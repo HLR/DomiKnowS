@@ -151,7 +151,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],currentConceptRelation[1],dn.getInstanceID()))
                     x[index] = None
                 else:
-                    Q += currentProbability[1] * x[index] 
+                    if Q is None:
+                        Q = currentProbability[1] * x[index]
+                    else:
+                        Q += currentProbability[1] * x[index] 
                     index += 1   
                        
                 # Create negative variable for binary concept
@@ -229,8 +232,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     dn.attributes[xkey][currentConceptRelation[2]] = xNew
                 else:
                     dn.attributes[xkey][0] = xNew
-                    
-                Q += currentProbability[1] * xNew       
+                
+                if Q is None:
+                    Q = currentProbability[1] * xNew
+                else:
+                    Q += currentProbability[1] * xNew       
     
                 # Check if probability is NaN or if and has to be created based on positive value
                 if self.valueToBeSkipped(currentProbability[0]):

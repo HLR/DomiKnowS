@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 import os
 
-DomiKnowS_version = '0.300'
+DomiKnowS_version = '0.400'
 DomiKnowS_version_env = os.getenv('DomiKnowS_VERSION')
 
 # Override version if set in environment
@@ -27,7 +27,7 @@ setup(
     install_requires=[
        'acls>=1.0.2',
        'Owlready2>=0.30',
-       'gurobipy<=9.1.2',
+       'gurobipy',
        'pandas>=1.1.5',
        'torch>=1.8.1',
        'ordered-set',

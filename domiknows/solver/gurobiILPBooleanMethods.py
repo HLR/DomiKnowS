@@ -64,7 +64,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
         if varsInfo['varSumLinExpr'].size() > 0:
             varsInfo['varSumLinExprStr'] = str(varsInfo['varSumLinExpr']) 
-            varsInfo['varSumLinExprStr'] = varsInfo['varSumLinExprStr'][varsInfo['varSumLinExprStr'].index(':') + 1 : varsInfo['varSumLinExprStr'].index('>')]
+            #varsInfo['varSumLinExprStr'] = varsInfo['varSumLinExprStr'][varsInfo['varSumLinExprStr'].index(':') + 1 : varsInfo['varSumLinExprStr'].index('>')]
           
         if len(varsInfo['varName']) > 0:   
             varsInfo['varName'] = varsInfo['varName'][:-1] # Remove last '_'
