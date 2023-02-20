@@ -36,7 +36,8 @@ setDnSkeletonMode(True)
 
 setProductionLogMode()
 
-trainloader, trainloader_mini, validloader, testloader = get_readers()
+num_train = 1
+trainloader, trainloader_mini, validloader, testloader = get_readers(num_train)
 
 def get_pred_from_node(node, suffix):
     digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
