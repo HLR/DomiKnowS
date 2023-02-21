@@ -1437,6 +1437,7 @@ class DataNodeBuilder(dict):
         
         from domiknows.utils import getDnSkeletonMode
         self.skeletonDataNode = getDnSkeletonMode()
+        dict.__setitem__(self, "DataNodesConcepts", set())
 
     def __getitem__(self, key):
         return dict.__getitem__(self, key)
@@ -2109,7 +2110,6 @@ class DataNodeBuilder(dict):
 
         start = process_time_ns()
         self.__addSetitemCounter()
-        dict.__setitem__(self, "DataNodesConcepts", set())
         
         if isinstance(_key, (Sensor, Property, Concept)):
             key = _key.fullname
@@ -2203,7 +2203,7 @@ class DataNodeBuilder(dict):
             self.__updateConceptInfo(usedGraph, conceptInfo, _key)
 
         DataNodesConcepts = dict.__getitem__(self, "DataNodesConcepts")
-        if not self.skeletonDataNode or "relationName" in conceptInfo or "dataNode" not in self or conceptName not in DataNodesConcepts:
+        if (not self.skeletonDataNode) or ("relationName" in conceptInfo) or ("dataNode" not in self) or (conceptName not in DataNodesConcepts):
             DataNodesConcepts.add(conceptName)
             dict.__setitem__(self, "DataNodesConcepts", DataNodesConcepts)
 
