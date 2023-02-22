@@ -42,6 +42,13 @@ parser.add_argument(
         If set, will only test on these points.'
 )
 
+parser.add_argument(
+    '--ILP',
+    default=False,
+    action='store_true',
+    help='Use ILP for model predictions.'
+)
+
 args = parser.parse_args()
 
 if args.unsatisfied_path is not None:
@@ -134,9 +141,14 @@ class CallbackProgram(SolverPOIProgram):
             super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
+infer_types = ['local/argmax']
+
+if args.ILP:
+    infer_types.append('ILP')
+
 program = CallbackProgram(graph,
                           poi=(sentence,),
-                          inferTypes=['local/argmax'],
+                          inferTypes=infer_types,
                           metric={})
 
 model = program.model
@@ -152,8 +164,28 @@ def populate_forward(model, data_item):
     return node, output[1]
 
 
+def get_model_predictions(node):
+    attributes = node.getAttributes()
+    sentence_length = attributes['predictions'].shape[0]
+
+    if args.ILP:
+        suffix = '/ILP'
+    else:
+        suffix = ''
+
+    tags = []
+    for i in range(num_words):
+        tags.append(torch.argmax(attributes['<pred_%d>%s' % (i, suffix)]).item())
+    tags = tags[:sentence_length]
+
+    return tags
+
+
 def get_constraints(node):
-    verifyResult = node.verifyResultsLC()
+    if args.ILP:
+        verifyResult = node.verifyResultsLC(key='/ILP')
+    else:
+        verifyResult = node.verifyResultsLC(key='/local/argmax')
 
     assert verifyResult
 
@@ -170,24 +202,13 @@ def get_constraints(node):
 
 
 def print_node_predictions(node, templ='%s'):
-    attributes = node.getAttributes()
-    sentence_length = attributes['predictions'].shape[0]
-
-    tags = []
-    for i in range(num_words):
-        tags.append(torch.argmax(attributes['<pred_%d>' % i]).item())
-    tags = tags[:sentence_length]
+    tags = get_model_predictions(node)
 
     print(templ % tags) 
 
-def is_correct(node, data_item, verbose=True):
-    attributes = node.getAttributes()
-    sentence_length = attributes['predictions'].shape[0]
 
-    tags = []
-    for i in range(num_words):
-        tags.append(torch.argmax(attributes['<pred_%d>' % i]).item())
-    tags = tags[:sentence_length]
+def is_correct(node, data_item, verbose=True):
+    tags = get_model_predictions(node)
 
     gt = data_item['arg_label'].squeeze().tolist()
 
@@ -197,14 +218,9 @@ def is_correct(node, data_item, verbose=True):
 
     return gt == tags
 
-def get_metrics(node, data_item):
-    attributes = node.getAttributes()
-    sentence_length = attributes['predictions'].shape[0]
 
-    tags = []
-    for i in range(num_words):
-        tags.append(torch.argmax(attributes['<pred_%d>' % i]).item())
-    tags = tags[:sentence_length]
+def get_metrics(node, data_item):
+    tags = get_model_predictions(node)
 
     gt = data_item['arg_label'].squeeze().tolist()
 
@@ -214,14 +230,9 @@ def get_metrics(node, data_item):
 
     return gt, tags
 
-def manual_constraints_check(node, data_item):
-    attributes = node.getAttributes()
-    sentence_length = attributes['predictions'].shape[0]
 
-    tags = []
-    for i in range(num_words):
-        tags.append(torch.argmax(attributes['<pred_%d>' % i]).item())
-    tags = tags[:sentence_length]
+def manual_constraints_check(node, data_item):
+    tags = get_model_predictions(node)
     
     tags = [1 if t != 0 else 0 for t in tags]
 
@@ -234,6 +245,7 @@ def manual_constraints_check(node, data_item):
     print('manual constraints check: %s' % ('SATISIFED' if manual_span_check else 'NOT SATISIFIED'))
     
     return manual_span_check
+
 
 def get_node_likelihood(builder_l):
     probs = {}
@@ -398,26 +410,28 @@ print('\n\n')
 
 print('-' * 10, 'METRICS', '-' * 10)
 
-print('Pre exact match (all spans): %.2f, Pre satsifaction: %.2f, n=%d' %
-    (
-        pre_metrics['correct'] / pre_metrics['total'],
-        pre_metrics['satisfied'] / pre_metrics['total'],
-        pre_metrics['total']
+if not pre_metrics['total'] == 0:
+    print('Pre exact match (all spans): %.2f, Pre satisfaction: %.2f, n=%d' %
+        (
+            pre_metrics['correct'] / pre_metrics['total'],
+            pre_metrics['satisfied'] / pre_metrics['total'],
+            pre_metrics['total']
+        )
     )
-)
 
-print('Token-level metrics:')
-print(classification_report(pre_metrics['token_gts'], pre_metrics['token_preds'], zero_division=0))
+    print('\nToken-level metrics:')
+    print(classification_report(pre_metrics['token_gts'], pre_metrics['token_preds'], zero_division=0))
 
-print('\n')
+    print('\n')
 
-print('Post exact match (all spans): %.2f, Post satsifaction: %.2f, n=%d' %
-    (
-        post_metrics['correct'] / post_metrics['total'],
-        post_metrics['satisfied'] / post_metrics['total'],
-        post_metrics['total']
+if not post_metrics['total'] == 0:
+    print('Post exact match (all spans): %.2f, Post satisfaction: %.2f, n=%d' %
+        (
+            post_metrics['correct'] / post_metrics['total'],
+            post_metrics['satisfied'] / post_metrics['total'],
+            post_metrics['total']
+        )
     )
-)
 
-print('Token-level metrics:')
-print(classification_report(post_metrics['token_gts'], post_metrics['token_preds'], zero_division=0))
+    print('\nToken-level metrics:')
+    print(classification_report(post_metrics['token_gts'], post_metrics['token_preds'], zero_division=0))

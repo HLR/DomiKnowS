@@ -132,10 +132,12 @@ def select_batch(data, i_start, batch_size):
     }
 
 
-def convert_args(ex, label_space):
-    lbls = [label_space.index(tkn) if tkn in label_space else 4 for tkn in ex]
+def convert_args_func(label_space):
+    def _convert_args(ex, label_space):
+        lbls = [label_space.index(tkn) if tkn in label_space else 4 for tkn in ex]
 
-    return lbls
+        return lbls
+    return _convert_args
 
 
 def get_validation_data(num_samples, load_subset=0.1, all_tags=False):
@@ -149,7 +151,7 @@ def get_validation_data(num_samples, load_subset=0.1, all_tags=False):
         with open('srl/bio_label_space.json') as label_space_f:
             label_space = json.load(label_space_f)
         
-        data_blob['args'] = list(map(convert_args, data_blob['args']))
+        data_blob['args'] = list(map(convert_args_func(label_space), data_blob['args']))
 
     data_blob_valid = select_batch(data_blob, 0, num_samples)
 
