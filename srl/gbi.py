@@ -28,8 +28,6 @@ def reg_loss(model, model_lambda, exclude_names=set()):
 
             orig_params.append(w_orig.flatten())
             lambda_params.append(w_curr.flatten())
-        else:
-            print('skipping %s' % name)
 
     orig_params = torch.cat(orig_params, dim=0)
     lambda_params = torch.cat(lambda_params, dim=0)

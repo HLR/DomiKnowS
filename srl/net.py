@@ -183,27 +183,19 @@ class HighwayLSTM(nn.Module):
         logits = logits.view(out_shape[0], out_shape[1], -1) # batch_size, longest, num_labels
         
         logits = logits[:, 0, :] # longest, num_labels
+
+        # viterbi decoding to get tags
         tags, scores = viterbi(logits, self.transition_matrix)
-
-        torch.set_printoptions(sci_mode=False)
-
-        #print(torch.argmax(logits, dim=-1))
-
-        logprobs = F.log_softmax(logits, dim=-1)
-        logits = torch.ones((logits.shape[0], 5)) * -10
         
-        likelihood = 0.0
+        # get log probability of entire sequence
+        logprobs = F.log_softmax(logits, dim=-1)
 
+        likelihood = 0.0
         for i in range(logits.shape[0]):
             likelihood += logprobs[i, tags[i]]
-            logits[i, tags[i]] = 10
 
-        #print(likelihood)
-
+        # convert BIO tags to (0,1,2) tags by summing probabilities for B-0 and I-0 / B-1 and I-1
         probs = F.softmax(logits, dim=1)
-
-        #print(logits)
-
         aggr_matrix = torch.tensor(
             [
                 [0,1,0],
@@ -213,17 +205,7 @@ class HighwayLSTM(nn.Module):
                 [1,0,0],
             ]
         ).float()
-
         logits = torch.mm(probs, aggr_matrix)
-
-        #print(logits)
-
         logits = torch.log(logits)
-
-        #logits = logits.index_select(1, torch.LongTensor([2, 0, 1]))
-
-        #print(torch.argmax(logits, dim=-1))
-
-        #print(scores)
 
         return [[logits.unsqueeze(0), likelihood]]

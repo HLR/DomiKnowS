@@ -15,14 +15,43 @@ from sklearn.metrics import classification_report, accuracy_score
 import copy
 from torch.optim import SGD
 import json
+import argparse
 
 from graph import *
-from data import valid_dataset
+from data import get_validation_data
 from net import SimpleLSTM, HighwayLSTM
 from gbi import reg_loss
 
 from domiknows import setProductionLogMode
 setProductionLogMode(no_UseTimeLog=True)
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    '--num_data',
+    type=int,
+    default=1000,
+    help='Number of points to test GBI on'
+)
+
+parser.add_argument(
+    '--unsatisfied_path',
+    type=str,
+    default=None,
+    help='Path to json file containing list of indices that were previously unsatisfied. \
+        If set, will only test on these points.'
+)
+
+args = parser.parse_args()
+
+if args.unsatisfied_path is not None:
+    only_not_satisfied = True
+    with open(args.unsatisfied_path) as unsat_f:
+        not_satisfied = json.load(unsat_f)
+else:
+    only_not_satisfied = False
+
+valid_dataset = get_validation_data(args.num_data)
 
 # reading words and labels
 sentence['words'] = ReaderSensor(keyword='words')
@@ -240,16 +269,14 @@ post_metrics = {
     'token_gts': []
 }
 
-only_not_satisfied = False
-
 # dataset only containing values indices for examples that aren't initially satisfied by the model
 # i.e., examples that we have to run gbi over
 not_satisfied = [4]
 not_satisfied_iter = filter(lambda x: x[0] in not_satisfied, enumerate(valid_dataset))
 
-use_dset = not_satisfied_iter if only_not_satisfied else enumerate(valid_dataset)
+dset = not_satisfied_iter if only_not_satisfied else enumerate(valid_dataset)
 
-for data_iter, data_item in use_dset:
+for data_iter, data_item in dset:
     data_item = valid_dataset[data_iter]
 
     print('-' * 10 + ' idx = %d / %d ' % (data_iter, len(valid_dataset) - 1) + '-' * 10)
@@ -372,19 +399,20 @@ print('\n\n')
 
 print('-' * 10, 'METRICS', '-' * 10)
 
-print('Pre accuracy: %.2f, Pre satsifaction: %.2f, n=%d' %
+print('Pre exact match (all spans): %.2f, Pre satsifaction: %.2f, n=%d' %
     (
         pre_metrics['correct'] / pre_metrics['total'],
         pre_metrics['satisfied'] / pre_metrics['total'],
-        post_metrics['total']
+        pre_metrics['total']
     )
 )
 
+print('Token-level metrics:')
 print(classification_report(pre_metrics['token_gts'], pre_metrics['token_preds'], zero_division=0))
 
-print('\n\n')
+print('\n')
 
-print('Post accuracy: %.2f, Post satsifaction: %.2f, n=%d' %
+print('Post exact match (all spans): %.2f, Post satsifaction: %.2f, n=%d' %
     (
         post_metrics['correct'] / post_metrics['total'],
         post_metrics['satisfied'] / post_metrics['total'],
@@ -392,4 +420,5 @@ print('Post accuracy: %.2f, Post satsifaction: %.2f, n=%d' %
     )
 )
 
+print('Token-level metrics:')
 print(classification_report(post_metrics['token_gts'], post_metrics['token_preds'], zero_division=0))
