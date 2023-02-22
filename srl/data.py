@@ -12,19 +12,14 @@ import torch.utils.data
 from torchtext.vocab import GloVe, vocab
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import pickle
+import json
 
 limit_spans = 40
 limit_words = 20
 
-glove_vectors = GloVe()
-
-# with open('examples/srl/data/srl_data_train.pkl', 'rb') as file_in:
-#     train_data = pickle.load(file_in)
-
-with open('srl/data/srl_data_dev.pkl', 'rb') as file_in:
-    dev_data = pickle.load(file_in)
-
 def unpack_data(data, subset=1.0):
+    glove_vectors = GloVe()
+
     sentence_raw = []
     sentences = []
     predicates = []
@@ -137,19 +132,28 @@ def select_batch(data, i_start, batch_size):
     }
 
 
-data_blob = unpack_data(dev_data, subset=0.1)
+def convert_args(ex, label_space):
+    lbls = [label_space.index(tkn) if tkn in label_space else 4 for tkn in ex]
 
-del dev_data
-del glove_vectors
+    return lbls
 
-print('number of instances loaded:', len(data_blob['sentences']))
 
-# data_blob_train = select_batch(data_blob, 0, 5000)
-# data_blob_train_mini = select_batch(data_blob, 0, 500)
-data_blob_valid = select_batch(data_blob, 0, 1000)
+def get_validation_data(num_samples, load_subset=0.1, all_tags=False):
+    with open('srl/data/srl_data_dev.pkl', 'rb') as file_in:
+        dev_data = pickle.load(file_in)
+    
+    data_blob = unpack_data(dev_data, subset=load_subset)
+    print('number of instances loaded:', len(data_blob['sentences']))
 
-# train_dataset = SRLDataset(data_blob_train, limit_spans)
-# train_mini_dataset = SRLDataset(data_blob_train_mini, limit_spans)
-valid_dataset = SRLDataset(data_blob_valid, limit_spans)
+    if all_tags:
+        with open('srl/bio_label_space.json') as label_space_f:
+            label_space = json.load(label_space_f)
+        
+        data_blob['args'] = list(map(convert_args, data_blob['args']))
 
-# print(data_blob_train)
+    data_blob_valid = select_batch(data_blob, 0, num_samples)
+
+    valid_dataset = SRLDataset(data_blob_valid, limit_spans)
+
+    return valid_dataset
+

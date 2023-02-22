@@ -271,7 +271,6 @@ post_metrics = {
 
 # dataset only containing values indices for examples that aren't initially satisfied by the model
 # i.e., examples that we have to run gbi over
-not_satisfied = [4]
 not_satisfied_iter = filter(lambda x: x[0] in not_satisfied, enumerate(valid_dataset))
 
 dset = not_satisfied_iter if only_not_satisfied else enumerate(valid_dataset)
@@ -391,7 +390,7 @@ for data_iter, data_item in dset:
         print('NOT SATISFIED')
 
 # save non-satisfied examples
-with open('srl/not_satisfied_dev.json', 'w') as file_out:
+with open('srl/not_satisfied.json', 'w') as file_out:
     json.dump(not_satisfied, file_out)
 
 # print metrics

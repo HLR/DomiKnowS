@@ -1,6 +1,6 @@
 ARG-0/ARG-1 only, LSTM w/ highway connection, Viterbi decoding
 
-GBI parameters: `lr=1e-3, reg_weight=1.0`
+GBI parameters: `lr=1e-3, reg_weight=1.0, limit_spans = 40, limit_words = 20`
 
 ```
 ---------- METRICS ----------
