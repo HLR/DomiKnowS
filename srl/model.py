@@ -49,16 +49,26 @@ parser.add_argument(
     help='Use ILP for model predictions.'
 )
 
+parser.add_argument(
+    '--all_tags',
+    default=False,
+    action='store_true',
+    help='Predict all tags instead of just ARG-0 and ARG-1.'
+)
+
 args = parser.parse_args()
 
 if args.unsatisfied_path is not None:
     only_not_satisfied = True
+
     with open(args.unsatisfied_path) as unsat_f:
         not_satisfied = json.load(unsat_f)
 else:
     only_not_satisfied = False
 
-valid_dataset = get_validation_data(args.num_data)
+    not_satisfied = []
+
+valid_dataset, label_space = get_validation_data(args.num_data, all_tags=args.all_tags)
 
 # reading words and labels
 sentence['words'] = ReaderSensor(keyword='words')
@@ -66,16 +76,12 @@ sentence['words'] = ReaderSensor(keyword='words')
 # (1, seq_length, 1)
 sentence['predicate'] = ReaderSensor(keyword='predicate')
 
-lstm = HighwayLSTM(
-    label_space = [
-        'B-ARG0',
-        'I-ARG0',
-        'B-ARG1',
-        'I-ARG1',
-        'O'
-    ]
-)
-lstm.load_state_dict(torch.load('srl/data/bio_srl_lstm_epoch2.pth', map_location=torch.device('cpu')))
+lstm = HighwayLSTM(label_space=label_space)
+
+if args.all_tags:
+    lstm.load_state_dict(torch.load('srl/data/bio_srl_lstm_alllabels_epoch1.pth', map_location=torch.device('cpu')))
+else:
+    lstm.load_state_dict(torch.load('srl/data/bio_srl_lstm_epoch2.pth', map_location=torch.device('cpu')))
 
 def print_grads(model):
     for name, x in model.named_parameters():
@@ -266,20 +272,37 @@ def get_node_likelihood(builder_l):
     return log_probs
 
 
-pre_metrics = {
-    'correct': 0,
-    'satisfied': 0,
-    'total': 0,
-    'token_preds': [],
-    'token_gts': []
-}
-post_metrics = {
-    'correct': 0,
-    'satisfied': 0,
-    'total': 0,
-    'token_preds': [],
-    'token_gts': []
-}
+def flatten(nested):
+        return [x for l in nested for x in l]
+
+
+class Metrics:
+    def __init__(self, name):
+        self.name = name
+
+        self.correct = 0
+        self.satisfied = 0
+        self.total = 0
+
+        # nested list of predicted (class) tags
+        self.preds = []
+
+        # nested list of ground truth (class) tags
+        self.gts = []
+
+        # indices of each sample
+        self.indices = []
+
+    def token_level(self):
+        preds_flattened = flatten(self.preds)
+        gts_flattened = flatten(self.gts)
+
+        return classification_report(gts_flattened, preds_flattened)
+    
+
+pre_metrics = Metrics('Pre')
+post_metrics = Metrics('Post')
+
 
 # dataset only containing values indices for examples that aren't initially satisfied by the model
 # i.e., examples that we have to run gbi over
@@ -303,24 +326,24 @@ for data_iter, data_item in dset:
     token_gts, token_preds = get_metrics(node, data_item)
 
     # save metrics
-    pre_metrics['token_preds'].extend(token_preds)
-    pre_metrics['token_gts'].extend(token_gts)
-    pre_metrics['total'] += 1
+    pre_metrics.preds.append(token_preds)
+    pre_metrics.gts.extend(token_gts)
+    pre_metrics.total += 1
 
     # if constraints are all satisfied, skip
     if num_satisfied == num_constraints:
-        pre_metrics['satisfied'] += 1
+        pre_metrics.satisfied += 1
         print('SATISFIED')
         if is_correct(node, data_item, verbose=False):
             print('CORRECT')
-            pre_metrics['correct'] += 1
+            pre_metrics.correct += 1
         else:
             print('INCORRECT')
         continue
 
     # if constraints aren't all satisfied, do gbi
     not_satisfied.append(data_iter)
-    post_metrics['total'] += 1
+    post_metrics.total += 1
  
     print('CONSTRAINTS SATISFACTION: %d/%d' % (num_satisfied, num_constraints))
 
@@ -383,11 +406,11 @@ for data_iter, data_item in dset:
         if num_satisfied_l == num_constraints_l:
             satisfied = True
             print('SATISFIED')
-            post_metrics['satisfied'] += 1
+            post_metrics.satisfied += 1
 
             if is_correct(node_l, data_item, verbose=False):
                 print('CORRECT')
-                post_metrics['correct'] += 1
+                post_metrics.correct += 1
             else:
                 print('INCORRECT')
 
@@ -395,8 +418,8 @@ for data_iter, data_item in dset:
 
         print()
 
-    post_metrics['token_preds'].extend(last_token_preds)
-    post_metrics['token_gts'].extend(token_gts)
+    post_metrics.preds.append(last_token_preds)
+    post_metrics.gts.append(token_gts)
 
     if not satisfied:
         print('NOT SATISFIED')

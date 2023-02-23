@@ -9,8 +9,7 @@ np.random.seed(0)
 
 from tqdm import tqdm
 import torch.utils.data
-from torchtext.vocab import GloVe, vocab
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from torchtext.vocab import GloVe
 import pickle
 import json
 
@@ -133,7 +132,7 @@ def select_batch(data, i_start, batch_size):
 
 
 def convert_args_func(label_space):
-    def _convert_args(ex, label_space):
+    def _convert_args(ex):
         lbls = [label_space.index(tkn) if tkn in label_space else 4 for tkn in ex]
 
         return lbls
@@ -152,10 +151,18 @@ def get_validation_data(num_samples, load_subset=0.1, all_tags=False):
             label_space = json.load(label_space_f)
         
         data_blob['args'] = list(map(convert_args_func(label_space), data_blob['args']))
-
+    else:
+        label_space = [
+            'B-ARG0',
+            'I-ARG0',
+            'B-ARG1',
+            'I-ARG1',
+            'O'
+        ]
+    
     data_blob_valid = select_batch(data_blob, 0, num_samples)
 
     valid_dataset = SRLDataset(data_blob_valid, limit_spans)
 
-    return valid_dataset
+    return valid_dataset, label_space
 
