@@ -2,8 +2,8 @@ from itertools import repeat
 from typing import Callable, List
 from dataclasses import dataclass
 
-from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
-from regr.program.callbackprogram import ProgramStorageCallback, hook
+from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from domiknows.program.callbackprogram import ProgramStorageCallback, hook
 
 
 class CallbackPrimalProgram(PrimalDualProgram):
