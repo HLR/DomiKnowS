@@ -12,10 +12,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-from regr.data.reader import RegrReader
-from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-from regr.program.model.pytorch import SolverModel
-from regr.utils import setProductionLogMode
+from domiknows.data.reader import RegrReader
+from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+from domiknows.program.model.pytorch import SolverModel
+from domiknows.utils import setProductionLogMode
 
 
 from random import sample
@@ -54,9 +54,9 @@ class SudokuReader(RegrReader):
     
 trainreader = SudokuReader("randn", type="raw")
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import andL, fixedL, eqL, exactAL, exactL
-from regr.graph import EnumConcept
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import andL, fixedL, eqL, exactAL, exactL
+from domiknows.graph import EnumConcept
 
 Graph.clear()
 Concept.clear()
@@ -120,9 +120,9 @@ class SudokuSolver(nn.Module):
         
         return self.W
     
-from regr.sensor.pytorch.sensors import JointSensor, FunctionalReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.sensors import JointSensor, FunctionalReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 class JointFunctionalReaderSensor(JointSensor, FunctionalReaderSensor):
     pass
@@ -213,9 +213,9 @@ same_table[same_table_arg1.reversed, same_table_arg2.reversed] = CompositionCand
     relations=(same_table_arg1.reversed, same_table_arg2.reversed),
     forward=filter_table)
 
-from regr.program import SolverPOIProgram
-from regr.program.metric import MacroAverageTracker
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program import SolverPOIProgram
+from domiknows.program.metric import MacroAverageTracker
+from domiknows.program.loss import NBCrossEntropyLoss
 
 program1 = SolverPOIProgram(
         graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', 'ILP'],
@@ -234,7 +234,7 @@ program_samp = SampleLossProgram(
         beta=50
         )
 
-from regr.program.metric import PRF1Tracker, DatanodeCMMetric
+from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric
 
 program_pd = PrimalDualProgram(
        graph, SolverModel, 

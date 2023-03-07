@@ -5,18 +5,18 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
-from regr.program.callbackprogram import ProgramStorageCallback
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.lossprogram import PrimalDualProgram
-# from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.model.pytorch import SolverModel, SolverModelDictLoss
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, CompositionCandidateReaderSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
-from regr.utils import setProductionLogMode
+from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+from domiknows.program.callbackprogram import ProgramStorageCallback
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.lossprogram import PrimalDualProgram
+# from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.model.pytorch import SolverModel, SolverModelDictLoss
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, CompositionCandidateReaderSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.utils import setProductionLogMode
 from examples.conll04.CallBackModel import CallbackPrimalProgram, CallbackSamplingProgram
 
 from conll.data.data import SingletonDataLoader
@@ -326,6 +326,7 @@ def main(args):
             program1.load(f'saves/conll04-bert-sample-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program1.test(test_reader, device=args.gpu)
+    # program1.verifyResultsLC(test_reader,constraint_names=None, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')

@@ -1,22 +1,22 @@
 import sys
 import torch
 
-sys.path.append('.')
-sys.path.append('../..')
+# sys.path.append('.')
+# sys.path.append('../..')
 
 import numpy as np
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, SolverPOIDictLossProgram
-from regr.program.callbackprogram import ProgramStorageCallback
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, SolverPOIDictLossProgram
+from domiknows.program.callbackprogram import ProgramStorageCallback
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
-from regr.utils import setProductionLogMode, setDnSkeletonMode
+from domiknows.utils import setProductionLogMode, setDnSkeletonMode
 
 
 import spacy
@@ -350,11 +350,7 @@ def main(args):
             program1.load(f'saves/conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program1.test(test_reader, device=args.gpu)
-    # for node in program1.populate(test_reader, device=args.gpu):
-    #     verifyResult = node.verifyResultsLC()
-    #     if verifyResult:
-    #         for lc in verifyResult:
-    #             print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+    # program1.verifyResultsLC(test_reader,constraint_names=None, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
