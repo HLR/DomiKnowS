@@ -81,3 +81,25 @@ If you only change the develop branch, you only need to commit changes to this b
     git add .
     git commit -m "Commit message"
     git push
+
+## Releasing pip package (develop and stable version)
+
+The github repository is linked to the pip package. When you want to release a new version of the pip package, you have to follow the following steps.
+
+    To release develop version of pip library use tag name starting with d followed by version number. For example:
+
+        git tag d0.501
+        git push origin d0.501
+
+    the library version will be in this case 0.501.dev0
+
+    To release stable version of pip library use tag name starting with v followed by version number. For example:
+        
+            git tag v0.501
+            git push origin v0.501
+
+    the library version will be in this case 0.501
+
+To check already used tags, you can execute the following command:
+
+    git tag
