@@ -54,7 +54,8 @@ It should be **Examples**.
 ## Updating the git repository with your changes
 
 When you makes change to the code in the Example or Docs folder. You have to first commit changes to them. Then, you have to commit changes to the develop branch. To do this, you have to use the following commands:
-if you want to commit changes to the Doc branch:
+
+If you want to commit changes to the Doc branch:
 
     cd Docs
     git add .
@@ -75,7 +76,7 @@ then always commit changes to the develop branch:
     git commit -m "Commit message"
     git push
 
-If you only change the develop branch, you can only need to commit changes to the develop branch:
+If you only change the develop branch, you only need to commit changes to this branch:
 
     git add .
     git commit -m "Commit message"
