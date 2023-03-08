@@ -9,7 +9,7 @@ DomiKnowS_VERSION_Postfix = os.getenv('DomiKnowS_VERSION_Postfix')
 if DomiKnowS_version_env is not None:
     DomiKnowS_version = DomiKnowS_version_env[1:]
     if DomiKnowS_VERSION_Postfix is not None:
-        DomiKnowS_version = DomiKnowS_version + "-" + DomiKnowS_VERSION_Postfix
+        DomiKnowS_version = DomiKnowS_version + "." + DomiKnowS_VERSION_Postfix
     
 print("Using DomiKnowS version: " + DomiKnowS_version)
     
