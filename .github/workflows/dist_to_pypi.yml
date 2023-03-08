@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: Build Dist and upload to PyPi
+name: Build Dist and upload to PyPi from the main branch
 
 # Controls when the action will run.
 # When tagged push with tag started with v 
@@ -20,13 +20,15 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
-
-      - name: Exit if not on main branch
-        if: endsWith(github.ref, 'master_beta') == false
+      - name: Exit if the tag was not on main branch
+        if: endsWith(github.ref, 'main') == false
         run: exit -1
         
+      # Checks-out the repository branch main under $GITHUB_WORKSPACE, so the workflow job can access it
+      - uses: actions/checkout@v3
+        with:
+          ref: "main"
+
       # Sets up python3
       - uses: actions/setup-python@v4
         with:
