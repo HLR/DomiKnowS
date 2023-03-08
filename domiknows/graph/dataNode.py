@@ -433,7 +433,7 @@ class DataNode:
         if 'variableSet' in self.attributes:
             conceptsAndRelations = set()
             for key in self.attributes['variableSet']:
-                if "label" in key:
+                if "/label" in key:
                     continue
                 conceptsAndRelations.add(key[key.index('<')+1:key.index('>')])
             
@@ -2227,12 +2227,14 @@ class DataNodeBuilder(dict):
                 if index:
                     indexKey = graphPath  + '/' +conceptName + '/index'
                     dict.__setitem__(self, indexKey, index)
-                    
+                    from collections.abc import Sequence
                     if self.skeletonDataNode:
                         if "allDns" not in self:
                             dict.__setitem__(self, "allDns", set())
                         allDns = dict.__getitem__(self, "allDns")
                         try:
+                            if isinstance(index[0], Sequence):
+                                index = index[0]
                             allDns.update(index)
                         except TypeError as ty:
                             pass

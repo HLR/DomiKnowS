@@ -831,7 +831,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
         
-        if xPkey not in dn.attributes:
+        if dn.getAttribute(xPkey) == None:
             if not sample:
                 return None
             else:   
@@ -1047,22 +1047,22 @@ class gurobiILPOntSolver(ilpOntSolver):
                             for listOfDataNodes in referredDns:
                                 eDns = [] 
                                 
-                                for currentReferedDataNode in listOfDataNodes:
-                                    if currentReferedDataNode is None:
+                                for currentReferredDataNode in listOfDataNodes:
+                                    if currentReferredDataNode is None:
                                         continue
                                     
                                     # -- Get DataNodes for the edge defined by the path part of the v
                                     if isinstance(path, eqL):
-                                        _eDns = currentReferedDataNode.getEdgeDataNode(v) 
+                                        _eDns = currentReferredDataNode.getEdgeDataNode(v) 
                                     else:
-                                        _eDns = currentReferedDataNode.getEdgeDataNode(v[1:]) 
+                                        _eDns = currentReferredDataNode.getEdgeDataNode(v[1:]) 
                                     
                                     if _eDns and _eDns[0]:
                                         eDns.extend(_eDns)
                                     elif not isinstance(path, eqL):
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
                                         if lc.__str__() != "fixedL":
-                                            self.myLogger.info('%s has no path %s requested by %s for concept %s'%(currentReferedDataNode, vNames, lc.lcName, conceptName))
+                                            self.myLogger.info('%s has no path %s requested by %s for concept %s'%(currentReferredDataNode, vNames, lc.lcName, conceptName))
                                 if not eDns:
                                     eDns = [None] # None - to keep track of candidates
                                     
@@ -2015,11 +2015,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
 
             lcLosses["globalSuccesses"] = globalSuccesses
-            lcLosses["globalSuccessCountet"] = torch.nansum(globalSuccesses).item()
-            self.myLoggerTime.info('Global success counter is %i '%(lcLosses["globalSuccessCountet"]))
+            lcLosses["globalSuccessCounter"] = torch.nansum(globalSuccesses).item()
+            self.myLoggerTime.info('Global success counter is %i '%(lcLosses["globalSuccessCounter"]))
             
             for currentLcName in lcLosses:
-                if currentLcName in ["globalSuccessCountet", "globalSuccesses"]:
+                if currentLcName in ["globalSuccessCounter", "globalSuccesses"]:
                     continue
                 
                 startLC = process_time_ns() # timer()
