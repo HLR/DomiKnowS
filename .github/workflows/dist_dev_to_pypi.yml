@@ -42,4 +42,5 @@ jobs:
           python3 setup.py sdist bdist_wheel
         env:
           DomiKnowS_VERSION: ${{github.ref_name}}
+          DomiKnowS_VERSION_Postfix : dev
           
