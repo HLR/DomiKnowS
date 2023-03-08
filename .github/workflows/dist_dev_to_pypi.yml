@@ -44,3 +44,11 @@ jobs:
           DomiKnowS_VERSION: ${{github.ref_name}}
           DomiKnowS_VERSION_Postfix : dev
           
+     # Upload to PyPI
+      - name: Upload to PyPI
+        run: |
+          python3 -m twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+          
