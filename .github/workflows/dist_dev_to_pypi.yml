@@ -1,0 +1,52 @@
+name: Build Dist and upload to PyPi from the develop branch
+
+# Controls when the action will run.
+# When tagged push with tag started with d
+on:
+  push:
+    tags:
+      - d*
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  # This workflow contains a single job called "dist_develop"
+  dist_develop:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out the repository branch develop under $GITHUB_WORKSPACE, so the workflow job can access it
+      - uses: actions/checkout@v3
+        with:
+          ref: "develop"
+
+      # Sets up python3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.8 
+
+      # Installs and upgrades pip, installs other dependencies and installs the package from setup.py
+      - name: "Installs and upgrades pip, install build modules"
+        run: |
+          # Upgrade pip
+          python3 -m pip install --upgrade pip
+          # Install build deps
+          python3 -m pip install setuptools wheel twine
+
+      # Create Distribution
+      - name: Creation of Distribution 
+        run: |
+          python3 setup.py sdist bdist_wheel
+        env:
+          DomiKnowS_VERSION: github.ref_name
+          
+      # Upload to PyPI
+      - name: Upload to PyPI
+        run: |
+          python3 -m twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
