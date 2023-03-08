@@ -20,11 +20,7 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - name: Exit if the tag was not on main branch
-        if: endsWith(github.ref, 'main') == false
-        run: exit -1
-        
-      # Checks-out the repository branch main under $GITHUB_WORKSPACE, so the workflow job can access it
+              # Checks-out the repository branch main under $GITHUB_WORKSPACE, so the workflow job can access it
       - uses: actions/checkout@v3
         with:
           ref: "main"
@@ -42,10 +38,16 @@ jobs:
           # Install build deps
           python3 -m pip install setuptools wheel twine
 
-      # Upload to PyPI
-      - name: Dist and Upload to PyPI
+      # Create Distribution
+      - name: Creation of Distribution 
         run: |
           python3 setup.py sdist bdist_wheel
+        env:
+          DomiKnowS_VERSION: github.ref_name
+          
+      # Upload to PyPI
+      - name: Upload to PyPI
+        run: |
           python3 -m twine upload dist/*
         env:
           TWINE_USERNAME: __token__
