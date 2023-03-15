@@ -37,4 +37,4 @@ After running the example for the first time the dataset is downloaded from the 
 + --lambdaValue: value of learning rate
 + --lr: learning rate of the adam optimiser
 + --beta: primal dual or IML multiplier
-+ --graph_type: type of constraints to be defined (It can be graph_only_exactL which does not define structural dependencies, or graph_exactL_ifLorLbothways, which considers structural dependencies).
++ --graph_type: type of constraints to be defined (It can be only_exactL which does not define structural dependencies, or exactL_ifLorLbothways, which considers structural dependencies).
