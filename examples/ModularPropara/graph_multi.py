@@ -176,3 +176,17 @@ with Graph('global') as graph:
         ),
         active = True
     )
+    
+    ### proposal
+#     forallL(
+#         entity('e'),
+#         forallL(
+#             step('i'),
+#            atMostL( 
+#                 entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
+#             ),
+#         )
+#     )
+    
+    ### proposal
+#     forallL(combinationL(entity('e'), step('i')), atMostL())
