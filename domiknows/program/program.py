@@ -325,7 +325,7 @@ class LearningBasedProgram():
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
-            for i, data_item in enumerate(dataset):
+            for i, data_item in tqdm(enumerate(dataset)):
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
 
@@ -378,10 +378,12 @@ class LearningBasedProgram():
                 FIRST=False
             IF_exsits=False
             for num,name in enumerate(names):
-                datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
-                datanode_t[num] +=1
-                all_ac[num] += verifyResult[name]["satisfied"]
-                all_t[num] +=1
+                if not np.isnan(verifyResult[name]["satisfied"]):
+                    datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
+                    datanode_t[num] +=1
+                if not np.isnan(verifyResult[name]["satisfied"]):
+                    all_ac[num] += verifyResult[name]["satisfied"]
+                    all_t[num] +=1
                 if "ifSatisfied" in verifyResult[name]:
                     IF_exsits=True
                     if not np.isnan(verifyResult[name]["ifSatisfied"]):
