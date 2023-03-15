@@ -2,7 +2,7 @@ import pytest
 
 # Testing ILP solver verify method based on constrains specified using logical constrains (not in ontology)
 def emr_graph():
-    from regr.graph import Graph, Concept, andL, nandL, notL, ifL, existsL
+    from domiknows.graph import Graph, Concept, andL, nandL, notL, ifL, existsL
 
     with Graph('global') as graph:
         with Graph('linguistic') as ling_graph:
@@ -142,8 +142,8 @@ def emr_input(request):
 def test_main_emr_verify(emr_input):
     import numpy as np
 
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    from regr.solver.ilpOntSolver import ilpOntSolver
+    from domiknows.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    from domiknows.solver.ilpOntSolver import ilpOntSolver
 
     app_graph = emr_graph()
 

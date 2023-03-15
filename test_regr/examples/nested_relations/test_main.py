@@ -9,7 +9,7 @@ import pytest
 @pytest.fixture(name='case')
 def test_case():
     import torch
-    from regr.utils import Namespace
+    from domiknows.utils import Namespace
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     word_emb = torch.randn(4, 2048, device=device)
@@ -112,7 +112,7 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from regr.program.program import LearningBasedProgram
+    from domiknows.program.program import LearningBasedProgram
 
     from .graph import graph, sentence, word, phrase, pair
     from .graph import Eword, Iword, Bword, Oword

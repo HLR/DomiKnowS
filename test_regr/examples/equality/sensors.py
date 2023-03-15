@@ -1,8 +1,8 @@
 from typing import Any
 import torch
 
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
 
 
 class Tokenizer(EdgeSensor, JointSensor):

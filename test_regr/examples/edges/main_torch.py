@@ -13,11 +13,11 @@ sys.path.append('../../../examples/ACE05')
 
 
 def test_edge_main():
-    from regr.sensor.pytorch.relation_sensors import EdgeSensor
-    from regr.sensor.pytorch.sensors import ConstantSensor
+    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+    from domiknows.sensor.pytorch.sensors import ConstantSensor
     from graph import sentence, word, sentence_con_word, word1, word_equal_word1, graph, pair_word1, pair_word2, pair
-    from regr.sensor.sensor import Sensor
-    from regr.graph import DataNodeBuilder
+    from domiknows.sensor.sensor import Sensor
+    from domiknows.graph import DataNodeBuilder
 
 
     import spacy

@@ -1,7 +1,7 @@
 import os
 
-from regr.utils import Namespace, caller_source
-from regr.program.model.pytorch import PoiModel
+from domiknows.utils import Namespace, caller_source
+from domiknows.program.model.pytorch import PoiModel
 
 
 from .graph import sentence, word, char, phrase, pair

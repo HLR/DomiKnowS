@@ -1,14 +1,14 @@
 from functools import wraps
 import random
 
-from regr.graph import Concept, Property, Relation
-from regr.sensor import Sensor, Learner
+from domiknows.graph import Concept, Property, Relation
+from domiknows.sensor import Sensor, Learner
 import pytest
 
 
 class TestRelation(object):
     def test_disjoint(self):
-        from regr.graph.relation import disjoint, NotA
+        from domiknows.graph.relation import disjoint, NotA
 
         phrase = Concept()
         people = phrase()

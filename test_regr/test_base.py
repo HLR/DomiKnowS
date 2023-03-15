@@ -1,4 +1,4 @@
-from regr.base import NamedTree, NamedTreeNode
+from domiknows.base import NamedTree, NamedTreeNode
 
 
 class TestNamedTree(object):

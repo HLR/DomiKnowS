@@ -1,1 +1,0 @@
-* [`Assignment`](https://github.com/kordjamshidi/RelationalGraph/wiki/Dev-%7C-Property-%7C-Assignment)

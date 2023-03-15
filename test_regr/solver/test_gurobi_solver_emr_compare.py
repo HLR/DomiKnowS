@@ -4,7 +4,7 @@ import numpy as np
 
 @pytest.fixture()
 def emr_graph(request):
-    from regr.graph import Graph, Concept, Relation
+    from domiknows.graph import Graph, Concept, Relation
 
     Graph.clear()
     Concept.clear()
@@ -130,7 +130,7 @@ def passby(fn, *args, **kwargs):
 
 def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    from domiknows.solver.ilpOntSolverFactory import ilpOntSolverFactory
     import logging
     ilpConfig = {
         'ilpSolver' : 'mini_prob_debug',
@@ -163,7 +163,7 @@ def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
         key_maps.append(key_map)
 
     # prepare solver
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    from domiknows.solver.ilpOntSolverFactory import ilpOntSolverFactory
     solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph)
 
     # call solver

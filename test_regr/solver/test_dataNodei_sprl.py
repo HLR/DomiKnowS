@@ -4,7 +4,7 @@ import numpy as np
 
 @pytest.fixture()
 def ontology_graph(request):
-    from regr.graph import Graph, Concept
+    from domiknows.graph import Graph, Concept
     Graph.clear()
     Concept.clear()
 
@@ -68,7 +68,7 @@ def ontology_graph(request):
 
 @pytest.fixture()
 def sprl_input(ontology_graph):
-    from regr.graph import DataNode
+    from domiknows.graph import DataNode
 
     test_ont_graph = ontology_graph
     sentence = test_ont_graph['linguistic/sentence']
@@ -151,7 +151,7 @@ def sprl_input(ontology_graph):
 @pytest.mark.skip(reason="ontology not supported in the new solver yet")
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input):
-    from regr.graph import DataNode
+    from domiknows.graph import DataNode
  
     linguistic_graph = ontology_graph['linguistic']
     phrase = linguistic_graph["phrase"]

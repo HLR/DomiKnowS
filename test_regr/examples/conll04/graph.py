@@ -1,9 +1,5 @@
-from itertools import permutations
-
-from regr.graph import Graph, Concept, Relation
-from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, andL, nandL, V, atMostL
-
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import ifL, andL, nandL, atMostL, existsL
 
 Graph.clear()
 Concept.clear()
@@ -33,7 +29,7 @@ with Graph('global') as graph:
         #disjoint(people, organization, location, other, o)
 
         # LC0
-        nandL(people, organization)
+        nandL(people, organization, active = True)
         
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')
@@ -48,8 +44,8 @@ with Graph('global') as graph:
         kill.has_a(people, people)
 
         # LC2
-        ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
+        ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
         
         # LC3
-        atMostL(people, organization, location, other, o)
+        ifL(word, atMostL(people, organization, location, other, o), active = True)
         

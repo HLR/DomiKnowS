@@ -3,7 +3,7 @@ import pytest
 
 @pytest.fixture()
 def case():
-    from regr.utils import Namespace
+    from domiknows.utils import Namespace
     import random
 
     case = {
@@ -17,8 +17,8 @@ def case():
 
 @pytest.fixture()
 def graph(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.graph import Graph, Concept
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.graph import Graph, Concept
 
     # knowledge
     Graph.clear()
@@ -36,8 +36,8 @@ def graph(case):
 
 @pytest.fixture()
 def sensor(case, graph):
-    from regr.graph import DataNode
-    from regr.sensor.pytorch.query_sensor import QuerySensor
+    from domiknows.graph import DataNode
+    from domiknows.sensor.pytorch.query_sensor import QuerySensor
 
     concept = graph['sub/concept']
 
@@ -57,8 +57,8 @@ def sensor(case, graph):
 
 @pytest.fixture()
 def context(case, graph):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.graph import Property, DataNodeBuilder
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.graph import Property, DataNodeBuilder
 
     context = {
         "graph": graph, 'READER': 1,

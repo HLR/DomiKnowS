@@ -4,7 +4,7 @@ from flaky import flaky
 
 import torch
 from allennlp.common.testing import AllenNlpTestCase
-from regr.graph.allennlp import utils as util
+from domiknows.graph.allennlp import utils as util
 
 
 class TestNnUtil(AllenNlpTestCase):
