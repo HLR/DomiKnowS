@@ -65,19 +65,10 @@ def main():
     parser.add_argument('--graph_type', dest='graph_type', default="exactL_ifLorLtopdown", help='type of constraints to be defined', type=str)
     args = parser.parse_args()
 
-    if args.graph_type=="nothing":
-        from graph import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
-    elif args.graph_type=="only_exactL":
+    if args.graph_type=="only_exactL":
         from graph_only_exactL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
-    elif args.graph_type == "exactL_ifLorLtopdown":
-        from graph_exactL_ifLorLtopdown import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
-    elif args.graph_type == "exactL_ifLorLbottomup":
-        from graph_exactL_ifLorLbottomup import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLbothways":
         from graph_exactL_ifLorLbothways import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
-    elif args.graph_type == "exactL_nandL":
-        from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
-
     children_names_reverse={i:j for j,i in children_names.items()}
     parent_names_reverse = {i: j for j, i in parent_names.items()}
 
