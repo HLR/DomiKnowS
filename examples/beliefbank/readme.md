@@ -22,6 +22,7 @@ simply write
 ```
 !python -m beliefbank
 ```
+After running the example for the first time the dataset is downloaded from the AllenAI official website. ( If the link is deprecated, check [AllenAI Website](https://allenai.org/data/beliefbank))
 
 ## Arguments
 
