@@ -229,7 +229,7 @@ class SolverModel(PoiModel):
             self.inference_with = inference_with
 
     def inference(self, builder):
-        for prop in self.poi:
+        for i, prop in enumerate(self.poi):
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
 #             for output_sensor, target_sensor in self.find_sensors(prop):
@@ -251,6 +251,7 @@ class SolverModel(PoiModel):
                 'local/softmax': lambda :datanode.inferLocal(),
                 'argmax': lambda :datanode.infer(),
                 'softmax': lambda :datanode.infer(),
+                'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self, builder=builder),
             }[infertype]()
 #         print("Done with the inference")
         return builder

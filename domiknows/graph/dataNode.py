@@ -2,6 +2,7 @@ import torch
 from collections import OrderedDict, namedtuple
 from  time import process_time_ns
 import re
+
 from .dataNodeConfig import dnConfig 
 
 from ordered_set import OrderedSet 
@@ -76,6 +77,8 @@ class DataNode:
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the node in the ontology graph (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
+        
+        self.graph =  self.ontologyNode.sup
         if relationLinks:
             self.relationLinks = relationLinks           # Dictionary mapping relation name to RealtionLinks
         else:
@@ -1146,6 +1149,19 @@ class DataNode:
         
         self.inferLocal()
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        
+    def inferGBIResults(self, *_conceptsRelations, model, builder):
+        if len(_conceptsRelations) == 0:
+            _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
+        else:
+            _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
+            
+        # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
+
+        from domiknows.program.model.gbi import GBIModel
+        myGBIModel = GBIModel(self.graph, model)
+        myGBIModel.calculateGBISelection(builder, _conceptsRelations)
         
     # Calculate the percentage of results satisfying each logical constraint 
     def verifyResultsLC(self, key = "/local/argmax"):

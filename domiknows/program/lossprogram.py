@@ -3,10 +3,15 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
+from domiknows.program.model.pytorch import SolverModel
+
+
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
-from .model.lossModel import PrimalDualModel, SampleLosslModel
+from .model.lossModel import PrimalDualModel, SampleLossModel
 from .model.base import Mode
+
+from .model.gbi import GBIModel
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -155,9 +160,6 @@ class LossProgram(LearningBasedProgram):
                         softmaxMetric = metric
 #         super().call_epoch(name=name, dataset=dataset, epoch_fn=epoch_fn, **kwargs)
         
-
-    
-
     def train_epoch(
         self, dataset,
         c_lr=1,
@@ -276,7 +278,7 @@ class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, beta=1, **kwargs):
-        super().__init__(graph, Model, CModel=SampleLosslModel, beta=beta, **kwargs)
+        super().__init__(graph, Model, CModel=SampleLossModel, beta=beta, **kwargs)
 
 
     def train(
@@ -358,4 +360,16 @@ class SampleLossProgram(LossProgram):
             
             yield (loss, metric, *output[:1])
 
-        c_session['iter'] = iter
+        c_session['iter'] = iter    
+        
+class GBIProgram(LossProgram):
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, poi, beta=1, **kwargs):
+        mySolverModel= SolverModel(graph,
+                           poi=poi,
+                           inferTypes=['local/argmax', 'local/softmax'],
+                           metric={})
+        super().__init__(graph, Model, CModel=GBIModel, beta=beta, solver_model = mySolverModel, poi=poi, **kwargs)
+        from domiknows.utils import setDnSkeletonMode
+        setDnSkeletonMode(True)

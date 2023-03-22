@@ -5,7 +5,7 @@ import torch
 from .pytorch import SolverModel
 from ...graph.concept import EnumConcept
 
-
+# Inference-Masked Loss
 class IMLModel(SolverModel):
     def poi_loss(self, data_item, prop, sensors):
         output_sensor, target_sensor = sensors

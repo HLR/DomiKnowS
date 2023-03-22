@@ -103,7 +103,7 @@ class PrimalDualModel(LossModel):
     def __init__(self, graph, tnorm=DataNode.tnormsDefault, device='auto'):
         super().__init__(graph, tnorm=tnorm, device=device)
         
-class SampleLosslModel(torch.nn.Module):
+class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
     # def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
@@ -165,7 +165,7 @@ class SampleLosslModel(torch.nn.Module):
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
         
-#         self.loss.reset()
+#       self.loss.reset()
 
         datanode = builder.getDataNode(device=self.device)
         
@@ -206,7 +206,7 @@ class SampleLosslModel(torch.nn.Module):
                         loss_ = 0
                     
                 else:
-                    if constr_loss["globalSuccessCountet"] > 0:
+                    if constr_loss["globalSuccessCounter"] > 0:
                         lcSuccesses = constr_loss["globalSuccesses"]
                     if lossTensor.sum().item() != 0:
                         tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
@@ -234,8 +234,6 @@ class SampleLosslModel(torch.nn.Module):
                         else:
                             loss_ = 0
                         
-                        
-
                         # if loss['lossTensor'].nansum().item() <= 1:
                         #     loss_value = loss['lossTensor']
                         #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
@@ -269,7 +267,7 @@ class SampleLosslModel(torch.nn.Module):
             satisfied_num = len( set(constr_loss.keys()) - set(key_losses.keys()) )
             unsatisfied_num = len(set(constr_loss.keys())) - satisfied_num
             #self.logger.info(f'-- number of satisfied constraints are {satisfied_num}')
-            #self.logger.info(f'-- number of unstatisfied constraints are {unsatisfied_num}')
+            #self.logger.info(f'-- number of unsatisfied constraints are {unsatisfied_num}')
             for key in key_losses:
                 if self.sampleSize != -1:
                     if replace_mul:
