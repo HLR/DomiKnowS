@@ -9,4 +9,4 @@ setuptools
 graphviz
 pymongo[tls]
 dnspython
-sklearn
+scikit-learn
