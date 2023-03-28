@@ -1,6 +1,11 @@
 import pytest
 import math
 import torch
+# import sys
+# sys.path.append('.')
+# sys.path.append('../../..')
+
+
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import atMostL, forAllL, combinationL
 from domiknows.program.model.pytorch import PoiModel
@@ -83,21 +88,21 @@ def model_declaration(config, case):
     ### Edge: entity to entities
     entity[rel_entities_contain_entity, 'raw'] = TestSensor(
         entities['list'],
-        expected_inputs=([case.entities]),
+        expected_inputs=([case.entities], ),
         expected_outputs=(torch.ones((len(case.entities), 1)), case.entities, )
     )
 
     ### Edge: step to steps
     step[rel_steps_contain_step, 'raw'] = TestSensor(
         steps['list'],
-        expected_inputs=([case.steps]),
+        expected_inputs=([case.steps], ),
         expected_outputs=(torch.ones((len(case.steps), 1)), case.steps, )
     )
 
     ### Edge: location to locations
     location[rel_locations_contain_location, 'raw'] = TestSensor(
         locations['list'],
-        expected_inputs=([case.locations]),
+        expected_inputs=([case.locations], ),
         expected_outputs=(torch.ones((len(case.locations), 1)), case.locations, )
     )
     
@@ -122,7 +127,7 @@ def model_declaration(config, case):
 
     ### Random probabilities for the decision for each triplet
     decision[final_decision] = TestSensor(
-        decision[rel_step.reversed, rel_entity.reversed, rel_location.reversed],
+        decision[rel_step.reversed], decision[rel_entity.reversed], decision[rel_location.reversed],
         expected_inputs=(connection_steps, connection_entities, connection_locations),
         expected_outputs=torch.rand(total_decision_number, 2)
     )
@@ -145,7 +150,10 @@ def test_main_conll04(case):
     data = {}
 
     _, _, datanode, _ = lbp.model(data)
-    
+    print(datanode)
                         
 if __name__ == '__main__':
     pytest.main([__file__])
+# case = test_case()
+# test_main_conll04(case)
+
