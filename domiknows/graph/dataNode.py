@@ -1777,7 +1777,7 @@ class DataNodeBuilder(dict):
  
             if len(existingDnsForRelationSorted) == 1:
                 if vInfo.dim == 0:
-                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value.item() # Add / /Update value of the attribute
+                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value # Add / /Update value of the attribute
             elif vInfo.dim > 0:
                 for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relations links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute

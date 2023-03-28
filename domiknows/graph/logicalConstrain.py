@@ -614,3 +614,23 @@ class atMostAL(LogicalConstrain):
         
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
             return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+        
+# ----------------- Forall
+class forAllL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
+        
+# ----------------- combinationL
+class combinationL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
+        
+        

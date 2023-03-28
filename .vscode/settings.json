@@ -1,2 +1,32 @@
 {
+    "cSpell.words": [
+        "argmax",
+        "autograd",
+        "callbackprogram",
+        "closs",
+        "cmodel",
+        "consum",
+        "datanode",
+        "Datanodes",
+        "detuple",
+        "dictloss",
+        "entuple",
+        "firestation",
+        "forall",
+        "ILPU",
+        "indicies",
+        "linalg",
+        "logit",
+        "logsumexp",
+        "lossprogram",
+        "mloss",
+        "nconstr",
+        "Optim",
+        "probs",
+        "softmax",
+        "tidx",
+        "tnorm",
+        "tnorms",
+        "warmpup"
+    ]
 }

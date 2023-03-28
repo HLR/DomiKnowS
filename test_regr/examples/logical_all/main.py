@@ -2,7 +2,7 @@ import pytest
 import math
 import torch
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import ifL, andL, nandL, atMostL, existsL
+from domiknows.graph.logicalConstrain import atMostL, forAllL, combinationL
 from domiknows.program.model.pytorch import PoiModel
 
 
@@ -52,12 +52,12 @@ with Graph('global') as graph:
     final_decision = decision(name='final_decision')
     # LC0: For all combinations of step and entity only one location can be true
     ### the proposed interface is below
-    # ForallL(
-    #     combinationL(step('i'), entity('e')), #this is the search space, cartesian product is expected between options
-    #     atMostL( 
-    #         final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
-    #     ), # this is the condition that should hold for every assignment
-    # )
+    forAllL(
+         combinationL(step('i'), entity('e')), #this is the search space, cartesian product is expected between options
+         atMostL( 
+             final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
+         ), # this is the condition that should hold for every assignment
+     )
         
 
 def model_declaration(config, case):
