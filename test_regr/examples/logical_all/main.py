@@ -56,7 +56,7 @@ with Graph('global') as graph:
     (rel_locations_contain_location, ) = locations.contains(location)
     (rel_steps_contain_step, ) = steps.contains(step)
     (rel_entities_contain_entity, ) = entities.contains(entity)
-    (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg1=entities, arg2=steps, arg3=locations)
+    (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg_e=entities, arg_s=steps, arg_l=locations)
 
     decision = Concept(name='decision')
     (rel_step, rel_entity, rel_location, ) = decision.has_a(arg1=step, arg2=entity, arg3=location)
