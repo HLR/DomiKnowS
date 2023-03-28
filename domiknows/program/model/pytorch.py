@@ -91,9 +91,9 @@ class TorchModel(torch.nn.Module):
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
             builder = DataNodeBuilder(data_item)
+            *out, = self.populate(builder)
             if (builder.needsBatchRootDN()):
                 builder.addBatchRootDN()
-            *out, = self.populate(builder)
             datanode = builder.getDataNode(context="build", device=self.device)
             return (*out, datanode, builder)
         else:

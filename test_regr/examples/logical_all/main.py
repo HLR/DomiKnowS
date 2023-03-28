@@ -151,6 +151,7 @@ def model_declaration(config, case):
 
 @pytest.mark.gurobi
 def test_main_conll04(case):
+    
     import torch
 
     lbp = model_declaration(
@@ -164,7 +165,8 @@ def test_main_conll04(case):
     data = {}
 
     _, _, datanode, _ = lbp.model(data)
-    print(datanode)
+    datanode.inferILPResults()
+    print(f"\nPrinting Datanode: {datanode}")
                         
 if __name__ == '__main__':
     pytest.main([__file__])

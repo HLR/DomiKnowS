@@ -317,6 +317,89 @@ class LogicalConstrain:
         # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
         return rVars
     
+    
+     # Collects combination setups of ILP variables for logical methods calls for the created Logical Constraint - recursive method
+    def _collectCombinationILPVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
+        
+        # Get set of ILP variables lists for the current variable name
+        cLcVariables = v[lcVariableName]
+        
+        # List of lists containing sets of ILP variables for particular position 
+        newLcVars = []
+        
+        # --- Update the lcVars setup with ILP variables from this iteration
+        
+        if not lcVars: # If ILP variables setup is not initialized yet - this is the first iteration of the _collectILPVariableSetups method
+            if cLcVariables is None:
+                newV = [[None]]
+                newLcVars.append(newV)
+            else:
+                for cV in cLcVariables:
+                    newV = []
+                    for cvElement in cV:
+                        if cvElement is None:
+                            pass
+                        newElement = [cvElement]
+                        newV.append(newElement)
+                    newLcVars.append(newV)
+        else: # Many ILP variables in the current set
+            for indexLcV, lcV in enumerate(lcVars):
+                newV = []
+                if cLcVariables is None:
+                    for _, lcVelement in enumerate(lcV):
+                        newLcVelement = lcVelement.copy()
+                        newLcVelement.append(None)
+                        
+                        newV.append(newLcVelement)
+                else:
+                    for cV in cLcVariables:
+                        for indexElement, lcVelement in enumerate(lcV):
+                        
+                            newLcVelement = lcVelement.copy()
+                            newLcVelement.append(cV[indexElement])
+                            
+                            newV.append(newLcVelement)
+                            
+                    newLcVars.append(newV)                
+                            
+        if lcVariableNames:
+            # Recursive call - lcVars contains currently collected ILP variables setups
+            return self._collectCombinationILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars)
+        else:
+            # Return collected setups
+            return newLcVars
+
+    def createILPConstrainsCombination(self, lcName, lcFun, model, v, headConstrain):
+        if len(v) < 2:
+            myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
+            return None
+        
+        # Input variable names
+        try:
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
+            pass
+                
+        lcVariableName0 = lcVariableNames[0]
+
+        rVars = [] # Output variables
+            
+        # Collect variables setups for ILP constraints
+        sVar = self._collectCombinationILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
+        
+        # Apply collected setups and create ILP constraint
+        for z in sVar:
+            tVars = [] # Collect ILP constraints results
+            for t in z:
+                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
+                
+            rVars.append(tVars)
+        
+        # Return results from created ILP constraints - 
+        # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
+        return rVars
+        
+
     def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
         try:
             lcVariableNames = [e for e in iter(v)]
@@ -631,6 +714,6 @@ class combinationL(LogicalConstrain):
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
+            return self.createILPConstrainsCombination('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
         
         
