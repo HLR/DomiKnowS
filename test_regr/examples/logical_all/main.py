@@ -30,6 +30,13 @@ def test_case():
             'loc1', 'loc2', 'loc3'
         ],
     }
+    final_decision_gt = torch.zeros(len(case['steps']), len(case['entities']), len(case['locations']))
+    for i in range(len(case['steps'])):
+        for j in range(len(case['entities'])):
+            ### randomly select one between locations and put that to 1
+            final_decision_gt[i, j, torch.randint(0, len(case['locations']), (1,))] = 1
+    final_decision_gt = final_decision_gt.to(device)
+    case['final_decision'] = final_decision_gt
     case = Namespace(case)
     return case
 
@@ -111,18 +118,20 @@ def model_declaration(config, case):
     connection_steps = torch.zeros(total_decision_number, len(case.steps))
     connection_entities = torch.zeros(total_decision_number, len(case.entities))
     connection_locations = torch.zeros(total_decision_number, len(case.locations))
+    dummy_names = []
     for i in range(len(case.steps)):
         for j in range(len(case.entities)):
             for k in range(len(case.locations)):
+                dummy_names.append(f"{case.steps[i]}_{case.entities[j]}_{case.locations[k]}")
                 connection_steps[i*len(case.entities)*len(case.locations) + j*len(case.locations) + k, i] = 1
                 connection_entities[i*len(case.entities)*len(case.locations) + j*len(case.locations) + k, j] = 1
                 connection_locations[i*len(case.entities)*len(case.locations) + j*len(case.locations) + k, k] = 1
 
     ### Edge: create decision from entity, step, and location
-    decision[rel_step.reversed, rel_entity.reversed, rel_location.reversed] = TestSensor(
+    decision[rel_step.reversed, rel_entity.reversed, rel_location.reversed, 'text'] = TestSensor(
         step['raw'], entity['raw'], location['raw'],
         expected_inputs=(case.steps, case.entities, case.locations),
-        expected_outputs=(connection_steps, connection_entities, connection_locations)
+        expected_outputs=(connection_steps, connection_entities, connection_locations, dummy_names)
     )
 
     ### Random probabilities for the decision for each triplet
@@ -130,6 +139,11 @@ def model_declaration(config, case):
         decision[rel_step.reversed], decision[rel_entity.reversed], decision[rel_location.reversed],
         expected_inputs=(connection_steps, connection_entities, connection_locations),
         expected_outputs=torch.rand(total_decision_number, 2)
+    )
+
+    decision[final_decision] = TestSensor(
+        label=True,
+        expected_outputs=case['final_decision'].flatten()
     )
 
     lbp = LearningBasedProgram(graph, **config)
@@ -142,7 +156,7 @@ def test_main_conll04(case):
     lbp = model_declaration(
         {
             'Model': PoiModel,
-            'poi': (process, entities, steps, locations, decision, final_decision),
+            'poi': (process, entities, steps, locations, step, location, entity, decision, final_decision),
             'loss': None,
             'metric': None,
         }, case)
