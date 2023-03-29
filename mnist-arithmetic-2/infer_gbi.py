@@ -28,7 +28,7 @@ import argparse
 import numpy
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
-from graph import image_batch, image, image_pair
+from graph import graph, image_batch, image, image_pair
 import config
 
 from gbi import get_lambda, reg_loss
@@ -71,7 +71,7 @@ def get_pred_from_node(node, suffix):
     return digit0_pred, digit1_pred, summation_pred
 
 
-def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax'], print_incorrect=False):
+#def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax'], print_incorrect=False):
     """
     Print report showing accuracy, constraint violation metrics for a given test set
     """
@@ -177,7 +177,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         print('Average constraint satisfactions: %s - %f' % (suffix, numpy.nanmean(suffixSatisfiedNumpy)))
 
 
-graph, images, digit0, digit1 = build_program(device=device, test=True)
+_, _, _, _ = build_program(device=device, test=True)
 
 program = SolverPOIProgram(graph,
                            poi=(image_batch, image, image_pair),
@@ -211,7 +211,7 @@ def populate_forward(model, data_item):
     return node, output[1]
 
 
-def get_constraints(node):
+def get_constraints_satisfaction(node):
     """
     Get constraint satisfaction from datanode
     Returns number of satisfied constraints and total number of constraints
@@ -232,9 +232,9 @@ def get_constraints(node):
     return num_satisifed, num_constraints
 
 
-def is_correct_digits(node):
+def are_both_digits_correct(node):
     """
-    Returns boolean indicating whether datanode contains a correct prediction or not
+    Returns boolean indicating whether datanode contains a correct prediction for both digits or not
     """
     # get label
     pair_node = node.findDatanodes(select='pair')[0]
@@ -278,29 +278,35 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
 
         model = program.model
         
-        # forward pass through model
+        # --- Forward pass through model
         with torch.no_grad():
             node, _ = populate_forward(model, data_item)
+        
+        # Get constraint satisfaction for the current DataNode
+        num_satisfied, num_constraints = get_constraints_satisfaction(node)
 
-        # get constraint satisfaction
-        num_satisfied, num_constraints = get_constraints(node)
-
-        if not is_correct(node):
-            incorrect_initial += 1
-
+        # --- Test if to to start GBI for this data_item
         if num_satisfied == num_constraints:
             continue
+        else:
+            unsatisfied_initial += 1
 
-        unsatisfied_initial += 1
-
-        print('INDEX: %d' % data_iter)
+        # --- Continue with GBI
+        
+        # test if prediction is correct - for debugging only
+        if not is_correct(node):
+            incorrect_initial += 1
+        # ------
+        
+        print('data item INDEX: %d' % data_iter)
         print('CONSTRAINTS SATISFACTION: %d/%d' % (num_satisfied, num_constraints))
 
         print('Starting GBI:')
 
-        # make copy of original model
-        # model_l is the model that gets optimized
+        # -- Make copy of original model
         model_l, c_opt = get_lambda(model, lr=1e-1)
+        
+        # -- model_l is the model that gets optimized by GBI
         model_l.mode(Mode.TRAIN)
         model_l.train()
         model_l.reset()
@@ -310,10 +316,10 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
         for c_iter in range(gbi_iters):
             c_opt.zero_grad()
 
-            # forward pass through model_l
+            # -- forward pass through model_l
             node_l, builder_l = populate_forward(model_l, data_item)
 
-            num_satisfied_l, num_constraints_l = get_constraints(node_l)
+            num_satisfied_l, num_constraints_l = get_constraints_satisfaction(node_l)
 
             is_satisifed = 1 if num_satisfied_l == num_constraints_l else 0
 
@@ -324,8 +330,8 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             #for ln in label_names:
             #    log_probs += torch.sum(torch.log(node_l.getAttribute('<%s>/local/softmax' % ln)))
 
-            # collect probs from all datanodes (regular)
-            probs = {}
+            #  collect probs from all datanodes (regular)
+            # probs = {}
             # iter through datanodes
             '''for dn in builder_l['dataNode']:
                 dn.inferLocal()
@@ -335,7 +341,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
                     if c_prob is not None and c_prob.grad_fn is not None:
                         probs[c[0].name] = c_prob'''
 
-            # collect probs from all datanodes (skeleton)
+            # -- collect probs from datanode (in skeleton mode) 
             probs = {}
             for var_name, var_val in node_l.getAttribute('variableSet').items():
                 if not var_name.endswith('/label') and var_val.grad_fn is not None:
@@ -346,28 +352,33 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             for c_prob in probs.values():
                 log_probs += torch.sum(torch.log(c_prob))
 
-            # constraint loss: NLL * binary satisfaction + regularization loss
+            #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
             c_loss = -1 * log_probs * is_satisifed + reg_loss(model_l, model)
 
             # print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
 
+            # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 satisfied = True
-                print('SATISFIED')
+                print(f'GBI iteration {c_iter} constraints SATISFIED')
 
                 if is_correct(node_l):
-                    print('CORRECT')
+                    print(f'Prediction for GBI iteration {c_iter} CORRECT')
                 else:
                     incorrect_after += 1
 
+                # --- End early if constraints are satisfied
                 break
 
+            # --- Backward pass on model_l
             c_loss.backward()
+            #  -- Update model_l
             c_opt.step()
 
+        # --- Test if GBI was successful - for debugging only
         if not satisfied:
-            print('NOT SATISFIED')
+            print('Constraints NOT SATISFIED')
 
             unsatisfied_after += 1
             incorrect_after += 1
@@ -381,4 +392,4 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     print('after unsatisifed: %.2f' % (unsatisfied_after / total))
 
 
-run_gbi(program, validloader, 1000, 100, ['digits0', 'digits1'], is_correct_digits)
+run_gbi(program, validloader, 1000, 100, ['digits0', 'digits1'], are_both_digits_correct)

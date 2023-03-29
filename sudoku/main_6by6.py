@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from domiknows.data.reader import RegrReader
-from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+from domiknows.program.lossprogram import GBIProgram, SampleLossProgram, PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.utils import setProductionLogMode
 
@@ -271,17 +271,19 @@ same_table[same_table_arg1.reversed, same_table_arg2.reversed] = CompositionCand
 
 ### What kind of model should we use for learning the entries? Because it should be aware of all other decision to make the correct decision,
 ##  otherwise it is impossible for the model to learn good weights.
-
-from domiknows.program import SolverPOIProgram
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
 
+from domiknows.program import SolverPOIProgram
+
 program1 = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', 'ILP'],
+        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', 'GBI'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
 )
+
+"""
 
 program = SampleLossProgram(
         graph, SolverModel,
@@ -304,14 +306,9 @@ program = SampleLossProgram(
         )
 
 from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric
+'"""
 
-program = PrimalDualProgram(
-       graph, SolverModel, 
-       poi=(sudoku, empty_entry, same_row, same_col, same_table),
-       inferTypes=['local/argmax'],
-       loss=MacroAverageTracker(NBCrossEntropyLoss()),
-    #    metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
-       )
+
 
 # program1 = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry), inferTypes=['local/argmax', 'ILP'],
@@ -400,6 +397,7 @@ def testSudokuPrediction(entries, predictionP = None):
     
 for datanode in program1.populate(trainreader):
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    datanode.inferILPResults()
     
     testSudokuPrediction(entries)
     
@@ -422,6 +420,14 @@ for datanode in program1.populate(trainreader):
 
 # program1.train(trainreader, train_epoch_num=100, 
 #                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+
+program = GBIProgram(
+       graph, SolverModel, 
+       poi=(sudoku, empty_entry, same_row, same_col, same_table),
+       inferTypes=['local/argmax'],
+       loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    #    metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+       )
 
 trainingNo = 220
 for i in range(trainingNo):
