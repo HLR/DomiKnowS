@@ -70,6 +70,19 @@ with Graph('global') as graph:
              final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
          ), # this is the condition that should hold for every assignment
      )
+
+    ### Given the above LC, the following LCs are automatically generated
+    ### for (entity, step) in zip(case.entities, case.steps):
+    ###     specific_decisions = [decision for decision in decisions if decision[step] == step and decision[entity] == entity]
+    ###     atMostL(specific_decisions, 1)
+    ### (1, a, loc1), (1, a, loc2), (1, a, loc3)
+    ### (1, b, loc1), (1, b, loc2), (1, b, loc3)
+    ### (1, c, loc1), (1, c, loc2), (1, c, loc3)
+    ### (1, d, loc1), (1, d, loc2), (1, d, loc3)
+    ### (2, a, loc1), (2, a, loc2), (2, a, loc3)
+    ### (2, b, loc1), (2, b, loc2), (2, b, loc3)
+    ### (2, c, loc1), (2, c, loc2), (2, c, loc3)
+    ### and so on!
         
 
 def model_declaration(config, case):
@@ -135,10 +148,11 @@ def model_declaration(config, case):
     )
 
     ### Random probabilities for the decision for each triplet
+    probs = torch.rand(total_decision_number, 2)
     decision[final_decision] = TestSensor(
         decision[rel_step.reversed], decision[rel_entity.reversed], decision[rel_location.reversed],
         expected_inputs=(connection_steps, connection_entities, connection_locations),
-        expected_outputs=torch.rand(total_decision_number, 2)
+        expected_outputs=probs
     )
 
     decision[final_decision] = TestSensor(
@@ -147,14 +161,14 @@ def model_declaration(config, case):
     )
 
     lbp = LearningBasedProgram(graph, **config)
-    return lbp
+    return lbp, probs
 
 @pytest.mark.gurobi
 def test_main_conll04(case):
     
     import torch
 
-    lbp = model_declaration(
+    lbp, probs = model_declaration(
         {
             'Model': PoiModel,
             'poi': (process, entities, steps, locations, step, location, entity, decision, final_decision),
