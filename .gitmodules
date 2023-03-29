@@ -2,7 +2,7 @@
 	path = Docs
 	url = https://github.com/HLR/DomiKnowS
 	branch = Doc
-[submodule "Example"]
-	path = Example
+[submodule "Tasks"]
+	path = Tasks
 	url = https://github.com/HLR/DomiKnowS
-	branch = Examples
+	branch = Tasks
