@@ -166,7 +166,7 @@ def test_main_conll04(case):
 
     _, _, datanode, _ = lbp.model(data)
     datanode.inferILPResults()
-    print(f"\nPrinting Datanode: {datanode}")
+    print(f"\nPrinting DataNode: {datanode}")
                         
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -326,7 +326,7 @@ def test_main_conll04(case):
                        
             #assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
             num_pairs = case.pair.pa1_backward[:,child_node.instanceID].sum()
-            assert len(child_node.getRelationLinks(relationName = "pair")) == num_pairs # has relation named "pair"with each word (including itself)
+            assert len(child_node.getRelationLinks(relationName = "arg1")) == num_pairs # has relation named "pair"with each word (including itself)
 
             #assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()

@@ -1618,7 +1618,7 @@ class DataNodeBuilder(dict):
                     if iDn in visitedDns:
                         continue
                     
-                    if not self.__isRootDn(iDn, checkedDns, visitedDns):
+                    if self.__isRootDn(iDn, checkedDns, visitedDns):
                         isRoot = False
                         break
                     
@@ -1718,7 +1718,7 @@ class DataNodeBuilder(dict):
                     allAttrInit = False
                     break
             
-            if allAttrInit: #Create links for the ralation DataNode
+            if allAttrInit: #Create links for the relation DataNode
                 # Find DataNodes connected by this relation based on graph definition
                 existingDnsForAttr = OrderedDict() # DataNodes for Attributes of the relation
                 for relationAttributeName, relationAttributeConcept in conceptInfo['relationAttrsGraph'].items():
@@ -1747,7 +1747,7 @@ class DataNodeBuilder(dict):
                             candidateDn = existingDnsForAttr[attribute][candidateIndex]
                             
                             if attributeIndex == 0:
-                                candidateDn.addRelationLink(relationName, relationDn)
+                                candidateDn.addRelationLink(attribute, relationDn)
                             
                             relationDn.addRelationLink(attribute, candidateDn)  
                             relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
