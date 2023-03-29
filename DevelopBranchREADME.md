@@ -1,6 +1,6 @@
 # Develop Branch Git README
 
-**Develop** Branch integrates three branches: **develop**, **Doc** and **Examples**. The **develop** branch is the main branch for development. Two other are _git submodules_ of it. The **Doc** branch is the branch for documentation of the project. The **Examples** branch is the branch for with examples of project library usage.
+**Develop** Branch integrates three branches: **develop**, **Doc** and **Tasks**. The **develop** branch is the main branch for development. Two other are _git submodules_ of it. The **Doc** branch is the branch for documentation of the project. The **Tasks** branch is the branch for with examples of project library usage.
 
 In order to correctly clone or update the repository, you must use the following command.
 First either clone the repository with the following command:
@@ -13,7 +13,7 @@ or update the repository with the following command:
 
 ## Initial setup of git submodules
 
-It is **necessary to recreate locally the submodules of the repository**. 
+It is **necessary to recreate locally the submodules of the repository om Windows**. 
 
 First remove exiting submodules with the following commands:
 
@@ -21,39 +21,43 @@ First remove exiting submodules with the following commands:
     git rm -r --cached Docs
     rd /S /Q Docs
 
-    git submodule deinit -f Examples
-    git rm -r --cached Example
-    rd /S /Q Example
+    git submodule deinit -f Tasks
+    git rm -r --cached Tasks
+    rd /S /Q Tasks
 
 Then, clone the submodules with the following commands:
 
     git submodule  add -b Doc https://github.com/HLR/DomiKnowS Docs
-    git submodule  add -b Examples https://github.com/HLR/DomiKnowS Example
+    git submodule  add -b Tasks https://github.com/HLR/DomiKnowS Tasks
+
+On **Linux you can use the following commands**:
+
+    git submodule update --init
 
 You can check the status of the repository with the following command:
 
     git status
 
-You can also check branch of develop branch with the following command:
+You can also check branch of the repository with the following command:
 
     git branch
 It should be **develop**.
 
-You can also check branch of Doc folder with the following command:
+You can also check branch of the Doc subfolder with the following command:
 
     cd Docs
     git branch 
 It should be **Doc**.
 
-You can also check branch of Example folder with the following command:
+You can also check branch of the Tasks subfolder with the following command:
 
-    cd Example
+    cd Tasks
     git branch
-It should be **Examples**.
+It should be **Tasks**.
 
 ## Updating the git repository with your changes
 
-When you makes change to the code in the Example or Docs folder. You have to first commit changes to them. Then, you have to commit changes to the develop branch. To do this, you have to use the following commands:
+When you makes change to the code in the Tasks or Docs folder. You have to first commit changes to them. Then, you have to commit changes to the develop branch. To do this, you have to use the following commands:
 
 If you want to commit changes to the Doc branch:
 
@@ -62,9 +66,9 @@ If you want to commit changes to the Doc branch:
     git commit -m "Commit message"
     git push
 
-or  if you want to commit changes to the Examples branch:
+or  if you want to commit changes to the Tasks branch:
 
-    cd Example
+    cd Tasks
     git add .
     git commit -m "Commit message"
     git push
