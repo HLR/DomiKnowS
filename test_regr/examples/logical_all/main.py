@@ -57,6 +57,8 @@ with Graph('global') as graph:
     (rel_steps_contain_step, ) = steps.contains(step)
     (rel_entities_contain_entity, ) = entities.contains(entity)
     (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg_e=entities, arg_s=steps, arg_l=locations)
+    # (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg1=entities, arg2=steps, arg3=locations)
+
 
     decision = Concept(name='decision')
     (rel_step, rel_entity, rel_location, ) = decision.has_a(arg1=step, arg2=entity, arg3=location)
@@ -64,9 +66,41 @@ with Graph('global') as graph:
     final_decision = decision(name='final_decision')
     # LC0: For all combinations of step and entity only one location can be true
     ### the proposed interface is below
+    ## for x, y in combination(step, entity):
+    ##     total= 0
+    ##     for z in locations:
+    ##         total += final_decision(x, y, z)
+    ##     assert total == 1
+
+    ####
+    # step('i') - [[step 0], [step 1], [step 2], [step 3], [step 4], [step 5], [step 6]]
+
+ 
+
+    # entity('e')- [[entity 0], [entity 1], [entity 2], [entity 3]]
+
+    # (step0, entity0), (step0, entity1)
+    
+
+    # final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed)))
+
+    # [[decision 2, decision 0, decision 1],
+
+    # [decision 16, decision 15, decision 17],
+
+    # [decision 31, decision 32, decision 30],
+
+    # [decision 47, decision 46, decision 45]]
+
+    ### andL(step('i'), entity('e'), location('l')) --> (step0, entity0, location0), (step1, entity1, location1)
+
+    ### if (pair('p') , if persn('x' , p.arg1) and location('y', p.arg2) )person('x'), location('y')
+
+    ### 
+
     forAllL(
-         combinationL(step('i'), entity('e')), #this is the search space, cartesian product is expected between options
-         atMostL( 
+         combinationL('i', 'e')(step, entity), #this is the search space, cartesian product is expected between options
+         atMostL(
              final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
          ), # this is the condition that should hold for every assignment
      )
@@ -75,8 +109,8 @@ with Graph('global') as graph:
     ### for (entity, step) in zip(case.entities, case.steps):
     ###     specific_decisions = [decision for decision in decisions if decision[step] == step and decision[entity] == entity]
     ###     atMostL(specific_decisions, 1)
-    ### (1, a, loc1), (1, a, loc2), (1, a, loc3)
-    ### (1, b, loc1), (1, b, loc2), (1, b, loc3)
+    ### decision(1, a, loc1), decision(1, a, loc2), decision(1, a, loc3)
+    ### (1, b, loc1), (1, b, loc2), decision(1, b, loc3)
     ### (1, c, loc1), (1, c, loc2), (1, c, loc3)
     ### (1, d, loc1), (1, d, loc2), (1, d, loc3)
     ### (2, a, loc1), (2, a, loc2), (2, a, loc3)
@@ -97,11 +131,11 @@ def model_declaration(config, case):
     locations['list'] = TestSensor(expected_outputs=[case.locations])
 
     # Edge: entities, steps, and locations to process
-    process[rel_process_entities.reversed, rel_process_steps.reversed, rel_process_locations.reversed, 'id'] = TestSensor(
+    process[rel_process_entities.reversed, rel_process_steps.reversed, rel_process_locations.reversed] = TestSensor(
         entities['list'], steps['list'], locations['list'],
         expected_inputs= ([case.entities], [case.steps], [case.locations]),
         expected_outputs= (
-            torch.ones([1, 1]), torch.ones([1, 1]),torch.ones([1, 1]), case.process
+            torch.ones([1, 1]), torch.ones([1, 1]),torch.ones([1, 1])
             )
         )
     
