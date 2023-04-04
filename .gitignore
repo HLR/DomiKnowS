@@ -242,3 +242,7 @@ data/MNIST/raw/train-labels-idx1-ubyte.gz
 .vscode/settings.json
 .vscode/settings.json
 /data/
+
+### example folder
+/examples/
+/examples

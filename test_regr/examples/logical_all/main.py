@@ -32,12 +32,24 @@ def test_case():
         ],
     }
     final_decision_gt = torch.zeros(len(case['steps']), len(case['entities']), len(case['locations']))
+    sample_decision = torch.rand(len(case['steps']), len(case['entities']), len(case['locations']), 2)
+    sample_decision_p = sample_decision.softmax(dim=-1)
+    sample_decision_p = sample_decision_p[:, :, :, 1]
+    ### get the index of the highest value in the last dimension of the tensor sample_decision
+    sample_indexes = sample_decision_p.argmax(dim=-1)
+    ### put that index equal to 1 in the final_decision_gt
     for i in range(len(case['steps'])):
         for j in range(len(case['entities'])):
-            ### randomly select one between locations and put that to 1
-            final_decision_gt[i, j, torch.randint(0, len(case['locations']), (1,))] = 1
-    final_decision_gt = final_decision_gt.to(device)
-    case['final_decision'] = final_decision_gt
+            final_decision_gt[i, j, sample_indexes[i, j]] = 1
+
+    # for i in range(len(case['steps'])):
+    #     for j in range(len(case['entities'])):
+    #         ### randomly select one between locations and put that to 1
+    #         final_decision_gt[i, j, torch.randint(0, len(case['locations']), (1,))] = 1
+    # final_decision_gt = final_decision_gt.to(device)
+    case['final_decision'] = final_decision_gt.to(device)
+    case['original_probs'] = sample_decision.reshape(-1, 2).to(device)
+    case['sample_decision_p'] = sample_decision_p.to(device)
     case = Namespace(case)
     return case
 
@@ -187,7 +199,7 @@ def model_declaration(config, case):
     decision[final_decision] = TestSensor(
         decision[rel_step.reversed], decision[rel_entity.reversed], decision[rel_location.reversed],
         expected_inputs=(connection_steps, connection_entities, connection_locations),
-        expected_outputs=probs
+        expected_outputs=case['original_probs']
     )
 
     decision[final_decision] = TestSensor(
@@ -216,6 +228,21 @@ def test_main_conll04(case):
     _, _, datanode, _ = lbp.model(data)
     datanode.inferILPResults()
     print(f"\nPrinting DataNode: {datanode}")
+    for node in datanode.findDatanodes(select=decision):
+        try:
+            assert node.getAttribute(final_decision, 'label').to('cpu').item() == node.getAttribute(final_decision, 'ILP').item()
+        except AssertionError:
+            print(f"AssertionError: {node.getAttribute(final_decision, 'label').to('cpu').item()} != {node.getAttribute(final_decision, 'ILP').item()}")
+            sind = node.getAttribute("arg1.reversed").argmax().item()
+            print("the step of the node is: ", sind)
+            eind = node.getAttribute("arg2.reversed").argmax().item()
+            print("the entity of the node is: ", eind)
+            lind = node.getAttribute("arg3.reversed").argmax().item()
+            print("the location of the node is: ", lind)
+            print("the node probs are ", node.getAttribute(final_decision, 'local/softmax').to('cpu'))
+            print("the original probs are: ", case['original_probs'][sind*len(case.entities)*len(case.locations) + eind*len(case.locations) + lind])
+            print("the sample_prediction_prob is ", case['sample_decision_p'][sind, eind])
+            raise
                         
 if __name__ == '__main__':
     pytest.main([__file__])
