@@ -1025,6 +1025,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     dnsList = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger)
                     lcVariablesDns[variableName] = dnsList
                                 
+                    if isinstance(lc, CandidateSelection):
+                        continue
+                    
                     # -- Get ILP variables from collected DataNodes for the given element of logical constraint
                     
                     conceptName = e[0].name

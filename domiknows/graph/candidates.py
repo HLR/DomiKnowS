@@ -15,13 +15,8 @@ class CandidateSelection(LcElement):
         def newCall (self, *input, keys = None):
             if input and isinstance(input[0], OrderedDict):
                 candiatesDict = input[0]
-                candidates = []
-                
-                for cKey in candiatesDict:
-                    flat_list = [item for sublist in candiatesDict[cKey] for item in sublist]
-                    candidates.append(flat_list)
-                
-                return originalCall(self, *candidates, keys=keys)
+                                    
+                return originalCall(self, list(candiatesDict.values()), keys=keys)
             else:
                 return self, input
         type(self).__call__ = newCall  
@@ -34,7 +29,7 @@ class combinationC(CandidateSelection):
     def __init__(self, *e, name = None):
         super().__init__(*e, name = name)
         
-    def __call__(self, *candidates_list, keys=None):
+    def __call__(self, candidates_list, keys=None):
         from  itertools import product
         
         # Create the Cartesian product of all candidates
@@ -42,15 +37,9 @@ class combinationC(CandidateSelection):
         
         # Extract lists of first elements, second elements, etc.
         extracted_elements = list(zip(*cartesian_product))
-        
-        # Wrap each element in the extracted elements lists in a separate list
-        wrapped_elements = [[element] for sublist in extracted_elements for element in sublist]
-        
-        # Group the wrapped elements based on their original sublist in extracted_elements
-        grouped_elements = [list(map(lambda x: [x], sublist)) for sublist in extracted_elements]  
               
-        # Create a dictionary using the provided keys and the grouped elements
-        result_dict = dict(zip(keys, grouped_elements))
+        # Create a dictionary using the provided keys and the extracted lists
+        result_dict = dict(zip(keys, extracted_elements))
         
         return result_dict
 
