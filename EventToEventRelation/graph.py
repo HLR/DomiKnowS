@@ -17,7 +17,7 @@ with Graph('event_to_event') as graph:
     relation_classes = event_relation(name="relation_classes", ConceptClass=EnumConcept,
                                       values=["before", "after", "EQUAL", "VAGUE"])
 
-    # Symmetric Constrain
+    # Symmetric constraint
     symmetric = Concept("symmetric")
     s_event1, s_event2 = symmetric.has_a(arg1=event_relation, arg2=event_relation)
 

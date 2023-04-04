@@ -25,7 +25,7 @@ with Graph('spatial_QA_rule') as graph:
     # answer_class = question(name="answer_class", ConceptClass=EnumConcept,
     #                         values=["yes", "no"])
 
-    # Symmetric Constrain
+    # Symmetric constraint
     # symmetric = Concept(name="symmetric")
     # s_quest1, s_quest2 = symmetric.has_a(arg1=question, arg2=question)
     # ifL(andL(answer_class.yes('x'), existsL(symmetric('s', path=('x', symmetric)))),

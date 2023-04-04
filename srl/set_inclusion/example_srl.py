@@ -5,10 +5,10 @@ e.g., John kicked the ball. Given predicate "kicked" predict ARG0="John" and ARG
 
 The SRL model predicts contiguous spans of text (e.g., "the ball").
 
-We have a set of *valid* spans that we want to constrain our model to.
+We have a set of *valid* spans that we want to constraint our model to.
 e.g., The valid spans of "John kicked the ball" => {"John", "kicked", "ball", "the ball", ...}
 
-We want to constrain the spans predicted by the model to be within that set of valid spans.
+We want to constraint the spans predicted by the model to be within that set of valid spans.
 '''
 
 # Input to predict on (e.g., "John kicked the ball")
@@ -21,7 +21,7 @@ span = Concept(name='span')
 span_set = Concept(name='span_set')
 span_set.contains(span)
 
-# Set of spans that we want to constrain our model to
+# Set of spans that we want to constraint our model to
 valid_spans = span_set(name='valid_spans')
 
 # Predicted arguments in the sentence (e.g., arg0 = "John" and arg1 = "the ball")
