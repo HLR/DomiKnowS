@@ -75,14 +75,14 @@ pair.has_a(phrase, phrase)
 The number of arguments of this relationship is not limited to 2 and can be more than that. To introduce more arguments simply add more concepts to the has_a relationship definition. `concept.has_a(arg1, arg2, arg3, ...)`.
 
 ### Constraints
-Very often the classified instance can be assign only a single class, as is the case in the example. This knowledge can be added to the model definition as a first oder logic constrain defined using DomiKnows sub language with the methods `atMostL`.  
+Very often the classified instance can be assign only a single class, as is the case in the example. This knowledge can be added to the model definition as a first oder logic constraint defined using DomiKnows sub language with the methods `atMostL`.  
  
 ```python3
 atMostL(people, organization, location, other, o)
 ```
-The `atMostL` method in this constrain will ensure that any instance will classified with only one of the concepts listed as the method arguments or none.
+The `atMostL` method in this constraint will ensure that any instance will classified with only one of the concepts listed as the method arguments or none.
 
-The `pair` relations has 5 different possible classes in this example. The `ifL` method can be use to constrain what can be a first and second related instance of each relations type.
+The `pair` relations has 5 different possible classes in this example. The `ifL` method can be use to constraint what can be a first and second related instance of each relations type.
 
 ```python3
 ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))))
@@ -92,11 +92,11 @@ ifL(orgbase_on('x'), andL(organization(path=('x', rel_pair_phrase1)), location(p
 ifL(kill('x'), andL(people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))))
 ```
 
-Each of this constrain is built in the same way. The first argument of the `ifL` is a constrain concept type of `pair`. 
+Each of this constraint is built in the same way. The first argument of the `ifL` is a constraint concept type of `pair`. 
 The concept has a name of the variable `x` which represent instances of `pair` in the example. 
-The second argument of the `ifL` method is a call to another DomiKnows constrain sub language method - `andL`.
+The second argument of the `ifL` method is a call to another DomiKnows constraint sub language method - `andL`.
 This method required that both its arguments must hold. 
-It is used here to ensure that both first and second of the constrain relation instances have required concepts assigned. 
+It is used here to ensure that both first and second of the constraint relation instances have required concepts assigned. 
 The first related instance is obtain by provided path in the graph starting from the current `x` instance. It is reach by following the edge `rel_pair_phrase1`.
 Respectively the second instance is reach by following the edge `rel_pair_phrase2` from the instance `x`,
 

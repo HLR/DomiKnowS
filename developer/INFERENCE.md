@@ -7,7 +7,7 @@
 - [Softmax and Argmax Inference](#softmax-and-argmax-inference)
 - [Inference Result Access](#inference-result-access)
 - [Inference Metrics](#inference-metrics)
-- [Verification of Logical Constrain Consistency](#verification-of-logical-constrain-consistency)
+- [Verification of Logical constraint Consistency](#verification-of-logical-constraint-consistency)
 
 ## Class Overview
 
@@ -69,7 +69,7 @@ Alternatively, if the DataNode for the parent concept or relation to the given c
 ```python
 conceptRelation
 ```
-where `conceptRelation` is the name of the concept or relation for which the hard constrain is being retrieved.
+where `conceptRelation` is the name of the concept or relation for which the hard constraint is being retrieved.
 The value of this attribute can be 0 or 1.
 
 The method retrieves the constrains from the knowledge graph associated with the Data Graph.
@@ -90,12 +90,12 @@ The solver ILP model is solved by Gurobi and the found solutions for optimal cla
 
 ### ILP Loss for Logical Constrains 
 
-Solver can also calculate the loss for each logical constrain:
+Solver can also calculate the loss for each logical constraint:
 
 ```python
 dn.calculateLcLoss()
 ```
-The method returns a dictionary with entry for each logical constrain and tensor with calculated losses.
+The method returns a dictionary with entry for each logical constraint and tensor with calculated losses.
 
 Example of loss calculation:
 
