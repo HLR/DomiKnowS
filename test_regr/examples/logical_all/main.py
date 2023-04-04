@@ -7,7 +7,8 @@ import torch
 
 
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import atMostL, forAllL, combinationL
+from domiknows.graph.logicalConstrain import atMostL, forAllL
+from domiknows.graph import combinationC
 from domiknows.program.model.pytorch import PoiModel
 
 
@@ -99,7 +100,7 @@ with Graph('global') as graph:
     ### 
 
     forAllL(
-         combinationL('i', 'e')(step, entity), #this is the search space, cartesian product is expected between options
+         combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
          atMostL(
              final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
          ), # this is the condition that should hold for every assignment
@@ -135,7 +136,7 @@ def model_declaration(config, case):
         entities['list'], steps['list'], locations['list'],
         expected_inputs= ([case.entities], [case.steps], [case.locations]),
         expected_outputs= (
-            torch.ones([1, 1]), torch.ones([1, 1]),torch.ones([1, 1])
+            torch.ones([1, 1]), torch.ones([1, 1]),torch.ones([1, 1]), case.process
             )
         )
     

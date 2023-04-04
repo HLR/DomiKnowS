@@ -407,7 +407,7 @@ def test_main_conll04(case):
         assert len(JohnDN.getChildDataNodes(conceptName=phrase)) == 0
         
         assert len(JohnDN.getRelationLinks()) == 2
-        assert len(JohnDN.getRelationLinks(relationName=pair)) == 4
+        assert len(JohnDN.getRelationLinks(relationName="arg1")) == 4
 
         # Get value of attribute o/ILP for word 2
         #assert tokenResult['O'][2] == 1

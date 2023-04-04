@@ -17,9 +17,11 @@ from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 from domiknows.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
 
-from domiknows.graph import LogicalConstrain, V, fixedL, ifL
-from _functools import reduce
+from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL
+from domiknows.graph import CandidateSelection
 from domiknows.utils import getReuseModel
+
+from domiknows.graph.candidates import getCandidates
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -302,7 +304,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             multiclassDict[c[0]].append(c)
             
         for mc in multiclassDict:
-            # Add constrain which restrict number of muliclass labels assigned to one for the given instance
+            # Add constraint which restrict number of muliclass labels assigned to one for the given instance
             rootConcept = rootDn.findRootConceptOrRelation(mc)
             dns = rootDn.findDatanodes(select = rootConcept)
             xkey = '<' + mc.name + '>/ILP/x'  
@@ -930,16 +932,44 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 return 0
         
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
+        
+    def __addLossTovDns(self, loss, vDns):
+        if loss and vDns:
+            vDnsOriginal = vDns
+            vDnsList = [v[0] for v in  vDns]
+            vDns = []
+            try:
+                if len(vDnsList) > 1:
+                    tStack = torch.stack(vDnsList, dim=1)
+                else:
+                    tStack = vDnsList[0]
+                tsqueezed = torch.squeeze(tStack, dim=0)
+
+            except IndexError as ie:
+                tsqueezed = torch.stack(vDnsList, dim=0)
+                pass
+        
+            if not len(tsqueezed.shape):
+                tsqueezed = torch.unsqueeze(tsqueezed, 0)
+                
+            tList = [tsqueezed]
+            vDns.append(tList)
+            
+        return vDns
+    
+    def __constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
         if key == None:
             key = ""
+            
         if lcVariablesDns == None:
             lcVariablesDns = OrderedDict()
             
         lcVariables = OrderedDict()
+        
         if sample:
             sampleInfo = OrderedDict()
             lcVariablesSet = OrderedDict()
+            
         if vNo == None:
             vNo = [1, 1]
         
@@ -950,7 +980,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             if  isinstance(e, V):
                 continue # Already processed in the previous Concept 
             
-            if isinstance(e, (Concept,  LogicalConstrain, tuple)): 
+            if isinstance(e, (Concept,  LcElement, tuple)): 
                 # Look one step ahead in the parsed logical constraint and get variables names (if present) after the current concept
                 if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
                     variable = lc.e[eIndex+1]
@@ -958,10 +988,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if isinstance(e, LogicalConstrain):
                         variable = V(name="_lc" + str(vNo[1]))
                         vNo[1] += 1
+                    elif isinstance(e, tuple) and isinstance(e[0], CandidateSelection):
+                        e[0].CandidateSelectionVariable = e[1]
+                        e = e[0]
+                        
+                        variable = V(name="_cs" + str(vNo[1]))
+                        vNo[1] += 1
                     else:
                         if firstV == None:
                             variable = V(name="_x" + str(vNo[0]) )
-                            firstV = variable.name
+                            if not isinstance(lc, CandidateSelection):
+                                firstV = variable.name
                             vNo[0] += 1
                         else:
                             variable = V(name="_x" + str(vNo[0]), v = (firstV,))
@@ -984,127 +1021,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcVariables[newvVariableName] = lcVariables[variableName]
 
                 elif isinstance(e, (Concept, tuple)): # -- Concept 
-                    conceptName = e[0].name
-                        
-                    # -- Collect dataNode for the logical constraint (path)
-                    
-                    dnsList = [] # Stores lists of dataNodes for each corresponding dataNode 
-                    
-                    if variable.v == None: # No path - just concept
-                        if variable.name == None:
-                            self.myLogger.error('The element %s of logical constraint %s has no name for variable'%(conceptName, lc.lcName))
-                            return None
-                                                 
-                        rootConcept = dn.findRootConceptOrRelation(conceptName)
-                        _dns = dn.findDatanodes(select = rootConcept)
-                        dnsList = [[dn] for dn in _dns]
-                    else: # Path specified
-                        from domiknows.graph.logicalConstrain import eqL
-                        if not isinstance(variable.v, eqL):
-                            if len(variable.v) == 0:
-                                self.myLogger.error('The element %s of logical constraint %s has empty part v of the variable'%(conceptName, lc.lcName))
-                                return None
-                          
-                        # -- Prepare paths
-                        path = variable.v
-                        paths = []
-                        
-                        if isinstance(path, eqL):
-                            paths.append(path)
-                        elif isinstance(path[0], str) and len(path) == 1:
-                            paths.append(path)
-                        elif isinstance(path[0], str) and not isinstance(path[1], tuple):
-                            paths.append(path)
-                        else: # If many paths
-                            for i, vE in enumerate(variable.v):
-                                if i == 0 and isinstance(vE, str):
-                                    continue
-                                
-                                paths.append(vE)
-                                
-                        pathsCount = len(paths)
-                        
-                        # -- Process  paths
-                        dnsListForPaths = []
-                        for i, v in enumerate(paths):
-                            dnsListForPaths.append([])
-                            
-                            # Get name of the referred variable 
-                            if isinstance(path, eqL):
-                                referredVariableName = None
-                            else:
-                                referredVariableName = v[0] 
-                        
-                            if referredVariableName not in lcVariablesDns: # Not yet defined - it has to be the current lc element dataNodes list
-                                rootConcept = dn.findRootConceptOrRelation(conceptName)
-                                _dns = dn.findDatanodes(select = rootConcept)
-                                referredDns = [[dn] for dn in _dns]
-                                integrate = True
-                            else: # already defined in the logical constraint from the v part 
-                                referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
-                                
-                            # Get variables from dataNodes selected  based on referredVariableName
-                            for listOfDataNodes in referredDns:
-                                eDns = [] 
-                                
-                                for currentReferredDataNode in listOfDataNodes:
-                                    if currentReferredDataNode is None:
-                                        continue
-                                    
-                                    # -- Get DataNodes for the edge defined by the path part of the v
-                                    if isinstance(path, eqL):
-                                        _eDns = currentReferredDataNode.getEdgeDataNode(v) 
-                                    else:
-                                        _eDns = currentReferredDataNode.getEdgeDataNode(v[1:]) 
-                                    
-                                    if _eDns and _eDns[0]:
-                                        eDns.extend(_eDns)
-                                    elif not isinstance(path, eqL):
-                                        vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
-                                        if lc.__str__() != "fixedL":
-                                            self.myLogger.info('%s has no path %s requested by %s for concept %s'%(currentReferredDataNode, vNames, lc.lcName, conceptName))
-                                if not eDns:
-                                    eDns = [None] # None - to keep track of candidates
-                                    
-                                dnsListForPaths[i].append(eDns)
-                           
-                        # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
-                        dnsList = []
-                        newIntersection = True
-                        if newIntersection:
-                            if pathsCount == 1: # Single path
-                                dnsList = dnsListForPaths[0]
-                            else:
-                                # --- Assume Intersection - TODO: in future use lo if defined to determine if different operation                                
-                                for i in range(len(dnsListForPaths[0])):
-                                    try:
-                                        se = [set(dnsListForPaths[item][i]) for item in range(pathsCount)]
-                                    except IndexError as ei:
-                                        continue
-                                    dnsListR = reduce(set.intersection, se)
-                                    dnsList.append(list(dnsListR))
-                        else:
-                            dnsList = dnsListForPaths[0]
-                           
-                            # -- Combine the collected lists of dataNodes based on paths 
-                            for l in dnsListForPaths[1:]:
-                                # --- Assume Intersection - TODO: in future use lo if defined to determine if different  operation
-                                _d = []
-                                for i in range(len(l)):
-                                    di = []
-                                    for x in dnsList[i]:
-                                        if x in l[i]:
-                                            di.append(x)
-                                            
-                                    if not di:
-                                        di = [None]
-                                        
-                                    _d.append(di)
-                                    
-                                dnsList = _d
+                    # -- Get dataNodes candidates 
+                    dnsList = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger)
+                    lcVariablesDns[variableName] = dnsList
                                 
                     # -- Get ILP variables from collected DataNodes for the given element of logical constraint
                     
+                    conceptName = e[0].name
                     vDns = [] # Stores ILP variables
                     if sample:
                         sampleInfoForVariable = []
@@ -1172,9 +1095,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if sample:
                             sampleInfoForVariable.append(_sampleInfoForVariable)
                         
-                    # -- Store dataNodes and ILP variables
-                    
-                    lcVariablesDns[variableName] = dnsList
+                    # -- Store ILP variables
                     
                     if None in lcVariablesDns:
                         pass
@@ -1199,39 +1120,36 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if sample:
                         sampleInfo[variableName] = sampleInfoForVariable
                 
-                elif isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
-                    self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
-                    if sample:
-                        vDns, sampleInfoLC, lcVariablesLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                        sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
-                        
-                        lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
-                    else:
-                        vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                        
-                        if loss and vDns:
-                            vDnsOriginal = vDns
-                            vDnsList = [v[0] for v in  vDns]
-                            vDns = []
-                            try:
-                                if len(vDnsList) > 1:
-                                    tStack = torch.stack(vDnsList, dim=1)
-                                else:
-                                    tStack = vDnsList[0]
-                                tsqueezed = torch.squeeze(tStack, dim=0)
+                if isinstance(e, LcElement):
 
-                            except IndexError as ie:
-                                tsqueezed = torch.stack(vDnsList, dim=0)
-                                pass
+                    if isinstance(e, CandidateSelection): # -- nested LogicalConstrain - process recursively 
+                        lcVariablesDnsNew = self.__constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
+                                                                     lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                         
+                        lcVariablesDns = lcVariablesDnsNew
+                        vDns = None
+                        if lcVariablesDns:
+                            length_of_list = len(next(iter(lcVariablesDns.values())))
+                            vDns = [[1] for _ in range(length_of_list)]
+                                   
+                        vDns = self.__addLossTovDns(loss, vDns)
                         
-                            if not len(tsqueezed.shape):
-                                tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                                
-                            tList = [tsqueezed]
-                            vDns.append(tList)
-                                                
+                    if isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
+                        self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
+
+                        if sample:
+                            vDns, sampleInfoLC, lcVariablesLC = self.__constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
+                                                                                   lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                            sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
+                            
+                            lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
+                        else:
+                            vDns = self.__constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
+                                                                     lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                            
+                            vDns = self.__addLossTovDns(loss, vDns)
+                        
+                                                    
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
                         return None
@@ -1251,11 +1169,14 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
                 return None
-        if sample:
+            
+        if isinstance(lc, CandidateSelection):
+            return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
+        elif sample:
             lcVariablesSet[lc] = lcVariables
-            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet
+            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet
         elif verify and headLC:
-            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
+            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
         else:
             if loss:
                 slpitT = False
@@ -1275,7 +1196,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         for s in lcVSplitted:
                             lcVariables[v].append([s]) 
                     
-            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate)
+            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate)
     
     # ---------------
                 

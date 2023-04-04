@@ -9,19 +9,15 @@ ifLog =  ilpConfig['ifLog']
         
 V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
-class LogicalConstrain:
-    def __init__(self, *e, p=100, active = True, sampleEntries  = False, name = None):
-        self.headLC = True # Indicate that it is head constrain and should be process individually
-        self.active = active
-        self.sampleEntries = sampleEntries
-        
+class LcElement:
+    def __init__(self, *e,  name = None):
         if not e:
-            myLogger.error("Logical Constraint initialized is empty")
-            raise LogicalConstrain.LogicalConstrainError("Logical Constraint initialized is empty")
+            myLogger.error("Logical Element initialized is empty")
+            raise LcElement.LcElementError("Logical Element initialized is empty")
         
         updatedE = []
         for _, eItem in enumerate(e):
-            if isinstance(eItem, (LogicalConstrain, Concept)):
+            if isinstance(eItem, (LcElement, Concept)):
                 updatedE.append(eItem)
             elif callable(eItem):
                 newEItem = eItem.__call__()
@@ -42,22 +38,23 @@ class LogicalConstrain:
                 
         self.e = updatedE
 
-        # -- Find the graph for this Logical Constraint - based on context defined in the concept used in constrain definition
+        # -- Find the graph for this Logical Element - based on context defined in the concept used in constraint definition
         self.graph = None
        
         conceptOrLc = None
         
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, LogicalConstrain):
+            if isinstance(eItem, LcElement):
                 conceptOrLc = eItem
                 break
             elif isinstance(eItem, tuple):
-                conceptOrLc = eItem[0]
-                break
+                if isinstance(eItem[0], Concept):
+                    conceptOrLc = eItem[0]
+                    break
     
         if conceptOrLc is None:
-            myLogger.error("Logical Constraint is incorrect")
-            raise LogicalConstrain.LogicalConstrainError("Logical Constraint is incorrect")
+            myLogger.error("Logical Element is incorrect")
+            raise LcElement.LcElementError("Logical Element is incorrect")
             
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
@@ -68,26 +65,50 @@ class LogicalConstrain:
             self.graph = conceptOrLc.graph
                 
         if self.graph == None:
-            myLogger.error("Logical Constraint initialized is not associated with graph")
-            raise LogicalConstrain.LogicalConstrainError("Logical Constraint initialized is not associated with graph")
+            myLogger.error("Logical Element initialized is not associated with graph")
+            raise LcElement.LcElementError("Logical Element initialized is not associated with graph")
                      
-        # Create Logical Constraint id based on number of existing Logical Constraint in the graph
+        # Create Logical Element id based on number of existing Logical Element in the graph
         self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
         if name is not None:
             self.name = name
         else:
             self.name = self.lcName
+     
+    class LcElementError(Exception):
+        pass
+    
+    def __str__(self):
+        return self.__class__.__name__
+    
+    def __repr__(self):
+        return  self.lcName + '(' + self.__class__.__name__ + ')'
             
-        # Add the constrain to the graph
+    def __getContext(self, e):
+        if isinstance(e, LcElement):
+            return self.__getContext(e.e[0])
+        else:
+            return e._context
+
+class LogicalConstrain(LcElement):
+    def __init__(self, *e, p=100, active = True, sampleEntries  = False, name = None):
+        super().__init__(*e, name = name)
+        
+        self.headLC = True # Indicate that it is head constraint and should be process individually
+        self.active = active
+        self.sampleEntries = sampleEntries
+        
+        # Add the constraint to the graph
+        assert self.graph is not None
         self.graph.logicalConstrains[self.lcName] = self
-                
-        # Go though constrain, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
+        
+         # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
         for e_item in self.e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False
                 
-        # Check soft constrain is activated though p - if certainty in the validity of the constrain or the user preference is provided by p
+        # Check soft constraint is activated though p - if certainty in the validity of the constraint or the user preference is provided by p
         if p < 0:
             self.p = 0
             myLogger.warning("%s Logical Constraint created with p equal %i sets it to 0"%(self.lcName,p))
@@ -96,25 +117,10 @@ class LogicalConstrain:
             myLogger.warning("%s Logical Constraint created with p equal %i sets it to 100"%(self.lcName,p))
         else:
             self.p = p
-     
-    class LogicalConstrainError(Exception):
-        pass
-    
-    def __str__(self):
-        return self.__class__.__name__
-    
-    def __repr__(self):
-        return  self.lcName + '(' + self.__class__.__name__ + ')'
-          
+        
     def __call__(self, model, myIlpBooleanProcessor, v): 
         pass 
-            
-    def __getContext(self, e):
-        if isinstance(e, LogicalConstrain):
-            return self.__getContext(e.e[0])
-        else:
-            return e._context
-       
+    
     def getLcConcepts(self):
         lcConcepts = set()
         
@@ -133,7 +139,7 @@ class LogicalConstrain:
                 
         return lcConcepts
         
-    # Get string representation of  Logical Constraintt
+    # Get string representation of  Logical Constraint
     def strEs(self):
         strsE = []
         for _, eItem in enumerate(self.e):
@@ -198,7 +204,7 @@ class LogicalConstrain:
             singleV.append(cSingleVar)
         
         if headConstrain:
-            if ifLog: myLogger.debug("%s Logical Constraint is the head constrain - only ILP constrain created"%(lcName))
+            if ifLog: myLogger.debug("%s Logical Constraint is the head constraint - only ILP constraint created"%(lcName))
         
         if model is not None:
             model.update()
@@ -698,22 +704,13 @@ class atMostAL(LogicalConstrain):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
             return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
         
-# ----------------- Forall
+# ----------------- forall
 class forAllL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
-        
-# ----------------- combinationL
-class combinationL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrainsCombination('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
-        
+            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)        
+    
         

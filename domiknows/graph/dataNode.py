@@ -1,6 +1,6 @@
 import torch
 from collections import OrderedDict, namedtuple
-from  time import process_time_ns
+from time import process_time_ns
 import re
 
 from .dataNodeConfig import dnConfig 
@@ -846,6 +846,8 @@ class DataNode:
 
         relDns = None         
         if self.isRelation(path0):
+            relDns = self.getDnsForRelation(path0)
+        elif isinstance(path0, str):
             relDns = self.getDnsForRelation(path0)
         else: # if not relation then has to be attribute in eql
             attributeValue = self.getAttribute(path[0].e[1]).item()
