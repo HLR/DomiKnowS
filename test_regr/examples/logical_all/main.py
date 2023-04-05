@@ -1,18 +1,19 @@
 import pytest
 import math
 import torch
-# import sys
-# sys.path.append('.')
-# sys.path.append('../../..')
+import sys
+sys.path.append('.')
+sys.path.append('../../..')
 
 
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import atMostL, forAllL, exactL
 from domiknows.graph import combinationC
 from domiknows.program.model.pytorch import PoiModel
+from domiknows.graph import EnumConcept
 
 
-@pytest.fixture(name='case')
+# @pytest.fixture(name='case')
 def test_case():
     import torch
     from domiknows.utils import Namespace
@@ -31,6 +32,8 @@ def test_case():
             'loc1', 'loc2', 'loc3'
         ],
     }
+
+    ### make probs and gt for the final_decision
     final_decision_gt = torch.zeros(len(case['steps']), len(case['entities']), len(case['locations']))
     sample_decision = torch.rand(len(case['steps']), len(case['entities']), len(case['locations']), 2)
     sample_decision_p = sample_decision.softmax(dim=-1)
@@ -42,11 +45,22 @@ def test_case():
         for j in range(len(case['entities'])):
             final_decision_gt[i, j, sample_indexes[i, j]] = 1
 
-    # for i in range(len(case['steps'])):
-    #     for j in range(len(case['entities'])):
-    #         ### randomly select one between locations and put that to 1
-    #         final_decision_gt[i, j, torch.randint(0, len(case['locations']), (1,))] = 1
-    # final_decision_gt = final_decision_gt.to(device)
+    ### make probs and gt for the action_decision
+    action_decision_gt = torch.zeros(len(case['steps']), len(case['entities']))
+    sample_action_decision = torch.rand(len(case['steps']), len(case['entities']), 6)
+    sample_action_decision_p = sample_action_decision.softmax(dim=-1)
+    ### get the index of the highest value in the last dimension of the tensor sample_decision
+    sample_action_indexes = sample_action_decision_p.argmax(dim=-1)
+    ### put that index equal to 1 in the final_decision_gt
+    for i in range(len(case['steps'])):
+        for j in range(len(case['entities'])):
+            action_decision_gt[i, j] = sample_action_indexes[i, j]
+    
+    ### adding action decision to the case
+    case['action_decision'] = action_decision_gt.to(device)
+    case['action_decision_p'] = sample_action_decision_p.to(device)
+    case['original_action_probs'] = sample_action_decision.reshape(-1, 6).to(device)
+    ### adding final decision to the case for the location triple
     case['final_decision'] = final_decision_gt.to(device)
     case['original_probs'] = sample_decision.reshape(-1, 2).to(device)
     case['sample_decision_p'] = sample_decision_p.to(device)
@@ -72,6 +86,11 @@ with Graph('global') as graph:
     (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg_e=entities, arg_s=steps, arg_l=locations)
     # (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg1=entities, arg2=steps, arg3=locations)
 
+
+    action_pair = Concept(name='action_pair')
+    (rel_action_pair_step, rel_action_pair_entity, ) = action_pair.has_a(arg_s1=step, arg_e2=entity)
+    action_decision = action_pair(name='action_decision', ConceptClass=EnumConcept, 
+                                  values=["create", "destroy", "exist", "move", "prior", "post"])
 
     decision = Concept(name='decision')
     (rel_step, rel_entity, rel_location, ) = decision.has_a(arg1=step, arg2=entity, arg3=location)
@@ -172,6 +191,32 @@ def model_declaration(config, case):
         expected_inputs=([case.locations], ),
         expected_outputs=(torch.ones((len(case.locations), 1)), case.locations, )
     )
+
+    ### create two matrixes to be 1 when connecting to certain type of object, between actions and step, actions and entiy
+    num_actions = len(case.steps) * len(case.entities)
+    connection_actions_steps = torch.zeros(num_actions, len(case.steps))
+    connection_actions_entities = torch.zeros(num_actions, len(case.entities))
+    for i in range(len(case.steps)):
+        for j in range(len(case.entities)):
+            connection_actions_steps[i*len(case.entities) + j, i] = 1
+            connection_actions_entities[i*len(case.entities) + j, j] = 1
+
+    action_pair[rel_action_pair_step.reversed, rel_action_pair_entity.reversed] = TestSensor(
+        step['raw'], entity['raw'],
+        expected_inputs=(case.steps, case.entities),
+        expected_outputs=(connection_actions_steps, connection_actions_entities, )
+    )
+
+    action_pair[action_decision] = TestSensor(
+        action_pair[rel_action_pair_step.reversed], action_pair[rel_action_pair_entity.reversed],
+        expected_inputs=(connection_actions_steps, connection_actions_entities),
+        expected_outputs=case.original_action_probs
+    )
+
+    action_pair[action_decision] = TestSensor(
+        label= True,
+        expected_outputs=case.action_decision.flatten()
+    )
     
     ### create three matrixes to be 1 when connecting to certain type of object
     total_decision_number = len(case.steps) * len(case.entities) * len(case.locations)
@@ -199,7 +244,7 @@ def model_declaration(config, case):
     decision[final_decision] = TestSensor(
         decision[rel_step.reversed], decision[rel_entity.reversed], decision[rel_location.reversed],
         expected_inputs=(connection_steps, connection_entities, connection_locations),
-        expected_outputs=case['original_probs']
+        expected_outputs=case.original_probs
     )
 
     decision[final_decision] = TestSensor(
@@ -210,7 +255,7 @@ def model_declaration(config, case):
     lbp = LearningBasedProgram(graph, **config)
     return lbp, probs
 
-@pytest.mark.gurobi
+# @pytest.mark.gurobi
 def test_main_conll04(case):
     
     import torch
@@ -218,7 +263,7 @@ def test_main_conll04(case):
     lbp, probs = model_declaration(
         {
             'Model': PoiModel,
-            'poi': (process, entities, steps, locations, step, location, entity, decision, final_decision),
+            'poi': (process, entities, steps, locations, step, location, entity, decision, final_decision, action_pair),
             'loss': None,
             'metric': None,
         }, case)
@@ -243,9 +288,21 @@ def test_main_conll04(case):
             print("the original probs are: ", case['original_probs'][sind*len(case.entities)*len(case.locations) + eind*len(case.locations) + lind])
             print("the sample_prediction_prob is ", case['sample_decision_p'][sind, eind])
             raise
+    
+    for node in datanode.findDatanodes(select=action_pair):
+        try:
+            assert node.getAttribute(action_decision, 'label').to('cpu').item() == node.getAttribute(action_decision, 'ILP').argmax()
+        except AssertionError:
+            print(f"AssertionError: {node.getAttribute(action_decision, 'label').to('cpu').item()} != {node.getAttribute(action_decision, 'ILP').item()}")
+            sind = node.getAttribute("arg_s1.reversed").argmax().item()
+            print("the step of the node is: ", sind)
+            eind = node.getAttribute("arg_e2.reversed").argmax().item()
+            print("the entity of the node is: ", eind)
+            print("the node probs are ", node.getAttribute(action_decision, 'local/softmax').to('cpu'))
+            raise
                         
-if __name__ == '__main__':
-    pytest.main([__file__])
-# case = test_case()
-# test_main_conll04(case)
+# if __name__ == '__main__':
+#     pytest.main([__file__])
+case = test_case()
+test_main_conll04(case)
 
