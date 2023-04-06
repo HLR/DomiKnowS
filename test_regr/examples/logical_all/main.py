@@ -1,19 +1,19 @@
 import pytest
 import math
 import torch
-import sys
-sys.path.append('.')
-sys.path.append('../../..')
+# import sys
+# sys.path.append('.')
+# sys.path.append('../../..')
 
 
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import atMostL, forAllL, exactL
+from domiknows.graph.logicalConstrain import atMostL, forAllL, exactL, ifL, andL, notL
 from domiknows.graph import combinationC
 from domiknows.program.model.pytorch import PoiModel
 from domiknows.graph import EnumConcept
 
 
-# @pytest.fixture(name='case')
+@pytest.fixture(name='case')
 def test_case():
     import torch
     from domiknows.utils import Namespace
@@ -26,7 +26,7 @@ def test_case():
             'a', 'b', 'c', 'd'
         ],
         'steps': [
-            1, 2, 3, 4, 5, 6, 7
+            0, 1, 2, 3, 4, 5, 6, 7
         ],
         'locations': [
             'loc1', 'loc2', 'loc3'
@@ -46,13 +46,13 @@ def test_case():
             final_decision_gt[i, j, sample_indexes[i, j]] = 1
 
     ### make probs and gt for the action_decision
-    action_decision_gt = torch.zeros(len(case['steps']), len(case['entities']))
-    sample_action_decision = torch.rand(len(case['steps']), len(case['entities']), 6)
+    action_decision_gt = torch.zeros(len(case['steps'])-1, len(case['entities']))
+    sample_action_decision = torch.rand(len(case['steps'])-1, len(case['entities']), 6)
     sample_action_decision_p = sample_action_decision.softmax(dim=-1)
     ### get the index of the highest value in the last dimension of the tensor sample_decision
     sample_action_indexes = sample_action_decision_p.argmax(dim=-1)
     ### put that index equal to 1 in the final_decision_gt
-    for i in range(len(case['steps'])):
+    for i in range(len(case['steps']) - 1):
         for j in range(len(case['entities'])):
             action_decision_gt[i, j] = sample_action_indexes[i, j]
     
@@ -86,6 +86,11 @@ with Graph('global') as graph:
     (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg_e=entities, arg_s=steps, arg_l=locations)
     # (rel_process_entities, rel_process_steps, rel_process_locations, ) = process.has_a(arg1=entities, arg2=steps, arg3=locations)
 
+    exact_before = Concept(name='exact_before')
+    (rel_exact_before_step1, rel_exact_before_step2, ) = exact_before.has_a(arg_eb_s1=step, arg_eb_s2=step)
+
+    before = Concept(name='before')
+    (rel_before_step1, rel_before_step2, ) = before.has_a(arg_b_s1=step, arg_b_s2=step)
 
     action_pair = Concept(name='action_pair')
     (rel_action_pair_step, rel_action_pair_entity, ) = action_pair.has_a(arg_s1=step, arg_e2=entity)
@@ -103,33 +108,6 @@ with Graph('global') as graph:
     ##     for z in locations:
     ##         total += final_decision(x, y, z)
     ##     assert total == 1
-
-    ####
-    # step('i') - [[step 0], [step 1], [step 2], [step 3], [step 4], [step 5], [step 6]]
-
- 
-
-    # entity('e')- [[entity 0], [entity 1], [entity 2], [entity 3]]
-
-    # (step0, entity0), (step0, entity1)
-    
-
-    # final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed)))
-
-    # [[decision 2, decision 0, decision 1],
-
-    # [decision 16, decision 15, decision 17],
-
-    # [decision 31, decision 32, decision 30],
-
-    # [decision 47, decision 46, decision 45]]
-
-    ### andL(step('i'), entity('e'), location('l')) --> (step0, entity0, location0), (step1, entity1, location1)
-
-    ### if (pair('p') , if persn('x' , p.arg1) and location('y', p.arg2) )person('x'), location('y')
-
-    ### 
-
     forAllL(
          combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
          exactL(
@@ -149,7 +127,26 @@ with Graph('global') as graph:
     ### (2, b, loc1), (2, b, loc2), (2, b, loc3)
     ### (2, c, loc1), (2, c, loc2), (2, c, loc3)
     ### and so on!
-        
+
+    ### LC2: If the action for entity e and step i is move, then the location should be different in step i-1 and step i
+    ifL(
+        # action a1 is move, i is a1's step and e is action entity
+        andL(
+            action_decision.move('a1'), 
+            step('i', path=('a1', rel_action_pair_step)),
+            entity('e', path=('a1', rel_action_pair_entity)),
+            final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed)))
+            ), 
+        andL(
+            step('j', path=('i', rel_exact_before_step2.reversed, rel_exact_before_step1)),
+            notL(final_decision('y', path=(('j', rel_step.reversed), ('e', rel_entity.reversed), ('x', rel_location, rel_location.reversed))))
+        ),
+        active = False
+    )
+
+    ### step('i') --> step('j', path=(attr('raw') = j.attr('raw') - 1))
+    ### (x != y)
+
 
 def model_declaration(config, case):
     from domiknows.program.program import LearningBasedProgram
@@ -192,13 +189,57 @@ def model_declaration(config, case):
         expected_outputs=(torch.ones((len(case.locations), 1)), case.locations, )
     )
 
-    ### create two matrixes to be 1 when connecting to certain type of object, between actions and step, actions and entiy
-    num_actions = len(case.steps) * len(case.entities)
+    ### create two 2d tensor to be 1 when step i is before step j
+    ### each tensor represents the edges for the relationship
+    b1s = []
+    b2s = []
+    for st in range(len(case.steps)):
+        step1 = st + 1
+        if step1 < len(case.steps):
+            b1 = torch.zeros(len(case.steps))
+            b1[st] = 1
+            b2 = torch.zeros(len(case.steps))
+            b2[step1] = 1
+            b1s.append(b1)
+            b2s.append(b2)                
+    b1s, b2s = torch.stack(b1s), torch.stack(b2s)
+    
+
+    ### creating the before pair between steps
+    exact_before[rel_exact_before_step1.reversed, rel_exact_before_step2.reversed] = TestSensor(
+        step['raw'],
+        expected_inputs=(case.steps, ),
+        expected_outputs=(b1s, b2s, )
+    )
+
+    ### reformat the following code to be more readable
+    b1s = []
+    b2s = []
+    for st in range(len(case.steps)):
+        for step1 in range(len(case.steps)):
+            if st < step1:
+                b1 = torch.zeros(len(case.steps))
+                b1[st] = 1
+                b2 = torch.zeros(len(case.steps))
+                b2[step1] = 1
+                b1s.append(b1)
+                b2s.append(b2)
+    b1s, b2s = torch.stack(b1s), torch.stack(b2s)
+
+    ### creating the before pair between steps
+    before[rel_before_step1.reversed, rel_before_step2.reversed] = TestSensor(
+        step['raw'],
+        expected_inputs=(case.steps, ),
+        expected_outputs=(b1s, b2s, )
+    )
+
+    ### create two matrixes to be 1 when connecting to certain type of object, between actions and step, actions and entiy, skipping the first step since it does not have an action
+    num_actions = (len(case.steps)-1) * len(case.entities)
     connection_actions_steps = torch.zeros(num_actions, len(case.steps))
     connection_actions_entities = torch.zeros(num_actions, len(case.entities))
-    for i in range(len(case.steps)):
+    for i in range(len(case.steps)-1):
         for j in range(len(case.entities)):
-            connection_actions_steps[i*len(case.entities) + j, i] = 1
+            connection_actions_steps[i*len(case.entities) + j, i+1] = 1
             connection_actions_entities[i*len(case.entities) + j, j] = 1
 
     action_pair[rel_action_pair_step.reversed, rel_action_pair_entity.reversed] = TestSensor(
@@ -240,7 +281,6 @@ def model_declaration(config, case):
     )
 
     ### Random probabilities for the decision for each triplet
-    probs = torch.rand(total_decision_number, 2)
     decision[final_decision] = TestSensor(
         decision[rel_step.reversed], decision[rel_entity.reversed], decision[rel_location.reversed],
         expected_inputs=(connection_steps, connection_entities, connection_locations),
@@ -253,17 +293,17 @@ def model_declaration(config, case):
     )
 
     lbp = LearningBasedProgram(graph, **config)
-    return lbp, probs
+    return lbp
 
-# @pytest.mark.gurobi
+@pytest.mark.gurobi
 def test_main_conll04(case):
     
     import torch
 
-    lbp, probs = model_declaration(
+    lbp = model_declaration(
         {
             'Model': PoiModel,
-            'poi': (process, entities, steps, locations, step, location, entity, decision, final_decision, action_pair),
+            'poi': (process, entities, steps, locations, step, before, exact_before, location, entity, decision, final_decision, action_pair),
             'loss': None,
             'metric': None,
         }, case)
@@ -293,7 +333,7 @@ def test_main_conll04(case):
         try:
             assert node.getAttribute(action_decision, 'label').to('cpu').item() == node.getAttribute(action_decision, 'ILP').argmax()
         except AssertionError:
-            print(f"AssertionError: {node.getAttribute(action_decision, 'label').to('cpu').item()} != {node.getAttribute(action_decision, 'ILP').item()}")
+            print(f"AssertionError: {node.getAttribute(action_decision, 'label').to('cpu').item()} != {node.getAttribute(action_decision, 'ILP').argmax().item()}")
             sind = node.getAttribute("arg_s1.reversed").argmax().item()
             print("the step of the node is: ", sind)
             eind = node.getAttribute("arg_e2.reversed").argmax().item()
@@ -301,8 +341,8 @@ def test_main_conll04(case):
             print("the node probs are ", node.getAttribute(action_decision, 'local/softmax').to('cpu'))
             raise
                         
-# if __name__ == '__main__':
-#     pytest.main([__file__])
-case = test_case()
-test_main_conll04(case)
+if __name__ == '__main__':
+    pytest.main([__file__])
+# case = test_case()
+# test_main_conll04(case)
 
