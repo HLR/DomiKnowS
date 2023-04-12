@@ -257,6 +257,41 @@ The basic blocks are combined using the following functions:
 	 		*fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)* - 
 	 			candidates for *empty_entry_label* which have attribute *fixed* should have their classification  fixed to *empty_entry*
 
+#### Candidate Selection
+
+The candidates for the logical constraint are equal number for each concept in the constraint. The logical constrain is then translated into ILP constraints for each candidate pair (or triple, etc.) of the concepts in the constraint. 
+
+If possible to change this behavior by defining the the new candidate selection class by inheriting from `CandidateSelection` and overriding the `get_candidates` method. The example of new candidate selection class is `combinationC` which creates cartesian product of candidates for each concept in the selection. Here is the code example:
+
+  class combinationC(CandidateSelection):
+      def __call__(self, candidates_list, keys=None):
+        from  itertools import product
+        
+        # Create the Cartesian product of all candidates
+        cartesian_product = list(product(*candidates_list))
+        
+        # Extract lists of first elements, second elements, etc.
+        extracted_elements = list(zip(*cartesian_product))
+              
+        # Create a dictionary using the provided keys and the extracted lists
+        result_dict = dict(zip(keys, extracted_elements))
+        
+        return result_dict
+  
+  This class is already available in the library.
+
+  This class can be used in the logical constraint by specifying the `candidate_selection` parameter, e.g.:
+
+        forAllL(
+            combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
+            exactL(
+                final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
+            ),
+        )
+  
+  In this example the combination of all possible candidates for `step` and `entity` concepts is created and then returned as a dictionary with keys `i` and `e` respectively. This dictionary is then used to define the path for the `final_decision` concept. The forAllL constraint is then applied to all possible assignments of `i` and `e` to the path of `final_decision` concept.
+
+  The example show the generic semantic of the `CandidateSelection` candidate selection class. It takes a list of concepts and returns a dictionary with keys corresponding to the concepts and values corresponding to the candidates for the concepts. The keys are provided as tuple behind the `CandidateSelection` call.
 
 ### Graph Constraints
 
@@ -266,7 +301,7 @@ The graph can also specify constraints:
 
   *IF(people, word)*
 
-- **Disjointment between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
+- **Disjointing between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
 
   *atMostL(people, organization, location, other, o, 1)*
   
