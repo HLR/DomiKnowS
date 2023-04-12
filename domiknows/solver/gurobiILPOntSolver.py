@@ -17,7 +17,7 @@ from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 from domiknows.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
 
-from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL
+from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
 from domiknows.utils import getReuseModel
 
@@ -937,7 +937,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         if loss and vDns:
             vDnsOriginal = vDns
             vDnsList = [v[0] for v in  vDns]
-            vDns = []
+            
+            updatedVDns = []
             try:
                 if len(vDnsList) > 1:
                     tStack = torch.stack(vDnsList, dim=1)
@@ -953,9 +954,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 tsqueezed = torch.unsqueeze(tsqueezed, 0)
                 
             tList = [tsqueezed]
-            vDns.append(tList)
+            updatedVDns.append(tList)
             
-        return vDns
+            return updatedVDns
+        else:
+            return vDns
     
     def __constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
         if key == None:
@@ -1133,10 +1136,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                         vDns = None
                         if lcVariablesDns:
                             length_of_list = len(next(iter(lcVariablesDns.values())))
-                            vDns = [[1] for _ in range(length_of_list)]
+
+                            if sample:
+                                vDns = [[torch.ones(p, device=self.current_device, requires_grad=False, dtype=torch.bool)] for _ in range(length_of_list)]
+                            elif loss:
+                                vDns = [[torch.zeros(length_of_list, device=self.current_device, requires_grad=True, dtype=torch.float64)]]
+                                vDns = self.__addLossTovDns(loss, vDns)
+                            else:
+                                vDns = [[1] for _ in range(length_of_list)]
                                    
-                        vDns = self.__addLossTovDns(loss, vDns)
-                        
                     if isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
                         self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
 
@@ -2090,7 +2098,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_verifyResult['satisfied'] = float("nan")
                     
                 # If  this if logical constraints
-                if type(lc) is ifL: # if LC
+                if type(lc) is ifL or type(lc) is forAllL: # if LC
                     firstKey = next(iter(lcVariables)) # antecedent variable name in the given if LC
                     firstLcV = lcVariables[firstKey]   # values of antecedent 
                     

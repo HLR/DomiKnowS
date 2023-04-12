@@ -311,6 +311,11 @@ def test_main_conll04(case):
     data = {}
 
     _, _, datanode, _ = lbp.model(data)
+    
+    #datanode.calculateLcLoss()
+    #datanode.calculateLcLoss(sample = True, sampleSize = 100, sampleGlobalLoss = False)
+    datanode.verifyResultsLC()
+    
     datanode.inferILPResults()
     print(f"\nPrinting DataNode: {datanode}")
     for node in datanode.findDatanodes(select=decision):
