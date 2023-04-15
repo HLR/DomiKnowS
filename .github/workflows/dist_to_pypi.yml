@@ -23,22 +23,17 @@ jobs:
       # Checks-out the repository branch main under $GITHUB_WORKSPACE, so the workflow job can access it
       - uses: actions/checkout@v3
         with:
+          submodules: 'true'
           ref: "main"
           
       # Create Release
       - name: Create Release
         id: create_release
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
           body: |
             Changes in this Release
             - To be provided manually later
-          draft: false
-          prerelease: false
           
       # Sets up python3
       - uses: actions/setup-python@v4
