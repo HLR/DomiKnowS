@@ -7,7 +7,7 @@ While several approaches for integrating symbolic and sub-symbolic models have b
 
 ## Contents
 
-- [Getting Started](https://link-to-getting-started-docs): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
+- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
 - [Example Tasks](https://link-to-examples-docs): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning.
 - [Documentation](https://link-to-api-reference-docs): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
 - [Contributing](https://link-to-contributing-docs): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
