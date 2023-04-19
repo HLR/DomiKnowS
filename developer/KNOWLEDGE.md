@@ -18,7 +18,7 @@ We provide a graph language based on Python for knowledge declaration with notat
   - [Constraints](#constraints)
     - [Logical Constraints](#logical-constraints-lc)
     - [Graph Constraints](#graph-constraints)
-    - [Ontology Cconstrains](#ontology-constraint)
+    - [Ontology Constraints](#ontology-constraint)
 
 ## Class Overview
 
@@ -32,12 +32,12 @@ We provide a graph language based on Python for knowledge declaration with notat
 
 ### Constraints classes
 
-- Package `domiknows.graph.logicalConstrain`: a set of functions with logical symantics, that one can express logical constraints in first order logic.
-- Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the locigal constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, etc.
+- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics, that one can express logical constraints in first order logic.
+- Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the logical constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, etc.
 
 ## Graph
 
-`Graph` instances are basic container of the `Concept`s, `Relation`s, constaints and other instances in the framework.
+`Graph` instances are basic container of the `Concept`s, `Relation`s, constraints and other instances in the framework.
 A `Graph` object is constructed either by manually coding or compiled from `OWL` (deprecated).
 Each `Graph` object can contain other `Graph` objects as sub-graphs. No cyclic reference in graph hierarchy is allowed.
 
@@ -52,7 +52,7 @@ The graph is a partial program, and there is no sensor or learner, which are dat
 We have three defined relationship between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. 
 
 `contains` means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
-Whgen ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
+When ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
 
 ```Python
 sentence = Concept('sentence')
@@ -74,20 +74,20 @@ This means that the candidates of a `pair` concept are generated based on a `wor
 Considering the properties of `contains` and `has_a`, in case of defining a `semantic frame` we have to define the following code.
 
 ```Python
-semanic_frame = Concept('semantic-frame')
+semantic_frame = Concept('semantic-frame')
 semantic_frame.has_a(verb=word, subject=word, object=word)
 ```
 
 As we only support relationships between three concepts, in case of a relation with more arguments, you have to break it to relationships between a main concept and one other concept each time.
 
 ```Python
-semanic_frame = Concept('semantic-frame')
+semantic_frame = Concept('semantic-frame')
 verb_semantic = Concept('verb-semantic')
 subject_semantic = Concept('subject-semantic')
 object_semantic = Concept('object-semantic')
-verb_semantic.has_a(semantic=semanic_frame, verb=word)
-subject_semantic.has_a(semantic=semanic_frame, subject=word)
-object_semantic.has_a(semantic=semanic_frame, object=word)
+verb_semantic.has_a(semantic=semantic_frame, verb=word)
+subject_semantic.has_a(semantic=semantic_frame, subject=word)
+object_semantic.has_a(semantic=semantic_frame, object=word)
 ```
 
 the `equal` relation establishes an equality between two different concept. for instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
@@ -104,7 +104,7 @@ Using each of these relation edges requires us to assign a sensor to them in the
 
 ### Example
 
-The following snippest shows an example of a `Graph`.
+The following snippets shows an example of a `Graph`.
 
 ```Python
 with Graph() as graph:
