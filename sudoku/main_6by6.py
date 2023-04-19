@@ -429,6 +429,8 @@ program = GBIProgram(
     #    metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
        )
 
+#program = program1
+
 trainingNo = 220
 for i in range(trainingNo):
     print("Training - %i"%(i))

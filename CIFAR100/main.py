@@ -3,7 +3,7 @@ import sys
 
 sys.path.append('.')
 sys.path.append('../..')
-from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+from domiknows.program.lossprogram import GBIProgram, SampleLossProgram, PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
 
 
@@ -47,9 +47,12 @@ def main():
     parser.add_argument('--namesave', dest='namesave', default="none", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--ilp', dest='ilp', default=True, help='whether or not to use ilp', type=bool)
-    parser.add_argument('--pd', dest='primaldual', default=False,help='whether or not to use primaldual constriant learning', type=bool)
-    parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
+    parser.add_argument('--pd', dest='primaldual', default=False,help='whether or not to use primaldual constraint learning', type=bool)
+    parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constraint learning',type=bool)
     parser.add_argument('--sam', dest='sam', default=False, help='whether or not to use sampling learning', type=bool)
+    parser.add_argument('--gbi', dest='gbi', default=False, help='whether or not to use GBI learning', type=bool)
+    parser.add_argument('--gbi_solver', dest='gbi_solver', default=False, help='whether or not to use GBI solver learning', type=bool)
+
 
     parser.add_argument('--test', dest='test', default=False, help='dont train just test', type=bool)
     parser.add_argument('--verbose', dest='verbose', default=False, help='print improved and damaged examples', type=bool)
@@ -59,7 +62,7 @@ def main():
     parser.add_argument('--samplenum', dest='samplenum', default=999999999,help='number of samples to choose from the dataset',type=int)
     parser.add_argument('--epochs', dest='epochs', default=19, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
-    parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
+    parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimizer',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
 
     parser.add_argument('--graph_type', dest='graph_type', default="exactL_ifLorLtopdown", help='type of constraints to be defined', type=str)
@@ -143,6 +146,7 @@ def main():
     image[Label] = ModuleLearner('pixels',"child", module=model)
 
     f = open(str(args.ilp)+"_"+str(args.samplenum)+"_"+"_"+str(args.beta)+".txt", "w")
+    
     print("POI")
     program = SolverPOIProgram(graph, inferTypes=['local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
@@ -153,23 +157,35 @@ def main():
                                    loss=MacroAverageTracker(NBCrossEntropyLoss()) \
                                    , metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                              'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
+        
+    if args.gbi:
+        program = GBIProgram(graph, SolverModel, poi=(image,), inferTypes=['local/argmax'],
+                            loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                            metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
+
+    if args.gbi_solver:
+        print("ILP")
+        program = SolverPOIProgram(graph, inferTypes=['GBI', 'local/argmax'],
+                                   loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                   metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
 
     if args.primaldual:
         print("PrimalDualProgram")
         program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
+        
     if args.primaldual and args.ilp:
-
         print("PrimalDualProgram ILP")
         program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
+        
     if args.sam:
-
         print("sam")
         program = SampleLossProgram(graph, SolverModel,inferTypes=['local/argmax'],metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=250,sampleGlobalLoss=False,beta=args.beta,device=device)
+    
     if args.sam and args.ilp:
 
         print("sam ILP")
