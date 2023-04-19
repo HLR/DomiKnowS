@@ -121,7 +121,8 @@ class LossProgram(LearningBasedProgram):
                 if self.dbUpdate is not None:
                     self.dbUpdate(desc, metricName, metricResult)
                     
-            if self.cmodel.loss and self.cmodel.loss is not None:
+            if self.cmodel.loss is not None and  repr(self.cmodel.loss) == "'None'":
+                losSTr = str(self.cmodel.loss)
                 desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
                 self.logger.info(' - Constraint loss:')
                 self.logger.info(self.cmodel.loss)
@@ -193,7 +194,11 @@ class LossProgram(LearningBasedProgram):
                 loss = mloss
             else:
                 closs, *_ = self.cmodel(output[1])
-                loss = mloss + self.beta * closs
+                if torch.is_nonzero(closs):
+                    loss = mloss + self.beta * closs
+                    self.logger.info('closs is not zero')
+                else:
+                    loss = mloss
             if self.opt is not None and loss:
                 loss.backward()
                 self.opt.step()

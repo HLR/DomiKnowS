@@ -155,19 +155,22 @@ class GBIModel(torch.nn.Module):
             # -- collect probs from datanode (in skeleton mode) 
             probs = {}
             for var_name, var_val in node_l.getAttribute('variableSet').items():
-                if not var_name.endswith('/label') and var_val.grad_fn is not None:
+                if not var_name.endswith('/label') and var_val.requires_grad:
                     probs[var_name] = torch.sum(F.log_softmax(var_val, dim=-1))
 
             # get total log prob
             log_probs = 0.0
             for c_prob in probs.values():
-                log_probs += torch.sum(torch.log(c_prob))
+                eps=1e-7
+                t = F.relu(c_prob)
+                tLog = torch.log(t+eps)
+                log_probs += torch.sum(tLog)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
             c_loss = -1 * log_probs * is_satisfied + self.reg_loss(model_l, self.server_model)
 
-            print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
+            print("iter=%d, c_loss=%d, satisfied=%d"%(c_iter, c_loss.item(), num_satisfied_l))
 
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:

@@ -2373,9 +2373,11 @@ class DataNodeBuilder(dict):
         if context=="interference":
             if self.skeletonDataNode:
                 self.myLoggerTime.info("DataNode Builder is using skeleton datanode mode")
-            self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
-            elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
-            self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
+            if 'Counter' + '_setitem' in self:
+                self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem']))
+            if 'DataNodeTime' in self:
+                elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
+                self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')
@@ -2435,9 +2437,11 @@ class DataNodeBuilder(dict):
     def getBatchDataNodes(self):
         self.__addGetDataNodeCounter()
         
-        self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
-        elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
-        self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
+        if 'Counter' + '_setitem' in self:
+            self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem' ]))
+        if 'DataNodeTime' in self:
+            elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
+            self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')

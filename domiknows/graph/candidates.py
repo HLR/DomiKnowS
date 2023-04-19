@@ -14,11 +14,12 @@ class CandidateSelection(LcElement):
         
         def newCall (self, *input, keys = None):
             if input and isinstance(input[0], OrderedDict):
-                candiatesDict = input[0]
+                candidatesDict = input[0]
                                     
-                return originalCall(self, list(candiatesDict.values()), keys=keys)
+                return originalCall(self, list(candidatesDict.values()), keys=keys)
             else:
                 return self, input
+            
         type(self).__call__ = newCall  
         
     def __call__(self, *candidates, keys=None): 
@@ -39,6 +40,7 @@ class combinationC(CandidateSelection):
         extracted_elements = list(zip(*cartesian_product))
               
         # Create a dictionary using the provided keys and the extracted lists
+        assert keys is not None, "Keys must be provided for the combinationC candidate selection"
         result_dict = dict(zip(keys, extracted_elements))
         
         return result_dict
