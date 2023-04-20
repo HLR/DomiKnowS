@@ -33,6 +33,25 @@ Then, clone the submodules with the following commands:
 On **Linux you can use the following commands**:
 
     git submodule update --init
+    
+When you initialize a submodule using the command git submodule update --init, Git will check out the submodule at a specific commit, typically the commit referenced in the parent repository's .gitmodules file.
+
+If the submodule's HEAD is detached, it means that the submodule has been checked out to a specific commit, rather than a branch. To update the submodule to the latest version of the branch, you can run the following commands:
+
+Navigate to the submodule directory: **`cd <submodule_directory>`**
+
+Checkout the branch you want to update: **`git checkout <branch_name>`**
+
+Pull the latest changes from the remote repository: **`git pull`**
+
+Once you've updated the submodule to the latest version of the branch, you can commit the changes to the parent repository to reflect the updated submodule commit hash.
+
+If you want to automatically update submodules to the latest commit of their respective branches whenever you update the parent repository, you can use the following command:
+
+```bash
+git submodule update --remote
+```
+This command will update the submodules to the latest commit of their respective branches and checkout the branch, rather than a specific commit.
 
 You can check the status of the repository with the following command:
 
