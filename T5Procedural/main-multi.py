@@ -287,7 +287,7 @@ def main():
 
     lbp = model_declaration()
 #     setProductionLogMode()
-    dataset = ProparaReader(file="Procedural/QA/Framework/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    dataset = ProparaReader(file="data/prepared_results.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 

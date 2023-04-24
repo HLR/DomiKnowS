@@ -76,6 +76,23 @@ with Graph('global') as graph:
     #  ------------ Destroy
     # No subsequent destroy action unless there is a create action between them
     
+    ### if entity is input, the first state should not be `none`
+    forAllL(
+        combinationC(entity, location(path=eqL(location, 'text', {5839})))('i', 'e', 'l'),
+        ifL(
+            input_entity('e'),
+            notL(
+                entity_location_before_label('el1', path=(
+                                    ("e", lentity.reversed),
+                                    ("e", lentity.reversed, lstep, eqL(step, 'index', {0})),
+                                    # ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}))
+                                    ("l", llocation.reversed)
+
+                ))
+            )
+        )
+    )
+    
     ifL(
         # action a1 is destroy, i is a1's step and e is action entity
         andL(
@@ -338,9 +355,11 @@ with Graph('global') as graph:
 
     ### the before action of step i+1 should match the after action of step i
     ifL(
-        andL(entity_location_label('x'),
-        step('i', path=('x', lstep)),
-        entity('e', path=('x', lentity)),),
+        andL(
+            entity_location_label('x'),
+            step('i', path=('x', lstep)),
+            entity('e', path=('x', lentity))
+        ),
         andL(
             step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
             entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
@@ -381,22 +400,8 @@ with Graph('global') as graph:
         action_destroy('a2', path=(('i', action_step.reversed), ('e', action_entity.reversed)))
     )
 
-    ### if entity is input, the first state should not be `none`
-    forAllL(
-        combinationC(entity, location(path=eqL(location, 'text', {5839})))('i', 'e', 'l'),
-        ifL(
-            input_entity('e'),
-            notL(
-                entity_location_before_label('el1', path=(
-                                    ("e", lentity.reversed),
-                                    ("e", lentity.reversed, lstep, eqL(step, 'index', {0})),
-                                    # ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}))
-                                    ("l", llocation.reversed)
-
-                ))
-            )
-        )
-    )
+   
+    
     # ifL(
     #     input_entity('e'),
     #     notL(
@@ -414,9 +419,9 @@ with Graph('global') as graph:
     ### if entity exists, the location should not be `none`
     ifL(
         andL(
-            after_existence('a1'),
-            entity('e', path=('a1', action_entity)),
-            step('i', path=('a1', action_step))
+            after_existence('a11'),
+            entity('e', path=('a11', action_entity)),
+            step('i', path=('a11', action_step))
         ),
         notL(
             entity_location_label('el1', path=(
@@ -425,14 +430,14 @@ with Graph('global') as graph:
                                     ("i", lstep.reversed)
                                 )
             )
-        )
+        ), active = True
     )
 
     ifL(
         andL(
-            before_existence('a1'),
-            entity('e', path=('a1', action_entity)),
-            step('i', path=('a1', action_step))
+            before_existence('a12'),
+            entity('e', path=('a12', action_entity)),
+            step('i', path=('a12', action_step))
         ),
         notL(
             entity_location_before_label('el1', path=(
@@ -441,7 +446,7 @@ with Graph('global') as graph:
                                     ("i", lstep.reversed)
                                 )
             )
-        )
+        ), active = True
     )
 
     ### if location change is true, the locations after for step i-1 and i should not match
@@ -471,18 +476,18 @@ with Graph('global') as graph:
     ### if location change is true, there should be one action either create, destroy, or move
     ifL(
         andL(
-            action('a1'),
-            step('i', path=('a1', action_step)),
-            entity('e', path=('a1', action_entity)),
+            action('a14'),
+            step('i', path=('a14', action_step)),
+            entity('e', path=('a14', action_entity)),
         ),
         ifL(
-            location_change(path=('a1')),
+            location_change(path=('a14')),
             orL(
-                action_create(path=('a1')),
-                action_destroy(path=('a1')),
-                action_move(path=('a1'))
+                action_create(path=('a14')),
+                action_destroy(path=('a14')),
+                action_move(path=('a14'))
             )
-        )
+        ), active = True
     )
 
-    ### if the the location shuold not match the entity itself
+    ### if the the location should not match the entity itself
