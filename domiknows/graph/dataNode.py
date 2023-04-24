@@ -8,7 +8,6 @@ from .dataNodeConfig import dnConfig
 from ordered_set import OrderedSet 
 
 from domiknows import getRegrTimer_logger, getProductionModeStatus
-from domiknows.graph.logicalConstrain import eqL
 from domiknows.solver import ilpOntSolverFactory
 
 import logging
@@ -818,82 +817,6 @@ class DataNode:
                 return resultForCurrent
         
         return None 
-    
-    # Find DataNodes starting from the given DataNode following provided path
-    #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
-    def getEdgeDataNode(self, path):
-        # Path is empty
-        if isinstance(path, eqL):
-            path = [path]
-        if len(path) == 0:
-            return [self]
-
-        # Path has single element
-        if (not isinstance(path[0], eqL)) and len(path) == 1:
-            relDns = self.getDnsForRelation(path[0])
-                    
-            if relDns is None or len(relDns) == 0 or relDns[0] is None:
-                return [None]
-            
-            return relDns
-                
-        # Path has at least 2 elements - will perform recursion
-
-        if isinstance(path[0], eqL): # check if eqL
-            path0 = path[0].e[0][0]
-        else:
-            path0 = path[0]
-
-        relDns = None         
-        if self.isRelation(path0):
-            relDns = self.getDnsForRelation(path0)
-        elif isinstance(path0, str):
-            relDns = self.getDnsForRelation(path0)
-        else: # if not relation then has to be attribute in eql
-            attributeValue = self.getAttribute(path[0].e[1]).item()
-            requiredValue = path[0].e[2]
-             
-            if attributeValue in requiredValue:
-                return [self]
-            elif (True in  requiredValue ) and attributeValue == 1:
-                return [self]
-            elif (False in  requiredValue ) and attributeValue == 0:
-                attributeValue = False
-            else:
-                return [None]
-          
-        # Check if it is a valid relation link  with not empty set of connected datanodes      
-        if relDns is None or len(relDns) == 0 or relDns[0] is None:
-            return [None]
-            relDns = []
-            
-        # if eqL then filter DataNode  
-        if isinstance(path[0], eqL):
-            _cDns = []
-            for cDn in relDns:
-                if isinstance(path[0].e[1], str):
-                    path0e1 = path[0].e[1]
-                else:
-                    path0e1 = path[0].e[1].name
-                    
-                if path0e1 in cDn.attributes or ("rootDataNode" in cDn.attributes and (path0.name + "/" + path0e1) in cDn.attributes["rootDataNode"].attributes["propertySet"]):
-                    if cDn.getAttribute(path0e1).item() in path[0].e[2]:
-                        _cDns.append(cDn)
-                    
-            relDns = _cDns
-        
-        # recursion
-        rDNS = []
-        for cDn in relDns:
-            rDn = cDn.getEdgeDataNode(path[1:])
-            
-            if rDn:
-                rDNS.extend(rDn)
-                
-        if rDNS:
-            return rDNS
-        else:
-            return [None]
 
     # cache
     collectedConceptsAndRelations = None

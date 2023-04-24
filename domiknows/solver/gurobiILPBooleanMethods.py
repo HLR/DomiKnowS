@@ -421,8 +421,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         hasNone = False
         if var1 is None: # antecedent 
             antecedent = 1 # when None
-            self.myLogger.info("%s called with antecedent equals None"%(logicMethodName))
-            self.myLogger.info("%s called with consequent equals %s"%(logicMethodName,var2))
+            #self.myLogger.info("%s called with antecedent equals None"%(logicMethodName))
+            #self.myLogger.info("%s called with consequent equals %s"%(logicMethodName,var2))
 
             hasNone = True
         else:
@@ -431,8 +431,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if var2 is None: # consequent
             consequent = 0 # when None
             if not hasNone: # not yet
-                self.myLogger.info("%s called with antecedent equals %s"%(logicMethodName,var1))
-                self.myLogger.info("%s called with consequent equals None"%(logicMethodName))
+                #self.myLogger.info("%s called with antecedent equals %s"%(logicMethodName,var1))
+                #self.myLogger.info("%s called with consequent equals None"%(logicMethodName))
                 hasNone = True
         else:
             consequent = var2
@@ -456,8 +456,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if hasNone: self.myLogger.info("%s is True - antecedent and consequent are True"%(logicMethodName))
                     return 
                 else: # antecedent and not consequent
-                    raise Exception("ILP model is infeasible - %s is called with the antecedent True and the consequent False - the result of applying %s is False"
-                                    %(logicMethodName,logicMethodName))
+                    self.myLogger.warn("%s is called with the antecedent True and the consequent False - the result of applying %s would be False making ILP model is infeasible - ignoring it"%(logicMethodName,logicMethodName))
+                    return
+                
+                    #raise Exception("ILP model is infeasible - %s is called with the antecedent True and the consequent False - the result of applying %s is False"
+                    #                %(logicMethodName,logicMethodName))
             elif self.__varIsNumber(antecedent): # antecedent is boolean and consequent is the ILP variable
                 if not antecedent:
                     # Applying if results in True

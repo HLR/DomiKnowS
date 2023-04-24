@@ -1165,6 +1165,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
                         return None
                         
+                    countValid = sum(1 for sublist in vDns if sublist and any(elem is not None for elem in sublist))
+                    self.myLogger.info('Size of candidate list returned by %s(%s) nested Logical Constraint is %i of which %i is not None'%(e.lcName,e,len(vDns),countValid))
                     lcVariables[variableName] = vDns   
             # Int - limit 
             elif isinstance(e, int): 

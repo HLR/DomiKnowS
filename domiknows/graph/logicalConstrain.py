@@ -152,9 +152,18 @@ class LogicalConstrain(LcElement):
                     if isinstance(eItem[1], eqL):
                         strsE.append("eql")
                     else:
-                        from domiknows.graph import Relation
-                        new_v = [v if isinstance(v, (str, tuple, LogicalConstrain, Relation)) else v.name for v in eItem[1]]
-                        new_V.append("path={}".format(tuple(new_v)))
+                        new_v = []
+                        for v in eItem[1]:
+                            if isinstance(v, (str, LogicalConstrain)):
+                                new_v.append(v)
+                            elif isinstance(v, (tuple)):
+                                v_tuple = [w if isinstance(w, (str, tuple, LogicalConstrain)) else w.name for w in v]
+                                new_v.append(v_tuple)
+                            else:
+                                new_v.append(v.name)
+
+                    #new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
+                    new_V.append("path={}".format(tuple(new_v)))
                 strsE.append("{}".format(tuple(new_V)))
             elif isinstance(eItem, Concept):
                 strsE.append(eItem.name)
@@ -428,7 +437,7 @@ class LogicalConstrain(LcElement):
                 
             if len(var) == 0:
                 if not (headConstrain or integrate):
-                    varsSetup.append([None])
+                    zVars.append([None])
                     
                 continue
             
