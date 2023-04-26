@@ -53,7 +53,7 @@ If this collection is empty then the methods will use all concepts and relations
 
 - `minimizeObjective` by default objective is maximized however if this variable is set to True then the ILP model will minimize the objective.
 
-The solver [implementation using Gurobi](/domiknows/solver/gurobiILPOntSolver.py) is called with classification probabilities obtained from learned model. 
+The solver [implementation using Gurobi](/Technical%20API/Solver/) is called with classification probabilities obtained from learned model. 
 
 The method retrieves the probabilities from Data Graph nodes attributes. The key use to retrieve it has a pattern:
 
