@@ -92,7 +92,7 @@ We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaratio
 
 To create a program, the user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
-There are different [pre-defined sensors](./apis/sensor/PYTORCH.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./apis/SENSORS.md) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
+There are different [pre-defined sensors](./Technical%20API/Sensor/Class%20Sensor.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./Technical%20API/Sensor/Class%20Sensor.md#TorchSensor) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
 
 ```python
 paragraph['paragraph_intext'] = ReaderSensor(keyword='paragraph_intext')
@@ -144,7 +144,7 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 `ModuleLearner` in the above code is used first to calculate an embedding for a question given its `token_ids` and `Mask` properties. being a Learner, this sensor's parameters will change and update itself during training later. in the following three lines, this `embedding` property is used to calculate the binary labels for `is_more`, `is_less`, and `no_effect`. these learners will also learn from predictions after calculating loss given the actual values of these properties.
 
 It should be noted that we have assigned `ReaderSensor`s to the same `Property`s of `is_more`, `is_less`, and `no_effect`.
-This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convention) of the framework.
+This is the ["Multiple Assignment" semantic](./developer/MODEL.md#multiple-assigment-convention) of the framework.
 Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`.
 
 we should also define the sensors for symmetric and transitive concepts. these concepts have arguments and their definition is a little different from previous sensors. for these concepts, we use Edge Sensors.
@@ -163,7 +163,7 @@ Now that the `graph`, the `Property`s of `Concept`s are assigned with different 
 program = LearningBasedProgram(graph, model_helper(primal_dual_model,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 ```
-the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch. one can find explanations about different `loss` function [here](../domiknows/program/loss.py), and explanations about different `metrics` [here](../domiknows/program/metric.py).
+the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch.
 
 ## Training and Testing
 
