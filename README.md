@@ -8,10 +8,10 @@ While several approaches for integrating symbolic and sub-symbolic models have b
 ## Contents
 
 - [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
-- [Example Tasks](https://link-to-examples-docs): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning.
-- [Documentation](https://link-to-api-reference-docs): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
-- [Contributing](https://link-to-contributing-docs): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
-- [License](https://link-to-license-docs): Contains information about the license of DomiKnowS and its terms of use.
+- [Example Tasks](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more example see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/AAAI23) )
+- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/apis): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+- [Contributing](https://github.com/HLR/DomiKnowS/blob/Doc/IssueReport.md): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
+- [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
 ## Quick Start
@@ -19,12 +19,12 @@ While several approaches for integrating symbolic and sub-symbolic models have b
 To start using DomiKnowS, follow these steps:
 
 1. Install DomiKnowS using `pip install DomiKnowS`.
-2. Install Gurobi following the instructions [here](https://link-to-gurobi-readme).
-3. Refer to the [Getting Started](https://link-to-getting-started-docs) documentation for detailed instructions on how to define graph declarations, model declarations, initialize programs, and compose and execute programs using DomiKnowS.
+2. Install Gurobi following the instructions [here](https://github.com/HLR/DomiKnowS/blob/develop/GurobiREADME.md).
+3. Refer to the [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md) documentation for detailed instructions on how to define graph declarations, model declarations, initialize programs, and compose and execute programs using DomiKnowS.
 
 ## Acknowledgements
 
-DomiKnowS is developed and maintained by [Your Organization Name](https://your-organization-website.com). We would like to acknowledge the contributions of the open-source community and express our gratitude to the developers of Gurobi for their excellent optimization solver.
+DomiKnowS is developed and maintained by [HLR](https://hlr.github.io/). We would like to acknowledge the contributions of the open-source community and express our gratitude to the developers of Gurobi for their excellent optimization solver.
 
 ## Citation
 
