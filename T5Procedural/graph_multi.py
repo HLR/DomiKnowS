@@ -50,8 +50,8 @@ with Graph('global') as graph:
     when_destroy = action(name="when_destroy")
 
     ### before/after existence for entity per step, extend from action
-    before_existence = action(name="existence")
-    after_existence = action(name="existence")
+    before_existence = action(name="before_existence")
+    after_existence = action(name="after_existence")
 
     
     same_mention = Concept(name='same_mention')
@@ -84,7 +84,7 @@ with Graph('global') as graph:
             notL(
                 entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, lstep, eqL(step, 'index', {0})),
+                                    ("e", lentity.reversed, lstep, eqL(step, 'index', {0}), lstep.reversed),
                                     # ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}))
                                     ("l", llocation.reversed)
 
@@ -127,7 +127,6 @@ with Graph('global') as graph:
 
     #  ------------ Create
     # No subsequent create action unless there is a destroy action between them
-    
     ifL(
         # action a1 is create, i is a1's step and e is action entity
         andL(
@@ -172,28 +171,87 @@ with Graph('global') as graph:
             ), 
         # then either
         orL(
-            # step j associated with entity e, which is before step i cannot be associated with destroy action a2
+            # step j associated with entity e, which is before step i cannot be associated with destroy action a2 or outside action a2
             ifL(
                 step('j', path=(('i', before_arg2.reversed, before_arg1))), 
-                notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
+                andL(
+                    notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed)))),
+                    notL(action_label.outside('a3', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
+                )
             ),
             # or if  
             ifL(
                 # step j1 which is before step i is associated with destroy action a2
                 andL(
                     step('j1', path=('i', before_arg2.reversed, before_arg1)), 
-                    action_label.destroy('a3', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
+                    orL(
+                        action_label.destroy('a3', path=(('j1', action_step.reversed), ('e', action_entity.reversed))),
+                        action_label.outside('a4', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
+                    )
                     ), 
                 # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
                 existsL(
                     andL(
                         step('k', path=(('j1', before_arg1.reversed, before_arg2), ('i', before_arg2.reversed, before_arg1))), 
-                        action_label.create('a4', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                        action_label.create('a5', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
                         )
                     )
                 )
             ), active = True
         )
+    
+    ifL(
+        # action a1 is exists, i is a1's step and e is action entity
+        andL(
+            action_label.exists('a1'), 
+            step('i', path=('a1', action_step)),
+            entity('e', path=('a1', action_entity))
+            ), 
+        # then either
+        orL(
+            # step j associated with entity e, which is before step i cannot be associated with destroy action a2 or outside action a2
+            ifL(
+                step('j', path=(('i', before_arg2.reversed, before_arg1))), 
+                andL(
+                    notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed)))),
+                    notL(action_label.outside('a3', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
+                )
+            ),
+            # or if  
+            ifL(
+                # step j1 which is before step i is associated with destroy action a2
+                andL(
+                    step('j1', path=('i', before_arg2.reversed, before_arg1)), 
+                    orL(
+                        action_label.destroy('a3', path=(('j1', action_step.reversed), ('e', action_entity.reversed))),
+                        action_label.outside('a4', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
+                    )
+                    ), 
+                # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
+                existsL(
+                    andL(
+                        step('k', path=(('j1', before_arg1.reversed, before_arg2), ('i', before_arg2.reversed, before_arg1))), 
+                        action_label.create('a5', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                        )
+                    )
+                )
+            ), active = True
+        )
+    
+
+    ### ------ Move cannot happen if the item is not created or exist from before
+    # ifL(
+    #     # action a1 is move, i is a1's step and e is action entity
+    #     andL(
+    #         action_label.move('a1'),
+    #         step('i', path=('a1', action_step)),
+    #         entity('e', path=('a1', action_entity))
+    #         ),
+    #     # then either
+    #     orL(
+    #         ## the entity exists from before
+    #         ifL(
+    #             # step j associated with entity e, which is before step i cannot be associated with destroy action a2
 
     ### If the action is move, then the location from step before should be different from the current step
     ifL(
@@ -265,14 +323,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -290,14 +348,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -314,14 +372,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 notL(entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -348,6 +406,53 @@ with Graph('global') as graph:
                                         ('e1', llocation, llocation.reversed)
                                     )
                         )
+                )
+            )
+        )
+    )
+
+    ### if action is exists, the location should not be `none` and before location should not be none
+    forAllL(
+        combinationC(step, entity)('i', 'e'),
+        ifL(
+            action_label.exists('a1', path=(('i', action_step.reversed), ('e', action_entity.reversed))),
+            andL(
+                notL(
+                    entity_location_label('el1', path=(
+                                    ("e", lentity.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("i", lstep.reversed)
+                                )
+                    )
+                ),
+                notL(entity_location_before_label('el1', path=(
+                                    ("e", lentity.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("i", lstep.reversed)
+                                )
+                    )
+                )
+            )
+        )
+    )
+
+    ### if action is outside, the location should  be `none` and before location should be none
+    forAllL(
+        combinationC(step, entity)('i', 'e'),
+        ifL(
+            action_label.outside('a1', path=(('i', action_step.reversed), ('e', action_entity.reversed))),
+            andL(
+                entity_location_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                ("i", lstep.reversed)
+                            )
+                ),
+                entity_location_before_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                ("i", lstep.reversed)
+                            )
                 )
             )
         )
@@ -426,7 +531,7 @@ with Graph('global') as graph:
         notL(
             entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
@@ -442,11 +547,25 @@ with Graph('global') as graph:
         notL(
             entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839})),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
         ), active = True
+    )
+
+    ifL(
+        andL(
+            notL(before_existence('a56')),
+            entity('e', path=('a56', action_entity)),
+            step('i', path=('a56', action_step))
+        ),
+        entity_location_before_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
+                                ("i", lstep.reversed)
+                            )
+        ), active = True, name='checking_CL'
     )
 
     ### if location change is true, the locations after for step i-1 and i should not match

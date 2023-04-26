@@ -217,6 +217,8 @@ def model_declaration():
     action[location_change] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="ChangeProb", forward=read_labels)
     action[when_create] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="WhenCreateProb", forward=read_labels_to_bool)
     action[when_destroy] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="WhenDestroyProb", forward=read_labels_to_bool)
+    action[before_existence] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="BeforeExistenceProb", forward=read_labels)
+    action[after_existence] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="AfterExistenceProb", forward=read_labels)
 
     program = SolverPOIProgram(graph, 
                                poi=(
@@ -225,6 +227,7 @@ def model_declaration():
                                         entity_location, entity_location_label, 
                                         entity_location_before_label, 
                                         when_create, when_destroy,
+                                        before_existence, after_existence,
                                         action_create, action_destroy, action_move, location_change,
                                         input_entity, input_entity_alt, output_entity, output_entity_alt
                                     ), 
@@ -287,26 +290,36 @@ def main():
 
     lbp = model_declaration()
 #     setProductionLogMode()
-    dataset = ProparaReader(file="data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 
+    d2 = iter(dataset)
     dataset = iter(dataset)
+    
 
     #     lbp.test(dataset, device='auto')
     all_updates = []
-    for datanode in lbp.populate(dataset, device="cpu"):
+    for item_set, datanode in zip(d2, lbp.populate(dataset, device="cpu")):
     #     tdatanode = datanode.findDatanodes(select = context)[0]
     #     print(len(datanode.findDatanodes(select = context)))
     #     print(tdatanode.getChildDataNodes(conceptName=step))
         # datanode.inferILPResults(action_label, fun=None)
         final_output = {
-            "id": datanode.getAttribute("id"),
+            "id": datanode.findDatanodes(select=procedure)[0].getAttribute("id"),
             "steps": [],
-            "actions": [],
-            "steps_before": [],
-            "actions_before": [],
+            "entities": []
         }
+        for _concept in [
+            action_create, action_destroy, action_move, location_change,
+            when_create, when_destroy,
+            action_label,
+            input_entity, input_entity_alt, output_entity, output_entity_alt,
+            entity_location_before_label, entity_location_label,
+            after_existence, before_existence
+            ]:
+            final_output[f"{_concept.name}"] = []
+            final_output[f"{_concept.name}_before"] = []
 
         entities_instances = datanode.findDatanodes(select=entity)
     #     print(len(entities))
@@ -319,17 +332,165 @@ def main():
             # rel = step.getRelationLinks(relationName=before)
             # print(rel)
         # print(len(steps_instances), "\n")
+        def assing_labels(node, concept, final_output):
+            ### adding action_label information after ILP
+            c = node.getAttribute(concept, "ILP")
+            _map_list = ["create", "exists", "move", "destroy", "outside"]
+            if not concept in {entity_location_label, entity_location_before_label}:
+                if c.shape[-1] > 2:
+                    c = torch.argmax(c, dim=-1).item()
+                    c = _map_list[c]
+                elif c.shape[-1] == 1:
+                    c = int(c.item())
+                    if c == 1:
+                        c = "yes"
+                    else:
+                        c = "no"
+            final_output[f"{concept.name}"].append(c)
+            ### adding action_label information before ILP
+            c1 = node.getAttribute(concept)
+            if not concept in {entity_location_label, entity_location_before_label}:
+                if c1.shape[-1] > 2:
+                    c1 = torch.argmax(c1, dim=-1).item()
+                    c1 = _map_list[c1]
+                elif c1.shape[-1] == 1:
+                    c1 = c1.item()
+                    if c1 == 1:
+                        c1 = "yes"
+                    else:
+                        c1 = "no"
+                elif c1.shape[-1] == 2:
+                    c1 = c1.argmax(-1).item()
+                    if c1 == 1:
+                        c1 = "yes"
+                    else:
+                        c1 = "no"
+            final_output[f"{concept.name}_before"].append(c1)
+            return final_output
+        
         for action_info in datanode.findDatanodes(select=action):
-            c = action_info.getAttribute(action_label, "ILP")
-            final_output["actions"].append(c)
-            c1 = action_info.getAttribute(action_label)
-            final_output["actions_before"].append(c1)
+            ### adding action_label information
+            final_output = assing_labels(action_info, action_label, final_output)
+            
+            ### adding action_create information
+            final_output = assing_labels(action_info, action_create, final_output)
+            ### adding action_destroy information
+            final_output = assing_labels(action_info, action_destroy, final_output)
+            ### adding action_move information
+            final_output = assing_labels(action_info, action_move, final_output)
+            ### adding location_change information
+            final_output = assing_labels(action_info, location_change, final_output)
 
-        final_output['actions'] = torch.stack(final_output['actions'])
-        final_output['actions'] = final_output['actions'].view(len(entities_instances), len(steps_instances), 4)
+            ### adding when_create information
+            final_output = assing_labels(action_info, when_create, final_output)
+            ### adding when_destroy information
+            final_output = assing_labels(action_info, when_destroy, final_output)
 
-        final_output['actions_before'] = torch.stack(final_output['actions_before'])
-        final_output['actions_before'] = final_output['actions_before'].view(len(entities_instances), len(steps_instances), 4)
+            ### adding before_existence information
+            final_output = assing_labels(action_info, before_existence, final_output)
+            ### adding after_existence information
+            final_output = assing_labels(action_info, after_existence, final_output)
+
+        def fix_action_format(final_output, key, entities_instances, steps_instances):
+            ### fix the format to be a list of list instead of a flat list, use the lenght of entities and steps
+            ### the input is not a tensor but a list
+            temp = []
+            for i in range(len(entities_instances)):
+                temp.append(final_output[key][i*len(steps_instances):(i+1)*len(steps_instances)])
+            final_output[key] = temp
+
+
+        for _concept in [
+            action_label, action_create, action_destroy, action_move, location_change,
+            when_create, when_destroy,
+            before_existence, after_existence
+        ]:
+            fix_action_format(final_output, f"{_concept.name}", entities_instances, steps_instances)
+            fix_action_format(final_output, f"{_concept.name}_before", entities_instances, steps_instances)
+            
+
+        # for _concept in [action_label, action_create, action_destroy, action_move, location_change, when_create, when_destroy, before_existence, after_existence]:
+        #     final_output[f"{_concept.name}"] = torch.stack(final_output[f"{_concept.name}"])
+        #     final_output[f"{_concept.name}_before"] = torch.stack(final_output[f"{_concept.name}_before"])
+
+        #     if _concept == action_label:
+        #         final_output[f"{_concept.name}"] = final_output[f"{_concept.name}"].reshape(len(entities_instances), len(steps_instances), 5)
+        #         final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"].reshape(len(entities_instances), len(steps_instances), 5)
+        #     else:
+        #         final_output[f"{_concept.name}"] = final_output[f"{_concept.name}"].reshape(len(entities_instances), len(steps_instances), 1)
+        #         final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"].reshape(len(entities_instances), len(steps_instances), 2)
+
+        for entity_info in datanode.findDatanodes(select=entity):
+            ### adding input_entity information
+            final_output = assing_labels(entity_info, input_entity, final_output)
+            ### adding input_entity_alt information
+            final_output = assing_labels(entity_info, input_entity_alt, final_output)
+            ### adding output_entity information
+            final_output = assing_labels(entity_info, output_entity, final_output)
+            ### adding output_entity_alt information
+            final_output = assing_labels(entity_info, output_entity_alt, final_output)
+        
+        for entity_location_info in datanode.findDatanodes(select=entity_location):
+            ### adding entity_location information
+            final_output = assing_labels(entity_location_info, entity_location_label, final_output)
+            ### adding entity_location_before information
+            final_output = assing_labels(entity_location_info, entity_location_before_label, final_output)
+
+
+        for _concept in [entity_location_before_label, entity_location_label]:
+            final_output[f"{_concept.name}"] = torch.stack(final_output[f"{_concept.name}"])
+            final_output[f"{_concept.name}"] = final_output[f"{_concept.name}"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
+            temp = []
+            for i in range(len(entities_instances)):
+                temp.append([])
+                for j in range(len(steps_instances)):
+                    temp[-1].append(item_set['Location'][final_output[f"{_concept.name}"][i][j].item()])
+            final_output[f"{_concept.name}"] = temp
+            final_output[f"{_concept.name}_before"] = torch.stack(final_output[f"{_concept.name}_before"])
+            final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"].argmax(-1)
+            final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
+            temp = []
+            for i in range(len(entities_instances)):
+                temp.append([])
+                for j in range(len(steps_instances)):
+                    temp[-1].append(item_set['Location'][final_output[f"{_concept.name}_before"][i][j].item()])
+            final_output[f"{_concept.name}_before"] = temp
+
+        final_output['entities'] = item_set['Entities'][0]
+        final_output['steps'] = item_set['Step']
+        final_output['locations'] = item_set['Location']
+
+        def check_diff(final_output, key):
+            ### check whether there are differences between key and key_before
+            ### if there are differences, then return the index of the differences
+            ### else return None
+            diff = []
+            if type(final_output[key][0]) != list:
+                for i in range(len(final_output[key])):
+                    if final_output[key][i] != final_output[key+"_before"][i]:
+                        diff.append(i)
+            else:
+                for i in range(len(final_output[key])):
+                    for j in range(len(final_output[key][i])):
+                        if final_output[key][i][j] != final_output[key+"_before"][i][j]:
+                            diff.append((i, j))
+                            break
+            if len(diff) == 0:
+                return None
+            else:
+                return diff
+            
+        for _concept in [
+            entity_location_before_label, entity_location_label,
+            input_entity, input_entity_alt, output_entity, output_entity_alt,
+            action_label, action_create, action_destroy, action_move, location_change,
+            after_existence, before_existence,
+        ]:
+            print(f"\n{_concept.name} diff:")
+            diff = check_diff(final_output, _concept.name)
+            if diff:
+                print(diff)
+                
 
         all_updates.append(final_output)
         

@@ -179,6 +179,23 @@ class ProparaReader(RegrReader):
         _, ground_truth = self.compute_iterative_probs(item, 'bool_change')
         return ground_truth
     
+    ### get the before_existnce and after_existence probs and value
+    def getBeforeExistenceProbval(self, item):
+        decision, _ = self.compute_iterative_probs(item, 'bool_ex_before')
+        return decision
+    
+    def getBeforeExistenceTrueval(self, item):
+        _, ground_truth = self.compute_iterative_probs(item, 'bool_ex_before')
+        return ground_truth
+    
+    def getAfterExistenceProbval(self, item):
+        decision, _ = self.compute_iterative_probs(item, 'bool_ex_after')
+        return decision
+    
+    def getAfterExistenceTrueval(self, item):
+        _, ground_truth = self.compute_iterative_probs(item, 'bool_ex_after')
+        return ground_truth
+    
     ### Get the input and input_alt value for the single entity
     def getInputProbval(self, item):
         decision, _ = self.computer_single_probs(item, 'input')
