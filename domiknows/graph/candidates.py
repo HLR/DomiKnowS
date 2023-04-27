@@ -106,7 +106,9 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                 _dns = dn.findDatanodes(select = rootConcept)
                 referredDns = [[dn] for dn in _dns]
                 integrate = True
+                new_iterate = True
             else: # Already defined in the logical constraint from the v part 
+                new_iterate = False
                 referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
                 
             # Get variables from dataNodes selected  based on referredVariableName
@@ -119,14 +121,15 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                     
                     # -- Get DataNodes for the edge defined by the path part of the v
                     if isinstance(path, eqL):
-                        currentEDns = getEdgeDataNode(currentReferredDataNode, v) 
-                        if currentEDns:
-                            eDns.extend(currentEDns)
+                        currentEDns = getEdgeDataNode(currentReferredDataNode, v)
+                        currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
+                        if currentEDnsNew and len(currentEDnsNew):
+                            eDns.extend(currentEDnsNew)
                         else:
                             pass
                     else:
                         currentEDns = getEdgeDataNode(currentReferredDataNode, v[1:]) 
-                    
+                        # currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
                         if currentEDns is not None and len(currentEDns):
                             eDns.extend(currentEDns)
                         elif lc.__str__() != "fixedL":
@@ -134,10 +137,14 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                             vNames = [v if isinstance(v, str) else v.name for v in v[1:]] # collect names on the path
                             logger.info('%s has no path %s requested by %s for concept %s'%(currentReferredDataNode, vNames, lc.lcName, conceptName))
                                 
-                if not eDns:
+                if not eDns and not new_iterate:
                     eDns = [None] # None - to keep track of candidates
                     
-                dnsListForPaths[i].append(eDns)
+                if not new_iterate:
+                    dnsListForPaths[i].append(eDns)
+                elif len(eDns):
+                    dnsListForPaths[i].append(eDns)
+                    
             
             if isinstance(v, eqL) or (isinstance(path, tuple) and any(isinstance(elem, eqL) for elem in v)):
                 countValid = sum(1 for sublist in dnsListForPaths[i] if sublist and any(elem is not None for elem in sublist))
@@ -146,7 +153,15 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
         # -- Compress candidates and print log about the path candidates
         for ip, dnsPathList in enumerate(dnsListForPaths):
             dnsPathListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsPathList if sublist]
+            # dnsPathNewCompresed = []
+            # for elems in dnsPathListCompressed:
+            #     if any(elem is not None for elem in elems):
+            #         dnsPathNewCompresed.append(elems)
+            #     else:
+            #         dnsPathNewCompresed.append([None])
+
             dnsListForPaths[ip] = dnsPathListCompressed
+            # dnsListForPaths[ip] = dnsPathNewCompresed
             
             if len(dnsListForPaths) > 1:
                 countValid = sum(1 for sublist in dnsListForPaths[ip] if sublist and any(elem is not None for elem in sublist))
@@ -230,6 +245,7 @@ def getEdgeDataNode(dn, path):
     elif isinstance(path0, str):
         relDns = dn.getDnsForRelation(path0)
     else: # if not relation then has to be attribute in eql
+        relDns = []
         attributeName = path[0].e[1]
         attributeValue = dn.getAttribute(attributeName)
         
@@ -239,13 +255,17 @@ def getEdgeDataNode(dn, path):
         requiredValue = path[0].e[2]
          
         if attributeValue in requiredValue:
-            return [dn]
+            # return [dn]
+            relDns.append(dn)
         elif (True in  requiredValue ) and attributeValue == 1:
-            return [dn]
+            # return [dn]
+            relDns.append(dn)
         elif (False in  requiredValue ) and attributeValue == 0:
             attributeValue = False
         else:
-            return [None]
+            # return [None]
+            # relDns.append(None)
+            pass
       
     # Check if it is a valid relation link  with not empty set of connected datanodes      
     if relDns is None or len(relDns) == 0 or relDns[0] is None:
