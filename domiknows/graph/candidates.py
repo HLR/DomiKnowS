@@ -142,6 +142,15 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
             if isinstance(v, eqL) or (isinstance(path, tuple) and any(isinstance(elem, eqL) for elem in v)):
                 countValid = sum(1 for sublist in dnsListForPaths[i] if sublist and any(elem is not None for elem in sublist))
                 logger.info('eqL has collected %i candidates of which %i is not None %s'%(len(dnsListForPaths[i]), countValid, dnsListForPaths[i]))
+                
+        # -- Compress candidates and print log about the path candidates
+        for ip, dnsPathList in enumerate(dnsListForPaths):
+            dnsPathListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsPathList if sublist]
+            dnsListForPaths[ip] = dnsPathListCompressed
+            
+            if len(dnsListForPaths) > 1:
+                countValid = sum(1 for sublist in dnsListForPaths[ip] if sublist and any(elem is not None for elem in sublist))
+                logger.info('path %i has collected %i candidates of which %i is not None %s'%(ip,len(dnsListForPaths[ip]), countValid, dnsListForPaths[ip]))
             
         # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
         dnsList = [] # candidates to be returned
@@ -183,8 +192,8 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
         # ----- End - Old code calculating intersection
             
     # Returns candidates  
+    #dnsList = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsList if sublist] # compress
     countValidC = sum(1 for sublist in dnsList if sublist and any(elem is not None for elem in sublist))
-
     logger.info('collected %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
   
     return dnsList

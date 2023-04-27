@@ -182,7 +182,7 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         
         countSuccess = 0
 
-        varSum = sum(list(var)).item()
+        varSum = sum(list(var))
 
         if limitOp == '>=':
             if varSum >= limit:
