@@ -290,7 +290,7 @@ def main():
 
     lbp = model_declaration()
 #     setProductionLogMode()
-    dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    dataset = ProparaReader(file="data/prepared_results.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 
@@ -498,24 +498,35 @@ def main():
         verifyResult = datanode.verifyResultsLC()
         if verifyResult:
             for lc in verifyResult:
-                print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+                if verifyResult[lc]['satisfied'] == verifyResult[lc]['satisfied']:
+                    print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+                else:
+                    print("lc %s cannot be verified for learned results - check if lc is correct"%(lc))
+
 
         print("\nVerify ILP Results:")
         verifyResultILP = datanode.verifyResultsLC(key = "/ILP")
         if verifyResultILP:
             for lc in verifyResultILP:
-                print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+                if verifyResultILP[lc]['satisfied'] == verifyResultILP[lc]['satisfied']:
+                    print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+                else:
+                    print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
+
     
     return all_updates
 
 
 updated_data = main()
 
-print("\nResults from model before ILP")
-print(updated_data[0]['actions_before'].argmax(dim=-1))
+print("\nResults from model before ILP for actions_before")
+if 'actions_before' in updated_data[0]:
+    print(updated_data[0]['actions_before'].argmax(dim=-1))
 
-print("\nResults after ILP")
-print(updated_data[0]['actions'].argmax(dim=-1))
+print("\nResults after ILP for action")
+if 'actions' in updated_data[0]:
+    print(updated_data[0]['actions'].argmax(dim=-1))
+    
 # import json
 # with open("data/updated_info.json", "w") as f:
 #     json.dump(updated_data, f)
