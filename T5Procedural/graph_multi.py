@@ -85,7 +85,7 @@ with Graph('global') as graph:
         ),
         andL(
             step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
-            entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
+            entity_location_before_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
         )
     )
 
