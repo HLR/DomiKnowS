@@ -24,9 +24,11 @@ class ProparaReader(RegrReader):
 
     def getEntitiesval(self, item):
         return [item['entities']]
+        # return [[item['entities'][0]]]
         
     def getEntityval(self, item):
         return item["entities"]
+        # return [item['entities'][0]]
     
     def getContextval(self, item):
         return [item['sentence_texts']]
@@ -272,7 +274,11 @@ class ProparaReader(RegrReader):
         ### loop over all entities in the processed probs and gather the after_location values
         all_decisions = []
         all_ground_truths = []
+        count = 0
         for eid in item['processed_probs']:
+            # if count != 0:
+            #     break
+            # count += 1
             predictions = item['processed_probs'][eid][key]
             formatted_preds = []
             formatted_gt = []
@@ -311,7 +317,11 @@ class ProparaReader(RegrReader):
         """
         all_decisions = []
         all_ground_truths = []
+        count = 0
         for eid in item['processed_probs']:
+            # if count != 0:
+            #     break
+            # count += 1
             predictions = item['processed_probs'][eid][key]
             all_decisions.append(predictions[0])
             if 'input' in key or 'output' in key:

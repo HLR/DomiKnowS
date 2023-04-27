@@ -76,9 +76,22 @@ with Graph('global') as graph:
     #  ------------ Destroy
     # No subsequent destroy action unless there is a create action between them
     
+    ### the before action of step i+1 should match the after action of step i
+    ifL(
+        andL(
+            entity_location_label('x'),
+            step('i', path=('x', lstep)),
+            entity('e', path=('x', lentity))
+        ),
+        andL(
+            step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
+            entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
+        )
+    )
+
     ### if entity is input, the first state should not be `none`
     forAllL(
-        combinationC(entity, location(path=eqL(location, 'text', {5839})))('i', 'e', 'l'),
+        combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
         ifL(
             input_entity('e'),
             notL(
@@ -91,6 +104,20 @@ with Graph('global') as graph:
                 ))
             )
         )
+    )
+
+    ifL(
+        andL(
+            notL(before_existence('a56')),
+            entity('e', path=('a56', action_entity)),
+            step('i', path=('a56', action_step))
+        ),
+        entity_location_before_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
+                                ("i", lstep.reversed)
+                            )
+        ), active = True, name='checking_CL'
     )
     
     ifL(
@@ -458,19 +485,6 @@ with Graph('global') as graph:
         )
     )
 
-    ### the before action of step i+1 should match the after action of step i
-    ifL(
-        andL(
-            entity_location_label('x'),
-            step('i', path=('x', lstep)),
-            entity('e', path=('x', lentity))
-        ),
-        andL(
-            step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
-            entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
-        )
-    )
-
     ### multi-class action_label and the actual create, destroy, move label alignment
     ifL(
         action_label.move('a1'),
@@ -552,20 +566,6 @@ with Graph('global') as graph:
                                 )
             )
         ), active = True
-    )
-
-    ifL(
-        andL(
-            notL(before_existence('a56')),
-            entity('e', path=('a56', action_entity)),
-            step('i', path=('a56', action_step))
-        ),
-        entity_location_before_label('el1', path=(
-                                ("e", lentity.reversed),
-                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
-                                ("i", lstep.reversed)
-                            )
-        ), active = True, name='checking_CL'
     )
 
     ### if location change is true, the locations after for step i-1 and i should not match
