@@ -77,15 +77,23 @@ with Graph('global') as graph:
     # No subsequent destroy action unless there is a create action between them
     
     ### the before action of step i+1 should match the after action of step i
-    ifL(
-        andL(
-            entity_location_label('x'),
-            step('i', path=('x', lstep)),
-            entity('e', path=('x', lentity))
-        ),
-        andL(
-            step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
-            entity_location_before_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
+    # ifL(
+    #     andL(
+    #         entity_location_label('x'),
+    #         step('i', path=('x', lstep)),
+    #         entity('e', path=('x', lentity))
+    #     ),
+    #     andL(
+    #         step('j', path=('i', ebefore_arg1.reversed, ebefore_arg2)),
+    #         entity_location_before_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
+    #     )
+    # )
+
+    forAllL(
+        combinationC(entity, exact_before)('e', 'step_rel'),
+        ifL(
+            entity_location_label('x', path=(('e', lentity.reversed), ('step_rel', ebefore_arg1, lstep.reversed))),
+            entity_location_before_label('y', path=(('e', lentity.reversed), ('step_rel', ebefore_arg2, lstep.reversed), ('x', llocation, llocation.reversed))),
         )
     )
 
@@ -185,7 +193,260 @@ with Graph('global') as graph:
                 )
             ), active = True
         )
-    
+    ### --- there cannot be a move action before the create event unless there is another create event before them
+    ifL(
+        andL(
+            action_label.create('a100'),
+            step('i', path=('a100', action_step)),
+            entity('e', path=('a100', action_entity))
+        ),
+        ifL(
+            step('j', path=(('i', before_arg2.reversed, before_arg1))),
+            orL(
+                notL(action_label.move('a101', path=(('j', action_step.reversed), ('e', action_entity.reversed)))),
+                ifL(
+                    action_label.move('a101', path=(('j', action_step.reversed), ('e', action_entity.reversed))),
+                    existsL(
+                        andL(
+                                step('k', path=(('j', before_arg2.reversed, before_arg1))), 
+                                action_label.create('a102', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                            )
+                        )
+                )
+            )
+        )
+    )
+    ### --- there cannot be a exists action before the create event unless there is another create event before them
+    ifL(
+        andL(
+            action_label.create('a100'),
+            step('i', path=('a100', action_step)),
+            entity('e', path=('a100', action_entity))
+        ),
+        ifL(
+            step('j', path=(('i', before_arg2.reversed, before_arg1))),
+            orL(
+                notL(action_label.exists('a101', path=(('j', action_step.reversed), ('e', action_entity.reversed)))),
+                ifL(
+                    action_label.exists('a101', path=(('j', action_step.reversed), ('e', action_entity.reversed))),
+                    existsL(
+                        andL(
+                                step('k', path=(('j', before_arg2.reversed, before_arg1))), 
+                                action_label.create('a102', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                            )
+                        )
+                )
+            )
+        )
+    )
+
+    ### If there is an outside action, there cannot be create, exist, move action before unless there is a destroy action after them
+    ifL(
+        andL(
+            action_label.outside('a110'),
+            step('i', path=('a110', action_step)),
+            entity('e', path=('a110', action_entity))
+        ),
+        ifL(
+            andL(
+                step('j', path=(('i', before_arg2.reversed, before_arg1))),
+                orL(
+                    action_label.exists('a114', path=(('j', action_step.reversed), ('e', action_entity.reversed))),
+                    action_label.move('a115', path=(('j', action_step.reversed), ('e', action_entity.reversed))),
+                    action_label.create('a116', path=(('j', action_step.reversed), ('e', action_entity.reversed)))
+                ),
+            ),                
+            existsL(
+                andL(
+                        step('k', path=(('j', before_arg1.reversed, before_arg2), ('i', before_arg2.reversed, before_arg1))),
+                        action_label.destroy('a117', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                    )
+            )
+        )
+    )
+
+
+    ifL(
+        # action a1 is create, i is a1's step and e is action entity
+        andL(
+            action_label.create('a1'), 
+            step('i', path=('a1', action_step)),
+            entity('e', path=('a1', action_entity))
+            ), 
+        # then either
+        orL(
+            # step j associated with entity e, which is before step i cannot be associated with create action a2
+            ifL(
+                step('j', path=(('i', before_arg2.reversed, before_arg1))), 
+                notL(action_label.create('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
+                ), 
+            # or if  
+            ifL(
+                # step j1 which is before step i is associated with create action a2
+                andL(
+                    step('j1', path=('i', before_arg2.reversed, before_arg1)), 
+                    action_label.create('a2', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
+                    ), 
+                # then exists step k associated with entity e, which is between step i and j1 associated with destroy action a3
+                existsL(
+                    andL(
+                        step('k', path=(('j1', before_arg1.reversed, before_arg2), ('i', before_arg2.reversed, before_arg1))), 
+                        action_label.destroy('a3', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                        )
+                    )
+                )
+            ), active = True
+        )
+
+    #### New constraints for the sequential order of actions
+    forAllL(
+        combinationC(exact_before, entity)('ebstep', 'e'),
+        ifL(
+            action_label.outside('a1', path=(
+                                ('ebstep', ebefore_arg2, action_step),
+                                ('e', action_entity.reversed)
+                                )
+            ),
+            orL(
+                action_label.outside('a2', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.destroy('a3', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+            ),
+        )
+    )
+
+    forAllL(
+        combinationC(exact_before, entity)('ebstep', 'e'),
+        ifL(
+            action_label.exists('a1', path=(
+                                ('ebstep', ebefore_arg2, action_step),
+                                ('e', action_entity.reversed)
+                                )
+            ),
+            orL(
+                action_label.exists('a2', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.move('a3', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.create('a4', path=(
+                                ('ebstep', before_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+            ),
+        )
+    )
+
+    forAllL(
+        combinationC(exact_before, entity)('ebstep', 'e'),
+        ifL(
+            action_label.create('a1', path=(
+                                ('ebstep', ebefore_arg2, action_step),
+                                ('e', action_entity.reversed)
+                                )
+            ),
+            orL(
+                action_label.outside('a2', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.destroy('a3', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+            ),
+        )
+    )
+
+    forAllL(
+        combinationC(exact_before, entity)('ebstep', 'e'),
+        ifL(
+            action_label.move('a1', path=(
+                                ('ebstep', ebefore_arg2, action_step),
+                                ('e', action_entity.reversed)
+                                )
+            ),
+            orL(
+                action_label.exists('a2', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.move('a3', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.create('a4', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+            ),
+        )
+    )
+
+    forAllL(
+        combinationC(exact_before, entity)('ebstep', 'e'),
+        ifL(
+            action_label.destroy('a1', path=(
+                                ('ebstep', ebefore_arg2, action_step),
+                                ('e', action_entity.reversed)
+                                )
+            ),
+            orL(
+                action_label.exists('a2', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.move('a3', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+                action_label.create('a4', path=(
+                                ('ebstep', ebefore_arg1, action_step),
+                                ('e', action_entity.reversed)
+                            )
+                ),
+            ),
+        )
+    )
+
+    ifL(
+        entity('e'),
+        atMostL(
+            action_label.create(path=('e', action_entity.reversed)),
+            2
+        )
+    )
+
+    ifL(
+        entity('e'),
+        atMostL(
+            action_label.destroy(path=('e', action_entity.reversed)),
+            2
+        )
+    )
+
+
+
     #  ------------ Move
     # No subsequent move action unless there is a create action between them
 
@@ -253,7 +514,7 @@ with Graph('global') as graph:
                         action_label.destroy('a3', path=(('j1', action_step.reversed), ('e', action_entity.reversed))),
                         action_label.outside('a4', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
                     )
-                    ), 
+                ), 
                 # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
                 existsL(
                     andL(
