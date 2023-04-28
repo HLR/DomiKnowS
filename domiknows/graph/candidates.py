@@ -48,6 +48,18 @@ class combinationC(CandidateSelection):
         
         return result_dict
 
+def intersection_of_lists(lists):
+    # Find the intersection of n lists while preserving order
+    if not lists:
+        return []
+    # Find the common elements
+    common_elements = set(lists[0])
+    for lst in lists[1:]:
+        common_elements.intersection_update(lst)
+    # Preserve the order of the common elements based on the first list
+    ordered_common_elements = [elem for elem in lists[0] if elem in common_elements]
+    return ordered_common_elements
+
 def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
     conceptName = e[0].name
                         
@@ -169,43 +181,22 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
             
         # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
         dnsList = [] # candidates to be returned
-        newIntersection = True
-        if newIntersection:
-            if pathsCount == 1: # Single path
-                dnsList = dnsListForPaths[0]
-            else:
-                # --- Assume Intersection - TODO: in future use lo if defined to determine if different operation                                
-                for i in range(len(dnsListForPaths[0])):
-                    try:
-                        se = [set(dnsListForPaths[item][i]) for item in range(pathsCount)]
-                    except IndexError as ei:
-                        continue
-                    # Go through all the sets and calculate the intersection
-                    dnsListR = reduce(set.intersection, se)
-                    dnsList.append(list(dnsListR))
-        else:
-        # ----- Old code calculating intersection
+        if pathsCount == 1: # Single path
             dnsList = dnsListForPaths[0]
-            
-            # -- Combine the collected lists of dataNodes based on paths 
-            for l in dnsListForPaths[1:]:
-                # --- Assume Intersection - TODO: in future use lo if defined to determine if different  operation
-                _d = []
-                for i in range(len(l)):
-                    di = []
-                    for x in dnsList[i]:
-                        if x in l[i]:
-                            di.append(x)
-                            
-                    if not di:
-                        di = [None]
-                        
-                    _d.append(di)
-                    
-                dnsList = _d
+        else:
+            # --- Assume Intersection - TODO: in future use lo if defined to determine if different operation 
+            noOfCandidatesSubsets = len(dnsListForPaths[0])
+            for i in range(noOfCandidatesSubsets):
+                # Collect subsets with the same index from each path
+                try:
+                    listsOfSubsetsForIndex = [dnsListForPaths[item][i] for item in range(pathsCount)]
+                except IndexError as ei:
+                    continue
                 
-        # ----- End - Old code calculating intersection
-            
+                # Calculate the intersection
+                se = intersection_of_lists(listsOfSubsetsForIndex)
+                dnsList.append(se)
+                
     # Returns candidates  
     dnsListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsList] # compress
     if len(dnsListCompressed) == len(dnsList):
