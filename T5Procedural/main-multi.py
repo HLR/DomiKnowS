@@ -4,6 +4,9 @@ sys.path.append("../..")
 
 import torch
 from torch import nn
+import math
+
+
 from reader import ProparaReader
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor, JointReaderSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
@@ -300,6 +303,7 @@ def main():
 
     #     lbp.test(dataset, device='auto')
     all_updates = []
+    correct, correct_before, total = {}, {}, {}
     for item_set, datanode in zip(d2, lbp.populate(dataset, device="cpu")):
     #     tdatanode = datanode.findDatanodes(select = context)[0]
     #     print(len(datanode.findDatanodes(select = context)))
@@ -491,29 +495,122 @@ def main():
             if diff:
                 print(diff)
                 
-
+        assert torch.all(torch.tensor(final_output['entity_location_before_label'])[:, 1:] == torch.tensor(final_output['entity_location_label'])[:, :-1])
         all_updates.append(final_output)
+
+        ### evaluate the accuracy before and after the changes
+        key_data = [
+            "AfterExistenceTrue", "BeforeExistenceTrue",
+            "AfterLocationTrue", "BeforeLocationTrue",
+            "AltInputTrue", "AltOutputTrue",
+            "ChangeTrue", "CreateTrue", "DestroyTrue", "MoveTrue",
+            "InputTrue", "OutputTrue",
+            "MultiActionTrue", "WhenCreateTrue", "WhenDestroyTrue",
+        ]
+        key_decision = [
+            after_existence, before_existence,
+            entity_location_label, entity_location_before_label,
+            input_entity_alt, output_entity_alt,
+            location_change, action_create, action_destroy, action_move,
+            input_entity, output_entity,
+            action_label, when_create, when_destroy,
+        ]
+        def change_format_to_tensor(x):
+            ### x is the values changed from function assign_label which we want to revert back
+            ### to the original format
+            _mapping = {"yes": 1, "no": 0}
+            ### maping based on the index for "create", "exists", "move", "destroy", "outside"
+            _mapping_action = {"create": 0, "exists": 1, "move": 2, "destroy": 3, "outside": 4}
+            if type(x[0]) == list and x[0][0] in {"yes", "no"}:
+                final_data = []
+                for x1 in x:
+                    final_data.append(torch.tensor([_mapping[_it] for _it in x1]))
+                final_data = torch.stack(final_data)
+                return final_data
+            elif type(x[0]) == str and x[0] in {"yes", "no"}:
+                final_data = torch.tensor([_mapping[_it] for _it in x])
+                return final_data
+            elif type(x[0]) == list and x[0][0] in {"create", "exists", "outside", "destroy", "move"}:
+                final_data = []
+                for x1 in x:
+                    final_data.append(torch.tensor([_mapping_action[_it] for _it in x1]))
+                final_data = torch.stack(final_data)
+                return final_data
+            else:
+                return torch.tensor(x)
+
+
+        for key1, key2 in zip(key_data, key_decision):
+            if not key2.name in total:
+                total[key2.name] = 0
+                correct[key2.name] = 0
+                correct_before[key2.name] = 0
+            
+            fixed_decision = final_output[key2.name]
+            original_decision = final_output[key2.name+"_before"]
+            fixed_decision = change_format_to_tensor(fixed_decision)
+            original_decision = change_format_to_tensor(original_decision)
+            ground_truth = item_set[key1]
+            ground_truth[ground_truth==3] = 7752
+            fixed_decision[fixed_decision==3] = 7752
+            original_decision[original_decision==3] = 7752
+            if "when" in key2.name:
+                ground_truth = ground_truth - 1
+                new_fixed = []
+                for i in range(len(fixed_decision)):
+                    if 1 in fixed_decision[i]:
+                        ### find the first index in fixed_decision[i] that is 1 using tensor operation
+                        positive_ind = torch.nonzero(fixed_decision[i] == 1)[0].item()
+                        ### and add that to new_fixed
+                        new_fixed.append(positive_ind)
+                    else:
+                        new_fixed.append(-1)
+                fixed_decision = torch.tensor(new_fixed)
+                new_original = []
+                for i in range(len(original_decision)):
+                    if 1 in original_decision[i]:
+                        ### find the first index in original_decision[i] that is 1 using tensor operation
+                        positive_ind = torch.nonzero(original_decision[i] == 1)[0].item()
+                        ### and add that to new_original
+                        new_original.append(positive_ind)
+                    else:
+                        new_original.append(-1)
+                original_decision = torch.tensor(new_original)
+
+            correct[key2.name] += (ground_truth.flatten() == fixed_decision.flatten()).sum().item()
+            correct_before[key2.name] += (ground_truth.flatten() == original_decision.flatten()).sum().item()
+            total[key2.name] += len(ground_truth.flatten())
+
+
         
         print("\nVerify Learned Results:")
         verifyResult = datanode.verifyResultsLC()
         if verifyResult:
             for lc in verifyResult:
-                if verifyResult[lc]['satisfied'] == verifyResult[lc]['satisfied']:
-                    print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+                if 'ifSatisfied' in verifyResult[lc] and not math.isnan(verifyResult[lc]['ifSatisfied']):
+                    print("lc %s is %i%% IfSatisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
                 else:
-                    print("lc %s cannot be verified for learned results - check if lc is correct"%(lc))
+                    if verifyResult[lc]['satisfied'] == verifyResult[lc]['satisfied']:
+                        print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+                    else:
+                        print("lc %s cannot be verified for learned results - check if lc is correct"%(lc))
 
 
         print("\nVerify ILP Results:")
         verifyResultILP = datanode.verifyResultsLC(key = "/ILP")
         if verifyResultILP:
             for lc in verifyResultILP:
-                if verifyResultILP[lc]['satisfied'] == verifyResultILP[lc]['satisfied']:
-                    print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+                if 'ifSatisfied' in verifyResultILP[lc] and not math.isnan(verifyResultILP[lc]['ifSatisfied']):
+                    print("lc %s is %i%% IfSatisfied by learned results"%(lc, verifyResultILP[lc]['satisfied']))
                 else:
-                    print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
+                    if verifyResultILP[lc]['satisfied'] == verifyResultILP[lc]['satisfied']:
+                        print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+                    else:
+                        print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
 
-    
+    for key in total:
+        print(key, correct[key]/total[key])
+        print(key+"_before", correct_before[key]/total[key])
     return all_updates
 
 

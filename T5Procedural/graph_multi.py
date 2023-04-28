@@ -99,21 +99,31 @@ with Graph('global') as graph:
 
     ### if entity is input, the first state should not be `none`
     forAllL(
-        combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
+        combinationC(entity, location(path=eqL(location, 'text', {5839, 150, 14794, 597, 1})))('e', 'l'),
         ifL(
             input_entity('e'),
             notL(
                 entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
                                     ("e", lentity.reversed, lstep, eqL(step, 'index', {0}), lstep.reversed),
-                                    # ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}))
                                     ("l", llocation.reversed)
-
                 ))
             )
         )
     )
 
+    # ifL(
+    #     input_entity('e'),
+    #     notL(
+    #         entity_location_before_label('el1', path=(
+    #                             ("e", lentity.reversed),
+    #                             ("e", lentity.reversed, lstep, eqL(step, 'index', {0}), lstep.reversed),
+    #                             ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
+    #         ))
+    #     )
+    # )
+
+    ### if entity exists before the step, its location should be not none
     ifL(
         andL(
             notL(before_existence('a56')),
@@ -122,7 +132,7 @@ with Graph('global') as graph:
         ),
         entity_location_before_label('el1', path=(
                                 ("e", lentity.reversed),
-                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
                                 ("i", lstep.reversed)
                             )
         ), active = True, name='checking_CL'
@@ -299,135 +309,135 @@ with Graph('global') as graph:
         )
 
     #### New constraints for the sequential order of actions
-    forAllL(
-        combinationC(exact_before, entity)('ebstep', 'e'),
-        ifL(
-            action_label.outside('a1', path=(
-                                ('ebstep', ebefore_arg2, action_step),
-                                ('e', action_entity.reversed)
-                                )
-            ),
-            orL(
-                action_label.outside('a2', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.destroy('a3', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-            ),
-        )
-    )
+    # forAllL(
+    #     combinationC(exact_before, entity)('ebstep', 'e'),
+    #     ifL(
+    #         action_label.outside('a1', path=(
+    #                             ('ebstep', ebefore_arg2, action_step),
+    #                             ('e', action_entity.reversed)
+    #                             )
+    #         ),
+    #         orL(
+    #             action_label.outside('a2', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.destroy('a3', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #         ),
+    #     )
+    # )
 
-    forAllL(
-        combinationC(exact_before, entity)('ebstep', 'e'),
-        ifL(
-            action_label.exists('a1', path=(
-                                ('ebstep', ebefore_arg2, action_step),
-                                ('e', action_entity.reversed)
-                                )
-            ),
-            orL(
-                action_label.exists('a2', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.move('a3', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.create('a4', path=(
-                                ('ebstep', before_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-            ),
-        )
-    )
+    # forAllL(
+    #     combinationC(exact_before, entity)('ebstep', 'e'),
+    #     ifL(
+    #         action_label.exists('a1', path=(
+    #                             ('ebstep', ebefore_arg2, action_step),
+    #                             ('e', action_entity.reversed)
+    #                             )
+    #         ),
+    #         orL(
+    #             action_label.exists('a2', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.move('a3', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.create('a4', path=(
+    #                             ('ebstep', before_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #         ),
+    #     )
+    # )
 
-    forAllL(
-        combinationC(exact_before, entity)('ebstep', 'e'),
-        ifL(
-            action_label.create('a1', path=(
-                                ('ebstep', ebefore_arg2, action_step),
-                                ('e', action_entity.reversed)
-                                )
-            ),
-            orL(
-                action_label.outside('a2', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.destroy('a3', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-            ),
-        )
-    )
+    # forAllL(
+    #     combinationC(exact_before, entity)('ebstep', 'e'),
+    #     ifL(
+    #         action_label.create('a1', path=(
+    #                             ('ebstep', ebefore_arg2, action_step),
+    #                             ('e', action_entity.reversed)
+    #                             )
+    #         ),
+    #         orL(
+    #             action_label.outside('a2', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.destroy('a3', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #         ),
+    #     )
+    # )
 
-    forAllL(
-        combinationC(exact_before, entity)('ebstep', 'e'),
-        ifL(
-            action_label.move('a1', path=(
-                                ('ebstep', ebefore_arg2, action_step),
-                                ('e', action_entity.reversed)
-                                )
-            ),
-            orL(
-                action_label.exists('a2', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.move('a3', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.create('a4', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-            ),
-        )
-    )
+    # forAllL(
+    #     combinationC(exact_before, entity)('ebstep', 'e'),
+    #     ifL(
+    #         action_label.move('a1', path=(
+    #                             ('ebstep', ebefore_arg2, action_step),
+    #                             ('e', action_entity.reversed)
+    #                             )
+    #         ),
+    #         orL(
+    #             action_label.exists('a2', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.move('a3', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.create('a4', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #         ),
+    #     )
+    # )
 
-    forAllL(
-        combinationC(exact_before, entity)('ebstep', 'e'),
-        ifL(
-            action_label.destroy('a1', path=(
-                                ('ebstep', ebefore_arg2, action_step),
-                                ('e', action_entity.reversed)
-                                )
-            ),
-            orL(
-                action_label.exists('a2', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.move('a3', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-                action_label.create('a4', path=(
-                                ('ebstep', ebefore_arg1, action_step),
-                                ('e', action_entity.reversed)
-                            )
-                ),
-            ),
-        )
-    )
+    # forAllL(
+    #     combinationC(exact_before, entity)('ebstep', 'e'),
+    #     ifL(
+    #         action_label.destroy('a1', path=(
+    #                             ('ebstep', ebefore_arg2, action_step),
+    #                             ('e', action_entity.reversed)
+    #                             )
+    #         ),
+    #         orL(
+    #             action_label.exists('a2', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.move('a3', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #             action_label.create('a4', path=(
+    #                             ('ebstep', ebefore_arg1, action_step),
+    #                             ('e', action_entity.reversed)
+    #                         )
+    #             ),
+    #         ),
+    #     )
+    # )
 
     ifL(
         entity('e'),
@@ -611,7 +621,7 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -636,7 +646,7 @@ with Graph('global') as graph:
                 notL(
                     entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -660,14 +670,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 notL(entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -682,16 +692,16 @@ with Graph('global') as graph:
         ifL(
             action_label.move('a1', path=(('i', action_step.reversed), ('e', action_entity.reversed))),
             ifL(
-                entity_location_label('el1', path=(
+                entity_location_before_label('el1', path=(
                                 ("e", lentity.reversed),
                                 ("i", lstep.reversed)
                             )
                 ),
                 notL(
-                    entity_location_before_label('el2', path=(
+                    entity_location_label('el2', path=(
                                         ("e", lentity.reversed),
                                         ("i", lstep.reversed),
-                                        ('e1', llocation, llocation.reversed)
+                                        ('el1', llocation, llocation.reversed)
                                     )
                         )
                 )
@@ -708,14 +718,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
-                notL(entity_location_before_label('el1', path=(
+                notL(entity_location_before_label('el2', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -736,7 +746,7 @@ with Graph('global') as graph:
                                 ("i", lstep.reversed)
                             )
                 ),
-                entity_location_before_label('el1', path=(
+                entity_location_before_label('el2', path=(
                                 ("e", lentity.reversed),
                                 ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
                                 ("i", lstep.reversed)
@@ -788,7 +798,7 @@ with Graph('global') as graph:
     #         entity_location_before_label('el1', path=(
     #                             ("e", lentity.reversed),
     #                             ("e", lentity.reversed, lstep, eqL(step, 'index', {0})),
-    #                             # ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}))
+    #                             # ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}))
     #                             ("l", llocation.reversed)
 
     #         ))
@@ -806,7 +816,7 @@ with Graph('global') as graph:
         notL(
             entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
@@ -822,7 +832,7 @@ with Graph('global') as graph:
         notL(
             entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
