@@ -6,7 +6,6 @@ from domiknows.graph.logicalConstrain import eqL
 
 import torch
 
-
 class CandidateSelection(LcElement):
     def __init__(self, *e,  name = None):
         super().__init__(*e, name = name)
@@ -55,7 +54,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
     # -- Collect dataNode for the logical constraint (path)
     
     dnsList = [] # Stores lists of dataNodes for each corresponding dataNode 
-    
+    pathsCount = 0
     if variable.v == None: # No path - just concept
         if variable.name == None:
             logger.error('The element %s of logical constraint %s has no name for variable'%(conceptName, lc.lcName))
@@ -89,9 +88,11 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                 paths.append(vE)
                 
         pathsCount = len(paths)
+        eqLPaths = []
         
         # -- Process  paths
         dnsListForPaths = []
+        eqLPaths = []
         for i, v in enumerate(paths):
             dnsListForPaths.append([])
             
@@ -147,25 +148,24 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                     
             
             if isinstance(v, eqL) or (isinstance(path, tuple) and any(isinstance(elem, eqL) for elem in v)):
-                countValid = sum(1 for sublist in dnsListForPaths[i] if sublist and any(elem is not None for elem in sublist))
-                logger.info('eqL has collected %i candidates of which %i is not None %s'%(len(dnsListForPaths[i]), countValid, dnsListForPaths[i]))
+                eqLPaths.append(False)
+            else:
+                eqLPaths.append(True)
                 
         # -- Compress candidates and print log about the path candidates
         for ip, dnsPathList in enumerate(dnsListForPaths):
-            dnsPathListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsPathList if sublist]
-            # dnsPathNewCompresed = []
-            # for elems in dnsPathListCompressed:
-            #     if any(elem is not None for elem in elems):
-            #         dnsPathNewCompresed.append(elems)
-            #     else:
-            #         dnsPathNewCompresed.append([None])
-
-            dnsListForPaths[ip] = dnsPathListCompressed
-            # dnsListForPaths[ip] = dnsPathNewCompresed
+            dnsPathListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsPathList]
+            if len(dnsPathListCompressed) == len(dnsPathList):
+                dnsListForPaths[ip] = dnsPathListCompressed
+            else:
+                pass
             
             if len(dnsListForPaths) > 1:
                 countValid = sum(1 for sublist in dnsListForPaths[ip] if sublist and any(elem is not None for elem in sublist))
-                logger.info('path %i has collected %i candidates of which %i is not None %s'%(ip,len(dnsListForPaths[ip]), countValid, dnsListForPaths[ip]))
+                if eqLPaths[ip]:
+                    logger.info('path %i involving eqL has collected %i candidates of which %i is not None %s'%(ip,len(dnsListForPaths[ip]), countValid, dnsListForPaths[ip]))
+                else:
+                    logger.info('path %i has collected %i candidates of which %i is not None %s'%(ip,len(dnsListForPaths[ip]), countValid, dnsListForPaths[ip]))
             
         # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
         dnsList = [] # candidates to be returned
@@ -207,9 +207,17 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
         # ----- End - Old code calculating intersection
             
     # Returns candidates  
-    #dnsList = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsList if sublist] # compress
+    dnsListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsList] # compress
+    if len(dnsListCompressed) == len(dnsList):
+        dnsList = dnsListCompressed
+    else:
+        pass
+    
     countValidC = sum(1 for sublist in dnsList if sublist and any(elem is not None for elem in sublist))
-    logger.info('collected %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
+    if pathsCount > 1:
+        logger.info('intersection of path resulted in %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
+    else:
+        logger.info('collected %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
   
     return dnsList
 
@@ -270,7 +278,6 @@ def getEdgeDataNode(dn, path):
     # Check if it is a valid relation link  with not empty set of connected datanodes      
     if relDns is None or len(relDns) == 0 or relDns[0] is None:
         return [None]
-        relDns = []
         
     # if eqL then filter DataNode  
     if isinstance(path[0], eqL):
