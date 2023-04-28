@@ -591,22 +591,15 @@ with Graph('global') as graph:
             )
         )
     )
-    ### if location change is true, the locations before for step i and after step i should not match
+    
     ### if location change is true, there should be one action either create, destroy, or move
     ifL(
-        andL(
-            action('a14'),
-            step('i', path=('a14', action_step)),
-            entity('e', path=('a14', action_entity)),
-        ),
-        ifL(
-            location_change(path=('a14')),
-            orL(
-                action_create(path=('a14')),
-                action_destroy(path=('a14')),
-                action_move(path=('a14'))
-            )
-        ), active = True
+        location_change('a14'),
+        orL(
+            action_create(path=('a14')),
+            action_destroy(path=('a14')),
+            action_move(path=('a14'))
+        )
     )
 
     ### if the the location should not match the entity itself
