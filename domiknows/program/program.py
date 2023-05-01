@@ -291,7 +291,7 @@ class LearningBasedProgram():
         self.epoch = None
         self.stop = None
 
-    def train_epoch(self, dataset):
+    def train_epoch(self, dataset, **kwargs):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
@@ -308,7 +308,7 @@ class LearningBasedProgram():
             self.to(device)
         self.call_epoch('Testing', dataset, self.test_epoch, **kwargs)
 
-    def test_epoch(self, dataset):
+    def test_epoch(self, dataset, **kwargs):
         self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():

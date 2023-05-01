@@ -43,13 +43,13 @@ Additional, logical constrains defined within the graph can use the following lo
 * **equalA**, 
 * **inSetA**.
 
-The logical constrain can use variables to associate related objects of the logical expression. 
+The logical constraint can use variables to associate related objects of the logical expression. 
 The expressions use concepts defined in the graph and set additional constrains on them. 
 Example:
 
 	ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
 	
-This above example logical constrain specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
+This above example logical constraint specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
 
 The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
@@ -66,7 +66,7 @@ The [ilpBooleanMethods](https://github.com/kordjamshidi/RelationalGraph/blob/mas
 The solver [implementation using Gurobi](https://github.com/kordjamshidi/RelationalGraph/blob/master/domiknows/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. The solver encodes mapping from OWL constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities. 
 The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned. 
 
-This detail of mapping from OWL to logical representation is presented below for each OWL constrain.
+This detail of mapping from OWL to logical representation is presented below for each OWL constraint.
 
 **Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*)**:
 
@@ -148,11 +148,11 @@ This detail of mapping from OWL to logical representation is presented below for
   
 - **[someValueFrom](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of someValueFrom statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world *
+  *This is an Existential constraint not possible to check without assumption of close world *
   
 - **[hasValue](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of hasValue statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
  
 - **[objectHasSelf](https://www.w3.org/TR/owl2-syntax/#Self-Restriction "OWL example of objectHasSelf statement for property")** statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
@@ -168,11 +168,11 @@ This detail of mapping from OWL to logical representation is presented below for
       
 - **[exactCardinality](https://www.w3.org/TR/owl2-syntax/#Exact_Cardinality "OWL example of exactCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
     
 - **[minCardinality](https://www.w3.org/TR/owl2-syntax/#Minimum_Cardinality "OWL example of minCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
 
 - **[maxCardinality](https://www.w3.org/TR/owl2-syntax/#Maximum_Cardinality "OWL example of maxCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 

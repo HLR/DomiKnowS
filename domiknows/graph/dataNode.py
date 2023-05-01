@@ -1,13 +1,13 @@
 import torch
 from collections import OrderedDict, namedtuple
-from  time import process_time_ns
+from time import process_time_ns
 import re
+
 from .dataNodeConfig import dnConfig 
 
 from ordered_set import OrderedSet 
 
 from domiknows import getRegrTimer_logger, getProductionModeStatus
-from domiknows.graph.logicalConstrain import eqL
 from domiknows.solver import ilpOntSolverFactory
 
 import logging
@@ -76,6 +76,8 @@ class DataNode:
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the node in the ontology graph (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
+        
+        self.graph =  self.ontologyNode.sup
         if relationLinks:
             self.relationLinks = relationLinks           # Dictionary mapping relation name to RealtionLinks
         else:
@@ -815,80 +817,6 @@ class DataNode:
                 return resultForCurrent
         
         return None 
-    
-    # Find DataNodes starting from the given DataNode following provided path
-    #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
-    def getEdgeDataNode(self, path):
-        # Path is empty
-        if isinstance(path, eqL):
-            path = [path]
-        if len(path) == 0:
-            return [self]
-
-        # Path has single element
-        if (not isinstance(path[0], eqL)) and len(path) == 1:
-            relDns = self.getDnsForRelation(path[0])
-                    
-            if relDns is None or len(relDns) == 0 or relDns[0] is None:
-                return [None]
-            
-            return relDns
-                
-        # Path has at least 2 elements - will perform recursion
-
-        if isinstance(path[0], eqL): # check if eqL
-            path0 = path[0].e[0][0]
-        else:
-            path0 = path[0]
-
-        relDns = None         
-        if self.isRelation(path0):
-            relDns = self.getDnsForRelation(path0)
-        else: # if not relation then has to be attribute in eql
-            attributeValue = self.getAttribute(path[0].e[1]).item()
-            requiredValue = path[0].e[2]
-             
-            if attributeValue in requiredValue:
-                return [self]
-            elif (True in  requiredValue ) and attributeValue == 1:
-                return [self]
-            elif (False in  requiredValue ) and attributeValue == 0:
-                attributeValue = False
-            else:
-                return [None]
-          
-        # Check if it is a valid relation link  with not empty set of connected datanodes      
-        if relDns is None or len(relDns) == 0 or relDns[0] is None:
-            return [None]
-            relDns = []
-            
-        # if eqL then filter DataNode  
-        if isinstance(path[0], eqL):
-            _cDns = []
-            for cDn in relDns:
-                if isinstance(path[0].e[1], str):
-                    path0e1 = path[0].e[1]
-                else:
-                    path0e1 = path[0].e[1].name
-                    
-                if path0e1 in cDn.attributes or ("rootDataNode" in cDn.attributes and (path0.name + "/" + path0e1) in cDn.attributes["rootDataNode"].attributes["propertySet"]):
-                    if cDn.getAttribute(path0e1).item() in path[0].e[2]:
-                        _cDns.append(cDn)
-                    
-            relDns = _cDns
-        
-        # recursion
-        rDNS = []
-        for cDn in relDns:
-            rDn = cDn.getEdgeDataNode(path[1:])
-            
-            if rDn:
-                rDNS.extend(rDn)
-                
-        if rDNS:
-            return rDNS
-        else:
-            return [None]
 
     # cache
     collectedConceptsAndRelations = None
@@ -1146,6 +1074,19 @@ class DataNode:
         
         self.inferLocal()
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        
+    def inferGBIResults(self, *_conceptsRelations, model, builder):
+        if len(_conceptsRelations) == 0:
+            _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
+        else:
+            _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
+            
+        # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
+
+        from domiknows.program.model.gbi import GBIModel
+        myGBIModel = GBIModel(self.graph, model)
+        myGBIModel.calculateGBISelection(builder, _conceptsRelations)
         
     # Calculate the percentage of results satisfying each logical constraint 
     def verifyResultsLC(self, key = "/local/argmax"):
@@ -1602,7 +1543,7 @@ class DataNodeBuilder(dict):
                     if iDn in visitedDns:
                         continue
                     
-                    if not self.__isRootDn(iDn, checkedDns, visitedDns):
+                    if self.__isRootDn(iDn, checkedDns, visitedDns):
                         isRoot = False
                         break
                     
@@ -1702,7 +1643,7 @@ class DataNodeBuilder(dict):
                     allAttrInit = False
                     break
             
-            if allAttrInit: #Create links for the ralation DataNode
+            if allAttrInit: #Create links for the relation DataNode
                 # Find DataNodes connected by this relation based on graph definition
                 existingDnsForAttr = OrderedDict() # DataNodes for Attributes of the relation
                 for relationAttributeName, relationAttributeConcept in conceptInfo['relationAttrsGraph'].items():
@@ -1731,7 +1672,7 @@ class DataNodeBuilder(dict):
                             candidateDn = existingDnsForAttr[attribute][candidateIndex]
                             
                             if attributeIndex == 0:
-                                candidateDn.addRelationLink(relationName, relationDn)
+                                candidateDn.addRelationLink(attribute, relationDn)
                             
                             relationDn.addRelationLink(attribute, candidateDn)  
                             relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
@@ -1761,7 +1702,7 @@ class DataNodeBuilder(dict):
  
             if len(existingDnsForRelationSorted) == 1:
                 if vInfo.dim == 0:
-                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value.item() # Add / /Update value of the attribute
+                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value # Add / /Update value of the attribute
             elif vInfo.dim > 0:
                 for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relations links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
@@ -2355,9 +2296,11 @@ class DataNodeBuilder(dict):
         if context=="interference":
             if self.skeletonDataNode:
                 self.myLoggerTime.info("DataNode Builder is using skeleton datanode mode")
-            self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
-            elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
-            self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
+            if 'Counter' + '_setitem' in self:
+                self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem']))
+            if 'DataNodeTime' in self:
+                elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
+                self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')
@@ -2417,9 +2360,11 @@ class DataNodeBuilder(dict):
     def getBatchDataNodes(self):
         self.__addGetDataNodeCounter()
         
-        self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
-        elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
-        self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
+        if 'Counter' + '_setitem' in self:
+            self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem' ]))
+        if 'DataNodeTime' in self:
+            elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
+            self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')

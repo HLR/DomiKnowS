@@ -91,9 +91,9 @@ class TorchModel(torch.nn.Module):
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
             builder = DataNodeBuilder(data_item)
+            *out, = self.populate(builder)
             if (builder.needsBatchRootDN()):
                 builder.addBatchRootDN()
-            *out, = self.populate(builder)
             datanode = builder.getDataNode(context="build", device=self.device)
             return (*out, datanode, builder)
         else:
@@ -229,7 +229,7 @@ class SolverModel(PoiModel):
             self.inference_with = inference_with
 
     def inference(self, builder):
-        for prop in self.poi:
+        for i, prop in enumerate(self.poi):
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
 #             for output_sensor, target_sensor in self.find_sensors(prop):
@@ -244,15 +244,17 @@ class SolverModel(PoiModel):
         datanode = builder.getDataNode(device=self.device)
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
-        for infertype in self.inferTypes:
-            {
-                'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
-                'local/argmax': lambda :datanode.inferLocal(),
-                'local/softmax': lambda :datanode.inferLocal(),
-                'argmax': lambda :datanode.infer(),
-                'softmax': lambda :datanode.infer(),
-            }[infertype]()
-#         print("Done with the inference")
+        if datanode:
+            for infertype in self.inferTypes:
+                {
+                    'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                    'local/argmax': lambda :datanode.inferLocal(),
+                    'local/softmax': lambda :datanode.inferLocal(),
+                    'argmax': lambda :datanode.infer(),
+                    'softmax': lambda :datanode.infer(),
+                    'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self, builder=builder),
+                }[infertype]()
+    #         print("Done with the inference")
         return builder
 
     def populate(self, builder, run=True):
