@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, forAllL, eqL
+from domiknows.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, forAllL, eqL, atLeastAL, exactAL, atMostAL
 from domiknows.graph import combinationC
 from domiknows.graph import EnumConcept
 
@@ -97,9 +97,20 @@ with Graph('global') as graph:
         )
     )
 
+    #### Prolog: entity_location_label(e, i, l):- entity_location_before_label(e, i-1, l).
+
+    forAllL(
+        combinationC(entity, exact_before)('e', 'step_rel'),
+        ifL(
+            entity_location_before_label('x', path=(('e', lentity.reversed), ('step_rel', ebefore_arg2, lstep.reversed))),
+            entity_location_label('y', path=(('e', lentity.reversed), ('step_rel', ebefore_arg1, lstep.reversed), ('x', llocation, llocation.reversed))),
+        )
+    )
+
     ### if entity is input, the first state should not be `none`
     forAllL(
         combinationC(entity, location(path=eqL(location, 'text', {5839, 150, 14794, 597, 1})))('e', 'l'),
+        # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
         ifL(
             input_entity('e'),
             notL(
@@ -112,6 +123,32 @@ with Graph('global') as graph:
         )
     )
 
+    ### Prolog: input_entity(e) :- not(non-location(l) and step_index(i, 0) entity_location_before_label(e, i, l))
+
+    ### if entity is not input, there should exists at least one create event associated with it
+    ifL(
+        notL(input_entity('e')),
+        atLeastL(
+            action_label.create('a', path=(('e', action_entity))), 1
+        )
+    )
+    
+
+    ### if entity is input, and there is an action create for it, it should have been destroyed before that
+    ifL(
+        input_entity('e'),
+        ifL(
+            action_create('a', path=('e', action_entity)),
+            existsL(
+                andL(
+                    step('k', path=(('a', action_step, before_arg2.reversed, before_arg1))), 
+                    action_label.destroy('a64', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                )
+            )
+        )
+    )
+    ### 
+
     # ifL(
     #     input_entity('e'),
     #     notL(
@@ -123,7 +160,7 @@ with Graph('global') as graph:
     #     )
     # )
 
-    ### if entity exists before the step, its location should be not none
+    ### if entity does not exists before the step, its location should be not none
     ifL(
         andL(
             notL(before_existence('a56')),
@@ -132,7 +169,7 @@ with Graph('global') as graph:
         ),
         entity_location_before_label('el1', path=(
                                 ("e", lentity.reversed),
-                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
                                 ("i", lstep.reversed)
                             )
         ), active = True, name='checking_CL'
@@ -573,7 +610,14 @@ with Graph('global') as graph:
          exactL(
              entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
          ), # this is the condition that should hold for every assignment
-     )
+    )
+    
+    forAllL(
+         combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
+         exactL(
+             entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
+         ), # this is the condition that should hold for every assignment
+    )
     
     ### for each entity, only one when_creat and when_destroy can be correct
     ifL(
@@ -593,6 +637,8 @@ with Graph('global') as graph:
     ### the input/output and alternative should match each other
     ifL(input_entity('x'), input_entity_alt(path=('x')))
     ifL(output_entity('x'), output_entity_alt(path=('x')))
+    ifL(input_entity_alt('x'), input_entity(path=('x')))
+    ifL(output_entity_alt('x'), output_entity(path=('x')))
 
     ### for each step and entity at most one action is applicable
     forAllL(
@@ -873,4 +919,153 @@ with Graph('global') as graph:
         )
     )
 
+    ifL(
+        orL(
+            action_create(path=('a14')),
+            action_destroy(path=('a14')),
+            action_move(path=('a14'))
+        ),
+        location_change('a14'),
+    )
+
     ### if the the location should not match the entity itself
+    # forAllL(
+    #     combinationC(step, entity)('i', 'e'),
+    #     ifL(
+    #         entity_location_label('el1', path=(
+    #                         ("e", lentity.reversed),
+    #                         ("i", lstep.reversed)
+    #             )
+    #         )
+    #     ),
+    #     notL(
+    #         existsL(
+    #             same_mention('sm1', path=(
+    #                 ("e", same_entity.reversed),
+    #                 ("el1", llocation, same_location.reversed)
+    #             ))
+    #         )
+    #     )
+    # )
+
+    ### if entity and location match each other in same_mention, the entity_location with that location should be false
+    forAllL(
+        combinationC(step, entity, location)('i', 'e', 'l'),
+        ifL(
+            existsL(
+                same_mention('sm1', path=(
+                    ("e", same_entity.reversed),
+                    ("l", same_location.reversed)
+                ))
+            ),
+            notL(
+                entity_location_label('el1', path=(
+                    ("e", lentity.reversed),
+                    ("l", llocation.reversed),
+                    ("i", lstep.reversed)
+                ))
+            )
+        )
+    )
+
+    ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
+    # forAllL(
+    #     combinationC(step, entity)('i', 'e'),
+    #     ifL(
+    #         andL(
+    #             entity_location_label('el1', path=(
+    #                             ("e", lentity.reversed),
+    #                             ("i", lstep.reversed)
+    #                 )
+    #             ),
+    #             existsL(
+    #                 same_mention('sm1', path=(
+    #                     ("el1", llocation, same_location.reversed)
+    #                 ))
+    #             )
+    #         ),
+    #         after_existence('a1', path=(
+    #             ("sm1", same_entity, action_entity.reversed),
+    #             ("i", action_step.reversed)
+    #         ))
+    #     )
+    # )
+
+    ### if entity 'e' is located in a location 'l' which corresponds to an entity 'e1' and entity 'e1' is destroyed, the entity `e` is either moved or destroyed
+    forAllL(
+        combinationC(step, entity)('i', 'e'),
+        ifL(
+            andL(
+                entity_location_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("i", lstep.reversed)
+                )),
+                existsL(
+                    andL(
+                        same_mention('sm1', path=(
+                        ("el1", llocation, same_location.reversed)
+                        )),
+                        action_destroy('a1', path=(
+                            ("sm1", same_entity, action_entity.reversed),
+                            ("i", action_step.reversed)
+                        )),
+                    ) 
+                ),        
+            ),
+            orL(
+                action_move('a2', path=(
+                    ("e", action_entity.reversed),
+                    ("i", action_step.reversed)
+                )),
+                action_destroy('a3', path=(
+                    ("e", action_entity.reversed),
+                    ("i", action_step.reversed)
+                ))
+            )
+        )
+    )
+
+    ### sum(x1, x2, i + j) :- image(x1, i), image(x2, j)
+    # def check_func(i, j, k):
+    #     return i + j == k
+    
+    # ifL(
+    #     sum(var='x', val='k'), --> one, two, three, ..., eighteen
+    #     --> (x1, k1), (x1, k2), (x1, k3)
+    #     --> (x2, k1), (x2, k2), (x2, k3)
+    #     andL(
+    #         image(var='y = x1.arg1', val='i'), --> one, two, three, ... ,nine
+    #         image(var='z = x1.arg2', val='j'), --> one, two, three, ..., nine
+    #         # check_valL(check_func(i, j, k))
+    #         # check_varL()
+    #     )
+    # )
+
+
+    # ifL(
+    #     c1(),
+    #     c2(), 
+    #     check_valL()
+    # )
+
+
+
+    
+    # [x1, x2]
+    # [[x1.arg1], [x2.arg1]]
+    # [[x1.arg2], [x2.arg2]]
+
+    # (x1, x1.arg1, x1.arg2)
+    # (x2, x2.arg1, x2.arg2)
+
+    # (x1, k1), (x1, k2), (x1, k3)
+    # ([(x1.arg1, i1), ])
+
+    # check_func(**filled_values)
+    # filled_values {"i": 10, "j": 11, "k": 21}
+
+    ### At least one input should exist
+    atLeastAL(input_entity('e'))
+
+    ### At least one output should exist
+    atLeastAL(output_entity('e'))

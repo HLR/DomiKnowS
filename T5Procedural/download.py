@@ -2,7 +2,7 @@ import os
 import gdown
 
 # Set the Google Drive file ID
-file_id = '1Ep2EBPSbY1fVE7SegXcv3nrUpGfzHAC5'
+file_id = '1LFl_SFcCSqOb0jgsVB1Xm4wSEaFlUWhP'
 
 # Set the destination directory and file name
 destination_dir = 'data'

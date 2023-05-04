@@ -339,3 +339,26 @@ class ProparaReader(RegrReader):
             else:
                 all_ground_truths.append(predictions[1])
         return torch.stack(all_decisions), torch.tensor(all_ground_truths)
+    
+    def getSameMentionsval(self, item):
+        entities = item['entities_tokens']
+        location = item['loc_candidates']
+        matchings = []
+        for eid, ent in enumerate(entities):
+            ### ent is a list of lists, we want to flattent the list here
+            ent = [_it for sublist in ent for _it in sublist]
+            ### Finding the indexes of location list, where its value is inside ent
+            loc_indexes = [location.index(_it) for _it in ent if _it in location]
+            for loc_index in loc_indexes:
+                matchings.append((eid, loc_index))
+        connection_entities = torch.zeros(len(matchings), len(entities))
+        connection_locations = torch.zeros(len(matchings), len(location))
+        ### putting one for the corresponding entity and location
+        for match_id, match in enumerate(matchings):
+            connection_entities[match_id, match[0]] = 1
+            connection_locations[match_id, match[1]] = 1
+
+        return connection_entities, connection_locations
+            
+
+

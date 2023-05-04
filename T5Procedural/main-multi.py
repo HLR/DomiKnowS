@@ -143,25 +143,22 @@ def model_declaration():
 
     action[action_step.reversed, action_entity.reversed] = JointSensor(entity[entity_rel], step[context_step], entity['index'], step['index'], forward=make_actions)
     
-    def make_same_mentions(r1, r2, entities, locations):
-        matches = []
-        for eid, ent in enumerate(entities):
-            for lid, loc in enumerate(locations):
-                if ent == loc:
-                    matches.append(eid, lid)
-        link1 = torch.zeros(len(matches), len(entities))
-        link2 = torch.zeros(len(matches), len(locations))
+    # def make_same_mentions(r1, r2, entities, locations):
+    #     matches = []
+    #     for eid, ent in enumerate(entities):
+    #         for lid, loc in enumerate(locations):
+    #             if ent == loc:
+    #                 matches.append(eid, lid)
+    #     link1 = torch.zeros(len(matches), len(entities))
+    #     link2 = torch.zeros(len(matches), len(locations))
 
-        for mid, match in enumerate(matches):
-            link1[mid][match[0]] = 1
-            link2[mid][match[1]] = 1
+    #     for mid, match in enumerate(matches):
+    #         link1[mid][match[0]] = 1
+    #         link2[mid][match[1]] = 1
 
-        return link1, link2
-                
+    #     return link1, link2    
 
-    # same_mention[same_entity.reversed, same_location.reversed] = JointSensor(entity[entity_rel], location[loc_rel], entity['text'], location['text'], forward=make_same_mentions)
-
-
+    same_mention[same_entity.reversed, same_location.reversed] = JointReaderSensor(entity['text'], location['text'], keyword="SameMentions")
 
     def make_entity_locations(r1, r2, r3, entities, steps, locations):
         all_actions = len(steps) * len(entities) * len(locations)
@@ -226,6 +223,7 @@ def model_declaration():
     program = SolverPOIProgram(graph, 
                                poi=(
                                         procedure, before, action, entity, location,
+                                        same_mention,
                                         action_label, exact_before, 
                                         entity_location, entity_location_label, 
                                         entity_location_before_label, 
@@ -478,24 +476,25 @@ def main():
                     for j in range(len(final_output[key][i])):
                         if final_output[key][i][j] != final_output[key+"_before"][i][j]:
                             diff.append((i, j))
-                            break
             if len(diff) == 0:
                 return None
             else:
                 return diff
             
-        for _concept in [
-            entity_location_before_label, entity_location_label,
-            input_entity, input_entity_alt, output_entity, output_entity_alt,
-            action_label, action_create, action_destroy, action_move, location_change,
-            after_existence, before_existence,
-        ]:
-            print(f"\n{_concept.name} diff:")
-            diff = check_diff(final_output, _concept.name)
-            if diff:
-                print(diff)
+        # for _concept in [
+        #     entity_location_before_label, entity_location_label,
+        #     input_entity, input_entity_alt, output_entity, output_entity_alt,
+        #     action_label, action_create, action_destroy, action_move, location_change,
+        #     after_existence, before_existence,
+        # ]:
+        #     print(f"\n{_concept.name} diff:")
+        #     diff = check_diff(final_output, _concept.name)
+        #     if diff:
+        #         print(diff)
                 
         assert torch.all(torch.tensor(final_output['entity_location_before_label'])[:, 1:] == torch.tensor(final_output['entity_location_label'])[:, :-1])
+        assert final_output['output_entity'] == final_output['output_entity_alt']
+        assert final_output['input_entity'] == final_output['input_entity_alt']
         all_updates.append(final_output)
 
         ### evaluate the accuracy before and after the changes
@@ -583,30 +582,30 @@ def main():
 
 
         
-        print("\nVerify Learned Results:")
-        verifyResult = datanode.verifyResultsLC()
-        if verifyResult:
-            for lc in verifyResult:
-                if 'ifSatisfied' in verifyResult[lc] and not math.isnan(verifyResult[lc]['ifSatisfied']):
-                    print("lc %s is %i%% IfSatisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
-                else:
-                    if verifyResult[lc]['satisfied'] == verifyResult[lc]['satisfied']:
-                        print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
-                    else:
-                        print("lc %s cannot be verified for learned results - check if lc is correct"%(lc))
+        # print("\nVerify Learned Results:")
+        # verifyResult = datanode.verifyResultsLC()
+        # if verifyResult:
+        #     for lc in verifyResult:
+        #         if 'ifSatisfied' in verifyResult[lc] and not math.isnan(verifyResult[lc]['ifSatisfied']):
+        #             print("lc %s is %i%% IfSatisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+        #         else:
+        #             if verifyResult[lc]['satisfied'] == verifyResult[lc]['satisfied']:
+        #                 print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+        #             else:
+        #                 print("lc %s cannot be verified for learned results - check if lc is correct"%(lc))
 
 
-        print("\nVerify ILP Results:")
-        verifyResultILP = datanode.verifyResultsLC(key = "/ILP")
-        if verifyResultILP:
-            for lc in verifyResultILP:
-                if 'ifSatisfied' in verifyResultILP[lc] and not math.isnan(verifyResultILP[lc]['ifSatisfied']):
-                    print("lc %s is %i%% IfSatisfied by learned results"%(lc, verifyResultILP[lc]['satisfied']))
-                else:
-                    if verifyResultILP[lc]['satisfied'] == verifyResultILP[lc]['satisfied']:
-                        print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
-                    else:
-                        print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
+        # print("\nVerify ILP Results:")
+        # verifyResultILP = datanode.verifyResultsLC(key = "/ILP")
+        # if verifyResultILP:
+        #     for lc in verifyResultILP:
+        #         if 'ifSatisfied' in verifyResultILP[lc] and not math.isnan(verifyResultILP[lc]['ifSatisfied']):
+        #             print("lc %s is %i%% IfSatisfied by learned results"%(lc, verifyResultILP[lc]['satisfied']))
+        #         else:
+        #             if verifyResultILP[lc]['satisfied'] == verifyResultILP[lc]['satisfied']:
+        #                 print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+        #             else:
+        #                 print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
 
     for key in total:
         print(key, correct[key]/total[key])
