@@ -996,15 +996,19 @@ with Graph('global') as graph:
         combinationC(step, entity)('i', 'e'),
         ifL(
             andL(
+                ### entity `e` at step `i` is located at `el1.llocation`
                 entity_location_before_label('el1', path=(
                                 ("e", lentity.reversed),
                                 ("i", lstep.reversed)
                 )),
                 existsL(
+                    ### if there exist an entity mention which matches `el1.llocation`, and that entity is `destroyed`
                     andL(
+                        ### entity `sm1.same_entity` is the same mention as `el.llocation`
                         same_mention('sm1', path=(
                         ("el1", llocation, same_location.reversed)
                         )),
+                        ### `sm1.same_entity` is destroyed at step `i`
                         action_destroy('a1', path=(
                             ("sm1", same_entity, action_entity.reversed),
                             ("i", action_step.reversed)
@@ -1013,6 +1017,7 @@ with Graph('global') as graph:
                 ),        
             ),
             orL(
+                ### the original entity `e` should be either moved or destroyed at step `i`
                 action_move('a2', path=(
                     ("e", action_entity.reversed),
                     ("i", action_step.reversed)
