@@ -73,6 +73,10 @@ with Graph('global') as graph:
     input_entity_alt = entity(name='input_entity_alt')
     output_entity_alt = entity(name='output_entity_alt')
         
+    # LC Active status
+    All_LC = True
+    Tested_Lc = True
+    
     #  ------------ Destroy
     # No subsequent destroy action unless there is a create action between them
     
@@ -94,7 +98,7 @@ with Graph('global') as graph:
         ifL(
             entity_location_label('x', path=(('e', lentity.reversed), ('step_rel', ebefore_arg1, lstep.reversed))),
             entity_location_before_label('y', path=(('e', lentity.reversed), ('step_rel', ebefore_arg2, lstep.reversed), ('x', llocation, llocation.reversed))),
-        )
+        ), active = All_LC
     )
 
     #### Prolog: entity_location_label(e, i, l):- entity_location_before_label(e, i-1, l).
@@ -104,7 +108,7 @@ with Graph('global') as graph:
         ifL(
             entity_location_before_label('x', path=(('e', lentity.reversed), ('step_rel', ebefore_arg2, lstep.reversed))),
             entity_location_label('y', path=(('e', lentity.reversed), ('step_rel', ebefore_arg1, lstep.reversed), ('x', llocation, llocation.reversed))),
-        )
+        ), active = All_LC
     )
 
     ### if entity is input, the first state should not be `none`
@@ -120,7 +124,7 @@ with Graph('global') as graph:
                                     ("l", llocation.reversed)
                 ))
             )
-        )
+        ), active = All_LC
     )
 
     ### Prolog: input_entity(e) :- not(non-location(l) and step_index(i, 0) entity_location_before_label(e, i, l))
@@ -130,7 +134,7 @@ with Graph('global') as graph:
         notL(input_entity('e')),
         atLeastL(
             action_label.create('a', path=(('e', action_entity))), 1
-        )
+        ), active = All_LC
     )
     
 
@@ -145,8 +149,9 @@ with Graph('global') as graph:
                     action_label.destroy('a64', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
                 )
             )
-        )
+        ), active = All_LC
     )
+    
     ### 
 
     # ifL(
@@ -172,7 +177,7 @@ with Graph('global') as graph:
                                 ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
                                 ("i", lstep.reversed)
                             )
-        ), active = True, name='checking_CL'
+        ), active = All_LC, name='checking_CL'
     )
     
     ifL(
@@ -204,7 +209,7 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = True
+            ), active = All_LC
         ) 
 
     #  ------------ Create
@@ -238,8 +243,9 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = True
+            ), active = All_LC
         )
+    
     ### --- there cannot be a move action before the create event unless there is another create event before them
     ifL(
         andL(
@@ -261,8 +267,9 @@ with Graph('global') as graph:
                         )
                 )
             )
-        )
+        ), active = All_LC
     )
+    
     ### --- there cannot be a exists action before the create event unless there is another create event before them
     ifL(
         andL(
@@ -284,7 +291,7 @@ with Graph('global') as graph:
                         )
                 )
             )
-        )
+        ), active = All_LC
     )
 
     ### If there is an outside action, there cannot be create, exist, move action before unless there is a destroy action after them
@@ -309,9 +316,8 @@ with Graph('global') as graph:
                         action_label.destroy('a117', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
                     )
             )
-        )
+        ), active = All_LC
     )
-
 
     ifL(
         # action a1 is create, i is a1's step and e is action entity
@@ -326,7 +332,7 @@ with Graph('global') as graph:
             ifL(
                 step('j', path=(('i', before_arg2.reversed, before_arg1))), 
                 notL(action_label.create('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
-                ), 
+            ), 
             # or if  
             ifL(
                 # step j1 which is before step i is associated with create action a2
@@ -341,9 +347,9 @@ with Graph('global') as graph:
                         action_label.destroy('a3', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
                         )
                     )
-                )
-            ), active = True
-        )
+            )
+        ), active = All_LC
+    )
 
     #### New constraints for the sequential order of actions
     # forAllL(
@@ -481,7 +487,7 @@ with Graph('global') as graph:
         atMostL(
             action_label.create(path=('e', action_entity.reversed)),
             2
-        )
+        ), active = All_LC
     )
 
     ifL(
@@ -489,10 +495,8 @@ with Graph('global') as graph:
         atMostL(
             action_label.destroy(path=('e', action_entity.reversed)),
             2
-        )
+        ), active = All_LC
     )
-
-
 
     #  ------------ Move
     # No subsequent move action unless there is a create action between them
@@ -532,7 +536,7 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = True
+            ), active = All_LC
         )
     
     ifL(
@@ -570,7 +574,7 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = True
+            ), active = All_LC
         )
     
 
@@ -600,8 +604,7 @@ with Graph('global') as graph:
         andL(
             step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
             notL(entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
-        ),
-        active = True
+        ), active = All_LC
     )
     
     ### There can only be one location for each entity at each step
@@ -609,14 +612,14 @@ with Graph('global') as graph:
          combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
          exactL(
              entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
-         ), # this is the condition that should hold for every assignment
+         ), active = All_LC# this is the condition that should hold for every assignment
     )
     
     forAllL(
          combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
          exactL(
              entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
-         ), # this is the condition that should hold for every assignment
+         ), active = All_LC # this is the condition that should hold for every assignment
     )
     
     ### for each entity, only one when_creat and when_destroy can be correct
@@ -624,21 +627,21 @@ with Graph('global') as graph:
         entity('e'),
         atMostL(
             when_create('x', path=('e', action_entity.reversed)),
-        )
+        ), active = All_LC
     )
 
     ifL(
         entity('e'),
         atMostL(
             when_destroy('x', path=('e', action_entity.reversed)),
-        )
+        ), active = All_LC
     )
 
     ### the input/output and alternative should match each other
-    ifL(input_entity('x'), input_entity_alt(path=('x')))
-    ifL(output_entity('x'), output_entity_alt(path=('x')))
-    ifL(input_entity_alt('x'), input_entity(path=('x')))
-    ifL(output_entity_alt('x'), output_entity(path=('x')))
+    ifL(input_entity('x'), input_entity_alt(path=('x')), active = All_LC)
+    ifL(output_entity('x'), output_entity_alt(path=('x')), active = All_LC)
+    ifL(input_entity_alt('x'), input_entity(path=('x')), active = All_LC)
+    ifL(output_entity_alt('x'), output_entity(path=('x')), active = All_LC)
 
     ### for each step and entity at most one action is applicable
     forAllL(
@@ -646,7 +649,7 @@ with Graph('global') as graph:
         ifL(
             action(path=(('i', action_step.reversed), ('e', action_entity.reversed))),
             atMostL(action_create, action_destroy, action_move)
-        )
+        ), active = All_LC
     )
 
     ### for each step and entity at most one action is applicable
@@ -655,7 +658,7 @@ with Graph('global') as graph:
          ifL(
              action('x', path=(('i', action_step.reversed), ('e', action_entity.reversed))),
              atMostL(action_create(path='x'), action_destroy(path='x'), action_move(path='x'))
-         )
+         ), active = All_LC
     )
     
     ### if action is create, the location should not be `none` and before location should be none
@@ -679,9 +682,8 @@ with Graph('global') as graph:
                                 )
                     )
             )
-        )
+        ), active = All_LC
     )
-    
 
     ### if action is destroy, the location should be `none`
     forAllL(
@@ -704,7 +706,7 @@ with Graph('global') as graph:
                                 )
                     )
             )
-        )
+        ), active = All_LC
     )
 
     ### if action is move, the location should not be `none`
@@ -729,7 +731,7 @@ with Graph('global') as graph:
                     )
                 )
             )
-        )
+        ), active = All_LC
     )
 
     ### if action is move, the location should be different from the previous step(before/after location)
@@ -752,7 +754,7 @@ with Graph('global') as graph:
                         )
                 )
             )
-        )
+        ), active = All_LC
     )
 
     ### if action is exists, the location should not be `none` and before location should not be none
@@ -777,7 +779,7 @@ with Graph('global') as graph:
                     )
                 )
             )
-        )
+        ), active = All_LC
     )
 
     ### if action is outside, the location should  be `none` and before location should be none
@@ -799,21 +801,21 @@ with Graph('global') as graph:
                             )
                 )
             )
-        )
+        ), active = All_LC
     )
 
     ### multi-class action_label and the actual create, destroy, move label alignment
     ifL(
         action_label.move('a1'),
-        action_move('a1')
+        action_move('a1'), active = All_LC
     )
     ifL(
         action_label.create('a1'),
-        action_create('a1')
+        action_create('a1'), active = All_LC
     )
     ifL(
         action_label.destroy('a1'),
-        action_destroy('a1')
+        action_destroy('a1'), active = All_LC
     )
 
     ### when-create and action-create should match
@@ -823,7 +825,7 @@ with Graph('global') as graph:
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity))
         ),
-        action_create('a2', path=(('i', action_step.reversed), ('e', action_entity.reversed)))
+        action_create('a2', path=(('i', action_step.reversed), ('e', action_entity.reversed))), active = All_LC
     )
 
     ### when-destroy and action-destroy should match
@@ -833,11 +835,9 @@ with Graph('global') as graph:
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity))
         ),
-        action_destroy('a2', path=(('i', action_step.reversed), ('e', action_entity.reversed)))
+        action_destroy('a2', path=(('i', action_step.reversed), ('e', action_entity.reversed))), active = All_LC
     )
 
-   
-    
     # ifL(
     #     input_entity('e'),
     #     notL(
@@ -866,7 +866,7 @@ with Graph('global') as graph:
                                     ("i", lstep.reversed)
                                 )
             )
-        ), active = True
+        ), active = All_LC
     )
 
     ifL(
@@ -882,7 +882,7 @@ with Graph('global') as graph:
                                     ("i", lstep.reversed)
                                 )
             )
-        ), active = True
+        ), active = All_LC
     )
 
     ### if location change is true, the locations after for step i-1 and i should not match
@@ -906,7 +906,7 @@ with Graph('global') as graph:
                     )
                 ),
             )
-        )
+        ), active = All_LC
     )
     
     ### if location change is true, there should be one action either create, destroy, or move
@@ -916,7 +916,7 @@ with Graph('global') as graph:
             action_create(path=('a14')),
             action_destroy(path=('a14')),
             action_move(path=('a14'))
-        )
+        ), active = All_LC
     )
 
     ifL(
@@ -925,7 +925,7 @@ with Graph('global') as graph:
             action_destroy(path=('a14')),
             action_move(path=('a14'))
         ),
-        location_change('a14'),
+        location_change('a14'), active = All_LC
     )
 
     ### if the the location should not match the entity itself
@@ -965,7 +965,7 @@ with Graph('global') as graph:
                     ("i", lstep.reversed)
                 ))
             )
-        )
+        ), active = All_LC
     )
 
     ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
@@ -1022,9 +1022,9 @@ with Graph('global') as graph:
                     ("i", action_step.reversed)
                 ))
             )
-        )
+        ), active = All_LC
     )
-
+        
     ### sum(x1, x2, i + j) :- image(x1, i), image(x2, j)
     # def check_func(i, j, k):
     #     return i + j == k
@@ -1065,7 +1065,7 @@ with Graph('global') as graph:
     # filled_values {"i": 10, "j": 11, "k": 21}
 
     ### At least one input should exist
-    atLeastAL(input_entity('e'))
+    atLeastAL(input_entity('e'), active = All_LC)
 
     ### At least one output should exist
-    atLeastAL(output_entity('e'))
+    atLeastAL(output_entity('e'), active = All_LC)
