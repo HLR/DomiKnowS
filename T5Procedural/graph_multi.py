@@ -970,20 +970,27 @@ with Graph('global') as graph:
 
     ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
     forAllL(
+        ### for every combination of step 'i' and entity 'e'
         combinationC(step, entity)('i', 'e'),
         ifL(
+        ### if
             andL(
+                ### the location of `e` at step `i` is `el1.llocation` --> entity_location_label(e,i,el1.llocation) is correct
                 entity_location_label('el1', path=(
                                 ("e", lentity.reversed),
                                 ("i", lstep.reversed)
                     )
                 ),
+                ### and 
+                ### if el1.llocation matches another entity `sm1.same_entity` --> same_mention(sm1.same_entity,el1.llocation)
+                ### This means tha the assinged location `el1.llocation` to (e, i) has an equivalant entity candidate
                 existsL(
                     same_mention('sm1', path=(
                         ("el1", llocation, same_location.reversed)
                     ))
                 )
             ),
+            ### if the condition in the if is True, then for the exact same `entity` that matched `el1.llocation`, the entity should exist at step 'i
             after_existence('a1', path=(
                 ("sm1", same_entity, action_entity.reversed),
                 ("i", action_step.reversed)
