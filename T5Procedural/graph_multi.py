@@ -969,34 +969,34 @@ with Graph('global') as graph:
     )
 
     ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
-    # forAllL(
-    #     combinationC(step, entity)('i', 'e'),
-    #     ifL(
-    #         andL(
-    #             entity_location_label('el1', path=(
-    #                             ("e", lentity.reversed),
-    #                             ("i", lstep.reversed)
-    #                 )
-    #             ),
-    #             existsL(
-    #                 same_mention('sm1', path=(
-    #                     ("el1", llocation, same_location.reversed)
-    #                 ))
-    #             )
-    #         ),
-    #         after_existence('a1', path=(
-    #             ("sm1", same_entity, action_entity.reversed),
-    #             ("i", action_step.reversed)
-    #         ))
-    #     )
-    # )
+    forAllL(
+        combinationC(step, entity)('i', 'e'),
+        ifL(
+            andL(
+                entity_location_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("i", lstep.reversed)
+                    )
+                ),
+                existsL(
+                    same_mention('sm1', path=(
+                        ("el1", llocation, same_location.reversed)
+                    ))
+                )
+            ),
+            after_existence('a1', path=(
+                ("sm1", same_entity, action_entity.reversed),
+                ("i", action_step.reversed)
+            ))
+        )
+    )
 
     ### if entity 'e' is located in a location 'l' which corresponds to an entity 'e1' and entity 'e1' is destroyed, the entity `e` is either moved or destroyed
     forAllL(
         combinationC(step, entity)('i', 'e'),
         ifL(
             andL(
-                entity_location_label('el1', path=(
+                entity_location_before_label('el1', path=(
                                 ("e", lentity.reversed),
                                 ("i", lstep.reversed)
                 )),
