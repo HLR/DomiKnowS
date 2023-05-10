@@ -125,7 +125,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                 referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
                 
             # Get variables from dataNodes selected  based on referredVariableName
-            for listOfDataNodes in referredDns:
+            for indexDn, listOfDataNodes in enumerate(referredDns):
                 eDns = [] 
                 
                 for currentReferredDataNode in listOfDataNodes:
@@ -134,14 +134,14 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
                     
                     # -- Get DataNodes for the edge defined by the path part of the v
                     if isinstance(path, eqL):
-                        currentEDns = getEdgeDataNode(currentReferredDataNode, v)
+                        currentEDns = getEdgeDataNode(currentReferredDataNode, v, indexDn, lcVariablesDns)
                         currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
                         if currentEDnsNew and len(currentEDnsNew):
                             eDns.extend(currentEDnsNew)
                         else:
                             pass
                     else:
-                        currentEDns = getEdgeDataNode(currentReferredDataNode, v[1:]) 
+                        currentEDns = getEdgeDataNode(currentReferredDataNode, v[1:], indexDn, lcVariablesDns) 
                         # currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
                         if currentEDns is not None and len(currentEDns):
                             eDns.extend(currentEDns)
@@ -214,7 +214,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
 
 # Find DataNodes starting from the given DataNode following provided path
 #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
-def getEdgeDataNode(dn, path):
+def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
     # Path is empty
     
     if isinstance(path, eqL):
@@ -234,20 +234,51 @@ def getEdgeDataNode(dn, path):
     # Path has at least 2 elements - will perform recursion
 
     if isinstance(path[0], eqL): # check if eqL
-        path0 = path[0].e[0][0]
+        if isinstance(path[0].e[0], tuple):
+            path0 = path[0].e[0][0]
+        else:
+            path0 = path[0].e[0]
     else:
         path0 = path[0]
 
     relDns = None         
     if dn.isRelation(path0):
         relDns = dn.getDnsForRelation(path0)
+        
+        if isinstance(path[0], eqL):
+            path0Dns = relDns
+            attributeName = path[0].e[1]
+            
+            relDns = []
+            if attributeName == "instanceID":
+                
+                for pDns in path0Dns:
+                    attributeValue = pDns.getInstanceID()
+                    referedCandidateID = path[0].e[2]
+                    
+                    if referedCandidateID in lcVariablesDns and len(lcVariablesDns[referedCandidateID]) - 1 >= currentIndexDN:
+                        currentReferedCandidates = lcVariablesDns[referedCandidateID][currentIndexDN]
+                        for currentReferedCandidate in currentReferedCandidates:
+                            currentReferedCandidateID = currentReferedCandidate.getInstanceID()
+                            
+                            if currentReferedCandidateID == attributeValue:
+                                if dn not in relDns:
+                                    relDns.append(dn)
+                        
+                    # Check if it is a valid relation link  with not empty set of connected datanodes      
+                    if relDns is None or len(relDns) == 0 or relDns[0] is None:
+                        return [None]
+                    else:
+                        return relDns
+                    
     elif isinstance(path0, str):
         relDns = dn.getDnsForRelation(path0)
     else: # if not relation then has to be attribute in eql
         relDns = []
         attributeName = path[0].e[1]
-        attributeValue = dn.getAttribute(attributeName)
         
+        attributeValue = dn.getAttribute(attributeName)
+            
         if torch.is_tensor(attributeValue) and attributeValue.ndimension() == 0:
             attributeValue = attributeValue.item()
             
@@ -288,7 +319,7 @@ def getEdgeDataNode(dn, path):
     # recursion
     rDNS = []
     for cDn in relDns:
-        rDn = getEdgeDataNode(cDn, path[1:])
+        rDn = getEdgeDataNode(cDn, path[1:], currentIndexDN, lcVariablesDns)
         
         if rDn:
             rDNS.extend(rDn)

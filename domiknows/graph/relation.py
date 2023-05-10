@@ -103,6 +103,10 @@ class Relation(BaseGraphTree):
     @dst.setter
     def dst(self, dst):
         self._dst = dst
+        
+    @property
+    def graph(self):
+        return self._sup
 
     def what(self):
         return {'src': self.src, 'dst': self.dst}

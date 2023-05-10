@@ -11,13 +11,15 @@ V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
 class LcElement:
     def __init__(self, *e,  name = None):
+        from .relation import IsA, HasA
+
         if not e:
             myLogger.error("Logical Element initialized is empty")
             raise LcElement.LcElementError("Logical Element initialized is empty")
         
         updatedE = []
         for _, eItem in enumerate(e):
-            if isinstance(eItem, (LcElement, Concept)):
+            if isinstance(eItem, (LcElement, Concept, HasA, IsA)):
                 updatedE.append(eItem)
             elif callable(eItem):
                 newEItem = eItem.__call__()
@@ -44,10 +46,10 @@ class LcElement:
         conceptOrLc = None
         
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, LcElement):
+            if isinstance(eItem, (LcElement, HasA, IsA)):
                 conceptOrLc = eItem
                 break
-            elif isinstance(eItem, tuple):
+            elif isinstance(eItem, tuple): # Concept
                 if isinstance(eItem[0], Concept):
                     conceptOrLc = eItem[0]
                     break
@@ -59,6 +61,8 @@ class LcElement:
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
                 self.graph = self.__getContext(conceptOrLc)[-1]
+        elif isinstance(conceptOrLc, (HasA, IsA)):
+            self.graph = conceptOrLc.graph
         elif isinstance(conceptOrLc, str):
             self.graph = None
         else:
@@ -583,6 +587,9 @@ class epqL(LogicalConstrain):
      
 class eqL(LogicalConstrain):
     def __init__(self, *e, active = True, sampleEntries = False, name = None):
+        #if e is len 2 and element index 1 is of type String
+        if len(e) == 2 and isinstance(e[1], str):
+            e = (e[0],  "instanceID", e[1])  
         LogicalConstrain.__init__(self, *e, p=100)
         self.headLC = False
     
