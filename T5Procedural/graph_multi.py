@@ -969,33 +969,21 @@ with Graph('global') as graph:
     )
 
     ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
+    
+    # if some location is in same_mention relation with current entity and step selected from the combination then the action for this entity in the current step has to be after_existance
+    # in case the entity in the given step can associated with multiply actions then we have to use existsL in the second part of if
     forAllL(
-        ### for every combination of step 'i' and entity 'e'
         combinationC(step, entity)('i', 'e'),
         ifL(
-        ### if
             andL(
-                ### the location of `e` at step `i` is `el1.llocation` --> entity_location_label(e,i,el1.llocation) is correct
-                entity_location_label('el1', path=(
-                                ("e", lentity.reversed),
-                                ("i", lstep.reversed)
-                    )
-                ),
-                ### and 
-                ### if el1.llocation matches another entity `sm1.same_entity` --> same_mention(sm1.same_entity,el1.llocation)
-                ### This means tha the assinged location `el1.llocation` to (e, i) has an equivalant entity candidate
-                existsL(
-                    same_mention('sm1', path=(
-                        ("el1", llocation, same_location.reversed)
-                    ))
-                )
+                entity_location_label('el1', path=("e", lentity.reversed, eqL(lstep, "i"))),
+                same_mention('sm1', path=(("el1", llocation, same_location.reversed)))
             ),
-            ### if the condition in the if is True, then for the exact same `entity` that matched `el1.llocation`, the entity should exist at step 'i
-            after_existence('a1', path=(
-                ("sm1", same_entity, action_entity.reversed),
-                ("i", action_step.reversed)
-            ))
-        )
+            
+           existsL(
+               after_existence('a1', path=("sm1", same_entity, action_entity.reversed, eqL(action_step, "i")))
+            )
+        ), active=Tested_Lc 
     )
 
     ### if entity 'e' is located in a location 'l' which corresponds to an entity 'e1' and entity 'e1' is destroyed, the entity `e` is either moved or destroyed
@@ -1059,6 +1047,7 @@ with Graph('global') as graph:
     #     c2(), 
     #     check_valL()
     # )
+    
 
 
 
@@ -1081,3 +1070,11 @@ with Graph('global') as graph:
 
     ### At least one output should exist
     atLeastAL(output_entity('e'), active = All_LC)
+
+    graph.visualize("./image")
+
+    #from PIL import Image
+    # Open an image file
+    #graphImage = Image.open('image.png')
+    # Display the image
+    #graphImage.show()
