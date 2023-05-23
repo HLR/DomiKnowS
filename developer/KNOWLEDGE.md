@@ -1,7 +1,46 @@
 # Knowledge Declaration
 
-In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge a the task.
-We provide a graph language based on Python for knowledge declaration with notation of "graph", "concept", "property", "relation", and "constraints".
+DomiKnows Library allows you to **define knowledge** about a domain and use it during the learning and evaluation phases of ML model preparation, as well as during the model usage.  
+The knowledge about the domain enhances the model's performance and makes it more robust against noise in the data.  
+It also enables a faster learning process and reduces the number of training samples required for the model to learn.
+
+Knowledge about the domain in DomiKnows is represented as a graph with associated logical constraints.  
+The graph's nodes are concepts, and edges are relations between concepts.  
+The logical constraints define the knowledge about the domain in the form of logical expressions on concepts and relations from the graph.
+
+First, the user defines a collection of concepts and the ways they are related to each other, building the **domain graph**, which represents the domain knowledge in an ML task.  
+The concepts and relations represent the classification of the data and the relationships between the data, which are the subjects of the ML task. 
+
+The parent-child relation between **concepts** is used to represent the hierarchical structure of the domain knowledge.  
+It implies that if the data is classified as belonging to a concept, it also belongs to all the parent concepts of that concept.  
+Conversely, if the data is classified as belonging to a concept, it can be classified in more detail as one of the child concepts.  
+
+In the graph, there are two distinct types of concepts.  
+* The first type, referred to as **'classification concepts'**, define the classification of the data within semantic frames.  
+* The second type, known as **'data concepts'**, specify the types of data, for example, words, sentences, pixels, etc. 
+ 
+Classification concepts are subordinate to data concepts, thereby establishing a parent-child relationship.  
+Depending on the level of data classification granularity, a single data concept may encompass multiple classification concepts.
+
+The **relationships** between concepts are utilized to represent classified associations within the data.  
+They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.  
+Additionally, they can illustrate temporal relationships between events.  
+Furthermore, they can also signify relationships between the data and the domain knowledge.  
+For example, the relationship between a word and a _semantic frame_ can be represented, such as 'works for' or 'located in', among others
+
+DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.  
+In FOL, the basic building blocks of logical constraints are **predicates**. In DomiKnows, these predicates are functions that evaluate whether a given variable corresponds to a certain concept or relation.  
+The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data classified by the concepts and relationships derived from the graph.
+
+Relationships between predicates can be expressed using **logical connectives**.  
+The most common is the conditional statement ('if'), but all other logical connectives, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if'), are supported as well.
+
+**Quantifiers** can be applied to variables in predicate expressions. By default, the universal quantifier 'for every' is assumed unless specified otherwise.  
+The DomiKnows library provides semantics for expressing detailed specifications for the quantifiers.  
+This allows for selecting entities from the domain of discourse, which will subsequently be evaluated by the predicate.
+
+Both graphs and logical constraints are defined in **Python** code using constructs from the DomiKnows library.  
+Blow is the overview of the DomiKnows API and concepts used to define the domain knowledge.
 
 - [Knowledge Declaration](#knowledge-declaration)
   - [Class Overview](#class-overview)
