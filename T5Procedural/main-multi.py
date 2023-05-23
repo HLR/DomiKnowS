@@ -292,7 +292,7 @@ def main():
     lbp = model_declaration()
     setProductionLogMode(no_UseTimeLog=True)
 
-    dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    dataset = ProparaReader(file="data/prepared_results.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 

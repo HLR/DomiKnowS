@@ -106,7 +106,8 @@ with Graph('global') as graph:
         combinationC(entity, location(path=eqL(location, 'text', {5839, 150, 14794, 597, 1})))('e', 'l'),
         # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
         ifL(
-            input_entity(path=('e')),
+            #input_entity(path=('e')),
+            input_entity('e'),
             notL(
                 entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
