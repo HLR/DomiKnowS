@@ -71,10 +71,14 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
         if variable.name == None:
             logger.error('The element %s of logical constraint %s has no name for variable'%(conceptName, lc.lcName))
             return None
-                                    
-        rootConcept = dn.findRootConceptOrRelation(conceptName)
-        _dns = dn.findDatanodes(select = rootConcept)
-        dnsList = [[dn] for dn in _dns]
+        
+        # Check if we already found this variable
+        if variable.name in lcVariablesDns:
+             dnsList =lcVariablesDns[variable.name]  
+        else:
+            rootConcept = dn.findRootConceptOrRelation(conceptName)
+            _dns = dn.findDatanodes(select = rootConcept)
+            dnsList = [[dn] for dn in _dns]
     else: # Path specified
         from domiknows.graph.logicalConstrain import eqL
         if not isinstance(variable.v, eqL):
