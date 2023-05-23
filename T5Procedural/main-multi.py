@@ -290,8 +290,9 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-#     setProductionLogMode()
-    dataset = ProparaReader(file="data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    setProductionLogMode(no_UseTimeLog=True)
+
+    dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 
@@ -301,13 +302,20 @@ def main():
 
     #     lbp.test(dataset, device='auto')
     all_updates = []
-    correct, correct_before, total = {}, {}, {}
+    changes, correct, correct_before, total = {}, {}, {}, {}
+    correct_inferred, total_inferred = {}, {}
+    final_loc_results = {}
     for item_set, datanode in zip(d2, lbp.populate(dataset, device="cpu")):
     #     tdatanode = datanode.findDatanodes(select = context)[0]
     #     print(len(datanode.findDatanodes(select = context)))
     #     print(tdatanode.getChildDataNodes(conceptName=step))
         # datanode.inferILPResults(action_label, fun=None)
         final_output = {
+            "id": datanode.findDatanodes(select=procedure)[0].getAttribute("id"),
+            "steps": [],
+            "entities": []
+        }
+        final_loc_out = {
             "id": datanode.findDatanodes(select=procedure)[0].getAttribute("id"),
             "steps": [],
             "entities": []
@@ -461,7 +469,8 @@ def main():
         final_output['entities'] = item_set['Entities'][0]
         final_output['steps'] = item_set['Step']
         final_output['locations'] = item_set['Location']
-
+        final_loc_out['entities'] = item_set['Entities'][0]
+        final_loc_out['steps'] = item_set['Step']
         def check_diff(final_output, key):
             ### check whether there are differences between key and key_before
             ### if there are differences, then return the index of the differences
@@ -499,20 +508,22 @@ def main():
 
         ### evaluate the accuracy before and after the changes
         key_data = [
+            "MultiActionTrue",
             "AfterExistenceTrue", "BeforeExistenceTrue",
             "AfterLocationTrue", "BeforeLocationTrue",
             "AltInputTrue", "AltOutputTrue",
             "ChangeTrue", "CreateTrue", "DestroyTrue", "MoveTrue",
             "InputTrue", "OutputTrue",
-            "MultiActionTrue", "WhenCreateTrue", "WhenDestroyTrue",
+            "WhenCreateTrue", "WhenDestroyTrue",
         ]
         key_decision = [
+            action_label,
             after_existence, before_existence,
             entity_location_label, entity_location_before_label,
             input_entity_alt, output_entity_alt,
             location_change, action_create, action_destroy, action_move,
             input_entity, output_entity,
-            action_label, when_create, when_destroy,
+            when_create, when_destroy,
         ]
         def change_format_to_tensor(x):
             ### x is the values changed from function assign_label which we want to revert back
@@ -538,21 +549,24 @@ def main():
             else:
                 return torch.tensor(x)
 
-
+        kept_original_decisions = {}
+        check_fixed_decisions = {}
         for key1, key2 in zip(key_data, key_decision):
             if not key2.name in total:
                 total[key2.name] = 0
                 correct[key2.name] = 0
                 correct_before[key2.name] = 0
+                changes[key2.name] = 0
             
             fixed_decision = final_output[key2.name]
             original_decision = final_output[key2.name+"_before"]
             fixed_decision = change_format_to_tensor(fixed_decision)
             original_decision = change_format_to_tensor(original_decision)
             ground_truth = item_set[key1]
-            ground_truth[ground_truth==3] = 7752
-            fixed_decision[fixed_decision==3] = 7752
-            original_decision[original_decision==3] = 7752
+            if not key2 in {action_label}:
+                ground_truth[ground_truth==3] = 7752
+                fixed_decision[fixed_decision==3] = 7752
+                original_decision[original_decision==3] = 7752
             if "when" in key2.name:
                 ground_truth = ground_truth - 1
                 new_fixed = []
@@ -576,9 +590,219 @@ def main():
                         new_original.append(-1)
                 original_decision = torch.tensor(new_original)
 
+            if key2 in {action_label, entity_location_before_label, entity_location_label, input_entity}:
+                kept_original_decisions[key2.name] = original_decision
+                check_fixed_decisions[key2.name] = fixed_decision
+
+            changes[key2.name] += (original_decision.flatten() != fixed_decision.flatten()).sum().item()
             correct[key2.name] += (ground_truth.flatten() == fixed_decision.flatten()).sum().item()
             correct_before[key2.name] += (ground_truth.flatten() == original_decision.flatten()).sum().item()
             total[key2.name] += len(ground_truth.flatten())
+        ### Logically and Sequentially fixing the decisions in action_label, entity_location_label, and entity_location_before_label
+        sequentially_fixed_decisions = {
+            action_label.name: torch.zeros(kept_original_decisions[action_label.name].shape),
+            "entity_locations": torch.zeros(kept_original_decisions[entity_location_label.name].shape[0], kept_original_decisions[entity_location_label.name].shape[1]+1),
+            }
+        for eid in range(kept_original_decisions[action_label.name].shape[0]):
+            entity_actions = kept_original_decisions[action_label.name][eid]
+            entity_locations_after = kept_original_decisions[entity_location_label.name][eid]
+            entity_locations_start = kept_original_decisions[entity_location_before_label.name][eid][0]
+            exists = True
+            ### "create", "exists", "move", "destroy", "outside"
+            if entity_actions[0].item() in {0, 4}: ### if entity is being created or is outside at first
+                sequentially_fixed_decisions["entity_locations"][eid][0] = 5839 ### set the location to be none
+                sequentially_fixed_decisions[action_label.name][eid][0] = entity_actions[0].item()
+                exists = False
+            else:
+                sequentially_fixed_decisions["entity_locations"][eid][0] = entity_locations_start.item()
+                sequentially_fixed_decisions[action_label.name][eid][0] = entity_actions[0].item()
+            for sid in range(0, kept_original_decisions[action_label.name].shape[1]):
+                if entity_actions[sid].item() == 0: ### if entity is being created
+                    if exists:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 1
+                        sequentially_fixed_decisions["entity_locations"][eid][sid+1] = sequentially_fixed_decisions["entity_locations"][eid][sid]
+                    else:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 0
+                        if not entity_locations_after[sid].item() in {5839, 3, 1}:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = entity_locations_after[sid].item()
+                        else:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 7752
+                        exists = True
+                elif entity_actions[sid].item() == 2: ### if entity is moved
+                    if not exists:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 0
+                        if not entity_locations_after[sid].item() in {5839, 3, 1}:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = entity_locations_after[sid].item()
+                        else:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 7752
+                        exists = True
+                    else:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 2
+                        if not entity_locations_after[sid].item() in {5839, 3, 1}:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = entity_locations_after[sid].item()
+                        else:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 7752
+                elif entity_actions[sid].item() == 3: ### if entity is destroyed
+                    if exists:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 3
+                        sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 5839
+                        exists = False
+                    else:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 1
+                        sequentially_fixed_decisions["entity_locations"][eid][sid+1] = sequentially_fixed_decisions["entity_locations"][eid][sid]
+                elif entity_actions[sid].item() == 4: ### if entity is outside
+                    if exists:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 3
+                        sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 5839
+                        exists = False
+                    else:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 4
+                        sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 5839
+                elif entity_actions[sid].item() == 1: ### if entity exists
+                    if exists:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 1
+                        sequentially_fixed_decisions["entity_locations"][eid][sid+1] = sequentially_fixed_decisions["entity_locations"][eid][sid]
+                    else:
+                        sequentially_fixed_decisions[action_label.name][eid][sid] = 0
+                        if not entity_locations_after[sid].item() in {5839, 3, 1}:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = entity_locations_after[sid].item()
+                        else:
+                            sequentially_fixed_decisions["entity_locations"][eid][sid+1] = 7752
+                        exists = True
+
+
+        key_set = [
+            action_label,
+            after_existence, before_existence,
+            entity_location_label, entity_location_before_label,
+            input_entity_alt, output_entity_alt,
+            location_change, action_create, action_destroy, action_move,
+            input_entity, output_entity,
+            when_create, when_destroy,
+        ]
+        key_grs = [
+            "MultiActionTrue",
+            "AfterExistenceTrue", "BeforeExistenceTrue",
+            "AfterLocationTrue", "BeforeLocationTrue",
+            "AltInputTrue", "AltOutputTrue",
+            "ChangeTrue", "CreateTrue", "DestroyTrue", "MoveTrue",
+            "InputTrue", "OutputTrue",
+            "WhenCreateTrue", "WhenDestroyTrue",
+        ]
+        for key_gr, key in zip(key_grs, key_set):
+            ground_truth = item_set[key_gr]
+            if not key.name in total_inferred:
+                correct_inferred[key.name] = 0
+                total_inferred[key.name] = 0
+            if key == action_label:
+                # inferred_answer = kept_original_decisions[key.name]
+                inferred_answer = sequentially_fixed_decisions[key.name]
+            elif key == entity_location_label:
+                # inferred_answer = kept_original_decisions[key.name]
+                inferred_answer = sequentially_fixed_decisions["entity_locations"][:, 1:]
+            elif key == entity_location_before_label:
+                # inferred_answer = torch.zeros(kept_original_decisions[entity_location_before_label.name].shape)
+                # for i in range(inferred_answer.shape[0]):
+                #     for j in range(inferred_answer.shape[1]):
+                #         if j == 0:
+                #             inferred_answer[i][j] = kept_original_decisions[entity_location_before_label.name][i][j].item()
+                #         else:
+                #             inferred_answer[i][j] = kept_original_decisions[entity_location_label.name][i][j-1].item()
+                inferred_answer = sequentially_fixed_decisions["entity_locations"][:, :-1]
+            elif key == after_existence:
+                inferred_answer = torch.zeros(kept_original_decisions[entity_location_label.name].shape)
+                # inferred_answer[kept_original_decisions['entity_location_label'] != 5839] = 1
+                inferred_answer[sequentially_fixed_decisions["entity_locations"][:, 1:] != 5839] = 1
+                
+            elif key == before_existence:
+                inferred_answer = torch.zeros(kept_original_decisions[entity_location_before_label.name].shape)
+                # inferred_answer[kept_original_decisions['entity_location_label'] != 5839] = 1
+                inferred_answer[sequentially_fixed_decisions["entity_locations"][:, :-1] != 5839] = 1
+                
+                # inferred_answer = torch.zeros(kept_original_decisions[entity_location_before_label.name].shape)
+                # for i in range(inferred_answer.shape[0]):
+                #     for j in range(inferred_answer.shape[1]):
+                #         if j == 0:
+                #             if kept_original_decisions[entity_location_before_label.name][i][j] != 5839:
+                #                 inferred_answer[i][j] = 1
+                #         else:
+                #             if kept_original_decisions[entity_location_label.name][i][j-1] != 5839:
+                #                 inferred_answer[i][j] = 1
+            elif key in {input_entity_alt, input_entity}:
+                inferred_answer = torch.zeros(kept_original_decisions[entity_location_before_label.name].shape[0])
+                for i in range(inferred_answer.shape[0]):
+                    # if kept_original_decisions[entity_location_before_label.name][i][0] != 5839:
+                    if sequentially_fixed_decisions["entity_locations"][i][0] != 5839:
+                        inferred_answer[i] = 1
+            elif key in {output_entity_alt, output_entity}:
+                inferred_answer = torch.zeros(kept_original_decisions[entity_location_label.name].shape[0])
+                for i in range(inferred_answer.shape[0]):
+                    # if kept_original_decisions[entity_location_label.name][i][-1] != 5839:
+                    if sequentially_fixed_decisions["entity_locations"][i][-1] != 5839:  
+                        inferred_answer[i] = 1
+            elif key == location_change:
+                inferred_answer = torch.zeros(kept_original_decisions[entity_location_label.name].shape)
+                for i in range(inferred_answer.shape[0]):
+                    # cur_loc = kept_original_decisions[entity_location_before_label.name][i][0].item()
+                    cur_loc = sequentially_fixed_decisions['entity_locations'][i][0].item()
+                    # for j in range(inferred_answer.shape[1]-1):
+                    for j in range(inferred_answer.shape[1]):
+                        # if cur_loc != kept_original_decisions[entity_location_label.name][i][j].item():
+                        if cur_loc != sequentially_fixed_decisions['entity_locations'][i][j].item():
+                            inferred_answer[i][j] = 1
+                        # cur_loc = kept_original_decisions[entity_location_label.name][i][j].item()
+                        cur_loc = sequentially_fixed_decisions['entity_locations'][i][j].item()
+                        
+            elif key == action_create:
+                inferred_answer = torch.zeros(kept_original_decisions[action_label.name].shape)
+                ### "create", "exists", "move", "destroy", "outside"
+                inferred_answer[sequentially_fixed_decisions[action_label.name] == 0] = 1
+            elif key == action_destroy:
+                inferred_answer = torch.zeros(kept_original_decisions[action_label.name].shape)
+                inferred_answer[sequentially_fixed_decisions[action_label.name] == 3] = 1
+            elif key == action_move:
+                inferred_answer = torch.zeros(kept_original_decisions[action_label.name].shape)
+                inferred_answer[sequentially_fixed_decisions[action_label.name] == 2] = 1
+            elif key == when_create:
+                inferred_answer = torch.zeros(kept_original_decisions[action_label.name].shape[0])
+                for i in range(kept_original_decisions[action_label.name].shape[0]):
+                    check = False
+                    for j in range(kept_original_decisions[action_label.name].shape[1]):
+                        if sequentially_fixed_decisions[action_label.name][i][j] == 0:
+                            inferred_answer[i] = j
+                            check = True
+                            break
+                    if not check:
+                        inferred_answer[i] = -1
+            elif key == when_destroy:
+                inferred_answer = torch.zeros(kept_original_decisions[action_label.name].shape[0])
+                for i in range(kept_original_decisions[action_label.name].shape[0]):
+                    check = False
+                    for j in range(kept_original_decisions[action_label.name].shape[1]):
+                        if sequentially_fixed_decisions[action_label.name][i][j] == 3:
+                            inferred_answer[i] = j
+                            check = True
+                            break
+                    if not check:
+                        inferred_answer[i] = -1
+
+            if not key in {action_label}:
+                ground_truth[ground_truth==3] = 7752
+                inferred_answer[inferred_answer==3] = 7752
+            if "when" in key.name:
+                ground_truth = ground_truth - 1
+
+            correct_inferred[key.name] += (ground_truth.flatten() == inferred_answer.flatten()).sum().item()
+            total_inferred[key.name] += len(ground_truth.flatten())
+        # assert correct_before[action_label.name] == correct_inferred[action_label.name]
+        assert total[action_label.name] == total_inferred[action_label.name]
+        # assert correct_before[entity_location_label.name] == correct_inferred[entity_location_label.name]
+        assert total[entity_location_label.name] == total_inferred[entity_location_label.name]
+        updated_locations = check_fixed_decisions[entity_location_label.name]
+        initial_updated_locations = check_fixed_decisions[entity_location_before_label.name][:,0]
+        updated_locations = torch.cat((initial_updated_locations.unsqueeze(-1), updated_locations), dim=-1)
+        final_loc_out['locations'] = updated_locations
+        final_loc_results[final_loc_out['id']] = final_loc_out
 
 
         
@@ -606,10 +830,12 @@ def main():
         #                 print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
         #             else:
         #                 print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
-
     for key in total:
         print(key, correct[key]/total[key])
         print(key+"_before", correct_before[key]/total[key])
+        print(key+"inferred", correct_inferred[key]/total_inferred[key])
+        print(key + "changes", changes[key])
+    torch.save(final_loc_results, "updated_loc_info.pt")
     return all_updates
 
 

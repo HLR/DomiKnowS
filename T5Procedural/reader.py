@@ -350,14 +350,46 @@ class ProparaReader(RegrReader):
             ### Finding the indexes of location list, where its value is inside ent
             loc_indexes = [location.index(_it) for _it in ent if _it in location]
             for loc_index in loc_indexes:
-                matchings.append((eid, loc_index))
+                if (eid, loc_index) not in matchings:
+                    matchings.append((eid, loc_index))
+        ### matching is [(eid, loc_index), ...)], if the same `loc_index` is repeated for more than one eid, then the smallest matching should be selected
+        # a = matchings.copy()
+        # for match in a:
+        #     if not match in matchings:
+        #         continue
+        #     ent1 = entities[match[0]][0]
+        #     loc1 = location[match[1]]
+        #     for match2 in a:
+        #         if not match2 in matchings:
+        #             continue
+        #         if match2 == match:
+        #             continue
+        #         ent2 = entities[match2[0]][0]
+        #         loc2 = location[match2[1]]
+        #         if loc1 == loc2:
+        #             if loc1 == ent1[0] and loc1 != ent2[0]:
+        #                 matchings.remove(match2)
+        #             elif loc1 == ent2[0] and loc1 != ent1[0]:
+        #                 matchings.remove(match)
+        #             elif loc1 == ent1[0] and loc1 == ent2[0]:
+        #                 if len(ent1) > len(ent2):
+        #                     if match in matchings:
+        #                         matchings.remove(match)
+        #                 else:
+        #                     if match2 in matchings:
+        #                         matchings.remove(match2)
+                        
+
+
         connection_entities = torch.zeros(len(matchings), len(entities))
         connection_locations = torch.zeros(len(matchings), len(location))
         ### putting one for the corresponding entity and location
         for match_id, match in enumerate(matchings):
             connection_entities[match_id, match[0]] = 1
             connection_locations[match_id, match[1]] = 1
-
+        check = ((connection_locations == 1).nonzero()[...,-1:]).flatten().tolist()
+        if len(set(check)) != len(check):
+            print("multiple entities matched a location")
         return connection_entities, connection_locations
             
 

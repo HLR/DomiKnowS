@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, forAllL, eqL, atLeastAL, exactAL, atMostAL
+from domiknows.graph.logicalConstrain import orL, andL, existsL, existsAL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, forAllL, eqL, atLeastAL, exactAL, atMostAL
 from domiknows.graph import combinationC
 from domiknows.graph import EnumConcept
 
@@ -93,6 +93,33 @@ with Graph('global') as graph:
     #     )
     # )
 
+    ### if entity is not input, there should exists at least one create event associated with it
+    ifL(
+        notL(input_entity('e')),
+        atLeastAL(
+            action_label.create('a', path=(('e', action_entity.reversed))), 1
+        ), active = All_LC
+    )
+
+    ### if entity is input, the first state should not be `none`
+    forAllL(
+        combinationC(entity, location(path=eqL(location, 'text', {5839, 150, 14794, 597, 1})))('e', 'l'),
+        # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
+        ifL(
+            input_entity(path=('e')),
+            notL(
+                entity_location_before_label('el1', path=(
+                                    ("e", lentity.reversed),
+                                    ("e", lentity.reversed, lstep, eqL(step, 'index', {0}), lstep.reversed),
+                                    ("l", llocation.reversed)
+                ))
+            )
+        ), active = Tested_Lc
+    )
+
+    ### Prolog: input_entity(e) :- not(non-location(l) and step_index(i, 0) entity_location_before_label(e, i, l))
+
+
     forAllL(
         combinationC(entity, exact_before)('e', 'step_rel'),
         ifL(
@@ -111,38 +138,13 @@ with Graph('global') as graph:
         ), active = All_LC
     )
 
-    ### if entity is input, the first state should not be `none`
-    forAllL(
-        combinationC(entity, location(path=eqL(location, 'text', {5839, 150, 14794, 597, 1})))('e', 'l'),
-        # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
-        ifL(
-            input_entity('e'),
-            notL(
-                entity_location_before_label('el1', path=(
-                                    ("e", lentity.reversed),
-                                    ("e", lentity.reversed, lstep, eqL(step, 'index', {0}), lstep.reversed),
-                                    ("l", llocation.reversed)
-                ))
-            )
-        ), active = All_LC
-    )
-
-    ### Prolog: input_entity(e) :- not(non-location(l) and step_index(i, 0) entity_location_before_label(e, i, l))
-
-    ### if entity is not input, there should exists at least one create event associated with it
-    ifL(
-        notL(input_entity('e')),
-        atLeastL(
-            action_label.create('a', path=(('e', action_entity))), 1
-        ), active = All_LC
-    )
     
 
     ### if entity is input, and there is an action create for it, it should have been destroyed before that
     ifL(
         input_entity('e'),
         ifL(
-            action_create('a', path=('e', action_entity)),
+            action_label.create('a', path=('e', action_entity.reversed)),
             existsL(
                 andL(
                     step('k', path=(('a', action_step, before_arg2.reversed, before_arg1))), 
@@ -949,81 +951,94 @@ with Graph('global') as graph:
     # )
 
     ### if entity and location match each other in same_mention, the entity_location with that location should be false
-    forAllL(
-        combinationC(step, entity, location)('i', 'e', 'l'),
-        ifL(
-            existsL(
-                same_mention('sm1', path=(
-                    ("e", same_entity.reversed),
-                    ("l", same_location.reversed)
-                ))
-            ),
-            notL(
-                entity_location_label('el1', path=(
-                    ("e", lentity.reversed),
-                    ("l", llocation.reversed),
-                    ("i", lstep.reversed)
-                ))
-            )
-        ), active = All_LC
-    )
+    # forAllL(
+    #     combinationC(step, entity, location)('i', 'e', 'l'),
+    #     ifL(
+    #         existsL(
+    #             same_mention('sm1', path=(
+    #                 ("e", same_entity.reversed),
+    #                 ("l", same_location.reversed)
+    #             ))
+    #         ),
+    #         notL(
+    #             entity_location_label('el1', path=(
+    #                 ("e", lentity.reversed),
+    #                 ("l", llocation.reversed),
+    #                 ("i", lstep.reversed)
+    #             ))
+    #         )
+    #     ), active = Tested_Lc
+    # )
+    # forAllL(
+    #     combinationC(same_mention, step)('sm1', 'i'),
+    #     notL(
+    #         entity_location_label('el1', path=(
+    #             ("sm1", same_entity, lentity.reversed),
+    #             ("sm1", same_location, llocation.reversed),
+    #             ("i", lstep.reversed)
+    #         ))
+    #     ), active = Tested_Lc
+    # )
+    ### this has a problem, for instance carbon can be inside carbon-based mixture
 
     ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
     
     # if some location is in same_mention relation with current entity and step selected from the combination then the action for this entity in the current step has to be after_existance
     # in case the entity in the given step can associated with multiply actions then we have to use existsL in the second part of if
-    forAllL(
+    forAllL( 
         combinationC(step, entity)('i', 'e'),
+        # combinationC(step, entity, location('l1'), entity(path=('l1', same_location.reversed, same_entity)))('i', 'e', 'l', 'e2')
         ifL(
-            andL(
-                entity_location_label('el1', path=("e", lentity.reversed, eqL(lstep, "i"))),
-                same_mention('sm1', path=(("el1", llocation, same_location.reversed)))
-            ),
-            
-           existsL(
-               after_existence('a1', path=("sm1", same_entity, action_entity.reversed, eqL(action_step, "i")))
-            )
-        ), active=Tested_Lc 
+            entity_location_label('el1', path=("e", lentity.reversed, eqL(lstep, "i"))),
+            ifL(
+                existsL(
+                    same_mention('sm1', path=(("el1", llocation, same_location.reversed)))
+                ),
+                atLeastAL(
+                    after_existence('a1', path=("el1", llocation, same_location.reversed, same_entity, action_entity.reversed, eqL(action_step, "i"))), 1
+                )
+            )  
+        ), active=All_LC 
     )
 
     ### if entity 'e' is located in a location 'l' which corresponds to an entity 'e1' and entity 'e1' is destroyed, the entity `e` is either moved or destroyed
-    forAllL(
-        combinationC(step, entity)('i', 'e'),
-        ifL(
-            andL(
-                ### entity `e` at step `i` is located at `el1.llocation`
-                entity_location_before_label('el1', path=(
-                                ("e", lentity.reversed),
-                                ("i", lstep.reversed)
-                )),
-                existsL(
-                    ### if there exist an entity mention which matches `el1.llocation`, and that entity is `destroyed`
-                    andL(
-                        ### entity `sm1.same_entity` is the same mention as `el.llocation`
-                        same_mention('sm1', path=(
-                        ("el1", llocation, same_location.reversed)
-                        )),
-                        ### `sm1.same_entity` is destroyed at step `i`
-                        action_destroy('a1', path=(
-                            ("sm1", same_entity, action_entity.reversed),
-                            ("i", action_step.reversed)
-                        )),
-                    ) 
-                ),        
-            ),
-            orL(
-                ### the original entity `e` should be either moved or destroyed at step `i`
-                action_move('a2', path=(
-                    ("e", action_entity.reversed),
-                    ("i", action_step.reversed)
-                )),
-                action_destroy('a3', path=(
-                    ("e", action_entity.reversed),
-                    ("i", action_step.reversed)
-                ))
-            )
-        ), active = All_LC
-    )
+    # forAllL(
+    #     combinationC(step, entity)('i', 'e'),
+    #     ifL(
+    #         andL(
+    #             ### entity `e` at step `i` is located at `el1.llocation`
+    #             entity_location_before_label('el1', path=(
+    #                             ("e", lentity.reversed),
+    #                             ("i", lstep.reversed)
+    #             )),
+    #             existsL(
+    #                 ### if there exist an entity mention which matches `el1.llocation`, and that entity is `destroyed`
+    #                 andL(
+    #                     ### entity `sm1.same_entity` is the same mention as `el.llocation`
+    #                     same_mention('sm1', path=(
+    #                     ("el1", llocation, same_location.reversed)
+    #                     )),
+    #                     ### `sm1.same_entity` is destroyed at step `i`
+    #                     action_destroy('a1', path=(
+    #                         ("sm1", same_entity, action_entity.reversed),
+    #                         ("i", action_step.reversed)
+    #                     )),
+    #                 ) 
+    #             ),        
+    #         ),
+    #         orL(
+    #             ### the original entity `e` should be either moved or destroyed at step `i`
+    #             action_move('a2', path=(
+    #                 ("e", action_entity.reversed),
+    #                 ("i", action_step.reversed)
+    #             )),
+    #             action_destroy('a3', path=(
+    #                 ("e", action_entity.reversed),
+    #                 ("i", action_step.reversed)
+    #             ))
+    #         )
+    #     ), active = Tested_Lc
+    # )
         
     ### sum(x1, x2, i + j) :- image(x1, i), image(x2, j)
     # def check_func(i, j, k):
@@ -1071,7 +1086,7 @@ with Graph('global') as graph:
     ### At least one output should exist
     atLeastAL(output_entity('e'), active = All_LC)
 
-    graph.visualize("./image")
+    # graph.visualize("./image")
 
     #from PIL import Image
     # Open an image file
