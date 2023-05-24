@@ -4,7 +4,7 @@ DomiKnows Library allows to **define knowledge** about a domain and use it durin
 The knowledge about the domain enhances the model's performance and makes it more robust against noise in the data. 
 It also enables a faster learning process and reduces the number of training samples required for the model to learn.
 
-Knowledge about the domain in DomiKnows is represented as a graph with associated logical constraints. 
+**Knowledge about the domain in DomiKnows is represented as a graph with associated logical constraints.**  
 The graph's nodes are concepts, and edges are relations between concepts. 
 The logical constraints define the knowledge about the domain in the form of logical expressions on concepts and relations from the graph.
 
