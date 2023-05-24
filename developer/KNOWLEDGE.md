@@ -210,7 +210,7 @@ The constraints are collected from three sources:
 
 The foundational element of a logical constraint is the definition of its **predicates**. A predicate is constructed using the name of a concept or a relation from the pre-defined graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
 
-If the variable is not explicitly specified in the predicate, then the default variable name will be used. It is usually used when the variable is not referred in the other parts of teh logical constraint.
+If the variable is not explicitly specified in the predicate, then the default variable name will be used. It is usually used when the variable is not referred in the other parts of the logical constraint.
 
 By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate. The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
 
@@ -231,33 +231,34 @@ This example above defines variables:
  	- `'rel_pair_phrase1'` and 
  	- `'rel_pair_phrase2'`.
 
-  Please notice that `'people'` and `'organization'` predicates do not have their variables specified are they are not referred in other parts of this simple logical constraint.
+Please notice that `'people'` and `'organization'` predicates do not have their variables specified are they are not referred in other parts of this simple logical constraint.  
 
+This example of the logical constraint below defines defines variable `p` representing candidates for `'people'` concept. 
+This variable is then used to define candidates for `'live_in'` predicate by specifying `path` to the candidates  using names of graph edge `'rel_pair_phrase1'`. 
+This edge is decorated with `reversed` keyword to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
 
-This example below defines defines variable `x` representing candidates for `'people'` concept. 
-This variable is then used to define candidates for `'live_in'` by specifying `path` to them using names of graph edge respectively `'rel_pair_phrase1'`. 
-This edge is decorated with  `reversed` to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
+```Python
+LC_SET_ADDITIONAL = True
 
-	LC_SET_ADDITIONAL = True
-	
-	ifL(
-        people('p'), 
-        atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
-        active = LC_SET_ADDITIONAL
-        )
+ifL(
+      people('p'), 
+      atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
+      active = LC_SET_ADDITIONAL
+      )
+```
+Additionally this constraint shows general logical constrain optional attribute `active` which allow to activate or deactivate this constraint.
+It if set to false and this will disable usage of this constraint.  
 
-Additionally this constraint shows optional attribute `active` which if set to false will disable usage of this constraint in the ILP model.  
-
+```Python
 	ifL(
 		city('x'), 
 		atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3),
 		p=90
 		)
-	
+```
 The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
 The basic blocks are combined using the following functions implementing Logical connectives:
-
 	- `notL()`,
 	- `andL()`,
 	- `orL()`,
