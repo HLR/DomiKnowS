@@ -8,15 +8,16 @@ It also enables a faster learning process and reduces the number of training sam
 The graph's nodes are concepts, and edges are relations between concepts. 
 The logical constraints define the knowledge about the domain in the form of logical expressions on concepts and relations from the graph.
 
-First, the user defines a collection of concepts and the ways they are related to each other, building the **domain graph**, which represents the domain knowledge in an ML task. 
-The concepts and relations represent the classification of the data and the relationships between the data, which are the subjects of the ML task. 
+Capturing knowledge begins with gathering concepts and establishing their relationships to each other, thereby building the **domain graph**. 
+This graph represents the domain knowledge in an ML task. 
+The concepts and relations exemplify the classification of the data and the relationships among the data, which are the subjects of the ML task.
 
-The parent-child relation between **concepts** is used to represent the hierarchical structure of the domain knowledge. 
+The parent-child relation between **concepts** in the graph is used to represent the hierarchical structure of the domain knowledge. 
 It implies that if the data is classified as belonging to a concept, it also belongs to all the parent concepts of that concept. 
 Conversely, if the data is classified as belonging to a concept, it can be classified in more detail as one of the child concepts. 
 
 In the graph, there are two distinct types of concepts.  
-* The first type, referred to as **'classification concepts'**, define the classification of the data within semantic frames. 
+* The first type, referred to as **'classification concepts'**, define the classification of the data within _semantic frame_. 
 * The second type, known as **'data concepts'**, specify the types of data, for example, words, sentences, pixels, etc. 
  
 Classification concepts are subordinate to data concepts, thereby establishing a parent-child relationship.  
@@ -30,14 +31,14 @@ For example, the relationship between a word and a _semantic frame_ can be repre
 
 DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.  
 In FOL, the basic building blocks of logical constraints are **predicates**. In DomiKnows, these predicates are functions that evaluate whether a given variable corresponds to a certain concept or relation.  
-The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data classified by the concepts and relationships derived from the graph.
+The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data classified by the concepts and relationships derived from the graph during the learning phase of the ML model.
 
 Relationships between predicates can be expressed using **logical connectives**.  
 The most common is the conditional statement ('if'), but all other logical connectives, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if'), are supported as well.
 
-**Quantifiers** can be applied to variables in predicate expressions. By default, the universal quantifier 'for every' is assumed unless specified otherwise.  
-The DomiKnows library provides semantics for expressing detailed specifications for the quantifiers.  
-This allows for selecting entities from the domain of discourse, which will subsequently be evaluated by the predicate.
+**Quantifiers** can be applied to variables within predicate expressions. By default, the universal quantifier 'for every' is presumed, implying that each entity from the domain of discourse is subject to the constraint unless stated otherwise. 
+
+The DomiKnows library offers constructs for expressing detailed specifications for specific quantifiers. These allow for the selection of entities from the domain of discourse, which will then be evaluated by the predicate.
 
 Both graphs and logical constraints are defined in **Python** code using constructs from the DomiKnows library.  
 Blow is the overview of the DomiKnows API and concepts used to define the domain knowledge.
