@@ -210,25 +210,28 @@ The constraints are collected from three sources:
 
 The foundational element of a logical constraint is the definition of its **predicates**. A predicate is constructed using the name of a concept or a relation from the pre-defined graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
 
-If the variable is not explicitly specified in the predicate, then the default variable name will be used.
+If the variable is not explicitly specified in the predicate, then the default variable name will be used. It is usually used when the variable is not referred in the other parts of teh logical constraint.
 
 By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate. The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
 
-```Python
+This is the basic example of the logical constraint:
 
-	 ifL(
-		 work_for('x'), 
-	     andL(
-	     	  people(path=('x', rel_pair_phrase1)), 
-	     	  organization(path=('x', rel_pair_phrase2))
-	     	  )
-	     )
+```Python
+ifL(
+    work_for('x'), 
+    andL(
+      people(path=('x', rel_pair_phrase1)), 
+      organization(path=('x', rel_pair_phrase2))
+    )
+  )
 ```
-This example above show shows the constraint defines variables:
+This example above defines variables:
  - `x` representing candidates for `'work_for'` concept. 
  - this variable `x` is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively:
  	- `'rel_pair_phrase1'` and 
  	- `'rel_pair_phrase2'`.
+
+  Please notice that `'people'` and `'organization'` predicates do not have their variables specified are they are not referred in other parts of this simple logical constraint.
 
 
 This example below defines defines variable `x` representing candidates for `'people'` concept. 
