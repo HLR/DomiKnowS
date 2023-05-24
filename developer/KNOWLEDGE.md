@@ -1,22 +1,22 @@
 # Knowledge Declaration
 
-DomiKnows Library allows you to **define knowledge** about a domain and use it during the learning and evaluation phases of ML model preparation, as well as during the model usage.  
-The knowledge about the domain enhances the model's performance and makes it more robust against noise in the data.  
+DomiKnows Library allows to **define knowledge** about a domain and use it during the learning and evaluation phases of ML model preparation, as well as during the model usage. 
+The knowledge about the domain enhances the model's performance and makes it more robust against noise in the data. 
 It also enables a faster learning process and reduces the number of training samples required for the model to learn.
 
-Knowledge about the domain in DomiKnows is represented as a graph with associated logical constraints.  
-The graph's nodes are concepts, and edges are relations between concepts.  
+Knowledge about the domain in DomiKnows is represented as a graph with associated logical constraints. 
+The graph's nodes are concepts, and edges are relations between concepts. 
 The logical constraints define the knowledge about the domain in the form of logical expressions on concepts and relations from the graph.
 
-First, the user defines a collection of concepts and the ways they are related to each other, building the **domain graph**, which represents the domain knowledge in an ML task.  
+First, the user defines a collection of concepts and the ways they are related to each other, building the **domain graph**, which represents the domain knowledge in an ML task. 
 The concepts and relations represent the classification of the data and the relationships between the data, which are the subjects of the ML task. 
 
-The parent-child relation between **concepts** is used to represent the hierarchical structure of the domain knowledge.  
-It implies that if the data is classified as belonging to a concept, it also belongs to all the parent concepts of that concept.  
-Conversely, if the data is classified as belonging to a concept, it can be classified in more detail as one of the child concepts.  
+The parent-child relation between **concepts** is used to represent the hierarchical structure of the domain knowledge. 
+It implies that if the data is classified as belonging to a concept, it also belongs to all the parent concepts of that concept. 
+Conversely, if the data is classified as belonging to a concept, it can be classified in more detail as one of the child concepts. 
 
 In the graph, there are two distinct types of concepts.  
-* The first type, referred to as **'classification concepts'**, define the classification of the data within semantic frames.  
+* The first type, referred to as **'classification concepts'**, define the classification of the data within semantic frames. 
 * The second type, known as **'data concepts'**, specify the types of data, for example, words, sentences, pixels, etc. 
  
 Classification concepts are subordinate to data concepts, thereby establishing a parent-child relationship.  
