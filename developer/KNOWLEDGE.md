@@ -298,9 +298,15 @@ The basic blocks are combined using the following functions implementing Logical
 
 #### Candidate Selection
 
-The candidates for the logical constraint are equal number for each concept in the constraint. The logical constrain is then translated into ILP constraints for each candidate pair (or triple, etc.) of the concepts in the constraint. 
+The candidates for each predicate in the logical constraint are selected independently. By default, all candidates from the data are selected. However, this default can be modified by specifying a quantifier within the predicate.
 
-If possible to change this behavior by defining the the new candidate selection class by inheriting from `CandidateSelection` and overriding the `get_candidates` method. The example of new candidate selection class is `combinationC` which creates cartesian product of candidates for each concept in the selection. Here is the code example:
+If the predicates do not use a quantifier or if the quantifier in the predicate refers to the variable that defines the candidates for the previous predicates, there will be an equal number of candidates for each predicate in the logical constraint. This is typically the case with logical constraints.
+
+However, if the predicates in the logical constraint employ disjointed quantifiers to select their candidates, the selected sets of candidates for each predicate can be different.
+
+DomiKnows defined the mechanism allowing to define to specific candidate selection for the logical constraint. This is done by defining the new class by inheriting from `CandidateSelection` and overriding the `get_candidates` method.  
+
+This example of new candidate selection class is `combinationC` which creates cartesian product of candidates for each concept in the selection. Here is the code example:
 
   class combinationC(CandidateSelection):
       def __call__(self, candidates_list, keys=None):
@@ -317,7 +323,7 @@ If possible to change this behavior by defining the the new candidate selection 
         
         return result_dict
   
-  This class is already available in the library.
+  This class is already available in the DomiKnows library.
 
   This class can be used in the logical constraint by specifying the `candidate_selection` parameter, e.g.:
 
