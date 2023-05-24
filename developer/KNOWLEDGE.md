@@ -64,15 +64,15 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 
 ### Graph classes
 
-- Package `domiknows.graph`: the set of class for above-mentioned notations as well as some base classes.
-- Class `Graph`: a basic container for other components. It can contain sub-graphs for flexible modeling.
-- Class `Concept`: a collection of `Property`s that can be related with each other by `Relation`s. It is a none leaf node in the `Graph`.
-- Class `Property`: a key attached to a `Concept` that can be associated with certain value assigned by a sensor or a learner. It is a leaf node in the `Graph`.
-- Class `Relation`: a relation between two `Concept`s. It is an edge in the `Graph`.
+- Package `domiknows.graph`: the set of class for graph and constraints definitions.
+- Class `Graph`: classes to construct graph, its structure and containers.
+- Class `Concept`: classes to define concepts and their properties.
+- Class `Property`: a key attached to a `Concept` that can be associated with certain value assigned by a sensor or a learner
+- Class `Relation`: a relation between two `Concept`s.
 
 ### Constraints classes
 
-- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics, that one can express logical constraints in first order logic.
+- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics, that one can express logical constraints.
 - Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the logical constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, etc.
 
 ## Graph
@@ -81,7 +81,7 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 A `Graph` object is constructed either by manually coding or compiled from `OWL` (deprecated).
 Each `Graph` object can contain other `Graph` objects as sub-graphs. No cyclic reference in graph hierarchy is allowed.
 
-You can either write an owl file initializing your concepts and relations or to write your graph with our specific Python classes.
+You can either write an OWL ontology file initializing your concepts and relations or to write your graph with our specific Python classes.
 
 Each `Graph` object can contain `Concept`s.
 
@@ -208,17 +208,13 @@ The constraints are collected from three sources:
 
 ### Logical Constraints (LC)
 
-They express constraints between instances of concepts defined in the graph using logical and counting methods (e.g. `ifL`, see below for the full list of LC methods).
+The foundational element of a logical constraint is the definition of its **predicates**. A predicate is constructed using the name of a concept or a relation from the pre-defined graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
 
-The basic building block of the logical constraint is the instance candidate selection expression consisting of the instance **concept** name called with two optional attributes:
-- `variable name` is assigned to the current lc element candidate set. 
-	- If not variable namer is specified than a new unique variable name is created. 
-	
-	- If the variable has been already used in the current constraint then its associated candidate set will be reused and the `path` element, if present, is ignored.  
-	
-- `path` provides information how to reach candidates for the LC element from the candidates of the LC other element. 
-  The path uses candidates set identified by `variable name` and the chain of relation concepts through the graph edges to candidates of the current LC element concept.
-  If the `path` is not define for the current LC element than the default candidate set is used consists of of all possible candidates for the current concept.
+If the variable is not explicitly specified in the predicate, then the default variable name will be used.
+
+By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate. The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
+
+```Python
 
 	 ifL(
 		 work_for('x'), 
@@ -256,9 +252,8 @@ Additionally this constraint shows optional attribute `active` which if set to f
 		)
 	
 The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
-The basic blocks are combined using the following functions:
 
-- Logical methods:
+The basic blocks are combined using the following functions implementing Logical connectives:
 
 	- `notL()`,
 	- `andL()`,
