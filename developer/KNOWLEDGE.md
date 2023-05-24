@@ -26,10 +26,10 @@ Depending on the level of data classification granularity, a single data concept
 The **relationships** between concepts are employed to denote not only associations within the data but also categorized relationships between the data and elements of the _semantic frame_. 
 They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.
 Additionally, they can illustrate temporal relationships between events.  
-Furthermore, they can also signify relationships between the data and the domain knowledge.  
+Furthermore, they can also signify relationships between the data and the domain knowledge.
 For example, the relationship between a word and a _semantic frame_ can be represented, such as 'works for' or 'located in', among others
 
-DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.  
+DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.
 In FOL, the basic building blocks of logical constraints are **predicates**. In DomiKnows, these predicates are functions that evaluate whether a given variable corresponds to a certain concept or relation.  
 The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data classified by the concepts and relationships derived from the graph during the learning phase of the ML model.
 
