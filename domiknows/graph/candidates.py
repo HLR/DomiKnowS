@@ -60,7 +60,7 @@ def intersection_of_lists(lists):
     ordered_common_elements = [elem for elem in lists[0] if elem in common_elements]
     return ordered_common_elements
 
-def getCandidates(dn, e, variable, lcVariablesDns, lc, logger):
+def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False):
     conceptName = e[0].name
                         
     # -- Collect dataNode for the logical constraint (path)

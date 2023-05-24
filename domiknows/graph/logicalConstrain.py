@@ -166,8 +166,8 @@ class LogicalConstrain(LcElement):
                             else:
                                 new_v.append(v.name)
 
-                    #new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
-                    new_V.append("path={}".format(tuple(new_v)))
+                        #new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
+                        new_V.append("path={}".format(tuple(new_v)))
                 strsE.append("{}".format(tuple(new_V)))
             elif isinstance(eItem, Concept):
                 strsE.append(eItem.name)
@@ -335,89 +335,6 @@ class LogicalConstrain(LcElement):
         # Return results from created ILP constraints - 
         # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
         return rVars
-    
-    
-     # Collects combination setups of ILP variables for logical methods calls for the created Logical Constraint - recursive method
-    def _collectCombinationILPVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
-        
-        # Get set of ILP variables lists for the current variable name
-        cLcVariables = v[lcVariableName]
-        
-        # List of lists containing sets of ILP variables for particular position 
-        newLcVars = []
-        
-        # --- Update the lcVars setup with ILP variables from this iteration
-        
-        if not lcVars: # If ILP variables setup is not initialized yet - this is the first iteration of the _collectILPVariableSetups method
-            if cLcVariables is None:
-                newV = [[None]]
-                newLcVars.append(newV)
-            else:
-                for cV in cLcVariables:
-                    newV = []
-                    for cvElement in cV:
-                        if cvElement is None:
-                            pass
-                        newElement = [cvElement]
-                        newV.append(newElement)
-                    newLcVars.append(newV)
-        else: # Many ILP variables in the current set
-            for indexLcV, lcV in enumerate(lcVars):
-                newV = []
-                if cLcVariables is None:
-                    for _, lcVelement in enumerate(lcV):
-                        newLcVelement = lcVelement.copy()
-                        newLcVelement.append(None)
-                        
-                        newV.append(newLcVelement)
-                else:
-                    for cV in cLcVariables:
-                        for indexElement, lcVelement in enumerate(lcV):
-                        
-                            newLcVelement = lcVelement.copy()
-                            newLcVelement.append(cV[indexElement])
-                            
-                            newV.append(newLcVelement)
-                            
-                    newLcVars.append(newV)                
-                            
-        if lcVariableNames:
-            # Recursive call - lcVars contains currently collected ILP variables setups
-            return self._collectCombinationILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars)
-        else:
-            # Return collected setups
-            return newLcVars
-
-    def createILPConstrainsCombination(self, lcName, lcFun, model, v, headConstrain):
-        if len(v) < 2:
-            myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
-            return None
-        
-        # Input variable names
-        try:
-            lcVariableNames = [e for e in iter(v)]
-        except StopIteration:
-            pass
-                
-        lcVariableName0 = lcVariableNames[0]
-
-        rVars = [] # Output variables
-            
-        # Collect variables setups for ILP constraints
-        sVar = self._collectCombinationILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
-        
-        # Apply collected setups and create ILP constraint
-        for z in sVar:
-            tVars = [] # Collect ILP constraints results
-            for t in z:
-                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
-                
-            rVars.append(tVars)
-        
-        # Return results from created ILP constraints - 
-        # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
-        return rVars
-        
 
     def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
         try:
@@ -425,8 +342,9 @@ class LogicalConstrain(LcElement):
         except StopIteration:
             pass
         
-        if cLimit== None:
-            cLimit
+        if cLimit == None:
+            cLimit = 1
+            
         lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
@@ -464,14 +382,19 @@ class LogicalConstrain(LcElement):
             
         return zVars
     
-    def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
+    def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
+        
+        # Ignore value of integrate
+        integrate = True
+               
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
-        if cLimit== None:
-            cLimit
+        if cLimit == None:
+            cLimit = 1
+            
         lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
@@ -498,8 +421,10 @@ class LogicalConstrain(LcElement):
              
         # -- Use ILP variable setup to create constrains   
         if headConstrain or integrate:
-            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
-                                                         logicMethodName = logicMethodName)])
+            r = myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                     logicMethodName = logicMethodName)
+            for _ in lcVariableSet0:
+                zVars.append([r])
         else:
             for current_var in varsSetup:
                 zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 

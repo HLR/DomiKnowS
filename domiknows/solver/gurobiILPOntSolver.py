@@ -1025,7 +1025,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                 elif isinstance(e, (Concept, tuple)): # -- Concept 
                     # -- Get dataNodes candidates 
-                    dnsList = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger)
+                    dnsList = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
                     lcVariablesDns[variableName] = dnsList
                                 
                     if isinstance(lc, CandidateSelection):
