@@ -23,7 +23,7 @@ In the graph, there are two distinct types of concepts.
 Classification concepts are subordinate to data concepts, thereby establishing a parent-child relationship.  
 Depending on the level of data classification granularity, a single data concept may encompass multiple classification concepts.
 
-The **relationships** between concepts are utilized to represent classified associations within the data.  
+The **relationships**between concepts are employed to denote not only associations within the data but also categorized relationships between the data and elements of the _semantic frame_. 
 They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.  
 Additionally, they can illustrate temporal relationships between events.  
 Furthermore, they can also signify relationships between the data and the domain knowledge.  
@@ -36,9 +36,9 @@ The variables in this context refer to an entity or entities in the domain of di
 Relationships between predicates can be expressed using **logical connectives**.  
 The most common is the conditional statement ('if'), but all other logical connectives, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if'), are supported as well.
 
-**Quantifiers** can be applied to variables within predicate expressions. By default, the universal quantifier 'for every' is presumed, implying that each entity from the domain of discourse is subject to the constraint unless stated otherwise. 
+**Quantifiers** can be applied to variables within predicate expressions. By default, the universal quantifier 'for every' is presumed, suggesting that each entity from the domain of discourse is subject to the constraint unless stated otherwise.
 
-The DomiKnows library offers constructs for expressing detailed specifications for specific quantifiers. These allow for the selection of entities from the domain of discourse, which will then be evaluated by the predicate.
+The DomiKnows library offers constructs that allow for the detailed specification of particular quantifiers. These constructs facilitate the selection of entities from the domain of discourse, which will then be evaluated by the predicate.
 
 Both graphs and logical constraints are defined in **Python** code using constructs from the DomiKnows library.  
 Blow is the overview of the DomiKnows API and concepts used to define the domain knowledge.
