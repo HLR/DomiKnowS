@@ -96,7 +96,7 @@ with Graph('global') as graph:
     ### if entity is not input, there should exists at least one create event associated with it
     ifL(
         notL(input_entity('e')),
-        atLeastAL(
+        atLeastL(
             action_label.create('a', path=(('e', action_entity.reversed))), 1
         ), active = All_LC
     )
@@ -115,7 +115,7 @@ with Graph('global') as graph:
                                     ("l", llocation.reversed)
                 ))
             )
-        ), active = Tested_Lc
+        ), active = All_LC
     )
 
     ### Prolog: input_entity(e) :- not(non-location(l) and step_index(i, 0) entity_location_before_label(e, i, l))
@@ -630,7 +630,7 @@ with Graph('global') as graph:
         entity('e'),
         atMostL(
             when_create('x', path=('e', action_entity.reversed)),
-        ), active = All_LC
+        ), active = Tested_Lc
     )
 
     ifL(
@@ -995,7 +995,7 @@ with Graph('global') as graph:
                 existsL(
                     same_mention('sm1', path=(("el1", llocation, same_location.reversed)))
                 ),
-                atLeastAL(
+                atLeastL(
                     after_existence('a1', path=("el1", llocation, same_location.reversed, same_entity, action_entity.reversed, eqL(action_step, "i"))), 1
                 )
             )  
