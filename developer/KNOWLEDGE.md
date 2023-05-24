@@ -223,7 +223,7 @@ By default, the variable in the predicate is associated with all candidates from
 	     	  organization(path=('x', rel_pair_phrase2))
 	     	  )
 	     )
-
+```
 This example above show shows the constraint defines variables:
  - `x` representing candidates for `'work_for'` concept. 
  - this variable `x` is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively:
