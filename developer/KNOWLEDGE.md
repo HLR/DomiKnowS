@@ -23,8 +23,8 @@ In the graph, there are two distinct types of concepts.
 Classification concepts are subordinate to data concepts, thereby establishing a parent-child relationship.  
 Depending on the level of data classification granularity, a single data concept may encompass multiple classification concepts.
 
-The **relationships**between concepts are employed to denote not only associations within the data but also categorized relationships between the data and elements of the _semantic frame_. 
-They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.  
+The **relationships** between concepts are employed to denote not only associations within the data but also categorized relationships between the data and elements of the _semantic frame_. 
+They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.
 Additionally, they can illustrate temporal relationships between events.  
 Furthermore, they can also signify relationships between the data and the domain knowledge.  
 For example, the relationship between a word and a _semantic frame_ can be represented, such as 'works for' or 'located in', among others
