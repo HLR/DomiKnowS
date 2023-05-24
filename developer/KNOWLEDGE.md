@@ -241,20 +241,20 @@ This edge is decorated with `reversed` keyword to follow the edge in reversed di
 LC_SET_ADDITIONAL = True
 
 ifL(
-      people('p'), 
-      atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
-      active = LC_SET_ADDITIONAL
-      )
+    people('p'), 
+    atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
+    active = LC_SET_ADDITIONAL
+  )
 ```
 Additionally this constraint shows general logical constrain optional attribute `active` which allow to activate or deactivate this constraint.
 It if set to false and this will disable usage of this constraint.  
 
 ```Python
-	ifL(
-		city('x'), 
-		atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3),
-		p=90
-		)
+ifL(
+    city('x'), 
+    atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3),
+    p=90
+  )
 ```
 The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
