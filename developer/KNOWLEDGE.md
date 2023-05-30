@@ -281,15 +281,15 @@ DomiKnows also provides counting methods as an extension of logical connectives.
  
 Examples of counting methods usage in the logical constraint:  
     - _existsAL(firestationCity)_ -   
-        &emsp in the present ML example exists candidate with classification firestationCity,  
+    in the present ML example exists candidate with classification firestationCity,  
      - _existsAL(firestationCity, policeStationCity)_ -   
-        &emsp in the present ML example exists candidate with classification firestationCity or policeStationCity,  
+    in the present ML example exists candidate with classification firestationCity or policeStationCity,  
     - _exactL(firestationCity, 2)_ -  
-        &emsp in the present ML example there are exactly 2 candidates with classification firestationCity,   
+    in the present ML example there are exactly 2 candidates with classification firestationCity,   
     - _atLeastL(firestationCity, 4)_ -  
-        &emsp in the present ML example there are at least 4 candidates with classification firestationCity,  
+    in the present ML example there are at least 4 candidates with classification firestationCity,  
     - _atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ -  
-        &emsp for every candidate in the present ML example each city has no more then 4 candidates reach though path cityLink with attribute *neighbors* equal True which are classification firestationCity.  
+    for every candidate in the present ML example each city has no more then 4 candidates reach though path cityLink with attribute *neighbors* equal True which are classification firestationCity.  
 
 #### Candidate Selection
 
