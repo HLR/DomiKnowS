@@ -281,8 +281,7 @@ DomiKnows also provides counting methods as an extension of logical connectives.
  
 Examples of counting methods usage in the logical constraint:  
     - _existsAL(firestationCity)_ -   
-    in the present ML example exists candidate with classification firestationCity,  
-    
+            in the present ML example exists candidate with classification firestationCity,  
      - _existsAL(firestationCity, policeStationCity)_ -   
     in the present ML example exists candidate with classification firestationCity or policeStationCity,  
     - _exactL(firestationCity, 2)_ -  
