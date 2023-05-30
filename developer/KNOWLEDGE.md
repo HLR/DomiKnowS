@@ -212,9 +212,9 @@ The foundational element of a logical constraint is the definition of its **pred
 
 If the variable is not explicitly specified in the predicate, then the default variable name will be used. It is usually used when the variable is not referred in the other parts of the logical constraint.
 
-By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate. The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
+By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
 
-This is the basic example of the logical constraint:
+This is the simple example of the logical constraint:
 
 ```Python
 ifL(
@@ -247,7 +247,6 @@ ifL(
   )
 ```
 Additionally this constraint shows general logical constrain optional attribute `active` which allow to activate or deactivate this constraint.
-It if set to false and this will disable usage of this constraint.  
 
 ```Python
 ifL(
@@ -256,9 +255,9 @@ ifL(
     p=90
   )
 ```
-The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
+The example above show usage of another optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
-The basic blocks are combined using the following functions implementing Logical connectives:
+The predicates are combined using the following functions implementing logical connectives:
 	- `notL()`,
 	- `andL()`,
 	- `orL()`,
@@ -266,35 +265,27 @@ The basic blocks are combined using the following functions implementing Logical
 	- `ifL()`,
 	- `norL()`,
 	- `xorL()`,
-	- `epqL()`,
+	- `epqL()` (if and only if).
 
- - Counting methods:
+DomiKnows also provides counting methods as an extension of logical connectives. 
+Each counting method contains a list of predicates and nested logical constraints and a number of candidates that satisfy the constraint.
+There are two flavors of counting methods: one counting over candidates in the current context of constraint's evaluation and the other counting domain of discourse (it has 'A' suffix in the name - indicating accumulation).
  
-	- `existsL()`, e.g.: 
-			*existsL(firestationCity)* - 
-				*firestationCity* exists,
-	
-	- `exactL(firestationCity)`, e.g.:
-			*exactL(firestationCity, 2)* -
-				there are exactly 2 *firestationCity*,
-	
-	- `atLeastL()`, e.g.:
-			*atLeastL(firestationCity, 4)* - 
-				there are at least 4 *firestationCity*,
-	
-	- `atMostL()`,  e.g.:
-			*atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - 
-				each city has no more then 4 *neighbors*.
-	
- - Auxiliary methods:
+  - The following counting methods are available:
+    - `existsAL()`, e.g.: existsAL(firestationCity) - firestationCity exists in the domain of discourse,
+    - `exactAL()`, e.g.: exactL(firestationCity, 2) - there are exactly 2 firestationCity in the domain of discourse,
+    - `atLeastAL()`, e.g.: atLeastL(firestationCity, 4) - there are at least 4 firestationCity in the domain of discourse,
+    - `atMostL()`,  e.g.: atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4) - each city has no more then 4 *neighbors* which are firestationCity.
+    
+Auxiliary methods:
  
-	- `eqL()`, -  used to select, for the logical constraint, instances with value for specified attribute in the provided set or equal to the provided value, e.g.:
-			*eqL(cityLink, 'neighbor', {True})* - 
-				instances of *cityLink* with attribute *neighbor* in the set containing only single value True,
-			
+	- `eqL()`, -  used to filter instances with value for specified attribute in the provided set or equal to the provided value, e.g.:
+			eqL(cityLink, 'neighbor', {True}) - 
+				instances of cityLink with attribute neighbor in the set containing only single value True,
+
 	- `fixedL()`, used to fixed selected candidates to selected classification, e.g.:
-	 		*fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)* - 
-	 			candidates for *empty_entry_label* which have attribute *fixed* should have their classification  fixed to *empty_entry*
+	 		fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED) - 
+	 			candidates for empty_entry_label which have attribute fixed* should have their classification fixed to empty_entry
 
 #### Candidate Selection
 
