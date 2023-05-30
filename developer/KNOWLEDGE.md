@@ -289,11 +289,11 @@ Examples of counting methods usage in the logical constraint:
 
 The candidates for each predicate in the logical constraint are selected independently from the current ML example. By default, all candidates are selected. However, this default can be modified by specifying a quantifier within the predicate.
 
-When defining the logical constraint usually either predicates do not use a quantifier or predicate's quantifier refers to the variable that defines the candidates for the previous predicates in the current logical constraint. In this case there will be an equal number of candidates for each predicate in the logical constraint. This is typically the case with logical constraints.
+When defining the logical constraint, predicates typically do not use a quantifier, or the predicate's quantifier refers to the variable that defines the candidates for the previous predicates in the current logical constraint. In this case, there will be an equal number of candidates for each predicate in the logical constraint. This is typically the case with logical constraints.
 
-However, if the predicates in the logical constraint employ disjointed quantifiers to select their candidates, the selected sets of candidates for each predicate can be different. This causes problem when evaluating the logical constraint, as it is tno clear how to match candidates between predicates. To solve this problem, DomiKnows allows to define a mechanism for selecting candidates for each predicate in the logical constraint. This mechanism is called **candidate selection**. This is done by defining the new class by inheriting from `CandidateSelection` and overriding the `get_candidates` method.  
+However, if the predicates in the logical constraint employ disjoint quantifiers to select their candidates, the selected sets of candidates for each predicate can be different. This causes a problem when evaluating the logical constraint, as it is not clear how to match candidates between predicates. To solve this problem, DomiKnows allows the definition of a mechanism for selecting candidates for each predicate in the logical constraint. This mechanism is called **candidate selection**. This is done by defining a new class by inheriting from _CandidateSelection_ and overriding the _get_candidates_ method.
 
-This example of new candidate selection class is `combinationC` which creates cartesian product of candidates for each concept in the selection. Here is the code example:
+An example of a new candidate selection class is combinationC, which creates a Cartesian product of candidates for each concept in the selection. Here is the code example:
 
   class combinationC(CandidateSelection):
       def __call__(self, candidates_list, keys=None):
@@ -329,9 +329,9 @@ This example of new candidate selection class is `combinationC` which creates ca
 
 The graph can also specify constraints:
 
-- **Subclass relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
+- **Parent-child relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
 
-  *IF(people, word)*
+  *IfL(people, word)*
 
 - **Disjointing between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
 
