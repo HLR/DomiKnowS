@@ -21,6 +21,7 @@
         "logsumexp",
         "lossprogram",
         "mloss",
+        "nand",
         "nconstr",
         "Optim",
         "primaldual",
