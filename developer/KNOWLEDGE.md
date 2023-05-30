@@ -275,6 +275,8 @@ Auxiliary logical constraint methods:
     - `fixedL()`, used to fixed selected candidates to selected classification, e.g.:  
        _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed* should have their classification fixed to empty_entry._  
 
+##### Counting methods
+
 DomiKnows also provides **counting methods** as an extension of logical connectives. 
 Each counting method contains a list of predicates or nested logical constraints and optionally a number of required satisfied predicates.
 If the number is not specified as the last argument in the counting method, then the default value of 1 is used.
