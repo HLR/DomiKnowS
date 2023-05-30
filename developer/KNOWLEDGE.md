@@ -270,10 +270,10 @@ The full list of DomiKnows functions implementing **logical connectives**:
 	- `epqL()` (if and only if).
 
 Auxiliary logical constraint methods:  
-    - `eqL()` -  used in the path definition to filter instances with value for specified attribute in the provided set or equal to the provided value, e.g.:   
+    - `eqL()` -  used in the path definition to filter based on the specified attribute, e.g.:   
       _eqL(cityLink, 'neighbor', {True}) - instances of cityLink with attribute neighbor in the set containing only single value True,_   
     - `fixedL()`, used to fixed selected candidates to selected classification, e.g.:  
-       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed* should have their classification fixed to empty_entry._  
+       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed should have their classification fixed to empty_entry._  
 
 ##### Counting methods
 
