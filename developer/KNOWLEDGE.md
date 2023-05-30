@@ -241,7 +241,7 @@ ifL(
     active = LC_SET_ADDITIONAL
   )
 ```
-Another example above states that for every candidate in the present ML example if a current candidate is classified as `'people'` concept, then not more then one candidate found by following the path from the current candidate to first argument of the `'pair'` relation will be positively classified as `'live_in'` concept.
+Another example above states that _for every candidate in the present ML example if a current candidate is classified as `'people'` concept, then not more then one candidate found by following the path from the current candidate to first argument of the `'pair'` relation will be positively classified as `'live_in'` concept_.
 
 The logical constraint defines variable `p` representing candidates for `'people'` predicate. 
 This variable is then used to define candidates for `'live_in'` predicate by specifying `path` to the candidates using names of graph edge `'rel_pair_phrase1'`. This edge is decorated with `reversed` keyword to follow the edge in reversed direction from `people` concept to corresponding `live_in` relation candidates.
@@ -255,7 +255,7 @@ ifL(
     p=90
   )
 ```
-The example states that for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept.
+The example states that _for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_.
 
 Ths logical constrain show usage of another optional logical constrain attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
