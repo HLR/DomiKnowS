@@ -283,10 +283,10 @@ If the number is not specified as the last argument in the counting method, then
 There are two flavors of counting methods: one counting over candidates in the current context of constraint's evaluation and the other counting domain of discourse (it has 'A' suffix in the name - indicating accumulation). Four types of counting methods are implemented: **exists, exact, atLeast** and **atMost**.
  
 Examples of counting methods usage in the logical constraint:  
-    - _existsAL(firestationCity)_ - firestationCity exists in the domain of discourse,  
-    - _exactL(firestationCity, 2)_ - there are exactly 2 firestationCity in the domain of discourse,  
-    - _atLeastL(firestationCity, 4)_ - there are at least 4 firestationCity in the domain of discourse,  
-    - _atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ - each city has no more then 4 *neighbors* which are firestationCity.  
+    - _existsAL(firestationCity)_ - in the domain of discourse exists candidate with classification firestationCity,
+    - _exactL(firestationCity, 2)_ - in the domain of discourse there are exactly 2 candidates with classification firestationCity,  
+    - _atLeastL(firestationCity, 4)_ - in the domain of discourse there are at least 4 candidates with classification firestationCity,  
+    - _atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ - each city has no more then 4 candidates with attribute *neighbors* equal True which are classification firestationCity.  
 
 #### Candidate Selection
 
