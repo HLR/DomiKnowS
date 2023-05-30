@@ -227,7 +227,7 @@ ifL(
 ```
 This example above states that _for every candidate in the present ML example if a current candidate is classified as `'work_for'`concept, then the candidates found by following the paths from the current candidate to first and second argument of the `'pair'` relation have to  be positively classified as `'people'` and `'organization'` concepts.
 
-In more detail about the syntax of teh constraint - the example defines variables `x` representing candidates for `'work_for'` predicate. 
+More detail about the syntax of the constraint - the example defines variables `x` representing candidates for `'work_for'` predicate. 
 This variable `x` is then used to define candidates for `'people'` and `'organization'` predicates by specifying `path` to them using names of graph edges respectively:`'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
 
 Please notice that `'people'` and `'organization'` predicates do not have their variables specified are they are not referred in other parts of this simple logical constraint.  
