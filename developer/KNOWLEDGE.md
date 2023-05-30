@@ -277,26 +277,21 @@ Auxiliary logical constraint methods:
 
 ##### Counting methods
 
-DomiKnows also provides **counting methods** as an extension of logical connectives. 
-Each counting method contains a list of predicates or nested logical constraints and optionally a number of required satisfied predicates.
-If the number is not specified as the last argument in the counting method, then the default value of 1 is used.
-There are two flavors of counting methods: one counting over candidates in the current context of constraint's evaluation and the other counting domain of discourse (it has 'A' suffix in the name - indicating accumulation). Four types of counting methods are implemented: **exists, exact, atLeast** and **atMost**.
+DomiKnows also provides counting methods as an extension of logical connectives. Each counting method contains a list of predicates or nested logical constraints, and optionally, a number of required predicates that need to be satisfied. If the number isn't specified as the last argument in the counting method, then the default value of 1 is used. There are two  flavors of counting methods: one counts over candidates in the current context of constraint's evaluation, and the other counts the domain of discourse, which is the present ML example. The latter type has an 'A' suffix in its name, indicating accumulation. Four types of counting methods are implemented: **exists, exact, atLeast,** and **atMost**.
  
 Examples of counting methods usage in the logical constraint:  
-    - _existsAL(firestationCity)_ - in the domain of discourse exists candidate with classification firestationCity,
-    - _exactL(firestationCity, 2)_ - in the domain of discourse there are exactly 2 candidates with classification firestationCity,  
-    - _atLeastL(firestationCity, 4)_ - in the domain of discourse there are at least 4 candidates with classification firestationCity,  
-    - _atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ - each city has no more then 4 candidates with attribute *neighbors* equal True which are classification firestationCity.  
+    - _existsAL(firestationCity)_ - in the present ML example exists candidate with classification firestationCity,  
+    - _exactL(firestationCity, 2)_ - in the present ML example there are exactly 2 candidates with classification firestationCity,  
+    - _atLeastL(firestationCity, 4)_ - in the present ML example there are at least 4 candidates with classification firestationCity,  
+    - _atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ - for every candidate in the present ML example each city has no more then 4 candidates reach though path cityLink with attribute *neighbors* equal True which are classification firestationCity.  
 
 #### Candidate Selection
 
-The candidates for each predicate in the logical constraint are selected independently. By default, all candidates from the data are selected. However, this default can be modified by specifying a quantifier within the predicate.
+The candidates for each predicate in the logical constraint are selected independently from the current ML example. By default, all candidates are selected. However, this default can be modified by specifying a quantifier within the predicate.
 
-If the predicates do not use a quantifier or if the quantifier in the predicate refers to the variable that defines the candidates for the previous predicates, there will be an equal number of candidates for each predicate in the logical constraint. This is typically the case with logical constraints.
+When defining the logical constraint usually either predicates do not use a quantifier or predicate's quantifier refers to the variable that defines the candidates for the previous predicates in the current logical constraint. In this case there will be an equal number of candidates for each predicate in the logical constraint. This is typically the case with logical constraints.
 
-However, if the predicates in the logical constraint employ disjointed quantifiers to select their candidates, the selected sets of candidates for each predicate can be different.
-
-DomiKnows defined the mechanism allowing to define to specific candidate selection for the logical constraint. This is done by defining the new class by inheriting from `CandidateSelection` and overriding the `get_candidates` method.  
+However, if the predicates in the logical constraint employ disjointed quantifiers to select their candidates, the selected sets of candidates for each predicate can be different. This causes problem when evaluating the logical constraint, as it is tno clear how to match candidates between predicates. To solve this problem, DomiKnows allows to define a mechanism for selecting candidates for each predicate in the logical constraint. This mechanism is called **candidate selection**. This is done by defining the new class by inheriting from `CandidateSelection` and overriding the `get_candidates` method.  
 
 This example of new candidate selection class is `combinationC` which creates cartesian product of candidates for each concept in the selection. Here is the code example:
 
@@ -320,7 +315,7 @@ This example of new candidate selection class is `combinationC` which creates ca
   This class can be used in the logical constraint by specifying the `candidate_selection` parameter, e.g.:
 
         forAllL(
-            combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
+            combinationC(step, entity)('i', 'e'), # this is the search space
             exactL(
                 final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
             ),
