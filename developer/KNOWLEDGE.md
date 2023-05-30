@@ -68,22 +68,22 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 - Class `Graph`: classes to construct graph, its structure and containers.
 - Class `Concept`: classes to define concepts and their properties.
 - Class `Property`: a key attached to a `Concept` that can be associated with certain value assigned by a sensor or a learner
-- Class `Relation`: a relation between two `Concept`s.
+- Class `Relation`: a relation between two `Concepts`.
 
 ### Constraints classes
 
 - Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics, that one can express logical constraints.
-- Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the logical constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, etc.
+- Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the logical constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existsL()`, `equalL()`, etc.
 
 ## Graph
 
-`Graph` instances are basic container of the `Concept`s, `Relation`s, constraints and other instances in the framework.
+`Graph` instances are basic container of the `Concepts`, `Relations`, constraints and other instances in the framework.
 A `Graph` object is constructed either by manually coding or compiled from `OWL` (deprecated).
 Each `Graph` object can contain other `Graph` objects as sub-graphs. No cyclic reference in graph hierarchy is allowed.
 
 You can either write an OWL ontology file initializing your concepts and relations or to write your graph with our specific Python classes.
 
-Each `Graph` object can contain `Concept`s.
+Each `Graph` object can contain `Concepts`.
 
 The graph is a partial program, and there is no sensor or learner, which are data processing units, connected. There is no behavior associated. It is only a data structure to express domain knowledge.
 
@@ -195,22 +195,22 @@ organization.is_a(word)
 
 ### Access the nodes
 
- All the sub-`Graph`s and `Concept` instances can be retrieved from a graph (or sub-graph) with a (relative) pathname.
+ All the sub-`Graphs` and `Concept` instances can be retrieved from a graph (or sub-graph) with a (relative) pathname.
  For example, to retrieve `people` from the above example, one can do `graph['sub/people']` or `sub_graph['people']`.
 
 ## Constraints
 
 The constraints are collected from three sources:
 
-- **logical constraints** - basic form of constraint in the system,
-- **knowledge graph** special definitions in the graph, 
-- **ontology (OWL file)** provided as url to OWL file in the ontology graph.
+- **logical constraints** - main source of constraint in the system,
+- **knowledge graph** - definitions in the graph (already described, e.g. parent-child relations, etc.)
+- **ontology (OWL file)** - alternative source of knowledge, provided as url to OWL file in the ontology graph.
 
 ### Logical Constraints (LC)
 
 The foundational element of a logical constraint is the definition of its **predicates**. A predicate is constructed using the name of a concept or a relation from the pre-defined graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
 
-If the variable is not explicitly specified in the predicate, then the default variable name will be used. It is usually used when the variable is not referred in the other parts of the logical constraint.
+If the variable is not explicitly specified in the predicate, then the default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
 
 By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
 
@@ -225,17 +225,12 @@ ifL(
     )
   )
 ```
-This example above defines variables:
- - `x` representing candidates for `'work_for'` concept. 
- - this variable `x` is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively:
- 	- `'rel_pair_phrase1'` and 
- 	- `'rel_pair_phrase2'`.
+This example above states that _for every candidate in the present ML example if a current candidate is classified as `'work_for'`concept, then the candidates found by following the paths from the current candidate to first and second argument of the `'pair'` relation have to  be positively classified as `'people'` and `'organization'` concepts.
+
+In more detail about the syntax of teh constraint - the example defines variables `x` representing candidates for `'work_for'` predicate. 
+This variable `x` is then used to define candidates for `'people'` and `'organization'` predicates by specifying `path` to them using names of graph edges respectively:`'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
 
 Please notice that `'people'` and `'organization'` predicates do not have their variables specified are they are not referred in other parts of this simple logical constraint.  
-
-This example of the logical constraint below defines defines variable `p` representing candidates for `'people'` concept. 
-This variable is then used to define candidates for `'live_in'` predicate by specifying `path` to the candidates  using names of graph edge `'rel_pair_phrase1'`. 
-This edge is decorated with `reversed` keyword to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
 
 ```Python
 LC_SET_ADDITIONAL = True
@@ -246,7 +241,12 @@ ifL(
     active = LC_SET_ADDITIONAL
   )
 ```
-Additionally this constraint shows general logical constrain optional attribute `active` which allow to activate or deactivate this constraint.
+Another example above states that for every candidate in the present ML example if a current candidate is classified as `'people'` concept, then not more then one candidate found by following the path from the current candidate to first argument of the `'pair'` relation will be positively classified as `'live_in'` concept.
+
+The logical constraint defines variable `p` representing candidates for `'people'` predicate. 
+This variable is then used to define candidates for `'live_in'` predicate by specifying `path` to the candidates using names of graph edge `'rel_pair_phrase1'`. This edge is decorated with `reversed` keyword to follow the edge in reversed direction from `people` concept to corresponding `live_in` relation candidates.
+
+Additionally this constraint shows logical constrain optional attribute `active` which allow to activate or deactivate this constraint.
 
 ```Python
 ifL(
@@ -255,9 +255,11 @@ ifL(
     p=90
   )
 ```
-The example above show usage of another optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
+The example states that for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept.
 
-The predicates are combined using the following functions implementing logical connectives:
+Ths logical constrain show usage of another optional logical constrain attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
+
+The full list of DomiKnows functions implementing logical connectives:
 	- `notL()`,
 	- `andL()`,
 	- `orL()`,
@@ -267,8 +269,14 @@ The predicates are combined using the following functions implementing logical c
 	- `xorL()`,
 	- `epqL()` (if and only if).
 
-DomiKnows also provides counting methods as an extension of logical connectives. 
-Each counting method contains a list of predicates and nested logical constraints and a number of candidates that satisfy the constraint.
+Auxiliary logical constraint methods:  
+    - `eqL()` -  used in the path definition to filter instances with value for specified attribute in the provided set or equal to the provided value, e.g.:   
+      _eqL(cityLink, 'neighbor', {True}) - instances of cityLink with attribute neighbor in the set containing only single value True,_   
+    - `fixedL()`, used to fixed selected candidates to selected classification, e.g.:  
+       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed* should have their classification fixed to empty_entry._  
+
+DomiKnows also provides **counting methods** as an extension of logical connectives. 
+Each counting method contains a list of predicates or nested logical constraints and a number of required satisfied predicates.
 There are two flavors of counting methods: one counting over candidates in the current context of constraint's evaluation and the other counting domain of discourse (it has 'A' suffix in the name - indicating accumulation).
  
   - The following counting methods are available:
@@ -276,16 +284,6 @@ There are two flavors of counting methods: one counting over candidates in the c
     - `exactAL()`, e.g.: exactL(firestationCity, 2) - there are exactly 2 firestationCity in the domain of discourse,
     - `atLeastAL()`, e.g.: atLeastL(firestationCity, 4) - there are at least 4 firestationCity in the domain of discourse,
     - `atMostL()`,  e.g.: atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4) - each city has no more then 4 *neighbors* which are firestationCity.
-    
-Auxiliary methods:
- 
-	- `eqL()`, -  used to filter instances with value for specified attribute in the provided set or equal to the provided value, e.g.:
-			eqL(cityLink, 'neighbor', {True}) - 
-				instances of cityLink with attribute neighbor in the set containing only single value True,
-
-	- `fixedL()`, used to fixed selected candidates to selected classification, e.g.:
-	 		fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED) - 
-	 			candidates for empty_entry_label which have attribute fixed* should have their classification fixed to empty_entry
 
 #### Candidate Selection
 
