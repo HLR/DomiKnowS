@@ -259,7 +259,7 @@ The example states that _for every candidate in the present ML example if a curr
 
 Ths logical constrain show usage of another optional logical constrain attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
-The full list of DomiKnows functions implementing logical connectives:
+The full list of DomiKnows functions implementing **logical connectives**:
 	- `notL()`,
 	- `andL()`,
 	- `orL()`,
@@ -276,8 +276,9 @@ Auxiliary logical constraint methods:
        _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed* should have their classification fixed to empty_entry._  
 
 DomiKnows also provides **counting methods** as an extension of logical connectives. 
-Each counting method contains a list of predicates or nested logical constraints and a number of required satisfied predicates.
-There are two flavors of counting methods: one counting over candidates in the current context of constraint's evaluation and the other counting domain of discourse (it has 'A' suffix in the name - indicating accumulation).
+Each counting method contains a list of predicates or nested logical constraints and optionally a number of required satisfied predicates.
+If teh number is not specified as the last argument in the counting method, then the default value of 1 is used.
+There are two flavors of counting methods: one counting over candidates in the current context of constraint's evaluation and the other counting domain of discourse (it has 'A' suffix in the name - indicating accumulation). Four types of counting methods are implemented: **exists, exact, atLeast and atMost**.
  
   - The following counting methods are available:
     - `existsAL()`, e.g.: existsAL(firestationCity) - firestationCity exists in the domain of discourse,
