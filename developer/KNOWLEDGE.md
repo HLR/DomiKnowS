@@ -280,10 +280,14 @@ Auxiliary logical constraint methods:
 DomiKnows also provides counting methods as an extension of logical connectives. Each counting method contains a list of predicates or nested logical constraints, and optionally, a number of required predicates that need to be satisfied. If the number isn't specified as the last argument in the counting method, then the default value of 1 is used. There are two  flavors of counting methods: one counts over candidates in the current context of constraint's evaluation, and the other counts the domain of discourse, which is the present ML example. The latter type has an 'A' suffix in its name, indicating accumulation. Four types of counting methods are implemented: **exists, exact, atLeast,** and **atMost**.
  
 Examples of counting methods usage in the logical constraint:  
-    - _existsAL(firestationCity)_ - in the present ML example exists candidate with classification firestationCity,  
-    - _exactL(firestationCity, 2)_ - in the present ML example there are exactly 2 candidates with classification firestationCity,  
-    - _atLeastL(firestationCity, 4)_ - in the present ML example there are at least 4 candidates with classification firestationCity,  
-    - _atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ - for every candidate in the present ML example each city has no more then 4 candidates reach though path cityLink with attribute *neighbors* equal True which are classification firestationCity.  
+    - _existsAL(firestationCity)_ -   
+    in the present ML example exists candidate with classification firestationCity,  
+    - _exactL(firestationCity, 2)_ -  
+    in the present ML example there are exactly 2 candidates with classification firestationCity,  
+    - _atLeastL(firestationCity, 4)_ -  
+    in the present ML example there are at least 4 candidates with classification firestationCity,  
+    - _atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ -  
+    for every candidate in the present ML example each city has no more then 4 candidates reach though path cityLink with attribute *neighbors* equal True which are classification firestationCity.  
 
 #### Candidate Selection
 
