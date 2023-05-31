@@ -15,12 +15,17 @@ class ProparaReader(RegrReader):
         function.
         """
         data = torch.load(self.file)
-        return list(data.values())
+        new_data = []
+        for key in data.keys():
+            val = data[key]
+            val['pid'] = key
+            new_data.append(val)
+        return list(new_data)
 
     def getProcedureIDval(self, item):
         # return [item["para_id"]]
         ### generate a random number and add to the following sample id
-        return [f"sample_id {random.randint(0, 1000)}"]
+        return [f"sample_id {item['pid']}"]
 
     def getEntitiesval(self, item):
         return [item['entities']]
@@ -38,10 +43,84 @@ class ProparaReader(RegrReader):
         return  sentences
     
     def getLocationsval(self, item):
-        return [item['loc_candidates']]
+        locations = []
+        for loc in item['loc_candidates']:
+            if 1 in loc:
+                loc.remove(1)
+            loc = [str(i) for i in loc]
+            loc = " ".join(loc)
+            # loc = int(loc)
+            locations.append(loc)
+        # for lid, loc in enumerate(locations):
+        #     f = str(int(loc))
+        #     if len(f) > 5:
+        #         reduce = -1
+        #         check = False
+        #         while True:
+        #             if not float(f[:reduce]) in locations:
+        #                 locations[lid] = float(f[:reduce])
+        #                 reduce -= 1
+        #                 check = True
+        #             else:
+        #                 break
+        assert len(locations) == len(set(locations))
+        return [locations]
+        # return [item['loc_candidates']]
     
     def getLocationval(self, item):
-        return item['loc_candidates']
+        locations = []
+        for loc in item['loc_candidates']:
+            if 1 in loc:
+                loc.remove(1)
+            loc = [str(i) for i in loc]
+            loc = " ".join(loc)
+            locations.append(loc)
+
+        # for lid, loc in enumerate(locations):
+        #     f = str(int(loc))
+        #     if len(f) > 5:
+        #         reduce = -1
+        #         check = False
+        #         while True:
+        #             if not float(f[:reduce]) in locations:
+        #                 locations[lid] = float(f[:reduce])
+        #                 reduce -= 1
+        #                 check = True
+        #             else:
+        #                 break
+        
+        return locations
+        # return item['loc_candidates']
+
+    # def getLocationMapval(self, item):
+    #     locations = {}
+    #     # locations_list = []
+    #     for loc in item['loc_candidates']:
+    #         if 1 in loc:
+    #             loc.remove(1)
+    #         loc = [str(i) for i in loc]
+    #         key = loc
+    #         loc = " ".join(loc)
+            # loc = float(loc)
+            # locations[loc] = key
+            # locations_list.append(loc)
+        # for lid, loc in enumerate(locations_list):
+        #     f = str(int(loc))
+        #     if len(f) > 5:
+        #         reduce = -1
+        #         check = False
+        #         while True:
+        #             if not float(f[:reduce]) in locations:
+        #                 locations[lid] = float(f[:reduce])
+        #                 reduce -= 1
+        #                 check = True
+        #             else:
+        #                 break
+        #         if check:
+        #             key = locations[loc]
+        #             locations.pop(loc)
+        #             locations[float(locations[lid])] = key
+        # return locations
     
     def getbeforeval(self, item):
         """
@@ -283,7 +362,10 @@ class ProparaReader(RegrReader):
             formatted_preds = []
             formatted_gt = []
             for sid, val in enumerate(predictions):
-                formatted_preds.append(val[0])
+                if not torch.is_tensor(val[0]):
+                    formatted_preds.append(torch.stack(val[0]))
+                else:
+                    formatted_preds.append(val[0])
                 if 'bool' in key:
                     tval = 0
                     if val[1] == 'yes':
@@ -298,10 +380,34 @@ class ProparaReader(RegrReader):
                 #     tval = _cand_list.index(val[1])
                 #     formatted_gt.append(tval)
                 else:
-                    formatted_gt.append(val[1])
-            all_decisions.append(torch.stack(formatted_preds))
+                    if "location" in key:
+                        answer = val[1]
+                        if 1 in answer:
+                            answer.remove(1)
+                        # if answer[0] == 3 and len(answer) > 1:
+                        #     answer = answer[1:]
+                        if answer[0] == 3 and len(answer) == 1:
+                            answer = [5839]
+                        # answer = [str(x) for x in answer]
+                        # answer = " ".join(answer)
+                        check = -1
+                        for lid, lcand in enumerate(item['loc_candidates']):
+                            if 1 in lcand:
+                                lcand.remove(1)
+                            if answer == lcand:
+                                check = lid
+                                break
+                        answer = check
+                        formatted_gt.append(answer)
+                    else:
+                        formatted_gt.append(val[1])
+            
+            all_decisions.append(torch.stack(self.process_prob_vectors(formatted_preds)))
             all_ground_truths.append(formatted_gt)
-        return torch.stack(all_decisions), torch.tensor(all_ground_truths)
+        # if "location" in key:
+        #     return torch.stack(all_decisions), all_ground_truths
+        # else:
+        return torch.stack(all_decisions), torch.tensor(all_ground_truths, dtype=torch.float32)
     
     def computer_single_probs(self, item, key):
         """
@@ -322,8 +428,8 @@ class ProparaReader(RegrReader):
             # if count != 0:
             #     break
             # count += 1
-            predictions = item['processed_probs'][eid][key]
-            all_decisions.append(predictions[0])
+            predictions = item['processed_probs'][eid][key]   
+            all_decisions.append(self.process_prob_vectors(predictions[0]))
             if 'input' in key or 'output' in key:
                 tval = 0
                 if predictions[1] == 'yes':
@@ -340,18 +446,60 @@ class ProparaReader(RegrReader):
                 all_ground_truths.append(predictions[1])
         return torch.stack(all_decisions), torch.tensor(all_ground_truths)
     
+    def process_prob_vectors(self, vectors):
+        final_vec = []
+        if torch.is_tensor(vectors):
+            vector = torch.clamp(vectors, min=1e-12, max=1 - 1e-12)
+            entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+            vector = (1/entropy.item()) * (vector/torch.mean(vector))
+            final_vec = vector
+        else:
+            for vector in vectors:
+                vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
+                entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+                vector = (1/entropy.item()) * (vector/torch.mean(vector))
+                final_vec.append(vector)
+        return final_vec
+
     def getSameMentionsval(self, item):
         entities = item['entities_tokens']
         location = item['loc_candidates']
         matchings = []
-        for eid, ent in enumerate(entities):
-            ### ent is a list of lists, we want to flattent the list here
-            ent = [_it for sublist in ent for _it in sublist]
-            ### Finding the indexes of location list, where its value is inside ent
-            loc_indexes = [location.index(_it) for _it in ent if _it in location]
-            for loc_index in loc_indexes:
-                if (eid, loc_index) not in matchings:
-                    matchings.append((eid, loc_index))
+        # for eid, ent in enumerate(entities):
+        #     ### ent is a list of lists, we want to flattent the list here
+        #     ent = [_it for sublist in ent for _it in sublist]
+        #     ### Finding the indexes of location list, where its value is inside ent
+        #     loc_indexes = [location.index(_it) for _it in ent if _it in location]
+        #     for loc_index in loc_indexes:
+        #         if (eid, loc_index) not in matchings:
+        #             matchings.append((eid, loc_index))
+        for lid, loc in enumerate(location):
+            ### Finding the indexes of entities list, where its value is inside location
+            if 1 in loc:
+                loc.remove(1)
+            check = False
+            for eid, ent in enumerate(entities):
+                if loc in ent:
+                    if (eid, lid) not in matchings:
+                        matchings.append((eid, lid))
+                        check = True
+                        break
+            # if not check:
+            #     ### check if location is part of any of these entities
+            #     ### find the largest match 
+            #     ### if it only matches one entity, then it is a match
+            #     matched = -1
+            #     for eid, ent in enumerate(entities):
+            #         for en in ent:
+            #             if set(loc).issubset(set(en)):
+            #                 if matched == -1:
+            #                     matched = eid
+            #                 else:
+            #                     matched = -1
+            #                     break
+            #     if matched != -1:
+            #         if (matched, lid) not in matchings:
+            #             matchings.append((matched, lid))
         ### matching is [(eid, loc_index), ...)], if the same `loc_index` is repeated for more than one eid, then the smallest matching should be selected
         # a = matchings.copy()
         # for match in a:

@@ -93,17 +93,31 @@ with Graph('global') as graph:
     #     )
     # )
 
+    ### the alone candidate "3" is never the answer of a location
+    forAllL(
+        combinationC(entity, step, location(path=eqL(location, 'text', {"3"})))('e', 'i', 'l'),
+        # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
+        notL(
+            entity_location_before_label('el1', path=(
+                                ("e", lentity.reversed),
+                                ("i", lstep.reversed),
+                                ("l", llocation.reversed)
+                )
+            )
+        ), active = Tested_Lc
+    )
+
     ### if entity is not input, there should exists at least one create event associated with it
     ifL(
         notL(input_entity('e')),
-        atLeastAL(
+        atLeastL(
             action_label.create('a', path=(('e', action_entity.reversed))), 1
         ), active = All_LC
     )
 
     ### if entity is input, the first state should not be `none`
     forAllL(
-        combinationC(entity, location(path=eqL(location, 'text', {5839, 150, 14794, 597, 1})))('e', 'l'),
+        combinationC(entity, location(path=eqL(location, 'text', {"5839", "150", "14794", "597", "1"})))('e', 'l'),
         # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
         ifL(
             #input_entity(path=('e')),
@@ -177,7 +191,7 @@ with Graph('global') as graph:
         ),
         entity_location_before_label('el1', path=(
                                 ("e", lentity.reversed),
-                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed),
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed),
                                 ("i", lstep.reversed)
                             )
         ), active = All_LC, name='checking_CL'
@@ -502,8 +516,6 @@ with Graph('global') as graph:
     )
 
     #  ------------ Move
-    # No subsequent move action unless there is a create action between them
-
     ifL(
         # action a1 is move, i is a1's step and e is action entity
         andL(
@@ -602,13 +614,47 @@ with Graph('global') as graph:
             action_label.move('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed)))
+            entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed)))
             ), 
-        andL(
-            step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
-            notL(entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
-        ), active = All_LC
+        notL(entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
+        , active = All_LC
     )
+    # forAllL(
+    #     combinationC(step, entity, location)('i', 'e', 'l'),
+    #     ifL(
+    #         andL(
+    #             action_label.move('a1', path=(
+    #                 ('i', action_step),
+    #                 ('e', action_entity)
+    #                 )),
+    #             entity_location_before_label('x', path=(
+    #                 ('i', lstep.reversed),
+    #                 ('e', lentity.reversed),
+    #                 ('l', llocation.reversed)
+    #                 ))
+    #         ),
+    #         notL(
+    #             entity_location_label('y', path=(
+    #                 ('i', lstep.reversed),
+    #                 ('e', lentity.reversed),
+    #                 ('l', llocation.reversed)
+    #                 ))
+    #         )
+    #     ), active = All_LC
+    # )
+
+    ### if action is exists, the location should not change
+    ifL(
+        andL(
+            action_label.exists('a1'),
+            step('i', path=('a1', action_step)),
+            entity('e', path=('a1', action_entity)),
+            entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed)))
+            ),
+        entity_location_label('y', path=(('i', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed)))
+    )
+
+    
     
     ### There can only be one location for each entity at each step
     forAllL(
@@ -673,14 +719,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -697,14 +743,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -721,14 +767,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 notL(entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -769,14 +815,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 notL(entity_location_before_label('el2', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -793,13 +839,13 @@ with Graph('global') as graph:
             andL(
                 entity_location_label('el1', path=(
                                 ("e", lentity.reversed),
-                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed), 
                                 ("i", lstep.reversed)
                             )
                 ),
                 entity_location_before_label('el2', path=(
                                 ("e", lentity.reversed),
-                                ("e", lentity.reversed, llocation, eqL(location, 'text', {5839}), llocation.reversed), 
+                                ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed), 
                                 ("i", lstep.reversed)
                             )
                 )
@@ -865,7 +911,7 @@ with Graph('global') as graph:
         notL(
             entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
@@ -881,7 +927,7 @@ with Graph('global') as graph:
         notL(
             entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {5839, 150, 14794, 597, 1}), llocation.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
@@ -970,16 +1016,18 @@ with Graph('global') as graph:
     #         )
     #     ), active = Tested_Lc
     # )
-    # forAllL(
-    #     combinationC(same_mention, step)('sm1', 'i'),
-    #     notL(
-    #         entity_location_label('el1', path=(
-    #             ("sm1", same_entity, lentity.reversed),
-    #             ("sm1", same_location, llocation.reversed),
-    #             ("i", lstep.reversed)
-    #         ))
-    #     ), active = Tested_Lc
-    # )
+
+    forAllL(
+        combinationC(same_mention, step)('sm1', 'i'),
+        notL(
+            entity_location_label('el1', path=(
+                ("sm1", same_entity, lentity.reversed),
+                ("sm1", same_location, llocation.reversed),
+                ("i", lstep.reversed)
+            ))
+        ), active = Tested_Lc
+    )
+
     ### this has a problem, for instance carbon can be inside carbon-based mixture
 
     ### if the location of entity `e` is `l` which matches another entity `e1`, then the entity `e1` should exist
@@ -995,7 +1043,7 @@ with Graph('global') as graph:
                 existsL(
                     same_mention('sm1', path=(("el1", llocation, same_location.reversed)))
                 ),
-                atLeastAL(
+                atLeastL(
                     after_existence('a1', path=("el1", llocation, same_location.reversed, same_entity, action_entity.reversed, eqL(action_step, "i"))), 1
                 )
             )  
@@ -1085,7 +1133,7 @@ with Graph('global') as graph:
     atLeastAL(input_entity('e'), active = All_LC)
 
     ### At least one output should exist
-    atLeastAL(output_entity('e'), active = All_LC)
+    # atLeastAL(output_entity('e'), active = All_LC)
 
     # graph.visualize("./image")
 

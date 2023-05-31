@@ -1,0 +1,4528 @@
+{
+    "level1": {
+        "vehicle": {
+            "precision_ilp": 0.7526881720430108,
+            "recall_ilp": 0.7094594594594594,
+            "f1_ilp": 0.7304347826086955,
+            "precision_normal": 0.7006369426751592,
+            "recall_normal": 0.7432432432432432,
+            "f1_normal": 0.721311475409836,
+            "support": 296
+        },
+        "phone": {
+            "precision_ilp": 0.07692307692307693,
+            "recall_ilp": 0.1111111111111111,
+            "f1_ilp": 0.09090909090909093,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 9
+        },
+        "cell phone": {
+            "precision_ilp": 0.23529411764705882,
+            "recall_ilp": 0.21052631578947367,
+            "f1_ilp": 0.2222222222222222,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.10526315789473684,
+            "f1_normal": 0.16,
+            "support": 19
+        },
+        "foot": {
+            "precision_ilp": 0.5217391304347826,
+            "recall_ilp": 0.2926829268292683,
+            "f1_ilp": 0.375,
+            "precision_normal": 0.4375,
+            "recall_normal": 0.34146341463414637,
+            "f1_normal": 0.3835616438356165,
+            "support": 41
+        },
+        "shoes": {
+            "precision_ilp": 0.54,
+            "recall_ilp": 0.5869565217391305,
+            "f1_ilp": 0.5625000000000001,
+            "precision_normal": 0.5343511450381679,
+            "recall_normal": 0.7608695652173914,
+            "f1_normal": 0.6278026905829597,
+            "support": 92
+        },
+        "home plate": {
+            "precision_ilp": 0.6,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.6666666666666665,
+            "precision_normal": 0.75,
+            "recall_normal": 0.75,
+            "f1_normal": 0.75,
+            "support": 4
+        },
+        "food": {
+            "precision_ilp": 0.6705607476635514,
+            "recall_ilp": 0.7435233160621761,
+            "f1_ilp": 0.705159705159705,
+            "precision_normal": 0.6444444444444445,
+            "recall_normal": 0.7512953367875648,
+            "f1_normal": 0.6937799043062202,
+            "support": 386
+        },
+        "room": {
+            "precision_ilp": 0.6330275229357798,
+            "recall_ilp": 0.6133333333333333,
+            "f1_ilp": 0.6230248306997742,
+            "precision_normal": 0.6018957345971564,
+            "recall_normal": 0.5644444444444444,
+            "f1_normal": 0.5825688073394495,
+            "support": 225
+        },
+        "paper": {
+            "precision_ilp": 0.5121951219512195,
+            "recall_ilp": 0.4117647058823529,
+            "f1_ilp": 0.4565217391304348,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5686274509803921,
+            "f1_normal": 0.5321100917431193,
+            "support": 51
+        },
+        "person": {
+            "precision_ilp": 0.7678855325914149,
+            "recall_ilp": 0.8076923076923077,
+            "f1_ilp": 0.7872860635696822,
+            "precision_normal": 0.7140845070422536,
+            "recall_normal": 0.8478260869565217,
+            "f1_normal": 0.7752293577981652,
+            "support": 598
+        },
+        "entrance": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.06666666666666667,
+            "f1_normal": 0.1111111111111111,
+            "support": 15
+        },
+        "barrier": {
+            "precision_ilp": 0.5980707395498392,
+            "recall_ilp": 0.6348122866894198,
+            "f1_ilp": 0.6158940397350994,
+            "precision_normal": 0.5454545454545454,
+            "recall_normal": 0.6348122866894198,
+            "f1_normal": 0.5867507886435331,
+            "support": 293
+        },
+        "container": {
+            "precision_ilp": 0.5895522388059702,
+            "recall_ilp": 0.43646408839779005,
+            "f1_ilp": 0.5015873015873016,
+            "precision_normal": 0.4521276595744681,
+            "recall_normal": 0.4696132596685083,
+            "f1_normal": 0.46070460704607047,
+            "support": 181
+        },
+        "leg": {
+            "precision_ilp": 0.6071428571428571,
+            "recall_ilp": 0.8252427184466019,
+            "f1_ilp": 0.6995884773662551,
+            "precision_normal": 0.7297297297297297,
+            "recall_normal": 0.7864077669902912,
+            "f1_normal": 0.7570093457943925,
+            "support": 103
+        },
+        "air": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 14
+        },
+        "sky": {
+            "precision_ilp": 0.6397058823529411,
+            "recall_ilp": 0.8446601941747572,
+            "f1_ilp": 0.7280334728033472,
+            "precision_normal": 0.6825396825396826,
+            "recall_normal": 0.8349514563106796,
+            "f1_normal": 0.7510917030567686,
+            "support": 103
+        },
+        "wrist": {
+            "precision_ilp": 0.3235294117647059,
+            "recall_ilp": 0.6111111111111112,
+            "f1_ilp": 0.42307692307692313,
+            "precision_normal": 0.5333333333333333,
+            "recall_normal": 0.4444444444444444,
+            "f1_normal": 0.4848484848484848,
+            "support": 18
+        },
+        "wristband": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 6
+        },
+        "mountains": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.25,
+            "recall_normal": 0.5,
+            "f1_normal": 0.3333333333333333,
+            "support": 6
+        },
+        "book": {
+            "precision_ilp": 0.5765765765765766,
+            "recall_ilp": 0.7272727272727273,
+            "f1_ilp": 0.6432160804020101,
+            "precision_normal": 0.5403726708074534,
+            "recall_normal": 0.7414772727272727,
+            "f1_normal": 0.6251497005988024,
+            "support": 352
+        },
+        "trees": {
+            "precision_ilp": 0.358695652173913,
+            "recall_ilp": 0.44594594594594594,
+            "f1_ilp": 0.3975903614457832,
+            "precision_normal": 0.42857142857142855,
+            "recall_normal": 0.40540540540540543,
+            "f1_normal": 0.4166666666666667,
+            "support": 74
+        },
+        "sign": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.3851851851851852,
+            "f1_ilp": 0.488262910798122,
+            "precision_normal": 0.5534591194968553,
+            "recall_normal": 0.6518518518518519,
+            "f1_normal": 0.598639455782313,
+            "support": 135
+        },
+        "hair": {
+            "precision_ilp": 0.7202380952380952,
+            "recall_ilp": 0.6173469387755102,
+            "f1_ilp": 0.6648351648351647,
+            "precision_normal": 0.6702702702702703,
+            "recall_normal": 0.6326530612244898,
+            "f1_normal": 0.6509186351706037,
+            "support": 196
+        },
+        "clothes": {
+            "precision_ilp": 0.6391304347826087,
+            "recall_ilp": 0.7461928934010152,
+            "f1_ilp": 0.6885245901639344,
+            "precision_normal": 0.5905511811023622,
+            "recall_normal": 0.7614213197969543,
+            "f1_normal": 0.6651884700665188,
+            "support": 197
+        },
+        "animal": {
+            "precision_ilp": 0.7244094488188977,
+            "recall_ilp": 0.6865671641791045,
+            "f1_ilp": 0.7049808429118773,
+            "precision_normal": 0.6715328467153284,
+            "recall_normal": 0.6865671641791045,
+            "f1_normal": 0.6789667896678967,
+            "support": 134
+        },
+        "tail": {
+            "precision_ilp": 0.696969696969697,
+            "recall_ilp": 0.40350877192982454,
+            "f1_ilp": 0.5111111111111111,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.49122807017543857,
+            "f1_normal": 0.5656565656565656,
+            "support": 57
+        },
+        "stone": {
+            "precision_ilp": 0.631578947368421,
+            "recall_ilp": 0.38095238095238093,
+            "f1_ilp": 0.4752475247524752,
+            "precision_normal": 0.5714285714285714,
+            "recall_normal": 0.5079365079365079,
+            "f1_normal": 0.5378151260504201,
+            "support": 63
+        },
+        "building": {
+            "precision_ilp": 0.7129629629629629,
+            "recall_ilp": 0.5703703703703704,
+            "f1_ilp": 0.6337448559670783,
+            "precision_normal": 0.5621301775147929,
+            "recall_normal": 0.7037037037037037,
+            "f1_normal": 0.625,
+            "support": 135
+        },
+        "platform": {
+            "precision_ilp": 0.5797101449275363,
+            "recall_ilp": 0.5755395683453237,
+            "f1_ilp": 0.5776173285198557,
+            "precision_normal": 0.551948051948052,
+            "recall_normal": 0.6115107913669064,
+            "f1_normal": 0.5802047781569966,
+            "support": 139
+        },
+        "shelf": {
+            "precision_ilp": 0.7,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.3684210526315789,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.35714285714285715,
+            "f1_normal": 0.43478260869565216,
+            "support": 28
+        },
+        "shelves": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "glasses": {
+            "precision_ilp": 0.7391304347826086,
+            "recall_ilp": 0.4857142857142857,
+            "f1_ilp": 0.5862068965517241,
+            "precision_normal": 0.6428571428571429,
+            "recall_normal": 0.5142857142857142,
+            "f1_normal": 0.5714285714285714,
+            "support": 35
+        },
+        "display": {
+            "precision_ilp": 0.7151515151515152,
+            "recall_ilp": 0.7866666666666666,
+            "f1_ilp": 0.7492063492063492,
+            "precision_normal": 0.6923076923076923,
+            "recall_normal": 0.78,
+            "f1_normal": 0.7335423197492164,
+            "support": 300
+        },
+        "plants": {
+            "precision_ilp": 0.14285714285714285,
+            "recall_ilp": 0.04,
+            "f1_ilp": 0.0625,
+            "precision_normal": 0.09090909090909091,
+            "recall_normal": 0.04,
+            "f1_normal": 0.05555555555555555,
+            "support": 25
+        },
+        "sink": {
+            "precision_ilp": 0.47619047619047616,
+            "recall_ilp": 0.47619047619047616,
+            "f1_ilp": 0.47619047619047616,
+            "precision_normal": 0.625,
+            "recall_normal": 0.47619047619047616,
+            "f1_normal": 0.5405405405405405,
+            "support": 21
+        },
+        "sticker": {
+            "precision_ilp": 0.1111111111111111,
+            "recall_ilp": 0.2222222222222222,
+            "f1_ilp": 0.14814814814814814,
+            "precision_normal": 0.2,
+            "recall_normal": 0.2222222222222222,
+            "f1_normal": 0.2105263157894737,
+            "support": 9
+        },
+        "label": {
+            "precision_ilp": 0.5714285714285714,
+            "recall_ilp": 0.26666666666666666,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0.4166666666666667,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.3703703703703704,
+            "support": 15
+        },
+        "license plate": {
+            "precision_ilp": 0.35294117647058826,
+            "recall_ilp": 0.8571428571428571,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.4166666666666667,
+            "recall_normal": 0.7142857142857143,
+            "f1_normal": 0.5263157894736842,
+            "support": 7
+        },
+        "street light": {
+            "precision_ilp": 0.28125,
+            "recall_ilp": 0.47368421052631576,
+            "f1_ilp": 0.35294117647058826,
+            "precision_normal": 0.3,
+            "recall_normal": 0.3157894736842105,
+            "f1_normal": 0.3076923076923077,
+            "support": 19
+        },
+        "pole": {
+            "precision_ilp": 0.46511627906976744,
+            "recall_ilp": 0.7476635514018691,
+            "f1_ilp": 0.5734767025089605,
+            "precision_normal": 0.5777777777777777,
+            "recall_normal": 0.7289719626168224,
+            "f1_normal": 0.6446280991735536,
+            "support": 107
+        },
+        "eye": {
+            "precision_ilp": 0.7,
+            "recall_ilp": 0.84,
+            "f1_ilp": 0.7636363636363636,
+            "precision_normal": 0.7411764705882353,
+            "recall_normal": 0.84,
+            "f1_normal": 0.7875000000000001,
+            "support": 75
+        },
+        "flowers": {
+            "precision_ilp": 0.45161290322580644,
+            "recall_ilp": 0.5185185185185185,
+            "f1_ilp": 0.48275862068965514,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.37037037037037035,
+            "f1_normal": 0.4444444444444445,
+            "support": 27
+        },
+        "blanket": {
+            "precision_ilp": 0.2631578947368421,
+            "recall_ilp": 0.3125,
+            "f1_ilp": 0.2857142857142857,
+            "precision_normal": 0.4166666666666667,
+            "recall_normal": 0.3125,
+            "f1_normal": 0.35714285714285715,
+            "support": 16
+        },
+        "toy": {
+            "precision_ilp": 0.6617647058823529,
+            "recall_ilp": 0.4838709677419355,
+            "f1_ilp": 0.5590062111801243,
+            "precision_normal": 0.671875,
+            "recall_normal": 0.46236559139784944,
+            "f1_normal": 0.5477707006369426,
+            "support": 93
+        },
+        "pants": {
+            "precision_ilp": 0.8387096774193549,
+            "recall_ilp": 0.8227848101265823,
+            "f1_ilp": 0.8306709265175719,
+            "precision_normal": 0.7828571428571428,
+            "recall_normal": 0.8670886075949367,
+            "f1_normal": 0.8228228228228229,
+            "support": 158
+        },
+        "number": {
+            "precision_ilp": 0.3484848484848485,
+            "recall_ilp": 0.5348837209302325,
+            "f1_ilp": 0.4220183486238532,
+            "precision_normal": 0.47619047619047616,
+            "recall_normal": 0.46511627906976744,
+            "f1_normal": 0.4705882352941176,
+            "support": 43
+        },
+        "symbol": {
+            "precision_ilp": 0.6496350364963503,
+            "recall_ilp": 0.52046783625731,
+            "f1_ilp": 0.577922077922078,
+            "precision_normal": 0.5625,
+            "recall_normal": 0.5789473684210527,
+            "f1_normal": 0.5706051873198847,
+            "support": 171
+        },
+        "pillows": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.3333333333333333,
+            "support": 3
+        },
+        "pillow": {
+            "precision_ilp": 0.5142857142857142,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.6101694915254237,
+            "precision_normal": 0.6071428571428571,
+            "recall_normal": 0.7083333333333334,
+            "f1_normal": 0.6538461538461539,
+            "support": 24
+        },
+        "arm": {
+            "precision_ilp": 0.40963855421686746,
+            "recall_ilp": 0.6415094339622641,
+            "f1_ilp": 0.4999999999999999,
+            "precision_normal": 0.5263157894736842,
+            "recall_normal": 0.5660377358490566,
+            "f1_normal": 0.5454545454545455,
+            "support": 53
+        },
+        "rocks": {
+            "precision_ilp": 0.23333333333333334,
+            "recall_ilp": 0.4375,
+            "f1_ilp": 0.3043478260869565,
+            "precision_normal": 0.4166666666666667,
+            "recall_normal": 0.3125,
+            "f1_normal": 0.35714285714285715,
+            "support": 16
+        },
+        "crust": {
+            "precision_ilp": 0.625,
+            "recall_ilp": 0.5645161290322581,
+            "f1_ilp": 0.5932203389830509,
+            "precision_normal": 0.6440677966101694,
+            "recall_normal": 0.6129032258064516,
+            "f1_normal": 0.628099173553719,
+            "support": 62
+        },
+        "keyboard": {
+            "precision_ilp": 0.4166666666666667,
+            "recall_ilp": 0.625,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.625,
+            "recall_normal": 0.625,
+            "f1_normal": 0.625,
+            "support": 8
+        },
+        "remote control": {
+            "precision_ilp": 0.18181818181818182,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.25000000000000006,
+            "precision_normal": 0.5,
+            "recall_normal": 0.4,
+            "f1_normal": 0.4444444444444445,
+            "support": 5
+        },
+        "canopy": {
+            "precision_ilp": 0.7083333333333334,
+            "recall_ilp": 0.6071428571428571,
+            "f1_ilp": 0.6538461538461539,
+            "precision_normal": 0.5862068965517241,
+            "recall_normal": 0.6071428571428571,
+            "f1_normal": 0.5964912280701754,
+            "support": 28
+        },
+        "couple": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.20000000000000004,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "ground": {
+            "precision_ilp": 0.49206349206349204,
+            "recall_ilp": 0.2012987012987013,
+            "f1_ilp": 0.2857142857142857,
+            "precision_normal": 0.4566929133858268,
+            "recall_normal": 0.37662337662337664,
+            "f1_normal": 0.4128113879003559,
+            "support": 154
+        },
+        "leaves": {
+            "precision_ilp": 0.4943820224719101,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.4971751412429378,
+            "precision_normal": 0.6,
+            "recall_normal": 0.4431818181818182,
+            "f1_normal": 0.5098039215686274,
+            "support": 88
+        },
+        "road": {
+            "precision_ilp": 0.5416666666666666,
+            "recall_ilp": 0.6842105263157895,
+            "f1_ilp": 0.6046511627906976,
+            "precision_normal": 0.5,
+            "recall_normal": 0.7368421052631579,
+            "f1_normal": 0.5957446808510638,
+            "support": 57
+        },
+        "logo": {
+            "precision_ilp": 0.23636363636363636,
+            "recall_ilp": 0.35135135135135137,
+            "f1_ilp": 0.28260869565217395,
+            "precision_normal": 0.3,
+            "recall_normal": 0.24324324324324326,
+            "f1_normal": 0.26865671641791045,
+            "support": 37
+        },
+        "neck": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.5925925925925926,
+            "f1_ilp": 0.627450980392157,
+            "precision_normal": 0.6190476190476191,
+            "recall_normal": 0.48148148148148145,
+            "f1_normal": 0.5416666666666666,
+            "support": 27
+        },
+        "necklace": {
+            "precision_ilp": 0.875,
+            "recall_ilp": 0.4666666666666667,
+            "f1_ilp": 0.608695652173913,
+            "precision_normal": 0.5384615384615384,
+            "recall_normal": 0.4666666666666667,
+            "f1_normal": 0.5,
+            "support": 15
+        },
+        "carpet": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.1111111111111111,
+            "f1_ilp": 0.15384615384615383,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 9
+        },
+        "snowboard": {
+            "precision_ilp": 0.42857142857142855,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.4615384615384615,
+            "precision_normal": 0.6,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5454545454545454,
+            "support": 6
+        },
+        "faucet": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.7777777777777778,
+            "f1_ilp": 0.4666666666666666,
+            "precision_normal": 0.4375,
+            "recall_normal": 0.7777777777777778,
+            "f1_normal": 0.56,
+            "support": 9
+        },
+        "wheel": {
+            "precision_ilp": 0.8854166666666666,
+            "recall_ilp": 0.8173076923076923,
+            "f1_ilp": 0.85,
+            "precision_normal": 0.7777777777777778,
+            "recall_normal": 0.875,
+            "f1_normal": 0.823529411764706,
+            "support": 104
+        },
+        "hat": {
+            "precision_ilp": 0.6896551724137931,
+            "recall_ilp": 0.6896551724137931,
+            "f1_ilp": 0.6896551724137931,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.7241379310344828,
+            "f1_normal": 0.6942148760330579,
+            "support": 116
+        },
+        "mouth": {
+            "precision_ilp": 0.375,
+            "recall_ilp": 0.625,
+            "f1_ilp": 0.46875,
+            "precision_normal": 0.46875,
+            "recall_normal": 0.625,
+            "f1_normal": 0.5357142857142857,
+            "support": 24
+        },
+        "lamp": {
+            "precision_ilp": 0.7692307692307693,
+            "recall_ilp": 0.37037037037037035,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.5714285714285714,
+            "recall_normal": 0.4444444444444444,
+            "f1_normal": 0.5,
+            "support": 27
+        },
+        "traffic light": {
+            "precision_ilp": 0.23809523809523808,
+            "recall_ilp": 0.35714285714285715,
+            "f1_ilp": 0.2857142857142857,
+            "precision_normal": 0.2777777777777778,
+            "recall_normal": 0.35714285714285715,
+            "f1_normal": 0.31250000000000006,
+            "support": 14
+        },
+        "rope": {
+            "precision_ilp": 0.6956521739130435,
+            "recall_ilp": 0.5333333333333333,
+            "f1_ilp": 0.6037735849056605,
+            "precision_normal": 0.4857142857142857,
+            "recall_normal": 0.5666666666666667,
+            "f1_normal": 0.523076923076923,
+            "support": 30
+        },
+        "tower": {
+            "precision_ilp": 0.26666666666666666,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.30769230769230765,
+            "support": 7
+        },
+        "hand": {
+            "precision_ilp": 0.6164383561643836,
+            "recall_ilp": 0.38461538461538464,
+            "f1_ilp": 0.4736842105263158,
+            "precision_normal": 0.4602272727272727,
+            "recall_normal": 0.6923076923076923,
+            "f1_normal": 0.552901023890785,
+            "support": 117
+        },
+        "napkin": {
+            "precision_ilp": 0.0625,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.1,
+            "precision_normal": 0.25,
+            "recall_normal": 0.25,
+            "f1_normal": 0.25,
+            "support": 4
+        },
+        "computer": {
+            "precision_ilp": 0.75,
+            "recall_ilp": 0.3,
+            "f1_ilp": 0.4285714285714285,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.4,
+            "f1_normal": 0.5,
+            "support": 10
+        },
+        "wire": {
+            "precision_ilp": 0.1,
+            "recall_ilp": 0.07142857142857142,
+            "f1_ilp": 0.08333333333333333,
+            "precision_normal": 0.25,
+            "recall_normal": 0.07142857142857142,
+            "f1_normal": 0.11111111111111112,
+            "support": 14
+        },
+        "seat": {
+            "precision_ilp": 0.536,
+            "recall_ilp": 0.43506493506493504,
+            "f1_ilp": 0.4802867383512545,
+            "precision_normal": 0.45098039215686275,
+            "recall_normal": 0.44805194805194803,
+            "f1_normal": 0.44951140065146583,
+            "support": 154
+        },
+        "apron": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.5,
+            "f1_normal": 0.4,
+            "support": 2
+        },
+        "dress": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.2222222222222222,
+            "f1_ilp": 0.26666666666666666,
+            "precision_normal": 0.35714285714285715,
+            "recall_normal": 0.2777777777777778,
+            "f1_normal": 0.31250000000000006,
+            "support": 18
+        },
+        "sock": {
+            "precision_ilp": 0.8095238095238095,
+            "recall_ilp": 0.8095238095238095,
+            "f1_ilp": 0.8095238095238095,
+            "precision_normal": 0.8095238095238095,
+            "recall_normal": 0.8095238095238095,
+            "f1_normal": 0.8095238095238095,
+            "support": 21
+        },
+        "microwave": {
+            "precision_ilp": 0.5454545454545454,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.631578947368421,
+            "precision_normal": 0.8571428571428571,
+            "recall_normal": 0.75,
+            "f1_normal": 0.7999999999999999,
+            "support": 8
+        },
+        "beer": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "bottles": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "wires": {
+            "precision_ilp": 0.1,
+            "recall_ilp": 0.09090909090909091,
+            "f1_ilp": 0.09523809523809525,
+            "precision_normal": 0.14285714285714285,
+            "recall_normal": 0.09090909090909091,
+            "f1_normal": 0.1111111111111111,
+            "support": 11
+        },
+        "hook": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.6666666666666666,
+            "support": 3
+        },
+        "people": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.11428571428571428,
+            "f1_ilp": 0.17777777777777776,
+            "precision_normal": 0.3684210526315789,
+            "recall_normal": 0.2,
+            "f1_normal": 0.25925925925925924,
+            "support": 70
+        },
+        "skier": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "wing": {
+            "precision_ilp": 0.5588235294117647,
+            "recall_ilp": 0.7037037037037037,
+            "f1_ilp": 0.6229508196721312,
+            "precision_normal": 0.6551724137931034,
+            "recall_normal": 0.7037037037037037,
+            "f1_normal": 0.6785714285714286,
+            "support": 27
+        },
+        "windows": {
+            "precision_ilp": 0.32558139534883723,
+            "recall_ilp": 0.3783783783783784,
+            "f1_ilp": 0.35000000000000003,
+            "precision_normal": 0.32,
+            "recall_normal": 0.21621621621621623,
+            "f1_normal": 0.25806451612903225,
+            "support": 37
+        },
+        "step": {
+            "precision_ilp": 0.1111111111111111,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.15384615384615383,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.25,
+            "f1_normal": 0.28571428571428575,
+            "support": 4
+        },
+        "post": {
+            "precision_ilp": 0.15384615384615385,
+            "recall_ilp": 0.08,
+            "f1_ilp": 0.10526315789473685,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 25
+        },
+        "clock": {
+            "precision_ilp": 0.6176470588235294,
+            "recall_ilp": 0.6363636363636364,
+            "f1_ilp": 0.6268656716417911,
+            "precision_normal": 0.5,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.5714285714285715,
+            "support": 33
+        },
+        "parking lot": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "hands": {
+            "precision_ilp": 0.19047619047619047,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.24242424242424246,
+            "precision_normal": 0.25,
+            "recall_normal": 0.08333333333333333,
+            "f1_normal": 0.125,
+            "support": 12
+        },
+        "wings": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 6
+        },
+        "clouds": {
+            "precision_ilp": 0.41379310344827586,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.48000000000000004,
+            "precision_normal": 0.4772727272727273,
+            "recall_normal": 0.5,
+            "f1_normal": 0.48837209302325585,
+            "support": 42
+        },
+        "catcher": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.6666666666666666,
+            "support": 3
+        },
+        "bed": {
+            "precision_ilp": 0.5294117647058824,
+            "recall_ilp": 0.45,
+            "f1_ilp": 0.48648648648648646,
+            "precision_normal": 0.55,
+            "recall_normal": 0.55,
+            "f1_normal": 0.55,
+            "support": 20
+        },
+        "glove": {
+            "precision_ilp": 0.24444444444444444,
+            "recall_ilp": 0.8461538461538461,
+            "f1_ilp": 0.37931034482758624,
+            "precision_normal": 0.3888888888888889,
+            "recall_normal": 0.5384615384615384,
+            "f1_normal": 0.45161290322580644,
+            "support": 13
+        },
+        "star": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.09090909090909091,
+            "f1_ilp": 0.16666666666666669,
+            "precision_normal": 0.75,
+            "recall_normal": 0.2727272727272727,
+            "f1_normal": 0.39999999999999997,
+            "support": 11
+        },
+        "field": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.10526315789473684,
+            "f1_ilp": 0.11428571428571428,
+            "precision_normal": 0.14285714285714285,
+            "recall_normal": 0.05263157894736842,
+            "f1_normal": 0.07692307692307693,
+            "support": 19
+        },
+        "chairs": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.16666666666666666,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.25,
+            "f1_normal": 0.28571428571428575,
+            "support": 4
+        },
+        "roof": {
+            "precision_ilp": 0.34545454545454546,
+            "recall_ilp": 0.5428571428571428,
+            "f1_ilp": 0.4222222222222222,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5142857142857142,
+            "f1_normal": 0.5070422535211268,
+            "support": 35
+        },
+        "trash can": {
+            "precision_ilp": 0.11764705882352941,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.19047619047619047,
+            "precision_normal": 0.2,
+            "recall_normal": 0.5,
+            "f1_normal": 0.28571428571428575,
+            "support": 4
+        },
+        "bush": {
+            "precision_ilp": 0.36363636363636365,
+            "recall_ilp": 0.32,
+            "f1_ilp": 0.3404255319148936,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.2,
+            "f1_normal": 0.25,
+            "support": 25
+        },
+        "branch": {
+            "precision_ilp": 0.09523809523809523,
+            "recall_ilp": 0.13333333333333333,
+            "f1_ilp": 0.1111111111111111,
+            "precision_normal": 0.10526315789473684,
+            "recall_normal": 0.13333333333333333,
+            "f1_normal": 0.11764705882352941,
+            "support": 15
+        },
+        "ski": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.4,
+            "f1_normal": 0.5,
+            "support": 5
+        },
+        "legs": {
+            "precision_ilp": 0.55,
+            "recall_ilp": 0.44,
+            "f1_ilp": 0.48888888888888893,
+            "precision_normal": 0.6875,
+            "recall_normal": 0.44,
+            "f1_normal": 0.5365853658536586,
+            "support": 25
+        },
+        "cone": {
+            "precision_ilp": 0.45454545454545453,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.47619047619047616,
+            "precision_normal": 0.5714285714285714,
+            "recall_normal": 0.4,
+            "f1_normal": 0.47058823529411764,
+            "support": 10
+        },
+        "sneakers": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 13
+        },
+        "forest": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "outlet": {
+            "precision_ilp": 0.42105263157894735,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.48484848484848486,
+            "precision_normal": 0.5384615384615384,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5185185185185186,
+            "support": 14
+        },
+        "eyes": {
+            "precision_ilp": 0.6428571428571429,
+            "recall_ilp": 0.6923076923076923,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.6153846153846154,
+            "f1_normal": 0.64,
+            "support": 13
+        },
+        "cloud": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.03571428571428571,
+            "f1_ilp": 0.06451612903225806,
+            "precision_normal": 0.47058823529411764,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.35555555555555557,
+            "support": 28
+        },
+        "socks": {
+            "precision_ilp": 0.625,
+            "recall_ilp": 0.45454545454545453,
+            "f1_ilp": 0.5263157894736842,
+            "precision_normal": 0.625,
+            "recall_normal": 0.45454545454545453,
+            "f1_normal": 0.5263157894736842,
+            "support": 11
+        },
+        "arrow": {
+            "precision_ilp": 0.2857142857142857,
+            "recall_ilp": 0.5454545454545454,
+            "f1_ilp": 0.37499999999999994,
+            "precision_normal": 0.5,
+            "recall_normal": 0.45454545454545453,
+            "f1_normal": 0.47619047619047616,
+            "support": 11
+        },
+        "ears": {
+            "precision_ilp": 0.7272727272727273,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.6956521739130435,
+            "precision_normal": 0.8,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.7272727272727272,
+            "support": 12
+        },
+        "trash": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 6
+        },
+        "walkway": {
+            "precision_ilp": 0.45714285714285713,
+            "recall_ilp": 0.34782608695652173,
+            "f1_ilp": 0.3950617283950617,
+            "precision_normal": 0.48484848484848486,
+            "recall_normal": 0.34782608695652173,
+            "f1_normal": 0.4050632911392405,
+            "support": 46
+        },
+        "wheels": {
+            "precision_ilp": 0.2608695652173913,
+            "recall_ilp": 0.42857142857142855,
+            "f1_ilp": 0.3243243243243243,
+            "precision_normal": 0.5,
+            "recall_normal": 0.35714285714285715,
+            "f1_normal": 0.41666666666666663,
+            "support": 14
+        },
+        "train tracks": {
+            "precision_ilp": 0.15384615384615385,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.25,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.36363636363636365,
+            "support": 3
+        },
+        "blinds": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.33333333333333337,
+            "precision_normal": 0.2,
+            "recall_normal": 1.0,
+            "f1_normal": 0.33333333333333337,
+            "support": 1
+        },
+        "tank top": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "tennis ball": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "cars": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.45454545454545453,
+            "f1_ilp": 0.47619047619047616,
+            "precision_normal": 0.8,
+            "recall_normal": 0.36363636363636365,
+            "f1_normal": 0.5000000000000001,
+            "support": 11
+        },
+        "train car": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "surfboard": {
+            "precision_ilp": 0.45,
+            "recall_ilp": 0.6923076923076923,
+            "f1_ilp": 0.5454545454545455,
+            "precision_normal": 0.6923076923076923,
+            "recall_normal": 0.6923076923076923,
+            "f1_normal": 0.6923076923076923,
+            "support": 13
+        },
+        "baseball bat": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "buildings": {
+            "precision_ilp": 0.26666666666666666,
+            "recall_ilp": 0.26666666666666666,
+            "f1_ilp": 0.26666666666666666,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.2,
+            "f1_normal": 0.25,
+            "support": 15
+        },
+        "camera": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.15384615384615385,
+            "precision_normal": 0.4,
+            "recall_normal": 0.2,
+            "f1_normal": 0.26666666666666666,
+            "support": 10
+        },
+        "doors": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 8
+        },
+        "burner": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "net": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5714285714285715,
+            "support": 8
+        },
+        "lid": {
+            "precision_ilp": 0.2631578947368421,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.3448275862068966,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.3,
+            "f1_normal": 0.3157894736842105,
+            "support": 10
+        },
+        "statue": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "belt": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.6363636363636364,
+            "f1_ilp": 0.56,
+            "precision_normal": 0.6,
+            "recall_normal": 0.5454545454545454,
+            "f1_normal": 0.5714285714285713,
+            "support": 11
+        },
+        "skis": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.7142857142857143,
+            "f1_ilp": 0.4545454545454545,
+            "precision_normal": 0.45454545454545453,
+            "recall_normal": 0.7142857142857143,
+            "f1_normal": 0.5555555555555556,
+            "support": 7
+        },
+        "mask": {
+            "precision_ilp": 0.75,
+            "recall_ilp": 0.42857142857142855,
+            "f1_ilp": 0.5454545454545454,
+            "precision_normal": 1.0,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.4444444444444445,
+            "support": 7
+        },
+        "suit": {
+            "precision_ilp": 0.4444444444444444,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.4210526315789474,
+            "precision_normal": 0.6,
+            "recall_normal": 0.3,
+            "f1_normal": 0.4,
+            "support": 10
+        },
+        "topping": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.5,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "apples": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.6153846153846153,
+            "precision_normal": 0.75,
+            "recall_normal": 0.42857142857142855,
+            "f1_normal": 0.5454545454545454,
+            "support": 7
+        },
+        "wine glass": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "books": {
+            "precision_ilp": 0.5384615384615384,
+            "recall_ilp": 0.6363636363636364,
+            "f1_ilp": 0.5833333333333334,
+            "precision_normal": 0.8,
+            "recall_normal": 0.36363636363636365,
+            "f1_normal": 0.5000000000000001,
+            "support": 11
+        },
+        "birds": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "straw": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "utensil": {
+            "precision_ilp": 0.14285714285714285,
+            "recall_ilp": 0.1111111111111111,
+            "f1_ilp": 0.125,
+            "precision_normal": 0.125,
+            "recall_normal": 0.1111111111111111,
+            "f1_normal": 0.11764705882352941,
+            "support": 9
+        },
+        "tray": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.2,
+            "precision_normal": 0.5,
+            "recall_normal": 0.125,
+            "f1_normal": 0.2,
+            "support": 8
+        },
+        "fork": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.36363636363636365,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.34782608695652173,
+            "support": 12
+        },
+        "sweater": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.07142857142857142,
+            "f1_ilp": 0.13333333333333333,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 14
+        },
+        "sail": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.28571428571428575,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.2,
+            "f1_normal": 0.30769230769230765,
+            "support": 10
+        },
+        "stairs": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.13333333333333333,
+            "f1_ilp": 0.2,
+            "precision_normal": 0.14285714285714285,
+            "recall_normal": 0.06666666666666667,
+            "f1_normal": 0.09090909090909091,
+            "support": 15
+        },
+        "racket": {
+            "precision_ilp": 0.6071428571428571,
+            "recall_ilp": 0.9444444444444444,
+            "f1_ilp": 0.7391304347826088,
+            "precision_normal": 0.8095238095238095,
+            "recall_normal": 0.9444444444444444,
+            "f1_normal": 0.8717948717948718,
+            "support": 18
+        },
+        "houses": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3636363636363636,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 6
+        },
+        "liquid": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.1875,
+            "f1_ilp": 0.2727272727272727,
+            "precision_normal": 0.5,
+            "recall_normal": 0.125,
+            "f1_normal": 0.2,
+            "support": 32
+        },
+        "tires": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.5,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "crowd": {
+            "precision_ilp": 0.14285714285714285,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.22222222222222224,
+            "precision_normal": 0.2727272727272727,
+            "recall_normal": 0.5,
+            "f1_normal": 0.3529411764705882,
+            "support": 6
+        },
+        "collar": {
+            "precision_ilp": 0.4375,
+            "recall_ilp": 0.5833333333333334,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.5833333333333334,
+            "recall_normal": 0.5833333333333334,
+            "f1_normal": 0.5833333333333334,
+            "support": 12
+        },
+        "spots": {
+            "precision_ilp": 0.6923076923076923,
+            "recall_ilp": 0.5625,
+            "f1_ilp": 0.6206896551724138,
+            "precision_normal": 0.8,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6153846153846154,
+            "support": 16
+        },
+        "luggage": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.6666666666666666,
+            "support": 3
+        },
+        "word": {
+            "precision_ilp": 0.56,
+            "recall_ilp": 0.2857142857142857,
+            "f1_ilp": 0.37837837837837834,
+            "precision_normal": 0.625,
+            "recall_normal": 0.30612244897959184,
+            "f1_normal": 0.4109589041095891,
+            "support": 49
+        },
+        "path": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 10
+        },
+        "magnet": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "street sign": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.25,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "t-shirt": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 10
+        },
+        "umbrellas": {
+            "precision_ilp": 0.6,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5454545454545454,
+            "precision_normal": 1.0,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.5,
+            "support": 6
+        },
+        "scarf": {
+            "precision_ilp": 0.2857142857142857,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.26666666666666666,
+            "precision_normal": 0.4,
+            "recall_normal": 0.25,
+            "f1_normal": 0.3076923076923077,
+            "support": 8
+        },
+        "nightstand": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.5,
+            "precision_normal": 1.0,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.5,
+            "support": 3
+        },
+        "kites": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.8,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5,
+            "support": 2
+        },
+        "feet": {
+            "precision_ilp": 0.1111111111111111,
+            "recall_ilp": 0.1,
+            "f1_ilp": 0.10526315789473685,
+            "precision_normal": 0.25,
+            "recall_normal": 0.05,
+            "f1_normal": 0.08333333333333334,
+            "support": 20
+        },
+        "outfit": {
+            "precision_ilp": 0.625,
+            "recall_ilp": 0.3125,
+            "f1_ilp": 0.4166666666666667,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.3125,
+            "f1_normal": 0.39999999999999997,
+            "support": 16
+        },
+        "vest": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "propeller": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.2857142857142857,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 1.0,
+            "f1_normal": 0.5,
+            "support": 1
+        },
+        "spectator": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "picture": {
+            "precision_ilp": 0.84,
+            "recall_ilp": 0.39622641509433965,
+            "f1_ilp": 0.5384615384615384,
+            "precision_normal": 0.6363636363636364,
+            "recall_normal": 0.39622641509433965,
+            "f1_normal": 0.48837209302325585,
+            "support": 53
+        },
+        "ceiling": {
+            "precision_ilp": 0.38461538461538464,
+            "recall_ilp": 0.7142857142857143,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.45454545454545453,
+            "recall_normal": 0.7142857142857143,
+            "f1_normal": 0.5555555555555556,
+            "support": 14
+        },
+        "wetsuit": {
+            "precision_ilp": 0.5454545454545454,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.631578947368421,
+            "precision_normal": 0.6,
+            "recall_normal": 0.75,
+            "f1_normal": 0.6666666666666665,
+            "support": 8
+        },
+        "boots": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3636363636363636,
+            "precision_normal": 1.0,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.5,
+            "support": 6
+        },
+        "cabinets": {
+            "precision_ilp": 0.2857142857142857,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.30769230769230765,
+            "precision_normal": 0.2857142857142857,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.30769230769230765,
+            "support": 6
+        },
+        "countertop": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "graffiti": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "decoration": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "scissors": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "refrigerator": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.2222222222222222,
+            "f1_ilp": 0.2105263157894737,
+            "precision_normal": 0.2857142857142857,
+            "recall_normal": 0.2222222222222222,
+            "f1_normal": 0.25,
+            "support": 9
+        },
+        "power lines": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.4,
+            "f1_normal": 0.5,
+            "support": 5
+        },
+        "finger": {
+            "precision_ilp": 0.8181818181818182,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.6206896551724137,
+            "precision_normal": 0.45454545454545453,
+            "recall_normal": 0.5555555555555556,
+            "f1_normal": 0.5,
+            "support": 18
+        },
+        "tree trunk": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.14285714285714285,
+            "f1_ilp": 0.18181818181818182,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 7
+        },
+        "bananas": {
+            "precision_ilp": 0.35,
+            "recall_ilp": 0.5833333333333334,
+            "f1_ilp": 0.4375,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5833333333333334,
+            "f1_normal": 0.5384615384615384,
+            "support": 12
+        },
+        "bracelet": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.25,
+            "recall_normal": 0.1111111111111111,
+            "f1_normal": 0.15384615384615383,
+            "support": 9
+        },
+        "television": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.375,
+            "f1_ilp": 0.5454545454545454,
+            "precision_normal": 0.6,
+            "recall_normal": 0.375,
+            "f1_normal": 0.4615384615384615,
+            "support": 8
+        },
+        "spectators": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.2222222222222222,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "telephone pole": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "stop sign": {
+            "precision_ilp": 0.3,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.37499999999999994,
+            "precision_normal": 0.75,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6,
+            "support": 6
+        },
+        "controller": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.2,
+            "precision_normal": 0.25,
+            "recall_normal": 0.5,
+            "f1_normal": 0.3333333333333333,
+            "support": 2
+        },
+        "tiles": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.22222222222222224,
+            "precision_normal": 0.25,
+            "recall_normal": 0.25,
+            "f1_normal": 0.25,
+            "support": 4
+        },
+        "towels": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "paint": {
+            "precision_ilp": 0.08333333333333333,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.1111111111111111,
+            "precision_normal": 0.25,
+            "recall_normal": 0.16666666666666666,
+            "f1_normal": 0.2,
+            "support": 6
+        },
+        "branches": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.0625,
+            "f1_ilp": 0.11764705882352941,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 16
+        },
+        "mountain": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3,
+            "f1_ilp": 0.3157894736842105,
+            "precision_normal": 0.375,
+            "recall_normal": 0.3,
+            "f1_normal": 0.33333333333333326,
+            "support": 10
+        },
+        "light bulb": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "crosswalk": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 1.0,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6666666666666666,
+            "support": 2
+        },
+        "tablecloth": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.14285714285714285,
+            "f1_ilp": 0.16666666666666666,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.14285714285714285,
+            "f1_normal": 0.2,
+            "support": 7
+        },
+        "umpire": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.28571428571428575,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "pen": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "sweatshirt": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "stick": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 6
+        },
+        "flags": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "stove": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.1111111111111111,
+            "f1_ilp": 0.1818181818181818,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.1111111111111111,
+            "f1_normal": 0.16666666666666666,
+            "support": 9
+        },
+        "earring": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 1.0,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6666666666666666,
+            "support": 4
+        },
+        "surfer": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "teeth": {
+            "precision_ilp": 0.8571428571428571,
+            "recall_ilp": 0.5454545454545454,
+            "f1_ilp": 0.6666666666666665,
+            "precision_normal": 0.8571428571428571,
+            "recall_normal": 0.5454545454545454,
+            "f1_normal": 0.6666666666666665,
+            "support": 11
+        },
+        "hay": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "knife": {
+            "precision_ilp": 0.3076923076923077,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.380952380952381,
+            "precision_normal": 0.4444444444444444,
+            "recall_normal": 0.5,
+            "f1_normal": 0.47058823529411764,
+            "support": 8
+        },
+        "toilet paper": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.4,
+            "precision_normal": 1.0,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6666666666666666,
+            "support": 4
+        },
+        "horns": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "horn": {
+            "precision_ilp": 0.4166666666666667,
+            "recall_ilp": 0.625,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.625,
+            "f1_normal": 0.5882352941176471,
+            "support": 8
+        },
+        "chimney": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.8,
+            "f1_ilp": 0.7272727272727272,
+            "precision_normal": 1.0,
+            "recall_normal": 0.8,
+            "f1_normal": 0.888888888888889,
+            "support": 5
+        },
+        "store": {
+            "precision_ilp": 0.18181818181818182,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.25000000000000006,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.2,
+            "f1_normal": 0.25,
+            "support": 5
+        },
+        "feathers": {
+            "precision_ilp": 0.14285714285714285,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.18181818181818182,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.25,
+            "f1_normal": 0.28571428571428575,
+            "support": 4
+        },
+        "walls": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "bathtub": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.42857142857142855,
+            "precision_normal": 0.5,
+            "recall_normal": 0.6,
+            "f1_normal": 0.5454545454545454,
+            "support": 5
+        },
+        "fire hydrant": {
+            "precision_ilp": 0.7272727272727273,
+            "recall_ilp": 0.8,
+            "f1_ilp": 0.761904761904762,
+            "precision_normal": 1.0,
+            "recall_normal": 0.8,
+            "f1_normal": 0.888888888888889,
+            "support": 10
+        },
+        "icing": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.25,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 6
+        },
+        "men": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "american flag": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "tent": {
+            "precision_ilp": 0.3,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.4285714285714285,
+            "precision_normal": 0.4,
+            "recall_normal": 0.5,
+            "f1_normal": 0.4444444444444445,
+            "support": 4
+        },
+        "hillside": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "mound": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.5,
+            "recall_normal": 1.0,
+            "f1_normal": 0.6666666666666666,
+            "support": 1
+        },
+        "towel": {
+            "precision_ilp": 0.4444444444444444,
+            "recall_ilp": 0.47058823529411764,
+            "f1_ilp": 0.45714285714285713,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.29411764705882354,
+            "f1_normal": 0.3846153846153846,
+            "support": 17
+        },
+        "moss": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "oranges": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.25,
+            "f1_normal": 0.3333333333333333,
+            "support": 4
+        },
+        "headboard": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 1.0,
+            "f1_normal": 0.5,
+            "support": 1
+        },
+        "sandals": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "boats": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "coffee table": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "shore": {
+            "precision_ilp": 0.6923076923076923,
+            "recall_ilp": 0.6923076923076923,
+            "f1_ilp": 0.6923076923076923,
+            "precision_normal": 0.6111111111111112,
+            "recall_normal": 0.8461538461538461,
+            "f1_normal": 0.7096774193548387,
+            "support": 13
+        },
+        "fingers": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.2857142857142857,
+            "f1_ilp": 0.2105263157894737,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 7
+        },
+        "arms": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.5,
+            "recall_normal": 0.25,
+            "f1_normal": 0.3333333333333333,
+            "support": 4
+        },
+        "lips": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.28571428571428575,
+            "precision_normal": 0.5,
+            "recall_normal": 0.25,
+            "f1_normal": 0.3333333333333333,
+            "support": 4
+        },
+        "bricks": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.1,
+            "f1_ilp": 0.13333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.1,
+            "f1_normal": 0.16666666666666669,
+            "support": 10
+        },
+        "plates": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "bags": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "soap": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "vehicles": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "log": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "airport": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 3
+        },
+        "pavement": {
+            "precision_ilp": 0.09090909090909091,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.11764705882352942,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 6
+        },
+        "station": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.28571428571428575,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.5,
+            "f1_normal": 0.4,
+            "support": 2
+        },
+        "curtains": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.5,
+            "precision_normal": 1.0,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.5,
+            "support": 3
+        },
+        "computer mouse": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.6,
+            "precision_normal": 0.7142857142857143,
+            "recall_normal": 0.625,
+            "f1_normal": 0.6666666666666666,
+            "support": 8
+        },
+        "park": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.25,
+            "recall_normal": 0.5,
+            "f1_normal": 0.3333333333333333,
+            "support": 2
+        },
+        "river": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.30769230769230765,
+            "precision_normal": 0.5,
+            "recall_normal": 0.2,
+            "f1_normal": 0.28571428571428575,
+            "support": 10
+        },
+        "tree branch": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "light switch": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0.2,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.25,
+            "support": 3
+        },
+        "fence post": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "light fixture": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "tape": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "children": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "cross": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 1.0,
+            "recall_normal": 0.25,
+            "f1_normal": 0.4,
+            "support": 4
+        },
+        "power line": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "speaker": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 3
+        },
+        "lake": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "batter": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.28571428571428575,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "stones": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "boxes": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "paws": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "hose": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 3
+        },
+        "cows": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "mustache": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 3
+        },
+        "donuts": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "tongue": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "drawers": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "hills": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "papers": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "total": {
+            "level_precision": 0.5574944183704575,
+            "level_recall": 0.5817500000000003,
+            "level_f1": 0.5599879240357832,
+            "level_precision_ilp": 0.5808150448349686,
+            "level_recall_ilp": 0.5641250000000004,
+            "level_f1_ilp": 0.5566934553098414,
+            "support": 8000
+        }
+    },
+    "level2": {
+        "bus": {
+            "precision_ilp": 0.6451612903225806,
+            "recall_ilp": 0.6451612903225806,
+            "f1_ilp": 0.6451612903225806,
+            "precision_normal": 0.8571428571428571,
+            "recall_normal": 0.5806451612903226,
+            "f1_normal": 0.6923076923076923,
+            "support": 31
+        },
+        "vegetable": {
+            "precision_ilp": 0.5081967213114754,
+            "recall_ilp": 0.62,
+            "f1_ilp": 0.5585585585585586,
+            "precision_normal": 0.5370370370370371,
+            "recall_normal": 0.58,
+            "f1_normal": 0.5576923076923077,
+            "support": 50
+        },
+        "toilet": {
+            "precision_ilp": 0.680327868852459,
+            "recall_ilp": 0.6587301587301587,
+            "f1_ilp": 0.6693548387096775,
+            "precision_normal": 0.6990291262135923,
+            "recall_normal": 0.5714285714285714,
+            "f1_normal": 0.62882096069869,
+            "support": 126
+        },
+        "shoe": {
+            "precision_ilp": 0.34408602150537637,
+            "recall_ilp": 0.6274509803921569,
+            "f1_ilp": 0.4444444444444445,
+            "precision_normal": 0.6,
+            "recall_normal": 0.4117647058823529,
+            "f1_normal": 0.4883720930232558,
+            "support": 51
+        },
+        "sheet": {
+            "precision_ilp": 0.4782608695652174,
+            "recall_ilp": 0.5945945945945946,
+            "f1_ilp": 0.5301204819277109,
+            "precision_normal": 0.5428571428571428,
+            "recall_normal": 0.5135135135135135,
+            "f1_normal": 0.5277777777777778,
+            "support": 37
+        },
+        "child": {
+            "precision_ilp": 0.40425531914893614,
+            "recall_ilp": 0.4810126582278481,
+            "f1_ilp": 0.4393063583815029,
+            "precision_normal": 0.5319148936170213,
+            "recall_normal": 0.31645569620253167,
+            "f1_normal": 0.39682539682539686,
+            "support": 79
+        },
+        "woman": {
+            "precision_ilp": 0.45454545454545453,
+            "recall_ilp": 0.3431372549019608,
+            "f1_ilp": 0.3910614525139665,
+            "precision_normal": 0.4473684210526316,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.38202247191011235,
+            "support": 102
+        },
+        "doorway": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 7
+        },
+        "fence": {
+            "precision_ilp": 0.5720164609053497,
+            "recall_ilp": 0.6495327102803738,
+            "f1_ilp": 0.6083150984682714,
+            "precision_normal": 0.6387434554973822,
+            "recall_normal": 0.5700934579439252,
+            "f1_normal": 0.6024691358024691,
+            "support": 214
+        },
+        "drawer": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5714285714285715,
+            "precision_normal": 0.7777777777777778,
+            "recall_normal": 0.5833333333333334,
+            "f1_normal": 0.6666666666666666,
+            "support": 12
+        },
+        "floor": {
+            "precision_ilp": 0.5352112676056338,
+            "recall_ilp": 0.6440677966101694,
+            "f1_ilp": 0.5846153846153846,
+            "precision_normal": 0.6101694915254238,
+            "recall_normal": 0.6101694915254238,
+            "f1_normal": 0.6101694915254238,
+            "support": 59
+        },
+        "bicycle": {
+            "precision_ilp": 0.5833333333333334,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5384615384615384,
+            "precision_normal": 0.7368421052631579,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5957446808510638,
+            "support": 28
+        },
+        "man": {
+            "precision_ilp": 0.5280898876404494,
+            "recall_ilp": 0.6380090497737556,
+            "f1_ilp": 0.5778688524590163,
+            "precision_normal": 0.569620253164557,
+            "recall_normal": 0.6108597285067874,
+            "f1_normal": 0.5895196506550219,
+            "support": 221
+        },
+        "poster": {
+            "precision_ilp": 0.01282051282051282,
+            "recall_ilp": 0.125,
+            "f1_ilp": 0.02325581395348837,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 8
+        },
+        "coat": {
+            "precision_ilp": 0.5625,
+            "recall_ilp": 0.5555555555555556,
+            "f1_ilp": 0.5590062111801242,
+            "precision_normal": 0.6557377049180327,
+            "recall_normal": 0.49382716049382713,
+            "f1_normal": 0.5633802816901409,
+            "support": 81
+        },
+        "shirt": {
+            "precision_ilp": 0.6457399103139013,
+            "recall_ilp": 0.7955801104972375,
+            "f1_ilp": 0.712871287128713,
+            "precision_normal": 0.6419213973799127,
+            "recall_normal": 0.8121546961325967,
+            "f1_normal": 0.7170731707317074,
+            "support": 181
+        },
+        "dog": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.47368421052631576,
+            "f1_ilp": 0.4864864864864865,
+            "precision_normal": 0.625,
+            "recall_normal": 0.5263157894736842,
+            "f1_normal": 0.5714285714285714,
+            "support": 19
+        },
+        "flag": {
+            "precision_ilp": 0.09375,
+            "recall_ilp": 0.21428571428571427,
+            "f1_ilp": 0.13043478260869562,
+            "precision_normal": 0.2857142857142857,
+            "recall_normal": 0.14285714285714285,
+            "f1_normal": 0.19047619047619047,
+            "support": 14
+        },
+        "house": {
+            "precision_ilp": 0.08256880733944955,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.14173228346456695,
+            "precision_normal": 0.25,
+            "recall_normal": 0.05555555555555555,
+            "f1_normal": 0.0909090909090909,
+            "support": 18
+        },
+        "table": {
+            "precision_ilp": 0.5905511811023622,
+            "recall_ilp": 0.6756756756756757,
+            "f1_ilp": 0.630252100840336,
+            "precision_normal": 0.6507936507936508,
+            "recall_normal": 0.7387387387387387,
+            "f1_normal": 0.6919831223628692,
+            "support": 111
+        },
+        "eye glasses": {
+            "precision_ilp": 0.07692307692307693,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.125,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "window": {
+            "precision_ilp": 0.6885245901639344,
+            "recall_ilp": 0.7865168539325843,
+            "f1_ilp": 0.7342657342657343,
+            "precision_normal": 0.7282608695652174,
+            "recall_normal": 0.7528089887640449,
+            "f1_normal": 0.7403314917127071,
+            "support": 267
+        },
+        "bathroom": {
+            "precision_ilp": 0.21428571428571427,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.3,
+            "precision_normal": 0.3,
+            "recall_normal": 0.5,
+            "f1_normal": 0.37499999999999994,
+            "support": 6
+        },
+        "plant": {
+            "precision_ilp": 0.5610859728506787,
+            "recall_ilp": 0.7492447129909365,
+            "f1_ilp": 0.6416558861578266,
+            "precision_normal": 0.6115942028985507,
+            "recall_normal": 0.6374622356495468,
+            "f1_normal": 0.6242603550295858,
+            "support": 331
+        },
+        "bushes": {
+            "precision_ilp": 0.14285714285714285,
+            "recall_ilp": 0.06666666666666667,
+            "f1_ilp": 0.09090909090909091,
+            "precision_normal": 0.5,
+            "recall_normal": 0.06666666666666667,
+            "f1_normal": 0.11764705882352941,
+            "support": 15
+        },
+        "basket": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.3,
+            "f1_ilp": 0.2727272727272727,
+            "precision_normal": 0.4,
+            "recall_normal": 0.2,
+            "f1_normal": 0.26666666666666666,
+            "support": 10
+        },
+        "tag": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.5,
+            "recall_normal": 0.25,
+            "f1_normal": 0.3333333333333333,
+            "support": 8
+        },
+        "ball": {
+            "precision_ilp": 0.5833333333333334,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.4242424242424242,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4444444444444444,
+            "support": 42
+        },
+        "cup": {
+            "precision_ilp": 0.15625,
+            "recall_ilp": 0.45454545454545453,
+            "f1_ilp": 0.2325581395348837,
+            "precision_normal": 0.3076923076923077,
+            "recall_normal": 0.36363636363636365,
+            "f1_normal": 0.33333333333333337,
+            "support": 11
+        },
+        "door": {
+            "precision_ilp": 0.4852941176470588,
+            "recall_ilp": 0.515625,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.625,
+            "recall_normal": 0.46875,
+            "f1_normal": 0.5357142857142857,
+            "support": 64
+        },
+        "car": {
+            "precision_ilp": 0.704225352112676,
+            "recall_ilp": 0.6024096385542169,
+            "f1_ilp": 0.6493506493506493,
+            "precision_normal": 0.6626506024096386,
+            "recall_normal": 0.6626506024096386,
+            "f1_normal": 0.6626506024096386,
+            "support": 83
+        },
+        "shorts": {
+            "precision_ilp": 0.5789473684210527,
+            "recall_ilp": 0.8,
+            "f1_ilp": 0.6717557251908397,
+            "precision_normal": 0.78,
+            "recall_normal": 0.7090909090909091,
+            "f1_normal": 0.7428571428571428,
+            "support": 55
+        },
+        "letter": {
+            "precision_ilp": 0.5102040816326531,
+            "recall_ilp": 0.5681818181818182,
+            "f1_ilp": 0.5376344086021506,
+            "precision_normal": 0.6578947368421053,
+            "recall_normal": 0.5681818181818182,
+            "f1_normal": 0.6097560975609756,
+            "support": 44
+        },
+        "glass": {
+            "precision_ilp": 0.5483870967741935,
+            "recall_ilp": 0.425,
+            "f1_ilp": 0.47887323943661964,
+            "precision_normal": 0.43902439024390244,
+            "recall_normal": 0.45,
+            "f1_normal": 0.4444444444444445,
+            "support": 40
+        },
+        "kitchen": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.2857142857142857,
+            "f1_ilp": 0.26666666666666666,
+            "precision_normal": 0.4,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.3333333333333333,
+            "support": 7
+        },
+        "horse": {
+            "precision_ilp": 0.8055555555555556,
+            "recall_ilp": 0.6744186046511628,
+            "f1_ilp": 0.7341772151898734,
+            "precision_normal": 0.8333333333333334,
+            "recall_normal": 0.6976744186046512,
+            "f1_normal": 0.759493670886076,
+            "support": 43
+        },
+        "plate": {
+            "precision_ilp": 0.631578947368421,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.6153846153846154,
+            "precision_normal": 0.6363636363636364,
+            "recall_normal": 0.5833333333333334,
+            "f1_normal": 0.6086956521739131,
+            "support": 60
+        },
+        "umbrella": {
+            "precision_ilp": 0.7083333333333334,
+            "recall_ilp": 0.6296296296296297,
+            "f1_ilp": 0.6666666666666667,
+            "precision_normal": 0.8,
+            "recall_normal": 0.5925925925925926,
+            "f1_normal": 0.6808510638297872,
+            "support": 27
+        },
+        "street": {
+            "precision_ilp": 0.2222222222222222,
+            "recall_ilp": 0.5925925925925926,
+            "f1_ilp": 0.3232323232323232,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.07407407407407407,
+            "f1_normal": 0.12121212121212122,
+            "support": 27
+        },
+        "train": {
+            "precision_ilp": 0.43478260869565216,
+            "recall_ilp": 0.5882352941176471,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.625,
+            "recall_normal": 0.5882352941176471,
+            "f1_normal": 0.6060606060606061,
+            "support": 17
+        },
+        "rock": {
+            "precision_ilp": 0.6585365853658537,
+            "recall_ilp": 0.47368421052631576,
+            "f1_ilp": 0.5510204081632653,
+            "precision_normal": 0.7096774193548387,
+            "recall_normal": 0.38596491228070173,
+            "f1_normal": 0.4999999999999999,
+            "support": 57
+        },
+        "jeans": {
+            "precision_ilp": 0.275,
+            "recall_ilp": 0.7586206896551724,
+            "f1_ilp": 0.40366972477064217,
+            "precision_normal": 0.5925925925925926,
+            "recall_normal": 0.5517241379310345,
+            "f1_normal": 0.5714285714285714,
+            "support": 29
+        },
+        "tire": {
+            "precision_ilp": 0.38144329896907214,
+            "recall_ilp": 0.925,
+            "f1_ilp": 0.5401459854014599,
+            "precision_normal": 0.46153846153846156,
+            "recall_normal": 0.3,
+            "f1_normal": 0.3636363636363637,
+            "support": 40
+        },
+        "cap": {
+            "precision_ilp": 0.26666666666666666,
+            "recall_ilp": 0.45714285714285713,
+            "f1_ilp": 0.3368421052631579,
+            "precision_normal": 0.6,
+            "recall_normal": 0.17142857142857143,
+            "f1_normal": 0.26666666666666666,
+            "support": 35
+        },
+        "water": {
+            "precision_ilp": 0.580952380952381,
+            "recall_ilp": 0.6354166666666666,
+            "f1_ilp": 0.6069651741293532,
+            "precision_normal": 0.6451612903225806,
+            "recall_normal": 0.625,
+            "f1_normal": 0.634920634920635,
+            "support": 96
+        },
+        "fruit": {
+            "precision_ilp": 0.6153846153846154,
+            "recall_ilp": 0.7901234567901234,
+            "f1_ilp": 0.6918918918918919,
+            "precision_normal": 0.6344086021505376,
+            "recall_normal": 0.7283950617283951,
+            "f1_normal": 0.6781609195402298,
+            "support": 81
+        },
+        "nose": {
+            "precision_ilp": 0.6984126984126984,
+            "recall_ilp": 0.5432098765432098,
+            "f1_ilp": 0.611111111111111,
+            "precision_normal": 0.7368421052631579,
+            "recall_normal": 0.5185185185185185,
+            "f1_normal": 0.6086956521739131,
+            "support": 81
+        },
+        "skateboard": {
+            "precision_ilp": 0.7692307692307693,
+            "recall_ilp": 0.5882352941176471,
+            "f1_ilp": 0.6666666666666667,
+            "precision_normal": 0.8,
+            "recall_normal": 0.47058823529411764,
+            "f1_normal": 0.5925925925925927,
+            "support": 17
+        },
+        "gloves": {
+            "precision_ilp": 0.1,
+            "recall_ilp": 0.1111111111111111,
+            "f1_ilp": 0.10526315789473685,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 9
+        },
+        "cord": {
+            "precision_ilp": 0.6521739130434783,
+            "recall_ilp": 0.5769230769230769,
+            "f1_ilp": 0.6122448979591837,
+            "precision_normal": 0.7222222222222222,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5909090909090908,
+            "support": 26
+        },
+        "giraffe": {
+            "precision_ilp": 0.7894736842105263,
+            "recall_ilp": 0.6521739130434783,
+            "f1_ilp": 0.7142857142857143,
+            "precision_normal": 0.7894736842105263,
+            "recall_normal": 0.6521739130434783,
+            "f1_normal": 0.7142857142857143,
+            "support": 23
+        },
+        "cart": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "bench": {
+            "precision_ilp": 0.22807017543859648,
+            "recall_ilp": 0.41935483870967744,
+            "f1_ilp": 0.29545454545454547,
+            "precision_normal": 0.5789473684210527,
+            "recall_normal": 0.3548387096774194,
+            "f1_normal": 0.44000000000000006,
+            "support": 31
+        },
+        "skirt": {
+            "precision_ilp": 0.08333333333333333,
+            "recall_ilp": 0.14285714285714285,
+            "f1_ilp": 0.10526315789473685,
+            "precision_normal": 0.25,
+            "recall_normal": 0.14285714285714285,
+            "f1_normal": 0.18181818181818182,
+            "support": 7
+        },
+        "city": {
+            "precision_ilp": 0.11764705882352941,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.19047619047619047,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5714285714285715,
+            "support": 4
+        },
+        "box": {
+            "precision_ilp": 0.38235294117647056,
+            "recall_ilp": 0.28888888888888886,
+            "f1_ilp": 0.3291139240506329,
+            "precision_normal": 0.4782608695652174,
+            "recall_normal": 0.24444444444444444,
+            "f1_normal": 0.32352941176470584,
+            "support": 45
+        },
+        "helmet": {
+            "precision_ilp": 0.3269230769230769,
+            "recall_ilp": 0.6296296296296297,
+            "f1_ilp": 0.430379746835443,
+            "precision_normal": 0.4358974358974359,
+            "recall_normal": 0.6296296296296297,
+            "f1_normal": 0.5151515151515151,
+            "support": 27
+        },
+        "sand": {
+            "precision_ilp": 0.10909090909090909,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.1791044776119403,
+            "precision_normal": 0.4444444444444444,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.380952380952381,
+            "support": 12
+        },
+        "donut": {
+            "precision_ilp": 0.07142857142857142,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.11764705882352941,
+            "precision_normal": 0.05263157894736842,
+            "recall_normal": 0.16666666666666666,
+            "f1_normal": 0.08,
+            "support": 6
+        },
+        "kite": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 0.7894736842105263,
+            "recall_normal": 0.7142857142857143,
+            "f1_normal": 0.7500000000000001,
+            "support": 21
+        },
+        "letters": {
+            "precision_ilp": 0.2777777777777778,
+            "recall_ilp": 0.22727272727272727,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.4,
+            "recall_normal": 0.09090909090909091,
+            "f1_normal": 0.14814814814814814,
+            "support": 22
+        },
+        "bag": {
+            "precision_ilp": 0.5757575757575758,
+            "recall_ilp": 0.3392857142857143,
+            "f1_ilp": 0.4269662921348315,
+            "precision_normal": 0.59375,
+            "recall_normal": 0.3392857142857143,
+            "f1_normal": 0.4318181818181819,
+            "support": 56
+        },
+        "mane": {
+            "precision_ilp": 0.10344827586206896,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.18181818181818182,
+            "precision_normal": 0.5,
+            "recall_normal": 0.75,
+            "f1_normal": 0.6,
+            "support": 8
+        },
+        "watch": {
+            "precision_ilp": 0.08571428571428572,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.13636363636363638,
+            "precision_normal": 0.5,
+            "recall_normal": 0.2222222222222222,
+            "f1_normal": 0.30769230769230765,
+            "support": 9
+        },
+        "truck": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.2777777777777778,
+            "f1_ilp": 0.303030303030303,
+            "precision_normal": 0.4,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.3636363636363636,
+            "support": 18
+        },
+        "fan": {
+            "precision_ilp": 0.0136986301369863,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.02564102564102564,
+            "precision_normal": 1.0,
+            "recall_normal": 0.2,
+            "f1_normal": 0.33333333333333337,
+            "support": 5
+        },
+        "banana": {
+            "precision_ilp": 0.1643835616438356,
+            "recall_ilp": 0.631578947368421,
+            "f1_ilp": 0.2608695652173913,
+            "precision_normal": 0.6875,
+            "recall_normal": 0.5789473684210527,
+            "f1_normal": 0.6285714285714286,
+            "support": 19
+        },
+        "pocket": {
+            "precision_ilp": 0.19047619047619047,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.2857142857142857,
+            "precision_normal": 0.5714285714285714,
+            "recall_normal": 0.5714285714285714,
+            "f1_normal": 0.5714285714285714,
+            "support": 7
+        },
+        "elephant": {
+            "precision_ilp": 0.7142857142857143,
+            "recall_ilp": 0.7894736842105263,
+            "f1_ilp": 0.7500000000000001,
+            "precision_normal": 0.7894736842105263,
+            "recall_normal": 0.7894736842105263,
+            "f1_normal": 0.7894736842105263,
+            "support": 19
+        },
+        "airplane": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.6086956521739131,
+            "f1_ilp": 0.7567567567567568,
+            "precision_normal": 1.0,
+            "recall_normal": 0.6086956521739131,
+            "f1_normal": 0.7567567567567568,
+            "support": 23
+        },
+        "face": {
+            "precision_ilp": 0.21951219512195122,
+            "recall_ilp": 0.43902439024390244,
+            "f1_ilp": 0.2926829268292683,
+            "precision_normal": 0.6206896551724138,
+            "recall_normal": 0.43902439024390244,
+            "f1_normal": 0.5142857142857142,
+            "support": 41
+        },
+        "couch": {
+            "precision_ilp": 0.2777777777777778,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.35714285714285715,
+            "precision_normal": 0.36363636363636365,
+            "recall_normal": 0.4,
+            "f1_normal": 0.380952380952381,
+            "support": 10
+        },
+        "gate": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 7
+        },
+        "curtain": {
+            "precision_ilp": 0.4166666666666667,
+            "recall_ilp": 0.4166666666666667,
+            "f1_ilp": 0.4166666666666667,
+            "precision_normal": 0.45454545454545453,
+            "recall_normal": 0.4166666666666667,
+            "f1_normal": 0.43478260869565216,
+            "support": 12
+        },
+        "pot": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.25,
+            "f1_normal": 0.28571428571428575,
+            "support": 8
+        },
+        "numbers": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 9
+        },
+        "bucket": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 8
+        },
+        "player": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.4117647058823529,
+            "f1_ilp": 0.45161290322580644,
+            "precision_normal": 0.46153846153846156,
+            "recall_normal": 0.35294117647058826,
+            "f1_normal": 0.4000000000000001,
+            "support": 17
+        },
+        "hill": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.0625,
+            "f1_ilp": 0.08333333333333333,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 16
+        },
+        "chair": {
+            "precision_ilp": 0.7222222222222222,
+            "recall_ilp": 0.5306122448979592,
+            "f1_ilp": 0.611764705882353,
+            "precision_normal": 0.627906976744186,
+            "recall_normal": 0.5510204081632653,
+            "f1_normal": 0.5869565217391305,
+            "support": 49
+        },
+        "balcony": {
+            "precision_ilp": 0.6363636363636364,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.56,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.42857142857142855,
+            "f1_normal": 0.5217391304347826,
+            "support": 14
+        },
+        "bookshelf": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.33333333333333337,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "pipe": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.2,
+            "f1_normal": 0.25,
+            "support": 10
+        },
+        "beard": {
+            "precision_ilp": 0.1388888888888889,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.2173913043478261,
+            "precision_normal": 1.0,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6666666666666666,
+            "support": 10
+        },
+        "sidewalk": {
+            "precision_ilp": 0.42857142857142855,
+            "recall_ilp": 0.35714285714285715,
+            "f1_ilp": 0.38961038961038963,
+            "precision_normal": 0.6190476190476191,
+            "recall_normal": 0.30952380952380953,
+            "f1_normal": 0.41269841269841273,
+            "support": 42
+        },
+        "bread": {
+            "precision_ilp": 0.1111111111111111,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.13333333333333333,
+            "precision_normal": 0.25,
+            "recall_normal": 0.16666666666666666,
+            "f1_normal": 0.2,
+            "support": 12
+        },
+        "egg": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "bottle": {
+            "precision_ilp": 0.6,
+            "recall_ilp": 0.375,
+            "f1_ilp": 0.4615384615384615,
+            "precision_normal": 0.55,
+            "recall_normal": 0.4583333333333333,
+            "f1_normal": 0.5,
+            "support": 24
+        },
+        "dock": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.2222222222222222,
+            "f1_ilp": 0.23529411764705882,
+            "precision_normal": 1.0,
+            "recall_normal": 0.2222222222222222,
+            "f1_normal": 0.3636363636363636,
+            "support": 9
+        },
+        "bat": {
+            "precision_ilp": 0.625,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5555555555555556,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5263157894736842,
+            "support": 10
+        },
+        "can": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 6
+        },
+        "pan": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.5,
+            "precision_normal": 1.0,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.5,
+            "support": 6
+        },
+        "headband": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "goggles": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.8333333333333334,
+            "f1_ilp": 0.625,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.5,
+            "f1_normal": 0.4,
+            "support": 6
+        },
+        "candle": {
+            "precision_ilp": 0.23076923076923078,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.3157894736842105,
+            "precision_normal": 0.75,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6,
+            "support": 6
+        },
+        "carrots": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 1.0,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6666666666666666,
+            "support": 4
+        },
+        "wine": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.25,
+            "recall_normal": 0.25,
+            "f1_normal": 0.25,
+            "support": 4
+        },
+        "meat": {
+            "precision_ilp": 0.625,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5555555555555556,
+            "precision_normal": 0.65625,
+            "recall_normal": 0.525,
+            "f1_normal": 0.5833333333333334,
+            "support": 40
+        },
+        "spoon": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.125,
+            "f1_ilp": 0.125,
+            "precision_normal": 0.25,
+            "recall_normal": 0.125,
+            "f1_normal": 0.16666666666666666,
+            "support": 8
+        },
+        "words": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.18181818181818182,
+            "f1_ilp": 0.25000000000000006,
+            "precision_normal": 1.0,
+            "recall_normal": 0.09090909090909091,
+            "f1_normal": 0.16666666666666669,
+            "support": 11
+        },
+        "cake": {
+            "precision_ilp": 0.14285714285714285,
+            "recall_ilp": 0.1111111111111111,
+            "f1_ilp": 0.125,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 9
+        },
+        "motorcycle": {
+            "precision_ilp": 0.4166666666666667,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.45454545454545453,
+            "precision_normal": 0.55,
+            "recall_normal": 0.55,
+            "f1_normal": 0.55,
+            "support": 20
+        },
+        "sauce": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.33333333333333337,
+            "precision_normal": 0.75,
+            "recall_normal": 0.3,
+            "f1_normal": 0.4285714285714285,
+            "support": 10
+        },
+        "pepperoni": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.3636363636363636,
+            "precision_normal": 0.5,
+            "recall_normal": 0.4,
+            "f1_normal": 0.4444444444444445,
+            "support": 5
+        },
+        "dirt": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.38095238095238093,
+            "f1_ilp": 0.4324324324324324,
+            "precision_normal": 0.5,
+            "recall_normal": 0.23809523809523808,
+            "f1_normal": 0.3225806451612903,
+            "support": 21
+        },
+        "steps": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 7
+        },
+        "boat": {
+            "precision_ilp": 0.425,
+            "recall_ilp": 0.7727272727272727,
+            "f1_ilp": 0.5483870967741935,
+            "precision_normal": 0.5185185185185185,
+            "recall_normal": 0.6363636363636364,
+            "f1_normal": 0.5714285714285714,
+            "support": 22
+        },
+        "boot": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.2857142857142857,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 7
+        },
+        "sandwich": {
+            "precision_ilp": 0.07692307692307693,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.11764705882352941,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "painting": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "frame": {
+            "precision_ilp": 0.29411764705882354,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.3125,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 15
+        },
+        "driver": {
+            "precision_ilp": 0.045454545454545456,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.08695652173913045,
+            "precision_normal": 1.0,
+            "recall_normal": 1.0,
+            "f1_normal": 1.0,
+            "support": 1
+        },
+        "ladder": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.1818181818181818,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.16666666666666666,
+            "f1_normal": 0.2222222222222222,
+            "support": 6
+        },
+        "game": {
+            "precision_ilp": 0.36363636363636365,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.2962962962962963,
+            "precision_normal": 0.375,
+            "recall_normal": 0.1875,
+            "f1_normal": 0.25,
+            "support": 16
+        },
+        "bun": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "hot dog": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "animals": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.47619047619047616,
+            "f1_ilp": 0.5555555555555556,
+            "precision_normal": 0.6875,
+            "recall_normal": 0.5238095238095238,
+            "f1_normal": 0.5945945945945946,
+            "support": 21
+        },
+        "bear": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.7142857142857143,
+            "f1_ilp": 0.4545454545454545,
+            "precision_normal": 0.35714285714285715,
+            "recall_normal": 0.7142857142857143,
+            "f1_normal": 0.4761904761904762,
+            "support": 7
+        },
+        "orange": {
+            "precision_ilp": 0.45454545454545453,
+            "recall_ilp": 0.45454545454545453,
+            "f1_ilp": 0.45454545454545453,
+            "precision_normal": 0.6,
+            "recall_normal": 0.2727272727272727,
+            "f1_normal": 0.37499999999999994,
+            "support": 11
+        },
+        "ring": {
+            "precision_ilp": 0.5714285714285714,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.47058823529411764,
+            "precision_normal": 0.8,
+            "recall_normal": 0.4,
+            "f1_normal": 0.5333333333333333,
+            "support": 10
+        },
+        "brush": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.5,
+            "recall_normal": 0.16666666666666666,
+            "f1_normal": 0.25,
+            "support": 6
+        },
+        "cow": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.4210526315789474,
+            "precision_normal": 0.6666666666666666,
+            "recall_normal": 0.5714285714285714,
+            "f1_normal": 0.6153846153846153,
+            "support": 7
+        },
+        "cable": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "shower": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.5,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.5714285714285715,
+            "support": 3
+        },
+        "cockpit": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.2,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.5,
+            "f1_normal": 0.4,
+            "support": 4
+        },
+        "uniform": {
+            "precision_ilp": 0.4444444444444444,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.4444444444444444,
+            "recall_normal": 0.5714285714285714,
+            "f1_normal": 0.5,
+            "support": 7
+        },
+        "thumb": {
+            "precision_ilp": 0.09090909090909091,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.14285714285714288,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "paw": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 0.8571428571428571,
+            "f1_ilp": 0.3870967741935483,
+            "precision_normal": 0.42857142857142855,
+            "recall_normal": 0.42857142857142855,
+            "f1_normal": 0.42857142857142855,
+            "support": 7
+        },
+        "ocean": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 1.0,
+            "recall_normal": 0.3125,
+            "f1_normal": 0.47619047619047616,
+            "support": 16
+        },
+        "laptop": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.4,
+            "precision_normal": 1.0,
+            "recall_normal": 0.16666666666666666,
+            "f1_normal": 0.2857142857142857,
+            "support": 6
+        },
+        "screen": {
+            "precision_ilp": 0.5217391304347826,
+            "recall_ilp": 0.5714285714285714,
+            "f1_ilp": 0.5454545454545454,
+            "precision_normal": 0.4090909090909091,
+            "recall_normal": 0.42857142857142855,
+            "f1_normal": 0.4186046511627907,
+            "support": 21
+        },
+        "taxi": {
+            "precision_ilp": 0.6,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.6,
+            "precision_normal": 1.0,
+            "recall_normal": 0.4,
+            "f1_normal": 0.5714285714285715,
+            "support": 5
+        },
+        "vase": {
+            "precision_ilp": 0.5714285714285714,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.6153846153846153,
+            "precision_normal": 0.875,
+            "recall_normal": 0.5833333333333334,
+            "f1_normal": 0.7000000000000001,
+            "support": 12
+        },
+        "sun": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.14285714285714285,
+            "f1_ilp": 0.25,
+            "precision_normal": 1.0,
+            "recall_normal": 0.14285714285714285,
+            "f1_normal": 0.25,
+            "support": 7
+        },
+        "monitor": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.5454545454545454,
+            "precision_normal": 0.25,
+            "recall_normal": 0.2,
+            "f1_normal": 0.22222222222222224,
+            "support": 5
+        },
+        "chain": {
+            "precision_ilp": 0.375,
+            "recall_ilp": 0.42857142857142855,
+            "f1_ilp": 0.39999999999999997,
+            "precision_normal": 1.0,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.4444444444444445,
+            "support": 7
+        },
+        "onions": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "cheese": {
+            "precision_ilp": 0.15384615384615385,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.21052631578947367,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.3333333333333333,
+            "support": 6
+        },
+        "drink": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "beach": {
+            "precision_ilp": 0.46153846153846156,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.5714285714285714,
+            "precision_normal": 0.8,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6153846153846154,
+            "support": 8
+        },
+        "jar": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.2,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "weeds": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "vegetables": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 1.0,
+            "f1_normal": 0.5,
+            "support": 1
+        },
+        "sprinkles": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.33333333333333337,
+            "precision_normal": 0.25,
+            "recall_normal": 1.0,
+            "f1_normal": 0.4,
+            "support": 1
+        },
+        "frisbee": {
+            "precision_ilp": 0.7,
+            "recall_ilp": 0.875,
+            "f1_ilp": 0.7777777777777777,
+            "precision_normal": 0.7,
+            "recall_normal": 0.875,
+            "f1_normal": 0.7777777777777777,
+            "support": 8
+        },
+        "mat": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.4444444444444445,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 5
+        },
+        "runway": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "grill": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5,
+            "support": 2
+        },
+        "smoke": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "sandal": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "pond": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "frosting": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 1.0,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6666666666666666,
+            "support": 2
+        },
+        "teddy bear": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 3
+        },
+        "sofa": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "fries": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "total": {
+            "level_precision": 0.5984186550503847,
+            "level_recall": 0.5152735022495853,
+            "level_f1": 0.5398402046382303,
+            "level_precision_ilp": 0.5209919397610606,
+            "level_recall_ilp": 0.5728155339805818,
+            "level_f1_ilp": 0.5300445875765412,
+            "support": 4223
+        }
+    },
+    "level3": {
+        "onion": {
+            "precision_ilp": 0.4,
+            "recall_ilp": 0.2857142857142857,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.5,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.36363636363636365,
+            "support": 7
+        },
+        "head": {
+            "precision_ilp": 0.5983606557377049,
+            "recall_ilp": 0.6460176991150443,
+            "f1_ilp": 0.6212765957446809,
+            "precision_normal": 0.4891304347826087,
+            "recall_normal": 0.7964601769911505,
+            "f1_normal": 0.6060606060606061,
+            "support": 113
+        },
+        "leaf": {
+            "precision_ilp": 0.4782608695652174,
+            "recall_ilp": 0.6111111111111112,
+            "f1_ilp": 0.5365853658536586,
+            "precision_normal": 0.3287671232876712,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.44036697247706424,
+            "support": 36
+        },
+        "girl": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.2962962962962963,
+            "f1_ilp": 0.21333333333333335,
+            "precision_normal": 0.1875,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.24000000000000005,
+            "support": 27
+        },
+        "broccoli": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.875,
+            "f1_ilp": 0.6363636363636364,
+            "precision_normal": 0.5833333333333334,
+            "recall_normal": 0.875,
+            "f1_normal": 0.7000000000000001,
+            "support": 8
+        },
+        "wall": {
+            "precision_ilp": 0.41975308641975306,
+            "recall_ilp": 0.6845637583892618,
+            "f1_ilp": 0.5204081632653061,
+            "precision_normal": 0.4690265486725664,
+            "recall_normal": 0.7114093959731543,
+            "f1_normal": 0.5653333333333334,
+            "support": 149
+        },
+        "bike": {
+            "precision_ilp": 0.2916666666666667,
+            "recall_ilp": 0.4117647058823529,
+            "f1_ilp": 0.34146341463414637,
+            "precision_normal": 0.38235294117647056,
+            "recall_normal": 0.7647058823529411,
+            "f1_normal": 0.5098039215686274,
+            "support": 17
+        },
+        "guy": {
+            "precision_ilp": 0.026217228464419477,
+            "recall_ilp": 0.6363636363636364,
+            "f1_ilp": 0.05035971223021583,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 11
+        },
+        "jacket": {
+            "precision_ilp": 0.38095238095238093,
+            "recall_ilp": 0.5106382978723404,
+            "f1_ilp": 0.43636363636363634,
+            "precision_normal": 0.345679012345679,
+            "recall_normal": 0.5957446808510638,
+            "f1_normal": 0.4375,
+            "support": 47
+        },
+        "jersey": {
+            "precision_ilp": 0.04035874439461883,
+            "recall_ilp": 0.9,
+            "f1_ilp": 0.07725321888412016,
+            "precision_normal": 0.7142857142857143,
+            "recall_normal": 0.5,
+            "f1_normal": 0.588235294117647,
+            "support": 10
+        },
+        "tree": {
+            "precision_ilp": 0.6097560975609756,
+            "recall_ilp": 0.7894736842105263,
+            "f1_ilp": 0.6880733944954129,
+            "precision_normal": 0.5015576323987538,
+            "recall_normal": 0.8473684210526315,
+            "f1_normal": 0.6301369863013698,
+            "support": 190
+        },
+        "boy": {
+            "precision_ilp": 0.2222222222222222,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.26666666666666666,
+            "precision_normal": 0.22727272727272727,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.27027027027027023,
+            "support": 30
+        },
+        "grass": {
+            "precision_ilp": 0.4228187919463087,
+            "recall_ilp": 0.7875,
+            "f1_ilp": 0.5502183406113537,
+            "precision_normal": 0.3602150537634409,
+            "recall_normal": 0.8375,
+            "f1_normal": 0.5037593984962406,
+            "support": 80
+        },
+        "bowl": {
+            "precision_ilp": 0.4666666666666667,
+            "recall_ilp": 0.35,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.35714285714285715,
+            "recall_normal": 0.5,
+            "f1_normal": 0.41666666666666663,
+            "support": 20
+        },
+        "suv": {
+            "precision_ilp": 0.014084507042253521,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.02666666666666667,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 4
+        },
+        "cat": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 0.4666666666666667,
+            "recall_normal": 0.5833333333333334,
+            "f1_normal": 0.5185185185185186,
+            "support": 12
+        },
+        "zebra": {
+            "precision_ilp": 0.4444444444444444,
+            "recall_ilp": 0.9411764705882353,
+            "f1_ilp": 0.6037735849056604,
+            "precision_normal": 0.8,
+            "recall_normal": 0.9411764705882353,
+            "f1_normal": 0.8648648648648648,
+            "support": 17
+        },
+        "lady": {
+            "precision_ilp": 0.06153846153846154,
+            "recall_ilp": 0.4,
+            "f1_ilp": 0.10666666666666667,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 10
+        },
+        "dish": {
+            "precision_ilp": 0.21052631578947367,
+            "recall_ilp": 0.8,
+            "f1_ilp": 0.3333333333333333,
+            "precision_normal": 0.45,
+            "recall_normal": 0.6,
+            "f1_normal": 0.5142857142857143,
+            "support": 15
+        },
+        "snow": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.65625,
+            "f1_ilp": 0.30656934306569344,
+            "precision_normal": 0.46,
+            "recall_normal": 0.71875,
+            "f1_normal": 0.5609756097560976,
+            "support": 32
+        },
+        "ear": {
+            "precision_ilp": 0.6057692307692307,
+            "recall_ilp": 0.863013698630137,
+            "f1_ilp": 0.7118644067796609,
+            "precision_normal": 0.5431034482758621,
+            "recall_normal": 0.863013698630137,
+            "f1_normal": 0.6666666666666667,
+            "support": 73
+        },
+        "tie": {
+            "precision_ilp": 0.6086956521739131,
+            "recall_ilp": 0.8235294117647058,
+            "f1_ilp": 0.7,
+            "precision_normal": 0.6363636363636364,
+            "recall_normal": 0.8235294117647058,
+            "f1_normal": 0.717948717948718,
+            "support": 17
+        },
+        "gravel": {
+            "precision_ilp": 0.12195121951219512,
+            "recall_ilp": 0.4166666666666667,
+            "f1_ilp": 0.18867924528301888,
+            "precision_normal": 0.5,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.4,
+            "support": 12
+        },
+        "fireplace": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "desk": {
+            "precision_ilp": 0.12195121951219512,
+            "recall_ilp": 0.35714285714285715,
+            "f1_ilp": 0.18181818181818182,
+            "precision_normal": 0.2,
+            "recall_normal": 0.2857142857142857,
+            "f1_normal": 0.23529411764705882,
+            "support": 14
+        },
+        "cabinet": {
+            "precision_ilp": 0.125,
+            "recall_ilp": 0.18181818181818182,
+            "f1_ilp": 0.14814814814814814,
+            "precision_normal": 0.16129032258064516,
+            "recall_normal": 0.45454545454545453,
+            "f1_normal": 0.23809523809523805,
+            "support": 11
+        },
+        "counter": {
+            "precision_ilp": 0.1511627906976744,
+            "recall_ilp": 0.7222222222222222,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.3055555555555556,
+            "recall_normal": 0.6111111111111112,
+            "f1_normal": 0.40740740740740744,
+            "support": 18
+        },
+        "olive": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "flower": {
+            "precision_ilp": 0.5319148936170213,
+            "recall_ilp": 0.5434782608695652,
+            "f1_ilp": 0.5376344086021505,
+            "precision_normal": 0.5172413793103449,
+            "recall_normal": 0.6521739130434783,
+            "f1_normal": 0.576923076923077,
+            "support": 46
+        },
+        "van": {
+            "precision_ilp": 0.06666666666666667,
+            "recall_ilp": 0.2,
+            "f1_ilp": 0.1,
+            "precision_normal": 0.07692307692307693,
+            "recall_normal": 0.2,
+            "f1_normal": 0.1111111111111111,
+            "support": 5
+        },
+        "jet": {
+            "precision_ilp": 0.07142857142857142,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.13333333333333333,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "suitcase": {
+            "precision_ilp": 0.6,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.631578947368421,
+            "precision_normal": 0.46153846153846156,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.5454545454545455,
+            "support": 9
+        },
+        "comforter": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 1
+        },
+        "mirror": {
+            "precision_ilp": 0.1935483870967742,
+            "recall_ilp": 0.35294117647058826,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.2916666666666667,
+            "recall_normal": 0.4117647058823529,
+            "f1_normal": 0.34146341463414637,
+            "support": 17
+        },
+        "pepper": {
+            "precision_ilp": 0.4444444444444444,
+            "recall_ilp": 0.4444444444444444,
+            "f1_ilp": 0.4444444444444444,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5555555555555556,
+            "f1_normal": 0.5263157894736842,
+            "support": 9
+        },
+        "tomato": {
+            "precision_ilp": 0.3333333333333333,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.4444444444444444,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.5,
+            "f1_normal": 0.4,
+            "support": 6
+        },
+        "lettuce": {
+            "precision_ilp": 0.6,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.5454545454545454,
+            "precision_normal": 0.75,
+            "recall_normal": 0.5,
+            "f1_normal": 0.6,
+            "support": 6
+        },
+        "baseball": {
+            "precision_ilp": 0.1111111111111111,
+            "recall_ilp": 0.16666666666666666,
+            "f1_ilp": 0.13333333333333333,
+            "precision_normal": 0.6,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5454545454545454,
+            "support": 6
+        },
+        "water bottle": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "paddle": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "fur": {
+            "precision_ilp": 0.35294117647058826,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.4444444444444445,
+            "precision_normal": 0.3,
+            "recall_normal": 0.6,
+            "f1_normal": 0.4,
+            "support": 10
+        },
+        "backpack": {
+            "precision_ilp": 0.5263157894736842,
+            "recall_ilp": 0.5882352941176471,
+            "f1_ilp": 0.5555555555555555,
+            "precision_normal": 0.5555555555555556,
+            "recall_normal": 0.5882352941176471,
+            "f1_normal": 0.5714285714285715,
+            "support": 17
+        },
+        "beak": {
+            "precision_ilp": 0.08571428571428572,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.15789473684210528,
+            "precision_normal": 0.375,
+            "recall_normal": 1.0,
+            "f1_normal": 0.5454545454545454,
+            "support": 3
+        },
+        "windshield": {
+            "precision_ilp": 0.34782608695652173,
+            "recall_ilp": 0.6153846153846154,
+            "f1_ilp": 0.4444444444444444,
+            "precision_normal": 0.2903225806451613,
+            "recall_normal": 0.6923076923076923,
+            "f1_normal": 0.4090909090909091,
+            "support": 13
+        },
+        "carrot": {
+            "precision_ilp": 0.2,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.30769230769230765,
+            "precision_normal": 0.25,
+            "recall_normal": 0.6666666666666666,
+            "f1_normal": 0.36363636363636365,
+            "support": 3
+        },
+        "toothbrush": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.6666666666666666,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 1.0,
+            "f1_normal": 0.5,
+            "support": 1
+        },
+        "bird": {
+            "precision_ilp": 0.59375,
+            "recall_ilp": 0.5588235294117647,
+            "f1_ilp": 0.5757575757575757,
+            "precision_normal": 0.5581395348837209,
+            "recall_normal": 0.7058823529411765,
+            "f1_normal": 0.6233766233766234,
+            "support": 34
+        },
+        "purse": {
+            "precision_ilp": 0.07142857142857142,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.125,
+            "precision_normal": 0.1,
+            "recall_normal": 0.5,
+            "f1_normal": 0.16666666666666669,
+            "support": 2
+        },
+        "mushroom": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "skin": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 3
+        },
+        "oven": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.25,
+            "f1_ilp": 0.2,
+            "precision_normal": 0.14285714285714285,
+            "recall_normal": 0.25,
+            "f1_normal": 0.18181818181818182,
+            "support": 4
+        },
+        "bridge": {
+            "precision_ilp": 0.36363636363636365,
+            "recall_ilp": 0.36363636363636365,
+            "f1_ilp": 0.36363636363636365,
+            "precision_normal": 0.25,
+            "recall_normal": 0.18181818181818182,
+            "f1_normal": 0.2105263157894737,
+            "support": 11
+        },
+        "sheep": {
+            "precision_ilp": 0.6666666666666666,
+            "recall_ilp": 0.5555555555555556,
+            "f1_ilp": 0.606060606060606,
+            "precision_normal": 0.65,
+            "recall_normal": 0.7222222222222222,
+            "f1_normal": 0.6842105263157895,
+            "support": 18
+        },
+        "pitcher": {
+            "precision_ilp": 0.21428571428571427,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.3157894736842105,
+            "precision_normal": 0.4,
+            "recall_normal": 0.4,
+            "f1_normal": 0.4000000000000001,
+            "support": 5
+        },
+        "potato": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.3333333333333333,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.3333333333333333,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.3333333333333333,
+            "support": 3
+        },
+        "rug": {
+            "precision_ilp": 0.5,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.5714285714285715,
+            "precision_normal": 0.1,
+            "recall_normal": 0.3333333333333333,
+            "f1_normal": 0.15384615384615383,
+            "support": 3
+        },
+        "trunk": {
+            "precision_ilp": 0.32142857142857145,
+            "recall_ilp": 0.391304347826087,
+            "f1_ilp": 0.35294117647058826,
+            "precision_normal": 0.29411764705882354,
+            "recall_normal": 0.43478260869565216,
+            "f1_normal": 0.3508771929824562,
+            "support": 23
+        },
+        "planter": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 2
+        },
+        "crate": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "baby": {
+            "precision_ilp": 1.0,
+            "recall_ilp": 0.14285714285714285,
+            "f1_ilp": 0.25,
+            "precision_normal": 1.0,
+            "recall_normal": 0.14285714285714285,
+            "f1_normal": 0.25,
+            "support": 7
+        },
+        "tomatoes": {
+            "precision_ilp": 0.25,
+            "recall_ilp": 1.0,
+            "f1_ilp": 0.4,
+            "precision_normal": 0.5,
+            "recall_normal": 1.0,
+            "f1_normal": 0.6666666666666666,
+            "support": 1
+        },
+        "drain": {
+            "precision_ilp": 0.16666666666666666,
+            "recall_ilp": 0.5,
+            "f1_ilp": 0.25,
+            "precision_normal": 0.5,
+            "recall_normal": 0.5,
+            "f1_normal": 0.5,
+            "support": 2
+        },
+        "total": {
+            "level_precision": 0.4334985011985845,
+            "level_recall": 0.6648089171974529,
+            "level_f1": 0.5144898973839405,
+            "level_precision_ilp": 0.4408921540322967,
+            "level_recall_ilp": 0.6281847133757971,
+            "level_f1_ilp": 0.49861086081307326,
+            "support": 1256
+        }
+    },
+    "level4": {
+        "chicken": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0.043478260869565216,
+            "recall_normal": 0.5,
+            "f1_normal": 0.08,
+            "support": 2
+        },
+        "pine tree": {
+            "precision_ilp": 0.020689655172413793,
+            "recall_ilp": 0.6,
+            "f1_ilp": 0.039999999999999994,
+            "precision_normal": 0.03260869565217391,
+            "recall_normal": 0.6,
+            "f1_normal": 0.06185567010309278,
+            "support": 5
+        },
+        "apple": {
+            "precision_ilp": 0.6153846153846154,
+            "recall_ilp": 0.6666666666666666,
+            "f1_ilp": 0.64,
+            "precision_normal": 0.11956521739130435,
+            "recall_normal": 0.9166666666666666,
+            "f1_normal": 0.21153846153846156,
+            "support": 12
+        },
+        "pizza": {
+            "precision_ilp": 0.2391304347826087,
+            "recall_ilp": 0.8461538461538461,
+            "f1_ilp": 0.3728813559322034,
+            "precision_normal": 0.18181818181818182,
+            "recall_normal": 0.7692307692307693,
+            "f1_normal": 0.29411764705882354,
+            "support": 13
+        },
+        "palm tree": {
+            "precision_ilp": 0.056818181818181816,
+            "recall_ilp": 0.5555555555555556,
+            "f1_ilp": 0.10309278350515465,
+            "precision_normal": 0.07936507936507936,
+            "recall_normal": 0.5555555555555556,
+            "f1_normal": 0.1388888888888889,
+            "support": 9
+        },
+        "duck": {
+            "precision_ilp": 0.10714285714285714,
+            "recall_ilp": 0.75,
+            "f1_ilp": 0.1875,
+            "precision_normal": 0.21052631578947367,
+            "recall_normal": 1.0,
+            "f1_normal": 0.34782608695652173,
+            "support": 4
+        },
+        "salad": {
+            "precision_ilp": 0,
+            "recall_ilp": 0,
+            "f1_ilp": 0,
+            "precision_normal": 0,
+            "recall_normal": 0,
+            "f1_normal": 0,
+            "support": 0
+        },
+        "total": {
+            "level_precision": 0.1245513322172361,
+            "level_recall": 0.7555555555555556,
+            "level_f1": 0.21050163663483992,
+            "level_precision_ilp": 0.2563709861685874,
+            "level_recall_ilp": 0.6666666666666666,
+            "level_f1_ilp": 0.3201176150814452,
+            "support": 45
+        }
+    },
+    "total": {
+        "level_precision": 0.5573170847897541,
+        "level_recall": 0.5692842354333039,
+        "level_f1": 0.5483082269473758,
+        "level_precision_ilp": 0.5480602307107999,
+        "level_recall_ilp": 0.5731292517006805,
+        "level_f1_ilp": 0.5421906588046694,
+        "support": 13524
+    }
+}
