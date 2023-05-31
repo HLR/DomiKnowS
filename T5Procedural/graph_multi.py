@@ -129,7 +129,7 @@ with Graph('global') as graph:
                                     ("l", llocation.reversed)
                 ))
             )
-        ), active = Tested_Lc
+        ), active = All_LC
     )
 
     ### Prolog: input_entity(e) :- not(non-location(l) and step_index(i, 0) entity_location_before_label(e, i, l))
@@ -676,7 +676,7 @@ with Graph('global') as graph:
         entity('e'),
         atMostL(
             when_create('x', path=('e', action_entity.reversed)),
-        ), active = All_LC
+        ), active = Tested_Lc
     )
 
     ifL(

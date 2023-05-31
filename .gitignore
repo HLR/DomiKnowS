@@ -2,3 +2,6 @@
 .vector_cache/
 .DS_Store
 mnist-arithmetic-2/set_inclusion/logs/datanode.log
+T5Procedural/image
+T5Procedural/image.png
+T5Procedural/updated_loc_info.pt
