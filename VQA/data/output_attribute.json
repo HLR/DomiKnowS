@@ -1,0 +1,122 @@
+{
+    "cloth": [
+        "lace"
+    ],
+    "asian": [
+        "chinese"
+    ],
+    "gas": [
+        "neon",
+        "gas"
+    ],
+    "rock": [
+        "gravel",
+        "crystal",
+        "marble"
+    ],
+    "plastic": [
+        "vinyl"
+    ],
+    "adult": [
+        "professional"
+    ],
+    "stone": [
+        "rock",
+        "stone",
+        "marble",
+        "granite",
+        "diamond"
+    ],
+    "american": [
+        "asian",
+        "american"
+    ],
+    "white": [
+        "snow",
+        "ivory",
+        "chalk"
+    ],
+    "metal": [
+        "aluminum",
+        "silver",
+        "copper",
+        "bronze",
+        "tin",
+        "iron",
+        "gold",
+        "steel"
+    ],
+    "bronze": [
+        "brass",
+        "bronze"
+    ],
+    "wine": [
+        "wine",
+        "vintage"
+    ],
+    "gray": [
+        "iron",
+        "aluminum"
+    ],
+    "crystal": [
+        "diamond"
+    ],
+    "yellow": [
+        "banana"
+    ],
+    "water": [
+        "snow",
+        "water"
+    ],
+    "light": [
+        "neon"
+    ],
+    "silver": [
+        "tin"
+    ],
+    "burning": [
+        "fire"
+    ],
+    "glass": [
+        "glass"
+    ],
+    "paper": [
+        "cardboard"
+    ],
+    "ocean": [
+        "deep"
+    ],
+    "swimming": [
+        "floating"
+    ],
+    "ceramic": [
+        "brick"
+    ],
+    "brown": [
+        "chocolate"
+    ],
+    "garbage": [
+        "trash"
+    ],
+    "fluffy": [
+        "furry"
+    ],
+    "trash": [
+        "garbage"
+    ],
+    "plain": [
+        "flat"
+    ],
+    "breakable": [
+        "glass"
+    ],
+    "heavy": [
+        "gold"
+    ],
+    "skating": [
+        "skateboarding"
+    ],
+    "hard": [
+        "rock"
+    ]
+}
