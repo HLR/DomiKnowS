@@ -315,8 +315,12 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
                 path0e1 = path[0].e[1].name
                 
             if path0e1 in cDn.attributes or ("rootDataNode" in cDn.attributes and (path0.name + "/" + path0e1) in cDn.attributes["rootDataNode"].attributes["propertySet"]):
-                if cDn.getAttribute(path0e1).item() in path[0].e[2]:
-                    _cDns.append(cDn)
+                if torch.is_tensor(cDn.getAttribute(path0e1)):
+                    if cDn.getAttribute(path0e1).item() in path[0].e[2]:
+                        _cDns.append(cDn)
+                else:
+                    if cDn.getAttribute(path0e1) in path[0].e[2]:
+                        _cDns.append(cDn) 
                 
         relDns = _cDns
     
