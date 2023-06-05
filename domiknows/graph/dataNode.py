@@ -1012,7 +1012,7 @@ class DataNode:
                 dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
     # Calculate local for datanote argMax and softMax
-    def inferLocal(self):
+    def inferLocal(self, keys=("softmax", "argmax")):
         conceptsRelations = self.collectConceptsAndRelations() 
         
         for c in conceptsRelations:
@@ -1025,34 +1025,61 @@ class DataNode:
             vs = []
             
             for dn in dns:
-                keySoftmax = "<" + c[0].name + ">/local/softmax"
-                if keySoftmax in dn.attributes:
-                    continue
+                if "softmax" in keys or "normalizedProb" in keys:
+                    keySoftmax = "<" + c[0].name + ">/local/softmax"
+                    if keySoftmax in dn.attributes: # Already calculated ?
+                        continue
+                    
+                    v = dn.getAttribute(c[0])
+                    
+                    # check if v is None or not a tensor
+                    if v is None or not torch.is_tensor(v):
+                        continue
+                    
+                    if not(isinstance(v, torch.FloatTensor) or isinstance(v, torch.cuda.FloatTensor)):
+                        v = v.float()
+                        
+                    vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
+                    
+                    # Replace nan with 1/len
+                    #for i, s in enumerate(vSoftmaxT):
+                    #   if s != s:
+                    #       vSoftmaxT[i] = 1/len(v)
+                    
+                    dn.attributes[keySoftmax] = vSoftmaxT
                 
-                v = dn.getAttribute(c[0])
-                vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
-                
-                # Replace nan with 1/len
-                #for i, s in enumerate(vSoftmaxT):
-                #   if s != s:
-                #       vSoftmaxT[i] = 1/len(v)
-                
-                dn.attributes[keySoftmax] = vSoftmaxT
-                
-                keyArgmax  = "<" + c[0].name + ">/local/argmax"
-                vArgmax = torch.clone(v)
-                vArgmaxIndex = torch.argmax(v).item()
-                
-                for i, _ in enumerate(v):
-                    if i == vArgmaxIndex:
-                        vArgmax[i] = 1
-                    else:
-                        vArgmax[i] = 0
-                                
-                dn.attributes[keyArgmax] = vArgmax
+                if "normalizedProb" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
+                    if keyNormalizedProb in dn.attributes: # Already calculated ?
+                        continue
+                    
+                    # Clamps the softmax probabilities
+                    vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
+                    
+                    # Calculates their entropy;
+                    entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+                    
+                    # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                    vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
+                    
+                    dn.attributes[keyNormalizedProb] = vNormalizedProbT
+                    
+                if "argmax" in keys:
+                    keyArgmax  = "<" + c[0].name + ">/local/argmax"
+                    vArgmax = torch.clone(v)
+                    vArgmaxIndex = torch.argmax(v).item()
+                    
+                    for i, _ in enumerate(v):
+                        if i == vArgmaxIndex:
+                            vArgmax[i] = 1
+                        else:
+                            vArgmax[i] = 0
+                                    
+                    dn.attributes[keyArgmax] = vArgmax
+                    
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
+    def inferILPResults(self, *_conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1072,8 +1099,11 @@ class DataNode:
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
         
-        self.inferLocal()
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        if "local" in key:
+            keys = (key[1],)
+            self.inferLocal(keys=keys)
+            
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def inferGBIResults(self, *_conceptsRelations, model, builder):
         if len(_conceptsRelations) == 0:

@@ -64,39 +64,39 @@ class gurobiILPOntSolver(ilpOntSolver):
         return value
         
     # Get and calculate probability for provided concept
-    def __getProbability(self, dn, conceptRelation, fun=None, epsilon = 0.00001):
+    def getProbability(self, dn, conceptRelation, key = ("local" , "softmax"), fun=None, epsilon = 0.00001):
         if not dn:
             valueI = None
         else:
-            valueI = dn.getAttribute(conceptRelation, "local" , "softmax")
+            valueI = dn.getAttribute(conceptRelation, *key)
                     
         if valueI is None: # No probability value - return negative probability 
             return [float("nan"), float("nan")]
         
-        if conceptRelation[2] is not None:
+        if conceptRelation[2] is None: # Binary
             value = torch.empty(2, dtype=torch.float)
             
-            value[0] = 1 - valueI[conceptRelation[2]]
-            value[1] = valueI[conceptRelation[2]]
-        else:
-            value = valueI
-
-        # Process probability through function and apply epsilon
-        if epsilon is not None:
-            if value[0] > 1-epsilon:
-                value[0] = 1-epsilon
-            elif value[1] > 1-epsilon:
-                value[1] = 1-epsilon
-                
-            if value[0] < epsilon:
-                value[0] = epsilon
-            elif value[1] < epsilon:
-                value[1] = epsilon
-               
-            # Apply fun on probabilities 
+            value[0] = 1 - valueI[1]
+            value[1] = valueI[1]
+            
+             # Process probability through function and apply epsilon
+            if epsilon is not None:
+                if value[0] > 1-epsilon:
+                    value[0] = 1-epsilon
+                elif value[1] > 1-epsilon:
+                    value[1] = 1-epsilon
+                    
+                if value[0] < epsilon:
+                    value[0] = epsilon
+                elif value[1] < epsilon:
+                    value[1] = epsilon
+                    
+             # Apply fun on probabilities 
             if fun is not None:
                 value = fun(value)
-            
+        else: # Multiclass
+            value = valueI
+
         return value # Return probability
     
     def countLCVariables(self, rootDn, *conceptsRelations):
@@ -122,7 +122,7 @@ class gurobiILPOntSolver(ilpOntSolver):
        
         return ilpVarCount
     
-    def createObjective(self, xDict, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
+    def createObjective(self, xDict, rootDn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001):
         Q = None
         conceptToDNSCash = {}        
         
@@ -142,7 +142,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if x[index] == None:
                     continue
                 
-                currentProbability = dnFun(dn, currentConceptRelation, fun=fun, epsilon=epsilon)
+                currentProbability = self.getProbability(dn, currentConceptRelation, key=key, fun=fun, epsilon=epsilon)
                 
                 if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
                     self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentName,dn.getInstanceID()))
@@ -176,7 +176,7 @@ class gurobiILPOntSolver(ilpOntSolver):
            
         return Q
     
-    def createILPVariables(self, m, x, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
+    def createILPVariables(self, m, x, rootDn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001):
         Q = None
         
         # Create ILP variables 
@@ -198,7 +198,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     else:
                         x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0] = None
                         
-                currentProbability = dnFun(dn, currentConceptRelation, fun=fun, epsilon=epsilon)
+                currentProbability = self.getProbability(dn, currentConceptRelation, key=key, fun=fun, epsilon=epsilon)
                 
                 if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
                     self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentConceptRelation[0].name,dn.getInstanceID()))
@@ -1214,7 +1214,7 @@ class gurobiILPOntSolver(ilpOntSolver):
     # ---------------
                 
     # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification  
-    def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
+    def calculateILPSelection(self, dn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning')
             self.myLoggerTime.warning('ILP solver not provided - returning')
@@ -1253,9 +1253,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 x = OrderedDict()
                 
                 # Create ILP Variables for concepts and objective
-                Q = self.createILPVariables(m, x, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
+                Q = self.createILPVariables(m, x, dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon)
             else:
-                Q = self.createObjective(x, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
+                Q = self.createObjective(x, dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon)
             
             endVariableInit = process_time() # timer()
             elapsedVariablesInMs = (endVariableInit - start) *1000
@@ -1874,7 +1874,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 elapsedInMsLC = elapsedInNsLC/1000000
                 current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
 
-                self.myLoggerTime.info('Processing time for %s with %i entries is: %ims'%(currentLcName, len(lossList),  current_lcLosses['elapsedInMsLC']))
+                if lossList is not None:
+                    self.myLoggerTime.info('Processing time for %s with %i entries is: %ims'%(currentLcName, len(lossList),  current_lcLosses['elapsedInMsLC']))
+                else:
+                    self.myLoggerTime.info('Processing time for %s with %i entries is: %ims'%(currentLcName, 0,  current_lcLosses['elapsedInMsLC']))
+
                 [h.flush() for h in self.myLoggerTime.handlers]
             
         else: # -----------Sample

@@ -215,7 +215,7 @@ class PoiModel(TorchModel):
         return loss, metric
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with = None, device='auto'):
+    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with = None, probKey = ("local" , "softmax"), device='auto'):
         super().__init__(graph, poi=poi, loss=loss, metric=metric, device=device)
         
         if inferTypes == None:
@@ -227,6 +227,8 @@ class SolverModel(PoiModel):
             self.inference_with = []
         else:
             self.inference_with = inference_with
+            
+        self.probKey = probKey
 
     def inference(self, builder):
         for i, prop in enumerate(self.poi):
@@ -247,7 +249,7 @@ class SolverModel(PoiModel):
         if datanode:
             for infertype in self.inferTypes:
                 {
-                    'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                    'ILP': lambda :datanode.inferILPResults(*self.inference_with, key=self.probKey, fun=None, epsilon=None),
                     'local/argmax': lambda :datanode.inferLocal(),
                     'local/softmax': lambda :datanode.inferLocal(),
                     'argmax': lambda :datanode.infer(),
