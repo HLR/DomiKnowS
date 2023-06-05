@@ -144,7 +144,7 @@ linearsoftmax = torch.nn.Sequential(
 DataNodeBuilder.context = "interference"
 for node in program.populate(reader, device=device):
     node.infer()
-    node.inferILPResults(fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+    node.inferILPResults(key = ("local" , "normalizedProb"), fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
     node.inferILPResults(fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
 
     for word_node in node.getChildDataNodes():
