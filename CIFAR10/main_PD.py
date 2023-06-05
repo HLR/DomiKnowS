@@ -17,7 +17,7 @@ import os,pickle
 import numpy as np
 from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from torch.utils.data import random_split
-from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram
 
 
 class ImageNetwork(torch.nn.Module):

@@ -4,7 +4,7 @@ sys.path.append("../..")
 def model_declaration():
     import torch
     from domiknows.program import LearningBasedProgram, IMLProgram
-    from domiknows.program.primaldualprogram import PrimalDualProgram
+    from domiknows.program.lossprogram import PrimalDualProgram
     from domiknows.program.model.pytorch import SolverModel
     from domiknows.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
     from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
@@ -35,7 +35,8 @@ def model_declaration():
     program = PrimalDualProgram(
         graph, SolverModel,
         poi=(world, x,),
-        # inferTypes=['ILP', 'local/argmax'],
+        inferTypes=['ILP', 'local/argmax'],
+        probKey = ("local" , "normalizedProb"),
         loss=MacroAverageTracker(BCEWithLogitsLoss()),
         metric=ValueTracker(prediction_softmax))
     # With the following line, the inference will not take x into account

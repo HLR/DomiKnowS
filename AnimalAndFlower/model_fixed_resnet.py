@@ -11,7 +11,7 @@ from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeC
 from domiknows.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from graph import graph
 from domiknows.program.model.pytorch import SolverModel, IMLModel
-from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from torchvision.models.resnet import resnet50

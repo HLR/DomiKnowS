@@ -13,7 +13,7 @@ from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
 from transformers import get_linear_schedule_with_warmup
-# from domiknows.program.primaldualprogram import PrimalDualProgram
+# from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor

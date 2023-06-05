@@ -1,0 +1,3 @@
+2023-06-05 13:10:11,132 - INFO - regrTimer:getRegrTimer_logger - --- Starting new run ---
+2023-06-05 13:10:11,774 - INFO - regrTimer:getDataNode - DataNode Builder the set method called - 40 times
+2023-06-05 13:10:11,774 - INFO - regrTimer:getDataNode - DataNode Builder used - 15.62500000ms

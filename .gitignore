@@ -5,3 +5,6 @@ mnist-arithmetic-2/set_inclusion/logs/datanode.log
 T5Procedural/image
 T5Procedural/image.png
 T5Procedural/updated_loc_info.pt
+
+# Ignore __pycache__ directories
+**/__pycache__

@@ -46,8 +46,7 @@ device = 'cuda' if args.cuda else 'cpu'
 
 setProductionLogMode()
 
-num_train = 1
-trainloader, trainloader_mini, validloader, testloader = get_readers(num_train)
+trainloader, trainloader_mini, validloader, testloader = get_readers(config.num_train)
 
 
 def get_pred_from_node(node, suffix):

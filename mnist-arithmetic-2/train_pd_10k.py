@@ -24,7 +24,7 @@ import config
 
 setProductionLogMode()
 
-trainloader, trainloader_mini, validloader, testloader = get_readers()
+trainloader, trainloader_mini, validloader, testloader = get_readers(config.num_train)
 
 
 def get_pred_from_node(node, suffix):

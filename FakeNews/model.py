@@ -11,7 +11,7 @@ from domiknows.program import SolverPOIProgram, IMLProgram
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsLoss
 from domiknows.program.model.pytorch import SolverModel, IMLModel
-from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.sensors import JointSensor

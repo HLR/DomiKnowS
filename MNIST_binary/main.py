@@ -4,7 +4,7 @@ sys.path.append('.')
 sys.path.append('../..')
 from domiknows.program.lossprogram import SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
-from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram
 
 from domiknows.program import SolverPOIProgram, IMLProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor

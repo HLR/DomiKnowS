@@ -11,7 +11,7 @@ from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTra
 import logging
 from reader import read_data
 from domiknows.graph import Graph, Concept, Relation, ifL, andL, notL, existsL
-#from domiknows.program.primaldualprogram import PrimalDualProgram
+#from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.sensor.pytorch import ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor

@@ -35,7 +35,7 @@ def main():
     trainreader, testreader = get_readers()
 
     # validate graph
-    # validate(program, trainreader)
+    validate(program, trainreader)
 
     # do training
     program.train(trainreader, test_set=testreader, train_epoch_num=config.epochs, Optim=partial(torch.optim.SGD, lr=config.lr), device='auto')

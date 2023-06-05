@@ -78,7 +78,7 @@ from domiknows.program import LearningBasedProgram
 from torch import nn
 from graph import graph
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
-from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program import SolverPOIProgram, IMLProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
