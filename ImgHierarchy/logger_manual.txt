@@ -1,10 +1,8 @@
-level1 accuracy: 0.565
-level1 ILP accuracy: 0.000625
-level2 accuracy: 0.4911660777385159
-level2 ILP accuracy: 0.007067137809187279
-level3 accuracy: 0.6708860759493671
+level1 accuracy: 0.7
+level1 ILP accuracy: 0.0
+level2 accuracy: 0.625
+level2 ILP accuracy: 0.0
+level3 accuracy: 1.0
 level3 ILP accuracy: 0.0
-level3 consistent accuracy: 0.569620253164557
-level4 accuracy: 0.7857142857142857
-level4 ILP accuracy: 0.0
-level4 consistent accuracy: 0.7142857142857143
+level3 consistent accuracy: 1.0
+no instances for level4

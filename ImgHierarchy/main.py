@@ -273,13 +273,15 @@ if __name__ == '__main__':
             if key not in support_set[_concept.name]:
                 support_set[_concept.name][key] = 0
 
-            level_precision += precision_normal * (support_set[_concept.name][key] / total_support_set[_concept.name])
-            level_recall += recall_normal * (support_set[_concept.name][key] / total_support_set[_concept.name])
-            level_f1 += f1_normal * (support_set[_concept.name][key] / total_support_set[_concept.name])
+            if total_support_set[_concept.name] != 0:
+                level_precision += precision_normal * (support_set[_concept.name][key] / total_support_set[_concept.name])
+                level_recall += recall_normal * (support_set[_concept.name][key] / total_support_set[_concept.name])
+                level_f1 += f1_normal * (support_set[_concept.name][key] / total_support_set[_concept.name])
 
-            level_precision_ilp += precision_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
-            level_recall_ilp += recall_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
-            level_f1_ilp += f1_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
+            if total_support_set[_concept.name] != 0: 
+                level_precision_ilp += precision_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
+                level_recall_ilp += recall_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
+                level_f1_ilp += f1_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
 
             f1_res[_concept.name][key] = {
                 "precision_ilp": precision_ilp,
