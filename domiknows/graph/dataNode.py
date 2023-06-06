@@ -1027,42 +1027,38 @@ class DataNode:
             for dn in dns:
                 if "softmax" in keys or "normalizedProb" in keys:
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
-                    if keySoftmax in dn.attributes: # Already calculated ?
-                        continue
-                    
-                    v = dn.getAttribute(c[0])
-                    
-                    # check if v is None or not a tensor
-                    if v is None or not torch.is_tensor(v):
-                        continue
-                    
-                    if not(isinstance(v, torch.FloatTensor) or isinstance(v, torch.cuda.FloatTensor)):
-                        v = v.float()
+                    if not keySoftmax in dn.attributes: # Already calculated ?                    
+                        v = dn.getAttribute(c[0])
                         
-                    vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
-                    
-                    # Replace nan with 1/len
-                    #for i, s in enumerate(vSoftmaxT):
-                    #   if s != s:
-                    #       vSoftmaxT[i] = 1/len(v)
-                    
-                    dn.attributes[keySoftmax] = vSoftmaxT
+                        # check if v is None or not a tensor
+                        if v is None or not torch.is_tensor(v):
+                            continue
+                        
+                        if not(isinstance(v, torch.FloatTensor) or isinstance(v, torch.cuda.FloatTensor)):
+                            v = v.float()
+                            
+                        vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
+                        
+                        # Replace nan with 1/len
+                        #for i, s in enumerate(vSoftmaxT):
+                        #   if s != s:
+                        #       vSoftmaxT[i] = 1/len(v)
+                        
+                        dn.attributes[keySoftmax] = vSoftmaxT
                 
                 if "normalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
-                    if keyNormalizedProb in dn.attributes: # Already calculated ?
-                        continue
-                    
-                    # Clamps the softmax probabilities
-                    vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
-                    
-                    # Calculates their entropy;
-                    entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-                    
-                    # Multiplies the reverse of entropy to the vector divided by its mean value. P
-                    vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
-                    
-                    dn.attributes[keyNormalizedProb] = vNormalizedProbT
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?                    
+                        # Clamps the softmax probabilities
+                        vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
+                        
+                        # Calculates their entropy;
+                        entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
                     
                 if "argmax" in keys:
                     keyArgmax  = "<" + c[0].name + ">/local/argmax"
