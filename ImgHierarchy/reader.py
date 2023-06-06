@@ -50,23 +50,29 @@ class VQADataset(Dataset):
         
 
     def change_vector(self, vector):
-        signs = vector - torch.mean(vector)
-        signs[signs < 0] = -1
-        signs[signs >= 0] = +1
-        adjustment = signs * torch.pow(vector - torch.mean(vector), 2)
-        vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
-        entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-        return (vector/torch.mean(vector))
+        # signs = vector - torch.mean(vector)
+        # signs[signs < 0] = -1
+        # signs[signs >= 0] = +1
+        # adjustment = signs * torch.pow(vector - torch.mean(vector), 2)
+        # vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
+        # entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+        # return (vector/torch.mean(vector))
+        return vector
         # return (1/entropy.item()) * vector
         # return (1/entropy.item()) * (vector/torch.mean(vector))
         # return (1/entropy.item()) * (vector) + adjustment
         # return vector
     
     def __getitem__(self, index):
-        x1 = torch.tensor(self.data['levels1']['logit'][index]).softmax(dim=-1)
-        x2 = torch.tensor(self.data['levels2']['logit'][index]).softmax(dim=-1)
-        x3 = torch.tensor(self.data['levels3']['logit'][index]).softmax(dim=-1)
-        x4 = torch.tensor(self.data['levels4']['logit'][index]).softmax(dim=-1)
+        # x1 = torch.tensor(self.data['levels1']['logit'][index]).softmax(dim=-1)
+        # x2 = torch.tensor(self.data['levels2']['logit'][index]).softmax(dim=-1)
+        # x3 = torch.tensor(self.data['levels3']['logit'][index]).softmax(dim=-1)
+        # x4 = torch.tensor(self.data['levels4']['logit'][index]).softmax(dim=-1)
+
+        x1 = torch.tensor(self.data['levels1']['logit'][index])
+        x2 = torch.tensor(self.data['levels2']['logit'][index])
+        x3 = torch.tensor(self.data['levels3']['logit'][index])
+        x4 = torch.tensor(self.data['levels4']['logit'][index])
 
         ### Normalize the values
         # x1 = x1 / torch.mean(x1)

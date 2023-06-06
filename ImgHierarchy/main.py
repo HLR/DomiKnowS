@@ -45,6 +45,7 @@ def main(device):
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
+        # probKey = ("local" , "softmax"),
                                 poi = (image_group, image, level1, level2, level3, level4),
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                  metric={
@@ -59,13 +60,14 @@ if __name__ == '__main__':
     from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     import logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.ERROR)
 
     from torch.utils.data import Dataset, DataLoader
     from reader import VQADataset
     from graph import *
 
-    file = "Tasks/VQA/data/val.npy"
+    # file = "Tasks/ImgHierarchy/data/val.npy"
+    file = "Tasks/ImgHierarchy/data_sample/val_small.npy"
     data = np.load(file, allow_pickle=True).item()
 
     dataset = VQADataset(data,)
@@ -118,7 +120,7 @@ if __name__ == '__main__':
     support_set = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
     total_support_set = {"level1": 0, "level2": 0, "level3": 0, "level4": 0}
     from tqdm import tqdm
-    for datanode in tqdm(program.populate(list(iter(dataloader))[:100], device=device)):
+    for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
     # for datanode in tqdm(program.populate(dataloader, device=device)):
         for child in datanode.getChildDataNodes('image'):
             pred = child.getAttribute('level1', 'local/argmax').argmax().item()
@@ -317,10 +319,10 @@ if __name__ == '__main__':
 
 
 
-    with open("Tasks/VQA/logger.json", "w") as file:
+    with open("Tasks/ImgHierarchy/logger.json", "w") as file:
         json.dump(f1_res, file, indent=4)
 
-    file2 = open("Tasks/VQA/logger_manual.txt", "w")
+    file2 = open("Tasks/ImgHierarchy/logger_manual.txt", "w")
     for _c in corrects:
         if totals[_c] != 0:
             print(f"{_c} accuracy: {corrects[_c]/totals[_c]}", file=file2)
