@@ -70,33 +70,30 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             valueI = dn.getAttribute(conceptRelation, *key)
                     
-        if valueI is None: # No probability value - return negative probability 
-            return [float("nan"), float("nan")]
-        
-        if conceptRelation[2] is None: # Binary
+        if conceptRelation[2] is not None: # This is mutliclass - need to convert it to binary for ILP 
             value = torch.empty(2, dtype=torch.float)
             
-            value[0] = 1 - valueI[1]
-            value[1] = valueI[1]
-            
-             # Process probability through function and apply epsilon
-            if epsilon is not None:
-                if value[0] > 1-epsilon:
-                    value[0] = 1-epsilon
-                elif value[1] > 1-epsilon:
-                    value[1] = 1-epsilon
-                    
-                if value[0] < epsilon:
-                    value[0] = epsilon
-                elif value[1] < epsilon:
-                    value[1] = epsilon
-                    
-             # Apply fun on probabilities 
-            if fun is not None:
-                value = fun(value)
-        else: # Multiclass
+            value[0] = 1 - valueI[conceptRelation[2]]
+            value[1] = valueI[conceptRelation[2]]
+        else: # This is binary 
             value = valueI
 
+        # Process probability through function and apply epsilon
+        if epsilon is not None:
+            if value[0] > 1-epsilon:
+                value[0] = 1-epsilon
+            elif value[1] > 1-epsilon:
+                value[1] = 1-epsilon
+                
+            if value[0] < epsilon:
+                value[0] = epsilon
+            elif value[1] < epsilon:
+                value[1] = epsilon
+               
+            # Apply fun on probabilities if defined
+            if fun is not None:
+                value = fun(value)
+            
         return value # Return probability
     
     def countLCVariables(self, rootDn, *conceptsRelations):
