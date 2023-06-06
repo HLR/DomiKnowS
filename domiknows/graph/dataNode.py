@@ -1062,6 +1062,7 @@ class DataNode:
                     
                 if "argmax" in keys:
                     keyArgmax  = "<" + c[0].name + ">/local/argmax"
+                    v = dn.getAttribute(c[0])
                     vArgmax = torch.clone(v)
                     vArgmaxIndex = torch.argmax(v).item()
                     
