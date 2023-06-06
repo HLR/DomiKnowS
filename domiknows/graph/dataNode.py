@@ -1014,7 +1014,7 @@ class DataNode:
     # Calculate local for datanote argMax and softMax
     def inferLocal(self, keys=("softmax", "argmax")):
         conceptsRelations = self.collectConceptsAndRelations() 
-        
+                
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
             dns = self.findDatanodes(select = cRoot)
@@ -1045,10 +1045,12 @@ class DataNode:
                         #       vSoftmaxT[i] = 1/len(v)
                         
                         dn.attributes[keySoftmax] = vSoftmaxT
-                
+                        
                 if "normalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?                    
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+                        
                         # Clamps the softmax probabilities
                         vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
                         
@@ -1059,7 +1061,7 @@ class DataNode:
                         vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
                         
                         dn.attributes[keyNormalizedProb] = vNormalizedProbT
-                    
+                
                 if "argmax" in keys:
                     keyArgmax  = "<" + c[0].name + ">/local/argmax"
                     v = dn.getAttribute(c[0])
