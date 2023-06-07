@@ -1,40 +1,40 @@
 # Knowledge Declaration
 
-DomiKnows Library allows to **define knowledge** about a domain and use it during the learning and evaluation phases of ML model preparation, as well as during the model usage. 
-The knowledge about the domain enhances the model's performance and makes it more robust against noise in the data. 
-It also enables a faster learning process and reduces the number of training samples required for the model to learn.
+DomiKnows Library allows to **declare knowledge** about a domain and use it during the training and inference phases. 
+The knowledge about the domain potentially enhances the model's performance and make it more robust and generalizable. 
+It also enables a faster learning process by reducing the number of required training samples.
 
 **Knowledge about the domain in DomiKnows is represented as a graph with associated logical constraints.**  
 The graph's nodes are concepts, and edges are relations between concepts. 
-The logical constraints define the knowledge about the domain in the form of logical expressions on concepts and relations from the graph.
+The logical constraints define the knowledge about the domain in the form of logical expressions on concepts and relations defined in the graph.
 
-Capturing knowledge begins with gathering concepts and establishing their relationships to each other, thereby building the **domain graph**. 
-This graph represents the domain knowledge in an ML task. 
-The concepts and relations exemplify the classification of the data and the relationships among the data, which are the subjects of the ML task.
+Declaring knowledge begins with introducing the concepts and establishing relationships between them, thereby building the **domain graph**. 
+This graph represents the domain knowledge of an ML task. 
+Parts of the concepts and relations exemplify classifiers which are subject to learning. 
 
-The parent-child relation between **concepts** in the graph is used to represent the hierarchical structure of the domain knowledge. 
-It implies that if the data is classified as belonging to a concept, it also belongs to all the parent concepts of that concept. 
-Conversely, if the data is classified as belonging to a concept, it can be classified in more detail as one of the child concepts. 
+The parent-child relation between **concepts** in the graph is used to represent the hierarchical structure of the domain knowledge. The expressions of parent and child are implicit though for example, when we wrtie word=concept() ... entity=word() this implies the is-a relationships  between word is-a concept, entity is-a word and the hierarchy will be concpet-> word-> entity.
+It implies that if a data item is classified as belonging to a concept, it also belongs to all the parent concepts of that concept. 
+Conversely, if the data item is classified as belonging to a concept, it can be classified in more detail as one of the child concepts. 
 
 In the graph, there are two distinct types of concepts.  
-* The first type, referred to as **'classification concepts'**, define the classification of the data within _semantic frame_. 
-* The second type, known as **'data concepts'**, specify the types of data, for example, words, sentences, pixels, etc. 
+* The first type, referred to as **'Ouptut concepts'**, defines the semantic abstraction in the output. 
+* The second type, known as **'input concepts'**, specify the types of data items, for example, words, sentences, pixels, etc. 
  
-Classification concepts are subordinate to data concepts, thereby establishing a parent-child relationship.  
-Depending on the level of data classification granularity, a single data concept may encompass multiple classification concepts.
+Output concepts are subordinate to input concepts, thereby establishing a parent-child relationship.  
+Depending on the level of data classification granularity, a single data concept may encompass multiple output concepts.
 
-The **relationships** between concepts are employed to denote not only associations within the data but also categorized relationships between the data and elements of the _semantic frame_. 
+The **relationships** between concepts are employed to denote not only associations within the data items but also categorized relationships between the data and elements of the output  concepts. 
 They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.
-Additionally, they can illustrate temporal relationships between events.  
-Furthermore, they can also signify relationships between the data and the domain knowledge.
-For example, the relationship between a word and a _semantic frame_ can be represented, such as 'works for' or 'located in', among others
+Another example is to illustrate temporal relationships between events.  
+Furthermore, they can also signify relationships between the input data items and the domain knowledge.
+For example, the relationship between a word and a _semantic frame_ can be represented, such as 'works for' or 'located in', among others.
 
 DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.
 In FOL, the basic building blocks of logical constraints are **predicates**. In DomiKnows, these predicates are functions that evaluate whether a given variable corresponds to a certain concept or relation.  
-The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data classified by the concepts and relationships derived from the graph during the learning phase of the ML model.
+The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data items classified by the concepts and relationships derived from the graph during the learning phase of the ML model.
 
 Relationships between predicates can be expressed using **logical connectives**.  
-The most common is the conditional statement ('if'), but all other logical connectives, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if'), are supported as well.
+We support implication statements ('if') and other logical connectives, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if').
 
 **Quantifiers** can be applied to variables within predicate expressions. By default, the universal quantifier 'for every' is presumed, suggesting that each entity from the domain of discourse is subject to the constraint unless stated otherwise.
 
@@ -77,7 +77,7 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 
 ## Graph
 
-`Graph` instances are basic container of the `Concepts`, `Relations`, constraints and other instances in the framework.
+`Graph` instances are basic container of the `Concepts`, `Relations`, constraints in the framework.
 A `Graph` object is constructed either by manually coding or compiled from `OWL` (deprecated).
 Each `Graph` object can contain other `Graph` objects as sub-graphs. No cyclic reference in graph hierarchy is allowed.
 
@@ -85,11 +85,11 @@ You can either write an OWL ontology file initializing your concepts and relatio
 
 Each `Graph` object can contain `Concepts`.
 
-The graph is a partial program, and there is no sensor or learner, which are data processing units, connected. There is no behavior associated. It is only a data structure to express domain knowledge.
+The graph is a partial program. Sensors and learnerwhich are data processing units which will be connected to the graph later. There is no behavior associated with the graph. It is only a data structure to express domain knowledge.
 
 ### Relation Types
 
-We have three defined relationship between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. 
+We have three defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. 
 
 `contains` means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
 When ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
