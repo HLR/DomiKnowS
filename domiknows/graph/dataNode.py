@@ -1045,6 +1045,8 @@ class DataNode:
                         #       vSoftmaxT[i] = 1/len(v)
                         
                         dn.attributes[keySoftmax] = vSoftmaxT
+                    else:
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
                 
                 if "normalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
