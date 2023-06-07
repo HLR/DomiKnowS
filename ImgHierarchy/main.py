@@ -45,7 +45,7 @@ def main(device):
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
-        # probKey = ("local" , "softmax"),
+        probKey = ("local" , "normalizedProb"),
                                 poi = (image_group, image, level1, level2, level3, level4),
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                  metric={
@@ -66,8 +66,8 @@ if __name__ == '__main__':
     from reader import VQADataset
     from graph import *
 
-    # file = "Tasks/ImgHierarchy/data/val.npy"
-    file = "Tasks/ImgHierarchy/data_sample/val_small.npy"
+    file = "Tasks/ImgHierarchy/data/val.npy"
+    # file = "Tasks/ImgHierarchy/data_sample/val_small.npy"
     data = np.load(file, allow_pickle=True).item()
 
     dataset = VQADataset(data,)
