@@ -1092,9 +1092,6 @@ class DataNode:
                         # Calculates their entropy;
                         entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
                         
-                        
-                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
-
                         signs = vector - torch.mean(vector)
                         signs[signs < 0] = -1
                         signs[signs >= 0] = +1
