@@ -1025,7 +1025,9 @@ class DataNode:
             vs = []
             
             for dn in dns:
-                if "softmax" in keys or "normalizedProb" in keys:
+                keySoftmax = "<" + c[0].name + ">/local/softmax"
+                normalized_keys = set(["normalizedProb", "meanNormalizedProb", "normalizedProbAll"])
+                if "softmax" in keys or normalized_keys.intersection(set(keys)):
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
                     if not keySoftmax in dn.attributes: # Already calculated ?                    
                         v = dn.getAttribute(c[0])
@@ -1038,6 +1040,7 @@ class DataNode:
                             v = v.float()
                             
                         vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
+                        # vSoftmaxT = v
                         
                         # Replace nan with 1/len
                         #for i, s in enumerate(vSoftmaxT):
@@ -1054,13 +1057,49 @@ class DataNode:
                         vSoftmaxT = dn.attributes[keySoftmax]
                         
                         # Clamps the softmax probabilities
-                        vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
+                        vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
                         
                         # Calculates their entropy;
                         entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
                         
                         # Multiplies the reverse of entropy to the vector divided by its mean value. P
                         vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                if "meanNormalizedProb" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/meanNormalizedProb"
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+
+                        vector = vSoftmaxT
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = vector/torch.mean(vector)
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                if "normalizedProbAll" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProbAll"
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+
+                        # Clamps the softmax probabilities
+                        vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
+                        
+                        # Calculates their entropy;
+                        entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+                        
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                        signs = vector - torch.mean(vector)
+                        signs[signs < 0] = -1
+                        signs[signs >= 0] = +1
+                        adjustment = signs * torch.pow(vector - torch.mean(vector), 4)
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector)) + adjustment
                         
                         dn.attributes[keyNormalizedProb] = vNormalizedProbT
                 
