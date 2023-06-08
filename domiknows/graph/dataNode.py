@@ -1,6 +1,6 @@
 import torch
 from collections import OrderedDict, namedtuple
-from time import process_time_ns
+from time import process_time, process_time_ns
 import re
 
 from .dataNodeConfig import dnConfig 
@@ -91,6 +91,8 @@ class DataNode:
             self.attributes = {}
             
         self.current_device = 'auto'
+        
+        self.myLoggerTime = getRegrTimer_logger()
                      
     class DataNodeError(Exception):
         pass
@@ -1101,9 +1103,14 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         if "local" in key:
+            startInferLocal = process_time() # timer()
+
             keys = (key[1],)
             self.inferLocal(keys=keys)
-            
+            endInferLocal = process_time() # timer()
+            elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
+            self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)     
+                   
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def inferGBIResults(self, *_conceptsRelations, model, builder):
