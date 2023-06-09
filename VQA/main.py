@@ -208,17 +208,21 @@ if __name__ == '__main__':
             test_every_epoch=True,
         )
     else:
+        # evaluation output
         eval_f = open(eval_file, 'w', buffering=1)
 
         eval_f.write('index,level1,level2,level3,level4,pred_type\n')
 
         for row_idx, row in enumerate(sg_test_loader):
+            # preprocess data
             dataitem = row_to_dataitem(row)
 
+            # input data to model
             node = program.populate_one(dataitem)
 
             node.inferLocal()
 
+            # record data to file
             for child in node.getChildDataNodes('image'):
                 eval_row = [str(row_idx)]
                 eval_row_GBI = [str(row_idx)]
