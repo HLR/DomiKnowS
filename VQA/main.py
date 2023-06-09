@@ -152,6 +152,9 @@ if __name__ == '__main__':
         return [l if l != -1 else label_sizes[depth] - 1 for l in label_list]
 
     def row_to_dataitem(row, batch_size=1):
+        """
+        Convert sg_test_loader item to domiknows dataitem dict.
+        """
         result = {}
         result['features'] = row[0]
 
