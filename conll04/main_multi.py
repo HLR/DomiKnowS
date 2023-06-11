@@ -137,7 +137,11 @@ def main():
             verifyResult = node.verifyResultsLC()
             if verifyResult:
                 for lc in verifyResult:
-                    print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+                    if verifyResult[lc]['satisfied'] == verifyResult[lc]['satisfied']:
+                        print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+                    else:
+                        print("lc %s is NaN satisfied by learned results"%(lc))
+
         else:
             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
             break

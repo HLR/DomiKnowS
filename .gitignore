@@ -8,3 +8,6 @@ T5Procedural/updated_loc_info.pt
 
 # Ignore __pycache__ directories
 **/__pycache__
+CIFAR100/True_999999999__0.1.txt
+ImgHierarchy/logs/ilpOntSolver.log
+ImgHierarchy/logs/datanode.log

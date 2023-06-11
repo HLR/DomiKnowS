@@ -1,7 +1,7 @@
 from transformers import RobertaModel
 import torch
 from torch import nn
-from domiknows.program.model import PrimalDualModel
+from domiknows.program.model.lossModel import PrimalDualModel
 
 class WIQA_Robert(nn.Module):
 
