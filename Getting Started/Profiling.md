@@ -18,7 +18,7 @@ The below log presents difference in execution time of ILP solver for the run us
 ```
 2022-10-01 10:59:29,444 - INFO - regrTimer:getDataNode - DataNode Builder the set method called - 28 times
 2022-10-01 10:59:29,444 - INFO - regrTimer:getDataNode - DataNode Builder used - 15.62500000ms
-2022-10-01 10:59:29,769 - INFO - regrTimer:calculateILPSelection - Calculating ILP Inferencing 
+2022-10-01 10:59:29,769 - INFO - regrTimer:calculateILPSelection - Calculating ILP Inference 
 2022-10-01 10:59:31,537 - INFO - regrTimer:calculateILPSelection - ILP Variables Init - time: 1765ms
 2022-10-01 10:59:31,537 - INFO - regrTimer:calculateILPSelection - Reusing ILP Model - LCs already present in the model
 2022-10-01 10:59:31,538 - INFO - regrTimer:calculateILPSelection - ILP Graph and Ontology Constraints - time: 0ms
@@ -28,13 +28,13 @@ The below log presents difference in execution time of ILP solver for the run us
 2022-10-01 10:59:31,541 - INFO - regrTimer:calculateILPSelection - ILP Logical Constraints - time: 0ms
 2022-10-01 10:59:31,574 - INFO - regrTimer:calculateILPSelection - Max solution was found in 31ms for p - 100 with optimal value: 23.79
 2022-10-01 10:59:31,736 - INFO - regrTimer:calculateILPSelection - ILP Preparing Return Results - time: 171ms
-2022-10-01 10:59:31,736 - INFO - regrTimer:calculateILPSelection - End ILP Inferencing - total time: 1.968750s
+2022-10-01 10:59:31,736 - INFO - regrTimer:calculateILPSelection - End ILP Inference - total time: 1.968750s
 ```
 
 ```
 11:02:47,221 - INFO - regrTimer:getDataNode - DataNode Builder the set method called - 28 times
 2022-10-01 11:02:47,221 - INFO - regrTimer:getDataNode - DataNode Builder used - 46.87500000ms
-2022-10-01 11:02:47,606 - INFO - regrTimer:calculateILPSelection - Calculating ILP Inferencing 
+2022-10-01 11:02:47,606 - INFO - regrTimer:calculateILPSelection - Calculating ILP Inference 
 2022-10-01 11:02:50,121 - INFO - regrTimer:calculateILPSelection - ILP Variables Init - time: 2500ms
 2022-10-01 11:02:50,222 - INFO - regrTimer:calculateILPSelection - ILP Graph and Ontology Constraints - time: 109ms
 2022-10-01 11:02:50,226 - INFO - regrTimer:calculateILPSelection - Starting ILP inferencing - Found 20 logical constraints
@@ -63,7 +63,7 @@ The below log presents difference in execution time of ILP solver for the run us
 2022-10-01 11:02:51,952 - INFO - regrTimer:calculateILPSelection - ILP Logical Constraints - time: 1734ms
 2022-10-01 11:02:51,988 - INFO - regrTimer:calculateILPSelection - Max solution was found in 31ms for p - 100 with optimal value: 21.27
 2022-10-01 11:02:52,432 - INFO - regrTimer:calculateILPSelection - ILP Preparing Return Results - time: 421ms
-2022-10-01 11:02:52,432 - INFO - regrTimer:calculateILPSelection - End ILP Inferencing - total time: 4.796875s
+2022-10-01 11:02:52,432 - INFO - regrTimer:calculateILPSelection - End ILP Inference - total time: 4.796875s
 ```
 
 
