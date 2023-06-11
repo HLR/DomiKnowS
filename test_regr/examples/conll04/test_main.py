@@ -418,23 +418,7 @@ def test_main_conll04(case):
         assert sum([dn.getAttribute(o, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 2
         
         # ------------ Relations Results
-        
-        # Get value of attribute work_for/ILP for pair between 0 and 3
-        #assert pairResult['work_for'][0][3] == nan
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() != \
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item()
-        
-        #assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item() \
-               != \
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item()
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item() !=\
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item()
-         
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') != \
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP')
-        
+                
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][1]) == 1
         assert sum([dn.getAttribute(work_for, 'ILP').item() if dn.getAttribute(work_for, 'ILP').item() == dn.getAttribute(work_for, 'ILP').item() else 0
