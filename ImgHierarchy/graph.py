@@ -9,7 +9,7 @@ from domiknows.graph.concept import EnumConcept
 from domiknows.graph.logicalConstrain import nandL, exactL, ifL, orL, andL, notL
 
 
-with open("Tasks/ImgHierarchy/concepts.json") as f:
+with open("concepts.json") as f:
     hierarchy = json.load(f)
 
 def process_hierarchy(path):
@@ -39,7 +39,7 @@ def process_hierarchy(path):
                                 structure[key2].add(key3)
     return structure
 
-structure = process_hierarchy("Tasks/ImgHierarchy/hierarchy.json")
+structure = process_hierarchy("hierarchy.json")
 
 
 
@@ -48,7 +48,7 @@ Concept.clear()
 Relation.clear()
 
 
-with Graph('VQA') as graph:
+with Graph('VQA', reuse_model=True) as graph:
     image_group = Concept(name='image_group')
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
@@ -84,9 +84,6 @@ with Graph('VQA') as graph:
                     ifL(level2.__getattr__(key), andL(level3.__getattr__('None'), level4.__getattr__('None')))
                 elif key in hierarchy['level3']:
                     ifL(level3.__getattr__(key), level4.__getattr__('None'))
-
-
-                
 
         # ifL(level1.__getattr__('None'), andL(*[level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')]))
         ifL(

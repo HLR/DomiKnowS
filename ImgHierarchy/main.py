@@ -52,11 +52,12 @@ def main(device):
                                     # 'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
     return program
+
 if __name__ == '__main__':
     from domiknows.utils import setProductionLogMode
     productionMode = True
     if productionMode:
-        setProductionLogMode(no_UseTimeLog=True)
+        setProductionLogMode(no_UseTimeLog=False)
     from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     import logging
@@ -66,8 +67,8 @@ if __name__ == '__main__':
     from reader import VQADataset
     from graph import *
 
-    file = "Tasks/ImgHierarchy/data/val.npy"
-    # file = "Tasks/ImgHierarchy/data_sample/val_small.npy"
+    #file = "Tasks/ImgHierarchy/data/val.npy"
+    file = "data_sample/val_small.npy"
     data = np.load(file, allow_pickle=True).item()
 
     dataset = VQADataset(data,)
@@ -321,10 +322,10 @@ if __name__ == '__main__':
 
 
 
-    with open("Tasks/ImgHierarchy/logger.json", "w") as file:
+    with open("logger.json", "w") as file:
         json.dump(f1_res, file, indent=4)
 
-    file2 = open("Tasks/ImgHierarchy/logger_manual.txt", "w")
+    file2 = open("logger_manual.txt", "w")
     for _c in corrects:
         if totals[_c] != 0:
             print(f"{_c} accuracy: {corrects[_c]/totals[_c]}", file=file2)

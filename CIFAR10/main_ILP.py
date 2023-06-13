@@ -5,7 +5,7 @@ sys.path.append('../..')
 
 from domiknows.program import SolverPOIProgram, POIProgram, IMLProgram
 from domiknows.program.model.pytorch import PoiModel, IMLModel
-from domiknows.program.model.primaldual import PrimalDualModel
+from domiknows.program.model.lossModel import PrimalDualModel
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
