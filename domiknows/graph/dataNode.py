@@ -1028,7 +1028,7 @@ class DataNode:
             
             for dn in dns:
                 keySoftmax = "<" + c[0].name + ">/local/softmax"
-                normalized_keys = set(["normalizedProb", "meanNormalizedProb", "normalizedProbAll"])
+                normalized_keys = set(["normalizedProb", "meanNormalizedProb", "normalizedProbAll", "meanNormalizedProbStd"])
                 if "softmax" in keys or normalized_keys.intersection(set(keys)):
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
                     if not keySoftmax in dn.attributes: # Already calculated ?                    
@@ -1087,7 +1087,7 @@ class DataNode:
                         vSoftmaxT = dn.attributes[keySoftmax]
 
                         # Clamps the softmax probabilities
-                        vector = torch.clamp(vSoftmaxT, min=1e-12, max=1 - 1e-12) 
+                        vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
                         
                         # Calculates their entropy;
                         entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
@@ -1099,6 +1099,23 @@ class DataNode:
                         
                         # Multiplies the reverse of entropy to the vector divided by its mean value. P
                         vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector)) + adjustment
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                if "meanNormalizedProbStd" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/meanNormalizedProbStd"
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+
+                        vector = vSoftmaxT
+
+                        signs = vector - torch.mean(vector)
+                        signs[signs < 0] = -1
+                        signs[signs >= 0] = +1
+                        adjustment = signs * torch.pow(vector - torch.mean(vector), 2)
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = (adjustment/torch.pow(torch.mean(vector), 2))
                         
                         dn.attributes[keyNormalizedProb] = vNormalizedProbT
                 
