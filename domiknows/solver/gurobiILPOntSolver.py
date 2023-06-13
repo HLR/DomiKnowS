@@ -1,3 +1,4 @@
+import math
 from time import process_time, process_time_ns
 from collections import OrderedDict
 import logging
@@ -22,6 +23,7 @@ from domiknows.graph import CandidateSelection
 from domiknows.utils import getReuseModel
 
 from domiknows.graph.candidates import getCandidates
+
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -51,231 +53,184 @@ class gurobiILPOntSolver(ilpOntSolver):
     def reset_logical_constraints(self, ):
         self.logical_constraints = self.myGraph[0].logicalConstrains ### Can myGraph really be multiple graphs?
         
-    def valueToBeSkipped(self, x):
-        return ( 
-                x != x or  # nan 
-                abs(x) == float('inf')  # inf 
-                ) 
+    def getConcept(self, concept):
+        return concept[0]
     
+    def getConceptName(self, concept):
+        return concept[0].name
+    
+    def conceptIsBinary(self, concept):
+        return concept[2] is None
+    
+    def conceptIsMultiClass(self, concept):
+        return concept[2] is not None
+    
+    # Check if value is NaN or if and has to be skipped
+    def valueToBeSkipped(self, x):
+        return math.isnan(x) or math.isinf(x)
+        
     # Get Ground Truth for provided concept
     def __getLabel(self, dn, conceptRelation, fun=None, epsilon = None):
         value = dn.getAttribute(conceptRelation, 'label')
-        
         return value
         
-    # Get and calculate probability for provided concept
+    # Get and tailor probability for provided concept and instance (represented as dn)
     def getProbability(self, dn, conceptRelation, key = ("local" , "softmax"), fun=None, epsilon = 0.00001):
-        if not dn:
-            valueI = None
+        valueI = dn.getAttribute(conceptRelation, *key) if dn else None
+        labelIndex = conceptRelation[2]
+        
+        if valueI is None:
+            value = None
         else:
-            valueI = dn.getAttribute(conceptRelation, *key)
-                    
-        if conceptRelation[2] is not None: # This is mutliclass - need to convert it to binary for ILP 
-            value = torch.empty(2, dtype=torch.float)
+            labelIndex = conceptRelation[2]
+            # If value is for multi-class concept, then we need to convert it to binary
+            value = torch.zeros(2, dtype=torch.float) if self.conceptIsMultiClass(conceptRelation) else valueI
+            value[0] = 1 - valueI[labelIndex] if self.conceptIsMultiClass(conceptRelation) else value[0]
+            value[1] = valueI[labelIndex] if self.conceptIsMultiClass(conceptRelation) else value[1]
             
-            value[0] = 1 - valueI[conceptRelation[2]]
-            value[1] = valueI[conceptRelation[2]]
-        else: # This is binary 
-            value = valueI
-
-        # Process probability through function and apply epsilon
-        if epsilon is not None:
-            if value[0] > 1-epsilon:
-                value[0] = 1-epsilon
-            elif value[1] > 1-epsilon:
-                value[1] = 1-epsilon
-                
-            if value[0] < epsilon:
-                value[0] = epsilon
-            elif value[1] < epsilon:
-                value[1] = epsilon
-               
+        # If softmax process probability through function and apply epsilon
+        if "softmax" in key and value is not None and not math.isnan(value[0]) and epsilon is not None:
+            value[0] = max(epsilon, min(1-epsilon, value[0]))
+            value[1] = max(epsilon, min(1-epsilon, value[1]))
+                    
             # Apply fun on probabilities if defined
             if fun is not None:
                 value = fun(value)
-            
+        
         return value # Return probability
     
+    def createILPVariable(self, m, dn, currentConceptRelation, notV = False):
+        if notV:
+            xkey = '<' + self.getConceptName(currentConceptRelation) + '>/ILP/notx'
+        else:
+            xkey = '<' + self.getConceptName(currentConceptRelation) + '>/ILP/x'  
+
+        # Create a placeholder in Datanode for variable if it does not exist
+        currentConceptLabelLength =  currentConceptRelation[3]
+        dn.attributes.setdefault(xkey, [None] * currentConceptLabelLength)
+        
+        # Check Datanode if ILP variable is already created
+        if self.conceptIsMultiClass(currentConceptRelation):
+            xNew = dn.attributes[xkey][currentConceptRelation[2]]
+        else:
+            xNew =  dn.attributes[xkey][0]
+            
+        # Return ILP variable if it already exists
+        if xNew is not None:
+            return xNew
+            
+        # --- Else create ILP variable
+        currentLabel = currentConceptRelation[1]
+
+        if notV:
+            xVarName = "%s_%s_is_not_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentLabel)
+        else:
+            xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentLabel)
+            
+        xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
+
+        # Add ILP Variable to Datanode
+        if self.conceptIsMultiClass(currentConceptRelation):
+            dn.attributes[xkey][currentConceptRelation[2]] = xNew
+        else:
+            dn.attributes[xkey][0] = xNew
+        
+        return xNew
+        
+    def getDatanodesForConcept(self, rootDn, currentName, conceptToDNSCash=None):
+        if conceptToDNSCash is None or currentName is None:
+            conceptToDNSCash = {}
+           
+            if currentName is None:
+                return  # Just reset cash
+            
+        if currentName in conceptToDNSCash:
+            dns = conceptToDNSCash[currentName]
+        else:
+            rootConcept = rootDn.findRootConceptOrRelation(currentName)
+            dns = rootDn.findDatanodes(select=rootConcept)
+            conceptToDNSCash[currentName] = dns
+            
+        return dns
+    
+    # Count number of variables for logical constraints
     def countLCVariables(self, rootDn, *conceptsRelations):
-        # Collect LC variables 
         ilpVarCount = {}
-        conceptToDNSCash = {}
         
         for currentConceptRelation in conceptsRelations: 
-            currentName = currentConceptRelation[0].name
-            
-            if currentName in conceptToDNSCash:
-                dns = conceptToDNSCash[currentName]
-            else:
-                rootConcept = rootDn.findRootConceptOrRelation(currentName)
-                dns = rootDn.findDatanodes(select = rootConcept)
-                conceptToDNSCash[currentName] = dns
+            currentName = self.getConceptName(currentConceptRelation)
+            currentLabel = currentConceptRelation[1]
+
+            dns = self.getDatanodesForConcept(rootDn, currentName)
                 
-            currentConceptName = currentName + "_" + currentConceptRelation[1]
+            currentConceptName = currentName + "_" + currentLabel
             ilpVarCount[currentConceptName] = len(dns)
             
-            if currentConceptRelation[2] is None:
+            if self.conceptIsMultiClass(currentConceptName):
                 ilpVarCount[currentConceptName] += len(dns)
        
         return ilpVarCount
-    
-    def createObjective(self, xDict, rootDn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001):
-        Q = None
-        conceptToDNSCash = {}        
-        
-        x = list(xDict.values())
-        index = 0
-        for currentConceptRelation in conceptsRelations: 
-            currentName = currentConceptRelation[0]
-            
-            if currentName in conceptToDNSCash:
-                dns = conceptToDNSCash[currentName]
-            else:
-                rootConcept = rootDn.findRootConceptOrRelation(currentName)
-                dns = rootDn.findDatanodes(select = rootConcept)
-                conceptToDNSCash[currentName] = dns
-       
-            for dn in dns:
-                if x[index] == None:
-                    continue
-                
-                currentProbability = self.getProbability(dn, currentConceptRelation, key=key, fun=fun, epsilon=epsilon)
-                
-                if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
-                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentName,dn.getInstanceID()))
-                    x[index] = None
-                
-                # Check if probability is NaN or if and has to be skipped
-                elif self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],currentConceptRelation[1],dn.getInstanceID()))
-                    x[index] = None
-                else:
-                    if Q is None:
-                        Q = currentProbability[1] * x[index]
-                    else:
-                        Q += currentProbability[1] * x[index] 
-                    index += 1   
-                       
-                # Create negative variable for binary concept
-                if currentConceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
-                    if x[index-1] == None:
-                        x[index] = None
-                        continue
-                    
-                    # Check if probability is NaN or if and has to be created based on positive value
-                    if self.valueToBeSkipped(currentProbability[0]):
-                        currentProbability[0] = 1 - currentProbability[1]
-                        self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"
-                                           %(dn.getInstanceID(), currentName, currentProbability[1]))
-                        
-                    Q += currentProbability[0] * x[index] 
-                    index += 1  
-           
-        return Q
-    
+  
+    # Create ILP variables for logical constraints and objective
     def createILPVariables(self, m, x, rootDn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001):
         Q = None
+        # Reset the cash for concept to datanodes
+        self.getDatanodesForConcept(rootDn, None)
         
         # Create ILP variables 
         for currentConceptRelation in conceptsRelations: 
-            rootConcept = rootDn.findRootConceptOrRelation(currentConceptRelation[0])
-            dns = rootDn.findDatanodes(select = rootConcept)
-            xkey = '<' + currentConceptRelation[0].name + '>/ILP/x'  
+            currentLabel = currentConceptRelation[1]
+            if self.conceptIsMultiClass(currentConceptRelation):
+                currentLabelIndex = currentConceptRelation[2]
+            else:
+                currentLabelIndex = 0
+            
+            if currentLabel is None:
+                self.myLogger.debug("Concept %s does not have label"%currentConceptRelation)
        
+            # Get datanodes for concept
+            dns = self.getDatanodesForConcept(rootDn, self.getConceptName(currentConceptRelation))
             for dn in dns:
-                # Init x to None
-                if currentConceptRelation[2] is not None:
-                    x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = None
-                else:
-                    x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = None
+                xNew = x.get((self.getConcept(currentConceptRelation), currentLabel, dn.getInstanceID(), currentLabelIndex), None)
+                if xNew is None:
+                    # Create ILP variable
+                    xNew = self.createILPVariable(m, dn, currentConceptRelation)
+                    if self.conceptIsBinary(currentConceptRelation):
+                        xNotNew  = self.createILPVariable(m, dn, currentConceptRelation, notV=True)
+
+                # ---- Prepare ILP variables for constraints and objective for the current run
+                
+                # Create placeholder for variable in the current x set for run
+                x[self.getConcept(currentConceptRelation), currentLabel, dn.getInstanceID(), currentLabelIndex] = None
+                if self.conceptIsBinary(currentConceptRelation):
+                    x[self.getConcept(currentConceptRelation), 'Not_'+  currentLabel, dn.getInstanceID(), currentLabelIndex]  = None
                     
-                if currentConceptRelation[2] is None:
-                    if currentConceptRelation[2] is not None:
-                        x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = None
-                    else:
-                        x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0] = None
-                        
+                # Get probability for variable in the current run
                 currentProbability = self.getProbability(dn, currentConceptRelation, key=key, fun=fun, epsilon=epsilon)
                 
+                # Skip variable for the current run if probability is None
                 if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
-                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentConceptRelation[0].name,dn.getInstanceID()))
-                    continue
-                
-                # Check if probability is NaN or if and has to be skipped
-                if self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],currentConceptRelation[1],dn.getInstanceID()))
-                    continue
-    
-                xNew = None
-                if currentConceptRelation[2] is not None:
-                    if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]) in x:
-                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
-                else:
-                    if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0) in x:
-                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0]
-                
-                if xkey not in dn.attributes:
-                    dn.attributes[xkey] = [None] * currentConceptRelation[3]
-                        
-                if xNew is None:
-                    # Create variable
-                    xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentConceptRelation[1])
-                    xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
-                    
-                    if currentConceptRelation[2] is not None:
-                        x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = xNew
-                    else:
-                        x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
+                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(self.getConceptName(currentConceptRelation),dn.getInstanceID()))
+                # Skip variable for the current run if probability is NaN or Inf
+                elif self.valueToBeSkipped(currentProbability[1]):
+                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],  currentLabel, dn.getInstanceID()))
+                else:    
+                    # Add variable to the x set for current run
+                    x[self.getConcept(currentConceptRelation),  currentLabel, dn.getInstanceID(), currentLabelIndex] = xNew
+                    if self.conceptIsBinary(currentConceptRelation):
+                        x[self.getConcept(currentConceptRelation), 'Not_' + currentLabel, dn.getInstanceID(), currentLabelIndex] = xNotNew
 
-                if currentConceptRelation[2] is not None:
-                    dn.attributes[xkey][currentConceptRelation[2]] = xNew
-                else:
-                    dn.attributes[xkey][0] = xNew
-                
-                if Q is None:
-                    Q = currentProbability[1] * xNew
-                else:
-                    Q += currentProbability[1] * xNew       
-    
-                # Check if probability is NaN or if and has to be created based on positive value
-                if self.valueToBeSkipped(currentProbability[0]):
-                    currentProbability[0] = 1 - currentProbability[1]
-                    self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"
-                                       %(dn.getInstanceID(), currentConceptRelation[0].name, currentProbability[1]))
-    
-                # Create negative variable for binary concept
-                if currentConceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
-                    xNotNew  = None
-                    
-                    if currentConceptRelation[2] is not None:
-                        if (currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]) in x:
-                            xNotNew= x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
+                    # Add variable to objective
+                    if Q is None:
+                        Q = currentProbability[1] * xNew
                     else:
-                        if (currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0) in x:
-                            xNotNew = x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0]
-                    
-                    notxkey = '<' + currentConceptRelation[0].name + '>/ILP/notx'
+                        Q += currentProbability[1] * xNew       
+                            
+                    if self.conceptIsBinary(currentConceptRelation): 
+                        Q += currentProbability[0] * xNotNew    
                 
-                    if notxkey not in dn.attributes:
-                        dn.attributes[notxkey] = [None] * currentConceptRelation[3]
-                        
-                    if xNotNew is None:
-                        xNotVarName = "%s_%s_is_not_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentConceptRelation[1])
-                        xNotNew = m.addVar(vtype=GRB.BINARY,name=xNotVarName)
-                        if currentConceptRelation[2] is not None:
-                            x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = xNotNew
-                        else:
-                            x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0] = xNotNew
-                        
-                    if currentConceptRelation[2] is not None:
-                        dn.attributes[notxkey][currentConceptRelation[2]] = xNotNew
-                    else:
-                        dn.attributes[notxkey][0] = xNotNew
-                                        
-                    Q += currentProbability[0] * xNotNew    
-                
-            if currentConceptRelation[2] is not None:
-                self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
+            if self.conceptIsMultiClass(currentConceptRelation):
+                self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%(currentLabel))
 
         m.update()
 
@@ -1220,8 +1175,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         self.current_device = dn.current_device
         
-        self.myLogger.info('Calculating ILP Inferencing ')
-        self.myLoggerTime.info('Calculating ILP Inferencing ')
+        self.myLogger.info('Calculating ILP Inference ')
+        self.myLoggerTime.info('Calculating ILP Inference ')
 
         start = process_time() # timer()
 
@@ -1229,13 +1184,14 @@ class gurobiILPOntSolver(ilpOntSolver):
         gurobiEnv.setParam('OutputFlag', 0)
         gurobiEnv.start()  
         
+        # Check if existing ILP model can be reuse without recreating ILP constraints
         try:
             # Find count of instance in each concept 
             ilpVarCount = self.countLCVariables(dn, *conceptsRelations)
 
             reusingModel = False
             if self.reuse_model:
-                # Find it there is saved model with this count of instances per concept
+                # Find it there is saved ILP model with this count of instances per concept
                 for modelDec in self.model:
                     if ilpVarCount == modelDec[0]:
                         m = modelDec[1]
@@ -1245,14 +1201,21 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
             if not reusingModel:
                 # If not reusing the model or if the right model was yet saved - create new Gurabi model
-                m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
+                if dn.gurobiModel == None:
+                    m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
+                    dn.gurobiModel = m
+                else:
+                    m = dn.gurobiModel
+                    m.reset()
+                    mConstr = m.getConstrs()
+                    m.remove(mConstr)
+                    m.update()
+                    
                 m.params.outputflag = 0
                 x = OrderedDict()
                 
-                # Create ILP Variables for concepts and objective
-                Q = self.createILPVariables(m, x, dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon)
-            else:
-                Q = self.createObjective(x, dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon)
+            # Handle ILP Variables for concepts and objective
+            Q = self.createILPVariables(m, x, dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon)
             
             endVariableInit = process_time() # timer()
             elapsedVariablesInMs = (endVariableInit - start) *1000
@@ -1350,7 +1313,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 
                             dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
                             
-                            pEnd= process_time() # timer()
+                            pEnd = process_time() # timer()
                             self.myLoggerTime.info('ILP Model init for p %i - time: %ims'%(p, (pEnd - pStart)*1000))
                 else:
                     mP = m
@@ -1566,12 +1529,12 @@ class gurobiILPOntSolver(ilpOntSolver):
         elapsedInS = end - start
         
         if elapsedInS > 1:
-            self.myLogger.info('End ILP Inferencing - total time: %fs'%(elapsedInS))
-            self.myLoggerTime.info('End ILP Inferencing - total time: %fs'%(elapsedInS))
+            self.myLogger.info('End ILP Inference - total time: %fs'%(elapsedInS))
+            self.myLoggerTime.info('End ILP Inference - total time: %fs'%(elapsedInS))
         else:
             elapsedInMs = elapsedInS *1000
-            self.myLogger.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
-            self.myLoggerTime.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
+            self.myLogger.info('End ILP Inference - total time: %ims'%(elapsedInMs))
+            self.myLoggerTime.info('End ILP Inference - total time: %ims'%(elapsedInMs))
             
         self.myLogger.info('')
         self.myLoggerTime.info('')
@@ -1672,7 +1635,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         productSize = 1
         productArgs = []
         for currentConceptRelation in conceptsRelations:
-            currentConceptName = currentConceptRelation[0].name
+            currentConceptName = self.getConceptName(currentConceptRelation)
             
             if currentConceptName not in masterConcepts:
                 masterConcepts[currentConceptName] = OrderedDict()
@@ -1686,7 +1649,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 masterConcepts[currentConceptName]["dns"] = dns
                 
                 conceptRange = 2
-                if currentConceptRelation[2] is not None:
+                if self.conceptIsMultiClass(currentConceptRelation):
                     conceptRange = currentConceptRelation[3]
                 masterConcepts[currentConceptName]["range"] = [x for x in range(conceptRange)]
                 

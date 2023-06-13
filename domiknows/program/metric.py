@@ -68,8 +68,7 @@ class DatanodeCMMetric(torch.nn.Module):
         self.inferType = inferType
 
     def forward(self, input, target, data_item, prop, weight=None):
-        if (data_item.needsBatchRootDN()):
-            data_item.addBatchRootDN()
+        data_item.createBatchRootDN()
         datanode = data_item.getDataNode(context=self.inferType)
         result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
         if len(result.keys())==2:

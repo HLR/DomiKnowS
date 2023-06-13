@@ -108,8 +108,7 @@ class GBIModel(torch.nn.Module):
     # ----
     
     def forward(self, builder, build=None):
-        if builder.needsBatchRootDN():
-            builder.addBatchRootDN()
+        builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
 
         datanode.infer()
@@ -191,8 +190,7 @@ class GBIModel(torch.nn.Module):
     def calculateGBISelection(self, builder, conceptsRelations):
         self.forward(builder)
         
-        if builder.needsBatchRootDN():
-            builder.addBatchRootDN()
+        builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
         
         for c in conceptsRelations:

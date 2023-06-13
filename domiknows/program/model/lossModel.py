@@ -68,8 +68,7 @@ class LossModel(torch.nn.Module):
         if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        if (builder.needsBatchRootDN()):
-            builder.addBatchRootDN()
+        builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
@@ -162,9 +161,8 @@ class SampleLossModel(torch.nn.Module):
         if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        if (builder.needsBatchRootDN()):
-            builder.addBatchRootDN()
-        
+        builder.createBatchRootDN()
+
 #       self.loss.reset()
 
         datanode = builder.getDataNode(device=self.device)

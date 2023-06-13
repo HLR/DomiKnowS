@@ -92,8 +92,7 @@ class TorchModel(torch.nn.Module):
             data_item.update({"graph": self.graph, 'READER': 0})
             builder = DataNodeBuilder(data_item)
             *out, = self.populate(builder)
-            if (builder.needsBatchRootDN()):
-                builder.addBatchRootDN()
+            builder.createBatchRootDN()
             datanode = builder.getDataNode(context="build", device=self.device)
             return (*out, datanode, builder)
         else:
@@ -241,8 +240,7 @@ class SolverModel(PoiModel):
 #         print("Done with the computation")
 
         # Check if this is batch
-        if (builder.needsBatchRootDN()):
-            builder.addBatchRootDN()
+        builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
@@ -487,8 +485,7 @@ class SolverModelDictLoss(PoiModelDictLoss):
 #         print("Done with the computation")
 
         # Check if this is batch
-        if (builder.needsBatchRootDN()):
-            builder.addBatchRootDN()
+        builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
