@@ -27,14 +27,14 @@ The **relationships** between concepts are employed to denote not only associati
 They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.
 Another example is to illustrate temporal relationships between events.  
 Furthermore, they can also signify relationships between the input data items and the domain knowledge.
-For example, the relationship between a word and a _semantic frame_ can be represented, such as 'works for' or 'located in', among others.
+For example, the relationship between words based on a entity-mentione-relationship abstraction  can be represented 'works for' or 'located in', among others.
 
 DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.
 In FOL, the basic building blocks of logical constraints are **predicates**. In DomiKnows, these predicates are functions that evaluate whether a given variable corresponds to a certain concept or relation.  
 The variables in this context refer to an entity or entities in the domain of discourse, which, in this case, pertains to machine learning data items classified by the concepts and relationships derived from the graph during the learning phase of the ML model.
 
-Relationships between predicates can be expressed using **logical connectives**.  
-We support implication statements ('if') and other logical connectives, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if').
+Relationships between predicates can be expressed using **logical operations**.  
+We support implication statements ('if') and other logical operations, such as conjunction ('and'), disjunction ('or'), negation ('not'), and biconditional ('if and only if').
 
 **Quantifiers** can be applied to variables within predicate expressions. By default, the universal quantifier 'for every' is presumed, suggesting that each entity from the domain of discourse is subject to the constraint unless stated otherwise.
 
@@ -64,7 +64,7 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 
 ### Graph classes
 
-- Package `domiknows.graph`: the set of class for graph and constraints definitions.
+- Package `domiknows.graph`: a set of classes for graph and constraints definitions.
 - Class `Graph`: classes to construct graph, its structure and containers.
 - Class `Concept`: classes to define concepts and their properties.
 - Class `Property`: a key attached to a `Concept` that can be associated with certain value assigned by a sensor or a learner
@@ -72,12 +72,12 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 
 ### Constraints classes
 
-- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics, that one can express logical constraints.
+- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics via whihc one can express logical constraints.
 - Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the logical constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existsL()`, `equalL()`, etc.
 
 ## Graph
 
-`Graph` instances are basic container of the `Concepts`, `Relations`, constraints in the framework.
+`Graph` instances are basic containers of the `Concepts`, `Relations` and constraints in the framework.
 A `Graph` object is constructed either by manually coding or compiled from `OWL` (deprecated).
 Each `Graph` object can contain other `Graph` objects as sub-graphs. No cyclic reference in graph hierarchy is allowed.
 
@@ -85,14 +85,14 @@ You can either write an OWL ontology file initializing your concepts and relatio
 
 Each `Graph` object can contain `Concepts`.
 
-The graph is a partial program. Sensors and learnerwhich are data processing units which will be connected to the graph later. There is no behavior associated with the graph. It is only a data structure to express domain knowledge.
+The graph declaration is a part of the program. Sensors and learners, describes later, are data processing units which will be connected to the graph. There is no behavior associated to the graph. It is only a declaration language to express domain knowledge.
 
 ### Relation Types
 
-We have three defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. 
+We have three defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. \pk{is-a??}
 
-`contains` means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
-When ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
+`contains` ?? is a one-to-many relationship. A.containd(B) means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
+Whenever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
 
 ```Python
 sentence = Concept('sentence')
@@ -103,7 +103,7 @@ sentence.contains(word)
 phrase.contains(word)
 ```
 
-we use the relationship `has_a` only to define relations between concepts and to produce candidates of a relationship. For instance, a relationship between `word` and `word` can be defined using an intermediate concept `pair` and two `has_a` relation links.
+The `has_a` relation is a many-to-many ?? relationship. It defines relations between concepts that helps in producing candidates of a relationship. For instance, a relationship between `word` and `word` can be defined using an intermediate concept `pair` and two `has_a` relation links as follows, 
 
 ```Python
 pair = Concept("pair")
@@ -111,14 +111,14 @@ pair.has_a(arg1=word, arg2=word)
 ```
 
 This means that the candidates of a `pair` concept are generated based on a `word_{i}` and a `word_{j}`.
-Considering the properties of `contains` and `has_a`, in case of defining a `semantic frame` we have to define the following code.
+Considering the properties of `contains` and `has_a`, in case of defining a `semantic frame` with multiple semantic elements, we can define it as follows,
 
 ```Python
 semantic_frame = Concept('semantic-frame')
 semantic_frame.has_a(verb=word, subject=word, object=word)
 ```
 
-As we only support relationships between three concepts, in case of a relation with more arguments, you have to break it to relationships between a main concept and one other concept each time.
+We only support relationships between three concepts. Therfore, in case of a relation has more arguments, you have to break it to relationships between a main concept and one other concept each time.
 
 ```Python
 semantic_frame = Concept('semantic-frame')
@@ -130,7 +130,7 @@ subject_semantic.has_a(semantic=semantic_frame, subject=word)
 object_semantic.has_a(semantic=semantic_frame, object=word)
 ```
 
-the `equal` relation establishes an equality between two different concept. for instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
+The `equal` relation establishes an equality between two different concepts. For instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
 
 ```Python
 word = Concept("word")
@@ -138,9 +138,9 @@ word1 = Concept("word1")
 word.equal(word1)
 ```
 
-This edge enables us to transfer properties of concepts between instances that are marked as equal.
+This edge enables us to transfer properties of concepts between instances that are marked as equal. 
 
-Using each of these relation edges requires us to assign a sensor to them in the model execution. The sensors input is selected properties from the source concept and the output will be stored as selected properties in the destination node.
+Using each of these relation edges requires us to assign a sensor to them in the model execution. The sensors input is selected properties from the source concept and the output will be stored as selected properties in the destination node. \pk{this description is nonsense at this stage, refer to a link with the actual information.}
 
 ### Example
 
@@ -158,9 +158,9 @@ with Graph() as graph:
 
 #### Graph declaration and `with` statement
 
-The first `with` statement creates a graph, assigns it to Python variable `graph`, and declares that anything below are attached to the graph.
+The first `with` statement creates a graph, assigns it to Python variable `graph`, and declares that anything defined under it are a part of the graph.
 
-The second `with` statement declare another graph with an explicit name `'sub'`. It will also be attached to the enclosing graph, and become a subgraph. However, everything below this point will be attached to the subgraph, instead of the first graph.
+The second `with` statement declare another graph with an explicit name `'sub'`. It will also be attached to the enclosing graph, and become a subgraph. However, everything under this point will be a part of the subgraph, instead of the first graph.
 
 #### Concept declaration
 
@@ -168,11 +168,11 @@ The second `with` statement declare another graph with an explicit name `'sub'`.
 
 `word = Concept('word')` creates a concept with name `'word'` (implicitly attached to the enclosing graph) and assign it to Python variable `word`.
 
-`pair = Concept(word, word)` is syntactic sugar to creates a concept with two `word`s being its arguments (with two `HasA` relations).
-It does not has an explicit name. If a explicit name is designable, use keyword argument `name=`. For example, `pair = Concept(word, word, name='pair')`.
-It will also be attached to the enclosing graph.
-A `HasA` relation will be added between the new concept and each argument concept. That implies, two `HasA` concepts will be created from `pair` to `word`.
-It is equivalent to the following statements:
+`pair = Concept(word, word)` can be used to create a concept `pair` with two `word`s being its arguments (two `HasA` relations are needed to establish the type of connections later).
+This decration does not include an explicit name. If an explicit name is desired, use keyword `name=` as an argument. For example, `pair = Concept(word, word, name='pair')`.
+This new node will also be attached to the enclosing graph.
+A `HasA` relation will be added between the new concept and each argument concept. In other words, two `HasA` concepts will be created from `pair` to `word`.
+This can be done as follows,
 
 ```Python
 pair = Concept(name='pair')
@@ -180,11 +180,11 @@ pair.has_a(word)
 pair.has_a(word)
 ```
 
-##### Inherit declaration
+##### Inheritance declaration
 
-`people = word('people')` and `organization = word('organization')` create another two concepts extending `word`, setting name `'people'` and `'organization'`, and assign them to Python variable `people` and `organization`. They are attached to enclosing subgraph `sub_graph`.
-Inherit declaration is syntactic sugar for creating concepts and `IsA` relations.
-An `IsA` relation will be create for each of these statements. It is equivalent to the following statements:
+`people = word('people')` and `organization = word('organization')` create two new concepts extending `word`. The name is set as `'people'` and `'organization'`, and assigns them to Python variable `people` and `organization`. They are attached to enclosing subgraph `sub_graph`.
+This decrations indicates inheritance and is the syntactic suger that can be used for creating concepts with `IsA` relations.
+An `IsA` relation will be created for each of these statements. It is equivalent to the following statements:
 
 ```Python
 people = Concept('people')
