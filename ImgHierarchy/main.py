@@ -45,7 +45,7 @@ def main(device):
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
-        probKey = ("local" , "normalizedProb"),
+        probKey = ("local" , "meanNormalizedProbStd"),
                                 poi = (image_group, image, level1, level2, level3, level4),
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                  metric={

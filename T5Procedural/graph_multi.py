@@ -117,7 +117,7 @@ with Graph('global') as graph:
 
     ### if entity is input, the first state should not be `none`
     forAllL(
-        combinationC(entity, location(path=eqL(location, 'text', {"5839", "150", "14794", "597", "1"})))('e', 'l'),
+        combinationC(entity, location(path=eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"})))('e', 'l'),
         # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
         ifL(
             #input_entity(path=('e')),
@@ -693,13 +693,13 @@ with Graph('global') as graph:
     ifL(output_entity_alt('x'), output_entity(path=('x')), active = All_LC)
 
     ### for each step and entity at most one action is applicable
-    forAllL(
-        combinationC(step, entity)('i', 'e'),
-        ifL(
-            action(path=(('i', action_step.reversed), ('e', action_entity.reversed))),
-            atMostL(action_create, action_destroy, action_move)
-        ), active = All_LC
-    )
+    # forAllL(
+    #     combinationC(step, entity)('i', 'e'),
+    #     ifL(
+    #         action(path=(('i', action_step.reversed), ('e', action_entity.reversed))),
+    #         atMostL(action_create, action_destroy, action_move)
+    #     ), active = All_LC
+    # )
 
     ### for each step and entity at most one action is applicable
     forAllL(
@@ -719,7 +719,7 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -743,7 +743,7 @@ with Graph('global') as graph:
                 notL(
                     entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -767,14 +767,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 notL(entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -815,14 +815,14 @@ with Graph('global') as graph:
                 notL(
                     entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
                 ),
                 notL(entity_location_before_label('el2', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed), 
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
@@ -911,7 +911,7 @@ with Graph('global') as graph:
         notL(
             entity_location_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )
@@ -927,7 +927,7 @@ with Graph('global') as graph:
         notL(
             entity_location_before_label('el1', path=(
                                     ("e", lentity.reversed),
-                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1"}), llocation.reversed),
+                                    ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed),
                                     ("i", lstep.reversed)
                                 )
             )

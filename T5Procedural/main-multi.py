@@ -338,6 +338,7 @@ def main():
             "steps": [],
             "entities": []
         }
+        # print("stop here")
         for _concept in [
             action_create, action_destroy, action_move, location_change,
             when_create, when_destroy,
