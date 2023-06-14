@@ -196,23 +196,23 @@ organization.is_a(word)
 ### Access the nodes
 
  All the sub-`Graphs` and `Concept` instances can be retrieved from a graph (or sub-graph) with a (relative) pathname.
- For example, to retrieve `people` from the above example, one can do `graph['sub/people']` or `sub_graph['people']`.
+ For example, to retrieve `people` from the above example, one can do `graph['sub/people']` \pk{??sub?} or `sub_graph['people']`.
 
 ## Constraints
 
 The constraints are collected from three sources:
 
-- **logical constraints** - main source of constraint in the system,
-- **knowledge graph** - definitions in the graph (already described, e.g. parent-child relations, etc.)
+- **logical expressions** - main source of constraint in the system,
+- **graph declaration** - definitions in the graph (the relationships declared in the graph, e.g. parent-child relations, etc.)
 - **ontology (OWL file)** - alternative source of knowledge, provided as url to OWL file in the ontology graph.
 
 ### Logical Constraints (LC)
 
-The foundational element of a logical constraint is the definition of its **predicates**. A predicate is constructed using the name of a concept or a relation from the pre-defined graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
+The basic elements of a logical constraint are its **predicates**. A predicate is constructed using the name of a concept or a relation from the declared graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
 
-If the variable is not explicitly specified in the predicate, then the default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
+If the variable is not explicitly specified in the predicate, then \pk{the: what is the default? maybe just "a default?"} default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
 
-By default, the variable in the predicate is associated with all candidates from the data, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
+By default, the variable in the predicate \pk{ is associated with all candidates from the data: ??}, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path. \pk{rel_pair_phrase1: from where this came? in this introduced before?}
 
 This is the simple example of the logical constraint:
 
@@ -227,13 +227,13 @@ ifL(
 ```
 This example above states that _for every candidate in the present ML example if a current candidate is classified as `'work_for'`concept, then the candidates found by following the paths from the current candidate to first and second argument of the `'pair'` relation have to  be positively classified as `'people'` and `'organization'` concepts_.
 
-More detail about the syntax of the constraint - the example defines variables `x` representing candidates for `'work_for'` predicate. 
+More detail about the syntax of the constraint - the example defines variables `x` representing candidates for `'work_for'` predicate. \pk{?? sentecne is incomplete, more examples what?}
 This variable `x` is then used to define candidates for `'people'` and `'organization'` predicates by specifying `path` to them using names of graph edges respectively:`'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
 
-Please notice that `'people'` and `'organization'` predicates do not have their variables specified are they are not referred in other parts of this simple logical constraint.  
+Please notice that `'people'` and `'organization'` predicates do not have their variables specified as they are not referred in other parts of this simple logical constraint.  
 
 ```Python
-LC_SET_ADDITIONAL = True
+LC_SET_ADDITIONAL = True \\\pk{what is this??} 
 
 ifL(
     people('p'), 
@@ -255,11 +255,11 @@ ifL(
     p=90
   )
 ```
-The example states that _for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_.
+The above example states that _for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_. \pk{I think for every predicate we need to specify the general template/syntax, or even the full grammar. For example LogicExp -> atMost(LogiclaExp, integer), etc??}
 
 Ths logical constrain show usage of another optional logical constrain attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
-The full list of DomiKnows functions implementing **logical connectives**:
+The full list of DomiKnows functions implementing **logical operations**: \pk{We need to define the full syntactic template for each}
 	- `notL()`,
 	- `andL()`,
 	- `orL()`,
@@ -267,13 +267,13 @@ The full list of DomiKnows functions implementing **logical connectives**:
 	- `ifL()`,
 	- `norL()`,
 	- `xorL()`,
-	- `epqL()` (if and only if).
+	- `epqL()` (if and only if). \pk{why ep??}
 
 Auxiliary logical constraint methods:  
-    - `eqL()` -  used in the path definition to filter based on the specified attribute, e.g.:   
+    - `eqL()` -  used in the path definition to filter based on the specified attribute, e.g.:   \pk{we need general syntax, examples are not enough}
       _eqL(cityLink, 'neighbor', {True}) - instances of cityLink with attribute neighbor in the set containing only single value True,_   
     - `fixedL()`, used to fixed selected candidates to selected classification, e.g.:  
-       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed should have their classification fixed to empty_entry._  
+       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed should have their classification fixed to empty_entry._  \pk{the explanation is not clear.}
 
 ##### Counting methods
 
