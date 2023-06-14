@@ -192,6 +192,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = self.getDatanodesForConcept(rootDn, self.getConceptName(currentConceptRelation))
             for dn in dns:
                 xNew = x.get((self.getConcept(currentConceptRelation), currentLabel, dn.getInstanceID(), currentLabelIndex), None)
+                if self.conceptIsBinary(currentConceptRelation):
+                    xNotNew = x.get((self.getConcept(currentConceptRelation), 'Not_' + currentLabel, dn.getInstanceID(), currentLabelIndex), None)
+
                 if xNew is None:
                     # Create ILP variable
                     xNew = self.createILPVariable(m, dn, currentConceptRelation)
