@@ -89,9 +89,9 @@ The graph declaration is a part of the program. Sensors and learners, describes 
 
 ### Relation Types
 
-We have three defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. \pk{is-a??}
+We have four defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. The is-a relation is implicit in concept defintions and the inheritance. 
 
-`contains` ?? is a one-to-many relationship. A.containd(B) means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
+`contains` is a one-to-many relationship. A.containd(B) means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
 Whenever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
 
 ```Python
@@ -140,7 +140,7 @@ word.equal(word1)
 
 This edge enables us to transfer properties of concepts between instances that are marked as equal. 
 
-Using each of these relation edges requires us to assign a sensor to them in the model execution. The sensors input is selected properties from the source concept and the output will be stored as selected properties in the destination node. \pk{this description is nonsense at this stage, refer to a link with the actual information.}
+Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of Senseors in \pk{XXX: cross reference}. 
 
 ### Example
 
@@ -196,7 +196,7 @@ organization.is_a(word)
 ### Access the nodes
 
  All the sub-`Graphs` and `Concept` instances can be retrieved from a graph (or sub-graph) with a (relative) pathname.
- For example, to retrieve `people` from the above example, one can do `graph['sub/people']` \pk{??sub?} or `sub_graph['people']`.
+ For example, to retrieve `people` from the above example, one can do `graph['sub/people']` or `sub_graph['people']`.
 
 ## Constraints
 
@@ -210,7 +210,7 @@ The constraints are collected from three sources:
 
 The basic elements of a logical constraint are its **predicates**. A predicate is constructed using the name of a concept or a relation from the declared graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.  
 
-If the variable is not explicitly specified in the predicate, then \pk{the: what is the default? maybe just "a default?"} default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
+If the variable is not explicitly specified in the predicate, then a default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
 
 By default, the variable in the predicate \pk{ is associated with all candidates from the data: ??}, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path. \pk{rel_pair_phrase1: from where this came? in this introduced before?}
 
