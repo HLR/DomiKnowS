@@ -230,6 +230,8 @@ class SolverModel(PoiModel):
         self.probKey = probKey
 
     def inference(self, builder):
+        # import time
+        # start = time.time()
         for i, prop in enumerate(self.poi):
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
@@ -240,12 +242,19 @@ class SolverModel(PoiModel):
 #         print("Done with the computation")
 
         # Check if this is batch
+        # end = time.time()
+        # print("Time taken for computation: ", end-start)
+        # start = time.time()
         builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
+        # end = time.time()
+        # print("Time taken for creating datanode in its builder: ", end-start)
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
+        # start = time.time()
         if datanode:
             for infertype in self.inferTypes:
+                # sub_start = time.time()
                 {
                     'ILP': lambda :datanode.inferILPResults(*self.inference_with, key=self.probKey, fun=None, epsilon=None),
                     'local/argmax': lambda :datanode.inferLocal(),
@@ -254,7 +263,11 @@ class SolverModel(PoiModel):
                     'softmax': lambda :datanode.infer(),
                     'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self, builder=builder),
                 }[infertype]()
+                # sub_end = time.time()
+                # print("Time taken for inference of type ", infertype, " : ", sub_end-sub_start)
     #         print("Done with the inference")
+        # end = time.time()
+        # print("Time taken for inference after datanode creation: ", end-start)
         return builder
 
     def populate(self, builder, run=True):

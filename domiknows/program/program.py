@@ -326,7 +326,11 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for i, data_item in tqdm(enumerate(dataset)):
+                # import time
+                # start = time.time()
                 _, _, *output = self.model(data_item)
+                # end = time.time()
+                # print("Time taken for one data item in populate epoch: ", end - start)
                 yield detuple(*output[:1])
 
     def populate_one(self, data_item):
