@@ -1736,12 +1736,19 @@ class DataNodeBuilder(dict):
         
         # Count the number of incoming links for each dataNode
         incomingLinks = {dn: 0 for dn in allDns}
+        containsLinks = {dn: 0 for dn in allDns}
         for dn in allDns:
             for il in dn.impactLinks:
                 if il in incomingLinks:
                     incomingLinks[dn] += 1
                 else:
                     incomingLinks[dn] = 1
+                
+                if il is "contains":
+                    if il in containsLinks:
+                        containsLinks[dn] += 1
+                    else:
+                        containsLinks[dn] = 1
 
         ### TODO: fix the relationship code, the current code is not correct and only limited in what it can do
         relation_count = 0
@@ -1757,7 +1764,13 @@ class DataNodeBuilder(dict):
         
         # Find the root dataNodes which have no incoming links
         newDnsRoots = [dn for dn in allDns if incomingLinks[dn] == 0 or not dn.impactLinks]
+        newDnsRootsBaseOnContains = [dn for dn in allDns if containsLinks[dn] == 0 or not dn.impactLinks]
 
+        # if newDnsRoots is empty
+        if not newDnsRoots:
+            newDnsRoots = allDns
+            newDnsRoots = sorted(newDnsRoots, key=lambda dn: incomingLinks[dn], reverse=True)
+            
         # Set the updated root list 
         _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict 
@@ -2422,8 +2435,9 @@ class DataNodeBuilder(dict):
             
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
             if len(typesInDNs) > 1:
-                raise ValueError('Not able to create Batch Root DataNode - DataNode Builder has DataNodes of different types: %s'%(typesInDNs))  
-        
+                _DataNodeBuilder__Logger.warn('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
+                return
+                
             # Create the Batch Root DataNode
             supGraph = _dataNode[1].getOntologyNode().sup
             if supGraph is None:
