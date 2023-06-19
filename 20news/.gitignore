@@ -1,1 +1,5 @@
 *.pt
+results
+logs
+models
+.ipynb_checkpoints

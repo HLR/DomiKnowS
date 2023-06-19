@@ -7,182 +7,232 @@ import sys
 sys.path.append(".")
 sys.path.append("../..")
 
+from transformers import AutoTokenizer, BertModel
 
 from domiknows.program.model_program import SolverPOIProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import NBCrossEntropyLoss
 
 
 # Enable skeleton DataNode
 def main(device):
-    from graph import graph, image_group_contains, image, level1, level2, level3, level4, image_group, structure
+    from graph_2level import graph, news_group_contains, news, level1, level2, news_group
 
-    image_group['reps'] = FunctionalReaderSensor(keyword='reps', forward=lambda data: data.unsqueeze(0) ,device=device)
+    news_group['input_ids'] = FunctionalReaderSensor(keyword='input_ids', forward=lambda data: data.unsqueeze(0) ,device=device)
+    
+    news_group['attention_mask'] = FunctionalReaderSensor(keyword='attention_mask', forward=lambda data: data.unsqueeze(0) ,device=device)
+    
+    class NewsRepModule(nn.Module):
+        def __init__(self, roberta):
+            super().__init__()
+            self.roberta = roberta
+            self.drop_layer = nn.Dropout(p=0.3)
 
-    image[image_group_contains, "reps"] = JointSensor(image_group['reps'], forward=lambda x: (torch.ones(x.shape[1], 1), x.squeeze(0)))
+        def forward(self, input_ids, attention_mask):
+            output = self.roberta(input_ids=input_ids.squeeze(0), attention_mask=attention_mask.squeeze(0))
+            logits = output.pooler_output
+            logits = self.drop_layer(logits)
+            return logits.unsqueeze(0)
+        
+    prefix = "Tasks/20news/models/"
+    rep_model = NewsRepModule(roberta=BertModel.from_pretrained("bert-base-uncased"))
 
-    def get_probs(*inputs, data):
-        return data
-        # return torch.softmax(data, -1)
+    rep_model_path = f"{prefix}rep_model2_base.pt"
+    rep_model.load_state_dict(torch.load(rep_model_path, map_location=device))
+    
+    news_group['reps'] = ModuleLearner("input_ids", "attention_mask", module=rep_model)
+    
+
+    news[news_group_contains, "reps"] = JointSensor(news_group['reps'], forward=lambda x: (torch.ones(x.shape[1], 1), x.squeeze(0)))
 
     def get_label(*inputs, data):
         return data
+    
+    class Level2Calssification(nn.Module):
+        def __init__(self,):
+            super().__init__()
+            self.classification = nn.Linear(768, 8)
 
-    image[level1] = FunctionalReaderSensor(image_group_contains, "reps", keyword='level1', forward=get_probs, label=False)
-    image[level1] = FunctionalReaderSensor(keyword='level1_label', forward=get_label, label=True)
+        def forward(self, logits):
+            multip_tensor = torch.tensor([
+                0.7291, 0.7614, 0.6675, 0.7811, 
+                0.9346, 0.9374, 0.8810, 0.9394
+                ]).to(logits.device)
+            _out = self.classification(logits)
+            ### comment later
+            _out = (torch.softmax(_out, -1) * pow(0.729, 4)) / torch.mean(torch.softmax(_out, -1), -1)[0]
+            return _out
+        
+    class Level1Calssification(nn.Module):
+        def __init__(self,):
+            super().__init__()
+            self.classification = nn.Linear(768, 50)
+            self.relu = nn.LeakyReLU()
+            self.classification2 = nn.Linear(50, 16)
+            
 
-    image[level2] = FunctionalReaderSensor(image_group_contains, "reps", keyword='level2', forward=get_probs, label=False)
-    image[level2] = FunctionalReaderSensor(keyword='level2_label', forward=get_label, label=True)
+        def forward(self, logits):
+            multip_tensor = torch.tensor([
+                0.6810, 0.8102, 0.8345, 0.6973, 0.7577, 0.9541, 
+                0.7990, 0.0475, 0.6869,0.8835, 0.8266, 0.7986, 
+                0.8609, 0.8114, 0.5521, 0.7321
+                ]).to(logits.device)
+            _out = self.classification(logits)
+            _out = self.relu(_out)
+            _out = self.classification2(_out)
 
-    image[level3] = FunctionalReaderSensor(image_group_contains, "reps", keyword='level3', forward=get_probs, label=False)
-    image[level3] = FunctionalReaderSensor(keyword='level3_label', forward=get_label, label=True)
+            ### comment later
+            _out = (torch.softmax(_out, -1) * pow(0.754, 4)) / torch.mean(torch.softmax(_out, -1), -1)[0]
+            return _out
+        
+    level1_classification = Level1Calssification()
+    level2_classification = Level2Calssification()
 
-    image[level4] = FunctionalReaderSensor(image_group_contains, "reps", keyword='level4', forward=get_probs, label=False)
-    image[level4] = FunctionalReaderSensor(keyword='level4_label', forward=get_label, label=True)
+    level1_classification_path = f"{prefix}level1_classification2_base.pt"
+    level1_classification.load_state_dict(torch.load(level1_classification_path, map_location=device))
+    level2_classification_path = f"{prefix}level2_classification2_base.pt"
+    level2_classification.load_state_dict(torch.load(level2_classification_path, map_location=device))
+    news[level1] = ModuleLearner("reps", module=level1_classification)
+    news[level1] = FunctionalReaderSensor(keyword='level1', forward=get_label, label=True)
 
-    prefix = "Tasks/ImgHierarchy/"
-    f = open(f"{prefix}logger.txt", "w")
+    news[level2] = ModuleLearner("reps", module=level2_classification)
+    news[level2] = FunctionalReaderSensor(keyword='level2', forward=get_label, label=True)
+
+    prefix = "Tasks/20news/logs/"
+    f = open(f"{prefix}logger_base.txt", "w")
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
-        probKey = ("local" , "meanNormalizedProb"),
-        probAcc = {'level1': 0.5673, 'level2': 0.5445, 'level3': 0.4342, 'level4': 0.1768},
-        poi = (image_group, image, level1, level2, level3, level4),
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric={
-                # 'ILP': PRF1Tracker(DatanodeCMMetric()),
-                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
+        # probKey = ("local" , "meanNormalizedProb"),
+                                poi = (news_group, news, level1, level2),
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                 metric={
+                                    'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                    'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     return program
 
 if __name__ == '__main__':
     from domiknows.utils import setProductionLogMode
     productionMode = True
     if productionMode:
-        setProductionLogMode(no_UseTimeLog=False)
+        setProductionLogMode(no_UseTimeLog=True)
     from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     import logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.ERROR)
 
     from torch.utils.data import Dataset, DataLoader
-    from reader import VQADataset
-    from graph import *
-    import time
+    from datasets import load_dataset
+    from reader_base_2level import collate_label_set
+    from graph_2level import *
 
-    file = "Tasks/ImgHierarchy/data/test_logits.pt"
-    # file = "data_sample/val_small.npy"
-    start = time.time()
-    if "npy" in file:
-        data = np.load(file, allow_pickle=True).item()
-    else:
-        data = torch.load(file)
+    dataset = load_dataset("rungalileo/20_Newsgroups_Fixed")
+    def trim_dataset(dataset, key):
+        labels = {}
+        for item in dataset[key]:
+            if item['label'] not in labels:
+                labels[item['label']] = 0
+            labels[item['label']] += 1
+        # print(labels)
+        before_len = len(dataset[key])
+        # print(before_len)
+        dataset[key] = dataset[key].filter(lambda example: example['label'] and example['label'] != "None" and example['text'] and len(example["text"]) >= 10)
+        after_len = len(dataset[key])
+        # print(after_len)
+        # print("the number of removed items : ", before_len - after_len)
+        labels = {}
+        for item in dataset[key]:
+            if item['label'] not in labels:
+                labels[item['label']] = 0
+            labels[item['label']] += 1
+        # print(labels)
+        return dataset
+    dataset = trim_dataset(dataset, "train")
+    dataset = trim_dataset(dataset, "test")
 
-    dataset = VQADataset(data,)
-    dataloader = DataLoader(dataset, batch_size=150)
-    end = time.time()
-    print(f"elapsed time for dataloader {end - start}")
-    # dataloader = DataLoader(dataset, batch_size=20)
+    dataloader = DataLoader(dataset['train'], batch_size=24, collate_fn=collate_label_set)
+    test_loader = DataLoader(dataset['test'], batch_size=200, collate_fn=collate_label_set)
 
-    # test_reader = VQAReader('val.npy', 'npy')
-    device = 'cpu'
+    device = 'cuda:2'
     program = main(device)
-    # program.test(dataloader, device=device)
+    # program.train(dataloader, train_epoch_num=10, Optim=lambda param: torch.optim.AdamW(param, lr=1e-5), device=device)
+
+    # program.test(test_loader, device=device)
     # program.test(list(iter(dataloader))[:40], device=device)
 
     corrects = {
         'level1': 0,
         'level2': 0,
-        'level3': 0,
-        'level4': 0
     }
 
     consistent_corrects = {
         'level1': 0,
         'level2': 0,
-        'level3': 0,
-        'level4': 0
     }
 
     ilp_corrects = {
         'level1': 0,
         'level2': 0,
-        'level3': 0,
-        'level4': 0
     }
 
     totals = {
         'level1': 0,
         'level2': 0,
-        'level3': 0,
-        'level4': 0
     }
 
-    backsteps = {'level3': 'level2', 'level4': 'level3'}
-    per_class_tp = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
-    per_class_fp = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
-    per_class_fn = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
+    total_with_none = {
+        'level1': 0,
+        'level2': 0,
+    }
+    corrects_with_none = {
+        'level1': 0,
+        'level2': 0,
+    }
+    total_with_none_ilp = {
+        'level1': 0,
+        'level2': 0,
+    }
+    corrects_with_none_ilp = {
+        'level1': 0,
+        'level2': 0,
+    }
+    changed_total = {
+        'level1': 0,
+        'level2': 0,
+    }
+    changed_corrects = {
+        'level1': 0,
+        'level2': 0,
+    }
+    changed_wrong = {
+        'level1': 0,
+        'level2': 0,
+    }
 
-    per_class_tp_ilp = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
-    per_class_fp_ilp = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
-    per_class_fn_ilp = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
+    backsteps = {"level2": "level1"}
+    per_class_tp = {"level1": {}, "level2": {},}
+    per_class_fp = {"level1": {}, "level2": {},}
+    per_class_fn = {"level1": {}, "level2": {},}
 
-    support_set = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
-    total_support_set = {"level1": 0, "level2": 0, "level3": 0, "level4": 0}
+    per_class_tp_ilp = {"level1": {}, "level2": {},}
+    per_class_fp_ilp = {"level1": {}, "level2": {},}
+    per_class_fn_ilp = {"level1": {}, "level2": {},}
+
+    support_set = {"level1": {}, "level2": {},}
+    total_support_set = {"level1": 0, "level2": 0,}
     from tqdm import tqdm
-    for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
-    # for datanode in tqdm(program.populate(dataloader, device=device)):
-        # start = time.time()
-        for child in datanode.getChildDataNodes('image'):
-            pred = child.getAttribute('level1', 'local/argmax').argmax().item()
-            pred_class = level1.enum[pred]
-            pred_ilp = child.getAttribute('level1', 'ILP').argmax().item()
-            pred_ilp_class = level1.enum[pred_ilp]
-            label = child.getAttribute('level1', 'label').item()
-            label_class = level1.enum[label]
-            total_support_set['level1'] += 1
-            if label_class not in support_set['level1']:
-                support_set['level1'][label_class] = 0
-            if label_class not in per_class_tp['level1']:
-                per_class_tp['level1'][label_class] = 0
-                per_class_fp['level1'][label_class] = 0
-                per_class_fn['level1'][label_class] = 0
-                per_class_tp_ilp['level1'][label_class] = 0
-                per_class_fp_ilp['level1'][label_class] = 0
-                per_class_fn_ilp['level1'][label_class] = 0
-            if pred_class not in per_class_tp['level1']:
-                per_class_tp['level1'][pred_class] = 0
-                per_class_fp['level1'][pred_class] = 0
-                per_class_fn['level1'][pred_class] = 0
-                per_class_tp_ilp['level1'][pred_class] = 0
-                per_class_fp_ilp['level1'][pred_class] = 0
-                per_class_fn_ilp['level1'][pred_class] = 0
-            if pred_ilp_class not in per_class_tp['level1']:
-                per_class_tp['level1'][pred_ilp_class] = 0
-                per_class_fp['level1'][pred_ilp_class] = 0
-                per_class_fn['level1'][pred_ilp_class] = 0
-                per_class_tp_ilp['level1'][pred_ilp_class] = 0
-                per_class_fp_ilp['level1'][pred_ilp_class] = 0
-                per_class_fn_ilp['level1'][pred_ilp_class] = 0
-
-            support_set['level1'][label_class] += 1
-
-            if pred == label:
-                corrects['level1'] += 1
-                per_class_tp['level1'][label_class] += 1
-            else:
-                per_class_fp['level1'][pred_class] += 1
-                per_class_fn['level1'][label_class] += 1
-            if pred_ilp == label:
-                ilp_corrects['level1'] += 1
-                per_class_tp_ilp['level1'][label_class] += 1
-            else:
-                per_class_fp_ilp['level1'][pred_ilp_class] += 1
-                per_class_fn_ilp['level1'][label_class] += 1
-            
-            totals['level1'] += 1
-            for _concept in [level2, level3, level4]:
-                none_index = _concept.enum.index('None')
+    # for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
+    for datanode in tqdm(program.populate(test_loader, device=device)):
+        for child in datanode.getChildDataNodes('news'):
+            for _concept in [level1, level2]:
+                total_with_none[_concept.name] += 1
+                total_with_none_ilp[_concept.name] += 1
+                if 'None' in _concept.enum:
+                    none_index = _concept.enum.index('None')
+                else:
+                    none_index = -1
                 label = child.getAttribute(_concept.name, 'label').item()
                 label_class = _concept.enum[label]
                 if label_class != "None":
@@ -191,9 +241,18 @@ if __name__ == '__main__':
                 pred_class = _concept.enum[pred]
                 pred_ilp = child.getAttribute(_concept.name, 'ILP').argmax().item()
                 pred_ilp_class = _concept.enum[pred_ilp]
+                if pred_class == label_class:
+                    corrects_with_none[_concept.name] += 1
+                if pred_ilp_class == label_class:
+                    corrects_with_none_ilp[_concept.name] += 1
                 if label_class not in support_set[_concept.name]:
                     support_set[_concept.name][label_class] = 0
-
+                if pred_class != pred_ilp_class and label_class != "None":
+                    changed_total[_concept.name] += 1
+                    if pred_ilp_class == label_class:
+                        changed_corrects[_concept.name] += 1
+                    elif pred_class == label_class:
+                        changed_wrong[_concept.name] += 1
                 if label_class not in per_class_tp[_concept.name]:
                     per_class_tp[_concept.name][label_class] = 0
                     per_class_fp[_concept.name][label_class] = 0
@@ -217,10 +276,17 @@ if __name__ == '__main__':
                     per_class_fn_ilp[_concept.name][pred_ilp_class] = 0
 
                 support_set[_concept.name][label_class] += 1
-                if len(hierarchy[_concept.name]) != label:
+                if _concept.name == level1.name:
+                    hierarchy = 0
+                    prior_limit = -1
+                elif _concept.name == level2.name:
+                    hierarchy = hierarchy_1
+                    prior_limit = 16
+                
+                if label != none_index:
                     totals[_concept.name] += 1
                     if _concept.name in backsteps:
-                        if prior != len(hierarchy[backsteps[_concept.name]]):
+                        if prior != prior_limit:
                             if label == pred:
                                 consistent_corrects[_concept.name] += 1
                     if label == pred:
@@ -246,14 +312,13 @@ if __name__ == '__main__':
                         per_class_fp_ilp[_concept.name][pred_ilp_class] += 1
                     if label != none_index:
                         per_class_fn_ilp[_concept.name][label_class] += 1
-        # end = time.time()
-        # print(f"elapsed time for evaluating one datanode after having all results are: {end - start}")
+
     #### calculate the perc lass Precision, Recall, and F1 scores
-    f1_res = {"level1":{}, "level2":{}, "level3":{}, "level4":{}}
+    f1_res = {"level1":{}, "level2":{}}
     total_precision, total_recall, total_f1 = 0, 0, 0
     total_precision_ilp, total_recall_ilp, total_f1_ilp = 0, 0, 0
     all_support = 0
-    for _concept in [level1, level2, level3, level4]:
+    for _concept in [level1, level2]:
         level_precision = 0
         level_recall = 0
         level_f1 = 0
@@ -314,7 +379,7 @@ if __name__ == '__main__':
         f1_res[_concept.name]["total"]["support"] = total_support_set[_concept.name]
         all_support += total_support_set[_concept.name]
 
-    for _concept in [level1, level2, level3, level4]:
+    for _concept in [level1, level2]:
         total_precision += f1_res[_concept.name]["total"]["level_precision"] * (total_support_set[_concept.name] / all_support)
         total_recall += f1_res[_concept.name]["total"]["level_recall"] * (total_support_set[_concept.name] / all_support)
         total_f1 += f1_res[_concept.name]["total"]["level_f1"] * (total_support_set[_concept.name] / all_support)
@@ -331,16 +396,20 @@ if __name__ == '__main__':
     f1_res["total"]["level_f1_ilp"] = total_f1_ilp
     f1_res["total"]["support"] = all_support
 
+    import json
 
-    prefix = "Tasks/ImgHierarchy/"
-    with open(f"{prefix}logger.json", "w") as file:
+    prefix = "Tasks/20news/logs/"
+    with open(f"{prefix}logger2_base.json", "w") as file:
         json.dump(f1_res, file, indent=4)
 
-    file2 = open(f"{prefix}logger_manual.txt", "w")
+    file2 = open(f"{prefix}logger2_manual_base.txt", "w")
     for _c in corrects:
         if totals[_c] != 0:
             print(f"{_c} accuracy: {corrects[_c]/totals[_c]}", file=file2)
             print(f"{_c} ILP accuracy: {ilp_corrects[_c]/totals[_c]}", file=file2)  
+            print(f"{_c} accuracy with none: {corrects_with_none[_c]/total_with_none[_c]}", file=file2)
+            print(f"{_c} ILP accuracy with none: {corrects_with_none_ilp[_c]/total_with_none_ilp[_c]}", file=file2)
+            print(f"{_c} total changed for ILP is {changed_total[_c]}, correct changes are {changed_corrects[_c]}({changed_corrects[_c]/changed_total[_c]}%), wrong changes are {changed_wrong[_c]}({changed_wrong[_c]/changed_total[_c]}%)", file=file2)
             if _c in backsteps:
                 print(f"{_c} consistent accuracy: {consistent_corrects[_c]/totals[_c]}", file=file2)
         else:

@@ -39,7 +39,7 @@ with Graph('20news') as graph:
     
     level3 = news(name="level3", ConceptClass=EnumConcept, values=["misc", "guns", "ibm", "mac", "baseball", "hockey", "mideast", "None"])
     
-    hierarchy_1 = {"comp": {"graphics", "os", "sys", "windows"}, "rec": {"auto", "motorcycles", "sport"},
+    hierarchy_1 = {"comp": {"graphics", "os", "sys", "windows"}, "rec": {"autos", "motorcycles", "sport"},
             "sci": {"crypt", "electronics", "med", "space"}, "misc": {"forsale"}, 
              "talk": {"politics", "religion"}, "alt": {}, "soc": {}, "None": {},
             }
@@ -48,11 +48,21 @@ with Graph('20news') as graph:
         "sys": {"ibm", "mac"}, "sport": {"hockey", "baseball"}
     }
     
-    for _parent in hierarchy_1.keys():
-        if len(hierarchy_1[_parent]):
-            ifL(level1.__getattr__(_parent), exactL(*[level2.__getattr__(key1) for key1 in hierarchy_1[_parent]]))
+    for _parent in level1_list:
+        if _parent in hierarchy_1.keys():
+            if len(hierarchy_1[_parent]):
+                ifL(level1.__getattr__(_parent), exactL(*[level2.__getattr__(key1) for key1 in hierarchy_1[_parent]]))
+            else:
+                ifL(level1.__getattr__(_parent), andL(level2.__getattr__("None"), level3.__getattr__("None")))
+        else:
+            ifL(level1.__getattr__(_parent), andL(level2.__getattr__("None"), level3.__getattr__("None")))
         
         
-    for _parent in hierarchy_2.keys():
-        if len(hierarchy_2[_parent]):
-            ifL(level2.__getattr__(_parent), exactL(*[level3.__getattr__(key1) for key1 in hierarchy_2[_parent]]))
+    for _parent in level2_list:
+        if _parent in hierarchy_2.keys():
+            if len(hierarchy_2[_parent]):
+                ifL(level2.__getattr__(_parent), exactL(*[level3.__getattr__(key1) for key1 in hierarchy_2[_parent]]))
+            else:
+                ifL(level2.__getattr__(_parent), level3.__getattr__("None"))
+        else:
+            ifL(level2.__getattr__(_parent), level3.__getattr__("None"))

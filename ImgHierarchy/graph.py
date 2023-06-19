@@ -8,8 +8,8 @@ from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.concept import EnumConcept
 from domiknows.graph.logicalConstrain import nandL, exactL, ifL, orL, andL, notL
 
-
-with open("concepts.json") as f:
+prefix = "Tasks/ImgHierarchy/"
+with open(f"{prefix}concepts.json") as f:
     hierarchy = json.load(f)
 
 def process_hierarchy(path):
@@ -39,7 +39,7 @@ def process_hierarchy(path):
                                 structure[key2].add(key3)
     return structure
 
-structure = process_hierarchy("hierarchy.json")
+structure = process_hierarchy(f"{prefix}hierarchy.json")
 
 
 

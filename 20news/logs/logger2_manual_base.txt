@@ -1,0 +1,11 @@
+level1 accuracy: 0.754096025074797
+level1 ILP accuracy: 0.7519589685140333
+level1 accuracy with none: 0.754096025074797
+level1 ILP accuracy with none: 0.7519589685140333
+level1 total changed for ILP is 144, correct changes are 38(0.2638888888888889%), wrong changes are 53(0.3680555555555556%)
+level2 accuracy: 0.7293783015034538
+level2 ILP accuracy: 0.7582283624542869
+level2 accuracy with none: 0.8704943724177233
+level2 ILP accuracy with none: 0.8689271976064966
+level2 total changed for ILP is 104, correct changes are 71(0.6826923076923077%), wrong changes are 0(0.0%)
+level2 consistent accuracy: 0.7293783015034538

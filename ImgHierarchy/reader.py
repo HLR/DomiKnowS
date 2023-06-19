@@ -42,11 +42,15 @@ import torch
 # from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
+import json
 
 
 class VQADataset(Dataset):
     def __init__(self, data):
         self.data = data
+        prefix = "Tasks/ImgHierarchy/"
+        with open(f"{prefix}concepts.json") as f:
+            self.hierarchy = json.load(f)
         
 
     def change_vector(self, vector):
@@ -69,10 +73,10 @@ class VQADataset(Dataset):
         # x3 = torch.tensor(self.data['levels3']['logit'][index]).softmax(dim=-1)
         # x4 = torch.tensor(self.data['levels4']['logit'][index]).softmax(dim=-1)
 
-        x1 = torch.tensor(self.data['levels1']['logit'][index])
-        x2 = torch.tensor(self.data['levels2']['logit'][index])
-        x3 = torch.tensor(self.data['levels3']['logit'][index])
-        x4 = torch.tensor(self.data['levels4']['logit'][index])
+        x1 = self.data['levels1']['logit'][index]
+        x2 = self.data['levels2']['logit'][index]
+        x3 = self.data['levels3']['logit'][index]
+        x4 = self.data['levels4']['logit'][index]
 
         ### Normalize the values
         # x1 = x1 / torch.mean(x1)
@@ -91,10 +95,14 @@ class VQADataset(Dataset):
         # x3 = torch.std(x3) * x3
         # x4 = torch.std(x4) * x4
 
-        y1 = torch.tensor(self.data['levels1']['labels'][index])
-        y2 = torch.tensor(self.data['levels2']['labels'][index])
-        y3 = torch.tensor(self.data['levels3']['labels'][index])
-        y4 = torch.tensor(self.data['levels4']['labels'][index])
+        y1 = self.data['levels1']['labels'][index].long()
+        y2 = self.data['levels2']['labels'][index].long()
+        y3 = self.data['levels3']['labels'][index].long()
+        y4 = self.data['levels4']['labels'][index].long()
+        y4[y4==-1] = len(self.hierarchy['level4'])
+        y3[y3==-1] = len(self.hierarchy['level3'])
+        y2[y2==-1] = len(self.hierarchy['level2'])
+        y1[y1==-1] = len(self.hierarchy['level1'])
         
         return {
             "level1": x1, "level2": x2, "level3": x3, "level4": x4, 

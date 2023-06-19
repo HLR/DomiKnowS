@@ -28,16 +28,19 @@ def main(device):
         def __init__(self, roberta):
             super().__init__()
             self.roberta = roberta
+            self.drop_layer = nn.Dropout(p=0.3)
 
         def forward(self, input_ids, attention_mask):
             output = self.roberta(input_ids=input_ids.squeeze(0), attention_mask=attention_mask.squeeze(0))
             logits = output.pooler_output
+            logits = self.drop_layer(logits)
             return logits.unsqueeze(0)
-    
+        
+    prefix = "Tasks/20news/"
     rep_model = NewsRepModule(roberta=RobertaModel.from_pretrained("roberta-large"))
 
-    # rep_model_path = ""
-    # rep_model.load_state_dict(torch.load(rep_model_path))
+    rep_model_path = f"{prefix}rep_model.pt"
+    rep_model.load_state_dict(torch.load(rep_model_path))
     
     news_group['reps'] = ModuleLearner("input_ids", "attention_mask", module=rep_model)
     
@@ -59,10 +62,17 @@ def main(device):
     class Level2Calssification(nn.Module):
         def __init__(self,):
             super().__init__()
-            self.classification = nn.Linear(1024, 15)
+            self.rep = nn.Linear(1024, 100)
+            self.relu = nn.LeakyReLU()
+            self.classification = nn.Linear(100, 15)
+            self.drop_layer = nn.Dropout(p=0.3)
+            
 
         def forward(self, logits):
-            _out = self.classification(logits)
+            _out = self.rep(logits)
+            _out = self.relu(_out)
+            _out = self.drop_layer(_out)
+            _out = self.classification(_out)
             return _out
         
     class Level3Calssification(nn.Module):
@@ -78,12 +88,12 @@ def main(device):
     level2_classification = Level2Calssification()
     level3_classification = Level3Calssification()
 
-    # level1_classification_path = ""
-    # level1_classification.load_state_dict(torch.load(level1_classification_path))
-    # level2_classification_path = ""
-    # level2_classification.load_state_dict(torch.load(level2_classification_path))
-    # level3_classification_path = ""
-    # level3_classification.load_state_dict(torch.load(level3_classification_path))
+    level1_classification_path = f"{prefix}level1_classification.pt"
+    level1_classification.load_state_dict(torch.load(level1_classification_path))
+    level2_classification_path = f"{prefix}level2_classification.pt"
+    level2_classification.load_state_dict(torch.load(level2_classification_path))
+    level3_classification_path = f"{prefix}level3_classification.pt"
+    level3_classification.load_state_dict(torch.load(level3_classification_path))
 
     news[level1] = ModuleLearner("reps", module=level1_classification)
     news[level1] = FunctionalReaderSensor(keyword='level1', forward=get_label, label=True)
@@ -99,12 +109,12 @@ def main(device):
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
-        # probKey = ("local" , "meanNormalizedProbStd"),
+        probKey = ("local" , "normalizedProb"),
                                 poi = (news_group, news, level1, level2, level3),
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                  metric={
-                                    # 'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+                                    'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                    'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     return program
 
 if __name__ == '__main__':
@@ -124,13 +134,13 @@ if __name__ == '__main__':
 
     dataset = load_dataset("rungalileo/20_Newsgroups_Fixed")
     dataloader = DataLoader(dataset['train'], batch_size=24, pin_memory=True, collate_fn=collate_label_set)
-    test_loader = DataLoader(dataset['test'], batch_size=12, pin_memory=True, collate_fn=collate_label_set)
+    test_loader = DataLoader(dataset['test'], batch_size=150, pin_memory=True, collate_fn=collate_label_set)
 
-    device = 'cuda:1'
+    device = 'cuda:2'
     program = main(device)
     # program.train(dataloader, train_epoch_num=10, Optim=lambda param: torch.optim.AdamW(param, lr=1e-5), device=device)
 
-    # program.test(dataloader, device=device)
+    # program.test(test_loader, device=device)
     # program.test(list(iter(dataloader))[:40], device=device)
 
     corrects = {
@@ -157,7 +167,28 @@ if __name__ == '__main__':
         'level3': 0,
     }
 
-    backsteps = {'level3': 'level2'}
+    total_with_none = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+    }
+    corrects_with_none = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+    }
+    total_with_none_ilp = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+    }
+    corrects_with_none_ilp = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+    }
+
+    backsteps = {'level3': 'level2', "level2": "level1"}
     per_class_tp = {"level1": {}, "level2": {}, "level3": {}}
     per_class_fp = {"level1": {}, "level2": {}, "level3": {}}
     per_class_fn = {"level1": {}, "level2": {}, "level3": {}}
@@ -170,56 +201,11 @@ if __name__ == '__main__':
     total_support_set = {"level1": 0, "level2": 0, "level3": 0}
     from tqdm import tqdm
     # for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
-    for datanode in tqdm(program.populate(dataloader, device=device)):
+    for datanode in tqdm(program.populate(test_loader, device=device)):
         for child in datanode.getChildDataNodes('news'):
-            pred = child.getAttribute('level1', 'local/argmax').argmax().item()
-            pred_class = level1.enum[pred]
-            pred_ilp = child.getAttribute('level1', 'ILP').argmax().item()
-            pred_ilp_class = level1.enum[pred_ilp]
-            label = child.getAttribute('level1', 'label').item()
-            label_class = level1.enum[label]
-            total_support_set['level1'] += 1
-            if label_class not in support_set['level1']:
-                support_set['level1'][label_class] = 0
-            if label_class not in per_class_tp['level1']:
-                per_class_tp['level1'][label_class] = 0
-                per_class_fp['level1'][label_class] = 0
-                per_class_fn['level1'][label_class] = 0
-                per_class_tp_ilp['level1'][label_class] = 0
-                per_class_fp_ilp['level1'][label_class] = 0
-                per_class_fn_ilp['level1'][label_class] = 0
-            if pred_class not in per_class_tp['level1']:
-                per_class_tp['level1'][pred_class] = 0
-                per_class_fp['level1'][pred_class] = 0
-                per_class_fn['level1'][pred_class] = 0
-                per_class_tp_ilp['level1'][pred_class] = 0
-                per_class_fp_ilp['level1'][pred_class] = 0
-                per_class_fn_ilp['level1'][pred_class] = 0
-            if pred_ilp_class not in per_class_tp['level1']:
-                per_class_tp['level1'][pred_ilp_class] = 0
-                per_class_fp['level1'][pred_ilp_class] = 0
-                per_class_fn['level1'][pred_ilp_class] = 0
-                per_class_tp_ilp['level1'][pred_ilp_class] = 0
-                per_class_fp_ilp['level1'][pred_ilp_class] = 0
-                per_class_fn_ilp['level1'][pred_ilp_class] = 0
-
-            support_set['level1'][label_class] += 1
-
-            if pred == label:
-                corrects['level1'] += 1
-                per_class_tp['level1'][label_class] += 1
-            else:
-                per_class_fp['level1'][pred_class] += 1
-                per_class_fn['level1'][label_class] += 1
-            if pred_ilp == label:
-                ilp_corrects['level1'] += 1
-                per_class_tp_ilp['level1'][label_class] += 1
-            else:
-                per_class_fp_ilp['level1'][pred_ilp_class] += 1
-                per_class_fn_ilp['level1'][label_class] += 1
-            
-            totals['level1'] += 1
-            for _concept in [level2, level3]:
+            for _concept in [level1, level2, level3]:
+                total_with_none[_concept.name] += 1
+                total_with_none_ilp[_concept.name] += 1
                 none_index = _concept.enum.index('None')
                 label = child.getAttribute(_concept.name, 'label').item()
                 label_class = _concept.enum[label]
@@ -229,6 +215,10 @@ if __name__ == '__main__':
                 pred_class = _concept.enum[pred]
                 pred_ilp = child.getAttribute(_concept.name, 'ILP').argmax().item()
                 pred_ilp_class = _concept.enum[pred_ilp]
+                if pred_class == label_class:
+                    corrects_with_none[_concept.name] += 1
+                if pred_ilp_class == label_class:
+                    corrects_with_none_ilp[_concept.name] += 1
                 if label_class not in support_set[_concept.name]:
                     support_set[_concept.name][label_class] = 0
 
@@ -255,13 +245,16 @@ if __name__ == '__main__':
                     per_class_fn_ilp[_concept.name][pred_ilp_class] = 0
 
                 support_set[_concept.name][label_class] += 1
-                if _concept == level2:
+                if _concept.name == level1.name:
+                    hierarchy = 0
+                    prior_limit = -1
+                elif _concept.name == level2.name:
                     hierarchy = hierarchy_1
                     prior_limit = 7
                 else:
                     hierarchy = hierarchy_2
                     prior_limit = 14
-
+                
                 if label != none_index:
                     totals[_concept.name] += 1
                     if _concept.name in backsteps:
@@ -386,6 +379,8 @@ if __name__ == '__main__':
         if totals[_c] != 0:
             print(f"{_c} accuracy: {corrects[_c]/totals[_c]}", file=file2)
             print(f"{_c} ILP accuracy: {ilp_corrects[_c]/totals[_c]}", file=file2)  
+            print(f"{_c} accuracy with none: {corrects_with_none[_c]/total_with_none[_c]}", file=file2)
+            print(f"{_c} ILP accuracy with none: {corrects_with_none_ilp[_c]/total_with_none_ilp[_c]}", file=file2)
             if _c in backsteps:
                 print(f"{_c} consistent accuracy: {consistent_corrects[_c]/totals[_c]}", file=file2)
         else:
