@@ -1015,7 +1015,7 @@ class DataNode:
                 dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
     # Calculate local for datanote argMax and softMax
-    def inferLocal(self, keys=("softmax", "argmax")):
+    def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
         conceptsRelations = self.collectConceptsAndRelations() 
                 
         for c in conceptsRelations:
@@ -1029,7 +1029,12 @@ class DataNode:
             
             for dn in dns:
                 keySoftmax = "<" + c[0].name + ">/local/softmax"
-                normalized_keys = set(["normalizedProb", "meanNormalizedProb", "normalizedProbAll", "meanNormalizedProbStd"])
+                normalized_keys = set([
+                    "normalizedProb", "meanNormalizedProb", 
+                    "normalizedProbAll", "meanNormalizedProbStd",
+                    "normalizedProbAcc", "entropyNormalizedProbAcc",
+                    "normalizedJustAcc",
+                    ])
                 if "softmax" in keys or normalized_keys.intersection(set(keys)):
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
                     if not keySoftmax in dn.attributes: # Already calculated ?                    
@@ -1067,6 +1072,77 @@ class DataNode:
                         
                         # Multiplies the reverse of entropy to the vector divided by its mean value. P
                         vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                if "normalizedProbAcc" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProbAcc"
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+
+                        # Clamps the softmax probabilities
+                        vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
+                        
+                        ### Calculate the multiplier factor
+                        if Acc and c[0].name in Acc:
+                            multiplier = pow(Acc[c[0].name], 4)
+                        else:
+                            multiplier = 1
+                        
+                        # Calculates their entropy;
+                        entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = (1/entropy.item()) * (vector/torch.mean(vector))
+
+                        if multiplier != 1:
+                            vNormalizedProbT = vNormalizedProbT * multiplier
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                if "entropyNormalizedProbAcc" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/entropyNormalizedProbAcc"
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+
+                        # Clamps the softmax probabilities
+                        vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
+                        
+                        ### Calculate the multiplier factor
+                        if Acc and c[0].name in Acc:
+                            multiplier = pow(Acc[c[0].name], 4)
+                        else:
+                            multiplier = 1
+                        
+                        # Calculates their entropy;
+                        entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = (1/entropy.item()) * vector
+
+                        if multiplier != 1:
+                            vNormalizedProbT = vNormalizedProbT * multiplier
+                        
+                        dn.attributes[keyNormalizedProb] = vNormalizedProbT
+
+                if "normalizedJustAcc" in keys:
+                    keyNormalizedProb = "<" + c[0].name + ">/local/normalizedJustAcc"
+                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                        vSoftmaxT = dn.attributes[keySoftmax]
+                        
+                        ### Calculate the multiplier factor
+                        if Acc and c[0].name in Acc:
+                            multiplier = pow(Acc[c[0].name], 8)
+                        else:
+                            multiplier = 1
+                        
+                        # Calculates their entropy;
+                        
+                        # Multiplies the reverse of entropy to the vector divided by its mean value. P
+                        vNormalizedProbT = vSoftmaxT
+
+                        if multiplier != 1:
+                            vNormalizedProbT = vNormalizedProbT * multiplier
                         
                         dn.attributes[keyNormalizedProb] = vNormalizedProbT
 
@@ -1130,7 +1206,7 @@ class DataNode:
                     dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPResults(self, *_conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
+    def inferILPResults(self, *_conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False, Acc=None):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1138,13 +1214,11 @@ class DataNode:
             
         # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
         _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
-
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
             raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
         else:        
             _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]))
-                
         myilpOntSolver, conceptsRelations = self.__getILPSolver(_conceptsRelations)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
@@ -1154,11 +1228,11 @@ class DataNode:
             startInferLocal = process_time() # timer()
 
             keys = (key[1],)
-            self.inferLocal(keys=keys)
+            self.inferLocal(keys=keys, Acc=Acc)
             endInferLocal = process_time() # timer()
             elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
-            self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)     
-                   
+            self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
+
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def inferGBIResults(self, *_conceptsRelations, model, builder):
@@ -1669,6 +1743,18 @@ class DataNodeBuilder(dict):
                 else:
                     incomingLinks[dn] = 1
 
+        ### TODO: fix the relationship code, the current code is not correct and only limited in what it can do
+        relation_count = 0
+        node_rels = []
+        for dn in allDns:
+            if len(dn.ontologyNode.has_a()):
+                relation_count += 1
+                node_rels.append(dn)
+        if relation_count == 1:
+            incomingLinks[node_rels[0]] = 0
+            node_rels[0].impactLinks = {}
+
+        
         # Find the root dataNodes which have no incoming links
         newDnsRoots = [dn for dn in allDns if incomingLinks[dn] == 0 or not dn.impactLinks]
 

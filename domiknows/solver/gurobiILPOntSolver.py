@@ -1180,7 +1180,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         self.myLogger.info('Calculating ILP Inference ')
         self.myLoggerTime.info('Calculating ILP Inference ')
-
         start = process_time() # timer()
 
         gurobiEnv = Env("", empty=True)
@@ -1530,7 +1529,6 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         end = process_time() # timer()
         elapsedInS = end - start
-        
         if elapsedInS > 1:
             self.myLogger.info('End ILP Inference - total time: %fs'%(elapsedInS))
             self.myLoggerTime.info('End ILP Inference - total time: %fs'%(elapsedInS))
