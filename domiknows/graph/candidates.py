@@ -275,31 +275,31 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
                     else:
                         return relDns
                     
-    elif isinstance(path0, str):
-        relDns = dn.getDnsForRelation(path0)
-    else: # if not relation then has to be attribute in eql
-        relDns = []
-        attributeName = path[0].e[1]
-        
-        attributeValue = dn.getAttribute(attributeName)
-            
-        if torch.is_tensor(attributeValue) and attributeValue.ndimension() == 0:
-            attributeValue = attributeValue.item()
-            
-        requiredValue = path[0].e[2]
-         
-        if attributeValue in requiredValue:
-            # return [dn]
-            relDns.append(dn)
-        elif (True in  requiredValue ) and attributeValue == 1:
-            # return [dn]
-            relDns.append(dn)
-        elif (False in  requiredValue ) and attributeValue == 0:
-            attributeValue = False
-        else:
-            # return [None]
-            # relDns.append(None)
-            pass
+            elif isinstance(path0, str):
+                relDns = dn.getDnsForRelation(path0)
+            else: # if not relation then has to be attribute in eql
+                relDns = []
+                attributeName = path[0].e[1]
+                
+                attributeValue = dn.getAttribute(attributeName)
+                    
+                if torch.is_tensor(attributeValue) and attributeValue.ndimension() == 0:
+                    attributeValue = attributeValue.item()
+                    
+                requiredValue = path[0].e[2]
+                 
+                if attributeValue in requiredValue:
+                    # return [dn]
+                    relDns.append(dn)
+                elif (True in  requiredValue ) and attributeValue == 1:
+                    # return [dn]
+                    relDns.append(dn)
+                elif (False in  requiredValue ) and attributeValue == 0:
+                    attributeValue = False
+                else:
+                    # return [None]
+                    # relDns.append(None)
+                    pass
       
     # Check if it is a valid relation link  with not empty set of connected datanodes      
     if relDns is None or len(relDns) == 0 or relDns[0] is None:
