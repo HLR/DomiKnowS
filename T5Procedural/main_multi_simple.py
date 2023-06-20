@@ -242,6 +242,7 @@ def main():
             actions_matrix_inferred[action_key][action_key2] = 0
 
     for item_set, datanode in zip(d2, lbp.populate(dataset, device="cpu")):
+    # for item_set, datanode in zip(d2, lbp.populate(list(iter(dataset))[:10], device="cpu")):
         final_output = {
             "id": datanode.findDatanodes(select=procedure)[0].getAttribute("id"),
             "steps": [],
@@ -664,7 +665,7 @@ def main():
             print(f"before ILP: count {actions_matrix_before[key][key1]}")
             print(f"through inferred results : count {actions_matrix_inferred[key][key1]}")
     
-    torch.save(final_loc_results, "updated_loc_info_simple.pt")
+    torch.save(final_loc_results, "updated_loc_info_simple_normalized.pt")
     return all_updates
 
 

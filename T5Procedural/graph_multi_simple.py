@@ -50,7 +50,7 @@ with Graph('global') as graph:
     All_LC = False
     Tested_Lc = False
     action_level_lc = True
-    location_action_lc = False
+    location_action_lc = True
     location_level_lc = True
 
     ### the first action label cannot Post
@@ -111,12 +111,14 @@ with Graph('global') as graph:
             action_label.destroy('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1))
         ),
-        orL(
-            action_label.create('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.move('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.exists('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+        ifL(
+            existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
+            orL(
+                action_label.create('a2', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.move('a3', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.exists('a4', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
+            )
         ), active = action_level_lc
     )
 
@@ -126,12 +128,14 @@ with Graph('global') as graph:
             action_label.create('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1))
         ),
-        orL(
-            action_label.prior('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.post('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.destroy('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+        ifL(
+            existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
+            orL(
+                action_label.prior("a2" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.post("a3" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.destroy("a4" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
+            )
         ), active = action_level_lc
     )
 
@@ -141,12 +145,14 @@ with Graph('global') as graph:
             action_label.move('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1))
         ),
-        orL(
-            action_label.create('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.exists('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.move('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+        ifL(
+            existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
+            orL(
+                action_label.create("a2" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.exists("a3" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.move("a4" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
+            )
         ), active = action_level_lc
     )
     
@@ -156,12 +162,14 @@ with Graph('global') as graph:
             action_label.exists('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1))
         ),
-        orL(
-            action_label.exists('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.move('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.create('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+        ifL(
+            existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
+            orL(
+                action_label.exists("a2" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.move("a3" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.create("a4" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
+            )
         ), active=action_level_lc
     )
 
@@ -171,9 +179,11 @@ with Graph('global') as graph:
             action_label.prior('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1))
         ),
-        action_label.prior('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed)),
+        ifL(
+            existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
+            action_label.prior("a2" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)),
+            )
         ), active=action_level_lc
     )
 
@@ -183,11 +193,13 @@ with Graph('global') as graph:
             action_label.post('a1'), 
             step('i', path=('a1', action_step)),
             entity('e', path=('a1', action_entity)),
-            step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1))
         ),
-        orL(
-            action_label.post('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed))),
-            action_label.destroy('a2', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+        ifL(
+            existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
+            orL(
+                action_label.post('a2', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+                action_label.destroy('a3', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
+            )
         ), active=action_level_lc
     )
 
@@ -203,7 +215,7 @@ with Graph('global') as graph:
                     step('j', path=(('i', before_arg2.reversed, before_arg1))),
                     action_label.destroy('a117', path=(('j', action_step.reversed), ('e', action_entity.reversed)))
                 )
-        ), active = action_level_lc
+        ), active = False
     )
 
     ifL(
