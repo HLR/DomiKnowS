@@ -18,6 +18,7 @@ from .concept import Concept, EnumConcept
 import graphviz
 
 from sklearn import metrics
+from scipy.sparse.linalg.eigen.arpack._arpack import dnaupd
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -352,7 +353,7 @@ class DataNode:
         if relationName in  dn.impactLinks:
             dn.impactLinks[relationName].remove(self)
             
-    def getLinks(self):
+    def getLinks(self, relationName = None, conceptName = None):
         keys = self.relationLinks.keys() | self.impactLinks.keys()
         
         links = {}
@@ -367,7 +368,40 @@ class DataNode:
             
             links[k] = self.impactLinks[k] + self.relationLinks[k]
             
-        return links
+        if relationName is None:
+            if conceptName is None:
+                return links
+            else:
+                conceptCN = []
+                
+                for r in links:
+                    for dn in links[r]:
+                        if dn.ontologyNode.name == conceptName:
+                            conceptCN.append(dn)
+            
+                return conceptCN
+        
+        if not isinstance(relationName, str):
+            relationName = relationName.name
+            
+        if relationName in links:
+            relDNs = links[relationName]
+            
+            if conceptName is None:
+                return relDNs
+            else:
+                conceptCN = []
+            
+            if not isinstance(conceptName, str):
+                conceptName = conceptName.name
+            
+            for dn in relDNs:
+                if dn.ontologyNode.name == conceptName:
+                    conceptCN.append(dn)
+            
+            return conceptCN
+        else:
+            return []
 
     # --- Contains (children) relation methods
     
@@ -1736,40 +1770,28 @@ class DataNodeBuilder(dict):
         
         # Count the number of incoming links for each dataNode
         incomingLinks = {dn: 0 for dn in allDns}
-        containsLinks = {dn: 0 for dn in allDns}
+        dnTypes = {}
         for dn in allDns:
+            if dn.ontologyNode in dnTypes:
+                dnTypes[dn.ontologyNode].append(dn)
+            else:
+                dnTypes[dn.ontologyNode] = [dn]
+                
             for il in dn.impactLinks:
                 if il in incomingLinks:
                     incomingLinks[dn] += 1
                 else:
                     incomingLinks[dn] = 1
-                
-                if il is "contains":
-                    if il in containsLinks:
-                        containsLinks[dn] += 1
-                    else:
-                        containsLinks[dn] = 1
-
-        ### TODO: fix the relationship code, the current code is not correct and only limited in what it can do
-        relation_count = 0
-        node_rels = []
-        for dn in allDns:
-            if len(dn.ontologyNode.has_a()):
-                relation_count += 1
-                node_rels.append(dn)
-        if relation_count == 1:
-            incomingLinks[node_rels[0]] = 0
-            node_rels[0].impactLinks = {}
-
         
         # Find the root dataNodes which have no incoming links
         newDnsRoots = [dn for dn in allDns if incomingLinks[dn] == 0 or not dn.impactLinks]
-        newDnsRootsBaseOnContains = [dn for dn in allDns if containsLinks[dn] == 0 or not dn.impactLinks]
+        newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # if newDnsRoots is empty
         if not newDnsRoots:
             newDnsRoots = allDns
-            newDnsRoots = sorted(newDnsRoots, key=lambda dn: incomingLinks[dn], reverse=True)
+            #newDnsRoots = sorted(newDnsRoots, key=lambda dn: incomingLinks[dn], reverse=True)
+            newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
             
         # Set the updated root list 
         _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
@@ -1848,8 +1870,8 @@ class DataNodeBuilder(dict):
                             
                             candidateDn = existingDnsForAttr[attribute][candidateIndex]
                             
-                            if attributeIndex == 0:
-                                candidateDn.addRelationLink(attribute, relationDn)
+                            #if attributeIndex == 0:
+                            #   candidateDn.addRelationLink(attribute, relationDn)
                             
                             relationDn.addRelationLink(attribute, candidateDn)  
                             relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
@@ -2428,9 +2450,6 @@ class DataNodeBuilder(dict):
             # Check if there are more than one type of DataNodes in the builder
             typesInDNs = set()
             for i, d in enumerate(_dataNode):
-                if i == 0:
-                    continue
-                
                 typesInDNs.add(d.getOntologyNode().name)
             
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode

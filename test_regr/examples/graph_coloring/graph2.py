@@ -16,8 +16,9 @@ with Graph('global') as graph2:
 
         firestationCity = city(name='firestationCity')
         
-        # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal True to city x and y is a firestationCity
-        orL(firestationCity('x'), existsL(firestationCity(path=('x', eqL(cityLink, city1.name, {True}),  city2))))
+        # Constraints - For each city x either it is a firestationCity or 
+        # exists a city y which is in cityLink relation with neighbor attribute equal True to city x and y is a firestationCity
+        orL(firestationCity('x'), existsL(firestationCity(path=('x', eqL(cityLink, city1.reversed, {True}),  city2))))
         
         # No less then 1 firestationCity in the world
         atLeastAL(firestationCity, p=90)
@@ -26,7 +27,7 @@ with Graph('global') as graph2:
         atMostAL(firestationCity, 3, p=80)
         
         # Each city has no more then 4 neighbors which are not firestationCity
-        ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, city1.name, {True}), city2))), 3), p=90)
+        ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, city1.reversed, {True}), city2))), 3), p=90)
 
         # Exactly 2 firestationCity in the world 
         exactAL(firestationCity, 2, p=55)

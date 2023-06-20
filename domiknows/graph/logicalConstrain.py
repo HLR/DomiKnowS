@@ -11,7 +11,7 @@ V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
 class LcElement:
     def __init__(self, *e,  name = None):
-        from .relation import IsA, HasA
+        from .relation import Relation
 
         if not e:
             myLogger.error("Logical Element initialized is empty")
@@ -19,7 +19,7 @@ class LcElement:
         
         updatedE = []
         for _, eItem in enumerate(e):
-            if isinstance(eItem, (LcElement, Concept, HasA, IsA)):
+            if isinstance(eItem, (LcElement, Concept, Relation)):
                 updatedE.append(eItem)
             elif callable(eItem):
                 newEItem = eItem.__call__()
@@ -46,7 +46,7 @@ class LcElement:
         conceptOrLc = None
         
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, (LcElement, HasA, IsA)):
+            if isinstance(eItem, (LcElement, Relation)):
                 conceptOrLc = eItem
                 break
             elif isinstance(eItem, tuple): # Concept
@@ -61,7 +61,7 @@ class LcElement:
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
                 self.graph = self.__getContext(conceptOrLc)[-1]
-        elif isinstance(conceptOrLc, (HasA, IsA)):
+        elif isinstance(conceptOrLc, (Relation,)):
             self.graph = conceptOrLc.graph
         elif isinstance(conceptOrLc, str):
             self.graph = None
