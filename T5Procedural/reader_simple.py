@@ -234,7 +234,7 @@ class ProparaReader(RegrReader):
                     else:
                         formatted_gt.append(val[1])
             
-            all_decisions.append(torch.stack(self.process_prob_vectors(formatted_preds)))
+            all_decisions.append(torch.stack(self.process_prob_vectors(formatted_preds, key)))
             all_ground_truths.append(formatted_gt)
         # if "location" in key:
         #     return torch.stack(all_decisions), all_ground_truths
@@ -278,20 +278,22 @@ class ProparaReader(RegrReader):
                 all_ground_truths.append(predictions[1])
         return torch.stack(all_decisions), torch.tensor(all_ground_truths)
     
-    def process_prob_vectors(self, vectors):
+    def process_prob_vectors(self, vectors, key):
+        acc = {"multi_action": 73.05, "before_location": 68.21, "after_location": 68.21}
         # return vectors
+        multiplier = pow(acc[key], 4)
         final_vec = []
         if torch.is_tensor(vectors):
             vector = torch.clamp(vectors, min=1e-12, max=1 - 1e-12)
             entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-            vector = (1/entropy.item()) * (vector/torch.mean(vector))
-            final_vec = vector
+            # vector = (1/entropy.item()) * (vector/torch.mean(vector))
+            final_vec = vector * multiplier
         else:
             for vector in vectors:
                 vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
                 entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-                vector = (1/entropy.item()) * (vector/torch.mean(vector))
-                final_vec.append(vector)
+                # vector = (1/entropy.item()) * (vector/torch.mean(vector))
+                final_vec.append(vector * multiplier)
         return final_vec
 
     def getSameMentionsval(self, item):

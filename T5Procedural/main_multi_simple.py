@@ -224,6 +224,8 @@ def main():
 
     all_updates = []
     changes, correct, correct_before, total = {}, {}, {}, {}
+    changes_wrong, changes_correct = {}, {}
+    changes_inferred, changes_inferred_correct, changes_inferred_wrong = {}, {}, {}
     correct_inferred, total_inferred = {}, {},
     actual_total, actual_correct = {}, {}
     actual_correct_before = {}
@@ -425,6 +427,11 @@ def main():
                 correct[key2.name] = 0
                 correct_before[key2.name] = 0
                 changes[key2.name] = 0
+                changes_wrong[key2.name] = 0
+                changes_correct[key2.name] = 0
+                changes_inferred[key2.name] = 0
+                changes_inferred_correct[key2.name] = 0
+                changes_inferred_wrong[key2.name] = 0
                 if "location" in key2.name:
                     actual_total[key2.name] = 0
                     actual_correct[key2.name] = 0
@@ -442,15 +449,29 @@ def main():
             if key2 in {action_label, entity_location_before_label, entity_location_label}:
                 kept_original_decisions[key2.name] = original_decision
                 check_fixed_decisions[key2.name] = fixed_decision
-
-            changes[key2.name] += (original_decision.flatten() != fixed_decision.flatten()).sum().item()
-            correct[key2.name] += (ground_truth.flatten() == fixed_decision.flatten()).sum().item()
-            correct_before[key2.name] += (ground_truth.flatten() == original_decision.flatten()).sum().item()
-            total[key2.name] += len(ground_truth.flatten())
+            if key2 in {entity_location_before_label}:
+                changes[key2.name] += (original_decision[:, 0].flatten() != fixed_decision[:, 0].flatten()).sum().item()
+                changes_wrong[key2.name] += ((original_decision[:, 0].flatten() != fixed_decision[:, 0].flatten()) & (ground_truth[:, 0].flatten() == original_decision[:, 0].flatten())).sum().item()
+                changes_correct[key2.name] += ((original_decision[:, 0].flatten() != fixed_decision[:, 0].flatten()) & (ground_truth[:, 0].flatten() == fixed_decision[:, 0].flatten())).sum().item()
+                correct[key2.name] += (ground_truth[:, 0].flatten() == fixed_decision[:, 0].flatten()).sum().item()
+                correct_before[key2.name] += (ground_truth[:, 0].flatten() == original_decision[:, 0].flatten()).sum().item()
+                total[key2.name] += len(ground_truth[:, 0].flatten())
+            else:
+                changes[key2.name] += (original_decision.flatten() != fixed_decision.flatten()).sum().item()
+                changes_wrong[key2.name] += ((original_decision.flatten() != fixed_decision.flatten()) & (ground_truth.flatten() == original_decision.flatten())).sum().item()
+                changes_correct[key2.name] += ((original_decision.flatten() != fixed_decision.flatten()) & (ground_truth.flatten() == fixed_decision.flatten())).sum().item()
+                correct[key2.name] += (ground_truth.flatten() == fixed_decision.flatten()).sum().item()
+                correct_before[key2.name] += (ground_truth.flatten() == original_decision.flatten()).sum().item()
+                total[key2.name] += len(ground_truth.flatten())
             if "location" in key2.name:
-                actual_correct[key2.name] += ((ground_truth.flatten() == fixed_decision.flatten()) & (ground_truth.flatten() != 0)).sum().item()
-                actual_total[key2.name] += (ground_truth.flatten() != 0).sum().item()
-                actual_correct_before[key2.name] += ((ground_truth.flatten() == original_decision.flatten()) & (ground_truth.flatten() != 0)).sum().item()
+                if key2 in {entity_location_before_label}:
+                    actual_correct[key2.name] += ((ground_truth[:, 0].flatten() == fixed_decision[:, 0].flatten()) & (ground_truth[:, 0].flatten() != 0)).sum().item()
+                    actual_total[key2.name] += (ground_truth[:, 0].flatten() != 0).sum().item()
+                    actual_correct_before[key2.name] += ((ground_truth[:, 0].flatten() == original_decision[:, 0].flatten()) & (ground_truth[:, 0].flatten() != 0)).sum().item()
+                else:
+                    actual_correct[key2.name] += ((ground_truth.flatten() == fixed_decision.flatten()) & (ground_truth.flatten() != 0)).sum().item()
+                    actual_total[key2.name] += (ground_truth.flatten() != 0).sum().item()
+                    actual_correct_before[key2.name] += ((ground_truth.flatten() == original_decision.flatten()) & (ground_truth.flatten() != 0)).sum().item()
             if "action" in key2.name:
                 _mapping = {0: "create", 1: "exists", 2: "move", 3: "destroy", 4: "prior", 5: "post"}
                 for eid in range(ground_truth.shape[0]):
@@ -591,12 +612,26 @@ def main():
 
             if not key in {action_label} and "location" in key2.name:
                 inferred_answer[inferred_answer==index3] = 0
-
-            correct_inferred[key.name] += (ground_truth.flatten() == inferred_answer.flatten()).sum().item()
-            total_inferred[key.name] += len(ground_truth.flatten())
+            if key in {entity_location_before_label}:
+                correct_inferred[key.name] += (ground_truth[:, 0].flatten() == inferred_answer[:, 0].flatten()).sum().item()
+                total_inferred[key.name] += len(ground_truth[:, 0].flatten())
+                kept_original_decisions[key.name]
+                changes_inferred[key.name] += (kept_original_decisions[key.name][:, 0] != inferred_answer[:, 0].flatten()).sum().item()
+                changes_inferred_correct[key.name] += ((kept_original_decisions[key.name][:, 0] != inferred_answer[:, 0].flatten()) & (ground_truth[:, 0].flatten() == inferred_answer[:, 0].flatten())).sum().item()
+                changes_inferred_wrong[key.name] += ((kept_original_decisions[key.name][:, 0] != inferred_answer[:, 0].flatten()) & (ground_truth[:, 0].flatten() == kept_original_decisions[key.name][:, 0].flatten())).sum().item()
+            else:
+                correct_inferred[key.name] += (ground_truth.flatten() == inferred_answer.flatten()).sum().item()
+                total_inferred[key.name] += len(ground_truth.flatten())
+                changes_inferred[key.name] += (kept_original_decisions[key.name].flatten() != inferred_answer.flatten()).sum().item()
+                changes_inferred_correct[key.name] += ((kept_original_decisions[key.name].flatten() != inferred_answer.flatten()) & (ground_truth.flatten() == inferred_answer.flatten())).sum().item()
+                changes_inferred_wrong[key.name] += ((kept_original_decisions[key.name].flatten() != inferred_answer.flatten()) & (ground_truth.flatten() == kept_original_decisions[key.name].flatten())).sum().item()
             if "location" in key.name:
-                actual_inferred_correct[key.name] += ((ground_truth.flatten() == inferred_answer.flatten()) & (ground_truth.flatten() != 0)).sum().item()
-                actual_inferred_total[key.name] += (ground_truth.flatten() != 0).sum().item()
+                if key in {entity_location_before_label}:
+                    actual_inferred_correct[key.name] += ((ground_truth[:, 0].flatten() == inferred_answer[:, 0].flatten()) & (ground_truth[:, 0].flatten() != 0)).sum().item()
+                    actual_inferred_total[key.name] += (ground_truth[:, 0].flatten() != 0).sum().item()
+                else:
+                    actual_inferred_correct[key.name] += ((ground_truth.flatten() == inferred_answer.flatten()) & (ground_truth.flatten() != 0)).sum().item()
+                    actual_inferred_total[key.name] += (ground_truth.flatten() != 0).sum().item()
             if "action" in key.name:
                 _mapping = {0: "create", 1: "exists", 2: "move", 3: "destroy", 4: "prior", 5: "post"}
                 for eid in range(ground_truth.shape[0]):
@@ -649,21 +684,28 @@ def main():
         #             else:
         #                 print("lc %s cannot be verified for ilp results - check if lc is correct"%(lc))
     for key in total:
+        print(f"Total for key: {key} is ", total[key])
         print(key, correct[key]/total[key])
         print(key+"_before", correct_before[key]/total[key])
-        print(key+" inferred", correct_inferred[key]/total_inferred[key])
         print(key + " changes", changes[key])
+        print(key + f" correct changes {changes_correct[key]}({changes_correct[key]/changes[key]})")
+        print(key + f" incorrect changes {changes_wrong[key]}({changes_wrong[key]/changes[key]})")
+        print(key+" inferred", correct_inferred[key]/total_inferred[key])
+        print(key + " changes inferred", changes_inferred[key])
+        print(key + f" correct changes inferred {changes_inferred_correct[key]}({changes_inferred_correct[key]/changes_inferred[key]})")
+        print(key + f" incorrect changes inferred {changes_inferred_wrong[key]}({changes_inferred_wrong[key]/changes_inferred[key]})")
         if "location" in key:
+            print(f"Total actual for key: {key} is ", actual_total[key])
             print(key + " actual", actual_correct[key]/actual_total[key])
             print(key + " actual_before", actual_correct_before[key]/actual_total[key])
             print(key + " actual_inferred", actual_inferred_correct[key]/actual_inferred_total[key])
-    for key in actions_matrix_inferred:
-        print(f"True key {key}")
-        for key1 in actions_matrix_inferred:
-            print(f"pred {key1}")
-            print(f"after ILP: count {actions_matrix[key][key1]}")
-            print(f"before ILP: count {actions_matrix_before[key][key1]}")
-            print(f"through inferred results : count {actions_matrix_inferred[key][key1]}")
+    # for key in actions_matrix_inferred:
+    #     print(f"True key {key}")
+    #     for key1 in actions_matrix_inferred:
+    #         print(f"pred {key1}")
+    #         print(f"after ILP: count {actions_matrix[key][key1]}")
+    #         print(f"before ILP: count {actions_matrix_before[key][key1]}")
+    #         print(f"through inferred results : count {actions_matrix_inferred[key][key1]}")
     
     torch.save(final_loc_results, "updated_loc_info_simple_normalized.pt")
     return all_updates

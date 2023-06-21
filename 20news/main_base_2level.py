@@ -56,13 +56,13 @@ def main(device):
             self.classification = nn.Linear(768, 8)
 
         def forward(self, logits):
-            multip_tensor = torch.tensor([
-                0.7291, 0.7614, 0.6675, 0.7811, 
-                0.9346, 0.9374, 0.8810, 0.9394
-                ]).to(logits.device)
+            # multip_tensor = torch.tensor([
+            #     0.7291, 0.7614, 0.6675, 0.7811, 
+            #     0.9346, 0.9374, 0.8810, 0.9394
+            #     ]).to(logits.device)
             _out = self.classification(logits)
             ### comment later
-            _out = (torch.softmax(_out, -1) * pow(0.729, 4)) / torch.mean(torch.softmax(_out, -1), -1)[0]
+            # _out = (torch.softmax(_out, -1) * pow(0.729, 4)) / torch.mean(torch.softmax(_out, -1), -1)[0]
             return _out
         
     class Level1Calssification(nn.Module):
@@ -74,17 +74,17 @@ def main(device):
             
 
         def forward(self, logits):
-            multip_tensor = torch.tensor([
-                0.6810, 0.8102, 0.8345, 0.6973, 0.7577, 0.9541, 
-                0.7990, 0.0475, 0.6869,0.8835, 0.8266, 0.7986, 
-                0.8609, 0.8114, 0.5521, 0.7321
-                ]).to(logits.device)
+            # multip_tensor = torch.tensor([
+            #     0.6810, 0.8102, 0.8345, 0.6973, 0.7577, 0.9541, 
+            #     0.7990, 0.0475, 0.6869,0.8835, 0.8266, 0.7986, 
+            #     0.8609, 0.8114, 0.5521, 0.7321
+            #     ]).to(logits.device)
             _out = self.classification(logits)
             _out = self.relu(_out)
             _out = self.classification2(_out)
 
             ### comment later
-            _out = (torch.softmax(_out, -1) * pow(0.754, 4)) / torch.mean(torch.softmax(_out, -1), -1)[0]
+            # _out = (torch.softmax(_out, -1) * pow(0.754, 4)) / torch.mean(torch.softmax(_out, -1), -1)[0]
             return _out
         
     level1_classification = Level1Calssification()
@@ -105,12 +105,13 @@ def main(device):
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
-        # probKey = ("local" , "meanNormalizedProb"),
-                                poi = (news_group, news, level1, level2),
-                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                                 metric={
-                                    'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                    'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        probKey = ("local" , "normalizedProbAcc"),
+        probAcc = {'level1': 0.7362, 'level2': 0.7513},
+        poi = (news_group, news, level1, level2),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+            metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     return program
 
 if __name__ == '__main__':
@@ -177,6 +178,11 @@ if __name__ == '__main__':
         'level2': 0,
     }
 
+    sequential_corrects = {
+        'level1': 0,
+        'level2': 0,
+    }
+
     totals = {
         'level1': 0,
         'level2': 0,
@@ -198,6 +204,16 @@ if __name__ == '__main__':
         'level1': 0,
         'level2': 0,
     }
+
+    total_with_none_sequential = {
+        'level1': 0,
+        'level2': 0,
+    }
+    corrects_with_none_sequential = {
+        'level1': 0,
+        'level2': 0,
+    }
+
     changed_total = {
         'level1': 0,
         'level2': 0,
@@ -220,8 +236,36 @@ if __name__ == '__main__':
     per_class_fp_ilp = {"level1": {}, "level2": {},}
     per_class_fn_ilp = {"level1": {}, "level2": {},}
 
+    per_class_tp_sequential = {"level1": {}, "level2": {},}
+    per_class_fp_sequential = {"level1": {}, "level2": {},}
+    per_class_fn_sequential = {"level1": {}, "level2": {},}
+
+    changed_total_sequntial = {
+        'level1': 0,
+        'level2': 0,
+    }
+    changed_corrects_sequntial = {
+        'level1': 0,
+        'level2': 0,
+    }
+    changed_wrong_sequntial = {
+        'level1': 0,
+        'level2': 0,
+    }
+
+
     support_set = {"level1": {}, "level2": {},}
     total_support_set = {"level1": 0, "level2": 0,}
+
+    reverse_hierarchy = {}
+    for key in hierarchy_1:
+        for item in hierarchy_1[key]:
+            reverse_hierarchy[item] = key
+
+    valid_none_indexes = []
+    for i, item in enumerate(level1.enum):
+        if item not in hierarchy_1:
+            valid_none_indexes.append(i)
     from tqdm import tqdm
     # for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
     for datanode in tqdm(program.populate(test_loader, device=device)):
@@ -260,6 +304,9 @@ if __name__ == '__main__':
                     per_class_tp_ilp[_concept.name][label_class] = 0
                     per_class_fp_ilp[_concept.name][label_class] = 0
                     per_class_fn_ilp[_concept.name][label_class] = 0
+                    per_class_fn_sequential[_concept.name][label_class] = 0
+                    per_class_tp_sequential[_concept.name][label_class] = 0
+                    per_class_fp_sequential[_concept.name][label_class] = 0
                 if pred_class not in per_class_tp[_concept.name]:
                     per_class_tp[_concept.name][pred_class] = 0
                     per_class_fp[_concept.name][pred_class] = 0
@@ -267,6 +314,9 @@ if __name__ == '__main__':
                     per_class_tp_ilp[_concept.name][pred_class] = 0
                     per_class_fp_ilp[_concept.name][pred_class] = 0
                     per_class_fn_ilp[_concept.name][pred_class] = 0
+                    per_class_fn_sequential[_concept.name][pred_class] = 0
+                    per_class_tp_sequential[_concept.name][pred_class] = 0
+                    per_class_fp_sequential[_concept.name][pred_class] = 0
                 if pred_ilp_class not in per_class_tp[_concept.name]:
                     per_class_tp[_concept.name][pred_ilp_class] = 0
                     per_class_fp[_concept.name][pred_ilp_class] = 0
@@ -274,6 +324,9 @@ if __name__ == '__main__':
                     per_class_tp_ilp[_concept.name][pred_ilp_class] = 0
                     per_class_fp_ilp[_concept.name][pred_ilp_class] = 0
                     per_class_fn_ilp[_concept.name][pred_ilp_class] = 0
+                    per_class_fn_sequential[_concept.name][pred_ilp_class] = 0
+                    per_class_tp_sequential[_concept.name][pred_ilp_class] = 0
+                    per_class_fp_sequential[_concept.name][pred_ilp_class] = 0
 
                 support_set[_concept.name][label_class] += 1
                 if _concept.name == level1.name:
@@ -313,10 +366,71 @@ if __name__ == '__main__':
                     if label != none_index:
                         per_class_fn_ilp[_concept.name][label_class] += 1
 
+            ### Calculate consistent accuracy for sequential prediction
+            pred_class_level1 = child.getAttribute(level1.name, 'local/argmax').argmax().item()
+            pred_class_level1 = level1.enum[pred_class_level1]
+
+            pred_class_level2 = child.getAttribute(level2.name, 'local/argmax').argmax().item()
+            pred_class_level2 = level2.enum[pred_class_level2]
+
+            label_level1 = child.getAttribute(level1.name, 'label').item()
+            label_class_level1 = level1.enum[label_level1]
+
+            label_level2 = child.getAttribute(level2.name, 'label').item()
+            label_class_level2 = level2.enum[label_level2]
+            
+            if pred_class_level2 == "None":
+                level1_answer = valid_none_indexes[child.getAttribute(level1.name, 'local/softmax')[valid_none_indexes].argmax().item()]
+                level1_answer = level1.enum[level1_answer]
+            else:
+                level1_answer = reverse_hierarchy[pred_class_level2] 
+
+            if level1_answer == label_class_level1:
+                corrects_with_none_sequential[level1.name] += 1
+                sequential_corrects[level1.name] += 1
+            if pred_class_level2 == label_class_level2:
+                corrects_with_none_sequential[level2.name] += 1
+                if pred_class_level2 != "None":
+                    sequential_corrects[level2.name] += 1
+
+            if level1_answer != pred_class_level1:
+                changed_total_sequntial[level1.name] += 1
+                if level1_answer == label_class_level1:
+                    changed_corrects_sequntial[level1.name] += 1
+                elif pred_class_level1 == label_class:
+                    changed_corrects_sequntial[level1.name] += 1
+            
+
+            if level1_answer not in per_class_tp_sequential[level1.name]:
+                per_class_tp_sequential[level1.name][level1_answer] = 0
+                per_class_fp_sequential[level1.name][level1_answer] = 0
+                per_class_fn_sequential[level1.name][level1_answer] = 0
+            if pred_class_level2 not in per_class_tp_sequential[level2.name]:
+                per_class_tp_sequential[level2.name][pred_class_level2] = 0
+                per_class_fp_sequential[level2.name][pred_class_level2] = 0
+                per_class_fn_sequential[level2.name][pred_class_level2] = 0
+            
+            if label_class_level1 == level1_answer:
+                per_class_tp_sequential[level1.name][level1_answer] += 1
+            else:
+                per_class_fn_sequential[level1.name][label_class_level1] += 1
+                per_class_fp_sequential[level1.name][level1_answer] += 1
+
+            if label_class_level2 == pred_class_level2:
+                if pred_class_level2 != "None":
+                    per_class_tp_sequential[level2.name][pred_class_level2] += 1
+            else:
+                if label_class_level2 != "None":
+                    per_class_fn_sequential[level2.name][label_class_level2] += 1
+                if pred_class_level2 != "None":
+                    per_class_fp_sequential[level2.name][pred_class_level2] += 1
+
+                
     #### calculate the perc lass Precision, Recall, and F1 scores
     f1_res = {"level1":{}, "level2":{}}
     total_precision, total_recall, total_f1 = 0, 0, 0
     total_precision_ilp, total_recall_ilp, total_f1_ilp = 0, 0, 0
+    total_precision_sequential, total_recall_sequential, total_f1_sequential = 0, 0, 0
     all_support = 0
     for _concept in [level1, level2]:
         level_precision = 0
@@ -326,6 +440,10 @@ if __name__ == '__main__':
         level_precision_ilp = 0
         level_recall_ilp = 0
         level_f1_ilp = 0
+
+        level1_precision_sequential = 0
+        level1_recall_sequential = 0
+        level1_f1_sequential = 0
 
         for key in per_class_fn_ilp[_concept.name]:
             if key == "None":
@@ -347,6 +465,16 @@ if __name__ == '__main__':
                 precision_normal = 0
                 recall_normal = 0
                 f1_normal = 0
+
+            if per_class_tp_sequential[_concept.name][key] != 0:
+                precision_sequential = per_class_tp_sequential[_concept.name][key] / (per_class_tp_sequential[_concept.name][key] + per_class_fp_sequential[_concept.name][key])
+                recall_sequential = per_class_tp_sequential[_concept.name][key] / (per_class_tp_sequential[_concept.name][key] + per_class_fn_sequential[_concept.name][key])
+                f1_sequential = 2 * precision_sequential * recall_sequential / (precision_sequential + recall_sequential)
+            else:
+                precision_sequential = 0
+                recall_sequential = 0
+                f1_sequential = 0
+            
             if key not in support_set[_concept.name]:
                 support_set[_concept.name][key] = 0
 
@@ -359,6 +487,11 @@ if __name__ == '__main__':
                 level_precision_ilp += precision_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
                 level_recall_ilp += recall_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
                 level_f1_ilp += f1_ilp * (support_set[_concept.name][key] / total_support_set[_concept.name])
+            
+            if total_support_set[_concept.name] != 0:
+                level1_precision_sequential += precision_sequential * (support_set[_concept.name][key] / total_support_set[_concept.name])
+                level1_recall_sequential += recall_sequential * (support_set[_concept.name][key] / total_support_set[_concept.name])
+                level1_f1_sequential += f1_sequential * (support_set[_concept.name][key] / total_support_set[_concept.name])
 
             f1_res[_concept.name][key] = {
                 "precision_ilp": precision_ilp,
@@ -367,6 +500,9 @@ if __name__ == '__main__':
                 "precision_normal": precision_normal,
                 "recall_normal": recall_normal,
                 "f1_normal": f1_normal,
+                "precision_sequential": precision_sequential,
+                "recall_sequential": recall_sequential,
+                "f1_sequential": f1_sequential,
                 "support": support_set[_concept.name][key],
             }
         f1_res[_concept.name]["total"] = {}
@@ -376,6 +512,9 @@ if __name__ == '__main__':
         f1_res[_concept.name]["total"]["level_precision_ilp"] = level_precision_ilp
         f1_res[_concept.name]["total"]["level_recall_ilp"] = level_recall_ilp
         f1_res[_concept.name]["total"]["level_f1_ilp"] = level_f1_ilp
+        f1_res[_concept.name]["total"]["level_precision_sequential"] = level1_precision_sequential
+        f1_res[_concept.name]["total"]["level_recall_sequential"] = level1_recall_sequential
+        f1_res[_concept.name]["total"]["level_f1_sequential"] = level1_f1_sequential
         f1_res[_concept.name]["total"]["support"] = total_support_set[_concept.name]
         all_support += total_support_set[_concept.name]
 
@@ -386,6 +525,9 @@ if __name__ == '__main__':
         total_precision_ilp += f1_res[_concept.name]["total"]["level_precision_ilp"] * (total_support_set[_concept.name] / all_support)
         total_recall_ilp += f1_res[_concept.name]["total"]["level_recall_ilp"] * (total_support_set[_concept.name] / all_support)
         total_f1_ilp += f1_res[_concept.name]["total"]["level_f1_ilp"] * (total_support_set[_concept.name] / all_support)
+        total_precision_sequential += f1_res[_concept.name]["total"]["level_precision_sequential"] * (total_support_set[_concept.name] / all_support)
+        total_recall_sequential += f1_res[_concept.name]["total"]["level_recall_sequential"] * (total_support_set[_concept.name] / all_support)
+        total_f1_sequential += f1_res[_concept.name]["total"]["level_f1_sequential"] * (total_support_set[_concept.name] / all_support)
     
     f1_res["total"] = {}
     f1_res["total"]["level_precision"] = total_precision
@@ -394,6 +536,9 @@ if __name__ == '__main__':
     f1_res["total"]["level_precision_ilp"] = total_precision_ilp
     f1_res["total"]["level_recall_ilp"] = total_recall_ilp
     f1_res["total"]["level_f1_ilp"] = total_f1_ilp
+    f1_res["total"]["level_precision_sequential"] = total_precision_sequential
+    f1_res["total"]["level_recall_sequential"] = total_recall_sequential
+    f1_res["total"]["level_f1_sequential"] = total_f1_sequential
     f1_res["total"]["support"] = all_support
 
     import json
@@ -410,6 +555,10 @@ if __name__ == '__main__':
             print(f"{_c} accuracy with none: {corrects_with_none[_c]/total_with_none[_c]}", file=file2)
             print(f"{_c} ILP accuracy with none: {corrects_with_none_ilp[_c]/total_with_none_ilp[_c]}", file=file2)
             print(f"{_c} total changed for ILP is {changed_total[_c]}, correct changes are {changed_corrects[_c]}({changed_corrects[_c]/changed_total[_c]}%), wrong changes are {changed_wrong[_c]}({changed_wrong[_c]/changed_total[_c]}%)", file=file2)
+            print(f"{_c} Sequential accuracy: {sequential_corrects[_c]/totals[_c]}", file=file2)
+            print(f"{_c} Sequential accuracy with none: {corrects_with_none_sequential[_c]/total_with_none[_c]}", file=file2)
+            if _c == level1.name:
+                print(f"{_c} Total changed for sequential is {changed_total_sequntial[_c]}, correct changes are {changed_corrects_sequntial[_c]}({changed_corrects_sequntial[_c]/changed_total_sequntial[_c]}%), wrong changes are {changed_wrong_sequntial[_c]}({changed_wrong_sequntial[_c]/changed_total_sequntial[_c]}%)", file=file2)
             if _c in backsteps:
                 print(f"{_c} consistent accuracy: {consistent_corrects[_c]/totals[_c]}", file=file2)
         else:
