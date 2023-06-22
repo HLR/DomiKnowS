@@ -247,60 +247,58 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
 
     relDns = None         
     if dn.isRelation(path0):
+        relDns = dn.getDnsForRelation(path0)            
+    elif isinstance(path0, str):
         relDns = dn.getDnsForRelation(path0)
+    else: # if not relation then has to be attribute in eql
+        path0Dns = relDns
+        attributeName = path[0].e[1]
         
-        if isinstance(path[0], eqL):
-            path0Dns = relDns
+        relDns = []
+        if attributeName == "instanceID":
+            
+            for pDns in path0Dns:
+                attributeValue = pDns.getInstanceID()
+                referredCandidateID = path[0].e[2]
+                
+                if referredCandidateID in lcVariablesDns and len(lcVariablesDns[referredCandidateID]) - 1 >= currentIndexDN:
+                    currentReferredCandidates = lcVariablesDns[referredCandidateID][currentIndexDN]
+                    for currentReferredCandidate in currentReferredCandidates:
+                        currentReferredCandidateID = currentReferredCandidate.getInstanceID()
+                        
+                        if currentReferredCandidateID == attributeValue:
+                            if dn not in relDns:
+                                relDns.append(dn)
+                    
+                # Check if it is a valid relation link  with not empty set of connected datanodes      
+                if relDns is None or len(relDns) == 0 or relDns[0] is None:
+                    return [None]
+                else:
+                    return relDns
+        else:
+            relDns = []
             attributeName = path[0].e[1]
             
-            relDns = []
-            if attributeName == "instanceID":
+            attributeValue = dn.getAttribute(attributeName)
                 
-                for pDns in path0Dns:
-                    attributeValue = pDns.getInstanceID()
-                    referedCandidateID = path[0].e[2]
-                    
-                    if referedCandidateID in lcVariablesDns and len(lcVariablesDns[referedCandidateID]) - 1 >= currentIndexDN:
-                        currentReferedCandidates = lcVariablesDns[referedCandidateID][currentIndexDN]
-                        for currentReferedCandidate in currentReferedCandidates:
-                            currentReferedCandidateID = currentReferedCandidate.getInstanceID()
-                            
-                            if currentReferedCandidateID == attributeValue:
-                                if dn not in relDns:
-                                    relDns.append(dn)
-                        
-                    # Check if it is a valid relation link  with not empty set of connected datanodes      
-                    if relDns is None or len(relDns) == 0 or relDns[0] is None:
-                        return [None]
-                    else:
-                        return relDns
-                    
-            elif isinstance(path0, str):
-                relDns = dn.getDnsForRelation(path0)
-            else: # if not relation then has to be attribute in eql
-                relDns = []
-                attributeName = path[0].e[1]
+            if torch.is_tensor(attributeValue) and attributeValue.ndimension() == 0:
+                attributeValue = attributeValue.item()
                 
-                attributeValue = dn.getAttribute(attributeName)
-                    
-                if torch.is_tensor(attributeValue) and attributeValue.ndimension() == 0:
-                    attributeValue = attributeValue.item()
-                    
-                requiredValue = path[0].e[2]
-                 
-                if attributeValue in requiredValue:
-                    # return [dn]
-                    relDns.append(dn)
-                elif (True in  requiredValue ) and attributeValue == 1:
-                    # return [dn]
-                    relDns.append(dn)
-                elif (False in  requiredValue ) and attributeValue == 0:
-                    attributeValue = False
-                else:
-                    # return [None]
-                    # relDns.append(None)
-                    pass
-      
+            requiredValue = path[0].e[2]
+                
+            if attributeValue in requiredValue:
+                # return [dn]
+                relDns.append(dn)
+            elif (True in  requiredValue ) and attributeValue == 1:
+                # return [dn]
+                relDns.append(dn)
+            elif (False in  requiredValue ) and attributeValue == 0:
+                attributeValue = False
+            else:
+                # return [None]
+                # relDns.append(None)
+                pass
+    
     # Check if it is a valid relation link  with not empty set of connected datanodes      
     if relDns is None or len(relDns) == 0 or relDns[0] is None:
         return [None]
