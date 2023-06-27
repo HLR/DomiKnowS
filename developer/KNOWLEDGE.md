@@ -12,12 +12,12 @@ Declaring knowledge begins with introducing the concepts and establishing relati
 This graph represents the domain knowledge of an ML task. 
 Parts of the concepts and relations exemplify classifiers which are subject to learning. 
 
-The parent-child relation between **concepts** in the graph is used to represent the hierarchical structure of the domain knowledge. The expressions of parent and child are implicit though for example, when we wrtie word=concept() ... entity=word() this implies the is-a relationships  between word is-a concept, entity is-a word and the hierarchy will be concpet-> word-> entity.
+The parent-child relation between **concepts** in the graph is used to represent the hierarchical structure of the domain knowledge. The expressions of parent and child are implicit though for example, when we write word=concept() ... entity=word() this implies the is-a relationships  between word is-a concept, entity is-a word and the hierarchy will be concept-> word-> entity.
 It implies that if a data item is classified as belonging to a concept, it also belongs to all the parent concepts of that concept. 
 Conversely, if the data item is classified as belonging to a concept, it can be classified in more detail as one of the child concepts. 
 
 In the graph, there are two distinct types of concepts.  
-* The first type, referred to as **'Ouptut concepts'**, defines the semantic abstraction in the output. 
+* The first type, referred to as **'Output concepts'**, defines the semantic abstraction in the output. 
 * The second type, known as **'input concepts'**, specify the types of data items, for example, words, sentences, pixels, etc. 
  
 Output concepts are subordinate to input concepts, thereby establishing a parent-child relationship.  
@@ -27,7 +27,7 @@ The **relationships** between concepts are employed to denote not only associati
 They can depict part-whole relationships, like the relationship between a word and a sentence, or between a word and a phrase.
 Another example is to illustrate temporal relationships between events.  
 Furthermore, they can also signify relationships between the input data items and the domain knowledge.
-For example, the relationship between words based on a entity-mentione-relationship abstraction  can be represented 'works for' or 'located in', among others.
+For example, the relationship between words based on a entity-mentioned-relationship abstraction  can be represented 'works for' or 'located in', among others.
 
 DomiKnows' **logical constraints** are defined through First Order Logic (FOL) expressions, which effectively encapsulate the domain knowledge.
 In FOL, the basic building blocks of logical constraints are **predicates**. In DomiKnows, these predicates are functions that evaluate whether a given variable corresponds to a certain concept or relation.  
@@ -72,7 +72,7 @@ Blow is the overview of the DomiKnows API and concepts used to define the domain
 
 ### Constraints classes
 
-- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics via whihc one can express logical constraints.
+- Package `domiknows.graph.logicalConstrain`: a set of functions with logical semantics via which one can express logical constraints.
 - Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the logical constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existsL()`, `equalL()`, etc.
 
 ## Graph
@@ -89,9 +89,9 @@ The graph declaration is a part of the program. Sensors and learners, describes 
 
 ### Relation Types
 
-We have four defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. The is-a relation is implicit in concept defintions and the inheritance. 
+* We have four defined relationship types between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. The is-a relation is implicit in concept definitions and the inheritance. 
 
-`contains` is a one-to-many relationship. A.containd(B) means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
+`contains` is a one-to-many relationship. A.contained(B) means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
 Whenever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
 
 ```Python
@@ -118,7 +118,7 @@ semantic_frame = Concept('semantic-frame')
 semantic_frame.has_a(verb=word, subject=word, object=word)
 ```
 
-We only support relationships between three concepts. Therfore, in case of a relation has more arguments, you have to break it to relationships between a main concept and one other concept each time.
+We only support relationships between three concepts. Therefore, in case of a relation has more arguments, you have to break it to relationships between a main concept and one other concept each time.
 
 ```Python
 semantic_frame = Concept('semantic-frame')
@@ -140,7 +140,7 @@ word.equal(word1)
 
 This edge enables us to transfer properties of concepts between instances that are marked as equal. 
 
-Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of Senseors in \pk{XXX: cross reference}. 
+Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of [Sensors](MODEL.md#sensor). 
 
 ### Example
 
@@ -169,7 +169,7 @@ The second `with` statement declare another graph with an explicit name `'sub'`.
 `word = Concept('word')` creates a concept with name `'word'` (implicitly attached to the enclosing graph) and assign it to Python variable `word`.
 
 `pair = Concept(word, word)` can be used to create a concept `pair` with two `word`s being its arguments (two `HasA` relations are needed to establish the type of connections later).
-This decration does not include an explicit name. If an explicit name is desired, use keyword `name=` as an argument. For example, `pair = Concept(word, word, name='pair')`.
+This declaration does not include an explicit name. If an explicit name is desired, use keyword `name=` as an argument. For example, `pair = Concept(word, word, name='pair')`.
 This new node will also be attached to the enclosing graph.
 A `HasA` relation will be added between the new concept and each argument concept. In other words, two `HasA` concepts will be created from `pair` to `word`.
 This can be done as follows,
@@ -183,7 +183,7 @@ pair.has_a(word)
 ##### Inheritance declaration
 
 `people = word('people')` and `organization = word('organization')` create two new concepts extending `word`. The name is set as `'people'` and `'organization'`, and assigns them to Python variable `people` and `organization`. They are attached to enclosing subgraph `sub_graph`.
-This decrations indicates inheritance and is the syntactic suger that can be used for creating concepts with `IsA` relations.
+This decorations indicates inheritance and is the syntactic sugar that can be used for creating concepts with `IsA` relations.
 An `IsA` relation will be created for each of these statements. It is equivalent to the following statements:
 
 ```Python
@@ -212,7 +212,11 @@ The basic elements of a logical constraint are its **predicates**. A predicate i
 
 If the variable is not explicitly specified in the predicate, then a default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
 
-By default, the variable in the predicate \pk{ is associated with all candidates from the data: ??}, which are identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path. \pk{rel_pair_phrase1: from where this came? in this introduced before?}
+As in Fist Order Logic we have to define the interpretation of variable in the predicate. An interpretation (or model) of a first-order formula specifies what each predicate means, and the entities that can instantiate the variables. These entities form the domain of discourse or universe. In DomiKnows, the domain of discourse is the set of candidates. By default, the variable in the predicate is associated with all candidates from the data. This basic set of variable candidate re identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path. 
+
+The BNF definition of DomiKnows logical constraint is available at [DomiKnows Logical Constraint BNF](https://tinyurl.com/LogicalConstraint-BNF). This web site allows to test the logical constraint syntax.
+
+```Pyth
 
 This is the simple example of the logical constraint:
 
@@ -227,18 +231,16 @@ ifL(
 ```
 This example above states that _for every candidate in the present ML example if a current candidate is classified as `'work_for'`concept, then the candidates found by following the paths from the current candidate to first and second argument of the `'pair'` relation have to  be positively classified as `'people'` and `'organization'` concepts_.
 
-More detail about the syntax of the constraint - the example defines variables `x` representing candidates for `'work_for'` predicate. \pk{?? sentecne is incomplete, more examples what?}
+The example defines variables `x` representing candidates for `'work_for'` predicate. 
 This variable `x` is then used to define candidates for `'people'` and `'organization'` predicates by specifying `path` to them using names of graph edges respectively:`'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
 
 Please notice that `'people'` and `'organization'` predicates do not have their variables specified as they are not referred in other parts of this simple logical constraint.  
 
 ```Python
-LC_SET_ADDITIONAL = True \\\pk{what is this??} 
-
 ifL(
     people('p'), 
     atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
-    active = LC_SET_ADDITIONAL
+    active = True
   )
 ```
 Another example above states that _for every candidate in the present ML example if a current candidate is classified as `'people'` concept, then not more then one candidate found by following the path from the current candidate to first argument of the `'pair'` relation will be positively classified as `'live_in'` concept_.
@@ -255,11 +257,11 @@ ifL(
     p=90
   )
 ```
-The above example states that _for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_. \pk{I think for every predicate we need to specify the general template/syntax, or even the full grammar. For example LogicExp -> atMost(LogiclaExp, integer), etc??}
+The above example states that _for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_.
 
 Ths logical constrain show usage of another optional logical constrain attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
 
-The full list of DomiKnows functions implementing **logical operations**: \pk{We need to define the full syntactic template for each}
+The full list of DomiKnows functions implementing **logical operations**:
 	- `notL()`,
 	- `andL()`,
 	- `orL()`,
@@ -267,13 +269,13 @@ The full list of DomiKnows functions implementing **logical operations**: \pk{We
 	- `ifL()`,
 	- `norL()`,
 	- `xorL()`,
-	- `epqL()` (if and only if). \pk{why ep??}
+	- `epqL()` (equal p q).
 
 Auxiliary logical constraint methods:  
-    - `eqL()` -  used in the path definition to filter based on the specified attribute, e.g.:   \pk{we need general syntax, examples are not enough}
-      _eqL(cityLink, 'neighbor', {True}) - instances of cityLink with attribute neighbor in the set containing only single value True,_   
+    - `eqL()` -  used in the path definition to filter based on the specified attribute, e.g.: 
+      _eqL(cityLink, 'neighbor', {True}) - instances of cityLink with attribute neighbor in the set containing only single value True,  
     - `fixedL()`, used to fixed selected candidates to selected classification, e.g.:  
-       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed should have their classification fixed to empty_entry._  \pk{the explanation is not clear.}
+       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed equal True should have their classification reset to the value of its attribute label. The candidates which do not have attribute fixed equal True should have their classification be not affected.
 
 ##### Counting methods
 
@@ -365,7 +367,7 @@ This detail of mapping from OWL to logical representation is presented below for
   
   *AND(Concept1(token), concept2(token))*
 
-- **[subClassOf](https://www.w3.org/TR/owl2-syntax/#Subclass_Axioms "OWL example of subclass statement for classes")** statement between two classes *Concept1* and *SuperConcept2* in ontology is mapped to equivalent logical expression -  
+- **[subClassOf](https://www.w3.org/TR/owl2-syntax/#Subclass_Axioms "OWL example of subclassS statement for classes")** statement between two classes *Concept1* and *SuperConcept2* in ontology is mapped to equivalent logical expression -  
   
   *IF(concept1(token), SuperConcept2(token))*
 

@@ -1,0 +1,72 @@
+/* This code defines the grammar for a logical constraint, which can be one of five types: */
+/* a negation constraint, a for all constraint, a two-element constraint, a multi-element constraint, or a count constraint.*/
+<LogicalConstraint> ::= <ow> <notLC> <ow> | <ow> <forAllConstraint> <ow> | <ow> <twoElementsLC> <ow> | <ow> <multiElementsLC> <ow> | <ow> <countLC> <ow>
+
+/*  Definitions of the five types of logical constraints.*/
+<notLC> ::= <notOperator> <ow> "(" <ow> <LcElement> <ow> ")" 
+<twoElementsLC> ::= <twoElementsOperator> <ow> "(" <ow> <LcElement> <ow> "," <ow> <LcElement> <ow> <opt_p> ")"
+<multiElementsLC> ::= <multiElementsOperator> <ow> "(" <ow> <LcElementChain> <ow> <opt_p> ")"
+<forAllConstraint> ::= <forAllOperator> <ow> "(" <ow> <combinationC> <ow> "," <ow> <LcElement> <ow> <opt_p> ")"
+<combinationC> ::= <combinationOperator> <ow> "(" <ow> <LcElementChain> <opt_comma> ")"
+<countLC> ::= <countOperator> <ow> "(" <ow> <LcElementChain> <ow> <count_number_opt> <ow> <opt_p> ")"
+
+/* Definitions of the operators used in logical constraints. */
+<notOperator> ::= "notL" 
+<eqOperator> ::=  "eqL" 
+<forAllOperator> ::= "forAllL"
+<twoElementsOperator> ::= "ifL" | "epqL" | "xorL" 
+<multiElementsOperator> ::= "andL" | "orL" | "nandL" | "norL" 
+<countOperator> ::= <countOperatorL> | <countOperatorA>
+<countOperatorL> ::= "exactL" | "atLeastL" | "atMostL" | "existsL" 
+<countOperatorA> ::= "exactAL" | "atLeastAL" | "atMostAL" | "existsAL" 
+<combinationOperator> ::= <CombinationOperatorName>
+
+/* LcElement is a logical constraint element, which can be a predicate, a logical constraint, or a logical constraint with a variables tuple. */
+<LcElement> ::= <Predicate> | <LogicalConstraint> | <LogicalConstraint> <ow> <variablesTuple>
+<LcElementChain> ::= <LcElement> <ow> "," <ow>  <LcElementChain> | <LcElement> <ow> 
+
+/* Definitions of the predicate */
+<Predicate> ::=  <Concept> <ow> "(" <ow> "'" <variableName> "'" <ow> "," <ow> <Path> <opt_comma> ")" | <Concept> <ow> "(" <ow> "'" <variableName> "'" <opt_comma> ")" | <Concept> <ow> "(" <ow> <Path> <opt_comma> ")" | <Concept> <ow>
+
+/* Definitions of the path and its pth variants, which can be a path element, a path intersection, or a path element with a variables tuple. */
+<Path> ::= <ow> "path" <ow> "=" <ow> <PathVariants>
+
+<PathVariants> ::= <PathChain>  | <PathIntersection> | <PathElement>
+<PathIntersection> ::= "(" <ow> <PathChain> <ow> ")"
+<PathChain> ::= <PathElement> | <PathElement> <ow> "," <ow> <PathChain>
+
+
+/* Definition of an equality constraint, which can be a part of path */
+<eqElement> ::= <eqOperator> <ow> "(" <ow> <Concept> <ow> "," <ow> "'" <attributeName> "'" <ow> "," <ow> <eqValue> ")"  
+<eqValue> ::= <value> | "{" <values> "}"
+<attributeName> ::= <name>
+
+/* Definitions of path element and path element part, which can be an equality constraint, a path concept or recursive path element part. */
+<PathElement> ::= "(" <ow> "'" <variableName> "'" <ow> "," <ow> <PathElementPart> ")"
+<PathElementPart> ::= <eqElement> | <eqElement> <ow> "," <ow> <PathElementPart> | <PathConcept> | <PathConcept> <ow> "," <ow> <PathElementPart>
+
+/* Definitions of auxiliary elements */
+<Concept> ::= <name>
+<PathConcept> ::= <name> | <name> ".reversed"
+<CombinationOperatorName> ::= <name>
+<variablesTuple> ::= "(" <ow> <variablesTupleElement> <ow> ")"
+<variablesTupleElement> ::= <variableName> <opt_comma> | <variableName> <ow> "," <ow> <variablesTupleElement>
+<variableName> ::= <name>
+<opt_p> ::= "," <ow> "p" <ow> "=" <ow> <number> <opt_comma> | <opt_comma>
+<value> ::= <number> | <name>
+<values> ::= <value> | <value> "," <values>
+
+<number> ::= <digit> | <digit> <number>
+<name> ::= <letter> <character>*
+<count_number_opt> ::= "," <ow> <number> <opt_comma> | <opt_comma>
+<opt_comma> ::= <ow> ","  <ow> | <ow>
+
+/* This production rule defines optional whitespace, which can appear zero or more times. */
+<ow> ::= " "*
+
+<character> ::= <digit> | <letter> | "_" | "."
+
+<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+<letter> ::= <LowerLetter> | <UpperLetter> 
+<LowerLetter> ::= "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" 
+<UpperLetter> ::= "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
