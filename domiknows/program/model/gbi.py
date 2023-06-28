@@ -151,6 +151,7 @@ class GBIModel(torch.nn.Module):
                 is_satisfied = 0
                 no_of_not_satisfied += 1
 
+            is_satisfied = num_satisfied_l/num_constraints_l
             # -- collect probs from datanode (in skeleton mode) 
             probs = {}
             for var_name, var_val in node_l.getAttribute('variableSet').items():
@@ -169,7 +170,7 @@ class GBIModel(torch.nn.Module):
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
             c_loss = -1 * log_probs * is_satisfied + self.reg_loss(model_l, self.server_model)
 
-            print("iter=%d, c_loss=%d, satisfied=%d"%(c_iter, c_loss.item(), num_satisfied_l))
+            print("iter=%d, c_loss=%d, num_constraints_l=%d, satisfied=%d"%(c_iter, c_loss.item(), num_constraints_l, num_satisfied_l))
 
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
@@ -181,7 +182,7 @@ class GBIModel(torch.nn.Module):
                         
             # --- Backward pass on model_l
             if c_loss.requires_grad:
-                c_loss.backward()
+                c_loss.backward(retain_graph=True)
             #  -- Update model_l
             c_opt.step()
         
@@ -206,14 +207,9 @@ class GBIModel(torch.nn.Module):
             for dn in dns: 
                 v = dn.getAttribute(c[0])
                  
-                vGBI = torch.clone(v)
+                vGBI = torch.zeros(v.size())
                 vArgmaxIndex = torch.argmax(v).item()
-                
-                for i, _ in enumerate(v):
-                    if i == vArgmaxIndex:
-                        vGBI[i] = 1
-                    else:
-                        vGBI[i] = 0
+                vGBI[vArgmaxIndex] = 1
                                 
                 dn.attributes[keyGBI] = vGBI
 

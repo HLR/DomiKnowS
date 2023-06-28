@@ -321,10 +321,19 @@ class LearningBasedProgram():
             self.to(device)
         yield from self.populate_epoch(dataset)
 
-    def populate_epoch(self, dataset):
+    def populate_epoch(self, dataset, grad = False):
         self.model.mode(Mode.POPULATE)
         self.model.reset()
-        with torch.no_grad():
+        if not grad:
+            with torch.no_grad():
+                for i, data_item in tqdm(enumerate(dataset)):
+                    # import time
+                    # start = time.time()
+                    _, _, *output = self.model(data_item)
+                    # end = time.time()
+                    # print("Time taken for one data item in populate epoch: ", end - start)
+                    yield detuple(*output[:1])
+        else:
             for i, data_item in tqdm(enumerate(dataset)):
                 # import time
                 # start = time.time()
@@ -333,8 +342,8 @@ class LearningBasedProgram():
                 # print("Time taken for one data item in populate epoch: ", end - start)
                 yield detuple(*output[:1])
 
-    def populate_one(self, data_item):
-        return next(self.populate_epoch([data_item]))
+    def populate_one(self, data_item, grad = False):
+        return next(self.populate_epoch([data_item], grad = grad))
 
     def save(self, path, **kwargs):
         torch.save(self.model.state_dict(), path, **kwargs)

@@ -264,15 +264,20 @@ class LossProgram(LearningBasedProgram):
 #         self.cmodel.mode(Mode.TEST)
         yield from super().test_epoch(dataset)
         
-    def populate_epoch(self, dataset):
+    def populate_epoch(self, dataset, grad = False):
         self.model.mode(Mode.POPULATE)
 #         self.cmodel.mode(Mode.POPULATE)
         self.model.reset()
-        with torch.no_grad():
+        if not grad:
+            with torch.no_grad():
+                for i, data_item in enumerate(dataset):
+                    _, _, *output = self.model(data_item)
+                    yield detuple(*output[:1])
+        else:
             for i, data_item in enumerate(dataset):
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
-        
+                
 class PrimalDualProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
