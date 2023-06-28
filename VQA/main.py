@@ -218,7 +218,7 @@ if __name__ == '__main__':
             dataitem = row_to_dataitem(row)
 
             # input data to model
-            node = program.populate_one(dataitem)
+            node = program.populate_one(dataitem, grad = True)
 
             node.inferLocal()
 
