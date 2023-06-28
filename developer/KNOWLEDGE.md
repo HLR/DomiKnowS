@@ -214,7 +214,7 @@ If the variable is not explicitly specified in the predicate, then a default var
 
 As in Fist Order Logic we have to define the interpretation of variable in the predicate. An interpretation (or model) of a first-order formula specifies what each predicate means, and the entities that can instantiate the variables. These entities form the domain of discourse or universe. In DomiKnows, the domain of discourse is the set of candidates. By default, the variable in the predicate is associated with all candidates from the data. This basic set of variable candidate re identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path. 
 
-The BNF definition of DomiKnows logical constraint is available at [DomiKnows Logical Constraint BNF](https://tinyurl.com/LogicalConstraint-BNF). This web site allows to test the logical constraint syntax.
+The BNF definition of DomiKnows logical constraint is available at [DomiKnows Logical Constraint BNF](https://tinyurl.com/DomiKnowsLogicalConstraint-BNF). This web site allows to test the logical constraint syntax.
 
 ```Pyth
 
