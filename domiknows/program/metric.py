@@ -1,10 +1,8 @@
 from collections import defaultdict
 from typing import Any
-
 import numpy as np
 import torch
-from torch.nn import functional as F
-
+from sklearn.metrics import confusion_matrix, classification_report
 from ..base import AutoNamed
 from ..utils import wrap_batch
 
@@ -46,22 +44,6 @@ class MultiClassCMWithLogitsMetric(CMWithLogitsMetric):
         return super().forward(input, target, data_item, prop, weight)
 
 
-def calc_TP_FP_TN_FN_for_single_class(val):
-    y = val["labels"]
-    p = val["preds"]
-    TP,FP,TN,FN=0,0,0,0
-    for i,j in zip(y,p):
-        if i==j and i==1:
-            TP+=1
-        elif i==j and i==0:
-            TN+=1
-        elif not i==j and i==1:
-            FN+=1
-        elif not i == j and i == 0:
-            FP += 1
-    return {"TP": TP, 'FP': FP, 'TN': TN, 'FN': FN}
-
-
 class DatanodeCMMetric(torch.nn.Module):
     def __init__(self, inferType='ILP'):
         super().__init__()
@@ -74,7 +56,20 @@ class DatanodeCMMetric(torch.nn.Module):
         if len(result.keys())==2:
             if str(prop.name) in result:
                 val =  result[str(prop.name)]
-                return calc_TP_FP_TN_FN_for_single_class(val)
+                if len(confusion_matrix(val["labels"], val["preds"]).ravel())<4:
+                    print()
+                    print("here")
+                conf_mat = confusion_matrix(val["labels"], val["preds"])
+                if conf_mat.size == 1:
+                    if val["labels"][0] == 1:
+                        TP = conf_mat[0, 0]
+                        FP = FN = TN = 0
+                    else:
+                        TN = conf_mat[0, 0]
+                        TP = FP = FN = 0
+                else:
+                    TN, FP, FN, TP = conf_mat.ravel()
+                return {"TP": TP, 'FP': FP, 'TN': TN, 'FN': FN}
             else:
                 return None
         else:
@@ -126,8 +121,6 @@ class MetricTracker(torch.nn.Module):
             value = wrap_batch(self.list)
             value = super().__call__(value)
         elif self.dict:
-            #value = wrap_batch(self.dict)
-            #value = super().__call__(value)
             func = super().__call__
             value = {self.kprint(k): func(v) for k, v in self.dict.items()}
         else:
@@ -180,14 +173,6 @@ class ValueTracker(MetricTracker):
     def forward(self, values):
         return values
 
-def frp_from_matrix(i,matrix):
-    matrix=np.array(matrix)
-    TP=matrix[i][i]
-    TN=matrix.sum()-matrix[i].sum()-matrix[:,i].sum()+matrix[i][i]
-    FN=matrix[i].sum()-matrix[i][i]
-    FP=matrix[:,i].sum()-matrix[i][i]
-    return TP,TN,FP,FN
-
 class PRF1Tracker(MetricTracker):
     def __init__(self, metric=CMWithLogitsMetric(),confusion_matrix=False):
         super().__init__(metric)
@@ -233,33 +218,12 @@ class PRF1Tracker(MetricTracker):
             output={}
             names=values[0]["class_names"][:]
             n=len(names)
-
-            matrix=[[0 for i in range(n)] for j in range(n)]
-            for batch in values:
-                for label,pred in zip(batch["labels"],batch["preds"]):
-                    matrix[label][pred]+=1
-            if self.confusion_matrix:
-                output[str(names)]=matrix
-            for name in names:
-                TP,TN,FP,FN=frp_from_matrix(names.index(name),matrix)
-                if (TP+FP):
-                    output[name+" Precision"]=TP/(TP+FP)
-                else:
-                    output[name + " Precision"] = 0
-                if (TP+FN):
-                    output[name + " Recall"] =TP/(TP+FN)
-                else:
-                    output[name + " Recall"]=0
-                if (output[name+" Precision"]+output[name + " Recall"]):
-                    output[name + " F1"] =2*(output[name+" Precision"]*output[name + " Recall"])/(output[name+" Precision"]+output[name + " Recall"])
-                else:
-                    output[name + " F1"]=0
-                if (TP+TN+FP+FN):
-                    output[name + " Accuracy"] =(TP+TN)/(TP+TN+FP+FN)
-                else:
-                    output[name + " Accuracy"]=0
-            output["Total Accuracy of All Classes"]=sum([matrix[i][i] for i in range(n)])/sum([sum(matrix[i]) for i in range(n)])
-            return output
+            labels = np.concatenate([batch["labels"] for batch in values])
+            preds = np.concatenate([batch["preds"] for batch in values])
+            report = classification_report(labels, preds, labels=np.arange(n), output_dict=True,zero_division=0)
+            report={names[i]:report[str(i)] for i in range(n)}
+            report["Total Accuracy of All Classes"]=sum(labels==preds)
+            return report
 
 
 class BinaryPRF1Tracker(PRF1Tracker):
