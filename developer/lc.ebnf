@@ -1,5 +1,6 @@
-/* This code defines the grammar for a logical constraint, which can be one of five types: */
-/* a negation constraint, a for all constraint, a two-element constraint, a multi-element constraint, or a count constraint.*/
+/* This code defines the grammar for logical constraints in DomiKnowS. We use first-order logical expressions including logical operations and quantifiers.*/
+/* The logical operations include a unary one that is a negation operation and binary ones include logical AND, OR, and IMPLICATION. Quantifiers include for all, exist, and counting constraints.*/
+
 <LogicalConstraint> ::= <ow> <notLC> <ow> | <ow> <forAllConstraint> <ow> | <ow> <twoElementsLC> <ow> | <ow> <multiElementsLC> <ow> | <ow> <countLC> <ow>
 
 /*  Definitions of the five types of logical constraints.*/
