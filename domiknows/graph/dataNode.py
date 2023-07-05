@@ -9,6 +9,7 @@ from ordered_set import OrderedSet
 
 from domiknows import getRegrTimer_logger, getProductionModeStatus
 from domiknows.solver import ilpOntSolverFactory
+from domiknows.utils import getDnSkeletonMode
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -223,6 +224,21 @@ class DataNode:
     def getAttributes(self):
         return self.attributes     
     
+    def hasAttribute(self, key):
+        if key in self.attributes:
+            return True
+        elif "rootDataNode" in self.attributes:
+            rootDataNode = self.attributes["rootDataNode"]
+            if "variableSet" in rootDataNode.attributes:
+                keyInVariableSet = self.ontologyNode.name + "/" + key
+                if keyInVariableSet in rootDataNode.attributes["variableSet"]:
+                    return True
+                elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
+                    return True
+        else:
+            return False
+        
+        
     def getAttribute(self, *keys):
         key = ""
         keyBis  = ""
@@ -991,87 +1007,180 @@ class DataNode:
         
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
-            dns = self.findDatanodes(select = cRoot)
             
-            if not dns:
-                continue
-            
-            vs = []
-            
-            for dn in dns:
-                v = dn.getAttribute(c[0])
+            # ----- skeleton - tensor
+            if getDnSkeletonMode() and "variableSet" in self.attributes:
+                vKeyInVariableSet = cRoot.name + "/<" + c[0].name +">"
                 
-                if v is None:
-                    vs = []
-                    break
-                elif not torch.is_tensor(v):
-                    vs = []
-                    break
-                else:
+                # softmax
+                softmaxKeyInVariableSet = vKeyInVariableSet + "/softmax"
+                
+                if not self.hasAttribute(softmaxKeyInVariableSet):
+                    vKeyInVariableSetValues = self.attributes["variableSet"][vKeyInVariableSet]
                     if c[2] is not None:
-                        vs.append(v[c[2]])
+                        v = vKeyInVariableSetValues[:, c[2]]
                     else:
-                        if len(v.size()) != 1 or v.size()[0] != 2:
-                            vs = []
-                            break
-                        else:
-                            vs.append(v[1])
-            
-            if not vs:
-                continue
-            
-            t = torch.tensor(vs)
-            t[torch.isnan(t)] = 0 # NAN  -> 0
-            
-            vM = torch.argmax(t).item() # argmax
-            
-            # Elements for softmax
-            tExp = torch.exp(t)
-            tExpSum = torch.sum(tExp).item()
-            
-            keyArgmax = "<" + c[0].name + ">/argmax"
-            keySoftMax = "<" + c[0].name + ">/softmax"
-            
-            # Add argmax and softmax to DataNodes
-            for dn in dns:    
-                if keyArgmax not in dn.attributes:
-                    dn.attributes[keyArgmax] = torch.empty(c[3], dtype=torch.float)
+                        v = vKeyInVariableSetValues[:, 1]
                     
-                if dn.getInstanceID() == vM:
-                    dn.attributes[keyArgmax][c[2]] = 1
-                else:
-                    dn.attributes[keyArgmax][c[2]] = 0
+                    # check if v is None or not a tensor
+                    if v is None or not torch.is_tensor(v):
+                        continue
+                    
+                    if not(isinstance(v, torch.FloatTensor) or isinstance(v, torch.cuda.FloatTensor)):
+                        v = v.float()
+                        
+                    vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
+                    self.attributes["variableSet"][softmaxKeyInVariableSet] = vSoftmaxT
+                        
+                # argmax
+                argmaxKeyInVariableSet = vKeyInVariableSet + "/argmax"
+                if not self.hasAttribute(argmaxKeyInVariableSet):
+                    vKeyInVariableSetValues = self.attributes["variableSet"][vKeyInVariableSet]
+                    if c[2] is not None:
+                        v = vKeyInVariableSetValues[:, c[2]]
+                    else:
+                        v = vKeyInVariableSetValues[:, 1]
+                     
+                    vArgmaxTInxexes = torch.argmax(v, dim=-1)
+                    vArgmax = torch.zeros_like(v).scatter_(-1, vArgmaxTInxexes.unsqueeze(-1), 1.)
+                    
+                    self.attributes["variableSet"][argmaxKeyInVariableSet] = vArgmax
+                  
+                # This is test 
+                if False:
+                    dns = self.findDatanodes(select = cRoot)  
+                    for dn in dns:
+                        keyArgmax = "<" + c[0].name + ">/argmax"
+                        keySoftMax = "<" + c[0].name + ">/softmax"
+                        
+                        index = c[2]
+                        if index is None:
+                            index = 1
+                            
+                        s = dn.getAttribute(keySoftMax)[c[2]]
+                        a = dn.getAttribute(keyArgmax)[c[2]]
+                        continue
+                        
+            else:      
+                # ---- loop through dns  
+                dns = self.findDatanodes(select = cRoot)
                 
-                if keySoftMax not in dn.attributes:
-                    dn.attributes[keySoftMax] = torch.empty(c[3], dtype=torch.float)
+                if not dns:
+                    continue
+                
+                vs = []
+                
+                for dn in dns:
+                    v = dn.getAttribute(c[0])
                     
-                dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
-                dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
+                    if v is None:
+                        vs = []
+                        break
+                    elif not torch.is_tensor(v):
+                        vs = []
+                        break
+                    else:
+                        if c[2] is not None:
+                            vs.append(v[c[2]])
+                        else:
+                            if len(v.size()) != 1 or v.size()[0] != 2:
+                                vs = []
+                                break
+                            else:
+                                vs.append(v[1])
+                
+                if not vs:
+                    continue
+                
+                t = torch.tensor(vs)
+                t[torch.isnan(t)] = 0 # NAN  -> 0
+                
+                vM = torch.argmax(t).item() # argmax
+                
+                # Elements for softmax
+                tExp = torch.exp(t)
+                tExpSum = torch.sum(tExp).item()
+                
+                keyArgmax = "<" + c[0].name + ">/argmax"
+                keySoftMax = "<" + c[0].name + ">/softmax"
+                
+                # Add argmax and softmax to DataNodes
+                for dn in dns:    
+                    if keyArgmax not in dn.attributes:
+                        dn.attributes[keyArgmax] = torch.empty(c[3], dtype=torch.float)
+                        
+                    if dn.getInstanceID() == vM:
+                        dn.attributes[keyArgmax][c[2]] = 1
+                    else:
+                        dn.attributes[keyArgmax][c[2]] = 0
+                    
+                    if keySoftMax not in dn.attributes:
+                        dn.attributes[keySoftMax] = torch.empty(c[3], dtype=torch.float)
+                        
+                    dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
+                    dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
     # Calculate local for datanote argMax and softMax
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
         conceptsRelations = self.collectConceptsAndRelations() 
-                
-        for c in conceptsRelations:
-            cRoot = self.findRootConceptOrRelation(c[0])
-            dns = self.findDatanodes(select = cRoot)
-            
-            if not dns:
-                continue
-            
-            vs = []
-            
-            for dn in dns:
-                keySoftmax = "<" + c[0].name + ">/local/softmax"
-                normalized_keys = set([
+        
+        normalized_keys = set([
                     "normalizedProb", "meanNormalizedProb", 
                     "normalizedProbAll", "meanNormalizedProbStd",
                     "normalizedProbAcc", "entropyNormalizedProbAcc",
                     "normalizedJustAcc",
                     ])
-                if "softmax" in keys or normalized_keys.intersection(set(keys)):
+        
+        if "softmax" in keys or normalized_keys.intersection(set(keys)):
+            needSoftmax = True
+        else:
+            needSoftmax = False
+            
+        for c in conceptsRelations:
+            cRoot = self.findRootConceptOrRelation(c[0])
+            
+            # ----- skeleton - tensor
+            if getDnSkeletonMode() and "variableSet" in self.attributes:
+                vKeyInVariableSet = cRoot.name + "/<" + c[0].name +">"
+                
+                if needSoftmax:
+                    localSoftmaxKeyInVariableSet = vKeyInVariableSet + "/local/softmax"
+                    
+                    if not self.hasAttribute(localSoftmaxKeyInVariableSet):
+                        v = self.attributes["variableSet"][vKeyInVariableSet]
+                        
+                        # check if v is None or not a tensor
+                        if v is None or not torch.is_tensor(v):
+                            continue
+                        
+                        if not(isinstance(v, torch.FloatTensor) or isinstance(v, torch.cuda.FloatTensor)):
+                            v = v.float()
+                            
+                        vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
+                        self.attributes["variableSet"][localSoftmaxKeyInVariableSet] = vSoftmaxT
+                        
+                if "argmax" in keys:
+                    localArgmaxKeyInVariableSet = vKeyInVariableSet + "/local/argmax"
+                    if not self.hasAttribute(localArgmaxKeyInVariableSet):
+                        v = self.attributes["variableSet"][vKeyInVariableSet]
+                         
+                        vArgmaxTInxexes = torch.argmax(v, dim=1)
+                        vArgmax = torch.zeros_like(v).scatter_(1, vArgmaxTInxexes.unsqueeze(1), 1.)
+                        
+                        self.attributes["variableSet"][localArgmaxKeyInVariableSet] = vArgmax
+            
+            # ---- loop through dns
+            dns = self.findDatanodes(select = cRoot)
+            if not dns:
+                continue
+            
+            vs = []
+            
+            for dn in dns:
+                if needSoftmax:
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
-                    if not keySoftmax in dn.attributes: # Already calculated ?                    
+
+                    if not dn.hasAttribute(keySoftmax):                        
                         v = dn.getAttribute(c[0])
                         
                         # check if v is None or not a tensor
@@ -1082,20 +1191,11 @@ class DataNode:
                             v = v.float()
                             
                         vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
-                        # vSoftmaxT = v
-                        
-                        # Replace nan with 1/len
-                        #for i, s in enumerate(vSoftmaxT):
-                        #   if s != s:
-                        #       vSoftmaxT[i] = 1/len(v)
-                        
                         dn.attributes[keySoftmax] = vSoftmaxT
-                    else:
-                        vSoftmaxT = dn.getAttribute(keySoftmax)
                 
                 if "normalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
                         
                         # Clamps the softmax probabilities
@@ -1111,7 +1211,7 @@ class DataNode:
 
                 if "normalizedProbAcc" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProbAcc"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
 
                         # Clamps the softmax probabilities
@@ -1136,7 +1236,7 @@ class DataNode:
 
                 if "entropyNormalizedProbAcc" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/entropyNormalizedProbAcc"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
 
                         # Clamps the softmax probabilities
@@ -1161,7 +1261,7 @@ class DataNode:
 
                 if "normalizedJustAcc" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedJustAcc"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
                         
                         ### Calculate the multiplier factor
@@ -1182,7 +1282,7 @@ class DataNode:
 
                 if "meanNormalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/meanNormalizedProb"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
 
                         vector = vSoftmaxT
@@ -1194,7 +1294,7 @@ class DataNode:
 
                 if "normalizedProbAll" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProbAll"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
 
                         # Clamps the softmax probabilities
@@ -1215,7 +1315,7 @@ class DataNode:
 
                 if "meanNormalizedProbStd" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/meanNormalizedProbStd"
-                    if not keyNormalizedProb in dn.attributes: # Already calculated ?   
+                    if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
                         vSoftmaxT = dn.attributes[keySoftmax]
 
                         vector = vSoftmaxT
@@ -1232,12 +1332,14 @@ class DataNode:
                 
                 if "argmax" in keys:
                     keyArgmax  = "<" + c[0].name + ">/local/argmax"
-                    v = dn.getAttribute(c[0])
-                    vArgmax = torch.zeros(v.shape)
-                    vArgmaxIndex = torch.argmax(v).item()
-                    vArgmax[vArgmaxIndex] = 1
-                                    
-                    dn.attributes[keyArgmax] = vArgmax
+                    if not dn.hasAttribute(keyArgmax):
+                        v = dn.getAttribute(c[0])
+                        vArgmax = torch.zeros(v.shape)
+                        vArgmaxCalculated = torch.argmax(v, keepdim=True)
+                        vArgmaxIndex = torch.argmax(v).item()
+                        vArgmax[vArgmaxIndex] = 1
+                                        
+                        dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False, Acc=None):

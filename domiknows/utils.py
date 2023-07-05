@@ -131,6 +131,8 @@ def getReuseModel():
 
 dnSkeletonMode = False
 def setDnSkeletonMode(dnSkeleton):
+    if not isinstance(dnSkeleton, bool):
+        dnSkeleton = False
     global dnSkeletonMode
     dnSkeletonMode = dnSkeleton
     
