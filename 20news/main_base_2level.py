@@ -397,8 +397,8 @@ if __name__ == '__main__':
                 changed_total_sequntial[level1.name] += 1
                 if level1_answer == label_class_level1:
                     changed_corrects_sequntial[level1.name] += 1
-                elif pred_class_level1 == label_class:
-                    changed_corrects_sequntial[level1.name] += 1
+                elif pred_class_level1 == label_class_level1:
+                    changed_wrong_sequntial[level1.name] += 1
             
 
             if level1_answer not in per_class_tp_sequential[level1.name]:

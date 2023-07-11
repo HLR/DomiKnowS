@@ -1,5 +1,6 @@
 import torch
 import random
+import json
 
 from domiknows.data.reader import RegrReader
 
@@ -15,6 +16,22 @@ class ProparaReader(RegrReader):
         function.
         """
         data = torch.load(self.file)
+        eval_path = "Tasks/T5Procedural/data/eval_cases/test/out_of_sentence_entities.json"
+        with open(eval_path, "r") as f:
+            eval_cases = json.load(f)
+        self.eval_cases_dict = {}
+        for eval_case in eval_cases:
+            if not eval_case["id"] in self.eval_cases_dict:
+                self.eval_cases_dict[eval_case["id"]] = {}
+            if eval_case["entity"] in self.eval_cases_dict[eval_case["id"]]:
+                self.eval_cases_dict[eval_case["id"]][eval_case["entity"]] = {}
+                if not eval_case['step'] in self.eval_cases_dict[eval_case["id"]][eval_case["entity"]]:
+                    self.eval_cases_dict[eval_case["id"]][eval_case["entity"]][eval_case['step']] = eval_case
+            else:
+                self.eval_cases_dict[eval_case["id"]][eval_case["entity"]] = {}
+                self.eval_cases_dict[eval_case["id"]][eval_case["entity"]][eval_case['step']] = eval_case
+            
+
         new_data = []
         for key in data.keys():
             val = data[key]
@@ -185,15 +202,30 @@ class ProparaReader(RegrReader):
         ### loop over all entities in the processed probs and gather the after_location values
         all_decisions = []
         all_ground_truths = []
+        special_case = False
+        if special_case:
+            related_eval = self.eval_cases_dict[item['pid']]
         count = 0
         for eid in item['processed_probs']:
             # if count != 0:
             #     break
             # count += 1
+            entity_name = item['entities'][eid]
+            if special_case:
+                entity_related_eval = related_eval[entity_name]
             predictions = item['processed_probs'][eid][key]
             formatted_preds = []
             formatted_gt = []
             for sid, val in enumerate(predictions):
+                if "multi" in key:
+                    sid_check = sid + 1
+                else:
+                    sid_check = sid
+                if special_case and sid_check in entity_related_eval:
+                    entity_step_related_eval = entity_related_eval[sid_check]
+                    factor = 0.7
+                elif special_case:
+                    factor = 1
                 if not torch.is_tensor(val[0]):
                     formatted_preds.append(torch.stack(val[0]))
                 else:
@@ -286,13 +318,15 @@ class ProparaReader(RegrReader):
         if torch.is_tensor(vectors):
             vector = torch.clamp(vectors, min=1e-12, max=1 - 1e-12)
             entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-            # vector = (1/entropy.item()) * (vector/torch.mean(vector))
+            vector = (1/entropy.item()) * vector
+            # * (vector/torch.mean(vector))
             final_vec = vector * multiplier
         else:
             for vector in vectors:
                 vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
                 entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-                # vector = (1/entropy.item()) * (vector/torch.mean(vector))
+                vector = (1/entropy.item()) * vector
+                # *  (vector/torch.mean(vector))
                 final_vec.append(vector * multiplier)
         return final_vec
 
