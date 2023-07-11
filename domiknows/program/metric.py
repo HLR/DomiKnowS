@@ -215,14 +215,17 @@ class PRF1Tracker(MetricTracker):
                 accuracy=(tp + tn) / (tp + fp + fn + tn)
             return {'P': p, 'R': r, 'F1': f1,"accuracy":accuracy}
         elif values[0]:
-            output={}
             names=values[0]["class_names"][:]
             n=len(names)
             labels = np.concatenate([batch["labels"] for batch in values])
             preds = np.concatenate([batch["preds"] for batch in values])
+
+            # remove the negative predictions
+            labels = labels[preds >= 0]
+            preds = preds[preds >= 0]
+
             report = classification_report(labels, preds, labels=np.arange(n), output_dict=True,zero_division=0)
-            report={names[i]:report[str(i)] for i in range(n)}
-            report["Total Accuracy of All Classes"]=sum(labels==preds)
+            report = {**{names[i]: report[str(i)] for i in range(n)}, **{'weighted avg': report['weighted avg'], 'macro avg': report['macro avg'], 'accuracy': report['accuracy']}}
             return report
 
 
