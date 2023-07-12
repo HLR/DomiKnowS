@@ -27,11 +27,12 @@ class TorchSensor(Sensor):
 
     def __call__(
         self,
-        data_item: Dict[str, Any]
+        data_item: Dict[str, Any],
+        force=False
     ) -> Any:
         self.context_helper = data_item
         try:
-            self.update_context(data_item)
+            self.update_context(data_item, force=force)
         except Exception as ex:
             print('Error {} during updating data item {} with sensor {}'.format(ex, data_item, self.fullname))
             raise

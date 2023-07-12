@@ -275,6 +275,10 @@ class LossProgram(LearningBasedProgram):
                     yield detuple(*output[:1])
         else:
             for i, data_item in enumerate(dataset):
+                for dataKey in data_item:
+                    if data_item[dataKey].dtype in [torch.float32, torch.float64, torch.complex64, torch.complex128]:
+                        data_item[dataKey].requires_grad= True
+                    
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
                 
@@ -376,10 +380,6 @@ class GBIProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, poi, beta=1, **kwargs):
-        mySolverModel= SolverModel(graph,
-                           poi=poi,
-                           inferTypes=['local/argmax', 'local/softmax'],
-                           metric={})
-        super().__init__(graph, Model, CModel=GBIModel, beta=beta, solver_model = mySolverModel, poi=poi, **kwargs)
+        super().__init__(graph, Model, CModel=GBIModel, beta=beta, poi=poi, **kwargs)
         from domiknows.utils import setDnSkeletonMode
         setDnSkeletonMode(True)

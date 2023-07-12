@@ -4,8 +4,11 @@ import warnings
 import torch
 import copy
 from torch.optim import SGD
+from domiknows.graph import DataNodeBuilder
 
 from domiknows.program.metric import MacroAverageTracker, MetricTracker
+from domiknows.sensor.pytorch.sensors import TorchSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.program.model.base import Mode
 
 from .pytorch import SolverModel
@@ -17,10 +20,14 @@ import numpy
 
 # Gradient-based Inference
 class GBIModel(torch.nn.Module):
-    def __init__(self, graph, solver_model, gbi_iters = 100, device='auto'):
+    def __init__(self, graph, solver_model=None, gbi_iters = 100, device='auto'):
         super().__init__()
         
-        self.server_model= solver_model
+        if solver_model is None:
+            solver_model =self
+        else:
+            self.server_model= solver_model
+            
         self.gbi_iters = gbi_iters
         self.device = device
         
@@ -102,9 +109,21 @@ class GBIModel(torch.nn.Module):
         Forward pass through torch model.
         Returns DataNode and DataNodeBuilder.
         """
-        _, _, *output = model(data_item)
-        node = detuple(*output[:1])
-        return node, output[1]
+        
+        #loss, metric, datanode, builder = model(data_item)
+        
+        data_item.update({"graph": model.graph, 'READER': 0})
+        builder = DataNodeBuilder(data_item)
+        
+        for i, prop in enumerate(model.poi):
+            for sensor in prop.find(ModuleLearner):
+                sensor(builder, force=True)
+        
+        builder.createBatchRootDN()
+        datanode = builder.getDataNode(context="build", device=self.device)
+            
+        return datanode, builder
+    
     # ----
     
     def forward(self, builder, build=None):
@@ -168,14 +187,17 @@ class GBIModel(torch.nn.Module):
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
-            c_loss = -1 * log_probs * is_satisfied + self.reg_loss(model_l, self.server_model)
+            reg_loss =  self.reg_loss(model_l, self.server_model)
+            c_loss = -1 * log_probs * is_satisfied + reg_loss
 
+            if c_loss != c_loss:
+                continue
+            
             print("iter=%d, c_loss=%d, num_constraints_l=%d, satisfied=%d"%(c_iter, c_loss.item(), num_constraints_l, num_satisfied_l))
 
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 # --- End early if constraints are satisfied
-                self.server_model 
                 return c_loss, datanode, builder
             elif no_of_not_satisfied > 3: # three consecutive iterations where constraints are not satisfied
                 return c_loss, datanode, builder # ? float("nan")
@@ -183,6 +205,15 @@ class GBIModel(torch.nn.Module):
             # --- Backward pass on model_l
             if c_loss.requires_grad:
                 c_loss.backward(retain_graph=True)
+                
+            print("Step after backward")
+            for name, x in model_l.named_parameters():
+                if x.grad is None:
+                    print(name, 'no grad')
+                    continue
+                
+                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
+   
             #  -- Update model_l
             c_opt.step()
         
@@ -205,8 +236,11 @@ class GBIModel(torch.nn.Module):
                 continue
                         
             for dn in dns: 
-                v = dn.getAttribute(c[0])
-                 
+                v = dn.getAttribute(c[0]) # Get ILP results
+                if v is None:
+                    continue
+                
+                # Create GBI  results
                 vGBI = torch.zeros(v.size())
                 vArgmaxIndex = torch.argmax(v).item()
                 vGBI[vArgmaxIndex] = 1

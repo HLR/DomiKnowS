@@ -1196,7 +1196,7 @@ class DataNode:
                 if "normalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
                         
                         # Clamps the softmax probabilities
                         vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
@@ -1212,7 +1212,7 @@ class DataNode:
                 if "normalizedProbAcc" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProbAcc"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
 
                         # Clamps the softmax probabilities
                         vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
@@ -1237,7 +1237,7 @@ class DataNode:
                 if "entropyNormalizedProbAcc" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/entropyNormalizedProbAcc"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
 
                         # Clamps the softmax probabilities
                         vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
@@ -1262,7 +1262,7 @@ class DataNode:
                 if "normalizedJustAcc" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedJustAcc"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
                         
                         ### Calculate the multiplier factor
                         if Acc and c[0].name in Acc:
@@ -1283,7 +1283,7 @@ class DataNode:
                 if "meanNormalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/meanNormalizedProb"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
 
                         vector = vSoftmaxT
                         
@@ -1295,7 +1295,7 @@ class DataNode:
                 if "normalizedProbAll" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProbAll"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
 
                         # Clamps the softmax probabilities
                         vector = torch.clamp(vSoftmaxT, min=1e-18, max=1 - 1e-18) 
@@ -1316,7 +1316,7 @@ class DataNode:
                 if "meanNormalizedProbStd" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/meanNormalizedProbStd"
                     if not dn.hasAttribute(keyNormalizedProb): # Already calculated ?   
-                        vSoftmaxT = dn.attributes[keySoftmax]
+                        vSoftmaxT = dn.getAttribute(keySoftmax)
 
                         vector = vSoftmaxT
 
@@ -1381,7 +1381,7 @@ class DataNode:
         _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
 
         from domiknows.program.model.gbi import GBIModel
-        myGBIModel = GBIModel(self.graph, model)
+        myGBIModel = GBIModel(self.graph, solver_model=model)
         myGBIModel.calculateGBISelection(builder, _conceptsRelations)
         
     # Calculate the percentage of results satisfying each logical constraint 
