@@ -223,9 +223,11 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-    setProductionLogMode(no_UseTimeLog=False)
-    setDnSkeletonMode(True)
-    dataset = ProparaReader(file="data/prepared_results_simple.pt", type="_pt")  # Adding the info on the reader
+    setProductionLogMode(no_UseTimeLog=True)
+    setDnSkeletonMode(False)
+    prefix = "Tasks/T5Procedural/"
+    # prefix = ""
+    dataset = ProparaReader(file=f"{prefix}data/prepared_results_simple.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 
@@ -291,7 +293,7 @@ def main():
             _map_list = ["create", "exists", "move", "destroy", "prior", "post"]
             if not concept in {entity_location_label, entity_location_before_label}:
                 if c is None:
-                    c = "unknown"
+                    raise TypeError("invalid C value")
                 elif not isinstance(c, torch.Tensor):
                     raise TypeError("c must be a tensor")
                 else:
@@ -357,6 +359,7 @@ def main():
                 # final_output[f"{_concept.name}"] is not None and tensor
                 if final_output[f"{_concept.name}"] is None:
                     final_output[f"{_concept.name}"] = torch.zeros(len(entities_instances), len(steps_instances), 1)
+                else:
                     final_output[f"{_concept.name}"] = torch.stack(final_output[f"{_concept.name}"])
                     final_output[f"{_concept.name}"] = final_output[f"{_concept.name}"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
                     final_output[f"{_concept.name}_before"] = torch.stack(final_output[f"{_concept.name}_before"])
