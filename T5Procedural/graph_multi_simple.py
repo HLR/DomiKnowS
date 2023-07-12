@@ -105,10 +105,10 @@ with Graph('global') as graph:
         # combinationC(entity, location(path=eqL(location, 'text', {5839})))('e', 'l'),
         notL(
             entity_location_label('el1', path=(
-                                ("e", lentity.reversed),
-                                ("i", lstep.reversed),
-                                ("l", llocation.reversed)
-                )
+                                                ("e", lentity.reversed),
+                                                ("i", lstep.reversed),
+                                                ("l", llocation.reversed)
+                                              )
             )
         ), active = location_level_lc
     )

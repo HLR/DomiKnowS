@@ -9,11 +9,11 @@ import torch
 
 from domiknows.graph import Graph, Concept, Relation, DataNodeBuilder
 from domiknows.graph import ifL, andL, nandL
-from domiknows.program import POIProgram
+from domiknows.program import SolverPOIProgram, POIProgram
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
-from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import NBCrossEntropyLoss
 
 from models import tokenize, WordEmbedding, Classifier, make_pair, concat, pair_label
@@ -103,7 +103,10 @@ pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed]
 #
 # Defined the program
 #
-program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+program = SolverPOIProgram(graph, poi=(word, ), inferTypes=['ILP', 'local/argmax', "GBI"], 
+                           loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),
+                                                                                   'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax')),
+                                                                                   'GBI':PRF1Tracker(DatanodeCMMetric('GBI'))})
 
 # device options are 'cpu', 'cuda', 'cuda:x', torch.device instance, 'auto', None
 device = 'auto'
