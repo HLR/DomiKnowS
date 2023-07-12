@@ -159,6 +159,37 @@ class ProparaReader(RegrReader):
                     
         return torch.stack(b1s), torch.stack(b2s)
     
+    def gettransition_instanceval(self, item):
+        ### make a combination of entities and all exact before steps
+        e1s = []
+        b1s = []
+        b2s = []
+        for eid, entity in enumerate(item['entities']):
+            for step in range(len(item['sentence_texts'])):
+                step1 = step + 1
+                if step1 < len(item['sentence_texts']):
+                    e1 = torch.zeros(len(item["entities"]))
+                    e1[eid] = 1
+                    e1s.append(e1)
+                    b1 = torch.zeros(len(item["sentence_texts"]))
+                    b1[step] = 1
+                    b2 = torch.zeros(len(item["sentence_texts"]))
+                    b2[step1] = 1
+                    b1s.append(b1)
+                    b2s.append(b2)
+                    
+                    
+        return torch.stack(e1s), torch.stack(b1s), torch.stack(b2s)
+    
+    def getTransitionval(self, item):
+        transition_scores = torch.tensor([0.0000, 0.6083, 0.2440, 0.1477, 0.0000, 0.0000, 0.0000, 0.7634, 0.1574,
+        0.0791, 0.0000, 0.0000, 0.0000, 0.6048, 0.3077, 0.0875, 0.0000, 0.0000,
+        0.0047, 0.0000, 0.0000, 0.0000, 0.0000, 0.9953, 0.2793, 0.0000, 0.0000,
+        0.0000, 0.7207, 0.0000, 0.0147, 0.0000, 0.0000, 0.0000, 0.0000, 0.9853])
+        relations_size = len(item['entities']) * (len(item['sentence_texts']) - 1)
+        transition_scores = transition_scores.unsqueeze(0).repeat(relations_size, 1)
+        return transition_scores.clamp(min=1e-5)
+    
     ### Getting the after location probs and value
     def getAfterLocationProbval(self, item):
         decision, _ = self.compute_iterative_probs(item, 'after_location')
@@ -312,23 +343,23 @@ class ProparaReader(RegrReader):
     
     def process_prob_vectors(self, vectors, key):
         acc = {"multi_action": 73.05, "before_location": 68.21, "after_location": 68.21}
-        # return vectors
-        multiplier = pow(acc[key], 4)
-        final_vec = []
-        if torch.is_tensor(vectors):
-            vector = torch.clamp(vectors, min=1e-12, max=1 - 1e-12)
-            entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-            vector = (1/entropy.item()) * vector
-            # * (vector/torch.mean(vector))
-            final_vec = vector * multiplier
-        else:
-            for vector in vectors:
-                vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
-                entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
-                vector = (1/entropy.item()) * vector
-                # *  (vector/torch.mean(vector))
-                final_vec.append(vector * multiplier)
-        return final_vec
+        return vectors
+        # multiplier = pow(acc[key], 4)
+        # final_vec = []
+        # if torch.is_tensor(vectors):
+        #     vector = torch.clamp(vectors, min=1e-12, max=1 - 1e-12)
+        #     entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+        #     vector = (1/entropy.item()) * vector
+        #     # * (vector/torch.mean(vector))
+        #     final_vec = vector * multiplier
+        # else:
+        #     for vector in vectors:
+        #         vector = torch.clamp(vector, min=1e-12, max=1 - 1e-12)
+        #         entropy = torch.distributions.Categorical(torch.log(vector)).entropy() / vector.shape[0]
+        #         vector = (1/entropy.item()) * vector
+        #         # *  (vector/torch.mean(vector))
+        #         final_vec.append(vector * multiplier)
+        # return final_vec
 
     def getSameMentionsval(self, item):
         entities = item['entities_tokens']

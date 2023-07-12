@@ -31,6 +31,17 @@ with Graph('global') as graph:
     
     exact_before = Concept(name="exact_before")
     (ebefore_arg1, ebefore_arg2) = exact_before.has_a(earg1=step, earg2=step)
+
+    transition_ebefore = Concept(name="transition_ebefore")
+    (tentity, targ1, targ2) = transition_ebefore.has_a(tearg1=entity, tearg2=step, tearg3=step)
+    actions_names=["create", "exists", "move", "destroy", "prior", "post"]
+    transitions_names = []
+    for _n1 in actions_names:
+        for _n2 in actions_names:
+            transitions_names.append(_n1 + "_" + _n2)
+
+    transition = transition_ebefore(name="transition", ConceptClass=EnumConcept, values=transitions_names)
+
     
     ### The action label
     action = Concept(name='action')
@@ -52,7 +63,34 @@ with Graph('global') as graph:
     action_level_lc = True
     location_action_lc = True
     location_level_lc = True
+    transition_level_lc = True
 
+
+    ### Transition scores
+    for transition_name in transitions_names:
+        arg1 = transition_name.split("_")[0]
+        arg2 = transition_name.split("_")[1]
+        # forAllL(
+        #     combinationC(entity, exact_before)('e', 'eb'),
+        #     ifL(
+        #         getattr(transition, transition_name)('t', path=('eb')),
+        #         andL(
+        #             getattr(action_label, arg1)(path=(('eb', ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
+        #             getattr(action_label, arg2)(path=(('eb', ebefore_arg2, action_step.reversed), ('e', action_entity.reversed)))
+        #         )
+        #     ), active = transition_level_lc
+        # )
+
+        ifL(
+            transition_ebefore('eb'),
+            ifL(
+                andL(
+                    getattr(action_label, arg1)(path=(('eb', targ1, action_step.reversed), ('eb', tentity, action_entity.reversed))),
+                    getattr(action_label, arg2)(path=(('eb', targ2, action_step.reversed), ('e', tentity, action_entity.reversed)))
+                ),
+                getattr(transition, transition_name)('t', path=('eb')),
+            ), active = transition_level_lc
+        )
     ### the first action label cannot Post
     forAllL(
         combinationC(entity, step(path=(eqL(step, 'index', {0}))))('e', 'i'),

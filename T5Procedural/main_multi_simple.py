@@ -55,7 +55,12 @@ def model_declaration():
         lstep,
         llocation,
         same_entity,
-        same_location
+        same_location,
+        transition_ebefore,
+        tentity,
+        targ1,
+        targ2,
+        transition
     )
 
 
@@ -110,6 +115,11 @@ def model_declaration():
     before[before_arg1.reversed, before_arg2.reversed] = JointFunctionalReaderSensor(step['text'], keyword='before', forward=make_before_connection)
 
     exact_before[ebefore_arg1.reversed, ebefore_arg2.reversed] = JointFunctionalReaderSensor(step['text'], keyword='exact_before', forward=make_before_connection)
+
+    def make_transition_conncetion(*prev, data):
+        return data[0], data[1], data[2]
+    transition_ebefore[tentity.reversed, targ1.reversed, targ2.reversed] = JointFunctionalReaderSensor(entity['text'], step['text'], step['text'], keyword='transition_instance', forward=make_transition_conncetion)
+    transition_ebefore[transition] = ReaderSensor(keyword='Transition')
 
 
     def make_actions(r1, r2, entities, steps):
@@ -181,6 +191,7 @@ def model_declaration():
                                         action_label, exact_before, 
                                         entity_location, entity_location_label, 
                                         entity_location_before_label, 
+                                        transition_ebefore, transition
                                     ), 
                                inferTypes=['ILP', 'local/argmax'],
                             #    inference_with=[action_label],
