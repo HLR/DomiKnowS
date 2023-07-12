@@ -44,14 +44,11 @@ def main(device, models):
     image[level4] = FunctionalReaderSensor(keyword='level4_label', forward=get_label, label=True)
 
     f = open("logger.txt", "w")
-    program = GBIProgram(graph, SolverModel,
+    program = SolverPOIProgram(graph,
         inferTypes=[
-            'local/argmax', 'GBI'
+            'local/argmax' , 'GBI'
         ],
         poi = (image_group, image, level1, level2, level3, level4),
-        metric={
-            # 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
-        },
         f=f
     )
 

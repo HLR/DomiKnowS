@@ -16,7 +16,7 @@ from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from domiknows.utils import setProductionLogMode
+from domiknows.utils import setProductionLogMode, setDnSkeletonMode
 
 
 def model_declaration():
@@ -212,9 +212,9 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-    setProductionLogMode(no_UseTimeLog=True)
-
-    dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results_simple.pt", type="_pt")  # Adding the info on the reader
+    setProductionLogMode(no_UseTimeLog=False)
+    setDnSkeletonMode(True)
+    dataset = ProparaReader(file="data/prepared_results_simple.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 
@@ -279,15 +279,20 @@ def main():
             c = node.getAttribute(concept, "ILP")
             _map_list = ["create", "exists", "move", "destroy", "prior", "post"]
             if not concept in {entity_location_label, entity_location_before_label}:
-                if c.shape[-1] > 2:
-                    c = torch.argmax(c, dim=-1).item()
-                    c = _map_list[c]
-                elif c.shape[-1] == 1:
-                    c = int(c.item())
-                    if c == 1:
-                        c = "yes"
-                    else:
-                        c = "no"
+                if c is None:
+                    c = "unknown"
+                elif not isinstance(c, torch.Tensor):
+                    raise TypeError("c must be a tensor")
+                else:
+                    if c.shape[-1] > 2:
+                        c = torch.argmax(c, dim=-1).item()
+                        c = _map_list[c]
+                    elif c.shape[-1] == 1:
+                        c = int(c.item())
+                        if c == 1:
+                            c = "yes"
+                        else:
+                             c = "no"
             final_output[f"{concept.name}"].append(c)
             ### adding action_label information before ILP
             c1 = node.getAttribute(concept)
@@ -336,18 +341,23 @@ def main():
             final_output = assing_labels(entity_location_info, entity_location_before_label, final_output)
 
 
-        for _concept in [entity_location_before_label, entity_location_label]:
-            final_output[f"{_concept.name}"] = torch.stack(final_output[f"{_concept.name}"])
-            final_output[f"{_concept.name}"] = final_output[f"{_concept.name}"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
-            final_output[f"{_concept.name}_before"] = torch.stack(final_output[f"{_concept.name}_before"])
-            final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"][:, 1]
-            final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
+        if final_output is not None:
+            for _concept in [entity_location_before_label, entity_location_label]:
+                # final_output[f"{_concept.name}"] is not None and tensor
+                if final_output[f"{_concept.name}"] is None:
+                    final_output[f"{_concept.name}"] = torch.zeros(len(entities_instances), len(steps_instances), 1)
+                    final_output[f"{_concept.name}"] = torch.stack(final_output[f"{_concept.name}"])
+                    final_output[f"{_concept.name}"] = final_output[f"{_concept.name}"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
+                    final_output[f"{_concept.name}_before"] = torch.stack(final_output[f"{_concept.name}_before"])
+                    final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"][:, 1]
+                    final_output[f"{_concept.name}_before"] = final_output[f"{_concept.name}_before"].reshape(len(entities_instances), len(steps_instances), -1).argmax(-1)
 
-        final_output['entities'] = item_set['Entities'][0]
-        final_output['steps'] = item_set['Step']
-        final_output['locations'] = item_set['Location']
-        final_loc_out['entities'] = item_set['Entities'][0]
-        final_loc_out['steps'] = item_set['Step']
+            final_output['entities'] = item_set['Entities'][0]
+            final_output['steps'] = item_set['Step']
+            final_output['locations'] = item_set['Location']
+            final_loc_out['entities'] = item_set['Entities'][0]
+            final_loc_out['steps'] = item_set['Step']
+        
         def check_diff(final_output, key):
             ### check whether there are differences between key and key_before
             ### if there are differences, then return the index of the differences

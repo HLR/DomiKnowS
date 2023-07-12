@@ -11,3 +11,6 @@ T5Procedural/updated_loc_info.pt
 CIFAR100/True_999999999__0.1.txt
 ImgHierarchy/logs/ilpOntSolver.log
 ImgHierarchy/logs/datanode.log
+demo/__pycache__/main.cpython-39.pyc
+demo/__pycache__/main.cpython-39.pyc
+VQA/eval_gbi_domiknows.csv
