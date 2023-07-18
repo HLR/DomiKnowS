@@ -58,13 +58,13 @@ with Graph('global') as graph:
     entity_location_before_label = entity_location(name='entity_location_before_label')
      
     # LC Active status
-    All_LC = True
+    All_LC = False
     Tested_Lc = All_LC or False
     action_level_lc = All_LC or False
     location_action_lc = All_LC or False
-    location_level_lc = All_LC or False
+    location_level_lc = All_LC or True
     
-    transition_level_lc = All_LC and False
+    transition_level_lc = All_LC or False
 
 
     ### Transition scores
@@ -87,7 +87,7 @@ with Graph('global') as graph:
             ifL(
                 andL(
                     getattr(action_label, arg1)(path=(('eb', targ1, action_step.reversed), ('eb', tentity, action_entity.reversed))),
-                    getattr(action_label, arg2)(path=(('eb', targ2, action_step.reversed), ('e', tentity, action_entity.reversed)))
+                    getattr(action_label, arg2)(path=(('eb', targ2, action_step.reversed), ('eb', tentity, action_entity.reversed)))
                 ),
                 getattr(transition, transition_name)('t', path=('eb')),
             ), active = transition_level_lc

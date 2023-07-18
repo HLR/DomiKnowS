@@ -224,7 +224,7 @@ def main():
 
     lbp = model_declaration()
     
-    setProductionLogMode(no_UseTimeLog=False)
+    #setProductionLogMode(no_UseTimeLog=False)
     setDnSkeletonMode(True)
     
     # Check if we running in the root folder of the project or in the task folder
