@@ -58,13 +58,13 @@ with Graph('global') as graph:
     entity_location_before_label = entity_location(name='entity_location_before_label')
      
     # LC Active status
-    All_LC = False
+    All_LC = True
     Tested_Lc = All_LC or False
     action_level_lc = All_LC or False
     location_action_lc = All_LC or False
-    location_level_lc = All_LC or True
+    location_level_lc = All_LC or False
     
-    transition_level_lc = All_LC or False
+    transition_level_lc = All_LC or True
 
 
     ### Transition scores
@@ -89,7 +89,7 @@ with Graph('global') as graph:
                     getattr(action_label, arg1)(path=(('eb', targ1, action_step.reversed), ('eb', tentity, action_entity.reversed))),
                     getattr(action_label, arg2)(path=(('eb', targ2, action_step.reversed), ('eb', tentity, action_entity.reversed)))
                 ),
-                getattr(transition, transition_name)('t', path=('eb')),
+                getattr(transition, transition_name)('t', path=('eb', )),
             ), active = transition_level_lc
         )
     ### the first action label cannot Post
