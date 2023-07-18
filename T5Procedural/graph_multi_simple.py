@@ -58,12 +58,13 @@ with Graph('global') as graph:
     entity_location_before_label = entity_location(name='entity_location_before_label')
      
     # LC Active status
-    All_LC = False
-    Tested_Lc = False
-    action_level_lc = True
-    location_action_lc = True
-    location_level_lc = True
-    transition_level_lc = True
+    All_LC = True
+    Tested_Lc = All_LC or False
+    action_level_lc = All_LC or False
+    location_action_lc = All_LC or False
+    location_level_lc = All_LC or False
+    
+    transition_level_lc = All_LC and False
 
 
     ### Transition scores

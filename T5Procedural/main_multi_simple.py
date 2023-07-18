@@ -223,11 +223,20 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-    setProductionLogMode(no_UseTimeLog=True)
-    setDnSkeletonMode(False)
-    prefix = "Tasks/T5Procedural/"
-    # prefix = ""
-    dataset = ProparaReader(file=f"{prefix}data/prepared_results_simple.pt", type="_pt")  # Adding the info on the reader
+    
+    setProductionLogMode(no_UseTimeLog=False)
+    setDnSkeletonMode(True)
+    
+    # Check if we running in the root folder of the project or in the task folder
+    import os
+    cwd = os.getcwd()
+
+    if "T5Procedural" in cwd: 
+        prefix = ""
+    else:
+        prefix = "Tasks/T5Procedural/"
+
+    dataset = ProparaReader(file=f"{prefix}data/prepared_results_simple.pt", type="_pt", prefix=prefix)  # Adding the info on the reader
 
     dataset = list(dataset)
 
@@ -715,14 +724,20 @@ def main():
         print(key + f" correct changes {changes_correct[key]}({changes_correct[key]/changes[key]})")
         print(key + f" incorrect changes {changes_wrong[key]}({changes_wrong[key]/changes[key]})")
         print(key+" inferred", correct_inferred[key]/total_inferred[key])
-        print(key + " changes inferred", changes_inferred[key])
-        print(key + f" correct changes inferred {changes_inferred_correct[key]}({changes_inferred_correct[key]/changes_inferred[key]})")
-        print(key + f" incorrect changes inferred {changes_inferred_wrong[key]}({changes_inferred_wrong[key]/changes_inferred[key]})")
+        
+        if changes_inferred[key] != 0:
+            print(key + " changes inferred", changes_inferred[key])
+            print(key + f" correct changes inferred {changes_inferred_correct[key]}({changes_inferred_correct[key]/changes_inferred[key]})")
+            print(key + f" incorrect changes inferred {changes_inferred_wrong[key]}({changes_inferred_wrong[key]/changes_inferred[key]})")
+        else:
+            print(f"No inferred changes for {key}.")
+            
         if "location" in key:
             print(f"Total actual for key: {key} is ", actual_total[key])
             print(key + " actual", actual_correct[key]/actual_total[key])
             print(key + " actual_before", actual_correct_before[key]/actual_total[key])
             print(key + " actual_inferred", actual_inferred_correct[key]/actual_inferred_total[key])
+            
     # for key in actions_matrix_inferred:
     #     print(f"True key {key}")
     #     for key1 in actions_matrix_inferred:

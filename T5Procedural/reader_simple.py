@@ -16,7 +16,7 @@ class ProparaReader(RegrReader):
         function.
         """
         data = torch.load(self.file)
-        eval_path = "Tasks/T5Procedural/data/eval_cases/test/out_of_sentence_entities.json"
+        eval_path = f"{self.prefix}data/eval_cases/test/out_of_sentence_entities.json"
         with open(eval_path, "r") as f:
             eval_cases = json.load(f)
         self.eval_cases_dict = {}
