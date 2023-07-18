@@ -88,13 +88,13 @@ class TorchModel(torch.nn.Module):
             sensor.fill_hash(data_hash)
         for sensor in self.graph.get_sensors(ReaderSensor):
             sensor.fill_data(data_item)
+            
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
             builder = DataNodeBuilder(data_item)
-            *out, = self.populate(builder)
-            builder.createBatchRootDN()
-            datanode = builder.getDataNode(context="build", device=self.device)
-            return (*out, datanode, builder)
+            datanode, loss, metric = self.populate(builder)
+           
+            return (loss, metric, datanode, builder)
         else:
             *out, = self.populate(data_item)
             return (*out,)
@@ -269,11 +269,13 @@ class SolverModel(PoiModel):
     #         print("Done with the inference")
         # end = time.time()
         # print("Time taken for inference after datanode creation: ", end-start)
-        return builder
+        return datanode
 
     def populate(self, builder, run=True):
-        data_item = self.inference(builder)
-        return super().populate(builder, run=False)
+        datanode = self.inference(builder)
+        lose, metric = super().populate(builder, run=False)
+        
+        return datanode, lose, metric
     
 
 class PoiModelToWorkWithLearnerWithLoss(TorchModel):

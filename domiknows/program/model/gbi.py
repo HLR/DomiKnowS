@@ -180,9 +180,9 @@ class GBIModel(torch.nn.Module):
             # get total log prob
             log_probs = 0.0
             for c_prob in probs.values():
-                eps=1e-7
+                eps = 1e-7
                 t = F.relu(c_prob)
-                tLog = torch.log(t+eps)
+                tLog = torch.log(t + eps)
                 log_probs += torch.sum(tLog)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss

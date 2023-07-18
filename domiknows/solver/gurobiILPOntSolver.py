@@ -21,6 +21,7 @@ from domiknows.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculato
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
 from domiknows.utils import getReuseModel
+from domiknows.utils import getDnSkeletonMode
 
 from domiknows.graph.candidates import getCandidates
 
@@ -1271,9 +1272,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
             for p in lcP:
                 self.myLogger.info('Found %i logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
-                self.myLoggerTime.info('Starting ILP inferencing - Found %i logical constraints'%(len(lcP[p])))
+                self.myLoggerTime.info('Starting ILP interference - Found %i logical constraints'%(len(lcP[p])))
             
-            # Search through set of logical constraints for subset satisfying and the mmax/min calculated objective value
+            # Search through set of logical constraints for subset satisfying and the max/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
             ps = [] # List with processed p 
             
@@ -1445,16 +1446,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                     c_root_dns = dn.findDatanodes(select = c_root)
                     
                     ILPkey = '<' + c[0].name + '>/ILP'
+                    
                     xkey = ILPkey + '/x'
                     xPkey = ILPkey + '/xP'
                     xNotPkey = ILPkey + '/notxP'
+                    
+                    ilpTensor = None
+                    if getDnSkeletonMode() and "variableSet" in dn.attributes:
+                        ilpKeyInVariableSet = c_root.name + "/<" + c[0].name +">" + "/ILP"
+                        
+                        if ilpKeyInVariableSet in dn.attributes["variableSet"]:
+                            ilpTensor = dn.attributes["variableSet"][ilpKeyInVariableSet]
+                        else:
+                            ilpTensor = torch.zeros([len(c_root_dns), c[3]], dtype=torch.float, device=self.current_device)
                    
-                    for cDn in c_root_dns:
+                    for i, cDn in enumerate(c_root_dns):
                         dnAtt = cDn.getAttributes()
                         
                         if xkey not in dnAtt and xPkey not in dnAtt:
                             if xVars[xVarsIndex] == None or not reusingModel:
-                                dnAtt[ILPkey] = torch.tensor([float("nan")], device=self.current_device)
+                                
+                                if ilpTensor is not None:
+                                   ilpTensor[i][index] = float("nan")
+                                else:
+                                    if ILPkey not in dnAtt:
+                                        dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
+                                    
+                                    dnAtt[ILPkey][index] = float("nan")
                                 
                                 # Update index for x variables 
                                 if c[2] is None:
@@ -1496,22 +1514,30 @@ class gurobiILPOntSolver(ilpOntSolver):
                         elif solution == 1: 
                             solution = 1
 
-                        if ILPkey not in dnAtt:
+                        if ilpTensor is None and ILPkey not in dnAtt:
                             dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
                         
                         if xkey not in dnAtt:
                             dnAtt[xkey] = torch.empty(c[3], dtype=torch.float)
                        
-                        dnAtt[ILPkey][index] = solution
-                        if pUsed: 
+                        if ilpTensor is not None:
+                           ilpTensor[i][index] = solution
+                        else:
+                            dnAtt[ILPkey][index] = solution
+                            
+                        if pUsed: # Set main ILP variable x based on max P ILP variable x
                             dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
-                            if xNotPkey in dnAtt:
+                            if xNotPkey in dnAtt: # do this for not x as well
                                 dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
 
-                        ILPV = dnAtt[ILPkey][index]
-                        if ILPV == 1:
-                            self.myLogger.info('\"%s\" is \"%s\"'%(cDn,c[1]))
+                        
+                        if solution == 1:
+                            self.myLogger.info('\"%s\" is \"%s\"'%(cDn, c[1]))
                             #self.myLoggerTime.info('\"%s\" is \"%s\"'%(cDn,c[1]))
+                    
+                    if ilpTensor is not None:
+                        dn.attributes["variableSet"][ilpKeyInVariableSet] = ilpTensor
+
             else:
                 pass
                                        
@@ -1530,15 +1556,14 @@ class gurobiILPOntSolver(ilpOntSolver):
         end = process_time() # timer()
         elapsedInS = end - start
         if elapsedInS > 1:
-            self.myLogger.info('End ILP Inference - total time: %fs'%(elapsedInS))
-            self.myLoggerTime.info('End ILP Inference - total time: %fs'%(elapsedInS))
+            self.myLogger.info('End ILP Inference - internal total time: %fs'%(elapsedInS))
+            self.myLoggerTime.info('End ILP Inference - internal total time: %fs'%(elapsedInS))
         else:
             elapsedInMs = elapsedInS *1000
-            self.myLogger.info('End ILP Inference - total time: %ims'%(elapsedInMs))
-            self.myLoggerTime.info('End ILP Inference - total time: %ims'%(elapsedInMs))
+            self.myLogger.info('End ILP Inference - internal total time: %ims'%(elapsedInMs))
+            self.myLoggerTime.info('End ILP Inference - internal total time: %ims'%(elapsedInMs))
             
         self.myLogger.info('')
-        self.myLoggerTime.info('')
         
         # ----------- Return
         return
@@ -2000,16 +2025,14 @@ class gurobiILPOntSolver(ilpOntSolver):
         elapsedInS = end - start
         
         if elapsedInS > 1:
-            self.myLogger.info('End of Loss Calculation - total time: %fs'%(elapsedInS))
-            self.myLoggerTime.info('End of Loss Calculation - total time: %fs'%(elapsedInS))
+            self.myLogger.info('End of Loss Calculation - total internl time: %fs'%(elapsedInS))
+            self.myLoggerTime.info('End of Loss Calculation - total internl time: %fs'%(elapsedInS))
         else:
             elapsedInMs = (end - start) *1000
-            self.myLogger.info('End of Loss Calculation - total time: %ims'%(elapsedInMs))
-            self.myLoggerTime.info('End of Loss Calculation - total time: %ims'%(elapsedInMs))
+            self.myLogger.info('End of Loss Calculation - total internl time: %ims'%(elapsedInMs))
+            self.myLoggerTime.info('End of Loss Calculation - total internl time: %ims'%(elapsedInMs))
             
-        
         self.myLogger.info('')
-        self.myLoggerTime.info('')
 
         [h.flush() for h in self.myLoggerTime.handlers]
             

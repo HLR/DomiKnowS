@@ -3,8 +3,9 @@ import re
 
 
 class RegrReader:
-    def __init__(self, file, type="json"):
+    def __init__(self, file, type="json", prefix=""):
         self.file = file
+        self.prefix = prefix
         if type == "json":
             with open(file, 'r') as myfile:
                 data = myfile.read()

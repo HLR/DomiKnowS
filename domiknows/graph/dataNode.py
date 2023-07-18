@@ -1122,6 +1122,8 @@ class DataNode:
 
     # Calculate local for datanote argMax and softMax
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
+        startInferLocal = process_time() # timer()
+
         conceptsRelations = self.collectConceptsAndRelations() 
         
         normalized_keys = set([
@@ -1138,13 +1140,17 @@ class DataNode:
             
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
+            inferLocalKeys = list(keys) # used to check if all keys are calculated
             
             # ----- skeleton - tensor
             if getDnSkeletonMode() and "variableSet" in self.attributes:
+                
                 vKeyInVariableSet = cRoot.name + "/<" + c[0].name +">"
                 
                 if needSoftmax:
                     localSoftmaxKeyInVariableSet = vKeyInVariableSet + "/local/softmax"
+                    
+                    inferLocalKeys.remove("softmax")
                     
                     if not self.hasAttribute(localSoftmaxKeyInVariableSet):
                         v = self.attributes["variableSet"][vKeyInVariableSet]
@@ -1161,6 +1167,8 @@ class DataNode:
                         
                 if "argmax" in keys:
                     localArgmaxKeyInVariableSet = vKeyInVariableSet + "/local/argmax"
+                    inferLocalKeys.remove("argmax")
+                    
                     if not self.hasAttribute(localArgmaxKeyInVariableSet):
                         v = self.attributes["variableSet"][vKeyInVariableSet]
                          
@@ -1168,6 +1176,10 @@ class DataNode:
                         vArgmax = torch.zeros_like(v).scatter_(1, vArgmaxTInxexes.unsqueeze(1), 1.)
                         
                         self.attributes["variableSet"][localArgmaxKeyInVariableSet] = vArgmax
+            
+            # check if we already processed all keys using skeleton
+            if not inferLocalKeys:
+                continue
             
             # ---- loop through dns
             dns = self.findDatanodes(select = cRoot)
@@ -1340,6 +1352,10 @@ class DataNode:
                         vArgmax[vArgmaxIndex] = 1
                                         
                         dn.attributes[keyArgmax] = vArgmax
+                        
+        endInferLocal = process_time() # timer()
+        elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
+        self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False, Acc=None):
@@ -1361,15 +1377,21 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         if "local" in key:
-            startInferLocal = process_time() # timer()
-
             keys = (key[1],)
             self.inferLocal(keys=keys, Acc=Acc)
-            endInferLocal = process_time() # timer()
-            elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
-            self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
-
+          
+        startILPInfer = process_time() # timer()
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        endIILPInfer = process_time() # timer()
+        
+        elapsedInS = (endIILPInfer - startILPInfer)
+        if elapsedInS > 1:
+            self.myLoggerTime.info('End ILP Inference - total time: %fs'%(elapsedInS))
+        else:
+            elapsedInMs = elapsedInS *1000
+            self.myLoggerTime.info('End ILP Inference - total time: %ims'%(elapsedInMs))
+                
+        self.myLoggerTime.info('')
         
     def inferGBIResults(self, *_conceptsRelations, model, builder):
         if len(_conceptsRelations) == 0:
