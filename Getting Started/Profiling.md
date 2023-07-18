@@ -22,7 +22,7 @@ The below log presents difference in execution time of ILP solver for the run us
 2022-10-01 10:59:31,537 - INFO - regrTimer:calculateILPSelection - ILP Variables Init - time: 1765ms
 2022-10-01 10:59:31,537 - INFO - regrTimer:calculateILPSelection - Reusing ILP Model - LCs already present in the model
 2022-10-01 10:59:31,538 - INFO - regrTimer:calculateILPSelection - ILP Graph and Ontology Constraints - time: 0ms
-2022-10-01 10:59:31,541 - INFO - regrTimer:calculateILPSelection - Starting ILP inferencing - Found 20 logical constraints
+2022-10-01 10:59:31,541 - INFO - regrTimer:calculateILPSelection - Starting ILP interference - Found 20 logical constraints
 2022-10-01 10:59:31,541 - INFO - regrTimer:calculateILPSelection - ILP Logical Constraints Preprocessing - time: 0ms
 2022-10-01 10:59:31,541 - INFO - regrTimer:calculateILPSelection - Optimizing model for LCs with probabilities 100 with 8960 ILP variables and 3968 ILP constraints
 2022-10-01 10:59:31,541 - INFO - regrTimer:calculateILPSelection - ILP Logical Constraints - time: 0ms
@@ -37,7 +37,7 @@ The below log presents difference in execution time of ILP solver for the run us
 2022-10-01 11:02:47,606 - INFO - regrTimer:calculateILPSelection - Calculating ILP Inference 
 2022-10-01 11:02:50,121 - INFO - regrTimer:calculateILPSelection - ILP Variables Init - time: 2500ms
 2022-10-01 11:02:50,222 - INFO - regrTimer:calculateILPSelection - ILP Graph and Ontology Constraints - time: 109ms
-2022-10-01 11:02:50,226 - INFO - regrTimer:calculateILPSelection - Starting ILP inferencing - Found 20 logical constraints
+2022-10-01 11:02:50,226 - INFO - regrTimer:calculateILPSelection - Starting ILP interference - Found 20 logical constraints
 2022-10-01 11:02:50,226 - INFO - regrTimer:calculateILPSelection - ILP Logical Constraints Preprocessing - time: 0ms
 2022-10-01 11:02:50,312 - INFO - regrTimer:addLogicalConstrains - Processing time for LC1(ifL) is: 93ms - created 192 new ILP constraint
 2022-10-01 11:02:50,399 - INFO - regrTimer:addLogicalConstrains - Processing time for LC3(ifL) is: 78ms - created 192 new ILP constraint
