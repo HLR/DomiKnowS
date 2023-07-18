@@ -88,6 +88,13 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
             
         # -- Prepare paths
         path = variable.v
+        if not isinstance(path, tuple):
+            if isinstance(path, str):
+                path = (path,)
+        
+        if not isinstance(path, (tuple, eqL)):
+            raise TypeError("Path must be a tuple or eqL")
+        
         paths = []
         
         if isinstance(path, eqL):
@@ -270,7 +277,7 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
                             if dn not in relDns:
                                 relDns.append(dn)
                     
-                # Check if it is a valid relation link  with not empty set of connected datanodes      
+                # Check if it is a valid relation link with not empty set of connected datanodes      
                 if relDns is None or len(relDns) == 0 or relDns[0] is None:
                     return [None]
                 else:
