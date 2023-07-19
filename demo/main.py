@@ -13,7 +13,7 @@ from domiknows.program import POIProgram
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
-from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.metric import DatanodeCMMetric, MacroAverageTracker, PRF1Tracker
 from domiknows.program.loss import NBCrossEntropyLoss
 
 from models import tokenize, WordEmbedding, Classifier, make_pair, concat, pair_label
@@ -103,7 +103,7 @@ pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed]
 #
 # Defined the program
 #
-program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()))
 
 # device options are 'cpu', 'cuda', 'cuda:x', torch.device instance, 'auto', None
 device = 'auto'
@@ -151,7 +151,9 @@ linearsoftmax = torch.nn.Sequential(
 DataNodeBuilder.context = "interference"
 for node in program.populate(reader, device=device):
     node.infer()
-    node.inferILPResults(key = ("local" , "normalizedProb"), fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+    node.inferLocal()
+    node.inferLocal(keys = ("local" , "normalizedProb"))
+    #node.inferILPResults(key = ("local" , "normalizedProb"), fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
     node.inferILPResults(fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
 
     for word_node in node.getChildDataNodes():

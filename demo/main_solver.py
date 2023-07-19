@@ -15,6 +15,7 @@ from domiknows.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, Join
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.utils import setProductionLogMode, setDnSkeletonMode
 
 from models import tokenize, WordEmbedding, Classifier, make_pair, concat, pair_label
 
@@ -23,6 +24,8 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
+#setProductionLogMode(no_UseTimeLog=False)
+setDnSkeletonMode(True)
 
 #
 # Graph Definition
@@ -103,10 +106,16 @@ pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed]
 #
 # Defined the program
 #
-program = SolverPOIProgram(graph, poi=(word, ), inferTypes=['ILP', 'local/argmax', "GBI"], 
-                           loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),
-                                                                                   'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax')),
-                                                                                   'GBI':PRF1Tracker(DatanodeCMMetric('GBI'))})
+GBI = False
+if GBI:
+    program = SolverPOIProgram(graph, poi=(word, ), inferTypes=['ILP', 'local/argmax', "GBI"], 
+                               loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),
+                                                                                       'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax')),
+                                                                                       'GBI':PRF1Tracker(DatanodeCMMetric('GBI'))})
+else:
+    program = SolverPOIProgram(graph, poi=(word, ), inferTypes=['ILP', 'local/argmax'], 
+                               loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),
+                                                                                       'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
 # device options are 'cpu', 'cuda', 'cuda:x', torch.device instance, 'auto', None
 device = 'auto'
@@ -154,7 +163,8 @@ linearsoftmax = torch.nn.Sequential(
 DataNodeBuilder.context = "interference"
 for node in program.populate(reader, device=device):
     node.infer()
-    node.inferILPResults(key = ("local" , "normalizedProb"), fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+    node.inferLocal()
+    node.inferLocal(keys = ("local" , "normalizedProb"))
     node.inferILPResults(fun=lambda val: val.clone().detach().requires_grad_(True).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
 
     for word_node in node.getChildDataNodes():
