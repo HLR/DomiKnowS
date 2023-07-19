@@ -235,6 +235,11 @@ class DataNode:
                     return True
                 elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
                     return True
+        elif "variableSet" in self.attributes:
+            if key in self.attributes["variableSet"]:
+                return True
+            elif key in self.attributes["propertySet"]:
+                return True
         else:
             return False
         
@@ -288,14 +293,21 @@ class DataNode:
                 return self.attributes[keyBis]
             else:
                 return self.attributes[keyBis][index]
-        elif "rootDataNode" in self.attributes:
-            rootDataNode = self.attributes["rootDataNode"]
-            if "variableSet" in rootDataNode.attributes:
+        elif "rootDataNode" in self.attributes or "variableSet" in self.attributes:
+            if "rootDataNode" in self.attributes:
+                rootDataNode = self.attributes["rootDataNode"]
                 keyInVariableSet = self.ontologyNode.name + "/" + key
-                if keyInVariableSet in rootDataNode.attributes["variableSet"]:
-                    return rootDataNode.attributes["variableSet"][keyInVariableSet][self.instanceID]
-                elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
-                    return rootDataNode.attributes["propertySet"][keyInVariableSet][self.instanceID]
+                
+                if "variableSet" in rootDataNode.attributes:
+                    if keyInVariableSet in rootDataNode.attributes["variableSet"]:
+                        return rootDataNode.attributes["variableSet"][keyInVariableSet][self.instanceID]
+                    elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
+                        return rootDataNode.attributes["propertySet"][keyInVariableSet][self.instanceID]
+            elif "variableSet" in self.attributes:
+                if key in self.attributes["variableSet"]:
+                    return self.attributes["variableSet"][key]
+                elif key in self.attributes["propertySet"]:
+                    return self.attributes["propertySet"][key]
                 
         return None   
            
@@ -972,6 +984,15 @@ class DataNode:
         
         if not rootConceptDns:
             return torch.tensor(collectAttributeList)
+        
+        if getDnSkeletonMode() and "variableSet" in self.attributes:
+            vKeyInVariableSet = rootConcept.name + "/<" + concept[0].name +">"
+            
+            # inferKey
+            inferKeyInVariableSet = vKeyInVariableSet + "/" + inferKey
+            
+            if self.hasAttribute(inferKeyInVariableSet):
+                return self.getAttribute(inferKeyInVariableSet)
 
         keys = [concept, inferKey]
         
@@ -1150,7 +1171,8 @@ class DataNode:
                 if needSoftmax:
                     localSoftmaxKeyInVariableSet = vKeyInVariableSet + "/local/softmax"
                     
-                    inferLocalKeys.remove("softmax")
+                    if "softmax" in inferLocalKeys:
+                        inferLocalKeys.remove("softmax")
                     
                     if not self.hasAttribute(localSoftmaxKeyInVariableSet):
                         v = self.attributes["variableSet"][vKeyInVariableSet]

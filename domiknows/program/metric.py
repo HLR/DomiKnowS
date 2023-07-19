@@ -10,17 +10,19 @@ from ..utils import wrap_batch
 
 
 class CMWithLogitsMetric(torch.nn.Module):
-    def forward(self, input, target, data_item, prop, weight=None):
+    def forward(self, input, target, _, prop, weight=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
         else:
             weight = weight.to(input.device)
+            
         preds = input.argmax(dim=-1).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
         tp = (preds * labels * weight).sum()
         fp = (preds * (1 - labels) * weight).sum()
         tn = ((1 - preds) * (1 - labels) * weight).sum()
         fn = ((1 - preds) * labels * weight).sum()
+        
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
 
@@ -68,8 +70,7 @@ class DatanodeCMMetric(torch.nn.Module):
         self.inferType = inferType
 
     def forward(self, input, target, data_item, prop, weight=None):
-        data_item.createBatchRootDN()
-        datanode = data_item.getDataNode(context=self.inferType)
+        datanode = data_item
         result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
         if len(result.keys())==2:
             if str(prop.name) in result:
@@ -162,6 +163,9 @@ class MetricTracker(torch.nn.Module):
         return str(value)
 
 class MacroAverageTracker(MetricTracker):
+    def __init__(self, metric):
+        super().__init__(metric)
+        
     def forward(self, values):
         def func(value):
             return value.clone().detach().mean()
@@ -218,14 +222,24 @@ class PRF1Tracker(MetricTracker):
             else:
                 tn = CM['TN'].sum().float()
 
+            # check if tp, fp, fn, tn are tensors if not make them tensors
+            if not torch.is_tensor(tp):
+                tp = torch.tensor(tp)
+            if not torch.is_tensor(fp):
+                fp = torch.tensor(fp)
+            if not torch.is_tensor(fn):
+                fn = torch.tensor(fn)
+            if not torch.is_tensor(tn):
+                tn = torch.tensor(tn)
+                
             if tp:
                 p = tp / (tp + fp)
                 r = tp / (tp + fn)
                 f1 = 2 * p * r / (p + r)
             else:
-                p = torch.zeros_like(torch.tensor(tp))
-                r = torch.zeros_like(torch.tensor(tp))
-                f1 = torch.zeros_like(torch.tensor(tp))
+                p = torch.zeros_like(tp)
+                r = torch.zeros_like(tp)
+                f1 = torch.zeros_like(tp)
             if (tp + fp + fn + tn):
                 accuracy=(tp + tn) / (tp + fp + fn + tn)
             return {'P': p, 'R': r, 'F1': f1,"accuracy":accuracy}

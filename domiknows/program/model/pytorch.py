@@ -92,8 +92,16 @@ class TorchModel(torch.nn.Module):
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
             builder = DataNodeBuilder(data_item)
-            datanode, loss, metric = self.populate(builder)
-           
+            out = self.populate(builder)
+            
+            if len(out) == 2:
+                builder.createBatchRootDN()
+                datanode = builder.getDataNode(context="build", device=self.device)
+                loss = out[0]
+                metric = out[1]
+            else:
+                datanode, loss, metric = out
+                
             return (loss, metric, datanode, builder)
         else:
             *out, = self.populate(data_item)
@@ -165,17 +173,21 @@ class PoiModel(TorchModel):
     def poi_loss(self, data_item, _, sensors):
         if not self.loss:
             return 0
+        
         outs = [sensor(data_item) for sensor in sensors]
+        
         if len(outs[0]) == 0:
             return None
-        local_loss = self.loss[(*sensors,)](*outs)
+        
+        selfLoss = self.loss[(*sensors,)]
+        local_loss = selfLoss(*outs)
         
         if local_loss != local_loss:
             raise Exception("Calculated local_loss is nan") 
         
         return local_loss
 
-    def poi_metric(self, data_item, prop, sensors):
+    def poi_metric(self, data_item, prop, sensors, datanode=None):
         if not self.metric:
             return None
         outs = [sensor(data_item) for sensor in sensors]
@@ -183,13 +195,13 @@ class PoiModel(TorchModel):
             return None
         local_metric = {}
         for key, metric in self.metric.items():
-            local_metric[key] = metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
+            local_metric[key] = metric[(*sensors,)](*outs, data_item=datanode, prop=prop)
         if len(local_metric) == 1:
             local_metric = list(local_metric.values())[0]
             
         return local_metric
 
-    def populate(self, builder, run=True):
+    def populate(self, builder, datanode = None, run=True):
         loss = 0
         metric = {}
         
@@ -207,7 +219,11 @@ class PoiModel(TorchModel):
                         if local_loss is not None:
                             loss += local_loss
                     if self.metric:
-                        local_metric = self.poi_metric(builder, prop, sensors)
+                        if datanode is None:
+                            builder.createBatchRootDN()
+                            datanode = builder.getDataNode()
+            
+                        local_metric = self.poi_metric(builder, prop, sensors, datanode=datanode)
                         if local_metric is not None:
                             metric[(*sensors,)] = local_metric
         
@@ -273,7 +289,7 @@ class SolverModel(PoiModel):
 
     def populate(self, builder, run=True):
         datanode = self.inference(builder)
-        lose, metric = super().populate(builder, run=False)
+        lose, metric = super().populate(builder, datanode = datanode, run=False)
         
         return datanode, lose, metric
     

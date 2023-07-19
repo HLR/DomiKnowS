@@ -35,7 +35,7 @@ class GBIModel(torch.nn.Module):
         nconstr = len(self.constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
-                          'PrimalDualModel will not generate any constraint loss.')
+                          'GBIModel will not generate any constraint loss.')
             
         self.lmbd = torch.nn.Parameter(torch.zeros(nconstr).float())
         self.lmbd_index = {}
