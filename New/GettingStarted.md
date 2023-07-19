@@ -33,7 +33,7 @@ For detailed documentation on how to use DomiKnowS, please refer to the [officia
 
 ## Examples
 
-To help you get started quickly, we provide several examples in the [examples directory](examples/) of this repository. These examples demonstrate how to use DomiKnowS for various tasks, including classification, regression, and optimization problems.
+To help you get started quickly, we provide several examples in [run with jupytor](https://github.com/HLR/DomiKnowS/tree/Doc/Run%20With%20Jupyter)) section of this repository. These examples demonstrate how to use DomiKnowS for various tasks, including classification, regression, and optimization problems.
 
 Refer to documentation!
 
