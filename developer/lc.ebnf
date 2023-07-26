@@ -3,12 +3,18 @@
 
 <LogicalConstraint> ::= <ow> <notLC> <ow> | <ow> <forAllConstraint> <ow> | <ow> <binaryConstraint> <ow> | <ow> <multiConstraint> <ow> | <ow> <countingConstraint> <ow>
 
-/*  Definitions of the five types of logical constraints.*/
+/*  -- Definitions of the five types of logical constraints.*/
+/* notL(other, ('o',))*/
 <notLC> ::= <notOperator> <ow> "(" <ow> <LcElement> <ow> ")" 
+/* ifL(work_for, ('x','y'), people, ('x',)) */
 <binaryConstraint> ::= <binaryOperator> <ow> "(" <ow> <LcElement> <ow> "," <ow> <LcElement> <ow> <opt_p> ")"
+/* orL(is_more, is_less, no_effect) */
 <multiConstraint> ::= <multiElementsOperator> <ow> "(" <ow> <LcElementChain> <ow> <opt_p> ")"
+/*  forAllL( combinationC(entity, step(path=(eqL(step, 'index', {0}))))('e', 'i'), notL(action_label.post('a110', path=(('i', action_step.reversed), ('e', action_entity.reversed))))) */
 <forAllConstraint> ::= <forAllOperator> <ow> "(" <ow> <combinationC> <ow> "," <ow> <LcElement> <ow> <opt_p> ")"
+/* exactL(is_more, is_less, no_effect) */
 <combinationC> ::= <combinationOperator> <ow> "(" <ow> <LcElementChain> <opt_comma> ")"
+
 <countingConstraint> ::= <countOperator> <ow> "(" <ow> <LcElementChain> <ow> <count_number_opt> <ow> <opt_p> ")"
 
 /* Definitions of the operators used in logical constraints. */
@@ -27,7 +33,7 @@
 <LcElementChain> ::= <LcElement> <ow> "," <ow>  <LcElementChain> | <LcElement> <ow> 
 
 /* Definitions of the predicate and its quantifier */
-<Predicate> ::=  <Concept> <ow> <Quantifier> | <Concept> <ow>  <Quantifier> | <Concept> <ow> <Quantifier> | <Concept>
+<Predicate> ::= <Concept> <ow> <Quantifier> | <Concept>
 <Quantifier> ::= "(" <ow> "'" <variableName> "'" <ow> "," <ow> <Path> <opt_comma> ")" | "(" <ow> "'" <variableName> "'" <opt_comma> ")" | "(" <ow> <Path> <opt_comma> ")"
 
 /* Definitions of the quantifier path and path variants, which can be a path element, a path intersection, or a path element with a variables tuple. */
