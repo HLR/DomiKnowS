@@ -295,12 +295,31 @@ class LearningBasedProgram():
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
+            
+            print("Model gradients before loss in train_epoch")
+            for name, x in self.model.named_parameters():
+                if x.grad is None:
+                    print(name, 'no grad')
+                    continue
+                   
+                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
+            
             if self.opt is not None:
                 self.opt.zero_grad()
+                
             loss, metric, *output = self.model(data_item)
             if self.opt and loss:
                 loss.backward()
                 self.opt.step()
+                
+            print("Model gradients after loss in train_epoch")
+            for name, x in self.model.named_parameters():
+                if x.grad is None:
+                    print(name, 'no grad')
+                    continue
+                   
+                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
+
             yield (loss, metric, *output[:1])
 
     def test(self, dataset, device=None, **kwargs):

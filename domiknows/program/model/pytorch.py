@@ -278,7 +278,7 @@ class SolverModel(PoiModel):
                     'local/softmax': lambda :datanode.inferLocal(),
                     'argmax': lambda :datanode.infer(),
                     'softmax': lambda :datanode.infer(),
-                    'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self, builder=builder),
+                    'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self),
                 }[infertype]()
                 # sub_end = time.time()
                 # print("Time taken for inference of type ", infertype, " : ", sub_end-sub_start)

@@ -24,9 +24,17 @@ class GBIModel(torch.nn.Module):
         super().__init__()
         
         if solver_model is None:
-            solver_model =self
+            self.solver_model = self
         else:
-            self.server_model= solver_model
+            self.server_model = solver_model
+            
+            print("Step server_model")
+            for name, x in self.server_model.named_parameters():
+                if x.grad is None:
+                    print(name, 'no grad')
+                    continue
+                
+                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
             
         self.gbi_iters = gbi_iters
         self.device = device
@@ -40,7 +48,6 @@ class GBIModel(torch.nn.Module):
         self.lmbd = torch.nn.Parameter(torch.zeros(nconstr).float())
         self.lmbd_index = {}
 
-        self.iter_step = 0
         self.warmpup = 80
         
         for i, (key, lc) in enumerate(self.constr.items()):
@@ -53,13 +60,14 @@ class GBIModel(torch.nn.Module):
         torch.nn.init.constant_(self.lmbd, 0.0)
 
     def reset(self):
-        if hasattr(self, 'loss') and self.loss and isinstance(self.loss, MetricTracker):
-            self.loss.reset()
+        if hasattr(self, 'loss') and self.solver_model.loss and isinstance(self.solver_model.loss, MetricTracker):
+            self.solver_model.loss.reset()
 
     def get_lmbd(self, key):
         if self.lmbd[self.lmbd_index[key]] < 0:
             with torch.no_grad():
                 self.lmbd[self.lmbd_index[key]] = 0
+                
         return self.lmbd[self.lmbd_index[key]]
 
  # --- GBI methods
@@ -68,7 +76,7 @@ class GBIModel(torch.nn.Module):
         Get constraint satisfaction from datanode
         Returns number of satisfied constraints and total number of constraints
         """
-        verifyResult = node.verifyResultsLC()
+        verifyResult = node.verifyResultsLC(key = "/local/argmax")
 
         assert verifyResult
 
@@ -126,18 +134,13 @@ class GBIModel(torch.nn.Module):
     
     # ----
     
-    def forward(self, builder, build=None):
-        builder.createBatchRootDN()
-        datanode = builder.getDataNode(device=self.device)
-
-        datanode.infer()
-
+    def forward(self, datanode, build=None):
         # Get constraint satisfaction for the current DataNode
         num_satisfied, num_constraints = self.get_constraints_satisfaction(datanode)
 
         # --- Test if to start GBI for this data_item
         if num_satisfied == num_constraints:
-            return 0.0, datanode, builder
+            return 0.0, datanode, datanode.myBuilder
         
         # ------- Continue with GBI
                 
@@ -145,8 +148,7 @@ class GBIModel(torch.nn.Module):
         model_l, c_opt = self.get_lambda(self.server_model, lr=1e-1)
         
         # -- model_l is the model that gets optimized by GBI
-        model_l.mode(Mode.TRAIN)
-        model_l.train()
+        model_l.mode(Mode.TEST)
         model_l.reset()        
 
         # Remove "GBI" from the list of inference types if model has it
@@ -155,11 +157,15 @@ class GBIModel(torch.nn.Module):
                 model_l.inferTypes.remove('GBI')
         
         no_of_not_satisfied = 0
+        node_l = None
         for c_iter in range(self.gbi_iters):
             c_opt.zero_grad()
 
             # -- forward pass through model_l
-            node_l, builder_l = self.populate_forward(model_l, builder) # data_item
+            with torch.no_grad():
+                x = datanode.myBuilder["data_item"]
+                loss, metric, node_l, _ = model_l(x)
+            #node_l, builder_l = self.populate_forward(model_l, datanode) # data_item
 
             num_satisfied_l, num_constraints_l = self.get_constraints_satisfaction(node_l)
 
@@ -174,7 +180,7 @@ class GBIModel(torch.nn.Module):
             # -- collect probs from datanode (in skeleton mode) 
             probs = {}
             for var_name, var_val in node_l.getAttribute('variableSet').items():
-                if not var_name.endswith('/label') and var_val.requires_grad:
+                if not var_name.endswith('/label'):# and var_val.requires_grad:
                     probs[var_name] = torch.sum(F.log_softmax(var_val, dim=-1))
 
             # get total log prob
@@ -198,9 +204,9 @@ class GBIModel(torch.nn.Module):
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 # --- End early if constraints are satisfied
-                return c_loss, datanode, builder
+                return c_loss, datanode, datanode.myBuilder
             elif no_of_not_satisfied > 3: # three consecutive iterations where constraints are not satisfied
-                return c_loss, datanode, builder # ? float("nan")
+                return c_loss, datanode, datanode.myBuilder # ? float("nan")
                         
             # --- Backward pass on model_l
             if c_loss.requires_grad:
@@ -217,17 +223,19 @@ class GBIModel(torch.nn.Module):
             #  -- Update model_l
             c_opt.step()
         
-        return c_loss, datanode, builder # ? float("nan")
+        node_l_builder = None
+        if node_l is not None:
+            node_l_builder = node_l.myBuilder
+            
+        return c_loss, node_l, node_l_builder # ? float("nan")
  
-    def calculateGBISelection(self, builder, conceptsRelations):
-        self.forward(builder)
-        
-        builder.createBatchRootDN()
-        datanode = builder.getDataNode(device=self.device)
+    def calculateGBISelection(self, datanode, conceptsRelations):
+        c_loss, updatedDatanode, updatedBuilder = self.forward(datanode)
         
         for c in conceptsRelations:
-            cRoot = datanode.findRootConceptOrRelation(c[0])
-            dns = datanode.findDatanodes(select = cRoot)
+            cRoot = updatedDatanode.findRootConceptOrRelation(c[0])
+            dns = updatedDatanode.findDatanodes(select = cRoot)
+            originalDns = datanode.findDatanodes(select = cRoot)
             
             keyArgmax  = "<" + c[0].name + ">/local/argmax"
             keyGBI  = "<" + c[0].name + ">/GBI"
@@ -235,7 +243,7 @@ class GBIModel(torch.nn.Module):
             if not dns:
                 continue
                         
-            for dn in dns: 
+            for dn, originalDn in zip(dns, originalDns): 
                 v = dn.getAttribute(c[0]) # Get ILP results
                 if v is None:
                     continue
@@ -245,5 +253,6 @@ class GBIModel(torch.nn.Module):
                 vArgmaxIndex = torch.argmax(v).item()
                 vGBI[vArgmaxIndex] = 1
                                 
-                dn.attributes[keyGBI] = vGBI
+                # Add GBI inferencing result to the original datanode 
+                originalDn.attributes[keyGBI] = vGBI
 

@@ -73,8 +73,9 @@ _DataNodeBuilder__Logger.info('--- Starting new run ---')
 
 # Class representing single data instance with relation links to other data nodes
 class DataNode:
-    def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
+    def __init__(self, myBuilder = None, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
 
+        self.myBuilder = myBuilder                       # DatanodeBuildr used to construct this datanode
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the node in the ontology graph (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
@@ -113,7 +114,6 @@ class DataNode:
             return '{} {}'.format(self.ontologyNode.name, self.instanceID)
         
     def __reprDeep__(self,  strRep = ""):
-        
         rel = [*self.getRelationLinks().keys()]
         if 'contains' in rel:
             rel.remove('contains')
@@ -242,7 +242,6 @@ class DataNode:
                 return True
         else:
             return False
-        
         
     def getAttribute(self, *keys):
         key = ""
@@ -1145,6 +1144,9 @@ class DataNode:
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
         startInferLocal = process_time() # timer()
 
+        # Go through keys and remove anything from each of them which is before slash, including slash        
+        keys = [key[key.rfind('/')+1:] for key in keys]
+        
         conceptsRelations = self.collectConceptsAndRelations() 
         
         normalized_keys = set([
@@ -1415,7 +1417,7 @@ class DataNode:
                 
         self.myLoggerTime.info('')
         
-    def inferGBIResults(self, *_conceptsRelations, model, builder):
+    def inferGBIResults(self, *_conceptsRelations, model):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1426,15 +1428,18 @@ class DataNode:
 
         from domiknows.program.model.gbi import GBIModel
         myGBIModel = GBIModel(self.graph, solver_model=model)
-        myGBIModel.calculateGBISelection(builder, _conceptsRelations)
+        myGBIModel.calculateGBISelection(self, _conceptsRelations)
         
     # Calculate the percentage of results satisfying each logical constraint 
     def verifyResultsLC(self, key = "/local/argmax"):
                 
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
-        self.inferLocal()
-        self.infer()
+        if "local" in key:
+            self.inferLocal(keys=[key])
+        else:
+            self.infer() # ILP?
+            
         verifyResult = myilpOntSolver.verifyResultsLC(self, key = key)
         
         return verifyResult
@@ -1719,6 +1724,8 @@ class DataNodeBuilder(dict):
         from domiknows.utils import getDnSkeletonMode
         self.skeletonDataNode = getDnSkeletonMode()
         dict.__setitem__(self, "DataNodesConcepts", set())
+        if args:
+            dict.__setitem__(self, "data_item", args[0])
 
     def __getitem__(self, key):
         return dict.__getitem__(self, key)
@@ -2069,7 +2076,7 @@ class DataNodeBuilder(dict):
             else:
                 instanceID = 0
                 
-            _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+            _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
             
             _dn.attributes[keyDataName] = vInfo.value
             
@@ -2079,7 +2086,7 @@ class DataNodeBuilder(dict):
             for vIndex, v in enumerate(vInfo.value):
                 instanceValue = ""
                 instanceID = vIndex
-                _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 _dn.attributes[keyDataName] = v
                 
@@ -2098,7 +2105,7 @@ class DataNodeBuilder(dict):
         # -- Create a single the new dataNode 
         instanceValue = ""
         instanceID = 0
-        _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+        _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
         _dn.attributes[keyDataName] = vInfo.value
                 
         _DataNodeBuilder__Logger.info('Single new dataNode %s created'%(_dn))
@@ -2131,7 +2138,7 @@ class DataNodeBuilder(dict):
                 instanceID = vIndex
                 
                 # Create new DataNode
-                _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 # add attribute
                 _dn.attributes[keyDataName] = v
@@ -2170,7 +2177,7 @@ class DataNodeBuilder(dict):
                 for i in range(0,vInfo.len):
                     instanceValue = ""
                     instanceID = i
-                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                    _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                         
                     _dn.attributes[keyDataName] = vInfo.value[i]
                     dns.append(_dn)
@@ -2190,7 +2197,7 @@ class DataNodeBuilder(dict):
                 for i in range(0,vInfo.len):
                     instanceValue = ""
                     instanceID = i
-                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                    _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                         
                     dns.append(_dn)
         else:
@@ -2613,7 +2620,7 @@ class DataNodeBuilder(dict):
             batchRootDNOntologyNode = Concept(name='batch')
             supGraph.attach(batchRootDNOntologyNode)
             
-            batchRootDN = DataNode(instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
+            batchRootDN = DataNode(myBuilder = self, instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
         
             for i, d in enumerate(_dataNode):
                 batchRootDN.addChildDataNode(d)  

@@ -247,3 +247,4 @@ data/MNIST/raw/train-labels-idx1-ubyte.gz
 /examples/
 /examples
 .vscode/settings.json
+domiknows/program/model/gbi copy.py
