@@ -372,6 +372,15 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
 
             # --- Backward pass on model_l
             c_loss.backward()
+            
+            print("Step after backward")
+            for name, x in model_l.named_parameters():
+                if x.grad is None:
+                    print(name, 'no grad')
+                    continue
+                
+                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
+                
             #  -- Update model_l
             c_opt.step()
 

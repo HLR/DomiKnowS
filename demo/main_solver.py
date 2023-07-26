@@ -19,7 +19,6 @@ from domiknows.utils import setProductionLogMode, setDnSkeletonMode
 
 from models import tokenize, WordEmbedding, Classifier, make_pair, concat, pair_label
 
-
 Graph.clear()
 Concept.clear()
 Relation.clear()
@@ -106,7 +105,7 @@ pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed]
 #
 # Defined the program
 #
-GBI = False
+GBI = True
 if GBI:
     program = SolverPOIProgram(graph, poi=(word, ), inferTypes=['ILP', 'local/argmax', "GBI"], 
                                loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),
@@ -134,6 +133,13 @@ print(program.model.metric)
 
 print('-'*40)
 
+print("Model gradients after Train")
+for name, x in program.model.named_parameters():
+    if x.grad is None:
+        print(name, 'no grad')
+        continue
+       
+    print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
 
 #
 # Test
@@ -143,7 +149,7 @@ print('Testing result:')
 print(program.model.loss)
 print(program.model.metric)
 
-print("Model gradients")
+print("Model gradients after Test")
 for name, x in program.model.named_parameters():
     if x.grad is None:
         print(name, 'no grad')
