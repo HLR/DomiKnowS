@@ -25,6 +25,7 @@ To start using DomiKnowS, follow these steps:
 ## Acknowledgements
 
 DomiKnowS is developed and maintained by [HLR](https://hlr.github.io/). We would like to acknowledge the contributions of the open-source community and express our gratitude to the developers of Gurobi for their excellent optimization solver.
+TODO add paper link
 
 ## Citation
 
