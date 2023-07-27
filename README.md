@@ -16,25 +16,20 @@ Using DomiKnowS involves the following steps:
 
 4. **Program Composition and Execution**: Compose and execute the DomiKnowS program to train the deep learning model with integrated domain knowledge. This step involves solving the optimization problem and updating the model's parameters iteratively.
 
-For detailed documentation on how to use DomiKnowS, please refer to the [official documentation](link_to_official_documentation).
+## Quick Start
 
+[Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
 
 ## Contents
 
-- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
 - [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/apis): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
 - [Example Tasks](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more example see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
 - [Contributing](https://github.com/HLR/DomiKnowS/blob/Doc/IssueReport.md): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
 - [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
-## Quick Start
 
-To start using DomiKnowS, follow these steps:
 
-1. Install DomiKnowS using `pip install DomiKnowS`.
-2. Install Gurobi following the instructions [here](https://github.com/HLR/DomiKnowS/blob/develop/GurobiREADME.md).
-3. Refer to the [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md) documentation for detailed instructions on how to define graph declarations, model declarations, initialize programs, and compose and execute programs using DomiKnowS.
 
 ## Acknowledgements
 
