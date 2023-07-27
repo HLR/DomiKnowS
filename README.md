@@ -1,77 +1,51 @@
-# DomiKnows
+# DomiKnowS: Declarative Knowledge Integration with Deep Neural Models
 
-### Table Of Content:
+DomiKnowS is a Python library that facilitates the integration of domain knowledge in deep learning architectures. With DomiKnowS, you can express the structure of your data symbolically via graph declarations and seamlessly add logical constraints over outputs or latent variables to your deep models. This allows you to define domain knowledge explicitly, improving the explainability, performance, and generalizability of your models, especially in low-data regimes. 
 
-- [Introduction](introduction.md)
-- [Install DomiKnows](Install%20DomiKnows.md)
-- [Getting Started](Getting%20Started.md)
-  - [Simple Example](Getting%20Started.md#Simple-Example)
-  - [Complex Example](Getting%20Started.md#Complex-Example)
-- [Run With Jupyter](Run%20With%20Jupyter/)
-- [Datasets and Their Results](Datasets%20and%20Their%20Results.md)
+While several approaches for integrating symbolic and sub-symbolic models have been introduced, there is no generic library that facilitates programming for such integration with various underlying algorithms. DomiKnowS aims to simplify the programming for knowledge integration in both training and inference phases, while separating the knowledge representation from learning algorithms.
 
 
+## Contents
 
-### Main Components:
+- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
+- [Example Tasks](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more example see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
+- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/apis): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+- [Contributing](https://github.com/HLR/DomiKnowS/blob/Doc/IssueReport.md): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
+- [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
+- [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
-- [Data](Main%20Components/Data.md)
-- [Graph](Main%20Components/Graph.md)
-- [Reader](Main%20Components/Reader.md)
-- [Sensor](Main%20Components/Sensor/)
-  - [Preprocess](Main%20Components/Sensor/Preprocess.md)
-  - [Learner](Main%20Components/Sensor/Learner.md)
-- [Program](Main%20Components/Program.md)
-  - [pytorch](Main%20Components/Program.md#pytorch)
-  - [ILP](Main%20Components/Program.md#ILP)
-  - [IML](Main%20Components/Program.md#IML)
-  - [Primal-Dual](Main%20Components/Program.md#Primal-Dual)
-- [Datanode](Main%20Components/Datanode.md)
+## Quick Start
 
+To start using DomiKnowS, follow these steps:
 
+1. Install DomiKnowS using `pip install DomiKnowS`.
+2. Install Gurobi following the instructions [here](https://github.com/HLR/DomiKnowS/blob/develop/GurobiREADME.md).
+3. Refer to the [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md) documentation for detailed instructions on how to define graph declarations, model declarations, initialize programs, and compose and execute programs using DomiKnowS.
 
-### Technical API:
+## Acknowledgements
 
-- [Graph](Technical%20API/Graph/)
-  - [Class Graph](Technical%20API/Graph/Class%20Graph.md)
-    - [Method Visualize](Technical%20API/Graph/Class%20Graph.md#Method-Visualize)
-  - [Class DataNode](Technical%20API/Graph/Class%20DataNode.md)
-    - [Class DataNodeBuilder](Technical%20API/Graph/Class%20DataNode.md#Class-DataNodeBuilder)
-  - [Class LogicalConstrain](Technical%20API/Graph/Class%20LogicalConstrain.md)
-    - [andL](Technical%20API/Graph/Class%20LogicalConstrain.md#andL)
-    - [orL](Technical%20API/Graph/Class%20LogicalConstrain.md#orL)
-    - [nandL](Technical%20API/Graph/Class%20LogicalConstrain.md#nandL)
-    - [ifL](Technical%20API/Graph/Class%20LogicalConstrain.md#ifL)
-    - [norL](Technical%20API/Graph/Class%20LogicalConstrain.md#norL)
-    - [xorL](Technical%20API/Graph/Class%20LogicalConstrain.md#xorL)
-    - [epqL](Technical%20API/Graph/Class%20LogicalConstrain.md#epqL)
-    - [notL](Technical%20API/Graph/Class%20LogicalConstrain.md#notL)
-    - [exactL](Technical%20API/Graph/Class%20LogicalConstrain.md#exactL)
-    - [existL](Technical%20API/Graph/Class%20LogicalConstrain.md#existL)
-    - [existsL](Technical%20API/Graph/Class%20LogicalConstrain.md#existsL)
-    - [atLeastL](Technical%20API/Graph/Class%20LogicalConstrain.md#atLeastL)
-    - [atMostL](Technical%20API/Graph/Class%20LogicalConstrain.md#atMostL)
-    - [exactI](Technical%20API/Graph/Class%20LogicalConstrain.md#exactI)
-    - [existsI](Technical%20API/Graph/Class%20LogicalConstrain.md#atLeastI)
-    - [atLeastI](Technical%20API/Graph/Class%20LogicalConstrain.md#atLeastI)
-    - [atMostI](Technical%20API/Graph/Class%20LogicalConstrain.md#atMostI)
-  - [Class Property](Technical%20API/Graph/Class%20Property.md)
-  - [Class Transformed](Technical%20API/Graph/Class%20Transformed.md)
-  - [Class Relation](Technical%20API/Graph/Class%20Relation.md)
-    - [OTORelation](Technical%20API/Graph/Class%20Relation.md#OTORelation)
-    - [OTMRelation](Technical%20API/Graph/Class%20Relation.md#OTMRelation)
-    - [MTORelation](Technical%20API/Graph/Class%20Relation.md#MTORelation)
-    - [MTMRelation](Technical%20API/Graph/Class%20Relation.md#MTMRelation)
-    - [IsA](Technical%20API/Graph/Class%20Relation.md#IsA)
-    - [NotA](Technical%20API/Graph/Class%20Relation.md#NotA)
-    - [HasA](Technical%20API/Graph/Class%20Relation.md#HasA)
-    - [HasMany](Technical%20API/Graph/Class%20Relation.md#HasMany)
-    - [Contains](Technical%20API/Graph/Class%20Relation.md#Contains)
-    - [Equal](Technical%20API/Graph/Class%20Relation.md#Equal)
-  - [Class TrialTree](Technical%20API/Graph/Class%20TrialTree.md)
-  - [Class Trial](Technical%20API/Graph/Class%20Trial.md)
-- [Program](Technical%20API/Program/)
-- [Sensor](Technical%20API/Sensor/)
-  - [Class Sensor](Technical%20API/Sensor/Class%20Sensor.md)
-  - [Class Learner](Technical%20API/Sensor/Class%20Learner.md)
-- [Solver](Technical%20API/Solver/)
+DomiKnowS is developed and maintained by [HLR](https://hlr.github.io/). We would like to acknowledge the contributions of the open-source community and express our gratitude to the developers of Gurobi for their excellent optimization solver.
+
+## Citation
+
+If you use DomiKnowS in your research or work, please cite our paper:
+
+```
+@inproceedings{rajaby-faghihi-etal-2021-domiknows,
+    title = "{D}omi{K}now{S}: A Library for Integration of Symbolic Domain Knowledge in Deep Learning",
+    author = "Rajaby Faghihi, Hossein  and
+      Guo, Quan  and
+      Uszok, Andrzej  and
+      Nafar, Aliakbar  and
+      Kordjamshidi, Parisa",
+    booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing: System Demonstrations",
+    month = nov,
+    year = "2021",
+    address = "Online and Punta Cana, Dominican Republic",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.emnlp-demo.27",
+    doi = "10.18653/v1/2021.emnlp-demo.27",
+    pages = "231--241",
+}
+```
 
