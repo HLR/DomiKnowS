@@ -60,6 +60,15 @@ def intersection_of_lists(lists):
     ordered_common_elements = [elem for elem in lists[0] if elem in common_elements]
     return ordered_common_elements
 
+def findDatanodesForRootConcept(dn, rootConcept):
+    if "DataNodesConcepts" in dn.myBuilder:
+        if rootConcept.name in dn.myBuilder["DataNodesConcepts"]:
+            return dn.myBuilder["DataNodesConcepts"][rootConcept.name]
+    
+    dns = dn.findDatanodes(select = rootConcept)
+    dn.myBuilder["DataNodesConcepts"][rootConcept.name] = dns
+    return dns
+    
 def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False):
     conceptName = e[0].name
                         
@@ -77,7 +86,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
              dnsList =lcVariablesDns[variable.name]  
         else:
             rootConcept = dn.findRootConceptOrRelation(conceptName)
-            _dns = dn.findDatanodes(select = rootConcept)
+            _dns = findDatanodesForRootConcept(dn, rootConcept)
             dnsList = [[dn] for dn in _dns]
     else: # Path specified
         from domiknows.graph.logicalConstrain import eqL
@@ -127,7 +136,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
         
             if referredVariableName not in lcVariablesDns: # Not yet defined - it has to be the current lc element dataNodes list
                 rootConcept = dn.findRootConceptOrRelation(conceptName)
-                _dns = dn.findDatanodes(select = rootConcept)
+                _dns = findDatanodesForRootConcept(dn, rootConcept)
                 referredDns = [[dn] for dn in _dns]
                 integrate = True
                 new_iterate = True

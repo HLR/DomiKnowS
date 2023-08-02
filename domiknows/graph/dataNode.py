@@ -75,7 +75,7 @@ _DataNodeBuilder__Logger.info('--- Starting new run ---')
 class DataNode:
     def __init__(self, myBuilder = None, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
 
-        self.myBuilder = myBuilder                       # DatanodeBuildr used to construct this datanode
+        self.myBuilder = myBuilder                       # DatanodeBuilder used to construct this datanode
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the node in the ontology graph (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
@@ -564,6 +564,10 @@ class DataNode:
                 return relationConcept 
 
         # Does this concept or relation has parent (through _isA)
+        
+        if isinstance(relationConcept, tuple):
+            relationConcept = relationConcept[0]
+            
         try:
             isAs = relationConcept.is_a()
         except (AttributeError, TypeError):
@@ -1723,7 +1727,7 @@ class DataNodeBuilder(dict):
         
         from domiknows.utils import getDnSkeletonMode
         self.skeletonDataNode = getDnSkeletonMode()
-        dict.__setitem__(self, "DataNodesConcepts", set())
+        dict.__setitem__(self, "DataNodesConcepts", {})
         if args:
             dict.__setitem__(self, "data_item", args[0])
 
@@ -2495,9 +2499,6 @@ class DataNodeBuilder(dict):
 
         DataNodesConcepts = dict.__getitem__(self, "DataNodesConcepts")
         if (not self.skeletonDataNode) or ("relationName" in conceptInfo) or ("dataNode" not in self) or (conceptName not in DataNodesConcepts):
-            DataNodesConcepts.add(conceptName)
-            dict.__setitem__(self, "DataNodesConcepts", DataNodesConcepts)
-
             # Create key for DataNode construction
             keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
             keyDataName = keyDataName[1:] # __cut first '/' from the string
@@ -2529,6 +2530,9 @@ class DataNodeBuilder(dict):
                             allDns.update(index)
                         except TypeError as ty:
                             pass
+                    
+                    DataNodesConcepts[conceptName] = index
+                    #dict.__setitem__(self, "DataNodesConcepts", DataNodesConcepts)
                 
                 if conceptInfo['relation']:
                     _DataNodeBuilder__Logger.debug('%s is a relation'%(conceptName))

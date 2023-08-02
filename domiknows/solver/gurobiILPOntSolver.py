@@ -235,6 +235,27 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
             if self.conceptIsMultiClass(currentConceptRelation):
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%(currentLabel))
+                
+            if getDnSkeletonMode() and "variableSet" in rootDn.attributes:
+                rootConcept = rootDn.findRootConceptOrRelation(currentConceptRelation)
+                rootConceptName = rootConcept.name
+
+                xkey = '<' + self.getConceptName(currentConceptRelation) + '>/ILP/x'
+                xkeyInVariableSet = rootConceptName + "/" + xkey
+                if not rootDn.hasAttribute(xkey):
+                    rootDn.attributes["variableSet"][xkeyInVariableSet] = []
+                xForConcept = [value for key, value in x.items() if key[0] == self.getConcept(currentConceptRelation) and key[1] == currentLabel]
+                rootDn.attributes["variableSet"][xkeyInVariableSet].append(xForConcept)
+                    
+                if self.conceptIsBinary(currentConceptRelation):
+                    notxkey = '<' + self.getConceptName(currentConceptRelation) + '>/ILP/notx'
+                    notxkeyInVariableSet = rootConceptName + "/" + notxkey
+                    if not rootDn.hasAttribute(notxkey):
+                        rootDn.attributes["variableSet"][notxkeyInVariableSet] = []
+                    
+                    xnotForConcept = [value for key, value in x.items() if key[0] == self.getConcept(currentConceptRelation) and key[1] == 'Not_' + currentLabel]
+                    rootDn.attributes["variableSet"][notxkeyInVariableSet].append(xnotForConcept)
+
 
         m.update()
 
