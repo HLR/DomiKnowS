@@ -1,38 +1,43 @@
-# DomiKnowS: Getting Started
+# DomiKnowS: Declarative Knowledge Integration with Deep Neural Models
 
-Welcome to DomiKnowS, a library for integrating symbolic domain knowledge in deep learning! This readme provides a quick overview of DomiKnowS and step-by-step instructions on how to get started with the library.
+DomiKnowS is a Python library that facilitates the integration of domain knowledge in deep learning architectures. With DomiKnowS, you can express the structure of your data symbolically via graph declarations and seamlessly add logical constraints over outputs or latent variables to your deep models. This allows you to define domain knowledge explicitly, improving the explainability, performance, and generalizability of your models, especially in low-data regimes. 
 
-## What is DomiKnowS?
+While several approaches for integrating symbolic and sub-symbolic models have been introduced, there is no generic library that facilitates programming for such integration with various underlying algorithms. DomiKnowS aims to simplify the programming for knowledge integration in both training and inference phases, while separating the knowledge representation from learning algorithms.
 
-DomiKnowS is a Python library that enables the integration of symbolic domain knowledge into deep learning models. It allows you to express domain knowledge in the form of logical constraints over model outputs or latent variables, which can improve model interpretability, robustness, and generalization. DomiKnowS is built on top of popular deep learning frameworks such as TensorFlow and PyTorch, making it easy to incorporate into your existing deep learning workflows.
 
-## Installation
+## Contents
 
-To install DomiKnowS, you can use `pip`, the Python package manager. Open a terminal and run the following command:
+- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
+- [Example Tasks](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more example see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
+- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/apis): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+- [Contributing](https://github.com/HLR/DomiKnowS/blob/Doc/IssueReport.md): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
+- [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
+- [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
-```bash
-pip install DomiKnowS
+## Acknowledgements
+
+DomiKnowS is developed and maintained by [HLR](https://hlr.github.io/). We would like to acknowledge the contributions of the open-source community and express our gratitude to the developers of Gurobi for their excellent optimization solver.
+
+## Citation
+
+If you use DomiKnowS in your research or work, please cite our paper:
+
 ```
-
-
-Note that DomiKnowS relies on Gurobi to solve the inference-time optimization. You need to install Gurobi separately by following the instructions [here](link_to_gurobi_readme).
-
-## Requirements
-
-The DomiKnowS library is integrated with the ILP solver [Gurobi](https://www.gurobi.com/). The library provides necessary capability to find solutions for logical constraints encoded as an ILP model.
-
-The [requirements](https://github.com/HLR/DomiKnowS/blob/main/requirements.txt) file for the library includes the Gurobi Python package [gurobipy](https://pypi.org/project/gurobipy/).
-This package comes with a trial license that allows solving problems of limited size. 
-As a student or staff member of an academic institution, you qualify for a free, full product license. For more information, see:
-
-- [https://www.gurobi.com/academia/academic-program-and-licenses/](https://www.gurobi.com/academia/academic-program-and-licenses/)
-
-For a commercial evaluation, you can request an evaluation license.
-
-
-## Examples
-
-To help you get started quickly, we provide several examples in [run with jupytor](https://github.com/HLR/DomiKnowS/tree/Doc/Run%20With%20Jupyter)) section of this repository. These examples demonstrate how to use DomiKnowS for various tasks, including classification, regression, and optimization problems.
-
-Refer to documentation!
+@inproceedings{rajaby-faghihi-etal-2021-domiknows,
+    title = "{D}omi{K}now{S}: A Library for Integration of Symbolic Domain Knowledge in Deep Learning",
+    author = "Rajaby Faghihi, Hossein  and
+      Guo, Quan  and
+      Uszok, Andrzej  and
+      Nafar, Aliakbar  and
+      Kordjamshidi, Parisa",
+    booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing: System Demonstrations",
+    month = nov,
+    year = "2021",
+    address = "Online and Punta Cana, Dominican Republic",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.emnlp-demo.27",
+    doi = "10.18653/v1/2021.emnlp-demo.27",
+    pages = "231--241",
+}
+```
 
