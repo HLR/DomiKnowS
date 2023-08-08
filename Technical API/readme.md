@@ -1,7 +1,7 @@
 # DomiKnows
 
 ### Table Of Content:
-- [Introduction](introduction.md)
+- [Introduction](Introduction.md)
 - [Install DomiKnows](Install%20DomiKnows.md)
 - [Getting Started](GettingStarted.md)
 - [Example Task](ExampleTask.md)
