@@ -2,11 +2,11 @@
 
 The following are the user's steps to using our framework.
 
-- [Complex Example](#Complex-Example)
-  - [Knowledge Declaration](#knowledge-declaration)
-  - [Model Declaration](#model-declaration)
-  - [Training and Testing](#training-and-testing)
-  - [Inference](#inference)
+
+- [Knowledge Declaration](#knowledge-declaration)
+- [Model Declaration](#model-declaration)
+- [Training and Testing](#training-and-testing)
+- [Inference](#inference)
 
 ## Knowledge Declaration
 

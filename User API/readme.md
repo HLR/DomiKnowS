@@ -12,18 +12,12 @@
 
 ### Main Components:
 
-- [Data](Main%20Components/Data.md)
-- [Graph](Main%20Components/Graph.md)
-- [Reader](Main%20Components/Reader.md)
-- [Sensor](Main%20Components/Sensor/)
-  - [Preprocess](Main%20Components/Sensor/Preprocess.md)
-  - [Learner](Main%20Components/Sensor/Learner.md)
-- [Program](Main%20Components/Program.md)
-  - [pytorch](Main%20Components/Program.md#pytorch)
-  - [ILP](Main%20Components/Program.md#ILP)
-  - [IML](Main%20Components/Program.md#IML)
-  - [Primal-Dual](Main%20Components/Program.md#Primal-Dual)
-- [Datanode](Main%20Components/Datanode.md)
+- [Knowledge Declaration (Graph)](Main%20Components/Graph.md)
+- [Model Declaration (Sensor)](Main%20Components/Sensor.md)
+- [DataNode](Main%20Components/Datanode.md)
+- [Training](Main%20Components/Training.md)
+- [Inference](Main%20Components/Inference.md)
+- [Solver](Main%20Components/Solver.md)
 
 
 
