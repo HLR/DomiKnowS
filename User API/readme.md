@@ -4,7 +4,7 @@
 - [Introduction](Introduction.md)
 - [Getting Started](GettingStarted.md)
 - [Example Task](ExampleTask.md)
-- [Run With Jupyter](Run%20With%20Jupyter/)
+- [Run With Jupyter](../Run%20With%20Jupyter/)
 - [Datasets and Their Results](Datasets%20and%20Their%20Results.md)
 
 
