@@ -220,6 +220,7 @@ if __name__ == '__main__':
             node.inferLocal()
 
             # record data to file
+            print("\n{:<10} {:<10} {:<10} {:<10}".format("concept", "argmax", "GBI", "label"))
             for child in node.getChildDataNodes('image'):
                 eval_row = [str(row_idx)]
                 eval_row_GBI = [str(row_idx)]
@@ -236,8 +237,8 @@ if __name__ == '__main__':
                     eval_row_GBI.append(str(pred_GBI))
                     #eval_row_ILP.append(str(pred_ILP))
 
-                    print(_concept, pred, label)
-                
+                    print("{:<10} {:<10} {:<10} {:<10}".format(_concept, pred, pred_GBI, label))
+                    
                 print()
 
                 eval_f.write(','.join(eval_row_label + ['label']) + '\n')
