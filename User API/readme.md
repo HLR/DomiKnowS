@@ -2,10 +2,9 @@
 
 ### Table Of Content:
 - [Introduction](Introduction.md)
-- [Install DomiKnows](Install%20DomiKnows.md)
 - [Getting Started](GettingStarted.md)
 - [Example Task](ExampleTask.md)
-- [Run With Jupyter](Run%20With%20Jupyter/)
+- [Run With Jupyter](/Run%20With%20Jupyter/)
 - [Datasets and Their Results](Datasets%20and%20Their%20Results.md)
 
 
