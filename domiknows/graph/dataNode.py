@@ -1951,7 +1951,8 @@ class DataNodeBuilder(dict):
             newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
             
         # Set the updated root list 
-        _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
+        if not getProductionModeStatus():
+            _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict 
     
         return
@@ -1989,7 +1990,8 @@ class DataNodeBuilder(dict):
             relationAttrsCache =  dict.__getitem__(self, relationAttrsCacheName)
             relationAttrsCache[attrName] = vInfo.value
                 
-            _DataNodeBuilder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'
+            if not getProductionModeStatus():
+                _DataNodeBuilder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'
                                          %(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
             
             # Find if all the needed attribute were initialized
@@ -2007,7 +2009,8 @@ class DataNodeBuilder(dict):
                      
                     if _existingDnsForAttr:
                         existingDnsForAttr[relationAttributeName] = _existingDnsForAttr
-                        _DataNodeBuilder__Logger.info('Found %i dataNodes of the attribute %s for concept %s'%(len(_existingDnsForAttr),relationAttributeName,relationAttributeConcept.name))
+                        if not getProductionModeStatus():
+                            _DataNodeBuilder__Logger.info('Found %i dataNodes of the attribute %s for concept %s'%(len(_existingDnsForAttr),relationAttributeName,relationAttributeConcept.name))
                     else:
                         existingDnsForAttr[relationAttributeName] = []
                         _DataNodeBuilder__Logger.warning('Not found dataNodes of the attribute %s for concept %s'%(relationAttributeName,relationAttributeConcept.name))
@@ -2031,46 +2034,53 @@ class DataNodeBuilder(dict):
                             #   candidateDn.addRelationLink(attribute, relationDn)
                             
                             relationDn.addRelationLink(attribute, candidateDn)  
-                            relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
+                            if (not self.skeletonDataNode):
+                                relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
                 
-                _DataNodeBuilder__Logger.info('Create links between the relation %s and instance dataNode of types'%(conceptInfo['concept'].name))
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info('Create links between the relation %s and instance dataNode of types'%(conceptInfo['concept'].name))
             else:
                 # Just add the sensor value to relation DataNodes
-                if keyDataName in self:
-                    _DataNodeBuilder__Logger.info('Updating attribute %s in relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
-                else:
-                    _DataNodeBuilder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
-                    
-                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
-                    rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+                if not getProductionModeStatus():
+                    if keyDataName in self:
+                        _DataNodeBuilder__Logger.info('Updating attribute %s in relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
+                    else:
+                        _DataNodeBuilder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
+                        
+                if (not self.skeletonDataNode):
+                    for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                        rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
             self.__updateRootDataNodeList(list(existingDnsForRelationSorted.values()))
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
-            if keyDataName in self:
-                _DataNodeBuilder__Logger.info('Updating attribute %s in relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
-            else:
-                _DataNodeBuilder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
- 
+            if not getProductionModeStatus():
+                if keyDataName in self:
+                    _DataNodeBuilder__Logger.info('Updating attribute %s in relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
+                else:
+                    _DataNodeBuilder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
+    
             if len(existingDnsForRelation) != vInfo.len:
                 _DataNodeBuilder__Logger.error('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
                 raise ValueError('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
  
-            if len(existingDnsForRelationSorted) == 1:
-                if vInfo.dim == 0:
-                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value # Add / /Update value of the attribute
-            elif vInfo.dim > 0:
-                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relations links dataNodes
-                    rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
-            else:
-                pass
+            if (not self.skeletonDataNode):
+                if len(existingDnsForRelationSorted) == 1:
+                    if vInfo.dim == 0:
+                        existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value # Add / /Update value of the attribute
+                elif vInfo.dim > 0:
+                    for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relations links dataNodes
+                        rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+                else:
+                    pass
 
     def __createInitialDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
 
         dns = []
-                   
-        _DataNodeBuilder__Logger.info('Creating initial dataNode - provided value has length %i'%(vInfo.len))
+           
+        if not getProductionModeStatus():        
+            _DataNodeBuilder__Logger.info('Creating initial dataNode - provided value has length %i'%(vInfo.len))
 
         if vInfo.len == 1: # Will use "READER" key as an id of the root dataNode
             instanceValue = ""
@@ -2082,9 +2092,11 @@ class DataNodeBuilder(dict):
                 
             _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
             
-            _dn.attributes[keyDataName] = vInfo.value
+            if (not self.skeletonDataNode):
+                _dn.attributes[keyDataName] = vInfo.value
             
-            _DataNodeBuilder__Logger.info('Created single dataNode with id %s of type %s'%(instanceID,conceptName))
+            if not getProductionModeStatus():
+                _DataNodeBuilder__Logger.info('Created single dataNode with id %s of type %s'%(instanceID,conceptName))
             dns.append(_dn)
         elif vInfo.len > 1:
             for vIndex, v in enumerate(vInfo.value):
@@ -2092,11 +2104,13 @@ class DataNodeBuilder(dict):
                 instanceID = vIndex
                 _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
-                _dn.attributes[keyDataName] = v
+                if (not self.skeletonDataNode):
+                    _dn.attributes[keyDataName] = v
                 
                 dns.append(_dn)
                         
-            _DataNodeBuilder__Logger.info('Created %i dataNodes of type %s'%(len(dns),conceptName))
+            if not getProductionModeStatus():
+                _DataNodeBuilder__Logger.info('Created %i dataNodes of type %s'%(len(dns),conceptName))
                     
         self.__updateRootDataNodeList(dns)
         
@@ -2104,15 +2118,18 @@ class DataNodeBuilder(dict):
     
     def __createSingleDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
-        _DataNodeBuilder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+        if not getProductionModeStatus():
+            _DataNodeBuilder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
 
         # -- Create a single the new dataNode 
         instanceValue = ""
         instanceID = 0
         _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
-        _dn.attributes[keyDataName] = vInfo.value
-                
-        _DataNodeBuilder__Logger.info('Single new dataNode %s created'%(_dn))
+        if (not self.skeletonDataNode):
+            _dn.attributes[keyDataName] = vInfo.value
+          
+        if not getProductionModeStatus():      
+            _DataNodeBuilder__Logger.info('Single new dataNode %s created'%(_dn))
 
         self.__updateRootDataNodeList(_dn)
                 
@@ -2125,7 +2142,8 @@ class DataNodeBuilder(dict):
         # (identified by the index in the master list)
         dns = [] 
                 
-        _DataNodeBuilder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+        if not getProductionModeStatus():
+            _DataNodeBuilder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
 
         # --- Create dataNodes
         
@@ -2134,7 +2152,8 @@ class DataNodeBuilder(dict):
             _DataNodeBuilder__Logger.warning('Provided value is empty %s - abandon the update'%(vInfo.value))
             return
         elif vInfo.dim == 1: # List with indexes for new DataNodes and data for attribute
-            _DataNodeBuilder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
+            if not getProductionModeStatus():
+                _DataNodeBuilder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
             dns1 = []
             for vIndex, v in enumerate(vInfo.value):
@@ -2145,7 +2164,8 @@ class DataNodeBuilder(dict):
                 _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 # add attribute
-                _dn.attributes[keyDataName] = v
+                if (not self.skeletonDataNode):
+                    _dn.attributes[keyDataName] = v
                 
                 dns1.append(_dn)
                       
@@ -2169,21 +2189,23 @@ class DataNodeBuilder(dict):
                                                     %(conceptInfo['relationName'],requiredLenOFRelatedDns,relatedDnsType,len(relatedDns)))
                     return
            
-                _DataNodeBuilder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
                 
-                if not conceptInfo['relation']:
-                    _DataNodeBuilder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
-                    if conceptInfo["relationMode"] == "forward":
-                        _DataNodeBuilder__Logger.info('%s is contain in %s'%(conceptName, relatedDnsType))
-                    else:
-                        _DataNodeBuilder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
+                    if not conceptInfo['relation']:
+                        _DataNodeBuilder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+                        if conceptInfo["relationMode"] == "forward":
+                            _DataNodeBuilder__Logger.info('%s is contain in %s'%(conceptName, relatedDnsType))
+                        else:
+                            _DataNodeBuilder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
 
                 for i in range(0,vInfo.len):
                     instanceValue = ""
                     instanceID = i
                     _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                         
-                    _dn.attributes[keyDataName] = vInfo.value[i]
+                    if (not self.skeletonDataNode):
+                        _dn.attributes[keyDataName] = vInfo.value[i]
                     dns.append(_dn)
                     
                     # If it is not a regular relation but (Create contain relation between the new DataNode and existing DataNodes
@@ -2197,7 +2219,8 @@ class DataNodeBuilder(dict):
                                 if isRelated == 1:
                                     _dn.addChildDataNode(relatedDns[index])  
             else:
-                _DataNodeBuilder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
                 for i in range(0,vInfo.len):
                     instanceValue = ""
                     instanceID = i
@@ -2210,6 +2233,7 @@ class DataNodeBuilder(dict):
         self.__updateRootDataNodeList(dns)   
         return dns
             
+    # not called when skeletonDataNode is on
     def __updateDataNodes(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
@@ -2219,12 +2243,13 @@ class DataNodeBuilder(dict):
             
         if not existingDnsForConcept:
             return
-                                                                    
-        if keyDataName in existingDnsForConcept[0].attributes:
-            _DataNodeBuilder__Logger.info('Updating attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
-        else:
-            _DataNodeBuilder__Logger.info('Adding attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
-        
+         
+        if not getProductionModeStatus():                                                           
+            if keyDataName in existingDnsForConcept[0].attributes:
+                _DataNodeBuilder__Logger.info('Updating attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
+            else:
+                _DataNodeBuilder__Logger.info('Adding attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
+            
         if len(existingDnsForConcept) > vInfo.len: # Not enough elements in the value 
             _DataNodeBuilder__Logger.warning('Provided value has length %i but found %i existing dataNode - abandon the update'%(vInfo.len,len(existingDnsForConcept)))
         elif len(existingDnsForConcept) == vInfo.len: # Number of  value elements matches the number of found dataNodes
@@ -2270,12 +2295,13 @@ class DataNodeBuilder(dict):
                 raise ValueError('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
                                               %(requiredLenOFRelatedDns,relatedDnsType,len(relatedDns)))
 
-                
-            _DataNodeBuilder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
-            if conceptInfo["relationMode"] == "forward":
-                _DataNodeBuilder__Logger.info('%s is contain in %s'%(conceptName, relatedDnsType))
-            else:
-                _DataNodeBuilder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
+             
+            if not getProductionModeStatus():   
+                _DataNodeBuilder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+                if conceptInfo["relationMode"] == "forward":
+                    _DataNodeBuilder__Logger.info('%s is contain in %s'%(conceptName, relatedDnsType))
+                else:
+                    _DataNodeBuilder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
                 
             for i in range(0,vInfo.len):
                 _dn = existingDnsForConcept[i]
@@ -2310,7 +2336,8 @@ class DataNodeBuilder(dict):
                 else: # -- Value is multiple elements
                     return self.__createMultiplyDataNode(vInfo, conceptInfo, keyDataName)
             else: # DataNode with this concept already created - update it
-                self.__updateDataNodes(vInfo, conceptInfo, keyDataName)
+                if (not self.skeletonDataNode):
+                    self.__updateDataNodes(vInfo, conceptInfo, keyDataName)
                 
     def __addEquality(self, vInfo, conceptInfo, equalityConceptName, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -2329,7 +2356,8 @@ class DataNodeBuilder(dict):
             _DataNodeBuilder__Logger.warning('No datNodes created for equality concept %s'%(equalityConceptName))
             return
         
-        _DataNodeBuilder__Logger.info('Added equality between dataNodes of types %s and %s'%(conceptName,equalityConceptName))
+        if not getProductionModeStatus():
+            _DataNodeBuilder__Logger.info('Added equality between dataNodes of types %s and %s'%(conceptName,equalityConceptName))
 
         for conceptDn in existingDnsForConcept:
             for equalDn in existingDnsForEqualityConcept:
@@ -2341,7 +2369,8 @@ class DataNodeBuilder(dict):
                     continue
                 
                 if vInfo.value[conceptDn.getInstanceID(), equalDn.getInstanceID()]:
-                    _DataNodeBuilder__Logger.info('DataNodes of %s is equal to %s'%(conceptDn,equalDn))
+                    if not getProductionModeStatus():
+                        _DataNodeBuilder__Logger.info('DataNodes of %s is equal to %s'%(conceptDn,equalDn))
                     conceptDn.addEqualTo(equalDn)
 
     # Method processing value of the attribute - determining it it should be treated as a single element. 
@@ -2446,12 +2475,13 @@ class DataNodeBuilder(dict):
             self.collectTime(start)
             return # Stop __setitem__ for repeated key value combination
         
-        if isinstance(value, torch.Tensor):
-            _DataNodeBuilder__Logger.info('key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
-        elif isinstance(value, list):
-            _DataNodeBuilder__Logger.info('key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
-        else:
-            _DataNodeBuilder__Logger.info('key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
+        if not getProductionModeStatus():
+            if isinstance(value, torch.Tensor):
+                _DataNodeBuilder__Logger.info('key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
+            elif isinstance(value, list):
+                _DataNodeBuilder__Logger.info('key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
+            else:
+                _DataNodeBuilder__Logger.info('key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
 
         if value is None:
             _DataNodeBuilder__Logger.error('The value for the key %s is None - abandon the update'%(key))
@@ -2539,9 +2569,6 @@ class DataNodeBuilder(dict):
                     self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
                     
         if self.skeletonDataNode:
-            # Join the last third and second elements of the skey list to create the key in the root data node
-            #  keyInRootDataNode = skey[-3] + "/" + skey[-2]
-            # keyInRootDataNode = "/".join(skey[-3:-1])
             if conceptName in skey:
                 # Find the index of "conceptName" in skey
                 index = skey.index(conceptName)
@@ -2549,7 +2576,7 @@ class DataNodeBuilder(dict):
                 # Join "conceptName" with the next element in skey
                 keyInRootDataNode = "/".join(skey[index:index+2])
            
-                # Add "/label" to the key if the concept has a label
+                # Add "/label" to the key if the concept has a label marked
                 if conceptInfo['label']:
                     keyInRootDataNode += "/label"
 
@@ -2601,7 +2628,8 @@ class DataNodeBuilder(dict):
             _dataNode = dict.__getitem__(self, 'dataNode')
             if len(_dataNode) == 1:
                 rootDn = _dataNode[0]
-                _DataNodeBuilder__Logger.info(f'No new Batch Root DataNode created - DataNode Builder already has single Root DataNode with id {rootDn.instanceID} of type {rootDn.getOntologyNode().name}')
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info(f'No new Batch Root DataNode created - DataNode Builder already has single Root DataNode with id {rootDn.instanceID} of type {rootDn.getOntologyNode().name}')
                 return
                 
             # Check if there are more than one type of DataNodes in the builder
@@ -2632,7 +2660,8 @@ class DataNodeBuilder(dict):
             # The new Root DataNode it the batch Root DataNode
             self.__updateRootDataNodeList([batchRootDN])
 
-            _DataNodeBuilder__Logger.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
+            if not getProductionModeStatus():
+                _DataNodeBuilder__Logger.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
             self.myLoggerTime.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
         else:
             raise ValueError('DataNode Builder has no DataNode started yet')
@@ -2669,7 +2698,8 @@ class DataNodeBuilder(dict):
                     _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(_dataNode)} dataNodes of types {typesInDNs}')
                     self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(_dataNode)} dataNodes of types {typesInDNs}')
                 else:
-                    _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
+                    if not getProductionModeStatus():
+                        _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
                     self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
                     
                 if self.skeletonDataNode:
@@ -2720,7 +2750,8 @@ class DataNodeBuilder(dict):
             
             if len(_dataNode) > 0:  
                 
-                _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(_dataNode),_dataNode))
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(_dataNode),_dataNode))
 
                 return _dataNode
         
