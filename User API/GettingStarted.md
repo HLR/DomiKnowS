@@ -59,6 +59,6 @@ program.train(reader, train_epoch_num=1, Optim=lambda param: AdamW(param, lr=1e-
 
 ## Examples
 
-To help you get started quickly, we provide several examples in [run with jupytor](https://github.com/HLR/DomiKnowS/tree/Doc/Run%20With%20Jupyter)) section of this repository. These examples demonstrate how to use DomiKnowS for various tasks, including classification, regression, and optimization problems.
+To help you get started quickly, we provide a [walkthrough example](ExampleTask.md). This example demonstrates how to use DomiKnowS step by step.
 
-Refer to documentation!
+Refer to documentation for detailed information!

@@ -1,4 +1,4 @@
-# Example Task
+# Walkthough Example
 
 The following are the user's steps to using our framework.
 
@@ -200,5 +200,5 @@ for paragraph_ in program.populate(reader_test):
 
 we can use `getChildDataNodes` method of a `paragraph` to access its questions. each `question` we can access this way, is also a `Datanode` class. one can use the `getAttribute` method of this `Datanode` to access the calculated result for its `is_more` property or as it is shown in the next line of the code, to access this property after "ILP" inference that enforces the constraints. here, unlike in sensors, the questions and their properties are accessed individually. we can use created datagraph here to do inference and calculate the metric with or without "ILP" however we wish.
 
-Please find in a specific topic for more information about [how to query a `Datanode`](developer/QUERY.md) and [how inference works](developer/INFERENCE.md).
+You can run this full example in [jupytor](https://colab.research.google.com/drive/1cftN2Tln34fquAAnOkuTtgySBfIkVsHZ?usp=sharing).
 
