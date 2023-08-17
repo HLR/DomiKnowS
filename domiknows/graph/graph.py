@@ -144,10 +144,4 @@ class Graph(BaseGraphTree):
         wht['concepts'] = dict(self.concepts)
         return wht
 
-    # NB: for namedtuple, defaults are right-most first
-    # `local` default to None,
-    # python 3.7+
-    # Ontology = namedtuple('Ontology', ('iri', 'local'), defaults=(None,))
-    # python 2.6+
-    Ontology = namedtuple('Ontology', ('iri', 'local'))
-    Ontology.__new__.__defaults__ = (None,)
+    Ontology = namedtuple('Ontology', ['iri', 'local'], defaults=[None])

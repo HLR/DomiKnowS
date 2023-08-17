@@ -163,15 +163,16 @@ class LearningBasedProgram():
         self.dbUpdate = None if db else dbUpdate(graph)
 
         from inspect import signature
-        modelSignature = signature(Model.__init__)
+        self.modelSignature = signature(Model.__init__)
         
-        modelKwargs = {}
-        for param in modelSignature.parameters.values():
+        self.kwargs = kwargs
+        self.modelKwargs = {}
+        for param in self.modelSignature.parameters.values():
             paramName = param.name
             if paramName in kwargs:
-                modelKwargs[paramName] = kwargs[paramName]
+                self.modelKwargs[paramName] = kwargs[paramName]
                 
-        self.model = Model(graph, **modelKwargs)
+        self.model = Model(graph, **self.modelKwargs)
         self.opt = None
         self.epoch = None
         self.stop = None
@@ -340,6 +341,7 @@ class LearningBasedProgram():
             for i, data_item in tqdm(enumerate(dataset)):
                 # import time
                 # start = time.time()
+                data_item["modelKwargs"] = self.modelKwargs
                 _, _, *output = self.model(data_item)
                 # end = time.time()
                 # print("Time taken for one data item in populate epoch: ", end - start)

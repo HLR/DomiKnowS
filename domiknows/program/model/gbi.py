@@ -84,17 +84,32 @@ class GBIModel(torch.nn.Module):
         
         # ------- Continue with GBI
                 
-        # -- Make copy of original model
+        # Make copy of original model
         model_l = copy.deepcopy(self.server_model)
-        # reset instance-specific weights
+    
+        # Data to be used for inference
+        x = datanode.myBuilder["data_item"]
+       
+        # reset instance-specific weights to pretrained weights 
+        # discard the last layer and the second last layer (dense and output) and replace it with random weights
         for modelChild in model_l.children():
-            currenNet = modelChild.model.net
-            for layer in currenNet:
+            currentNet = modelChild.model.net
+            last_layer = None
+            second_layer = None
+            for layer in currentNet:
                 if hasattr(layer, 'reset_parameters'):
-                    layer.reset_parameters()
-          
+                    second_layer = last_layer # optionally discard the second layer as well
+                    last_layer = layer
+            
+            if last_layer is not None:
+                #print("Resetting parameters for layer: ", last_layer)
+                last_layer.reset_parameters()
+                
+                if second_layer is not None:
+                    #print("Resetting parameters for layer: ", second_layer)
+                    second_layer.reset_parameters()
+                        
         # -- model_l is the model that gets optimized by GBI
-        model_l.mode(Mode.TEST)
         model_l.reset()        
 
         modelLParams = model_l.parameters()
@@ -109,10 +124,7 @@ class GBIModel(torch.nn.Module):
         node_l = None
         for c_iter in range(self.gbi_iters):
             # perform inference using weights from model_l
-            with torch.no_grad():
-                x = datanode.myBuilder["data_item"]
-                loss, metric, node_l, _ = model_l(x)
-            #node_l, builder_l = self.populate_forward(model_l, datanode) # data_item
+            loss, metric, node_l, _ = model_l(x)
 
             num_satisfied_l, num_constraints_l = self.get_constraints_satisfaction(node_l)
 
@@ -127,9 +139,14 @@ class GBIModel(torch.nn.Module):
             # -- collect probs from datanode (in skeleton mode) 
             probs = {}
             for var_name, var_val in node_l.getAttribute('variableSet').items():
-                if not var_name.endswith('/label'):# and var_val.requires_grad:
+                if var_name.endswith('>'):# and var_val.requires_grad:
                     probs[var_name] = torch.sum(F.log_softmax(var_val, dim=-1))
 
+            # print probs with the keys
+            print("probs:")
+            for key, value in probs.items():
+                print(key, value.item())
+            
             # get total log prob
             log_probs = 0.0
             for c_prob in probs.values():
@@ -146,8 +163,9 @@ class GBIModel(torch.nn.Module):
             if c_loss != c_loss:
                 continue
             
-            print("iter=%d, c_loss=%d, num_constraints_l=%d, satisfied=%d"%(c_iter, c_loss.item(), num_constraints_l, num_satisfied_l))
-
+            print("iter={}, c_loss={:.2f}, c_loss.grad_fn={}, num_constraints_l={}, satisfied={}".format(c_iter, c_loss.item(), c_loss.grad_fn.__class__.__name__, num_constraints_l, num_satisfied_l))
+            print("reg_loss={:.2f}, reg_loss.grad_fn={}, log_probs={:.2f}, log_probs.grad_fn={}\n".format(reg_loss.item(), reg_loss.grad_fn.__class__.__name__, log_probs.item(), log_probs.grad_fn.__class__.__name__))
+            
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 # --- End early if constraints are satisfied
@@ -157,22 +175,27 @@ class GBIModel(torch.nn.Module):
                         
             # --- Backward pass on model_l
             if c_loss.requires_grad:
+                # Zero gradients of model_l params before backward pass
                 c_opt.zero_grad()
-                #model_l.mode(Mode.TRAIN)
-                c_loss.backward(retain_graph=True)
                 
-            #  -- Update model_l
-            c_opt.step()
-            
-            print("Grads after model step")
-            for name, x in model_l.named_parameters():
-                if x.grad is None:
-                    print(name, 'no grad')
-                    continue
+                # Compute gradients
+                c_loss.backward()
                 
-                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
-   
-        
+                # Print the params of the model parameters which have grad
+                print("Params before model step which have grad")
+                for name, param in model_l.named_parameters():
+                    if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
+                        print(name, 'param sum ', torch.sum(torch.abs(param)).item())
+                                            
+                # Update model_l params based on gradients
+                c_opt.step()
+                
+                #  Print the params of the model parameters which have grad
+                print("Params after model step which have grad")
+                for name, param in model_l.named_parameters():
+                    if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
+                        print(name, 'param sum ', torch.sum(torch.abs(param)).item())
+
         node_l_builder = None
         if node_l is not None:
             node_l_builder = node_l.myBuilder
