@@ -93,7 +93,22 @@ class GBIModel(torch.nn.Module):
         # reset instance-specific weights to pretrained weights 
         # discard the last layer and the second last layer (dense and output) and replace it with random weights
         for modelChild in model_l.children():
-            currentNet = modelChild.model.net
+            if hasattr(modelChild, 'model'):
+                if hasattr(modelChild.model, 'net'):
+                    currentNet = modelChild.model.net
+                else:
+                    # Handle the case where the attribute is not present
+                    currentNet = None
+            else:
+                # Handle the case where the attribute is not present
+                if hasattr(modelChild, 'reset_parameters'):
+                   modelChild.reset_parameters()
+                   
+                continue
+                
+            if currentNet is None:
+                continue
+                     
             last_layer = None
             second_layer = None
             for layer in currentNet:
@@ -232,7 +247,10 @@ class GBIModel(torch.nn.Module):
                                 
                 # Add GBI inference result to the original datanode 
                 if gbiForConcept is not None:
-                    gbiForConcept[i] = vGBI
+                    if currentConceptRelation[2] is None: # binary concept
+                        gbiForConcept[i] = vGBI[1]
+                    else:
+                        gbiForConcept[i] = vGBI
                 else:
                     originalDn.attributes[keyGBI] = vGBI
             
