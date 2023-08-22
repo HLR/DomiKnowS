@@ -24,6 +24,7 @@ class Graph(BaseGraphTree):
         self._concepts = OrderedDict()
         self._logicalConstrains = OrderedDict()
         self._relations = OrderedDict()
+        self._batch = None
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
@@ -33,6 +34,14 @@ class Graph(BaseGraphTree):
     @property
     def ontology(self):
         return self._ontology
+    
+    @property
+    def batch(self):
+        return self._batch
+    
+    @batch.setter
+    def batch(self, value):
+        self._batch = value
 
     @property
     def auto_constraint(self):
@@ -86,6 +95,8 @@ class Graph(BaseGraphTree):
             BaseGraphTree.set_apply(self, name, sub)
         elif isinstance(sub, Concept):
             self.concepts[name] = sub
+            if sub.get_batch():
+                self.batch = sub
         elif isinstance(sub, Relation):
             self.relations[name] = sub
         else:

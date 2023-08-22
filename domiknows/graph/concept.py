@@ -8,7 +8,7 @@ from ..utils import enum
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
 class Concept(BaseGraphTree):
-    _rels = {}  # catogrory_name : creation callback
+    _rels = {}  # category_name : creation callback
 
     @classmethod
     def relation_type(cls, name=None):
@@ -30,14 +30,17 @@ class Concept(BaseGraphTree):
 
         return update
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, batch=False):
         '''
         Declare an concept.
         '''
+        self.batch = batch
         BaseGraphTree.__init__(self, name)
-
-        self._in = OrderedDict()  # relation catogrory_name : list of relation inst
-        self._out = OrderedDict()  # relation catogrory_name : list of relation inst
+        self._in = OrderedDict()  # relation category_name : list of relation inst
+        self._out = OrderedDict()  # relation category_name : list of relation inst
+        
+    def get_batch(self):
+        return self.batch
 
     def __str__(self):
         return self.name
@@ -327,6 +330,21 @@ class Concept(BaseGraphTree):
             node = node.sup
         return node
 
+    def deepcopy(self, memo=None):
+        if memo is None:
+            memo = {}
+        
+        if id(self) in memo:
+            return memo[id(self)]
+
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+
+        return result
 
 class EnumConcept(Concept):
     def __init__(self, name=None, values=[]):
@@ -360,3 +378,26 @@ class EnumConcept(Concept):
         valueIndex = self.get_index(value)
         return (self, value, valueIndex, len(self.enum))
         
+    def __deepcopy__(self, memo):
+        # Check if object is already in the memo dictionary.
+        # This prevents infinite loops due to circular references.
+        if id(self) in memo:
+            return memo[id(self)]
+        
+        # Use the superclass's __deepcopy__ method if it exists; otherwise, just create a new instance
+        if hasattr(super(), '__deepcopy__'):
+            copied = super().__deepcopy__(memo)
+        else:
+            # Use the __new__ method to create a new instance without calling __init__
+            copied = self.__class__.__new__(self.__class__)
+
+        # Copy the attributes specific to EnumConcept
+        # Copy the name as it's a simple string or None.
+        copied.name = self.name if self.name else None
+        
+        # Copy the enum values using the getter to get the current set of enum values.
+        copied._enum = list(self._enum)  # Deepcopy is not strictly necessary for a list of strings.
+        
+        # Add the copied object to the memo dictionary and return it.
+        memo[id(self)] = copied
+        return copied

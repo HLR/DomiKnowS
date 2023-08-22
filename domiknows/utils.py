@@ -130,15 +130,24 @@ def getReuseModel():
     return reuseModel
 
 dnSkeletonMode = False
-def setDnSkeletonMode(dnSkeleton):
+dnSkeletonModeFull = False
+def setDnSkeletonMode(dnSkeleton, full=False):
     if not isinstance(dnSkeleton, bool):
         dnSkeleton = False
+        return
+    
     global dnSkeletonMode
     dnSkeletonMode = dnSkeleton
+    if full:
+        dnSkeletonModeFull = True
     
 def getDnSkeletonMode():
     global dnSkeletonMode
     return dnSkeletonMode
+
+def getDnSkeletonModeFull():
+    global dnSkeletonModeFull
+    return dnSkeletonModeFull
     
 def printablesize(ni):
     if hasattr(ni, 'shape'):

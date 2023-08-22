@@ -9,7 +9,7 @@ from ordered_set import OrderedSet
 
 from domiknows import getRegrTimer_logger, getProductionModeStatus
 from domiknows.solver import ilpOntSolverFactory
-from domiknows.utils import getDnSkeletonMode
+from domiknows.utils import getDnSkeletonMode, getDnSkeletonModeFull
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -1409,7 +1409,23 @@ class DataNode:
             self.inferLocal(keys=keys, Acc=Acc)
           
         startILPInfer = process_time() # timer()
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        if self.graph.batch and self.ontologyNode == self.graph.batch and 'contains' in self.relationLinks:
+            batchConcept = self.graph.batch
+            self.myLoggerTime.info('ILP Batch processing for %s'%(batchConcept))
+
+            for batchIndex, dn in enumerate(self.relationLinks['contains']):
+                startILPBatchStepInfer = process_time() # timer()
+                myilpOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)
+                endIILPBatchStepInfer = process_time() # timer()    
+                
+                elapsedInS = (endIILPInfer - startILPInfer)
+                if elapsedInS > 1:
+                    self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %fs'%(batchIndex,elapsedInS))
+                else:
+                    elapsedInMs = elapsedInS *1000
+                    self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %ims'%(batchIndex,elapsedInMs))
+        else:
+            myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         endIILPInfer = process_time() # timer()
         
         elapsedInS = (endIILPInfer - startILPInfer)
@@ -1725,8 +1741,10 @@ class DataNodeBuilder(dict):
         _DataNodeBuilder__Logger.info("Called")
         self.myLoggerTime = getRegrTimer_logger()
         
-        from domiknows.utils import getDnSkeletonMode
+        from domiknows.utils import getDnSkeletonMode, getDnSkeletonModeFull
         self.skeletonDataNode = getDnSkeletonMode()
+        self.skeletonDataNodeFull = getDnSkeletonModeFull()
+        
         dict.__setitem__(self, "DataNodesConcepts", {})
         if args:
             dict.__setitem__(self, "data_item", args[0])
@@ -2090,24 +2108,24 @@ class DataNodeBuilder(dict):
             else:
                 instanceID = 0
                 
-            _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+            initialDn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
             
             if (not self.skeletonDataNode):
-                _dn.attributes[keyDataName] = vInfo.value
+                initialDn.attributes[keyDataName] = vInfo.value
             
             if not getProductionModeStatus():
                 _DataNodeBuilder__Logger.info('Created single dataNode with id %s of type %s'%(instanceID,conceptName))
-            dns.append(_dn)
+            dns.append(initialDn)
         elif vInfo.len > 1:
             for vIndex, v in enumerate(vInfo.value):
                 instanceValue = ""
                 instanceID = vIndex
-                _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                newInitialDn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 if (not self.skeletonDataNode):
-                    _dn.attributes[keyDataName] = v
+                    newInitialDn.attributes[keyDataName] = v
                 
-                dns.append(_dn)
+                dns.append(newInitialDn)
                         
             if not getProductionModeStatus():
                 _DataNodeBuilder__Logger.info('Created %i dataNodes of type %s'%(len(dns),conceptName))
@@ -2155,22 +2173,18 @@ class DataNodeBuilder(dict):
             if not getProductionModeStatus():
                 _DataNodeBuilder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
-            dns1 = []
             for vIndex, v in enumerate(vInfo.value):
                 instanceValue = ""
                 instanceID = vIndex
                 
                 # Create new DataNode
-                _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                newDn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 # add attribute
                 if (not self.skeletonDataNode):
-                    _dn.attributes[keyDataName] = v
+                    newDn.attributes[keyDataName] = v
                 
-                dns1.append(_dn)
-                      
-            # Single list of new DateNodes              
-            dns.append(dns1)              
+                dns.append(newDn)       
         elif vInfo.dim == 2: # Two dimensional relation information
             if "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
@@ -2202,11 +2216,11 @@ class DataNodeBuilder(dict):
                 for i in range(0,vInfo.len):
                     instanceValue = ""
                     instanceID = i
-                    _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                    newDn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                         
                     if (not self.skeletonDataNode):
-                        _dn.attributes[keyDataName] = vInfo.value[i]
-                    dns.append(_dn)
+                        newDn.attributes[keyDataName] = vInfo.value[i]
+                    dns.append(newDn)
                     
                     # If it is not a regular relation but (Create contain relation between the new DataNode and existing DataNodes
                     if not conceptInfo['relation']:
@@ -2224,9 +2238,9 @@ class DataNodeBuilder(dict):
                 for i in range(0,vInfo.len):
                     instanceValue = ""
                     instanceID = i
-                    _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                    newDn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                         
-                    dns.append(_dn)
+                    dns.append(newDn)
         else:
             _DataNodeBuilder__Logger.warning('It is an unsupported sensor input - %s'%(vInfo))
                 
@@ -2304,16 +2318,16 @@ class DataNodeBuilder(dict):
                     _DataNodeBuilder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
                 
             for i in range(0,vInfo.len):
-                _dn = existingDnsForConcept[i]
+                exitingDn = existingDnsForConcept[i]
                     
                 if conceptInfo["relationMode"] == "forward":
                     for index, isRelated in enumerate(vInfo.value[i]):
                         if isRelated == 1:
-                            relatedDns[index].addChildDataNode(_dn)                            
+                            relatedDns[index].addChildDataNode(exitingDn)                            
                 elif conceptInfo["relationMode"] == "backward":
                     for index, isRelated in enumerate(vInfo.value[i]):
                         if isRelated == 1:
-                            _dn.addChildDataNode(relatedDns[index])  
+                            exitingDn.addChildDataNode(relatedDns[index])  
                 
             self.__updateRootDataNodeList(existingDnsForConcept)   
                       
@@ -2528,45 +2542,49 @@ class DataNodeBuilder(dict):
             self.__updateConceptInfo(usedGraph, conceptInfo, _key)
 
         DataNodesConcepts = dict.__getitem__(self, "DataNodesConcepts")
-        if (not self.skeletonDataNode) or ("relationName" in conceptInfo) or ("dataNode" not in self) or (conceptName not in DataNodesConcepts):
-            # Create key for DataNode construction
-            keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
-            keyDataName = keyDataName[1:] # __cut first '/' from the string
-                            
-            if conceptInfo['label']:
-                keyDataName += '/label'
-                
-            vInfo = self.__processAttributeValue(value, keyDataName)
-            
-            # Decide if this is equality between concept data, dataNode creation or update for concept or relation link
-            if keyDataName.find("_Equality_") > 0:
-                equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
-                self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
-            else:                       
-                _DataNodeBuilder__Logger.debug('%s found in the graph; it is a concept'%(conceptName))
-                index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
-                
-                if index:
-                    indexKey = graphPath  + '/' + conceptName + '/index'
-                    dict.__setitem__(self, indexKey, index)
-                    from collections.abc import Sequence
-                    if self.skeletonDataNode:
-                        allDns = self.setdefault("allDns", set())
-
-                        # Add the index to the "allDns" set
-                        try:
-                            if isinstance(index[0], Sequence):
-                                index = index[0]
-                            allDns.update(index)
-                        except TypeError as ty:
-                            pass
+        # Only build the datanode if it is not a full skeleton mode or if the first initial datanode has not been created yet
+        if not self.skeletonDataNodeFull or ("dataNode" not in self):
+            # Only build the datanode if it is not a skeleton mode or if the datanodes for the given concept have not been created yet
+            # or if the concept is a relation
+            if (not self.skeletonDataNode) or (conceptName not in DataNodesConcepts) or ("relationName" in conceptInfo):
+                # Create key for DataNode construction
+                keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
+                keyDataName = keyDataName[1:] # __cut first '/' from the string
+                                
+                if conceptInfo['label']:
+                    keyDataName += '/label'
                     
-                    DataNodesConcepts[conceptName] = index
-                    #dict.__setitem__(self, "DataNodesConcepts", DataNodesConcepts)
+                vInfo = self.__processAttributeValue(value, keyDataName)
                 
-                if conceptInfo['relation']:
-                    _DataNodeBuilder__Logger.debug('%s is a relation'%(conceptName))
-                    self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
+                # Decide if this is equality between concept data, dataNode creation or update for concept or relation link
+                if keyDataName.find("_Equality_") > 0:
+                    equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
+                    self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
+                else:                       
+                    _DataNodeBuilder__Logger.debug('%s found in the graph; it is a concept'%(conceptName))
+                    index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
+                    
+                    if index:
+                        indexKey = graphPath  + '/' + conceptName + '/index'
+                        dict.__setitem__(self, indexKey, index)
+                        from collections.abc import Sequence
+                        if self.skeletonDataNode:
+                            allDns = self.setdefault("allDns", set())
+
+                            # Add the index to the "allDns" set
+                            try:
+                                if isinstance(index[0], Sequence):
+                                    index = index[0]
+                                allDns.update(index)
+                            except TypeError as ty:
+                                pass
+                        
+                        DataNodesConcepts[conceptName] = index
+                        #dict.__setitem__(self, "DataNodesConcepts", DataNodesConcepts)
+                    
+                    if conceptInfo['relation']:
+                        _DataNodeBuilder__Logger.debug('%s is a relation'%(conceptName))
+                        self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
                     
         if self.skeletonDataNode:
             if conceptName in skey:

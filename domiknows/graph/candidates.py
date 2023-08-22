@@ -83,11 +83,11 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
         
         # Check if we already found this variable
         if variable.name in lcVariablesDns:
-             dnsList =lcVariablesDns[variable.name]  
+             dnsList = lcVariablesDns[variable.name]  
         else:
             rootConcept = dn.findRootConceptOrRelation(conceptName)
-            _dns = findDatanodesForRootConcept(dn, rootConcept)
-            dnsList = [[dn] for dn in _dns]
+            rootDns = findDatanodesForRootConcept(dn, rootConcept)
+            dnsList = [[rDn] for rDn in rootDns]
     else: # Path specified
         from domiknows.graph.logicalConstrain import eqL
         if not isinstance(variable.v, eqL):
@@ -136,8 +136,8 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
         
             if referredVariableName not in lcVariablesDns: # Not yet defined - it has to be the current lc element dataNodes list
                 rootConcept = dn.findRootConceptOrRelation(conceptName)
-                _dns = findDatanodesForRootConcept(dn, rootConcept)
-                referredDns = [[dn] for dn in _dns]
+                rootDns = findDatanodesForRootConcept(dn, rootConcept)
+                referredDns = [[rDn] for rDn in rootDns]
                 integrate = True
                 new_iterate = True
             else: # Already defined in the logical constraint from the v part 

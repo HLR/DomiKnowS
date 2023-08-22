@@ -4,6 +4,7 @@ import pickle
 from typing import Iterable
 
 import torch
+import copy 
 
 from domiknows.graph import Property, Concept, DataNodeBuilder
 from domiknows.sensor.pytorch.sensors import TorchSensor, ReaderSensor, CacheSensor
@@ -12,7 +13,7 @@ from domiknows.sensor.pytorch.learners import TorchLearner
 from .base import Mode
 from ..tracker import MacroAverageTracker
 from ..metric import MetricTracker
-
+from domiknows.utils import setDnSkeletonMode, getDnSkeletonMode
 
 class TorchModel(torch.nn.Module):
     def __init__(self, graph, device='auto'):
@@ -24,6 +25,33 @@ class TorchModel(torch.nn.Module):
 
         for learner in self.graph.get_sensors(TorchLearner):
             self.add_module(learner.fullname, learner.model)
+            
+    def __deepcopy__(self, memo):
+        # Create a new instance of TorchModel without calling its __init__ method
+        cls = self.__class__
+        result = cls.__new__(cls)
+
+        # IMPORTANT: Initialize the base torch.nn.Module to set up internal state
+        torch.nn.Module.__init__(result)
+
+        # Continue with your deepcopy logic...
+
+        # Add the new instance to the memo dictionary to avoid infinite recursion
+        memo[id(self)] = result
+
+        # Copy the non-complex attributes
+        result._mode = self._mode
+        result.build = self.build
+        result.device = self.device
+
+        # Copy graph using deep copy
+        result.graph = copy.deepcopy(self.graph, memo)
+        
+        # Handle PyTorch-specific deep copy for the modules
+        for name, module in self.named_children():
+            setattr(result, name, copy.deepcopy(module, memo))
+
+        return result
 
     def mode(self, mode=None):
         if mode is None:
@@ -91,6 +119,10 @@ class TorchModel(torch.nn.Module):
             
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
+            # build datanode with tensor dictionary for attributes when not ILP aor GBI inference needed
+            if getDnSkeletonMode():
+                if 'ILP' not in self.inferTypes and "GBI" not in self.inferTypes:
+                    setDnSkeletonMode(True, full=True)
             builder = DataNodeBuilder(data_item)
             out = self.populate(builder)
             
@@ -139,6 +171,24 @@ class PoiModel(TorchModel):
         else:
             self.metric = {'': metric}
 
+    def __deepcopy__(self, memo):
+        # Start by deep copying the superclass
+        new_model = super(PoiModel, self).__deepcopy__(memo)
+        
+        # Deep copy the poi attributes
+        new_model.poi = copy.deepcopy(self.poi, memo)
+        
+        # Handle other attributes (like loss and metric)
+        # Assuming self.loss can be copied using deepcopy
+        new_model.loss = copy.deepcopy(self.loss, memo)
+
+        # Assuming self.metric can be copied using deepcopy
+        new_model.metric = copy.deepcopy(self.metric, memo)
+
+        # If there are other attributes to copy, do so here...
+
+        return new_model
+    
     def default_poi(self):
         poi = []
         for prop in self.graph.get_properties():
@@ -245,6 +295,20 @@ class SolverModel(PoiModel):
             
         self.probKey = probKey
         self.probAcc = probAcc
+    
+    def __deepcopy__(self, memo):
+        # Start by deep copying the superclass
+        new_model = super(SolverModel, self).__deepcopy__(memo)
+        
+        # Deep copy the specific attributes of SolverModel
+        new_model.inferTypes = copy.deepcopy(self.inferTypes, memo)
+        new_model.inference_with = copy.deepcopy(self.inference_with, memo)
+        new_model.probKey = self.probKey  # Assuming a tuple of immutable types
+        new_model.probAcc = self.probAcc  # Assuming simple datatype or None
+
+        # If there are other attributes to copy, do so here...
+
+        return new_model
 
     def inference(self, builder):
         # import time
@@ -304,6 +368,19 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
         self.loss_tracker = MacroAverageTracker()
         self.metric_tracker = None
 
+    def __deepcopy__(self, memo):
+        # Start by deep copying the superclass
+        new_model = super(PoiModelToWorkWithLearnerWithLoss, self).__deepcopy__(memo)
+        
+        # Deep copy the specific attributes of PoiModelToWorkWithLearnerWithLoss
+        new_model.poi = copy.deepcopy(self.poi, memo)
+        new_model.loss_tracker = copy.deepcopy(self.loss_tracker, memo)
+        new_model.metric_tracker = copy.deepcopy(self.metric_tracker, memo)
+        
+        # If there are other attributes to copy, do so here...
+
+        return new_model
+    
     def reset(self):
         if self.loss_tracker is not None:
             self.loss_tracker.reset()
@@ -366,6 +443,19 @@ class PoiModelDictLoss(PoiModel):
         self.losses = dict()
         self.dictloss = dictloss
         
+    def __deepcopy__(self, memo):
+        # Start by deep copying the superclass
+        new_model = super(PoiModelDictLoss, self).__deepcopy__(memo)
+        
+        # Deep copy the specific attributes of PoiModelDictLoss
+        new_model.loss_tracker = copy.deepcopy(self.loss_tracker, memo)
+        new_model.metric_tracker = copy.deepcopy(self.metric_tracker, memo)
+        new_model.losses = copy.deepcopy(self.losses, memo)
+        new_model.dictloss = self.dictloss  # Assuming dictionary of functions, functions themselves are not deep copied
+
+        # If there are other attributes to copy, do so here...
+
+        return new_model
     
     def reset(self):
         if self.loss_tracker is not None:
@@ -506,6 +596,20 @@ class SolverModelDictLoss(PoiModelDictLoss):
         self.inference_with = []
         self.inferTypes = inferTypes
 
+    def __deepcopy__(self, memo):
+        # Create a new instance of the class
+        cls = self.__class__
+        result = cls.__new__(cls)
+        
+        # Add the new instance to the memo dictionary to avoid infinite recursion
+        memo[id(self)] = result
+        
+        # Copy each attribute
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        
+        return result
+    
     def inference(self, builder):
         for prop in self.poi:
             for sensor in prop.find(TorchSensor):
