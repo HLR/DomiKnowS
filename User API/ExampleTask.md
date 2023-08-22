@@ -77,7 +77,7 @@ the transitive relation is between questions that have a transitive relation bet
 The following figure illustrates the graph for this task:
 ![plot](WIQA.png)
 
-See [here](developer/KNOWLEDGE.md) for more details about declaring graph and constraints.
+See [here]([developer/KNOWLEDGE.md](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Main%20Components/Graph.md)) for more details about declaring graph and constraints.
 
 
 ## Model Declaration
