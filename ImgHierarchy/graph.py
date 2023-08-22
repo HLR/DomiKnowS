@@ -49,7 +49,7 @@ Relation.clear()
 
 
 with Graph('VQA', reuse_model=True) as graph:
-    image_group = Concept(name='image_group')
+    image_group = Concept(name='image_group', batch=True)
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
 
