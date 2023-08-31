@@ -139,6 +139,7 @@ def setDnSkeletonMode(dnSkeleton, full=False):
     global dnSkeletonMode
     dnSkeletonMode = dnSkeleton
     if full:
+        global dnSkeletonModeFull
         dnSkeletonModeFull = True
     
 def getDnSkeletonMode():
