@@ -50,7 +50,7 @@ class Graph(BaseGraphTree):
     from collections import namedtuple
 
     # find all variables defined in the logical constrain and report error if some of them are defined more than once
-    def find_lc_variable(self, lc, found_variables=None):
+    def find_lc_variable(self, lc, found_variables=None, headLc=None):
         if found_variables is None:
             found_variables = {}
 
@@ -63,41 +63,41 @@ class Graph(BaseGraphTree):
                 variable_name = e.name
                 if e_before:
                     if variable_name in found_variables:
-                        raise Exception(f"Variable {variable_name} already defined in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}")
+                        raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} already defined in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}")
 
-                    variable_info = (lc.name, variable_name, e_before)
+                    variable_info = (lc, variable_name, e_before)
                     found_variables[variable_name] = variable_info
                 else:
-                    raise Exception(f"Variable {variable_name} is not associated with any concept")
+                    raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept")
 
             # checking if element is a tuple 
             elif isinstance(e, tuple) and e and isinstance(e[0], LcElement) and not isinstance(e[0], LogicalConstrain):
-                self.find_lc_variable(e[0], found_variables=found_variables)
+                self.find_lc_variable(e[0], found_variables=found_variables, headLc=headLc)
                 current_lc_element = e[0]
                 current_lc_element_concepts = [c for c in current_lc_element.e if isinstance(c, tuple) and not isinstance(c, V)]
 
                 if len(current_lc_element_concepts) != len(e[1]):
-                    raise Exception(f"Logical Constrain {lc.name} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
+                    raise Exception(f"Logical constraint {headLc} {lc} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
 
                 if len(e) >= 2 and isinstance(e[1], tuple):
                     for v in e[1]:
                         if not isinstance(v, str):
-                            raise Exception(f"Logical Constrain {lc.name} has incorrect definition of combination {e} - all variables should be strings")
+                            raise Exception(f"Logical constraint {headLc} {lc} has incorrect definition of combination {e} - all variables should be strings")
 
                     for index, v in enumerate(e[1]):
                         variable_name = v
-                        variable_info = (lc.name, variable_name, current_lc_element_concepts[index])
+                        variable_info = (lc, variable_name, current_lc_element_concepts[index])
                         found_variables[variable_name] = variable_info
 
             # Checking if element is a LogicalConstrain
             elif isinstance(e, LogicalConstrain):
-                self.find_lc_variable(e, found_variables=found_variables)
+                self.find_lc_variable(e, found_variables=found_variables, headLc=headLc)
 
             e_before = e
 
         return found_variables
 
-    def check_if_all_used_variables_are_defined(self, lc, found_variables, used_variables=None):
+    def check_if_all_used_variables_are_defined(self, lc, found_variables, used_variables=None, headLc=None):
         if used_variables is None:
             used_variables = {}
 
@@ -105,12 +105,12 @@ class Graph(BaseGraphTree):
 
         def handle_variable_name(variable_name):
             if variable_name not in found_variables:
-                raise Exception(f"Variable {variable_name} found in {lc.name} is not defined")
+                raise Exception(f"Variable {variable_name} found in {headLc} {lc} is not defined")
 
             if variable_name not in used_variables:
                 used_variables[variable_name] = []
 
-            variable_info = (lc.name, variable_name, e.v)
+            variable_info = (lc, variable_name, e.v)
             used_variables[variable_name].append(variable_info)
 
         for e in lc.e:
@@ -125,13 +125,13 @@ class Graph(BaseGraphTree):
                             if isinstance(t[0], str):
                                 handle_variable_name(t[0])
                             else:
-                                raise Exception(f"Path {t} found in {lc.name} is not correct")
+                                raise Exception(f"Path {t} found in {headLc} {lc} is not correct")
                     else:
-                        raise Exception(f"Path {e} found in {lc.name} is not correct")
+                        raise Exception(f"Path {e} found in {headLc} {lc} is not correct")
                 else:
-                    raise Exception(f"Path {e} found in {lc.name} is not correct")
+                    raise Exception(f"Path {e} found in {headLc} {lc} is not correct")
             elif isinstance(e, LogicalConstrain):
-                self.check_if_all_used_variables_are_defined(e, found_variables, used_variables=used_variables)
+                self.check_if_all_used_variables_are_defined(e, found_variables, used_variables=used_variables, headLc=headLc)
 
         return used_variables
 
@@ -151,11 +151,11 @@ class Graph(BaseGraphTree):
                 continue
 
             # find variable defined in the logical constrain - report error if some of them are defined more than once
-            found_variables = self.find_lc_variable(lc)
+            found_variables = self.find_lc_variable(lc, headLc=lc_name)
 
             # find all variables used in the logical constrain - report error if some of them are not defined
             # gather paths defined in the logical constrain per variable
-            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables)
+            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc_name)
             
             # save information about variables used and defined in the logical constrain
             current_lc_info = LcInfo(found_variables, used_variables)
@@ -195,7 +195,7 @@ class Graph(BaseGraphTree):
                                
                                 # check if the parent of the variable concept is the same as the source of the path element
                                 if variableConceptParent.name != pathElementSrc.name:
-                                    raise Exception(f"Path {path} found in {lc.name} is not correct for element {pathElement}")
+                                    raise Exception(f"Path {path} found in {lc_name} {foundVariables[variableName][0]} is not correct for element {pathElement}")
                        
                     else: # this path is a single path
                         if len(path) < 2:
@@ -208,7 +208,7 @@ class Graph(BaseGraphTree):
                                
                                 # check if the parent of the variable concept is the same as the source of the path element  
                                 if variableConceptParent.name != pathElementSrc.name:
-                                    raise Exception(f"Path {path} found in {lc.name} is not correct for element {pathElement}")
+                                    raise Exception(f"Path {path} found in {lc_name} {foundVariables[variableName][0]} is not correct for element {pathElement}")
                        
     @property
     def ontology(self):
