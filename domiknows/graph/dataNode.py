@@ -708,19 +708,19 @@ class DataNode:
                     continue
                 
                 # Visit DataNodes in the current relation
-                _returnDns = self.findDatanodes(dnsToVisit, select = select, indexes = indexes, visitedDns = visitedDns, depth = newDepth)
+                currentRelationDns = self.findDatanodes(dnsToVisit, select = select, indexes = indexes, visitedDns = visitedDns, depth = newDepth)
         
-                if _returnDns is not None:
-                    for _dn in _returnDns:
-                        if _dn not in returnDns:
-                            returnDns.append(_dn)
+                if currentRelationDns is not None:
+                    for currentRDn in currentRelationDns:
+                        if currentRDn not in returnDns:
+                            returnDns.append(currentRDn)
 
         if depth: # Finish recursion
             return returnDns
         
         # If index provided in query then filter the found results for the select part of query through the index part of query
         if (indexes != None):
-            _returnDns = [] # Will contain results from returnDns satisfying the index
+            currentReturnDns = [] # Will contain results from returnDns satisfying the index
             
             for dn in returnDns:
                 fit = True       
@@ -733,12 +733,12 @@ class DataNode:
                         break
                     
                     found = False
-                    for _dn in relDns:
+                    for rDn in relDns:
                         if isinstance(indexValue, tuple):
                             _test = []
                             for t in indexValue:
                                 if isinstance(t, tuple):
-                                    r = self.__testDataNode(_dn, t)
+                                    r = self.__testDataNode(rDn, t)
                                     
                                     if r:
                                         found = True
@@ -751,7 +751,7 @@ class DataNode:
                             else:
                                 indexValue = _test
                                 
-                        if self.__testDataNode(_dn, indexValue):
+                        if self.__testDataNode(rDn, indexValue):
                             found = True
                             break
                         
@@ -760,10 +760,10 @@ class DataNode:
                         break
                         
                 if fit:
-                    if dn not in _returnDns:
-                        _returnDns.append(dn)
+                    if dn not in currentReturnDns:
+                        currentReturnDns.append(dn)
                        
-            returnDns = _returnDns
+            returnDns = currentReturnDns
         
         # If not fund any results
         if depth == 0 and not returnDns:
@@ -2142,16 +2142,16 @@ class DataNodeBuilder(dict):
         # -- Create a single the new dataNode 
         instanceValue = ""
         instanceID = 0
-        _dn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+        newSingleDn = DataNode(myBuilder = self, instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
         if (not self.skeletonDataNode):
-            _dn.attributes[keyDataName] = vInfo.value
+            newSingleDn.attributes[keyDataName] = vInfo.value
           
         if not getProductionModeStatus():      
-            _DataNodeBuilder__Logger.info('Single new dataNode %s created'%(_dn))
+            _DataNodeBuilder__Logger.info('Single new dataNode %s created'%(newSingleDn))
 
-        self.__updateRootDataNodeList(_dn)
+        self.__updateRootDataNodeList(newSingleDn)
                 
-        return [_dn]
+        return [newSingleDn]
         
     def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -2643,16 +2643,16 @@ class DataNodeBuilder(dict):
         
     def createBatchRootDN(self):
         if dict.__contains__(self, 'dataNode'):
-            _dataNode = dict.__getitem__(self, 'dataNode')
-            if len(_dataNode) == 1:
-                rootDn = _dataNode[0]
+            existingDns = dict.__getitem__(self, 'dataNode')
+            if len(existingDns) == 1:
+                rootDn = existingDns[0]
                 if not getProductionModeStatus():
                     _DataNodeBuilder__Logger.info(f'No new Batch Root DataNode created - DataNode Builder already has single Root DataNode with id {rootDn.instanceID} of type {rootDn.getOntologyNode().name}')
                 return
                 
             # Check if there are more than one type of DataNodes in the builder
             typesInDNs = set()
-            for i, d in enumerate(_dataNode):
+            for i, d in enumerate(existingDns):
                 typesInDNs.add(d.getOntologyNode().name)
             
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
@@ -2661,7 +2661,7 @@ class DataNodeBuilder(dict):
                 return
                 
             # Create the Batch Root DataNode
-            supGraph = _dataNode[1].getOntologyNode().sup
+            supGraph = existingDns[1].getOntologyNode().sup
             if supGraph is None:
                 raise ValueError('Not able to create Batch Root DataNode - existing DataNodes in the Builder have concept type %s not connected to any graph: %s'%(typesInDNs))  
 
@@ -2672,7 +2672,7 @@ class DataNodeBuilder(dict):
             
             batchRootDN = DataNode(myBuilder = self, instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
         
-            for i, d in enumerate(_dataNode):
+            for i, d in enumerate(existingDns):
                 batchRootDN.addChildDataNode(d)  
             
             # The new Root DataNode it the batch Root DataNode
@@ -2699,10 +2699,10 @@ class DataNodeBuilder(dict):
                 
         # If DataNode it created then return it
         if dict.__contains__(self, 'dataNode'):
-            _dataNode = dict.__getitem__(self, 'dataNode')
+            existingDns = dict.__getitem__(self, 'dataNode')
             
-            if len(_dataNode) != 0:
-                returnDn = _dataNode[0]
+            if len(existingDns) != 0:
+                returnDn = existingDns[0]
                 
                 # Set the torch device
                 returnDn.current_device = device
@@ -2711,10 +2711,10 @@ class DataNodeBuilder(dict):
                     if torch.cuda.is_available():
                         returnDn.current_device = 'cuda'
                         
-                if len(_dataNode) != 1:
-                    typesInDNs = {d.getOntologyNode().name for d in _dataNode[1:]}
-                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(_dataNode)} dataNodes of types {typesInDNs}')
-                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(_dataNode)} dataNodes of types {typesInDNs}')
+                if len(existingDns) != 1:
+                    typesInDNs = {d.getOntologyNode().name for d in existingDns[1:]}
+                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
                 else:
                     if not getProductionModeStatus():
                         _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
@@ -2764,14 +2764,14 @@ class DataNodeBuilder(dict):
             self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
-            _dataNode = dict.__getitem__(self, 'dataNode')
+            existingDns = dict.__getitem__(self, 'dataNode')
             
-            if len(_dataNode) > 0:  
+            if len(existingDns) > 0:  
                 
                 if not getProductionModeStatus():
-                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(_dataNode),_dataNode))
+                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(existingDns),existingDns))
 
-                return _dataNode
+                return existingDns
         
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNodes')
         return None

@@ -19,21 +19,21 @@ class LcElement:
         
         updatedE = []
         for _, eItem in enumerate(e):
-            if isinstance(eItem, (LcElement, Concept, Relation)):
+            if isinstance(eItem, (LcElement, Concept, Relation)): # lc element without path
                 updatedE.append(eItem)
-            elif callable(eItem):
-                newEItem = eItem.__call__()
+            elif callable(eItem): # multiclass label
+                newEItem = eItem.__call__() # generated label
                 updatedE.extend(newEItem)
-            elif isinstance(eItem, list):
+            elif isinstance(eItem, list): # lc element with path
                 updatedE.extend(eItem)
             else:
-                updatedE.append(eItem)
+                updatedE.append(eItem) # ?
                 
         self.e = updatedE
         
         updatedE = []
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, Concept):
+            if isinstance(eItem, Concept): # binary concept mapping to tuple representation
                 updatedE.append((eItem, eItem.name, None, 1))
             else:
                 updatedE.append(eItem)
