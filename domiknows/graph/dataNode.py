@@ -1418,7 +1418,7 @@ class DataNode:
                 myilpOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)
                 endIILPBatchStepInfer = process_time() # timer()    
                 
-                elapsedInS = (endIILPInfer - startILPInfer)
+                elapsedInS = (endIILPBatchStepInfer - startILPBatchStepInfer)
                 if elapsedInS > 1:
                     self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %fs'%(batchIndex,elapsedInS))
                 else:
@@ -2227,11 +2227,11 @@ class DataNodeBuilder(dict):
                         if conceptInfo["relationMode"] == "forward":
                             for index, isRelated in enumerate(vInfo.value[i]):
                                 if isRelated == 1:
-                                    relatedDns[index].addChildDataNode(_dn)                            
+                                    relatedDns[index].addChildDataNode(newDn)                            
                         elif conceptInfo["relationMode"] == "backward":
                             for index, isRelated in enumerate(vInfo.value[i]):
                                 if isRelated == 1:
-                                    _dn.addChildDataNode(relatedDns[index])  
+                                    newDn.addChildDataNode(relatedDns[index])  
             else:
                 if not getProductionModeStatus():
                     _DataNodeBuilder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
