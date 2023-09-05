@@ -364,7 +364,7 @@ class LearningBasedProgram():
         names=[]
         FIRST=True
         for datanode in self.populate(data, device=device):
-            datanode.inferILPResults()
+            # datanode.inferILPResults()
             verifyResult = datanode.verifyResultsLC()
             if FIRST:
                 if constraint_names is None:
