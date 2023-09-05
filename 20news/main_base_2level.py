@@ -105,7 +105,7 @@ def main(device):
     program = SolverPOIProgram(graph, inferTypes=[
         'ILP', 
         'local/argmax'],
-        probKey = ("local" , "normalizedProbAcc"),
+        probKey = ("local" , "normalizedProbAll"),
         probAcc = {'level1': 0.7362, 'level2': 0.7513},
         poi = (news_group, news, level1, level2),
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -267,9 +267,38 @@ if __name__ == '__main__':
         if item not in hierarchy_1:
             valid_none_indexes.append(i)
     from tqdm import tqdm
+
+    # program.verifyResultsLC(test_loader, device=device)
     # for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
+    consistent_positive = 0
+    consistent_positive_ilp = 0
+    consistent_total = 0
     for datanode in tqdm(program.populate(test_loader, device=device)):
         for child in datanode.getChildDataNodes('news'):
+            consistent_total += 1
+            labels = []
+            preds = []
+            preds_ilp = []
+            for _concept in [level1, level2]:
+                label = child.getAttribute(_concept.name, 'label').item()
+                label_class = _concept.enum[label]
+                pred = child.getAttribute(_concept.name, 'local/argmax').argmax().item()
+                pred_class = _concept.enum[pred]
+                pred_ilp = child.getAttribute(_concept.name, 'ILP').argmax().item()
+                pred_ilp_class = _concept.enum[pred_ilp]
+                labels.append(label_class)
+                preds.append(pred_class)
+                preds_ilp.append(pred_ilp_class)
+            if labels[0] == preds[0] and labels[1] == preds[1]:
+                consistent_positive += 1
+            if labels[0] == preds_ilp[0] and labels[1] == preds_ilp[1]:
+                consistent_positive_ilp += 1
+    print(consistent_positive / consistent_total)
+    print(consistent_positive_ilp / consistent_total)
+
+    for datanode in tqdm(program.populate(test_loader, device=device)):
+        for child in datanode.getChildDataNodes('news'):
+            consistent_total += 1
             for _concept in [level1, level2]:
                 total_with_none[_concept.name] += 1
                 total_with_none_ilp[_concept.name] += 1

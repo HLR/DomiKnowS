@@ -193,7 +193,10 @@ def model_declaration():
                                         entity_location_before_label, 
                                         transition_ebefore, transition
                                     ), 
-                               inferTypes=['ILP', 'local/argmax'],
+                               inferTypes=[
+                                #    'ILP',
+                                    'local/argmax'
+                                   ],
                             #    inference_with=[action_label],
                             #    loss=MacroAverageTracker(NBCrossEntropyLoss()), 
                             #    metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))}
@@ -235,6 +238,8 @@ def main():
         prefix = ""
     else:
         prefix = "Tasks/T5Procedural/"
+    
+    prefix = "Tasks/T5Procedural/"
 
     dataset = ProparaReader(file=f"{prefix}data/prepared_results_simple.pt", type="_pt", prefix=prefix)  # Adding the info on the reader
 
@@ -264,7 +269,7 @@ def main():
             actions_matrix[action_key][action_key2] = 0
             actions_matrix_before[action_key][action_key2] = 0
             actions_matrix_inferred[action_key][action_key2] = 0
-
+    lbp.verifyResultsLC(dataset, device="cpu")
     for item_set, datanode in zip(d2, lbp.populate(dataset, device="cpu")):
     # for item_set, datanode in zip(d2, lbp.populate(list(iter(dataset))[:10], device="cpu")):
         final_output = {

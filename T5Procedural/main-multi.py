@@ -16,7 +16,7 @@ from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from domiknows.utils import setProductionLogMode
+from domiknows.utils import setProductionLogMode, setDnSkeletonMode
 
 
 def model_declaration():
@@ -294,8 +294,10 @@ def main():
 
     lbp = model_declaration()
     setProductionLogMode(no_UseTimeLog=True)
+    setDnSkeletonMode(True)
 
-    dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    # dataset = ProparaReader(file="Tasks/T5Procedural/data/prepared_results.pt", type="_pt")  # Adding the info on the reader
+    dataset = ProparaReader(file="Tasks/T5Procedural/data/normal_large/prepared_results.pt", type="_pt")  # Adding the info on the reader
 
     dataset = list(dataset)
 

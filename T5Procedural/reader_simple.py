@@ -9,6 +9,10 @@ from domiknows.data.reader import RegrReader
 # various values from Propara dataset files.
 class ProparaReader(RegrReader):
 
+    def __init__(self, prefix, **kwargs):
+        self.prefix = prefix
+        super().__init__(**kwargs, prefix=prefix)    
+
     def parse_file(self):
         """
         This function loads data from a file using PyTorch and returns a list of the values in the data.

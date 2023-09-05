@@ -447,7 +447,7 @@ class ProparaReader(RegrReader):
         return torch.stack(all_decisions), torch.tensor(all_ground_truths)
     
     def process_prob_vectors(self, vectors):
-        # return vectors
+        return vectors
         final_vec = []
         if torch.is_tensor(vectors):
             vector = torch.clamp(vectors, min=1e-12, max=1 - 1e-12)

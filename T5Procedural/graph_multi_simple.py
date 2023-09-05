@@ -64,7 +64,7 @@ with Graph('global') as graph:
     location_action_lc = All_LC or False
     location_level_lc = All_LC or False
     
-    transition_level_lc = All_LC or True
+    transition_level_lc = False
 
 
     ### Transition scores
