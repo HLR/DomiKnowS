@@ -19,7 +19,7 @@ from .concept import Concept, EnumConcept
 import graphviz
 
 from sklearn import metrics
-from scipy.sparse.linalg.eigen.arpack._arpack import dnaupd
+# from scipy.sparse.linalg.eigen.arpack._arpack import dnaupd
 
 logName = __name__
 logLevel = logging.CRITICAL
