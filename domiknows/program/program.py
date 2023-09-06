@@ -324,10 +324,19 @@ class LearningBasedProgram():
         if device is not None:
             self.to(device)
         yield from self.populate_epoch(dataset)
+        
+    def populate_one(self, data_item, grad = False, device=None):
+        if device is not None:
+            self.to(device)
+        return next(self.populate_epoch([data_item], grad = grad))
 
     def populate_epoch(self, dataset, grad = False):
         self.model.mode(Mode.POPULATE)
         self.model.reset()
+        
+        lenI = len(dataset)
+        print("Number of iteration in epoch: ", lenI)
+        
         if not grad:
             with torch.no_grad():
                 for i, data_item in tqdm(enumerate(dataset)):
@@ -346,9 +355,6 @@ class LearningBasedProgram():
                 # end = time.time()
                 # print("Time taken for one data item in populate epoch: ", end - start)
                 yield detuple(*output[:1])
-
-    def populate_one(self, data_item, grad = False):
-        return next(self.populate_epoch([data_item], grad = grad))
 
     def save(self, path, **kwargs):
         torch.save(self.model.state_dict(), path, **kwargs)
