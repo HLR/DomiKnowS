@@ -1,4 +1,4 @@
-# Walkthough Example
+# Walkthrough Example
 
 The following are the user's steps to using our framework.
 
