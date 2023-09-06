@@ -1,26 +1,30 @@
 # DomiKnowS: Declarative Knowledge Integration with Deep Neural Models
 
-DomiKnowS is a Python library that facilitates the integration of domain knowledge in deep learning architectures. With DomiKnowS, you can express the structure of your data symbolically via graph declarations and seamlessly add logical constraints over outputs or latent variables to your deep models. This allows you to define domain knowledge explicitly, improving the explainability, performance, and generalizability of your models, especially in low-data regimes. 
+DomiKnowS is a Python library that facilitates the integration of domain knowledge in deep learning architectures. With DomiKnowS, you can express the structure of your data symbolically via graph declarations and seamlessly add logical constraints over outputs or latent variables to your deep models. This allows you to define domain knowledge explicitly, improving your models' explainability, performance, and generalizability, especially in low-data regimes. 
 
-While several approaches for integrating symbolic and sub-symbolic models have been introduced, there is no generic library that facilitates programming for such integration with various underlying algorithms. DomiKnowS aims to simplify the programming for knowledge integration in both training and inference phases, while separating the knowledge representation from learning algorithms.
+While several approaches for integrating symbolic and sub-symbolic models have been introduced, no generic library facilitates programming for such integration with various underlying algorithms. DomiKnowS aims to simplify the programming for knowledge integration in training and inference phases while separating the knowledge representation from learning algorithms.
 
 
 ## Contents
 
-- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
-- [Example Tasks](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more example see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
-- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/apis): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
-- [Contributing](https://github.com/HLR/DomiKnowS/blob/Doc/IssueReport.md): Explains how you can contribute to the development of DomiKnowS, including reporting issues, suggesting enhancements, and submitting pull requests.
+- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Getting%20Started.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
+- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/User%20API): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+- [Walkthrough Example](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Walkthrough%20Example.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
+- [Tutorial Examples](https://github.com/HLR/DomiKnowS/tree/Doc/Tutorial%20Examples): Simple and diverse examples are outlined with detailed explanations in a Jupyter google colab file to run.
+- [FAQ](https://github.com/HLR/DomiKnowS/blob/Doc/FAQ.md): Read our FAQ file if you have any questions.
 - [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
-## Quick Start
+## Contribute to DomiKnowS:
 
-To start using DomiKnowS, follow these steps:
+- Report Issues: Encounter a problem? Let us know by [submitting an issue](https://github.com/HLR/DomiKnowS/blob/Doc/Issue%20Report.md).
+- Suggest Enhancements: Have an idea to make DomiKnowS better? [Share your suggestion](https://github.com/HLR/DomiKnowS/blob/Doc/Suggestions.md).
+- Submit Pull Requests: Ready to contribute code or features directly? [Create a pull request](https://github.com/HLR/DomiKnowS/blob/Doc/Pull%20Request.md).
 
-1. Install DomiKnowS using `pip install DomiKnowS`.
-2. Install Gurobi following the instructions [here](https://github.com/HLR/DomiKnowS/blob/develop/GurobiREADME.md).
-3. Refer to the [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/New/GettingStarted.md) documentation for detailed instructions on how to define graph declarations, model declarations, initialize programs, and compose and execute programs using DomiKnowS.
+## Publications
+
+- [DomiKnowS: A Library for Integration of Symbolic Domain Knowledge in Deep Learning](https://arxiv.org/abs/2108.12370)
+- [GLUECons: A Generic Benchmark for Learning Under Constraints](https://arxiv.org/abs/2302.10914)
 
 ## Acknowledgements
 
