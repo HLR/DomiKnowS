@@ -1,6 +1,6 @@
 # Walkthrough Example
 
-The following are the user's steps to using our framework.
+The followings are the user's steps to using our framework.
 
 - [Knowledge Declaration](#knowledge-declaration)
 - [Model Declaration](#model-declaration)
