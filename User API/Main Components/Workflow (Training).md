@@ -1,5 +1,7 @@
 # Workflow
 
+The following describes the workflow that allows the user to train its model with the chosen method.
+
 - [Workflow](#workflow)
   - [Class Overview](#class-overview)
   - [Workflows](#workflows)
@@ -8,7 +10,9 @@
     - [Test: `test()`](#test-test)
     - [Eval: `eval()`](#eval-eval)
   - [Programs](#Programs)
-    - [IML](#IML)
+    - [Inferece Mask Loss (IML)](#inferece-mask-loss-iml-1)
+    - [Priaml Dual (PD)](priaml-dual-pd-2)
+    
 ## Class Overview
 
 - package `domiknows.program`:
@@ -68,7 +72,7 @@ There are diffrent types of programs that can be used to train the data. `Solver
 
 However, Domiknows can leverage the defined constraints in the graph to teach the model not to violate those constraints and in the process imrove the overall performance of the mdoel.
 
-### IML [[1]](#1)
+### Inferece Mask Loss (IML) [[1]](#1)
 
 In order to use IML, the program should be initialized by `IMLProgram`. IMLProgram extends `LearningBasedProgram` and shares most of the same input arguments.
 
@@ -78,7 +82,7 @@ program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], l
 
 The only new parameter here is `inferTypes` that is set to `['ILP', 'local/argmax']`. These parameter is optional and can be used to calcualte metric.
 
-### Priaml Dual[[2]](#2)
+### Priaml Dual (PD) [[2]](#2)
 
 Primal Dual model can also be easily defined by:
 

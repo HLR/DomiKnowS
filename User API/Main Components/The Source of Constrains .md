@@ -1,4 +1,14 @@
-### ILP Solver 
+# The Source of Constrains 
+
+The following explains how to define constraints for our solver.
+
+- [Inroduction](#inroduction)
+- [Constrains Definition](#constrains-definition)
+  - [Graph with logical Constrains](#graph-with-logical-constrains)
+- [Ontology File as Constrains Definition](#ontology-file-as-constrains-definition)
+
+
+## Inroduction
 
 The solver builds the ILP (Integer Linear Programming) model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to example tokens.
 The actual used ILP is Zero-one linear programming in which the variables are restricted to be either 0 or 1.
@@ -20,11 +30,11 @@ If this collection is empty then the methods will use all concepts and relations
 
 The results of the ILP solution are added to nodes in the Data Graph with key ILP.
 
-## The source of constrains 
+## Constrains Definition
 
 The ILP constrains could be specified in the **ontology graph itself with defined logical constrains** or in the **ontology (in OWL file)** provided as url in the ontology graph.
 
-# Graph with logical Constrains
+### Graph with logical Constrains
 
 **If ontology url is not provided in the graph then the graph defined constrains and logical constrains will be retrieved by the ILP solver.**
 
@@ -53,7 +63,7 @@ This above example logical constrain specify that: *if two object are linked by 
 
 The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
-# Ontology file as a source of constrains
+## Ontology File as Constrains Definition
 
 **If ontology url is provided in the graph then only this ontology will be used to retrieved constrains by the ILP solver.**
 
