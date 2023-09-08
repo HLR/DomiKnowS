@@ -57,9 +57,9 @@ class DatanodeCMMetric(torch.nn.Module):
         if len(result.keys())==2:
             if str(prop.name) in result:
                 val =  result[str(prop.name)]
-                if len(confusion_matrix(val["labels"], val["preds"]).ravel())<4:
-                    print()
-                    print("here")
+                # if len(confusion_matrix(val["labels"], val["preds"]).ravel())<4:
+                    # print()
+                    # print("here")
                 conf_mat = confusion_matrix(val["labels"], val["preds"])
                 if conf_mat.size == 1:
                     if val["labels"][0] == 1:

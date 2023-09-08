@@ -403,7 +403,7 @@ class PoiModelDictLoss(PoiModel):
             elif not str(prop.name) in self.dictloss:
                 self.losses[pred, target] = self.dictloss["default"](data_item, prop, pred(data_item), target(data_item))
                 if torch.isnan(self.losses[pred, target]).any() :
-                    print("here it is")
+                    print("The loss has resulted in a Nan value")
                 return self.losses[pred, target]
             else:
                 self.losses[pred, target] = self.dictloss[str(prop.name)](data_item, prop, pred(data_item), target(data_item))
