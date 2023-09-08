@@ -7,9 +7,15 @@ While several approaches for integrating symbolic and sub-symbolic models have b
 
 ## Contents
 
-- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Getting%20Started.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
-- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/User%20API): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
-- [Walkthrough Example](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Walkthrough%20Example.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
+- [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
+- [Main Components](https://github.com/HLR/DomiKnowS/tree/Doc/Main%20Components): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+  - [Knowledge Declaration (Graph)](Main%20Components/Knowledge%20Declaration%20(Graph).md)
+  - [Model Declaration (Sensor)](Main%20Components/Model%20Declaration%20(Sensor).md)
+  - [Query and Access (Datanode)](Main%20Components/Query%20and%20Access%20(Datanode).md)
+  - [Workflow (Training)](Main%20Components/Workflow%20(Training).md)
+  - [Inference (ILP)](Main%20Components/Inference%20(ILP).md)
+  - [The Source of Constrains](Main%20Components/The%20Source%20of%20Constraints.md)
+- [Walkthrough Example](https://github.com/HLR/DomiKnowS/blob/Doc/Walkthrough%20Example.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
 - [Tutorial Examples](https://github.com/HLR/DomiKnowS/tree/Doc/Tutorial%20Examples): Simple and diverse examples are outlined with detailed explanations in a Jupyter google colab file to run.
 - [FAQ](https://github.com/HLR/DomiKnowS/blob/Doc/FAQ.md): Read our FAQ file if you have any questions.
 - [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.

@@ -1,19 +1,8 @@
-# DomiKnows
+# Main Components:
 
-### Table Of Content:
-- [Introduction](Introduction.md)
-- [Getting Started](Getting%20Started.md)
-- [Example Task](Example%20Task.md)
-- [Tutorial Examples](/Tutorial%20Examples/)
-- [Datasets and Their Results](Datasets%20and%20Their%20Results.md)
-
-
-
-### Main Components:
-
-- [Knowledge Declaration (Graph)](Main%20Components/Graph.md)
-- [Model Declaration (Sensor)](Main%20Components/Sensor.md)
-- [DataNode](Main%20Components/Datanode.md)
-- [Training](Main%20Components/Training.md)
-- [Inference](Main%20Components/Inference.md)
-- [Solver](Main%20Components/Solver.md)
+- [Knowledge Declaration (Graph)](Knowledge%20Declaration%20(Graph).md)
+- [Model Declaration (Sensor)](Model%20Declaration%20(Sensor).md)
+- [Query and Access (Datanode)](Query%20and%20Access%20(Datanode).md)
+- [Workflow (Training)](Workflow%20(Training).md)
+- [Inference (ILP)](Inference%20(ILP).md)
+- [The Source of Constrains](The%20Source%20of%20Constraints.md)
