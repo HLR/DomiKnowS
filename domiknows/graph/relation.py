@@ -62,6 +62,7 @@ class Relation(BaseGraphTree):
             self.is_reversed = True
         self.reversed = reverse_of
         self.auto_constraint = auto_constraint
+        self.var_name = None
 
     @property
     def mode(self):

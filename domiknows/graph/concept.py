@@ -4,7 +4,6 @@ from typing import Type
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
 
-
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
 class Concept(BaseGraphTree):
@@ -38,6 +37,8 @@ class Concept(BaseGraphTree):
         BaseGraphTree.__init__(self, name)
         self._in = OrderedDict()  # relation category_name : list of relation inst
         self._out = OrderedDict()  # relation category_name : list of relation inst
+        
+        self.var_name = None
         
     def get_batch(self):
         return self.batch

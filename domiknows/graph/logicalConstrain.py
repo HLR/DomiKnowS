@@ -13,12 +13,17 @@ class LcElement:
     def __init__(self, *e,  name = None):
         from .relation import Relation
 
+        self.typeName = "Logical Element"
+        if isinstance(self, LogicalConstrain):
+            self.typeName = "Logical Constraint"
+            
         if not e:
-            myLogger.error("Logical Element initialized is empty")
-            raise LcElement.LcElementError("Logical Element initialized is empty")
+            raise LcElement.LcElementError(f"{self.typeName} is empty")
         
         updatedE = []
-        for _, eItem in enumerate(e):
+        lenE = len(e)
+        self.cardinalityException = ""
+        for i, eItem in enumerate(e):
             if isinstance(eItem, (LcElement, Concept, Relation)): # lc element without path
                 updatedE.append(eItem)
             elif callable(eItem): # multiclass label
@@ -26,8 +31,13 @@ class LcElement:
                 updatedE.extend(newEItem)
             elif isinstance(eItem, list): # lc element with path
                 updatedE.extend(eItem)
+            elif isinstance(eItem, int):
+                if i<lenE-1:
+                    self.cardinalityException = eItem
+
+                updatedE.append(eItem)
             else:
-                updatedE.append(eItem) # ?
+                 raise LcElement.LcElementError(f"{self.typeName} is incorrect - {eItem} is not a valid element of the {self.typeName}")
                 
         self.e = updatedE
         
@@ -56,7 +66,7 @@ class LcElement:
     
         if conceptOrLc is None:
             myLogger.error("Logical Element is incorrect")
-            raise LcElement.LcElementError("Logical Element is incorrect")
+            raise LcElement.LcElementError(f"{self.typeName} {self.name} is incorrect - no concept or logical constrain found")
             
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
@@ -69,16 +79,15 @@ class LcElement:
             self.graph = conceptOrLc.graph
                 
         if self.graph == None:
-            myLogger.error("Logical Element initialized is not associated with graph")
-            raise LcElement.LcElementError("Logical Element initialized is not associated with graph")
-                     
-        # Create Logical Element id based on number of existing Logical Element in the graph
+            raise LcElement.LcElementError(f"{self.typeName} is incorrect - no graph found for the {self.typeName}")
+        
+         # Create Logical Element id based on number of existing Logical Element in the graph
         self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
         if name is not None:
             self.name = name
         else:
-            self.name = self.lcName
+            self.name = self.lcName            
      
     class LcElementError(Exception):
         pass

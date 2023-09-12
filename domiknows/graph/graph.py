@@ -1,5 +1,6 @@
 from collections import OrderedDict, namedtuple
 from itertools import chain
+import inspect
 
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
@@ -31,7 +32,6 @@ class Graph(BaseGraphTree):
         yield from self._concepts
         yield from self._relations
 
-
     # find the root parent of the provided concept or relation
     def findRootConceptOrRelation(self, relationConcept):
         try:
@@ -51,6 +51,12 @@ class Graph(BaseGraphTree):
 
     # find all variables defined in the logical constrain and report error if some of them are defined more than once
     def find_lc_variable(self, lc, found_variables=None, headLc=None):
+        if lc.cardinalityException:
+            if lc.name != headLc:
+                raise Exception(f"{lc.typeName} {headLc} has incorrect cardinality definition in nested constraint {lc.name} - integer {lc.cardinalityException} has to be last element in the {lc.typeName}")
+            else:
+                raise Exception(f"{lc.typeName} {headLc} has incorrect cardinality definition - integer {lc.cardinalityException} has to be last element in the {lc.typeName}")
+            
         if found_variables is None:
             found_variables = {}
 
@@ -135,14 +141,58 @@ class Graph(BaseGraphTree):
 
         return used_variables
 
+    def getPathStr(self, path):
+        from .relation import IsA, HasA
+        pathStr = ""
+        for pathElement in path[1:]:
+            if isinstance(pathElement, (HasA, IsA)):
+                if pathElement.var_name:
+                    pathStr += pathElement.var_name
+                else:
+                    pathStr += pathElement.name
+            else:
+                pathStr += pathElement
+                
+        return pathStr
+                
+    def check_path(self, path, variableConceptParent, lc_name, foundVariables, variableName):
+        from .relation import IsA, HasA
+        for pathElement in path[1:]:
+            if isinstance(pathElement, (HasA, IsA)):
+                pathElementSrc = pathElement.src
+                pathElementDst = pathElement.dst
+
+                if variableConceptParent.name != pathElementSrc.name:
+                    pathVariable = path[0]
+                    pathStr = self.getPathStr(path)
+                    pathElementVarName = pathElement.var_name
+                    exceptionStr1 = f"The Path {pathStr} from the variable {pathVariable}, defined in {lc_name} is not valid"
+                    exceptionStr2 = f" and the type of {pathVariable} is a {variableConceptParent}, there is no relationship defined between {pathElementDst} and {variableConceptParent}."
+                    exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
+        
+        # Get the current frame and then go one level back
+        frame = inspect.currentframe().f_back
+
+        from . import Concept
+        from .relation import IsA, HasA
+        
+        # Iterate through all local variables in that frame
+        for var_name, var_value in frame.f_locals.items():
+            # Check if any of them are instances of the Concept class or Relation subclass
+            if isinstance(var_value, (Concept, HasA, IsA)):
+                # If they are, and their var_name attribute is not already set,
+                # set it to the name of the variable they are stored in.
+                if var_value.var_name is None:
+                    var_value.var_name = var_name
+                    
         lc_info = {}
-        LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables'])
+        LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])
 
         # --- Check if the logical constrains are correct ---
-
-        from .relation import IsA, HasA
         
         # --- Gather information about variables used and defined in the logical constrains and 
         #     report errors if some of them are not defined and used or defined more than once
@@ -151,16 +201,15 @@ class Graph(BaseGraphTree):
                 continue
 
             # find variable defined in the logical constrain - report error if some of them are defined more than once
-            found_variables = self.find_lc_variable(lc, headLc=lc_name)
+            found_variables = self.find_lc_variable(lc, headLc=lc.name)
 
             # find all variables used in the logical constrain - report error if some of them are not defined
             # gather paths defined in the logical constrain per variable
-            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc_name)
+            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc.name)
             
             # save information about variables used and defined in the logical constrain
-            current_lc_info = LcInfo(found_variables, used_variables)
+            current_lc_info = LcInfo(found_variables, used_variables, lc.name)
             lc_info[lc_name] = current_lc_info
-
         
         # --- Check if the paths defined in the logical constrains are correct
         for lc_name, lc in self.logicalConstrains.items():
@@ -171,12 +220,14 @@ class Graph(BaseGraphTree):
             current_lc_info = lc_info[lc_name]
             usedVariables = current_lc_info.usedVariables
             foundVariables = current_lc_info.foundVariables
+            headLcName = current_lc_info.headLcName
             
             # loop over all variables used in the logical constrain
             for variableName, pathInfos in usedVariables.items():
                 # get information about the variable in the found variables record
                 variableConcept = foundVariables[variableName][2][0]
                 #variableConceptWhat = variableConcept.what()
+                
                 # get the root parent of the variable concept
                 variableConceptParent = self.findRootConceptOrRelation(variableConcept)
                 
@@ -189,26 +240,13 @@ class Graph(BaseGraphTree):
                             if len(subpath) < 2:  
                                 continue  # skip this subpath as it has only the starting point variable
                                 
-                            # loop over all elements in the subpath         
-                            for pathElement in subpath[1:]: 
-                                pathElementSrc = pathElement.src
-                               
-                                # check if the parent of the variable concept is the same as the source of the path element
-                                if variableConceptParent.name != pathElementSrc.name:
-                                    raise Exception(f"Path {path} found in {lc_name} {foundVariables[variableName][0]} is not correct for element {pathElement}")
-                       
+                            self.check_path(subpath, variableConceptParent, headLcName, foundVariables, variableName)
+                            
                     else: # this path is a single path
                         if len(path) < 2:
                             continue # skip this path as it has only the starting point variable
                             
-                        # loop over all elements in the path
-                        for pathElement in path[1:]:
-                            if isinstance(pathElement, (HasA, IsA)):
-                                pathElementSrc = pathElement.src
-                               
-                                # check if the parent of the variable concept is the same as the source of the path element  
-                                if variableConceptParent.name != pathElementSrc.name:
-                                    raise Exception(f"Path {path} found in {lc_name} {foundVariables[variableName][0]} is not correct for element {pathElement}")
+                        self.check_path(path, variableConceptParent, headLcName, foundVariables, variableName)
                        
     @property
     def ontology(self):
