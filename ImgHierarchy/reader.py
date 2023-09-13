@@ -46,9 +46,8 @@ import json
 
 
 class VQADataset(Dataset):
-    def __init__(self, data):
+    def __init__(self, data, prefix= "Tasks/ImgHierarchy/"):
         self.data = data
-        prefix = "Tasks/ImgHierarchy/"
         with open(f"{prefix}concepts.json") as f:
             self.hierarchy = json.load(f)
         
