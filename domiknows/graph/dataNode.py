@@ -1392,6 +1392,9 @@ class DataNode:
         else:
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
+        # Check if full data node is created and create it if not -it is needed for ILP inference
+        self.myBuilder.createFullDataNode(self)
+        
         # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
         _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
         if len(_conceptsRelations) == 0:
@@ -1399,9 +1402,9 @@ class DataNode:
             raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
         else:        
             _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]))
-        myilpOntSolver, conceptsRelations = self.__getILPSolver(_conceptsRelations)
+        myILPOntSolver, conceptsRelations = self.__getILPSolver(_conceptsRelations)
         
-        # Call ilpOntsolver with the collected probabilities for chosen candidates
+        # Call ilpOntSolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
         
         if "local" in key:
@@ -1415,20 +1418,20 @@ class DataNode:
 
             for batchIndex, dn in enumerate(self.relationLinks['contains']):
                 startILPBatchStepInfer = process_time() # timer()
-                myilpOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)
-                endIILPBatchStepInfer = process_time() # timer()    
+                myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)
+                endILPBatchStepInfer = process_time() # timer()    
                 
-                elapsedInS = (endIILPBatchStepInfer - startILPBatchStepInfer)
+                elapsedInS = (endILPBatchStepInfer - startILPBatchStepInfer)
                 if elapsedInS > 1:
                     self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %fs'%(batchIndex,elapsedInS))
                 else:
                     elapsedInMs = elapsedInS *1000
                     self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %ims'%(batchIndex,elapsedInMs))
         else:
-            myilpOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
-        endIILPInfer = process_time() # timer()
+            myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        endILPInfer = process_time() # timer()
         
-        elapsedInS = (endIILPInfer - startILPInfer)
+        elapsedInS = (endILPInfer - startILPInfer)
         if elapsedInS > 1:
             self.myLoggerTime.info('End ILP Inference - total time: %fs'%(elapsedInS))
         else:
@@ -1455,10 +1458,15 @@ class DataNode:
                 
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
+        # Check if full data node is created and create it if not
+        self.myBuilder.createFullDataNode(self)
+        
         if "local" in key:
-            self.inferLocal(keys=[key])
+            self.inferLocal(keys=[key])            
+        elif "ILP" in key:
+            self.infer()
         else:
-            self.infer() # ILP?
+            _DataNode__Logger.error("Not supported key %s for verifyResultsLC"%(key))
             
         verifyResult = myilpOntSolver.verifyResultsLC(self, key = key)
         
@@ -1469,6 +1477,8 @@ class DataNode:
     tnormsDefault = 'P'
     # sampleSize = -1 means Semantic Sample
     def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
+        # Check if full data node is created and create it if not
+        self.myBuilder.createFullDataNode(self)
         
         myilpOntSolver, conceptsRelations = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
@@ -1746,6 +1756,8 @@ class DataNodeBuilder(dict):
         self.skeletonDataNodeFull = getDnSkeletonModeFull()
         
         dict.__setitem__(self, "DataNodesConcepts", {})
+        dict.__setitem__(self, "KeysInOrder", [])
+        
         if args:
             dict.__setitem__(self, "data_item", args[0])
 
@@ -2607,6 +2619,11 @@ class DataNodeBuilder(dict):
                 # throw an exception
                 raise Exception("The key does not contain conceptName")
                     
+        # Add key to the list of keys in order
+        if self.skeletonDataNodeFull:
+            KeysInOrder = dict.__getitem__(self, "KeysInOrder")
+            KeysInOrder.append(_key)
+        
         # Add value to the underling dictionary
         r = dict.__setitem__(self, _key, value)
         
@@ -2640,6 +2657,35 @@ class DataNodeBuilder(dict):
             foundDns = existingRootDns[0].findDatanodes(dns=existingRootDns, select=select, indexes=indexes)
             
         return foundDns
+        
+    def createFullDataNode(self, rootDataNode):
+        if not self.skeletonDataNodeFull:
+            return # Do nothing if not in full skeleton mode
+
+        startCreateFullDataNode = process_time() # timer()
+        self.skeletonDataNodeFull = False # Set temporary flag to False to allow creation of full dataNode
+        
+        keysInOrder = dict.__getitem__(self, "KeysInOrder")
+        
+        for key in keysInOrder:
+            # Run the original values through __setitem__ to build the full dataNode
+            self.__setitem__(key, dict.__getitem__(self, key))
+            
+        if self.skeletonDataNode:
+            # Get the "allDns" set from the data node, or create a new empty set if it doesn't exist
+            allDns = self.get("allDns", set())
+    
+            # Iterate over the data nodes in "allDns" and add the "rootDataNode" attribute to them
+            for dn in allDns:
+                if dn == rootDataNode:
+                    continue
+                dn.attributes["rootDataNode"] = rootDataNode
+            
+        self.skeletonDataNodeFull = True # Return flag to the original 
+        
+        endCreateFullDataNode = process_time() # timer()
+        elapsedCreateFullDataNode = (endCreateFullDataNode - startCreateFullDataNode) * 1000
+        self.myLoggerTime.info(f'Creating Full Datanode: {elapsedCreateFullDataNode}ms')   
         
     def createBatchRootDN(self):
         if dict.__contains__(self, 'dataNode'):
@@ -2694,6 +2740,7 @@ class DataNodeBuilder(dict):
             if 'Counter' + '_setitem' in self:
                 self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem']))
             if 'DataNodeTime' in self:
+                # self['DataNodeTime'] is in nanoseconds, so divide by 1000000 to get milliseconds
                 elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
                 self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
                 
@@ -2760,6 +2807,7 @@ class DataNodeBuilder(dict):
         if 'Counter' + '_setitem' in self:
             self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem' ]))
         if 'DataNodeTime' in self:
+            # self['DataNodeTime'] is in nanoseconds, so divide by 1000000 to get milliseconds
             elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
             self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
