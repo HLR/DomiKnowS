@@ -5,21 +5,13 @@ DomiKnowS is a Python library that facilitates the integration of domain knowled
 While several approaches for integrating symbolic and sub-symbolic models have been introduced, no generic library facilitates programming for such integration with various underlying algorithms. DomiKnowS aims to simplify the programming for knowledge integration in training and inference phases while separating the knowledge representation from learning algorithms.
 
 
-## Contents
-
 - [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Getting%20Started.md): Provides detailed instructions on how to get started with DomiKnowS, including installation, setting up the environment, and basic usage.
-- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/User%20API): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+- [Documentation](https://github.com/HLR/DomiKnowS/tree/Doc/): Provides comprehensive documentation on the DomiKnowS, including classes, methods, and their usage.
+  - Contribute to DomiKnowS: Report Issues [see here](https://github.com/HLR/DomiKnowS/blob/Doc/Issue%20Report.md), share your suggestions [see here](https://github.com/HLR/DomiKnowS/blob/Doc/Suggestions.md) and create a pull request [see here](https://github.com/HLR/DomiKnowS/blob/Doc/Pull%20Request.md).
 - [Walkthrough Example](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Walkthrough%20Example.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
-- [Tutorial Examples](https://github.com/HLR/DomiKnowS/tree/Doc/Tutorial%20Examples): Simple and diverse examples are outlined with detailed explanations in a Jupyter google colab file to run.
 - [FAQ](https://github.com/HLR/DomiKnowS/blob/Doc/FAQ.md): Read our FAQ file if you have any questions.
 - [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
-
-## Contribute to DomiKnowS:
-
-- Report Issues: Encounter a problem? Let us know by [submitting an issue](https://github.com/HLR/DomiKnowS/blob/Doc/Issue%20Report.md).
-- Suggest Enhancements: Have an idea to make DomiKnowS better? [Share your suggestion](https://github.com/HLR/DomiKnowS/blob/Doc/Suggestions.md).
-- Submit Pull Requests: Ready to contribute code or features directly? [Create a pull request](https://github.com/HLR/DomiKnowS/blob/Doc/Pull%20Request.md).
 
 ## Publications
 
