@@ -10,7 +10,7 @@ While several approaches for integrating symbolic and sub-symbolic models have b
   - Contribute to DomiKnowS: Report Issues [see here](https://github.com/HLR/DomiKnowS/blob/Doc/Issue%20Report.md), share your suggestions [see here](https://github.com/HLR/DomiKnowS/blob/Doc/Suggestions.md) and create a pull request [see here](https://github.com/HLR/DomiKnowS/blob/Doc/Pull%20Request.md).
 - [Walkthrough Example](https://github.com/HLR/DomiKnowS/blob/Doc/Walkthrough%20Example.md): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
 - [FAQ](https://github.com/HLR/DomiKnowS/blob/Doc/FAQ.md): Read our FAQ file if you have any questions.
-- [LICENSE](https://github.com/HLR/DomiKnowS/blob/Doc/LICENSE.md): Contains information about the license of DomiKnowS and its terms of use.
+- [License](https://github.com/HLR/DomiKnowS/blob/Doc/LICENSE.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
 ## Publications
