@@ -41,22 +41,23 @@ def main(device):
     f = open(f"{prefix}logger.txt", "w")
 
     program = SolverPOIProgram(graph, inferTypes=[
-        # 'ILP', 
+        #'ILP', 
         'local/argmax'],
         # probKey = ("local" , "normalizedProb"),
         # probAcc = {'level1': 0.5673, 'level2': 0.5445, 'level3': 0.4342, 'level4': 0.1768},
         poi = (image_group, image, level1, level2, level3, level4),
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric={
-                # 'ILP': PRF1Tracker(DatanodeCMMetric()),
+                #'ILP': PRF1Tracker(DatanodeCMMetric()),
                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
     return program
 
 if __name__ == '__main__':
-    from domiknows.utils import setProductionLogMode
+    from domiknows.utils import setProductionLogMode, getRegrTimer_logger
     productionMode = True
     if productionMode:
         setProductionLogMode(no_UseTimeLog=False)
+    myLoggerTime = getRegrTimer_logger()
     from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     import logging
@@ -75,13 +76,20 @@ if __name__ == '__main__':
     else:
         data = torch.load(file)
 
+    # change data size
     dataset = VQADataset(data, prefix=prefix)
     # dataset = torch.utils.data.Subset(dataset, [i for i in range(2000)])
-    dataloader = DataLoader(dataset, batch_size=50000)
+    
+    # change batch size
+    batch_size=500
+    print(f'batch_size = {batch_size}')
+    myLoggerTime.info(f'batch_size = {batch_size}')
+    myLoggerTime.info(f'batch_size = {batch_size}')
+    dataloader = DataLoader(dataset, batch_size=batch_size)
     end = time.time()
     print(f"elapsed time for dataloader {end - start}")
-    # dataloader = DataLoader(dataset, batch_size=20)
-
+    myLoggerTime.info(f"elapsed time for dataloader {end - start}")
+    
     # test_reader = VQAReader('val.npy', 'npy')
     device = 'cuda:1'
     if torch.cuda.is_available():
@@ -159,7 +167,15 @@ if __name__ == '__main__':
 
     support_set = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
     total_support_set = {"level1": 0, "level2": 0, "level3": 0, "level4": 0}
-    calculate_ilp = False
+    if "inferTypes" in program.kwargs and "ILP" in program.kwargs["inferTypes"]:
+        calculate_ilp = True
+    else:
+        calculate_ilp = False
+       
+    if "inferTypes" in program.kwargs: 
+        print(f'inferTypes = {program.kwargs["inferTypes"]}')
+        myLoggerTime.info(f'inferTypes = {program.kwargs["inferTypes"]}')
+        
     calculate_sequential = False
     run_metrics = False
 
