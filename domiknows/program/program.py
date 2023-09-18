@@ -335,8 +335,8 @@ class LearningBasedProgram():
         self.model.reset()
         
         lenI = len(dataset)
-        print("Number of iteration in epoch: ", lenI)
-        
+        print(f"\nNumber of iterations in epoch: {lenI}")
+
         if not grad:
             with torch.no_grad():
                 for i, data_item in tqdm(enumerate(dataset)):

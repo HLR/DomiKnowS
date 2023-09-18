@@ -1,6 +1,6 @@
 import torch
 from collections import OrderedDict, namedtuple
-from time import process_time, process_time_ns
+from time import perf_counter, perf_counter_ns
 import re
 
 from .dataNodeConfig import dnConfig 
@@ -9,7 +9,7 @@ from ordered_set import OrderedSet
 
 from domiknows import getRegrTimer_logger, getProductionModeStatus
 from domiknows.solver import ilpOntSolverFactory
-from domiknows.utils import getDnSkeletonMode, getDnSkeletonModeFull
+from domiknows.utils import getDnSkeletonMode
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -19,7 +19,6 @@ from .concept import Concept, EnumConcept
 import graphviz
 
 from sklearn import metrics
-# from scipy.sparse.linalg.eigen.arpack._arpack import dnaupd
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -1146,7 +1145,7 @@ class DataNode:
 
     # Calculate local for datanote argMax and softMax
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
-        startInferLocal = process_time() # timer()
+        startInferLocal = perf_counter()
 
         # Go through keys and remove anything from each of them which is before slash, including slash        
         keys = [key[key.rfind('/')+1:] for key in keys]
@@ -1381,7 +1380,7 @@ class DataNode:
                                         
                         dn.attributes[keyArgmax] = vArgmax
                         
-        endInferLocal = process_time() # timer()
+        endInferLocal = perf_counter()
         elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
         self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
         
@@ -1411,15 +1410,15 @@ class DataNode:
             keys = (key[1],)
             self.inferLocal(keys=keys, Acc=Acc)
           
-        startILPInfer = process_time() # timer()
+        startILPInfer = perf_counter()
         if self.graph.batch and self.ontologyNode == self.graph.batch and 'contains' in self.relationLinks:
             batchConcept = self.graph.batch
             self.myLoggerTime.info('ILP Batch processing for %s'%(batchConcept))
 
             for batchIndex, dn in enumerate(self.relationLinks['contains']):
-                startILPBatchStepInfer = process_time() # timer()
+                startILPBatchStepInfer = perf_counter()
                 myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)
-                endILPBatchStepInfer = process_time() # timer()    
+                endILPBatchStepInfer = perf_counter()    
                 
                 elapsedInS = (endILPBatchStepInfer - startILPBatchStepInfer)
                 if elapsedInS > 1:
@@ -1429,7 +1428,7 @@ class DataNode:
                     self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %ims'%(batchIndex,elapsedInMs))
         else:
             myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
-        endILPInfer = process_time() # timer()
+        endILPInfer = perf_counter()
         
         elapsedInS = (endILPInfer - startILPInfer)
         if elapsedInS > 1:
@@ -2448,17 +2447,21 @@ class DataNodeBuilder(dict):
     
     def collectTime(self, start):
         # Collect time used for __setitem__
-        end = process_time_ns()
+        end = perf_counter_ns()
         currentTime =  end - start
     
         timeList = self.setdefault("DataNodeTime", [])
         timeList.append(currentTime)
+        startTimeList = self.setdefault("DataNodeTime_start", [])
+        startTimeList.append(start)
+        endTimeList = self.setdefault("DataNodeTime_end", [])
+        endTimeList.append(end)
         
     # Overloaded __setitem Dictionary method - tracking sensor data and building corresponding data graph
     def __setitem__(self, _key, value):
         from ..sensor import Sensor
 
-        start = process_time_ns()
+        start = perf_counter_ns()
         self.__addSetitemCounter()
         
         if isinstance(_key, (Sensor, Property, Concept)):
@@ -2662,7 +2665,7 @@ class DataNodeBuilder(dict):
         if not self.skeletonDataNodeFull:
             return # Do nothing if not in full skeleton mode
 
-        startCreateFullDataNode = process_time() # timer()
+        startCreateFullDataNode = perf_counter()
         self.skeletonDataNodeFull = False # Set temporary flag to False to allow creation of full dataNode
         
         keysInOrder = dict.__getitem__(self, "KeysInOrder")
@@ -2683,7 +2686,7 @@ class DataNodeBuilder(dict):
             
         self.skeletonDataNodeFull = True # Return flag to the original 
         
-        endCreateFullDataNode = process_time() # timer()
+        endCreateFullDataNode = perf_counter()
         elapsedCreateFullDataNode = (endCreateFullDataNode - startCreateFullDataNode) * 1000
         self.myLoggerTime.info(f'Creating Full Datanode: {elapsedCreateFullDataNode}ms')   
         
@@ -2742,8 +2745,12 @@ class DataNodeBuilder(dict):
             if 'DataNodeTime' in self:
                 # self['DataNodeTime'] is in nanoseconds, so divide by 1000000 to get milliseconds
                 elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
-                self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
+                self.myLoggerTime.info(f"DataNode Builder time usage - {elapsedInMsDataNodeBuilder:.5f}ms")
                 
+                #self.myLoggerTime.info(f"DataNode Builder elapsed time in ns - {self['DataNodeTime']}")
+                #self.myLoggerTime.info(f"DataNode Builder start time in ns - {self['DataNodeTime_start']}")
+                #self.myLoggerTime.info(f"DataNode Builder end time in ns - {self['DataNodeTime_end']}")
+
         # If DataNode it created then return it
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
@@ -2809,7 +2816,7 @@ class DataNodeBuilder(dict):
         if 'DataNodeTime' in self:
             # self['DataNodeTime'] is in nanoseconds, so divide by 1000000 to get milliseconds
             elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
-            self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
+            self.myLoggerTime.info(f"DataNode Builder time usage - {elapsedInMsDataNodeBuilder:.5f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
