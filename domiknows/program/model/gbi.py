@@ -3,6 +3,7 @@ import warnings
 import copy
 
 import torch
+from torch import nn
 from torch.optim import Adam, SGD
 import torch.nn.functional as F
 
@@ -56,90 +57,106 @@ class GBIModel(torch.nn.Module):
 
         return num_satisfied, num_constraints
     
-    def reg_loss(self, model_lambda, model, exclude_names=set()):
+    def reg_loss(self, model_updated, model, exclude_names=set()):
         orig_params = []
         lambda_params = []
 
-        for (name, w_orig), (_, w_curr) in zip(model.named_parameters(), model_lambda.named_parameters()):
-            if name not in exclude_names:
+        for key in model.keys():
+            w_orig = model[key]
+            w_curr = model_updated[key]
+            
+            if key not in exclude_names:
                 orig_params.append(w_orig.flatten())
                 lambda_params.append(w_curr.flatten())
             else:
-                print('skipping %s' % name)
+                print('skipping %s' % key)
 
         orig_params = torch.cat(orig_params, dim=0)
         lambda_params = torch.cat(lambda_params, dim=0)
 
         return torch.linalg.norm(orig_params - lambda_params, dim=0, ord=2)
     
+    # Finds the last layer in each submodel of a PyTorch model
+    def find_last_layers_in_submodels(self, model, name=""):
+        last_layers = {}
+        child_list = list(model.named_children())
+        child_names = [name for (name, child) in child_list]
+
+        # Determine if all child names are unique
+        are_child_names_unique = len(set(child_names)) == len(child_names)
+        
+        grandchilds = {}
+        for idx, (child_name, child) in enumerate(child_list):
+            grandchild_list = list(child.named_children())
+            if grandchild_list:
+                grandchilds[child_name] = len(grandchild_list)
+        
+        for idx, (child_name, child) in enumerate(child_list):
+            grandchild_list = list(child.named_children())
+            if grandchild_list:
+                updated_name = f"{name}.{child_name}"
+                last_layers.update(self.find_last_layers_in_submodels(child, name=updated_name))
+            else:
+                if idx == len(child_list) - 1 or grandchilds:
+                    updated_name = f"{name}.{child_name}"
+                    if hasattr(child, 'bias') and hasattr(child, 'weight'):
+                        last_layers[updated_name] = child
+                        
+        return last_layers
+
+    # Resets the last layer of each submodel of a PyTorch model
+    def reset_last_layers_in_submodels(self, model, last_layers):
+        for name, last_layer in last_layers.items():
+            if isinstance(last_layer, (nn.Linear, nn.Conv2d)):
+                last_layer.bias.data = torch.randn_like(last_layer.bias.data)
+                last_layer.weight.data = torch.randn_like(last_layer.weight.data) * 0.01
+
     # ----
     
     def forward(self, datanode, build=None):
         # Get constraint satisfaction for the current DataNode
         num_satisfied, num_constraints = self.get_constraints_satisfaction(datanode)
-
+        model_has_GBI_inference = False
+        
         # --- Test if to start GBI for this data_item
         if num_satisfied == num_constraints:
             return 0.0, datanode, datanode.myBuilder
         
         # ------- Continue with GBI
-                
-        # Make copy of original model
-        model_l = copy.deepcopy(self.server_model)
+        
+        optimized_parameters = {name: param for name, param in self.server_model.named_parameters()}
+        original_parameters = {name: param.clone().detach() for name, param in self.server_model.named_parameters()}
+        
+        last_layers = self.find_last_layers_in_submodels(self.server_model)
+        self.reset_last_layers_in_submodels(self.server_model, last_layers)
+        
+        # Print original and cloned parameters to verify they are the same but different in memory location
+        for name, param in self.server_model.named_parameters():
+            are_equal = torch.equal(param, original_parameters[name])
+            same_memory = param.storage().data_ptr() == original_parameters[name].untyped_storage().data_ptr()
+            if same_memory or not are_equal:
+                print(f"{name} -> Equal: {are_equal}, Same Memory: {same_memory}")
     
         # Data to be used for inference
         x = datanode.myBuilder["data_item"]
-       
-        # reset instance-specific weights to pretrained weights 
-        # discard the last layer and the second last layer (dense and output) and replace it with random weights
-        for modelChild in model_l.children():
-            if hasattr(modelChild, 'model'):
-                if hasattr(modelChild.model, 'net'):
-                    currentNet = modelChild.model.net
-                else:
-                    # Handle the case where the attribute is not present
-                    currentNet = None
-            else:
-                # Handle the case where the attribute is not present
-                if hasattr(modelChild, 'reset_parameters'):
-                   modelChild.reset_parameters()
-                   
-                continue
-                
-            if currentNet is None:
-                continue
-                     
-            last_layer = None
-            second_layer = None
-            for layer in currentNet:
-                if hasattr(layer, 'reset_parameters'):
-                    second_layer = last_layer # optionally discard the second layer as well
-                    last_layer = layer
-            
-            if last_layer is not None:
-                #print("Resetting parameters for layer: ", last_layer)
-                last_layer.reset_parameters()
-                
-                if second_layer is not None:
-                    #print("Resetting parameters for layer: ", second_layer)
-                    second_layer.reset_parameters()
                         
-        # -- model_l is the model that gets optimized by GBI
-        model_l.reset()        
+        # -- self.server_mode is the model that gets optimized by GBI
+        self.server_model.reset()        
 
-        modelLParams = model_l.parameters()
+        modelLParams = self.server_model.parameters()
         c_opt = Adam(modelLParams, lr=1e-1, betas=[0.9, 0.999], eps=1e-07, amsgrad=False) #SGD(modelLParams, lr=1e-1)
         
         # Remove "GBI" from the list of inference types if model has it
-        if hasattr(model_l, 'inferTypes'):
-            if 'GBI' in model_l.inferTypes:
-                model_l.inferTypes.remove('GBI')
+        if hasattr(self.server_model, 'inferTypes'):
+            if 'GBI' in self.server_model.inferTypes:
+                self.server_model.inferTypes.remove('GBI')
+                model_has_GBI_inference = True
         
         no_of_not_satisfied = 0
         node_l = None
         for c_iter in range(self.gbi_iters):
-            # perform inference using weights from model_l
-            loss, metric, node_l, _ = model_l(x)
+            # perform inference using weights from self.server_mode
+            loss, metric, node_l, _ = self.server_model(x)
 
             num_satisfied_l, num_constraints_l = self.get_constraints_satisfaction(node_l)
 
@@ -172,7 +189,7 @@ class GBIModel(torch.nn.Module):
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
-            reg_loss =  self.reg_loss(model_l, self.server_model)
+            reg_loss =  self.reg_loss(optimized_parameters, original_parameters)
             c_loss = -1 * log_probs * is_satisfied + reg_loss
 
             if c_loss != c_loss:
@@ -184,13 +201,17 @@ class GBIModel(torch.nn.Module):
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 # --- End early if constraints are satisfied
+                if model_has_GBI_inference:
+                    self.server_model.inferTypes.append('GBI')
                 return c_loss, datanode, datanode.myBuilder
-            elif no_of_not_satisfied > 3: # three consecutive iterations where constraints are not satisfied
+            elif no_of_not_satisfied > 10: # three consecutive iterations where constraints are not satisfied
+                if model_has_GBI_inference:
+                    self.server_model.inferTypes.append('GBI')
                 return c_loss, datanode, datanode.myBuilder # ? float("nan")
                         
-            # --- Backward pass on model_l
+            # --- Backward pass on self.server_model
             if c_loss.requires_grad:
-                # Zero gradients of model_l params before backward pass
+                # Zero gradients of self.server_model params before backward pass
                 c_opt.zero_grad()
                 
                 # Compute gradients
@@ -198,16 +219,16 @@ class GBIModel(torch.nn.Module):
                 
                 # Print the params of the model parameters which have grad
                 print("Params before model step which have grad")
-                for name, param in model_l.named_parameters():
+                for name, param in self.server_model.named_parameters():
                     if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
                         print(name, 'param sum ', torch.sum(torch.abs(param)).item())
                                             
-                # Update model_l params based on gradients
+                # Update self.server_model params based on gradients
                 c_opt.step()
                 
                 #  Print the params of the model parameters which have grad
                 print("Params after model step which have grad")
-                for name, param in model_l.named_parameters():
+                for name, param in self.server_model.named_parameters():
                     if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
                         print(name, 'param sum ', torch.sum(torch.abs(param)).item())
 
@@ -215,6 +236,8 @@ class GBIModel(torch.nn.Module):
         if node_l is not None:
             node_l_builder = node_l.myBuilder
             
+        if model_has_GBI_inference:
+            self.server_model.inferTypes.append('GBI')
         return c_loss, node_l, node_l_builder # ? float("nan")
  
     def calculateGBISelection(self, datanode, conceptsRelations):
