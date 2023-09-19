@@ -3,6 +3,7 @@ from itertools import chain, product
 from typing import Type
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
+# from .relation import Contains, HasA, IsA
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -14,9 +15,22 @@ class Concept(BaseGraphTree):
         def update(Rel):
             if name is not None:
                 Rel.name = classmethod(lambda cls: name)
+                Rel.relation_cls_name = name
 
             def create(src, *args, auto_constraint=None, **kwargs):
                 # add one-by-one
+                if Rel.relation_cls_name == "contains":
+                    arg_names = [arg.name for arg in args]
+                    arg_names = ", ".join(arg_names)
+                    assert len(args) == 1, f"The Contains relationship defined from {src.name} concept to concepts {arg_names} is not valid. The contains relationship can only be between one source and one destination concepts."
+                elif Rel.relation_cls_name == "has_a":
+                    if args:
+                        arg_names = [arg.name for arg in args]
+                        arg_names = " ".join(arg_names)
+                    elif kwargs:
+                        arg_names = [arg.name for arg in kwargs.values()]
+                        arg_names = " ".join(arg_names)
+                    assert len(args) >= 2 or len(kwargs) >= 2, f"The HasA relationship defined from {src.name} concept to concepts {arg_names} is not valid. The HasA relationship must be between one source and at least two destination concepts."
                 rels = []
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
@@ -48,6 +62,15 @@ class Concept(BaseGraphTree):
     
     def __rept__(self):
         return type(self) + ":" + self.name
+    
+    def assign_suggest_name(self, name=None):
+        cls = type(self)
+        if name is None:
+            name = cls.suggest_name()            
+        assert cls._names[name] == 0, f"The name {name} has been already used in this graph for a concept before, please use a unique name."
+        cls._names[name] += 1
+        self.name = name
+        cls._objs[name] = self
     
     def processLCArgs(self, *args, conceptT=None, **kwargs):
         from domiknows.graph.logicalConstrain import eqL, V
