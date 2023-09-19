@@ -269,10 +269,10 @@ class NamedTree(NamedTreeNode, OrderedDict):
         if isinstance(sub, NamedTreeNode):
             if sub.sup is not None:
                 sub.sup.detach(sub)
-            if sub.name in set(self.concepts.keys()):
-                raise ValueError('Concept name {} already exists in {}.'.format(sub.name, self.name))
-            else:
-                sub._sup = self # FIXME: using private method
+            # if sub.name in set(self.concepts.keys()):
+            #     raise ValueError('Concept name {} already exists in {}.'.format(sub.name, self.name))
+            # else:
+            sub._sup = self # FIXME: using private method
         if isinstance(sub, Named):
             if name is None:
                 name = sub.name
