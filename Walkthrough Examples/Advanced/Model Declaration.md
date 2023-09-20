@@ -2,82 +2,11 @@
 
 The followings are the user's steps to using our framework.
 
-- [Knowledge Declaration](#knowledge-declaration)
-- [Model Declaration](#model-declaration)
-- [Training and Testing](#training-and-testing)
-- [Inference](#inference)
-
-## Knowledge Declaration
-
-In knowledge declaration, the user defines a collection of concepts and how they are related, representing the domain knowledge for a task.
-We provide a graph language based on Python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
-
-The output of the Knowledge Declaration step is a `Graph`, within which there are `Concept`s, `Relation`s, and `LogicalConstrain`s. `Graph` instances are a basic container of the `Concept`s, `Relation`s, `LogicalConstrain`s and other instances in the framework. The `Graph` is a *"partial program"*, and no behavior is associated with it. It is only a data structure to express domain knowledge.
-
-
-Follows is an example showing how to declare a graph. In this example, we have a paragraph, and each paragraph has some questions related to it and the answer to each question can be "more", "less" or "no effect".
-
-```python
-with Graph('WIQA_graph') as graph:
-
-    paragraph = Concept(name='paragraph')
-    question = Concept(name='question')
-    para_quest_contains, = paragraph.contains(question)
-
-    is_more = question(name='is_more')
-    is_less = question(name='is_less')
-    no_effect = question(name='no_effect')
-
-    symmetric = Concept(name='symmetric')
-    s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
-
-    transitive = Concept(name='transitive')
-    t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
-    ...
-
-```
-
-The above code shows the declaration of a `Graph` named `'WIQA_graph'` as a variable `graph`.
-
-First, we define paragraph, then we define questions and add a contains relation from paragraph to question.
-
-In the graph are `Concepts`s named `'paragraph'`, `'question'`, `'symmetric'` and `'transitive'` as Python variables with the same name. 
-`symmetric` has two arguments named `arg1` and `arg2`, which are both `question`.
-`transitive` on the other hand has three arguments named `arg11`, `arg22` and `arg33`, all of which are `question` as well.
-`is_more` , `is_less` and `no_effect` are concepts that have IsA relation with `question`. We will use these three concepts as labels of questions as the answer to these questions can be one of these three.
-
-Further, in the graph, we define our constraints.
-
-```python
-with Graph('WIQA_graph') as graph:
-    ...
-    disjoint(is_more, is_less, no_effect)
-    orL(is_more, is_less, no_effect)
-    
-    ifL(is_more('x'), is_less('y', path=('x', symmetric.name, s_arg2.name)))
-    ifL(is_less('x'), is_more('y', path=('x', symmetric.name, s_arg2.name)))
-
-    ifL(andL(is_more('x'), is_more('z', path=('x', transitive.name, t_arg2.name))),
-        is_more('y', path=('x', transitive.name, t_arg3.name)))
-
-    ifL(andL(is_more('x'), is_less('z', path=('x', transitive.name, t_arg2.name))),
-        is_less('y', path=('x', transitive.name, t_arg3.name)))
-```
-
-Some constraints are inherent in the graph, such as the relations that are defined in them. But other constraints must be defined explicitly. 
-The first constraint is the `disjoint` constraint between `is_more` , `is_less` and `no_effect`. Disjoint means that at most one of these labels can be True simultaneously. In the following line, we add `orL` among our labels to ensure at least one of them is also correct.
-
-Further, we define the symmetric and transitive constraints. 
-
-The symmetric relation is between questions that are opposite and have opposing values. We define that if a question is `is_more` or `is_less` and has asymmetric relation with another question, the second question should be `is_less` and `is_more` respectively.
-
-The transitive relation is between questions with a transitive relation, meaning that the effect of the first question is the cause of the second question and the third question is made of the cause of the first and the effect of the second question. The transitive relation implies that if the first and the second question are `is_more`, so should be the third question. But if the first question is `is_more` and the second question is `is_less`, then the third question should also be `is_less`.
-
-The following figure illustrates the graph for this task:
-![plot](WIQA.png)
-
-See [here](https://github.com/HLR/DomiKnowS/blob/Doc/User%20API/Main%20Components/Graph.md) for more details about declaring graph and constraints.
-
+- Dataset
+- Knowledge Declaration
+- **Model Declaration**
+- Training and Testing
+- Inference
 
 ## Model Declaration
 
@@ -160,44 +89,5 @@ program = LearningBasedProgram(graph, model_helper(primal_dual_model,poi=[questi
 ```
 the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch.
 
-## Training and Testing
-
-With `Reader` and `Program` prepared by modeling step, the user can train the program now.
-Simply do 
-
-```python
-program.train(reader, train_epoch_num=10, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device='cuda:0')
-print(program.model.loss)  # last training loss will be printed
-print(program.model.metric)  # last training metrics will be printed
-```
-
-Here, `program` will check for "Multiple Assignment" of `Property` and generate a loss between each two `Sensor`s and/or `Learner`s where one has `label=True` and the other has `label=False`. The default total loss will be the sum of all "Multiple Assignment" losses, and optimization will be used with `Optim`. Parameters in direct and indirect `Learner`s will be updated towards a lower total loss.
-
-After training, we can test our trained program with another dataset
-
-```python
-program.test(test_reader)
-print(program.model.loss)  
-print(program.model.metric)  
-```
-
-Checkout for more details about [workflows in the program](developer/WORKFLOW.md)
-
-## Inference
-
-One feature of our framework is an automatic inference based on domain knowledge.
-To try this out, the user must first create `Datanode`.
-
-```python
-for paragraph_ in program.populate(reader_test):
-        paragraph_.inferILPResults(is_more)
-        for question_ in paragraph_.getChildDataNodes():
-            print(question_.getAttribute(is_more))
-            print(question_.getAttribute(is_more, "ILP"))
-```
-`program.populate` given the reader, will create a datagraph of `Datanode`s and returns a list of "Root" concepts. the "Root" concept here is the `paragraph` concept. each `paragraph` is an instance of `Datanode` class. `paragraph_.inferILPResults(is_more)` tells the datagraph to calculates the "ILP" inference for the property `is_more`.
-
-we can use `getChildDataNodes` method of a `paragraph` to access its questions. each `question` we can access this way, is also a `Datanode` class. one can use the `getAttribute` method of this `Datanode` to access the calculated result for its `is_more` property or as it is shown in the next line of the code, to access this property after "ILP" inference that enforces the constraints. here, unlike in sensors, the questions and their properties are accessed individually. we can use created datagraph here to do inference and calculate the metric with or without "ILP" however we wish.
-
-You can run this full example in [jupytor](https://colab.research.google.com/drive/1cftN2Tln34fquAAnOkuTtgySBfIkVsHZ?usp=sharing).
-
+____
+[Goto next section (Training and Testing)](Training%20and%20Testing.md)
