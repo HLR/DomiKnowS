@@ -371,5 +371,37 @@ class Graph(BaseGraphTree):
         wht = BaseGraphTree.what(self)
         wht['concepts'] = dict(self.concepts)
         return wht
+    
+    def print_predicates(self,):
+        predicate_list = dict()
+        variable_list = ['x', 'y', 'z', 'a', 'b', 'r', 't', 'l', 'i']
+        concepts = list(self.concepts.values())
+        for subgraph in self.subgraphs.values():
+            concepts.extend(list(subgraph.concepts.values()))
+        for concept in concepts:
+            predicate_name = concept.name
+            variables = variable_list[0]
+            check = False
+            if concept._out:
+                if 'has_a' in concept._out:
+                    num_relations = len(concept._out['has_a'])
+                    variables = ", ".join(variable_list[:num_relations])
+                    check = True
+            if not check:
+                new_node = concept
+                while 'is_a' in new_node._out:
+                    if new_node._out['is_a'][0].dst.name in predicate_list:
+                        variables = predicate_list[new_node._out['is_a'][0].dst.name][1]
+                        break
+                    else:
+                        if 'has_a' in new_node.sup._out:
+                            num_relations = len(new_node.sup._out['has_a'])
+                            variables = ", ".join(variable_list[:num_relations])
+                            break
+                    new_node = new_node._out['is_a'][0].dst
+            predicate_list[predicate_name] = [predicate_name, variables]
+        predicate_list = [f"{predicate[0]}({predicate[1]})" for predicate in predicate_list.values()]
+        return predicate_list
+
 
     Ontology = namedtuple('Ontology', ['iri', 'local'], defaults=[None])
