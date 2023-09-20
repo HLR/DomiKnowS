@@ -898,13 +898,14 @@ class DataNode:
         
         # Search the graph starting from self for concepts and relations
         candR = self.findConceptsAndRelations(self) 
+        self.rootConcepts = []
         
         returnCandR = []
         
         # Process founded concepts - translate them to tuple form with more information needed for logical constraints and metrics
         for c in candR:
             _concept = self.findConcept(c)[0]
-            
+                        
             if _concept is None:
                 continue
             
@@ -913,6 +914,8 @@ class DataNode:
             
             # Check if this is multiclass concept
             if isinstance(_concept, EnumConcept):
+                self.rootConcepts.append((_concept, len(_concept.enum)))
+                
                 for i, a in enumerate(_concept.enum):
                     
                     if conceptsAndRelations and a not in conceptsAndRelations:
@@ -921,6 +924,8 @@ class DataNode:
                     
                     returnCandR.append((_concept, a, i, len(_concept.enum))) # Create tuple representation for multiclass concept
             else:
+                self.rootConcepts.append((_concept, 1))
+
                 if conceptsAndRelations and c not in conceptsAndRelations and _concept not in conceptsAndRelations:
                     continue
                 
