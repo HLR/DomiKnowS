@@ -108,8 +108,8 @@ class GBIModel(torch.nn.Module):
     def reset_last_layers_in_submodels(self, model, last_layers):
         for name, last_layer in last_layers.items():
             if isinstance(last_layer, (nn.Linear, nn.Conv2d)):
-                last_layer.bias.data = torch.randn_like(last_layer.bias.data)
-                last_layer.weight.data = torch.randn_like(last_layer.weight.data) * 0.01
+                last_layer.bias.data += torch.randn_like(last_layer.bias.data) * 0.01
+                last_layer.weight.data += torch.randn_like(last_layer.weight.data) * 0.01
 
     # ----
     
