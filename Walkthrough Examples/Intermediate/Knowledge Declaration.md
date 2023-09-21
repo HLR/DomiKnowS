@@ -15,7 +15,6 @@ We provide a graph language based on Python for knowledge declaration with the n
 
 The output of the Knowledge Declaration step is a `Graph`, within which there are `Concept`s, `Relation`s, and `LogicalConstrain`s. `Graph` instances are a basic container of the `Concept`s, `Relation`s, `LogicalConstrain`s and other instances in the framework. The `Graph` is a *"partial program"*, and no behavior is associated with it. It is only a data structure to express domain knowledge.
 
-### Graph Declaration
 
 Follows is an example showing how to declare a graph. 
 
@@ -32,8 +31,6 @@ with Graph('email_graph') as graph:
 ```
 
 The above code shows the declaration of a `Graph` named `'email_graph'` as a variable `graph`. First, we define email, then we define Spam and Regular `Concept`s that are emails Further, in the graph, we define our constraints.
-
-### Logical Constraints
 
 ```python
 with Graph('email_graph') as graph:
