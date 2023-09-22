@@ -1,4 +1,4 @@
-This is the repository to share the code of the ClueCons benchmark
+This is the repository to share the code of the GlueCons benchmark
 
 ## Getting Started
 Installing the DomiKnowS library
