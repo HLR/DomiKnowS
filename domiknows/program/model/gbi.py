@@ -106,21 +106,24 @@ class GBIModel(torch.nn.Module):
 
     # Resets the last layer of each submodel of a PyTorch model
     def reset_last_layers_in_submodels(self, model, last_layers):
-        for name, last_layer in last_layers.items():
+        for name, last_layer in model.named_parameters():
             if isinstance(last_layer, (nn.Linear, nn.Conv2d)):
-                last_layer.bias.data += torch.randn_like(last_layer.bias.data) * 1e-4
-                last_layer.weight.data += torch.randn_like(last_layer.weight.data) * 1e-4
+                last_layer.bias.data += torch.randn_like(last_layer.bias.data) * 1e-6
+                last_layer.weight.data += torch.randn_like(last_layer.weight.data) * 1e-6
 
     # ----
     
     def forward(self, datanode, build=None, print_grads=False):
+        eval_f = open('gbi_log.txt', 'a', buffering=1)
+
         # Get constraint satisfaction for the current DataNode
         num_satisfied, num_constraints = self.get_constraints_satisfaction(datanode)
         model_has_GBI_inference = False
         
         # --- Test if to start GBI for this data_item
-        if num_satisfied == num_constraints:
-            return 0.0, datanode, datanode.myBuilder
+        # if num_satisfied == num_constraints:
+        #     eval_f.close()
+        #     return 0.0, datanode, datanode.myBuilder
         
         # ------- Continue with GBI
         
@@ -144,7 +147,7 @@ class GBIModel(torch.nn.Module):
         self.server_model.reset()        
 
         modelLParams = self.server_model.parameters()
-        c_opt = Adam(modelLParams, lr=1e-2, betas=[0.9, 0.999], eps=1e-07, amsgrad=False) #SGD(modelLParams, lr=1e-1)
+        c_opt = SGD(modelLParams, lr=1e-1)
         
         # Remove "GBI" from the list of inference types if model has it
         if hasattr(self.server_model, 'inferTypes'):
@@ -170,9 +173,11 @@ class GBIModel(torch.nn.Module):
             print('probs mean:')
             print(log_probs)
 
-            argmax_vals = [torch.argmax(prob) for prob in probs]
+            argmax_vals = [torch.argmax(prob).item() for prob in probs]
             print('argmax predictions:')
             print(argmax_vals)
+
+            eval_f.write(f'\ngbi|{c_iter}|' + '|'.join([str(argmax_val) for argmax_val in argmax_vals]))
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
@@ -190,10 +195,12 @@ class GBIModel(torch.nn.Module):
                 # --- End early if constraints are satisfied
                 if model_has_GBI_inference:
                     self.server_model.inferTypes.append('GBI')
+                eval_f.close()
                 return c_loss, datanode, datanode.myBuilder
-            elif no_of_not_satisfied > 1000: # temporary change to see behavior c_iter loop finishes
+            elif no_of_not_satisfied > 100:
                 if model_has_GBI_inference:
                     self.server_model.inferTypes.append('GBI')
+                eval_f.close()
                 return c_loss, datanode, datanode.myBuilder # ? float("nan")
                         
             # --- Backward pass on self.server_model
@@ -227,6 +234,7 @@ class GBIModel(torch.nn.Module):
             
         if model_has_GBI_inference:
             self.server_model.inferTypes.append('GBI')
+        eval_f.close()
         return c_loss, node_l, node_l_builder # ? float("nan")
  
     def calculateGBISelection(self, datanode, conceptsRelations):
