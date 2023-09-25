@@ -252,3 +252,4 @@ domiknows/program/model/gbi copy.py
 # venv
 venv
 .externalToolBuilders/org.eclipse.jdt.core.javabuilder.launch
+.settings/org.eclipse.ltk.core.refactoring.prefs

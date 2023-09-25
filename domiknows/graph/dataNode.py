@@ -72,14 +72,18 @@ _DataNodeBuilder__Logger.info('--- Starting new run ---')
 
 # Class representing single data instance with relation links to other data nodes
 class DataNode:
-    def __init__(self, myBuilder = None, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
+    def __init__(self, myBuilder = None, instanceID = None, instanceValue = None, ontologyNode = None, graph = None, relationLinks = {}, attributes = {}):
 
         self.myBuilder = myBuilder                       # DatanodeBuilder used to construct this datanode
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the node in the ontology graph (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
         
-        self.graph =  self.ontologyNode.sup
+        if ontologyNode is not None:
+            self.graph = self.ontologyNode.sup
+            if graph is not None:
+                self.graph = graph
+                
         if relationLinks:
             self.relationLinks = relationLinks           # Dictionary mapping relation name to RelationLinks
         else:
@@ -92,7 +96,13 @@ class DataNode:
         else:
             self.attributes = {}
             
-        self.current_device = 'auto'
+        self.current_device = 'cpu'
+        if torch.cuda.is_available():
+            if torch.cuda.device_count() > 1:
+                self.current_device = 'cuda:1'
+            else:
+                self.current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                
         self.gurobiModel = None
         
         self.myLoggerTime = getRegrTimer_logger()
@@ -232,12 +242,12 @@ class DataNode:
                 keyInVariableSet = self.ontologyNode.name + "/" + key
                 if keyInVariableSet in rootDataNode.attributes["variableSet"]:
                     return True
-                elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
+                elif "propertySet" in rootDataNode.attributes and keyInVariableSet in rootDataNode.attributes["propertySet"]:
                     return True
         elif "variableSet" in self.attributes:
             if key in self.attributes["variableSet"]:
                 return True
-            elif key in self.attributes["propertySet"]:
+            elif "propertySet" in self and key in self.attributes["propertySet"]:
                 return True
         else:
             return False
@@ -1397,10 +1407,11 @@ class DataNode:
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
         # Check if full data node is created and create it if not -it is needed for ILP inference
-        self.myBuilder.createFullDataNode(self)
+        if self.myBuilder:
+            self.myBuilder.createFullDataNode(self)
         
         # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
-        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from data graph as default set
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
             raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
