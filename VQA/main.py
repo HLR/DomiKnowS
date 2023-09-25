@@ -81,6 +81,8 @@ def main(device, models):
     return program
 
 
+
+
 if __name__ == '__main__':
     from domiknows.utils import setProductionLogMode
     productionMode = True
@@ -102,6 +104,8 @@ if __name__ == '__main__':
     from tqdm import tqdm
 
     from model import init_model
+
+    from violations import get_constraints_satisfaction, adj_matrix_violations
 
     """
     Train Config
@@ -156,7 +160,7 @@ if __name__ == '__main__':
         result['features'] = row[0]
 
         for depth in range(1, 5):
-            print(fix_label(row[depth + 1], depth))
+            # print(fix_label(row[depth + 1], depth))
             result[f'level{depth}_label'] = torch.tensor(fix_label(row[depth + 1], depth))
         
         result['reps'] = torch.randn((batch_size))
@@ -164,6 +168,8 @@ if __name__ == '__main__':
         return result
     
     feat_dim = list(obj_feats.values())[0].shape[0]
+
+    adj_matrix = torch.load('adj_matrix.pt')
 
     """
     Load models
@@ -226,6 +232,9 @@ if __name__ == '__main__':
                 eval_row_GBI = [str(row_idx)]
                 #eval_row_ILP = [str(row_idx)]
                 eval_row_label = [str(row_idx)]
+                
+                preds = []
+
                 for _concept in ['level1', 'level2', 'level3', 'level4']:
                     label = child.getAttribute(_concept, 'label').item()
                     pred = child.getAttribute(_concept, 'local/argmax').argmax().item()
@@ -237,9 +246,22 @@ if __name__ == '__main__':
                     eval_row_GBI.append(str(pred_GBI))
                     #eval_row_ILP.append(str(pred_ILP))
 
+                    preds.append(pred)
+
                     print("{:<10} {:<10} {:<10} {:<10}".format(_concept, pred, pred_GBI, label))
                     
                 print()
+
+                # get num violations via adj_matrix
+                print('TEST NUMBER OF VIOLATIONS:')
+                print('-' * 80)
+                print('Prediction:', preds)
+                adj_violations = adj_matrix_violations(adj_matrix, preds)
+                num_satisfied, num_constraints = get_constraints_satisfaction(node)
+                domiknows_violations = num_constraints - num_satisfied
+                print(f'Adj matrix violations: {adj_violations}')
+                print(f'Domiknows violations: {domiknows_violations}')
+                print('-' * 80)
 
                 eval_f.write(','.join(eval_row_label + ['label']) + '\n')
                 eval_f.write(','.join(eval_row + ['argmax']) + '\n')

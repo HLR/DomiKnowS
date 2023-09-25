@@ -1,17 +1,21 @@
 from sg_model import SceneGraphModel
 from torch import nn
+import torch
 
 
 class Net(nn.Module):
     def __init__(self, sg_models, depth):
         super().__init__()
 
+        self.depth = depth
         self.model = sg_models[depth]
     
     def forward(self, *inputs):
         data = inputs[-1]
 
         out = self.model(data)
+
+        print(f'Net(depth={self.depth}); pred: {torch.argmax(out, dim=-1)}')
 
         return out
 
