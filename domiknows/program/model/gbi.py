@@ -167,17 +167,14 @@ class GBIModel(torch.nn.Module):
             probs = []
             for var_name, var_val in node_l.getAttribute('variableSet').items():
                 if var_name.endswith('>'):# and var_val.requires_grad:
+                    print('var_name: {var_name}; argmax_prediction: ', torch.argmax(var_val, dim=-1))
                     probs.append(F.log_softmax(var_val, dim=-1).flatten())
 
             log_probs = torch.cat(probs, dim=0).mean()
             print('probs mean:')
             print(log_probs)
 
-            argmax_vals = [torch.argmax(prob).item() for prob in probs]
-            print('argmax predictions:')
-            print(argmax_vals)
-
-            eval_f.write(f'\ngbi|{c_iter}|' + '|'.join([str(argmax_val) for argmax_val in argmax_vals]))
+            # eval_f.write(f'\ngbi|{c_iter}|' + '|'.join([str(argmax_val) for argmax_val in argmax_vals]))
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
