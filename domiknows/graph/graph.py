@@ -162,7 +162,20 @@ class Graph(BaseGraphTree):
                 pathElementSrc = pathElement.src
                 pathElementDst = pathElement.dst
 
-                if variableConceptParent.name != pathElementSrc.name:
+                # Check if there is a problem with reversed usage 
+                if variableConceptParent.name == pathElementDst.name:
+                    pathVariable = path[0]
+                    pathStr = self.getPathStr(path)
+                    pathElementVarName = pathElement.var_name
+                    exceptionStr1 = f"The Path {pathStr} from the variable {pathVariable}, defined in {lc_name} is not valid"
+                    exceptionStr2 = f" The relation {pathElementVarName} is from a {pathElementSrc.name} to a {pathElementDst.name}, but you have used it from a {pathElementDst.name} to a {pathElementSrc.name}."
+                    if not pathElement.is_reversed:
+                        exceptionStr3 = f"You can use the .reversed property to change the direction."
+                    else:
+                        exceptionStr3 = f"You can use without the .reversed property to change the direction."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                # Check if the path is correct
+                elif variableConceptParent.name != pathElementSrc.name:
                     pathVariable = path[0]
                     pathStr = self.getPathStr(path)
                     pathElementVarName = pathElement.var_name

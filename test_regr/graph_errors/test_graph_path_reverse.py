@@ -1,5 +1,5 @@
 import pytest
-from graph_path import setup_graph
+from graph_path_reverse import setup_graph
 import re
 
 def test_setup_graph_exception():
@@ -8,7 +8,7 @@ def test_setup_graph_exception():
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
         sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', "The Path rel_pair_entity1 from the variable x, defined in LC_person_attendance is not valid"
-                                           " The relation rel_pair_entity1 is from a pair to a phrase, but you have used it from a phrase to a pair. " 
+                                           " The relation rel_pair_entity1 is from a pair to a named_entity, but you have used it from a named_entity to a pair. " 
                                            " You can use the .reversed property to change the direction.").replace(" ", "")
         
         print(repr(sanitized_error_message))
