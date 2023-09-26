@@ -1,13 +1,10 @@
-import argparse
-import os,sys
+import sys
 import torch
-import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 import sys
 sys.path.append(".")
 sys.path.append("../..")
-
 
 from domiknows.program.model_program import SolverPOIProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
@@ -17,7 +14,7 @@ from domiknows.program.loss import NBCrossEntropyLoss
 
 # Enable skeleton DataNode
 def main(device):
-    from graph import graph, image_group_contains, image, level1, level2, level3, level4, image_group, structure
+    from graph import graph, image_group_contains, image, level1, level2, level3, level4, image_group, structure, prefix
 
     image_group['reps'] = FunctionalReaderSensor(keyword='reps', forward=lambda data: data.unsqueeze(0) ,device=device)
 
@@ -42,25 +39,26 @@ def main(device):
     image[level4] = FunctionalReaderSensor(image_group_contains, "reps", keyword='level4', forward=get_probs, label=False)
     image[level4] = FunctionalReaderSensor(keyword='level4_label', forward=get_label, label=True)
 
-    prefix = "Tasks/ImgHierarchy/"
     f = open(f"{prefix}logger.txt", "w")
+
     program = SolverPOIProgram(graph, inferTypes=[
-        # 'ILP', 
+        #'ILP', 
         'local/argmax'],
         # probKey = ("local" , "normalizedProb"),
         # probAcc = {'level1': 0.5673, 'level2': 0.5445, 'level3': 0.4342, 'level4': 0.1768},
         poi = (image_group, image, level1, level2, level3, level4),
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric={
-                # 'ILP': PRF1Tracker(DatanodeCMMetric()),
+                #'ILP': PRF1Tracker(DatanodeCMMetric()),
                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
     return program
 
 if __name__ == '__main__':
-    from domiknows.utils import setProductionLogMode
+    from domiknows.utils import setProductionLogMode, getRegrTimer_logger
     productionMode = True
     if productionMode:
         setProductionLogMode(no_UseTimeLog=False)
+    myLoggerTime = getRegrTimer_logger()
     from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     import logging
@@ -71,7 +69,7 @@ if __name__ == '__main__':
     from graph import *
     import time
 
-    file = "Tasks/ImgHierarchy/data/test_logits.pt"
+    file = f"{prefix}data/test_logits.pt"
     # file = "data_sample/val_small.npy"
     start = time.time()
     if "npy" in file:
@@ -79,15 +77,37 @@ if __name__ == '__main__':
     else:
         data = torch.load(file)
 
-    dataset = VQADataset(data,)
+    # change data size
+    dataset = VQADataset(data, prefix=prefix)
     # dataset = torch.utils.data.Subset(dataset, [i for i in range(2000)])
-    dataloader = DataLoader(dataset, batch_size=500000)
+    # change batch size
+    batch_size=500
+    print(f'batch_size = {batch_size}')
+    myLoggerTime.info(f'batch_size = {batch_size}')
+    myLoggerTime.info(f'batch_size = {batch_size}')
+    dataloader = DataLoader(dataset, batch_size=batch_size)
     end = time.time()
     print(f"elapsed time for dataloader {end - start}")
-    # dataloader = DataLoader(dataset, batch_size=20)
-
+    myLoggerTime.info(f"elapsed time for dataloader {end - start}")
+    
     # test_reader = VQAReader('val.npy', 'npy')
     device = 'cuda:1'
+    if torch.cuda.is_available():
+    # Check if 'cuda:1' is available
+        if torch.cuda.device_count() > 1:
+            print(f"'{device}' is available.")
+        else:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            
+            # Create a tensor on the selected device
+            x = torch.randn(1).to(device)
+
+            # Print the device that the tensor is on
+            print(f"The tensors are on: {x.device}")
+    else:
+        print("CUDA is not available, setting device to 'cpu'.")
+        device = 'cpu'
+        
     program = main(device)
 
     # program.test(dataloader, device=device)
@@ -147,12 +167,20 @@ if __name__ == '__main__':
 
     support_set = {"level1": {}, "level2": {}, "level3": {}, "level4": {}}
     total_support_set = {"level1": 0, "level2": 0, "level3": 0, "level4": 0}
-    calculate_ilp = False
+    if "inferTypes" in program.kwargs and "ILP" in program.kwargs["inferTypes"]:
+        calculate_ilp = True
+    else:
+        calculate_ilp = False
+       
+    if "inferTypes" in program.kwargs: 
+        print(f'inferTypes = {program.kwargs["inferTypes"]}')
+        myLoggerTime.info(f'inferTypes = {program.kwargs["inferTypes"]}')
+        
     calculate_sequential = False
     run_metrics = False
 
     ### load hierarchy_flat.json and reverse its order
-    with open('Tasks/ImgHierarchy/hierarchy_flat.json') as f:
+    with open(f'{prefix}hierarchy_flat.json') as f:
         hierarchy_flat = json.load(f)
     
     reverse_flat_hierarchy = {"level1": {}, "level2": {}, "level3": {}}
@@ -209,8 +237,8 @@ if __name__ == '__main__':
         print(f"consistent ILP accuracy: {consistent_positive_ilp/consistent_all}")
 
 
-    # for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
-    for datanode in tqdm(program.populate(dataloader, device=device)):
+    for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
+    #for datanode in tqdm(program.populate(dataloader, device=device)):
         # start = time.time()
         if run_metrics:
             for child in datanode.getChildDataNodes('image'):
@@ -487,17 +515,18 @@ if __name__ == '__main__':
         f1_res[_concept.name]["total"]["support"] = total_support_set[_concept.name]
         all_support += total_support_set[_concept.name]
 
-    for _concept in [level1, level2, level3, level4]:
-        total_precision += f1_res[_concept.name]["total"]["level_precision"] * (total_support_set[_concept.name] / all_support)
-        total_recall += f1_res[_concept.name]["total"]["level_recall"] * (total_support_set[_concept.name] / all_support)
-        total_f1 += f1_res[_concept.name]["total"]["level_f1"] * (total_support_set[_concept.name] / all_support)
-        total_precision_ilp += f1_res[_concept.name]["total"]["level_precision_ilp"] * (total_support_set[_concept.name] / all_support)
-        total_recall_ilp += f1_res[_concept.name]["total"]["level_recall_ilp"] * (total_support_set[_concept.name] / all_support)
-        total_f1_ilp += f1_res[_concept.name]["total"]["level_f1_ilp"] * (total_support_set[_concept.name] / all_support)
-        if calculate_sequential:
-            total_precision_sequential += f1_res[_concept.name]["total"]["level_precision_sequential"] * (total_support_set[_concept.name] / all_support)
-            total_recall_sequential += f1_res[_concept.name]["total"]["level_recall_sequential"] * (total_support_set[_concept.name] / all_support)
-            total_f1_sequential += f1_res[_concept.name]["total"]["level_f1_sequential"] * (total_support_set[_concept.name] / all_support)
+    if all_support:
+        for _concept in [level1, level2, level3, level4]:
+            total_precision += f1_res[_concept.name]["total"]["level_precision"] * (total_support_set[_concept.name] / all_support)
+            total_recall += f1_res[_concept.name]["total"]["level_recall"] * (total_support_set[_concept.name] / all_support)
+            total_f1 += f1_res[_concept.name]["total"]["level_f1"] * (total_support_set[_concept.name] / all_support)
+            total_precision_ilp += f1_res[_concept.name]["total"]["level_precision_ilp"] * (total_support_set[_concept.name] / all_support)
+            total_recall_ilp += f1_res[_concept.name]["total"]["level_recall_ilp"] * (total_support_set[_concept.name] / all_support)
+            total_f1_ilp += f1_res[_concept.name]["total"]["level_f1_ilp"] * (total_support_set[_concept.name] / all_support)
+            if calculate_sequential:
+                total_precision_sequential += f1_res[_concept.name]["total"]["level_precision_sequential"] * (total_support_set[_concept.name] / all_support)
+                total_recall_sequential += f1_res[_concept.name]["total"]["level_recall_sequential"] * (total_support_set[_concept.name] / all_support)
+                total_f1_sequential += f1_res[_concept.name]["total"]["level_f1_sequential"] * (total_support_set[_concept.name] / all_support)
     
     f1_res["total"] = {}
     f1_res["total"]["level_precision"] = total_precision
@@ -512,7 +541,6 @@ if __name__ == '__main__':
     f1_res["total"]["support"] = all_support
 
 
-    prefix = "Tasks/ImgHierarchy/"
     with open(f"{prefix}logger.json", "w") as file:
         json.dump(f1_res, file, indent=4)
 

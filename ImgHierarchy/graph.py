@@ -1,6 +1,6 @@
 from itertools import combinations
 import json
-import sys
+import sys, os
 sys.path.append(".")
 sys.path.append("../..")
 
@@ -9,6 +9,12 @@ from domiknows.graph.concept import EnumConcept
 from domiknows.graph.logicalConstrain import nandL, exactL, ifL, orL, andL, notL
 
 prefix = "Tasks/ImgHierarchy/"
+
+# Test if the directory exists
+if not os.path.exists(f"{prefix}data"):
+    # Directory does not exist, set prefix to ""
+    prefix = ""
+            
 with open(f"{prefix}concepts.json") as f:
     hierarchy = json.load(f)
 

@@ -17,3 +17,5 @@ VQA/eval_gbi_domiknows.csv
 T5Procedural/updated_loc_info_simple_normalized.pt
 demo/__pycache__/main.cpython-39.pyc
 ImgHierarchy/logs/regrTimer.log
+ImgHierarchy/logger_manual.txt
+ImgHierarchy/logger.json
