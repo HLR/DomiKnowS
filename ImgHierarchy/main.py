@@ -3,6 +3,7 @@ import os,sys
 import torch
 import torch.nn as nn
 import numpy as np
+from tqdm import tqdm
 import sys
 sys.path.append(".")
 sys.path.append("../..")
@@ -80,7 +81,7 @@ if __name__ == '__main__':
 
     dataset = VQADataset(data,)
     # dataset = torch.utils.data.Subset(dataset, [i for i in range(2000)])
-    dataloader = DataLoader(dataset, batch_size=50000)
+    dataloader = DataLoader(dataset, batch_size=500000)
     end = time.time()
     print(f"elapsed time for dataloader {end - start}")
     # dataloader = DataLoader(dataset, batch_size=20)
