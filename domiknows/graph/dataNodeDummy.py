@@ -1,4 +1,4 @@
-from . import DataNode, Graph
+from . import DataNode
 import torch
 
 dataSizeInit = 5
@@ -33,17 +33,16 @@ def findConceptInfo(usedGraph, concept):
     return conceptInfo
 
 def addDatanodes(concept, conceptInfos, datanodes, allDns, level=1):
-    
     currentConceptInfo = conceptInfos[concept.name]
     instanceID = currentConceptInfo.get('count', 0)
 
     for dn in datanodes:
         dns = []
-        for i in range(dataSizeInit * level):
+        for _ in range(dataSizeInit * level):
             newDN = DataNode(instanceID = instanceID, ontologyNode = currentConceptInfo['concept'])
             dn.addChildDataNode(newDN)
             dns.append(newDN)
-            instanceID+=1
+            instanceID += 1
         
         for contain in currentConceptInfo['contains']:
             addDatanodes(contain, conceptInfos, dns, allDns, level = level+1)
@@ -55,18 +54,20 @@ def addDatanodes(concept, conceptInfos, datanodes, allDns, level=1):
         allDns.extend(dns)
 
 def createDummyDataNode(graph):
-    rootDataNode = None
-    rootConcept = None
+    rootDataNode = None # this will be the created dummy Datanode graph root 
+    rootConcept = None # find the root concept
     
-    conceptInfos = {}
-    allDns = []
+    conceptInfos = {} # info collected about all concepts
+    allDns = []       # all created datanodes
     
+    # Collect concepts info from main graph
     for currentConceptKey, currentConcept in graph.concepts.items():
         conceptInfo = findConceptInfo(graph, currentConcept)
         conceptInfos[currentConceptKey] = conceptInfo
         if conceptInfo['root']:
             rootConcept = currentConceptKey 
         
+    # Collect concepts info from subgraph
     for subGraphKey, subGraph in graph.subgraphs.items():
         for currentConceptKey, currentConcept in subGraph.concepts.items():
             conceptInfo = findConceptInfo(subGraph, currentConcept)
@@ -75,7 +76,7 @@ def createDummyDataNode(graph):
                 rootConcept = currentConceptKey 
                   
     if rootConcept:
-        # Add root datanode
+        # Add root datanodes
         rootConceptInfo = conceptInfos[rootConcept]
         rootDataNode = DataNode(instanceID = 1, ontologyNode = rootConceptInfo['concept'])
         rootDataNode.attributes["variableSet"] = {}
@@ -84,7 +85,7 @@ def createDummyDataNode(graph):
         for contain in rootConceptInfo['contains']:
             addDatanodes(contain, conceptInfos, [rootDataNode], allDns)
             
-        # Add relation
+        # Add relations
         for currentConceptKey in conceptInfos:
             relationConceptInfo = conceptInfos[currentConceptKey]
             relationDns = []
@@ -99,9 +100,12 @@ def createDummyDataNode(graph):
                         if d == 0:
                             newDN = DataNode(instanceID = instanceID, ontologyNode = attrConceptInfo['concept'])
                             relationDns.append(newDN)
-                            instanceID+=1
+                            instanceID += 1
                         else:
-                            newDN = relationDns[1]
+                            if i < len(relationDns):
+                                newDN = relationDns[i]
+                            else:
+                                break
                             
                         newDN.addRelationLink(attr, attrConceptInfo["dns"]["all"][i])
                         
