@@ -150,6 +150,11 @@ class Graph(BaseGraphTree):
                     pathStr += pathElement.var_name
                 else:
                     pathStr += pathElement.name
+            elif isinstance(pathElement.reversed, (HasA, IsA)):
+                if pathElement.reversed.var_name:
+                    pathStr += pathElement.reversed.var_name + ".reversed"
+                else:
+                    pathStr += pathElement.name
             else:
                 pathStr += pathElement
                 
