@@ -387,7 +387,7 @@ class Graph(BaseGraphTree):
     
     def print_predicates(self,):
         predicate_list = dict()
-        variable_list = ['x', 'y', 'z', 'a', 'b', 'r', 't', 'l', 'i']
+        variable_list = ['x', 'y', 'z', 'a', 'b', 'r', 'c', 'l', 'i']
         concepts = list(self.concepts.values())
         for subgraph in self.subgraphs.values():
             concepts.extend(list(subgraph.concepts.values()))
@@ -412,9 +412,19 @@ class Graph(BaseGraphTree):
                             variables = ", ".join(variable_list[:num_relations])
                             break
                     new_node = new_node._out['is_a'][0].dst
-            predicate_list[predicate_name] = [predicate_name, variables]
-        predicate_list = [f"{predicate[0]}({predicate[1]})" for predicate in predicate_list.values()]
-        return predicate_list
+            if hasattr(concept, 'enum'):
+                ### there should be another variable to indicate the type
+                variables = f"{variables}, t"
+                predicate_list[predicate_name] = [predicate_name, variables, concept.enum]
+            else:
+                predicate_list[predicate_name] = [predicate_name, variables]
+        final_list = []
+        for predicate in predicate_list.values():
+            if len(predicate) == 3:
+                final_list.append(f"{predicate[0]}({predicate[1]}) --> 't' stand for the possible types which should be selected from this list: {predicate[2]}")
+            else:
+                final_list.append(f"{predicate[0]}({predicate[1]})")
+        return final_list
 
 
     Ontology = namedtuple('Ontology', ['iri', 'local'], defaults=[None])
