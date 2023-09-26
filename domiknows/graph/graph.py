@@ -161,9 +161,9 @@ class Graph(BaseGraphTree):
         return pathStr
                 
     def check_path(self, path, variableConceptParent, lc_name, foundVariables, variableName):
-        from .relation import IsA, HasA
+        from .relation import IsA, HasA, Relation
         for pathElement in path[1:]:
-            if isinstance(pathElement, (HasA, IsA)):
+            if isinstance(pathElement, (HasA, IsA, Relation)):
                 pathElementSrc = pathElement.src
                 pathElementDst = pathElement.dst
 
@@ -188,6 +188,8 @@ class Graph(BaseGraphTree):
                     exceptionStr2 = f" and the type of {pathVariable} is a {variableConceptParent}, there is no relationship defined between {pathElementDst} and {variableConceptParent}."
                     exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                    
+                variableConceptParent = pathElementDst
 
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
