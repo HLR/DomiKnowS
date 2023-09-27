@@ -247,7 +247,7 @@ class DataNode:
         elif "variableSet" in self.attributes:
             if key in self.attributes["variableSet"]:
                 return True
-            elif "propertySet" in self and key in self.attributes["propertySet"]:
+            elif "propertySet" in self.attributes and key in self.attributes["propertySet"]:
                 return True
         else:
             return False
