@@ -38,7 +38,7 @@ def setup_graph(fix_constraint=False):
                         pair('x'),
                         pair('y'),
                         pair(path=('x', rel_pair_premise, rel_pair_hypothesis.reversed)),
-                        pair(path=('y', rel_pair_premise.reversed, rel_pair_hypothesis)),
+                        pair(path=('y')),
                     ),
                     ifL(
                         nli_class.entailment(path=('x')),
