@@ -147,18 +147,18 @@ class Graph(BaseGraphTree):
         for pathElement in path[1:]:
             if isinstance(pathElement, (HasA, IsA)):
                 if pathElement.var_name:
-                    pathStr += pathElement.var_name
+                    pathStr += pathElement.var_name + " "
                 else:
-                    pathStr += pathElement.name
+                    pathStr += pathElement.name + " "
             elif isinstance(pathElement.reversed, (HasA, IsA)):
                 if pathElement.reversed.var_name:
-                    pathStr += pathElement.reversed.var_name + ".reversed"
+                    pathStr += pathElement.reversed.var_name + ".reversed "
                 else:
-                    pathStr += pathElement.name
+                    pathStr += pathElement.name + " "
             else:
-                pathStr += pathElement
+                pathStr += pathElement + " "
                 
-        return pathStr
+        return pathStr.strip()
                 
     def check_path(self, path, variableConceptParent, lc_name, foundVariables, variableName):
         from .relation import IsA, HasA, Relation
