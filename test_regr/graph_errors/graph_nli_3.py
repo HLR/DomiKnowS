@@ -42,8 +42,8 @@ def setup_graph(fix_constraint=False):
                         pair(path=('y', rel_pair_premise)),
                     ),
                     ifL(
-                        nli_class.entailment(path=('x', rel_pair_hypothesis)),
-                        notL(nli_class.contradiction(path=('y', rel_pair_hypothesis)))
+                        nli_class.entailment(path=('x')),
+                        notL(nli_class.contradiction(path=('y')))
                     ),
                     name="pair_symmetry_constraint"
                 ) 
