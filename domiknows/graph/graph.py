@@ -176,7 +176,7 @@ class Graph(BaseGraphTree):
         for p, pathElement in enumerate(path[1:]):
             pathIndex = p+1
             if pathIndex < len(path)-1:
-                expectedRightConcept = path[pathIndex+1].dst.name
+                expectedRightConcept = path[pathIndex].dst.name
             else:
                 expectedRightConcept = requiredEndOfPathConcept
                 lastPathElement = True
