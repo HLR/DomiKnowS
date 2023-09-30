@@ -122,17 +122,17 @@ class Graph(BaseGraphTree):
             if variable_name not in used_variables:
                 used_variables[variable_name] = []
 
-            variable_info = (lc, variable_name, e.v)
+            variable_info = (lc, variable_name, lc.e[i-1], e.v)
             used_variables[variable_name].append(variable_info)
 
-        for e in lc.e:
-            if isinstance(e, V) and e.v:
+        for i, e in enumerate(lc.e):
+            if isinstance(e, V) and e.v: # has path
                 if isinstance(e.v, str):
                     handle_variable_name(e.v)
                 elif isinstance(e, tuple):
-                    if isinstance(e.v[0], str):
+                    if isinstance(e.v[0], str): # single path
                         handle_variable_name(e.v[0])
-                    elif isinstance(e.v[0], tuple):
+                    elif isinstance(e.v[0], tuple): # path union
                         for t in e.v:
                             if isinstance(t[0], str):
                                 handle_variable_name(t[0])
@@ -166,18 +166,34 @@ class Graph(BaseGraphTree):
                 
         return pathStr.strip()
                 
-    def check_path(self, path, variableConceptParent, lc_name, foundVariables, variableName):
+    def check_path(self, path, resultConcept, variableConceptParent, lc_name, foundVariables, variableName):
         from .relation import IsA, HasA, Relation
-        for pathElement in path[1:]:
+        
+        requiredLeftConcept = variableConceptParent # path element has to be relation with this type to the left
+        requiredEndOfPathConcept = resultConcept[1] # path has to result in this concept
+        expectedRightConcept =  None
+        lastPathElement = False
+        for p, pathElement in enumerate(path[1:]):
+            pathIndex = p+1
+            if pathIndex < len(path)-1:
+                expectedRightConcept = path[pathIndex+1].dst.name
+            else:
+                expectedRightConcept = requiredEndOfPathConcept
+                lastPathElement = True
+            
             if isinstance(pathElement, (HasA, IsA, Relation)):
                 pathElementSrc = pathElement.src
                 pathElementDst = pathElement.dst
-
+                if pathElement.var_name != None:
+                    pathElementVarName = pathElement.var_name
+                else:
+                    pathElementVarName =""
+                
                 # Check if there is a problem with reversed usage 
-                if variableConceptParent.name == pathElementDst.name:
+                if requiredLeftConcept.name == pathElementDst.name and expectedRightConcept == pathElementSrc.name:
                     pathVariable = path[0]
                     pathStr = self.getPathStr(path)
-                    pathElementVarName = pathElement.var_name
+                    
                     exceptionStr1 = f"The Path {pathStr} from the variable {pathVariable}, defined in {lc_name} is not valid"
                     exceptionStr2 = f" The relation {pathElementVarName} is from a {pathElementSrc.name} to a {pathElementDst.name}, but you have used it from a {pathElementDst.name} to a {pathElementSrc.name}."
                     if not pathElement.is_reversed:
@@ -186,16 +202,25 @@ class Graph(BaseGraphTree):
                         exceptionStr3 = f"You can use without the .reversed property to change the direction."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
                 # Check if the path is correct
-                elif variableConceptParent.name != pathElementSrc.name:
+                elif requiredLeftConcept.name != pathElementSrc.name:
                     pathVariable = path[0]
                     pathStr = self.getPathStr(path)
-                    pathElementVarName = pathElement.var_name
                     exceptionStr1 = f"The Path {pathStr} from the variable {pathVariable}, defined in {lc_name} is not valid"
-                    exceptionStr2 = f" and the type of {pathVariable} is a {variableConceptParent}, there is no relationship defined between {pathElementDst} and {variableConceptParent}."
+                    exceptionStr2 = f" and the type of {pathVariable} is a {requiredLeftConcept}, there is no relationship defined between {pathElementDst} and {requiredLeftConcept}."
+                    exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                elif expectedRightConcept != pathElementDst.name:
+                    pathVariable = path[0]
+                    pathStr = self.getPathStr(path)
+                    exceptionStr1 = f"The Path {pathStr} from the variable {pathVariable}, defined in {lc_name} is not valid"
+                    if lastPathElement:
+                        exceptionStr2 = f" and the required destination type of the last element of the path is a {expectedRightConcept}."
+                    else:
+                        exceptionStr2 = f" and the expected destination type in this place of the path is a {expectedRightConcept}."
                     exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
                     
-                variableConceptParent = pathElementDst
+                requiredLeftConcept = pathElementDst # move along the path with the requiredLeftConcept
 
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
@@ -259,20 +284,21 @@ class Graph(BaseGraphTree):
                 
                 # loop over all paths defined using the variable as starting point
                 for pathInfo in pathInfos:
-                    path = pathInfo[2]
-                   
+                    path = pathInfo[3]
+                    resultConcept = pathInfo[2]
+                    
                     if isinstance(path[0], tuple): # this path is a combination of paths 
                         for subpath in path: 
                             if len(subpath) < 2:  
                                 continue  # skip this subpath as it has only the starting point variable
                                 
-                            self.check_path(subpath, variableConceptParent, headLcName, foundVariables, variableName)
+                            self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                             
                     else: # this path is a single path
                         if len(path) < 2:
                             continue # skip this path as it has only the starting point variable
                             
-                        self.check_path(path, variableConceptParent, headLcName, foundVariables, variableName)
+                        self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                        
     @property
     def ontology(self):

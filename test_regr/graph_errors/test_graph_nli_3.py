@@ -1,5 +1,5 @@
 import pytest
-from graph_nli_2 import setup_graph
+from graph_nli_3 import setup_graph
 import re
 
 def test_setup_graph_exception():
@@ -7,10 +7,14 @@ def test_setup_graph_exception():
         setup_graph()
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
-        #### fill this, this graph has multiple errors in paths
-        sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', 
-                                   "LC0 andL constraint: the path x rel_pair_premise is not valid in pair(x, rel_pair_premise,). This is because x is of type pair, and x.rel_pair_premise is of type premise. You should either continue the path to get back to the pair with another reversed option, or use the x variable alone",
-                                   ).replace(" ", "")
+
+        sanitized_pattern = re.sub(
+            r'[^\x20-\x7E]', 
+            '', 
+            ("The Path rel_pair_premise from the variable x, defined in pair_symmetry_constraint is not valid"
+             "and the required destination type of the last element of the path is a pair."
+             "The used variable rel_pair_premise is a relationship defined between a pair and a premise, which is not correctly used here.")
+        ).replace(" ", "")
         
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
