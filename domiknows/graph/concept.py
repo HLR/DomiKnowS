@@ -74,24 +74,31 @@ class Concept(BaseGraphTree):
     
     def processLCArgs(self, *args, conceptT=None, **kwargs):
         from domiknows.graph.logicalConstrain import eqL, V
+        
+        error = None
+        
         if len(args) > 1 and isinstance(args[1], eqL):
             nameX = args[0]
             path = (nameX, args[1])
                                     
-            return [conceptT, V(name=nameX, v=path)]
-        elif len(args) and isinstance(args[0], str):
+            return [conceptT, V(name=nameX, v=path), error]
+        
+        if len(args) > 1:
+            error = ("extraV", ) + args
+            
+        if len(args) and isinstance(args[0], str):
             name = args[0]
             
             if "path" in kwargs:
                 path = kwargs['path']
                 
-                return [conceptT, V(name=name, v=path)]
+                return [conceptT, V(name=name, v=path), error]
             else:
-                return [conceptT, V(name=name)]
+                return [conceptT, V(name=name), error]
         elif "path" in kwargs:
             path = kwargs['path']
                                     
-            return [conceptT, V(name=None, v=path)]
+            return [conceptT, V(name=None, v=path), error]
         else:
             return [conceptT]
 

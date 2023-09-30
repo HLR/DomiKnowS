@@ -26,7 +26,7 @@ def setup_graph(fix_constraint=False):
     #       
             
             if fix_constraint:
-                ifL(pair_label.work_for('x'), andL(entity_label.people(path=('x', rel_pair_phrase1)), entity_label.organization(path=('y', rel_pair_phrase2))))
+                ifL(pair_label.work_for('x'), andL(entity_label.people(path=('x', rel_pair_phrase1)), entity_label.organization(path=('x', rel_pair_phrase2))))
             else:
                 ifL(pair_label.work_for('x', 'y'), andL(entity_label.people(path=('x')), entity_label.organization(path=('y'))))
     return graph

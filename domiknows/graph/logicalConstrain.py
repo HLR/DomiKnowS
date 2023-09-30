@@ -37,7 +37,7 @@ class LcElement:
 
                 updatedE.append(eItem)
             else:
-                 raise LcElement.LcElementError(f"{self.typeName} is incorrect - {eItem} is not a valid element of the {self.typeName}")
+                raise LcElement.LcElementError(f"{self.typeName} is incorrect - {eItem} is not a valid element of the {self.typeName}")
                 
         self.e = updatedE
         
@@ -81,7 +81,7 @@ class LcElement:
         if self.graph == None:
             raise LcElement.LcElementError(f"{self.typeName} is incorrect - no graph found for the {self.typeName}")
         
-         # Create Logical Element id based on number of existing Logical Element in the graph
+        # Create Logical Element id based on number of existing Logical Element in the graph
         self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
         if name is not None:
@@ -116,7 +116,7 @@ class LogicalConstrain(LcElement):
         assert self.graph is not None
         self.graph.logicalConstrains[self.lcName] = self
         
-         # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
+        # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
         for e_item in self.e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False

@@ -7,10 +7,18 @@ def test_setup_graph_exception():
         setup_graph()
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
-        sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', 
-                                   "LC0 ifL constraint: Each predicate can only have one new variable definition. For the predicate work_for, you have used both x and y as new variables",
-                                   "Either wrap both under on variable, if you intended to initialize x based on another value, then the second argument should be a path=(...),").replace(" ", "")
+
+        sanitized_pattern = re.sub(
+            r'[^\x20-\x7E]', 
+            '', 
+            ("Logical constraint LC1 ifL: Each predicate can only have one new variable definition."
+             "For the predicate work_for, you have used both x and y as new variables."
+             "Either wrap both under on variable, if you intended to initialize x based on another value,"
+             "then the second argument should be a path=(...).")
+        ).replace(" ", "")
         
+        print(sanitized_pattern)
+
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
         

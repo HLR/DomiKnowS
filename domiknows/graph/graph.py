@@ -76,6 +76,12 @@ class Graph(BaseGraphTree):
                 else:
                     raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept")
 
+            # checking for extra variable:
+            elif e and isinstance(e, tuple) and e[0] == 'extraV':
+                predicate = lc.e[0][1]
+                exceptionStr1 = f"Logical constraint {headLc} {lc}: Each predicate can only have one new variable definition. For the predicate {predicate}, you have used both {e[1]} and {e[2]} as new variables."
+                exceptionStr2 = f"Either wrap both under on variable, if you intended to initialize {e[1]} based on another value, then the second argument should be a path=(...)."
+                raise Exception(f"{exceptionStr1} {exceptionStr2}")
             # checking if element is a tuple 
             elif isinstance(e, tuple) and e and isinstance(e[0], LcElement) and not isinstance(e[0], LogicalConstrain):
                 self.find_lc_variable(e[0], found_variables=found_variables, headLc=headLc)
