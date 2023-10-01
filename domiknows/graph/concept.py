@@ -57,6 +57,9 @@ class Concept(BaseGraphTree):
     def get_batch(self):
         return self.batch
 
+    def get_var_name(self):
+        return self.var_name
+    
     def __str__(self):
         return self.name
     

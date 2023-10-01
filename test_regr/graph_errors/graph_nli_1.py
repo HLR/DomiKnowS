@@ -23,6 +23,20 @@ def setup_graph(fix_constraint=False):
                     andL(
                         pair('x'),
                         pair('y'),
+                        pair(path=('x', rel_pair_hypothesis, rel_pair_hypothesis.reversed)),
+                        pair(path=('y')),
+                    ),
+                    ifL(
+                        nli_class.entailment(path=('x')),
+                        notL(nli_class.contradiction(path=('y')))
+                    ),
+                    name="pair_symmetry_constraint"
+                ) 
+            else:
+                ifL(
+                    andL(
+                        pair('x'),
+                        pair('y'),
                         pair(path=('x', rel_pair_premise, rel_pair_hypothesis.reversed)),
                         pair(path=('y')),
                     ),
