@@ -8,7 +8,7 @@ def test_setup_graph_exception():
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
         sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', 
-                                   "The Path 'entity' from the variable x, defined in constraint_only_one_entity is not valid."
+                                   "The Path 'entity' from the variable x, after x is not valid."
                                    "The used variable entity is a concept, path element can be only relation or eqL logical constraint used to filter candidates in the path.").replace(" ", "")
         
         print(repr(sanitized_error_message))

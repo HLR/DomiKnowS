@@ -10,7 +10,7 @@ def test_setup_graph_exception():
         sanitized_pattern = re.sub(r'[^\x20-\x7E]', 
                                    '', 
                                    "The Path 'rel_pair_entity1' from the variable x, defined in LC_employment is not valid."
-                                   "The required source type in this place of the path is a relation," 
+                                   "The required source type after x is a relation," 
                                    "but the used variable rel_pair_entity1 is a relationship defined between a pair and a named_entity, which is not correctly used here.").replace(" ", "")
         
         print(repr(sanitized_error_message))

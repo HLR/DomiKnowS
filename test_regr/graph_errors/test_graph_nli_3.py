@@ -12,7 +12,7 @@ def test_setup_graph_exception():
             r'[^\x20-\x7E]', 
             '', 
             ("The Path 'rel_pair_premise' from the variable x, defined in pair_symmetry_constraint is not valid."
-             "The required destination type of the last element of the path is a pair."
+             "The required destination type after x is a pair."
              "The used variable rel_pair_premise is a relationship defined between a pair and a premise, which is not correctly used here.")
         ).replace(" ", "")
         

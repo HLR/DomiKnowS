@@ -191,6 +191,7 @@ class Graph(BaseGraphTree):
         lastPathElement = False
         pathStr = self.getPathStr(path)
         pathVariable = path[0]
+        pathPart = path[0]
             
         for p, pathElement in enumerate(path[1:]):
             pathIndex = p+1
@@ -223,26 +224,26 @@ class Graph(BaseGraphTree):
                 # Check if the current path element is correctly connected to the left (source) - has matching type
                 elif requiredLeftConcept != pathElementSrc:
                     exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
-                    exceptionStr2 = f"The required source type in this place of the path is a {requiredLeftConcept},"
+                    exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
                     exceptionStr3 = f"but the used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
                 # Check if the current path element is correctly connected to the right (destination) - has matching type
                 elif expectedRightConceptRoot != pathElementDst: 
                     exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
                     if lastPathElement: # if this is the last element it has to match the concept in which this path is embedded
-                        exceptionStr2 = f"The required destination type of the last element of the path is a {expectedRightConcept}."
+                        exceptionStr2 = f"The required destination type after {pathPart} is a {expectedRightConcept}."
                     else: # if this it intermediary path element that if is expected that it will match next path element source type
-                        exceptionStr2 = f"The expected destination type in this place of the path is a {expectedRightConcept}."
+                        exceptionStr2 = f"The expected destination type after {pathPart} is a {expectedRightConcept}."
                     exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
                 
                 # Move along the path with the requiredLeftConcept and pathVariable
                 requiredLeftConcept = pathElementDst
-                pathVariable = pathElementVarName
+                pathPart += " " + pathElementVarName
             elif isinstance(pathElement, (eqL,)):
                 pass # it is not check for now
             else:
-                exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
+                exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
                 if isinstance(pathElement, (Concept,)):
                     exceptionStr2 = f"The used variable {pathElement} is a concept, path element can be only relation or eqL logical constraint used to filter candidates in the path."
                 else:
