@@ -11,8 +11,8 @@ def test_setup_graph_exception():
         sanitized_pattern = re.sub(
             r'[^\x20-\x7E]', 
             '', 
-            ("The Path 'rel_pair_premise rel_pair_hypothesis.reversed' from the variable rel_pair_premise, defined in pair_symmetry_constraint is not valid."
-             "The required source type in this place of the path is a premise,"
+            ("The Path 'rel_pair_premise rel_pair_hypothesis.reversed' from the variable x, defined in pair_symmetry_constraint is not valid."
+             "The required source type after x rel_pair_premise is a premise,"
              "but the used variable rel_pair_hypothesis.reversed is a relationship defined between a hypothesis and a pair, which is not correctly used here.")
         ).replace(" ", "")
         
