@@ -24,7 +24,7 @@ class LcElement:
         lenE = len(e)
         self.cardinalityException = ""
         for i, eItem in enumerate(e):
-            if isinstance(eItem, (LcElement, Concept, Relation)): # lc element without path
+            if isinstance(eItem, (LcElement, Concept, Relation, tuple)): # lc element without path
                 updatedE.append(eItem)
             elif callable(eItem): # multiclass label
                 newEItem = eItem.__call__() # generated label
