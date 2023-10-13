@@ -130,7 +130,7 @@ class Graph(BaseGraphTree):
 
         from domiknows.graph import V, LogicalConstrain
 
-        def handle_variable_name(lc_variable_name):
+        def handle_variable_name(lc_variable_name, lcPath):
             if lc_variable_name not in found_variables:
                 raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined")
 
@@ -138,7 +138,6 @@ class Graph(BaseGraphTree):
                 used_variables[lc_variable_name] = []
 
             lcElementType = lc.e[i-1]
-            lcPath = e.v
             variable_info = (lc, lc_variable_name, lcElementType, lcPath)
             used_variables[lc_variable_name].append(variable_info)
 
@@ -147,14 +146,14 @@ class Graph(BaseGraphTree):
                 if isinstance(e.v, eqL):
                     continue
                 elif isinstance(e.v, str):
-                    handle_variable_name(e.v)
+                    handle_variable_name(e.v, e.v)
                 elif isinstance(e, tuple):
                     if isinstance(e.v[0], str): # single path
-                        handle_variable_name(e.v[0])
+                        handle_variable_name(e.v[0], e.v)
                     elif isinstance(e.v[0], tuple): # path union
                         for t in e.v:
                             if isinstance(t[0], str):
-                                handle_variable_name(t[0])
+                                handle_variable_name(t[0], t)
                             else:
                                 raise Exception(f"Path {t} found in {headLc} {lc} is not correct")
                     else:
@@ -197,11 +196,12 @@ class Graph(BaseGraphTree):
         pathVariable = path[0]
         pathPart = path[0]
             
-        for p, pathElement in enumerate(path[1:]):
-            pathIndex = p+1
-        
-            if pathIndex < len(path)-1:
-                expectedRightConcept = path[pathIndex].dst.name
+        for pathIndex, pathElement in enumerate(path[1:], start=1):   
+            if isinstance(pathElement, (eqL,)):
+                continue
+            
+            if pathIndex < len(path) - 1:
+                expectedRightConcept = pathElement.dst.name
                 expectedRightConceptRoot = expectedRightConcept
             else:
                 expectedRightConcept = requiredEndOfPathConcept
@@ -211,11 +211,8 @@ class Graph(BaseGraphTree):
             if isinstance(pathElement, (HasA, IsA, Relation)):
                 pathElementSrc = pathElement.src.name
                 pathElementDst = pathElement.dst.name
-                if pathElement.var_name != None:
-                    pathElementVarName = pathElement.var_name
-                else:
-                    pathElementVarName =""
-                
+                pathElementVarName = pathElement.var_name if pathElement.var_name else ""
+
                 # Check if there is a problem with reversed usage of the current path element - it has to be possible to reverse the order to fix it
                 if requiredLeftConcept == pathElementDst and expectedRightConceptRoot == pathElementSrc:                    
                     exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid"
@@ -244,8 +241,6 @@ class Graph(BaseGraphTree):
                 # Move along the path with the requiredLeftConcept and pathVariable
                 requiredLeftConcept = pathElementDst
                 pathPart += " " + pathElementVarName
-            elif isinstance(pathElement, (eqL,)):
-                pass # it is not check for now
             else:
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
                 if isinstance(pathElement, (Concept,)):
@@ -286,7 +281,7 @@ class Graph(BaseGraphTree):
         # --- Gather information about variables used and defined in the logical constrains and 
         #     report errors if some of them are not defined and used or defined more than once
         for lc_name, lc in self.logicalConstrains.items():
-            if not lc.headLC:
+            if not lc.active or not lc.headLC:
                 continue
 
             # find variable defined in the logical constrain - report error if some of them are defined more than once
@@ -302,7 +297,7 @@ class Graph(BaseGraphTree):
         
         # --- Check if the paths defined in the logical constrains are correct
         for lc_name, lc in self.logicalConstrains.items():
-            if not lc.headLC:
+            if not lc.active or not lc.headLC:
                 continue
             
             # current logical constrain info and variables found and used in the current logical constrain
