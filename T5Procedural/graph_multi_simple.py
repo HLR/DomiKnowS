@@ -90,14 +90,18 @@ with Graph('global') as graph:
                     getattr(action_label, arg2)(path=(('eb', targ2, action_step.reversed), ('eb', tentity, action_entity.reversed)))
                 ),
                 getattr(transition, transition_name)('t', path=('eb', )),
-            ), active = transition_level_lc
+            ), 
+            active = transition_level_lc,
+            name="transitive_1"
         )
     ### the first action label cannot Post
     forAllL(
         combinationC(entity, step(path=(eqL(step, 'index', {0}))))('e', 'i'),
         notL(
             action_label.post('a110', path=(('i', action_step.reversed), ('e', action_entity.reversed)))
-        ), active = action_level_lc
+        ), 
+        active = action_level_lc,
+        name="first_action"
     )
 
     ### the alone candidate "3" is never the answer of a location
@@ -111,7 +115,8 @@ with Graph('global') as graph:
                                                 ("l", llocation.reversed)
                                               )
             )
-        ), active = location_level_lc
+        ), active = location_level_lc,
+        name="alone_candidate"
     )
 
     ### if action before is none and after is not none, then the action is create
@@ -132,7 +137,8 @@ with Graph('global') as graph:
                 ))),
             ),
             action_label.create('a', path=(('i', action_step.reversed), ('e', action_entity.reversed)))
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="create_action"
     )
 
     ### the locations should match
@@ -141,7 +147,8 @@ with Graph('global') as graph:
         ifL(
             entity_location_label('x', path=(('e', lentity.reversed), ('step_rel', ebefore_arg1, lstep.reversed))),
             entity_location_before_label('y', path=(('e', lentity.reversed), ('step_rel', ebefore_arg2, lstep.reversed), ('x', llocation, llocation.reversed))),
-        ), active = location_level_lc
+        ), active = location_level_lc,
+        name="location_match"
     )
     
     ### possible actions before destroy
@@ -158,7 +165,8 @@ with Graph('global') as graph:
                 action_label.move('a3', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
                 action_label.exists('a4', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
             )
-        ), active = action_level_lc
+        ), active = action_level_lc,
+        name="possible_actions_before_destroy"
     )
 
     ### possible actions before create
@@ -175,7 +183,8 @@ with Graph('global') as graph:
                 action_label.post("a3" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
                 action_label.destroy("a4" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
             )
-        ), active = action_level_lc
+        ), active = action_level_lc,
+        name="possible_actions_before_create"
     )
 
     ### possible actions before move
@@ -192,7 +201,8 @@ with Graph('global') as graph:
                 action_label.exists("a3" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
                 action_label.move("a4" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
             )
-        ), active = action_level_lc
+        ), active = action_level_lc,
+        name="possible_actions_before_move"
     )
     
     ### possible actions before exists
@@ -209,7 +219,8 @@ with Graph('global') as graph:
                 action_label.move("a3" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
                 action_label.create("a4" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
             )
-        ), active=action_level_lc
+        ), active=action_level_lc,
+        name="possible_actions_before_exists"
     )
 
     ### possible actions before prior
@@ -223,7 +234,8 @@ with Graph('global') as graph:
             existsL(step('k', path=('i', ebefore_arg2.reversed, ebefore_arg1)),),
             action_label.prior("a2" , path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)),
             )
-        ), active=action_level_lc
+        ), active=action_level_lc,
+        name="possible_actions_before_prior"
     )
 
     ### possible actions before post
@@ -239,7 +251,8 @@ with Graph('global') as graph:
                 action_label.post('a2', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed))),
                 action_label.destroy('a3', path=(('i', ebefore_arg2.reversed, ebefore_arg1, action_step.reversed), ('e', action_entity.reversed)))
             )
-        ), active=action_level_lc
+        ), active=action_level_lc,
+        name="possible_actions_before_post"
     )
 
     ### before post, there should be a destroy somewhere
@@ -254,7 +267,8 @@ with Graph('global') as graph:
                     step('j', path=(('i', before_arg2.reversed, before_arg1))),
                     action_label.destroy('a117', path=(('j', action_step.reversed), ('e', action_entity.reversed)))
                 )
-        ), active = False
+        ), active = False,
+        name="before_post_destroy"
     )
 
     ifL(
@@ -262,7 +276,8 @@ with Graph('global') as graph:
         atMostL(
             action_label.create(path=('e', action_entity.reversed)),
             2
-        ), active = All_LC
+        ), active = All_LC,
+        name="create_limit"
     )
 
     ifL(
@@ -270,7 +285,8 @@ with Graph('global') as graph:
         atMostL(
             action_label.destroy(path=('e', action_entity.reversed)),
             1
-        ), active = All_LC
+        ), active = All_LC,
+        name="destroy_limit"
     )
 
     ### If the action is move, then the location from step before should be different from the current step
@@ -282,8 +298,9 @@ with Graph('global') as graph:
             entity('e', path=('a1', action_entity)),
             entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed)))
             ), 
-        notL(entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
-        , active = location_action_lc
+        notL(entity_location_label('y', path=(('i', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
+        , active = location_action_lc,
+        name="move_location"
     )
     
 
@@ -296,7 +313,8 @@ with Graph('global') as graph:
             entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed)))
             ),
         entity_location_label('y', path=(('i', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))),
-        active = location_action_lc
+        active = location_action_lc,
+        name="exists_location"
     )
     
     ### There can only be one location for each entity at each step
@@ -304,7 +322,8 @@ with Graph('global') as graph:
          combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
          exactL(
              entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
-         ), active = location_level_lc # this is the condition that should hold for every assignment
+         ), active = location_level_lc, # this is the condition that should hold for every assignment
+            name="one_location"
     )
     
     ### there can only be one location before for each entity at each step
@@ -312,7 +331,8 @@ with Graph('global') as graph:
          combinationC(step, entity)('i', 'e'), #this is the search space, cartesian product is expected between options
          exactL(
              entity_location_before_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
-         ), active = location_level_lc # this is the condition that should hold for every assignment
+         ), active = location_level_lc, # this is the condition that should hold for every assignment
+            name="one_location_before"
     )
     
     ### if action is create, the location should not be `none` and before location should be none
@@ -329,14 +349,15 @@ with Graph('global') as graph:
                                 )
                     )
                 ),
-                entity_location_before_label('el1', path=(
+                entity_location_before_label('el2', path=(
                                     ("e", lentity.reversed),
                                     ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="create_location"
     )
 
     ### if action is destroy, the location should be `none`
@@ -353,14 +374,15 @@ with Graph('global') as graph:
                                 )
                     )
                 ),
-                entity_location_label('el1', path=(
+                entity_location_label('el2', path=(
                                     ("e", lentity.reversed),
                                     ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839"}), llocation.reversed), 
                                     ("i", lstep.reversed)
                                 )
                     )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="destroy_location"
     )
 
     ### if action is move, the location should not be `none`
@@ -377,7 +399,7 @@ with Graph('global') as graph:
                                 )
                     )
                 ),
-                notL(entity_location_before_label('el1', path=(
+                notL(entity_location_before_label('el2', path=(
                                     ("e", lentity.reversed),
                                     ("e", lentity.reversed, llocation, eqL(location, 'text', {"5839", "150", "14794", "597", "1", "3"}), llocation.reversed), 
                                     ("i", lstep.reversed)
@@ -385,7 +407,8 @@ with Graph('global') as graph:
                     )
                 )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="move_location"
     )
 
     ### if action is move, the location should be different from the previous step(before/after location)
@@ -408,7 +431,8 @@ with Graph('global') as graph:
                         )
                 )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="move_location"
     )
 
     ### if action is exists, the location should not be `none` and before location should not be none
@@ -433,7 +457,8 @@ with Graph('global') as graph:
                     )
                 )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="exists_location"
     )
 
     ### if action is prior, the location should  be `none` and before location should be none
@@ -455,7 +480,8 @@ with Graph('global') as graph:
                             )
                 )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="prior_location"
     )
 
     ### if action is post, the location should  be `none` and before location should be none
@@ -477,7 +503,8 @@ with Graph('global') as graph:
                             )
                 )
             )
-        ), active = location_action_lc
+        ), active = location_action_lc,
+        name="post_location"
     )
 
     ### for same mention of entities some relations should hold
@@ -489,7 +516,8 @@ with Graph('global') as graph:
                 ("sm1", same_location, llocation.reversed),
                 ("i", lstep.reversed)
             ))
-        ), active = False
+        ), active = False,
+        name="same_mention"
     )
 
     # graph.visualize("./image")
