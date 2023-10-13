@@ -123,6 +123,8 @@ class Graph(BaseGraphTree):
         return found_variables
 
     def check_if_all_used_variables_are_defined(self, lc, found_variables, used_variables=None, headLc=None):
+        from .logicalConstrain import eqL
+        
         if used_variables is None:
             used_variables = {}
 
@@ -142,7 +144,9 @@ class Graph(BaseGraphTree):
 
         for i, e in enumerate(lc.e):
             if isinstance(e, V) and e.v: # has path
-                if isinstance(e.v, str):
+                if isinstance(e.v, eqL):
+                    continue
+                elif isinstance(e.v, str):
                     handle_variable_name(e.v)
                 elif isinstance(e, tuple):
                     if isinstance(e.v[0], str): # single path
@@ -175,7 +179,7 @@ class Graph(BaseGraphTree):
             elif isinstance(pathElement, (Concept,)):
                 pathStr += pathElement.var_name + " "
             else:
-                pathStr += pathElement
+                pathStr += str(pathElement)
                
         return pathStr.strip()
                 
