@@ -42,15 +42,13 @@ def process_hierarchy(path):
 
 structure = process_hierarchy("hierarchy.json")
 
-
-
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
 
-with Graph('VQA') as graph:
-    image_group = Concept(name='image_group')
+with Graph('VQA', reuse_model=True) as graph:
+    image_group = Concept(name='image_group', batch=True)
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
 
@@ -71,13 +69,15 @@ with Graph('VQA') as graph:
             if len(structure[key]):
                 if key in hierarchy['level1']:
                     # ifL(orL(*[level2.__getattr__(key1) for key1 in structure[key]]), level1.__getattr__(key))
-                    ifL(level1.__getattr__(key), exactL(*[level2.__getattr__(key1) for key1 in structure[key]]))
+                    ifL(level1.__getattr__(key), exactL(level2.__getattr__('None'), *[level2.__getattr__(key1) for key1 in structure[key]]))
                 elif key in hierarchy['level2']:
+                    if key == 'water':
+                        print(structure[key])
                     # ifL(orL(*[level3.__getattr__(key1) for key1 in structure[key]]), level2.__getattr__(key))
-                    ifL(level2.__getattr__(key), exactL(*[level3.__getattr__(key1) for key1 in structure[key]]))
+                    ifL(level2.__getattr__(key), exactL(level3.__getattr__('None'), *[level3.__getattr__(key1) for key1 in structure[key]]))
                 elif key in hierarchy['level3']:
                     # ifL(orL(*[level4.__getattr__(key1) for key1 in structure[key]]), level3.__getattr__(key))
-                    ifL(level3.__getattr__(key), exactL(*[level4.__getattr__(key1) for key1 in structure[key]]))
+                    ifL(level3.__getattr__(key), exactL(level4.__getattr__('None'), *[level4.__getattr__(key1) for key1 in structure[key]]))
             else:
                 if key in hierarchy['level1']:
                     ifL(level1.__getattr__(key), andL(level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')))
@@ -85,10 +85,15 @@ with Graph('VQA') as graph:
                     ifL(level2.__getattr__(key), andL(level3.__getattr__('None'), level4.__getattr__('None')))
                 elif key in hierarchy['level3']:
                     ifL(level3.__getattr__(key), level4.__getattr__('None'))
-
-
-                
-
+        for key in hierarchy['level1']:
+            if key not in structure:
+                ifL(level1.__getattr__(key), andL(level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')))
+        for key in hierarchy['level2']:
+            if key not in structure:
+                ifL(level2.__getattr__(key), andL(level3.__getattr__('None'), level4.__getattr__('None')))
+        for key in hierarchy['level3']:
+            if key not in structure:
+                ifL(level3.__getattr__(key), level4.__getattr__('None'))
         # ifL(level1.__getattr__('None'), andL(*[level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')]))
         ifL(
             level2.__getattr__('None'), 
@@ -121,3 +126,8 @@ with Graph('VQA') as graph:
         exactL(*[level3.__getattr__(key) for key in hierarchy['level3'] + ["None"]])
         exactL(*[level4.__getattr__(key) for key in hierarchy['level4'] + ["None"]])
         # print("number of relations: ", relations)
+
+
+
+
+
