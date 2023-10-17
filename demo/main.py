@@ -46,7 +46,8 @@ with Graph('example', reuse_model=True) as graph:
     nandL(people, organization)
     
     # if pair is work_for then its first pair element is people and the second is organization
-    ifL(work_for('x'), andL(people(path=('x', arg1)), organization(path=('x', arg2))))
+    #ifL(work_for('x'), andL(people(path=('x', arg1)), organization(path=('x', arg2))))
+    ifL(work_for('x', 'y'), andL(people('x'), organization('y')))
     
 
 #
