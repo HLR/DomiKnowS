@@ -1,6 +1,7 @@
 from collections import OrderedDict, namedtuple
 from itertools import chain
 import inspect
+from distutils.dep_util import newer
 
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
@@ -60,8 +61,49 @@ class Graph(BaseGraphTree):
         
         return relationConcept
     
-    from collections import namedtuple
+    def findConcept(self, conceptName):
+        subGraph_keys = [key for key in self._objs]
+        for subGraphKey in subGraph_keys:
+            subGraph = self._objs[subGraphKey]
+           
+            for conceptNameItem in subGraph.concepts:
+                if conceptName == conceptNameItem:
+                    concept = subGraph.concepts[conceptNameItem]
+                   
+                    return concept
+            
+        return None 
 
+    def findConceptInfo(self, concept):
+        
+        has_a = concept.has_a()
+        
+        if not has_a:
+            is_a = [contain.dst for contain in concept._out.get('is_a', [])]
+            
+            for i in is_a:
+                has_a = i.has_a()
+                
+                if has_a:
+                    break
+        
+        conceptInfo = OrderedDict([
+            ('concept', concept),
+            ('relation', bool(concept.has_a())),
+            ('has_a', concept.has_a()),
+            ('relationAttrs', OrderedDict((rel, self.findConcept(rel.dst.name)) for _, rel in enumerate(has_a))),
+            ('contains', [contain.dst for contain in concept._out.get('contains', [])]),
+            ('containedIn', [contain.src for contain in concept._in.get('contains', [])]),
+            ('is_a', [contain.dst for contain in concept._out.get('is_a', [])])
+        ])
+    
+        if not conceptInfo['containedIn'] and not conceptInfo['is_a'] and not conceptInfo['relation']:
+            conceptInfo['root'] = True
+        else:
+            conceptInfo['root'] = False
+            
+        return conceptInfo
+        
     # find all variables defined in the logical constrain and report error if some of them are defined more than once
     def find_lc_variable(self, lc, found_variables=None, headLc=None):
         if lc.cardinalityException:
@@ -250,6 +292,15 @@ class Graph(BaseGraphTree):
                     exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
                 raise Exception(f"{exceptionStr1} {exceptionStr2}")
 
+    def handleVarsPath(self, lc, varMaps):
+        from domiknows.graph import V, LogicalConstrain
+        
+        for i, e in enumerate(lc.e):
+            if isinstance(e, V) and e.name in varMaps:
+                lc.e[i] = varMaps[e.name]
+            if isinstance(e, LogicalConstrain):
+                self.handleVarsPath(e, varMaps)              
+                
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
         
@@ -284,6 +335,27 @@ class Graph(BaseGraphTree):
             if not lc.active or not lc.headLC:
                 continue
 
+            # process VarMaps
+            varMapsList = []
+            newE = []
+            for e in lc.e:
+                if isinstance(e, tuple) and e[0] == 'VarMaps':
+                    varMapsList.append(e[1])
+                else:
+                    newE.append(e)
+                    
+            lc.e = newE
+            
+            varMaps = {}
+            if varMapsList:
+                for dictionary in varMapsList:
+                    for key, value in dictionary.items():
+                        if key in varMaps:
+                            raise ValueError(f"Duplicate key found: {key}")
+                        varMaps[key] = value
+                        
+                    self.handleVarsPath(lc, varMaps)
+            
             # find variable defined in the logical constrain - report error if some of them are defined more than once
             found_variables = self.find_lc_variable(lc, headLc=lc.name)
 
@@ -496,6 +568,5 @@ class Graph(BaseGraphTree):
             else:
                 final_list.append(f"{predicate[0]}({predicate[1]})")
         return final_list
-
 
     Ontology = namedtuple('Ontology', ['iri', 'local'], defaults=[None])

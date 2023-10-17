@@ -44,8 +44,9 @@ with Graph('global') as graph:
         kill.has_a(people, people)
 
         # LC2
-        ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
-        
+        #ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1)), organization(path=('x', rel_pair_word2))), active = True)
+        ifL(work_for('x', 'y'), andL(people('x'), organization('y')))
+
         # LC3
         ifL(word, atMostL(people, organization, location, other, o), active = True)
         
