@@ -303,7 +303,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
         print('Starting GBI:')
 
         # -- Make copy of original model
-        model_l, c_opt = get_lambda(model, lr=1e-1)
+        model_l, c_opt = get_lambda(model, lr=1e-2)
         
         # -- model_l is the model that gets optimized by GBI
         model_l.mode(Mode.TRAIN)
@@ -344,18 +344,18 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             probs = {}
             for var_name, var_val in node_l.getAttribute('variableSet').items():
                 if not var_name.endswith('/label') and var_val.grad_fn is not None:
-                    probs[var_name] = torch.sum(F.log_softmax(var_val, dim=-1))
+                    p = torch.sum(F.log_softmax(var_val, dim=-1))
+
+                    probs[var_name] = p
 
             # get total log prob
-            log_probs = 0.0
-            for c_prob in probs.values():
-                log_probs += torch.sum(torch.log(c_prob))
+            log_probs = sum(probs.values()) / len(probs)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
-            c_loss = -1 * log_probs * is_satisifed + reg_loss(model_l, model)
+            c_loss = log_probs * (1 - is_satisifed) + reg_loss(model_l, model)
 
-            # print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
+            print("iter=%d, c_loss=%.4f, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
 
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
@@ -373,13 +373,13 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             # --- Backward pass on model_l
             c_loss.backward()
             
-            print("Step after backward")
-            for name, x in model_l.named_parameters():
-                if x.grad is None:
-                    print(name, 'no grad')
-                    continue
+            # print("Step after backward")
+            # for name, x in model_l.named_parameters():
+            #     if x.grad is None:
+            #         print(name, 'no grad')
+            #         continue
                 
-                print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
+            #     print(name, 'grad: ', torch.sum(torch.abs(x.grad)))
                 
             #  -- Update model_l
             c_opt.step()
@@ -400,4 +400,4 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     print('after unsatisifed: %.2f' % (unsatisfied_after / total))
 
 
-run_gbi(program, validloader, 1000, 100, ['digits0', 'digits1'], are_both_digits_correct)
+run_gbi(program, validloader, 1000, 50, ['digits0', 'digits1'], are_both_digits_correct)
