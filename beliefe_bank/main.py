@@ -86,10 +86,8 @@ with Graph('belief_bank') as graph:
     nimplication = Concept(name='nimplication')
     ni_arg1, ni_arg2 = nimplication.has_a(narg1=facts, narg2=facts)
 
-    ifL(andL(fact_check('x'), existsL(implication('s', path=('x', implication)))), fact_check(path=('s', i_arg2)))
-    #ifL(implication('s'), ifL(fact_check(path=('s',i_arg1.reversed)),fact_check(path=('s',i_arg2.reversed )) ) )
-    #ifL(andL(implication('s'),fact_check(path=('s',i_arg1.reversed)) ,fact_check(path=('s',i_arg2.reversed )) ) )
-    ifL(andL(fact_check('x'), existsL(nimplication('s', path=('x', nimplication)))), notL(fact_check(path=('s', ni_arg2))))
+    ifL(andL(fact_check('x'), existsL(implication('s', path=('x', i_arg1.reversed)))), fact_check(path=('s', i_arg2)))
+    ifL(andL(fact_check('x'), existsL(nimplication('s', path=('x', ni_arg1.reversed)))), notL(fact_check(path=('s', ni_arg2))))
 
 subject['name'] = ReaderSensor(keyword='name')
 subject['facts'] = ReaderSensor(keyword='facts')
