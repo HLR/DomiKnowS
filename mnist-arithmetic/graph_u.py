@@ -7,11 +7,13 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-digitRange = 10
-summationVal = 9
-summationRange = 2 * digitRange - 1
+
 
 with Graph(name='global', reuse_model=True) as graph:
+
+    digitRange = 10
+    summationVal = 9
+    summationRange = 2 * digitRange - 1
     
     T1 = Concept(name='t1')
     image = Concept(name='image')
