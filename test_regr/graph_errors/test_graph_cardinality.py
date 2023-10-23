@@ -13,6 +13,9 @@ def test_setup_graph_exception():
         
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
+
+        ### fixed with ChatGPT
+        ##### Logical Constraint constraint_only_one_entity has incorrect cardinality definition in nested atMostL logical operator - integer 1 has to be last element in the same Logical operator for counting or existing logical operators!
         
         assert sanitized_error_message == sanitized_pattern, f"Exception message did not match: got {sanitized_error_message}"
     else:

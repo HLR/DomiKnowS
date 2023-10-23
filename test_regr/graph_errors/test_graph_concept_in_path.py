@@ -11,6 +11,11 @@ def test_setup_graph_exception():
                                    "The Path 'entity' from the variable x, after x is not valid."
                                    "The used variable entity is a concept, path element can be only relation or eqL logical constraint used to filter candidates in the path.").replace(" ", "")
         
+        ### you have used the notion person(path=('x', entity)) which is incorrect.
+        ### entity is a concept and cannot be used as part of the path. 
+        ### - If you meant that 'x' should be of type person: person(path=('x'))
+        ### - if you meant another entity 'y' should be of type person which is somehow related to 'x': person(path=('x', edge1, edge2, ...)) 
+        ###   where edge1, edge2, ... are relations that connect 'x' to 'y'
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
         
