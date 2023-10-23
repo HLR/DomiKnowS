@@ -2732,7 +2732,11 @@ class DataNodeBuilder(dict):
 
             batchRootDNValue = ""
             batchRootDNID = 0
-            batchRootDNOntologyNode = Concept(name='batch')
+            
+            if 'batch' in supGraph.concepts:
+                batchRootDNOntologyNode = supGraph.concepts['batch' ]
+            else:
+                batchRootDNOntologyNode = Concept(name='batch')
             supGraph.attach(batchRootDNOntologyNode)
             
             batchRootDN = DataNode(myBuilder = self, instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
