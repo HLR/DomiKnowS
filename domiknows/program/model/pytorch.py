@@ -91,7 +91,7 @@ class TorchModel(torch.nn.Module):
             
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
-            # build datanode with tensor dictionary for attributes when not ILP aor GBI inference needed
+            # build datanode with tensor dictionary for attributes when not ILP or GBI inference needed
             if getDnSkeletonMode():
                 if not hasattr(self, 'inferTypes') or ('ILP' not in self.inferTypes and 'GBI' not in self.inferTypes):
                     setDnSkeletonMode(True, full=True)

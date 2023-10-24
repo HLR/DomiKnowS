@@ -13,6 +13,8 @@ else:
 
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
+    varNameReversedMap = {}  # Class variable
+        
     def __init__(self, name=None, ontology=None, iri=None, local=None, auto_constraint=None, reuse_model=False):
         BaseGraphTree.__init__(self, name)
         if ontology is None:
@@ -108,10 +110,13 @@ class Graph(BaseGraphTree):
     def find_lc_variable(self, lc, found_variables=None, headLc=None):
         if lc.cardinalityException:
             if lc.name != headLc:
-                raise Exception(f"{lc.typeName} {headLc} has incorrect cardinality definition in nested constraint {lc.name} - integer {lc.cardinalityException} has to be last element in the {lc.typeName}")
+                exceptionStr1 = f"{lc.typeName} {headLc} has incorrect cardinality definition in nested {lc} logical operator- " 
             else:
-                raise Exception(f"{lc.typeName} {headLc} has incorrect cardinality definition - integer {lc.cardinalityException} has to be last element in the {lc.typeName}")
+                exceptionStr1 = f"{lc.typeName} {headLc} has incorrect cardinality definition - "
             
+            exceptionStr2 = f"integer {lc.cardinalityException} has to be last element in the same Logical operator for counting or existing logical operators!"
+            raise Exception(f"{exceptionStr1} {exceptionStr2}")
+
         if found_variables is None:
             found_variables = {}
 
@@ -241,7 +246,15 @@ class Graph(BaseGraphTree):
         for pathIndex, pathElement in enumerate(path[1:], start=1):   
             if isinstance(pathElement, (eqL,)):
                 continue
-            
+            if isinstance(pathElement, (str,)): # It is a string check if we have corresponding relation in the graph
+                if pathElement in self.varNameReversedMap:
+                    pathElement = self.varNameReversedMap[pathElement]
+                else:
+                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
+                    exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
+                    exceptionStr3 = f"but the used variable {pathElement} is a string which is not a valid name of a graph relationship."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2}")
+                
             if pathIndex < len(path) - 1:
                 expectedRightConcept = pathElement.dst.name
                 expectedRightConceptRoot = expectedRightConcept
@@ -260,9 +273,10 @@ class Graph(BaseGraphTree):
                     exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid"
                     exceptionStr2 = f"The relation {pathElementVarName} is from a {pathElementSrc} to a {pathElementDst}, but you have used it from a {pathElementDst} to a {pathElementSrc}."
                     if not pathElement.is_reversed:
-                        exceptionStr3 = f"You can use the .reversed property to change the direction."
+                        exceptionStr3 = f"You can change '{pathElement.var_name}' to '{pathElement.var_name}.reversed' to go from {pathElementDst} to the {pathElementSrc}, which is what is required here."
                     else:
-                        exceptionStr3 = f"You can use without the .reversed property to change the direction."
+                        exceptionStr3 = f"You can change  '{pathElement.var_name}.reversed' to '{pathElement.var_name}' to go from {pathElementSrc} to the {pathElementDst}, which is what is required here."
+                        f"You can use without the .reversed property to change the direction."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
                 # Check if the current path element is correctly connected to the left (source) - has matching type
                 elif requiredLeftConcept != pathElementSrc:
@@ -284,13 +298,18 @@ class Graph(BaseGraphTree):
                 requiredLeftConcept = pathElementDst
                 pathPart += " " + pathElementVarName
             else:
-                exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
                 if isinstance(pathElement, (Concept,)):
-                    exceptionStr2 = f"The used variable {pathElement} is a concept, path element can be only relation or eqL logical constraint used to filter candidates in the path."
-                else:
+                    exceptionStr1 = f"You have used the notion {expectedRightConcept}(path=('{pathVariable}', {pathStr})) which is incorrect."
+                    exceptionStr2 = f"{pathElement} is a concept and cannot be used as part of the path."
+                    exceptionStr3 = f"- If you meant that '{pathVariable}' should be of type {expectedRightConcept}: {expectedRightConcept}(path=('{pathVariable}'))"
+                    exceptionStr4 = f"- If you meant another entity 'y' should be of type {expectedRightConcept} which is somehow related to '{pathVariable}': {expectedRightConcept}(path=('x', edge1, edge2, ...))"
+                    exceptionStr5 = f"where edge1, edge2, ... are relations that connect '{pathVariable}' to 'y'."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4} {exceptionStr5}")
+                else: # all other types not allowed in path
                     pathElementType = type(pathElement)
+                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
                     exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
-                raise Exception(f"{exceptionStr1} {exceptionStr2}")
+                    raise Exception(f"{exceptionStr1} {exceptionStr2}")
 
     def handleVarsPath(self, lc, varMaps):
         from domiknows.graph import V, LogicalConstrain
@@ -303,7 +322,7 @@ class Graph(BaseGraphTree):
                 
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
-        
+            
         #image_name = "./image" + self.name
         #self.visualize(image_name, open_image=True)
         
@@ -312,7 +331,7 @@ class Graph(BaseGraphTree):
 
         from . import Concept
         from .relation import IsA, HasA
-        
+    
         # Iterate through all local variables in that frame
         for var_name, var_value in frame.f_locals.items():
             # Check if any of them are instances of the Concept class or Relation subclass
@@ -321,8 +340,11 @@ class Graph(BaseGraphTree):
                 # set it to the name of the variable they are stored in.
                 if var_value.var_name is None:
                     var_value.var_name = var_name
+                    self.varNameReversedMap[var_value.name] = var_value
                     if isinstance(var_value, (HasA,)):
                         var_value.reversed.var_name = var_name + ".reversed"
+                        self.varNameReversedMap[var_value.reversed.name] = var_value.reversed
+
                     
         lc_info = {}
         LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])

@@ -129,7 +129,7 @@ def model_declaration(config, case):
     graph.detach()
 
     from domiknows.utils import setDnSkeletonMode
-    setDnSkeletonMode(True)
+    setDnSkeletonMode(False)
     
     lcConcepts = {}
     for _, g in graph.subgraphs.items():
