@@ -12,7 +12,7 @@ class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
-                 tnorm=DataNode.tnormsDefault, 
+                 tnorm='P', 
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         super().__init__()
         self.graph = graph
@@ -99,7 +99,7 @@ class LossModel(torch.nn.Module):
 class PrimalDualModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm=DataNode.tnormsDefault, device='auto'):
+    def __init__(self, graph, tnorm='P', device='auto'):
         super().__init__(graph, tnorm=tnorm, device=device)
         
 class SampleLossModel(torch.nn.Module):
@@ -109,7 +109,7 @@ class SampleLossModel(torch.nn.Module):
     #     super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
 
     def __init__(self, graph, 
-                 tnorm=DataNode.tnormsDefault, 
+                 tnorm='P', 
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         super().__init__()
         self.graph = graph

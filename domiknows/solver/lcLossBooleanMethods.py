@@ -10,7 +10,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-        self.tnorm = DataNode.tnormsDefault
+        self.tnorm = 'P'
         self.grad = True
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])

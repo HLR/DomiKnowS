@@ -13,9 +13,42 @@ else:
 
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
+    """
+    Represents a graph structure, extending from BaseGraphTree.
+    
+    Class Attributes:
+        varNameReversedMap (dict): Class-level variable to store a reversed mapping for variable names.
+        
+    Instance Attributes:
+        _concepts (OrderedDict): Stores the concepts in an ordered dictionary.
+        _logicalConstrains (OrderedDict): Stores the logical constraints in an ordered dictionary.
+        _relations (OrderedDict): Stores the relations in an ordered dictionary.
+        _batch (NoneType): Currently not set, reserved for batch operations.
+        cacheRootConcepts (dict): Cache for root concepts, initialized as an empty dictionary.
+        auto_constraint (Any): Specifies whether to automatically create constraints.
+        reuse_model (bool): Flag to indicate whether to reuse an existing model.
+        ontology (tuple or Graph.Ontology): The ontology associated with the graph.
+    """
     varNameReversedMap = {}  # Class variable
         
     def __init__(self, name=None, ontology=None, iri=None, local=None, auto_constraint=None, reuse_model=False):
+        '''Initializes an instance of the graph class.
+    
+        Args:
+        name (str, optional): The name of the object. Defaults to None.
+        ontology (Graph.Ontology or str, optional): The ontology associated with the object. If provided as a string, it will be paired with the 'local' parameter. Defaults to None.
+        iri (str, optional): The IRI (Internationalized Resource Identifier) of the ontology. Used when 'ontology' is None. Defaults to None.
+        local (str, optional): The local namespace. Paired with either 'iri' or 'ontology' if provided as a string. Defaults to None.
+        auto_constraint (Any, optional): Specifies whether to automatically create constraints. The type and use are determined by the class. Defaults to None.
+        reuse_model (bool, optional): Flag to indicate whether to reuse an existing model. Defaults to False.
+    
+        Attributes:
+        _concepts (OrderedDict): Stores the concepts in an ordered dictionary.
+        _logicalConstrains (OrderedDict): Stores the logical constraints in an ordered dictionary.
+        _relations (OrderedDict): Stores the relations in an ordered dictionary.
+        _batch (NoneType): Currently not set, reserved for batch operations.
+        cacheRootConcepts (dict): Cache for root concepts, initialized as an empty dictionary.
+        '''
         BaseGraphTree.__init__(self, name)
         if ontology is None:
             self.ontology = (iri, local)
@@ -64,6 +97,20 @@ class Graph(BaseGraphTree):
         return relationConcept
     
     def findConcept(self, conceptName):
+        '''Finds the root concept or relation for a given concept or relation.
+    
+        This method performs a recursive search to identify the root concept or relation.
+        If a result has been previously computed, it retrieves the result from cache to avoid redundant computation.
+        
+        Args:
+        relationConcept (Any): The concept or relation for which the root is to be found. The type depends on the implementation.
+    
+        Returns:
+        Any: The root concept or relation.
+    
+        Raises:
+        AttributeError, TypeError: If the attribute 'is_a' is not available or if the type is incorrect.
+        '''
         subGraph_keys = [key for key in self._objs]
         for subGraphKey in subGraph_keys:
             subGraph = self._objs[subGraphKey]
@@ -77,7 +124,25 @@ class Graph(BaseGraphTree):
         return None 
 
     def findConceptInfo(self, concept):
+        '''Finds and returns various information related to a given concept.
+    
+        This method compiles a dictionary containing different attributes and relations of the concept. 
+        It looks for the 'has_a', 'contains', and 'is_a' relationships and also identifies if the concept is a root.
         
+        Args:
+        concept (Any): The concept for which information is to be found. The type depends on the implementation.
+        
+        Returns:
+        OrderedDict: A dictionary containing the following keys:
+            - 'concept': The original concept.
+            - 'relation': Boolean indicating if the concept has a 'has_a' relationship.
+            - 'has_a': List of 'has_a' relations.
+            - 'relationAttrs': An ordered dictionary of relation attributes.
+            - 'contains': List of concepts that the original concept contains.
+            - 'containedIn': List of concepts that contain the original concept.
+            - 'is_a': List of concepts that the original concept is a type of.
+            - 'root': Boolean indicating if the concept is a root concept.
+        '''
         has_a = concept.has_a()
         
         if not has_a:
@@ -108,6 +173,26 @@ class Graph(BaseGraphTree):
         
     # find all variables defined in the logical constrain and report error if some of them are defined more than once
     def find_lc_variable(self, lc, found_variables=None, headLc=None):
+        '''Finds all variables defined in a logical constraint and reports errors for duplicates.
+    
+        This method traverses through the elements of a logical constraint to find all the variables 
+        that have been defined. It checks for incorrect cardinality definitions, multiple definitions of the 
+        same variable, and variables that are not associated with any concept among other things.
+        
+        Args:
+        lc (LogicalConstrain): The logical constraint to be processed.
+        found_variables (dict, optional): Dictionary to store found variables. The key is the variable name, 
+                                          and the value is a tuple containing the logical constraint, variable name, 
+                                          and the concept associated with the variable.
+                                          Defaults to None.
+        headLc (str, optional): The name of the parent logical constraint. Defaults to None.
+        
+        Returns:
+        dict: A dictionary containing all found variables.
+        
+        Raises:
+        Exception: If there are issues with the variable definitions or cardinality.
+        '''
         if lc.cardinalityException:
             if lc.name != headLc:
                 exceptionStr1 = f"{lc.typeName} {headLc} has incorrect cardinality definition in nested {lc} logical operator- " 
@@ -170,6 +255,28 @@ class Graph(BaseGraphTree):
         return found_variables
 
     def check_if_all_used_variables_are_defined(self, lc, found_variables, used_variables=None, headLc=None):
+        '''Checks if all variables used in a logical constraint are properly defined.
+    
+        This method traverses through the elements of a logical constraint to identify all the variables 
+        that are used but not defined. It also handles variable names in different types of paths.
+        
+        Args:
+        lc (LogicalConstrain): The logical constraint to be processed.
+        found_variables (dict): Dictionary containing all variables that have been defined.
+                                The key is the variable name and the value is a tuple containing information
+                                about the variable.
+        used_variables (dict, optional): Dictionary to store variables that are used. The key is the variable name,
+                                         and the value is a list of tuples, each containing the logical constraint,
+                                         variable name, the type of the element that uses it, and the path to the variable.
+                                         Defaults to None.
+        headLc (str, optional): The name of the parent logical constraint. Defaults to None.
+        
+        Returns:
+        dict: A dictionary containing all used variables.
+        
+        Raises:
+        Exception: If there are variables that are used but not defined, or if there are errors in the path definitions.
+        '''
         from .logicalConstrain import eqL
         
         if used_variables is None:
@@ -213,6 +320,18 @@ class Graph(BaseGraphTree):
         return used_variables
 
     def getPathStr(self, path):
+        '''Converts a path of concepts and relations to a string representation.
+    
+        This method iterates over a given path, which can include instances of the Relation and Concept classes,
+        and constructs a string representation of the path.
+        
+        Args:
+        path (list): A list of path elements which can be instances of Relation or Concept classes.
+                     The first element in the list is not processed, and the list should be non-empty.
+        
+        Returns:
+        str: A string representation of the path, excluding the first element.
+        '''
         from .concept import Concept
         from .relation import Relation
         pathStr = ""
@@ -230,6 +349,23 @@ class Graph(BaseGraphTree):
         return pathStr.strip()
                 
     def check_path(self, path, resultConcept, variableConceptParent, lc_name, foundVariables, variableName):
+        '''Checks the validity of a path in terms of relations and concepts.
+    
+        This function checks the validity of a given path, including ensuring that each relation
+        or concept in the path has the correct type. It raises exceptions with informative error messages 
+        if the path is not valid.
+    
+        Args:
+        path (list): The path to check, starting from the source concept.
+        resultConcept (tuple): The expected end concept of the path.
+        variableConceptParent (Concept): The parent concept for the source of the path.
+        lc_name (str): The name of the logical constraint where the path is defined.
+        foundVariables (dict): Dictionary of found variables in the scope.
+        variableName (str): The name of the variable being checked.
+    
+        Raises:
+        Exception: Various types of exceptions are raised for different kinds of path invalidity.
+        '''
         from .relation import IsA, HasA, Relation
         from .logicalConstrain import eqL
         from .concept import Concept
@@ -312,6 +448,15 @@ class Graph(BaseGraphTree):
                     raise Exception(f"{exceptionStr1} {exceptionStr2}")
 
     def handleVarsPath(self, lc, varMaps):
+        '''Handles variable paths within a given logical constraint.
+
+        This method replaces variable instances within the logical constraint equation with their 
+        mapped values. It also recursively processes nested logical constraints.
+    
+        Args:
+        lc (LogicalConstrain): The logical constraint containing the equations to process.
+        varMaps (dict): Mapping of variable names to their actual values.
+        '''
         from domiknows.graph import V, LogicalConstrain
         
         for i, e in enumerate(lc.e):
@@ -321,6 +466,21 @@ class Graph(BaseGraphTree):
                 self.handleVarsPath(e, varMaps)              
                 
     def __exit__(self, exc_type, exc_value, traceback):
+        '''Handles the exiting logic for the context manager.
+    
+        This method performs clean-up operations like mapping variable names and 
+        validating logical constraints. It is automatically called when exiting the 
+        'with' block of the context manager.
+    
+        Args:
+        exc_type (type): The type of the exception that caused the context manager to exit.
+        exc_value (Exception): The instance of the exception that caused the context manager to exit.
+        traceback (traceback): A traceback object encapsulating the call stack at the point 
+                               where the exception originally occurred.
+    
+        Side-effects:
+        Modifies internal state to include variable name mappings and validates logical constraints.
+        '''
         super().__exit__(exc_type, exc_value, traceback)
             
         #image_name = "./image" + self.name
@@ -429,36 +589,84 @@ class Graph(BaseGraphTree):
                        
     @property
     def ontology(self):
+        '''Gets the ontology associated with the object.
+    
+        Returns:
+        Graph.Ontology: The ontology associated with the object.
+        '''
         return self._ontology
-    
-    @property
-    def batch(self):
-        return self._batch
-    
-    @batch.setter
-    def batch(self, value):
-        self._batch = value
-
-    @property
-    def auto_constraint(self):
-        if self._auto_constraint is None and self.sup:
-            return self.sup.auto_constraint
-        return self._auto_constraint or False  # if None, return False instead
-
-    @auto_constraint.setter
-    def auto_constraint(self, value):
-        self._auto_constraint = value
 
     @ontology.setter
     def ontology(self, ontology):
+        '''Sets the ontology for the object.
+        
+        Args:
+        ontology (Graph.Ontology|str|tuple): The ontology to set. This can be either 
+                                             an instance of Graph.Ontology, a string, 
+                                             or a tuple containing two elements.
+    
+        Raises:
+        TypeError: If the provided ontology is not of the correct type.
+        '''
         if isinstance(ontology, Graph.Ontology):
             self._ontology = ontology
         elif isinstance(ontology, str):
             self._ontology = Graph.Ontology(ontology)
         elif isinstance(ontology, tuple) and len(ontology) == 2:
             self._ontology = Graph.Ontology(*ontology)
+        else:
+            raise TypeError("Invalid ontology type.")
 
+    @property
+    def batch(self):
+        '''Gets the current batch.
+        
+        Returns:
+        Any: The current batch.
+        '''
+        return self._batch
+    
+    @batch.setter
+    def batch(self, value):
+        '''Sets the batch.
+    
+        Args:
+        value (Any): The batch value to set.
+        '''
+        self._batch = value
+    
+    @property
+    def auto_constraint(self):
+        '''Determines whether to automatically enforce constraints.
+    
+        If the auto_constraint is not set, it will defer to the `sup` attribute.
+    
+        Returns:
+        bool: True if constraints should be automatically enforced, False otherwise.
+        '''
+        if self._auto_constraint is None and self.sup:
+            return self.sup.auto_constraint
+        return self._auto_constraint or False  # if None, return False instead
+    
+    @auto_constraint.setter
+    def auto_constraint(self, value):
+        '''Sets whether to automatically enforce constraints.
+        
+        Args:
+        value (bool): The value to set for automatic constraint enforcement.
+        '''
+        self._auto_constraint = value
+    
     def get_properties(self, *tests):
+        '''Finds and returns properties that meet the given conditions.
+    
+        Args:
+        tests (callable): Variable-length argument list of test conditions each property must pass.
+    
+        Returns:
+        list: A list of properties that meet all the given test conditions.
+
+        '''
         def func(node):
             if isinstance(node, Property):
                 for test in tests:
@@ -468,11 +676,27 @@ class Graph(BaseGraphTree):
                     return node
             return None
         return list(self.traversal_apply(func))
-
+    
     def get_sensors(self, *tests):
+        '''Finds and returns sensors that meet the given conditions.
+    
+        Args:
+        tests (callable): Variable-length argument list of test conditions each sensor must pass.
+    
+        Returns:
+        list: A list of sensors that meet all the given test conditions.
+        '''
         return list(chain(*(prop.find(*tests) for prop in self.get_properties())))
 
     def get_apply(self, name):
+        '''Finds and returns the concept or relation with the given name.
+    
+        Args:
+        name (str): The name of the concept or relation to find.
+    
+        Returns:
+        Object: The concept or relation with the specified name, or the result of BaseGraphTree.get_apply if not found.
+        '''
         if name in self.concepts:
             return self.concepts[name]
         if name in self.relations:
@@ -480,6 +704,21 @@ class Graph(BaseGraphTree):
         return BaseGraphTree.get_apply(self, name)
 
     def set_apply(self, name, sub):
+        '''Sets the `Concept` or `Relation` for a given name in the object.
+
+        If the sub is a `Graph`, it delegates to the parent class `BaseGraphTree.set_apply`.
+        If it is a `Concept` or `Relation`, it adds it to the respective dictionary.
+    
+        Args:
+        name (str): The name to set for the `Concept` or `Relation`.
+        sub (Graph|Concept|Relation): The object to set for the name. This can be an instance of `Graph`, 
+                                      `Concept`, or `Relation`.
+    
+        TODO:
+        1. Handle cases where a concept has the same name as a subgraph.
+        2. Handle other types for the 'sub' parameter.
+    
+        '''
         if __package__ is None or __package__ == '':
             from concept import Concept
             from relation import Relation
@@ -500,6 +739,22 @@ class Graph(BaseGraphTree):
             pass
 
     def visualize(self, filename, open_image=False):
+        '''Visualizes the graph using Graphviz.
+
+        Creates a directed graph and populates it with nodes for concepts and
+        edges for relations. It also recursively adds subgraphs. Finally, it
+        either saves the graph to a file or returns the graph object depending on
+        the `filename` parameter.
+    
+        Args:
+        filename (str|None): The name of the file where the graph will be saved.
+                             If None, the graph object is returned instead.
+        open_image (bool): Whether to open the image after rendering.
+                          Defaults to False.
+    
+        Returns:
+        graphviz.Digraph|None: The graph object if filename is None, otherwise None.
+        '''
         import graphviz
         concept_graph = graphviz.Digraph(name=f"{self.name}")
         concept_graph.attr(label=f"Graph: {self.name}") 
@@ -524,18 +779,41 @@ class Graph(BaseGraphTree):
 
     @property
     def subgraphs(self):
+        """Ordered dictionary containing the subgraphs.
+
+        Returns:
+            OrderedDict: An ordered dictionary of the subgraphs.
+        """
         return OrderedDict(self)
 
     @property
     def concepts(self):
+        """Getter for the concepts.
+
+        Returns:
+            dict: Dictionary of concepts.
+        """
         return self._concepts
 
     @property
     def logicalConstrains(self):
+        """Getter for the logical constraints.
+
+        Returns:
+            dict: Dictionary of logical constraints.
+        """
         return self._logicalConstrains
 
     @property
     def logicalConstrainsRecursive(self):
+        """Generator function that yields logical constraints recursively.
+
+        This method goes through all nodes and yields the logical constraints 
+        if the node is an instance of Graph.
+
+        Yields:
+            tuple: A tuple containing key-value pairs of logical constraints.
+        """
         def func(node):
             if isinstance(node, Graph):
                 yield from node.logicalConstrains.items()
@@ -543,14 +821,34 @@ class Graph(BaseGraphTree):
 
     @property
     def relations(self):
+        """Getter for the relations.
+
+        Returns:
+            dict: Dictionary of relations.
+        """
         return self._relations
 
     def what(self):
+        """Method to get the summary of the graph tree.
+
+        This method provides a dictionary containing the base graph tree and its concepts.
+
+        Returns:
+            dict: Dictionary containing 'concepts' and the base graph tree.
+        """
         wht = BaseGraphTree.what(self)
         wht['concepts'] = dict(self.concepts)
         return wht
     
     def print_predicates(self,):
+        """Generate and return a list of predicates with their variables.
+
+        This method goes through the subgraphs and concepts to generate a list of predicates,
+        determining the variables they use based on their relations and superclass structure.
+
+        Returns:
+            list: A list of strings, each representing a predicate and its variables.
+        """
         predicate_list = dict()
         variable_list = ['x', 'y', 'z', 'a', 'b', 'r', 'c', 'l', 'i']
         concepts = list(self.concepts.values())
@@ -592,3 +890,9 @@ class Graph(BaseGraphTree):
         return final_list
 
     Ontology = namedtuple('Ontology', ['iri', 'local'], defaults=[None])
+    """Namedtuple for Ontology data structure.
+
+    Attributes:
+        iri (str): The IRI of the ontology. Default is None.
+        local (str): The local identification of the ontology. Default is None.
+    """
