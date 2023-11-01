@@ -2,6 +2,7 @@ import torch
 from collections import OrderedDict, namedtuple
 from time import perf_counter, perf_counter_ns
 import re
+from itertools import count
 
 from .dataNodeConfig import dnConfig 
 
@@ -87,6 +88,8 @@ class DataNode:
         - gurobiModel (NoneType): Placeholder for Gurobi model.
         - myLoggerTime (Logger): Logger for time measurement.
     """
+    _ids = count(1)
+    
     def __init__(self, myBuilder = None, instanceID = None, instanceValue = None, ontologyNode = None, graph = None, relationLinks = {}, attributes = {}):
         """Initialize a DataNode instance.
 
@@ -112,6 +115,7 @@ class DataNode:
             gurobiModel (NoneType): Placeholder for Gurobi model.
             myLoggerTime (Logger): Logger for time measurement.
         """
+        self.id = next(self._ids)
         self.myBuilder = myBuilder                       # DatanodeBuilder used to construct this datanode
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
