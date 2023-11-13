@@ -184,8 +184,10 @@ class GBIModel(torch.nn.Module):
 
         if index == 2: # cause NaN predictions on the first item where GBI is used
             c_opt = SGD(modelLParams, lr=100)
+            print(f'Index = {index}: Using SGD(lr=100) to induce NaN values')
         else: # check GBI behavior on subsequent items
             c_opt = SGD(modelLParams, lr=1e-1)
+            print(f'Index = {index}: Using SGD(lr=1e-1) for regular GBI')
         # END NaN Test Changes
 
         # START Original Code
