@@ -218,6 +218,9 @@ if __name__ == '__main__':
         eval_f.write('index,level1,level2,level3,level4,pred_type\n')
 
         for row_idx, row in enumerate(sg_test_loader):
+            if row_idx > 3:
+                break
+
             # preprocess data
             dataitem = row_to_dataitem(row_idx, row)
 

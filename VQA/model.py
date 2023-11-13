@@ -15,7 +15,7 @@ class Net(nn.Module):
 
         out = self.model(data)
 
-        print(f'Net(depth={self.depth}); pred: {torch.argmax(out, dim=-1)}')
+        # print(f'Net(depth={self.depth}); pred: {torch.argmax(out, dim=-1)}')
 
         return out
 
