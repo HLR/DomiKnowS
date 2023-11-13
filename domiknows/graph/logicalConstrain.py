@@ -23,26 +23,44 @@ class LcElement:
         updatedE = []
         lenE = len(e)
         self.cardinalityException = ""
-        for i, eItem in enumerate(e):
-            if isinstance(eItem, (LcElement, Concept, Relation)): # lc element without path
-                updatedE.append(eItem)
-            elif callable(eItem): # multiclass label
-                newEItem = eItem.__call__() # generated label
-                updatedE.extend(newEItem)
-            elif isinstance(eItem, list): # lc element with path
-                updatedE.extend(eItem)
-            elif isinstance(eItem, int):
-                if i<lenE-1:
-                    self.cardinalityException = eItem
-
-                updatedE.append(eItem)
-            else:
-                 raise LcElement.LcElementError(f"{self.typeName} is incorrect - {eItem} is not a valid element of the {self.typeName}")
+        
+        if isinstance(self, eqL):
+            expected_types = {
+                0: (Concept, Relation, tuple),
+                1: str,
+                2: set
+            }
+            
+            for i, eItem in enumerate(e):
+                expected_type = expected_types.get(i)
+                if expected_type and isinstance(eItem, expected_type):
+                    updatedE.append(eItem)
+                else:
+                    error_message = f"{self.typeName} is incorrect - {eItem} is not a valid {i} element of the {self.typeName}"
+                    raise LcElement.LcElementError(error_message)
+        else:
+            for i, eItem in enumerate(e):
+                if isinstance(eItem, (LcElement, Concept, Relation, tuple)): # lc element without path
+                    updatedE.append(eItem)
+                elif callable(eItem): # multiclass label
+                    newEItem = eItem.__call__() # generated label
+                    updatedE.extend(newEItem)
+                elif isinstance(eItem, list): # lc element with path
+                    updatedE.extend(eItem)
+                elif isinstance(eItem, int):
+                    if i<lenE-1:
+                        self.cardinalityException = eItem
+    
+                    updatedE.append(eItem)
+                else:
+                    raise LcElement.LcElementError(f"{self.typeName} is incorrect - {eItem} is not a valid element of the {self.typeName}")
                 
         self.e = updatedE
         
         updatedE = []
         for _, eItem in enumerate(self.e):
+            if eItem == None:
+                continue
             if isinstance(eItem, Concept): # binary concept mapping to tuple representation
                 updatedE.append((eItem, eItem.name, None, 1))
             else:
@@ -81,7 +99,7 @@ class LcElement:
         if self.graph == None:
             raise LcElement.LcElementError(f"{self.typeName} is incorrect - no graph found for the {self.typeName}")
         
-         # Create Logical Element id based on number of existing Logical Element in the graph
+        # Create Logical Element id based on number of existing Logical Element in the graph
         self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
         if name is not None:
@@ -116,7 +134,7 @@ class LogicalConstrain(LcElement):
         assert self.graph is not None
         self.graph.logicalConstrains[self.lcName] = self
         
-         # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
+        # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
         for e_item in self.e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False

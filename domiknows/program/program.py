@@ -334,8 +334,9 @@ class LearningBasedProgram():
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         
-        lenI = len(dataset)
-        print(f"\nNumber of iterations in epoch: {lenI}")
+        if isinstance(dataset, list):
+            lenI = len(dataset)
+            print(f"\nNumber of iterations in epoch: {lenI}")
 
         if not grad:
             with torch.no_grad():

@@ -237,12 +237,12 @@ class GBIModel(torch.nn.Module):
     def calculateGBISelection(self, datanode, conceptsRelations):
         c_loss, updatedDatanode, updatedBuilder = self.forward(datanode)
         
-        for currentConceptRelation in conceptsRelations:
-            cRoot = updatedDatanode.findRootConceptOrRelation(currentConceptRelation[0])
+        for currentConcept, conceptLen in updatedDatanode.rootConcepts:
+            cRoot = updatedDatanode.findRootConceptOrRelation(currentConcept)
             dns = updatedDatanode.findDatanodes(select = cRoot)
             originalDns = datanode.findDatanodes(select = cRoot)
             
-            currentConceptRelationName = currentConceptRelation[0].name
+            currentConceptRelationName = currentConcept.name
             keyGBI  = "<" + currentConceptRelationName + ">/GBI"
             
             if not dns:
@@ -250,21 +250,21 @@ class GBIModel(torch.nn.Module):
                         
             gbiForConcept  = None
             if getDnSkeletonMode() and "variableSet" in updatedDatanode.attributes:
-                gbiForConcept = torch.zeros([len(dns), currentConceptRelation[3]], dtype=torch.float, device=updatedDatanode.current_device)
+                gbiForConcept = torch.zeros([len(dns), conceptLen], dtype=torch.float, device=updatedDatanode.current_device)
                    
             for i, (dn, originalDn) in enumerate(zip(dns, originalDns)): 
-                v = dn.getAttribute(currentConceptRelation[0]) # Get ILP results
+                v = dn.getAttribute(currentConcept) # Get learned probabilities
                 if v is None:
                     continue
                 
                 # Calculate GBI results
-                vGBI = torch.zeros(v.size())
+                vGBI = torch.zeros(v.size(), dtype=torch.float, device=updatedDatanode.current_device)
                 vArgmaxIndex = torch.argmax(v).item()
                 vGBI[vArgmaxIndex] = 1
                                 
                 # Add GBI inference result to the original datanode 
                 if gbiForConcept is not None:
-                    if currentConceptRelation[2] is None: # binary concept
+                    if conceptLen == 1: # binary concept
                         gbiForConcept[i] = vGBI[1]
                     else:
                         gbiForConcept[i] = vGBI
@@ -274,5 +274,6 @@ class GBIModel(torch.nn.Module):
             if gbiForConcept is not None:
                 rootConceptName = cRoot.name
                 keyGBIInVariableSet = rootConceptName + "/" + keyGBI
+                datanode.attributes["variableSet"][keyGBIInVariableSet]=gbiForConcept
                 updatedDatanode.attributes["variableSet"][keyGBIInVariableSet]=gbiForConcept
 

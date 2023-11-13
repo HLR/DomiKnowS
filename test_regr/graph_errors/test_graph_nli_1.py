@@ -1,5 +1,5 @@
 import pytest
-from graph_path import setup_graph
+from graph_nli_1 import setup_graph
 import re
 
 def test_setup_graph_exception():
@@ -7,12 +7,17 @@ def test_setup_graph_exception():
         setup_graph()
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
-        sanitized_pattern = re.sub(r'[^\x20-\x7E]', 
-                                   '', 
-                                   "The Path 'rel_pair_entity1' from the variable x, defined in LC_employment is not valid."
-                                   "The required source type after x is a relation," 
-                                   "but the used variable rel_pair_entity1 is a relationship defined between a pair and a named_entity, which is not correctly used here.").replace(" ", "")
+
+        sanitized_pattern = re.sub(
+            r'[^\x20-\x7E]', 
+            '', 
+            ("The Path 'rel_pair_premise rel_pair_hypothesis.reversed' from the variable x, defined in pair_symmetry_constraint is not valid."
+             "The required source type after x rel_pair_premise is a premise,"
+             "but the used variable rel_pair_hypothesis.reversed is a relationship defined between a hypothesis and a pair, which is not correctly used here.")
+        ).replace(" ", "")
         
+        print(sanitized_pattern)
+
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
         

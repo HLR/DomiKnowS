@@ -45,12 +45,12 @@ def setup_graph(fix_constraint=False):
                 ifL(
                     entity('x'),
                     atMostL(
-                        1,
-                        person(path=('x')),
-                        organization(path=('x')),
-                        location(path=('x')),
-                        date(path=('x')),
-                        other_entity_types(path=('x'))
+                        person(path=('x', entity)),
+                        organization(path=('x', entity)),
+                        location(path=('x', entity)),
+                        date(path=('x', entity)),
+                        other_entity_types(path=('x', entity)),
+                        1
                     ),
                     name="constraint_only_one_entity"
                 )

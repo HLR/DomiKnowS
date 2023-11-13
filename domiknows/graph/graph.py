@@ -1,6 +1,7 @@
 from collections import OrderedDict, namedtuple
 from itertools import chain
 import inspect
+from distutils.dep_util import newer
 
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
@@ -26,14 +27,19 @@ class Graph(BaseGraphTree):
         self._logicalConstrains = OrderedDict()
         self._relations = OrderedDict()
         self._batch = None
+        self.cacheRootConcepts = {}
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
         yield from self._concepts
         yield from self._relations
 
-    # find the root parent of the provided concept or relation
+      
     def findRootConceptOrRelation(self, relationConcept):
+        # If the result is already in cache, return it
+        if relationConcept in self.cacheRootConcepts:
+            return self.cacheRootConcepts[relationConcept]
+
         try:
             isAs = relationConcept.is_a()
         except (AttributeError, TypeError):
@@ -42,13 +48,62 @@ class Graph(BaseGraphTree):
         for _isA in isAs:
             parentRelationConcept = _isA.dst
             
-            return self.findRootConceptOrRelation(parentRelationConcept)
-        
-        # If the provided concept or relation is root (has not parents)
-        return relationConcept 
-    
-    from collections import namedtuple
+            # Recursive call, but result is cached if previously computed
+            root = self.findRootConceptOrRelation(parentRelationConcept)
+            
+            # Store result in cache
+            self.cacheRootConcepts[relationConcept] = root
+            return root
 
+        # If the provided concept or relation is root (has no parents)
+        # Store result in cache
+        self.cacheRootConcepts[relationConcept] = relationConcept
+        
+        return relationConcept
+    
+    def findConcept(self, conceptName):
+        subGraph_keys = [key for key in self._objs]
+        for subGraphKey in subGraph_keys:
+            subGraph = self._objs[subGraphKey]
+           
+            for conceptNameItem in subGraph.concepts:
+                if conceptName == conceptNameItem:
+                    concept = subGraph.concepts[conceptNameItem]
+                   
+                    return concept
+            
+        return None 
+
+    def findConceptInfo(self, concept):
+        
+        has_a = concept.has_a()
+        
+        if not has_a:
+            is_a = [contain.dst for contain in concept._out.get('is_a', [])]
+            
+            for i in is_a:
+                has_a = i.has_a()
+                
+                if has_a:
+                    break
+        
+        conceptInfo = OrderedDict([
+            ('concept', concept),
+            ('relation', bool(concept.has_a())),
+            ('has_a', concept.has_a()),
+            ('relationAttrs', OrderedDict((rel, self.findConcept(rel.dst.name)) for _, rel in enumerate(has_a))),
+            ('contains', [contain.dst for contain in concept._out.get('contains', [])]),
+            ('containedIn', [contain.src for contain in concept._in.get('contains', [])]),
+            ('is_a', [contain.dst for contain in concept._out.get('is_a', [])])
+        ])
+    
+        if not conceptInfo['containedIn'] and not conceptInfo['is_a'] and not conceptInfo['relation']:
+            conceptInfo['root'] = True
+        else:
+            conceptInfo['root'] = False
+            
+        return conceptInfo
+        
     # find all variables defined in the logical constrain and report error if some of them are defined more than once
     def find_lc_variable(self, lc, found_variables=None, headLc=None):
         if lc.cardinalityException:
@@ -76,6 +131,12 @@ class Graph(BaseGraphTree):
                 else:
                     raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept")
 
+            # checking for extra variable:
+            elif e and isinstance(e, tuple) and e[0] == 'extraV':
+                predicate = lc.e[0][1]
+                exceptionStr1 = f"Logical constraint {headLc} {lc}: Each predicate can only have one new variable definition. For the predicate {predicate}, you have used both {e[1]} and {e[2]} as new variables."
+                exceptionStr2 = f"Either wrap both under on variable, if you intended to initialize {e[1]} based on another value, then the second argument should be a path=(...)."
+                raise Exception(f"{exceptionStr1} {exceptionStr2}")
             # checking if element is a tuple 
             elif isinstance(e, tuple) and e and isinstance(e[0], LcElement) and not isinstance(e[0], LogicalConstrain):
                 self.find_lc_variable(e[0], found_variables=found_variables, headLc=headLc)
@@ -104,32 +165,37 @@ class Graph(BaseGraphTree):
         return found_variables
 
     def check_if_all_used_variables_are_defined(self, lc, found_variables, used_variables=None, headLc=None):
+        from .logicalConstrain import eqL
+        
         if used_variables is None:
             used_variables = {}
 
         from domiknows.graph import V, LogicalConstrain
 
-        def handle_variable_name(variable_name):
-            if variable_name not in found_variables:
-                raise Exception(f"Variable {variable_name} found in {headLc} {lc} is not defined")
+        def handle_variable_name(lc_variable_name, lcPath):
+            if lc_variable_name not in found_variables:
+                raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined")
 
-            if variable_name not in used_variables:
-                used_variables[variable_name] = []
+            if lc_variable_name not in used_variables:
+                used_variables[lc_variable_name] = []
 
-            variable_info = (lc, variable_name, e.v)
-            used_variables[variable_name].append(variable_info)
+            lcElementType = lc.e[i-1]
+            variable_info = (lc, lc_variable_name, lcElementType, lcPath)
+            used_variables[lc_variable_name].append(variable_info)
 
-        for e in lc.e:
-            if isinstance(e, V) and e.v:
-                if isinstance(e.v, str):
-                    handle_variable_name(e.v)
+        for i, e in enumerate(lc.e):
+            if isinstance(e, V) and e.v: # has path
+                if isinstance(e.v, eqL):
+                    continue
+                elif isinstance(e.v, str):
+                    handle_variable_name(e.v, e.v)
                 elif isinstance(e, tuple):
-                    if isinstance(e.v[0], str):
-                        handle_variable_name(e.v[0])
-                    elif isinstance(e.v[0], tuple):
+                    if isinstance(e.v[0], str): # single path
+                        handle_variable_name(e.v[0], e.v)
+                    elif isinstance(e.v[0], tuple): # path union
                         for t in e.v:
                             if isinstance(t[0], str):
-                                handle_variable_name(t[0])
+                                handle_variable_name(t[0], t)
                             else:
                                 raise Exception(f"Path {t} found in {headLc} {lc} is not correct")
                     else:
@@ -142,37 +208,104 @@ class Graph(BaseGraphTree):
         return used_variables
 
     def getPathStr(self, path):
-        from .relation import IsA, HasA
+        from .concept import Concept
+        from .relation import Relation
         pathStr = ""
         for pathElement in path[1:]:
-            if isinstance(pathElement, (HasA, IsA)):
+            if isinstance(pathElement, (Relation,)):
                 if pathElement.var_name:
-                    pathStr += pathElement.var_name
+                    pathStr += pathElement.var_name + " "
                 else:
-                    pathStr += pathElement.name
+                    pathStr += pathElement.name + " "
+            elif isinstance(pathElement, (Concept,)):
+                pathStr += pathElement.var_name + " "
             else:
-                pathStr += pathElement
+                pathStr += str(pathElement)
+               
+        return pathStr.strip()
                 
-        return pathStr
-                
-    def check_path(self, path, variableConceptParent, lc_name, foundVariables, variableName):
-        from .relation import IsA, HasA
-        for pathElement in path[1:]:
-            if isinstance(pathElement, (HasA, IsA)):
-                pathElementSrc = pathElement.src
-                pathElementDst = pathElement.dst
+    def check_path(self, path, resultConcept, variableConceptParent, lc_name, foundVariables, variableName):
+        from .relation import IsA, HasA, Relation
+        from .logicalConstrain import eqL
+        from .concept import Concept
+        
+        requiredLeftConcept = variableConceptParent.name # path element has to be relation with this type to the left
+        requiredEndOfPathConcept = resultConcept[1] # path has to result in this concept
+        requiredEndOfPathConceptRoot =  self.findRootConceptOrRelation(resultConcept[0]).name  
+        expectedRightConcept =  None
+        lastPathElement = False
+        pathStr = self.getPathStr(path)
+        pathVariable = path[0]
+        pathPart = path[0]
+            
+        for pathIndex, pathElement in enumerate(path[1:], start=1):   
+            if isinstance(pathElement, (eqL,)):
+                continue
+            
+            if pathIndex < len(path) - 1:
+                expectedRightConcept = pathElement.dst.name
+                expectedRightConceptRoot = expectedRightConcept
+            else:
+                expectedRightConcept = requiredEndOfPathConcept
+                lastPathElement = True
+                expectedRightConceptRoot = requiredEndOfPathConceptRoot                
+            
+            if isinstance(pathElement, (HasA, IsA, Relation)):
+                pathElementSrc = pathElement.src.name
+                pathElementDst = pathElement.dst.name
+                pathElementVarName = pathElement.var_name if pathElement.var_name else ""
 
-                if variableConceptParent.name != pathElementSrc.name:
-                    pathVariable = path[0]
-                    pathStr = self.getPathStr(path)
-                    pathElementVarName = pathElement.var_name
-                    exceptionStr1 = f"The Path {pathStr} from the variable {pathVariable}, defined in {lc_name} is not valid"
-                    exceptionStr2 = f" and the type of {pathVariable} is a {variableConceptParent}, there is no relationship defined between {pathElementDst} and {variableConceptParent}."
+                # Check if there is a problem with reversed usage of the current path element - it has to be possible to reverse the order to fix it
+                if requiredLeftConcept == pathElementDst and expectedRightConceptRoot == pathElementSrc:                    
+                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid"
+                    exceptionStr2 = f"The relation {pathElementVarName} is from a {pathElementSrc} to a {pathElementDst}, but you have used it from a {pathElementDst} to a {pathElementSrc}."
+                    if not pathElement.is_reversed:
+                        exceptionStr3 = f"You can use the .reversed property to change the direction."
+                    else:
+                        exceptionStr3 = f"You can use without the .reversed property to change the direction."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                # Check if the current path element is correctly connected to the left (source) - has matching type
+                elif requiredLeftConcept != pathElementSrc:
+                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
+                    exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
+                    exceptionStr3 = f"but the used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                # Check if the current path element is correctly connected to the right (destination) - has matching type
+                elif expectedRightConceptRoot != pathElementDst: 
+                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
+                    if lastPathElement: # if this is the last element it has to match the concept in which this path is embedded
+                        exceptionStr2 = f"The required destination type after {pathPart} is a {expectedRightConcept}."
+                    else: # if this it intermediary path element that if is expected that it will match next path element source type
+                        exceptionStr2 = f"The expected destination type after {pathPart} is a {expectedRightConcept}."
                     exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
                     raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                
+                # Move along the path with the requiredLeftConcept and pathVariable
+                requiredLeftConcept = pathElementDst
+                pathPart += " " + pathElementVarName
+            else:
+                exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
+                if isinstance(pathElement, (Concept,)):
+                    exceptionStr2 = f"The used variable {pathElement} is a concept, path element can be only relation or eqL logical constraint used to filter candidates in the path."
+                else:
+                    pathElementType = type(pathElement)
+                    exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
+                raise Exception(f"{exceptionStr1} {exceptionStr2}")
 
+    def handleVarsPath(self, lc, varMaps):
+        from domiknows.graph import V, LogicalConstrain
+        
+        for i, e in enumerate(lc.e):
+            if isinstance(e, V) and e.name in varMaps:
+                lc.e[i] = varMaps[e.name]
+            if isinstance(e, LogicalConstrain):
+                self.handleVarsPath(e, varMaps)              
+                
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
+        
+        #image_name = "./image" + self.name
+        #self.visualize(image_name, open_image=True)
         
         # Get the current frame and then go one level back
         frame = inspect.currentframe().f_back
@@ -188,6 +321,8 @@ class Graph(BaseGraphTree):
                 # set it to the name of the variable they are stored in.
                 if var_value.var_name is None:
                     var_value.var_name = var_name
+                    if isinstance(var_value, (HasA,)):
+                        var_value.reversed.var_name = var_name + ".reversed"
                     
         lc_info = {}
         LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])
@@ -197,9 +332,30 @@ class Graph(BaseGraphTree):
         # --- Gather information about variables used and defined in the logical constrains and 
         #     report errors if some of them are not defined and used or defined more than once
         for lc_name, lc in self.logicalConstrains.items():
-            if not lc.headLC:
+            if not lc.active or not lc.headLC:
                 continue
 
+            # process VarMaps
+            varMapsList = []
+            newE = []
+            for e in lc.e:
+                if isinstance(e, tuple) and e[0] == 'VarMaps':
+                    varMapsList.append(e[1])
+                else:
+                    newE.append(e)
+                    
+            lc.e = newE
+            
+            varMaps = {}
+            if varMapsList:
+                for dictionary in varMapsList:
+                    for key, value in dictionary.items():
+                        if key in varMaps:
+                            raise ValueError(f"Duplicate key found: {key}")
+                        varMaps[key] = value
+                        
+                    self.handleVarsPath(lc, varMaps)
+            
             # find variable defined in the logical constrain - report error if some of them are defined more than once
             found_variables = self.find_lc_variable(lc, headLc=lc.name)
 
@@ -213,7 +369,7 @@ class Graph(BaseGraphTree):
         
         # --- Check if the paths defined in the logical constrains are correct
         for lc_name, lc in self.logicalConstrains.items():
-            if not lc.headLC:
+            if not lc.active or not lc.headLC:
                 continue
             
             # current logical constrain info and variables found and used in the current logical constrain
@@ -233,20 +389,21 @@ class Graph(BaseGraphTree):
                 
                 # loop over all paths defined using the variable as starting point
                 for pathInfo in pathInfos:
-                    path = pathInfo[2]
-                   
+                    path = pathInfo[3]
+                    resultConcept = pathInfo[2]
+                    
                     if isinstance(path[0], tuple): # this path is a combination of paths 
                         for subpath in path: 
                             if len(subpath) < 2:  
                                 continue  # skip this subpath as it has only the starting point variable
                                 
-                            self.check_path(subpath, variableConceptParent, headLcName, foundVariables, variableName)
+                            self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                             
                     else: # this path is a single path
                         if len(path) < 2:
                             continue # skip this path as it has only the starting point variable
                             
-                        self.check_path(path, variableConceptParent, headLcName, foundVariables, variableName)
+                        self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                        
     @property
     def ontology(self):
@@ -320,7 +477,6 @@ class Graph(BaseGraphTree):
             # TODO: what are other cases
             pass
 
-
     def visualize(self, filename, open_image=False):
         import graphviz
         concept_graph = graphviz.Digraph(name=f"{self.name}")
@@ -371,5 +527,46 @@ class Graph(BaseGraphTree):
         wht = BaseGraphTree.what(self)
         wht['concepts'] = dict(self.concepts)
         return wht
+    
+    def print_predicates(self,):
+        predicate_list = dict()
+        variable_list = ['x', 'y', 'z', 'a', 'b', 'r', 'c', 'l', 'i']
+        concepts = list(self.concepts.values())
+        for subgraph in self.subgraphs.values():
+            concepts.extend(list(subgraph.concepts.values()))
+        for concept in concepts:
+            predicate_name = concept.name
+            variables = variable_list[0]
+            check = False
+            if concept._out:
+                if 'has_a' in concept._out:
+                    num_relations = len(concept._out['has_a'])
+                    variables = ", ".join(variable_list[:num_relations])
+                    check = True
+            if not check:
+                new_node = concept
+                while 'is_a' in new_node._out:
+                    if new_node._out['is_a'][0].dst.name in predicate_list:
+                        variables = predicate_list[new_node._out['is_a'][0].dst.name][1]
+                        break
+                    else:
+                        if 'has_a' in new_node.sup._out:
+                            num_relations = len(new_node.sup._out['has_a'])
+                            variables = ", ".join(variable_list[:num_relations])
+                            break
+                    new_node = new_node._out['is_a'][0].dst
+            if hasattr(concept, 'enum'):
+                ### there should be another variable to indicate the type
+                variables = f"{variables}, t"
+                predicate_list[predicate_name] = [predicate_name, variables, concept.enum]
+            else:
+                predicate_list[predicate_name] = [predicate_name, variables]
+        final_list = []
+        for predicate in predicate_list.values():
+            if len(predicate) == 3:
+                final_list.append(f"{predicate[0]}({predicate[1]}) --> 't' stand for the possible types which should be selected from this list: {predicate[2]}")
+            else:
+                final_list.append(f"{predicate[0]}({predicate[1]})")
+        return final_list
 
     Ontology = namedtuple('Ontology', ['iri', 'local'], defaults=[None])

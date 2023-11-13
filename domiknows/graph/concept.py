@@ -32,6 +32,7 @@ class Concept(BaseGraphTree):
                         arg_names = " ".join(arg_names)
                     assert len(args) >= 2 or len(kwargs) >= 2, f"The HasA relationship defined from {src.name} concept to concepts {arg_names} is not valid. The HasA relationship must be between one source and at least two destination concepts."
                 rels = []
+                
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
                     rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
@@ -53,10 +54,14 @@ class Concept(BaseGraphTree):
         self._out = OrderedDict()  # relation category_name : list of relation inst
         
         self.var_name = None
+        self.newVariableIndex = 0
         
     def get_batch(self):
         return self.batch
 
+    def get_var_name(self):
+        return self.var_name
+    
     def __str__(self):
         return self.name
     
@@ -71,27 +76,52 @@ class Concept(BaseGraphTree):
         cls._names[name] += 1
         self.name = name
         cls._objs[name] = self
+        
+    def findRootGraph(self, superGraph):
+        if superGraph._sub  == None:
+            return superGraph
+        
+        return self.findRootGraph(superGraph._sub)
     
     def processLCArgs(self, *args, conceptT=None, **kwargs):
         from domiknows.graph.logicalConstrain import eqL, V
+        
+        error = None
+        
         if len(args) > 1 and isinstance(args[1], eqL):
             nameX = args[0]
             path = (nameX, args[1])
                                     
-            return [conceptT, V(name=nameX, v=path)]
-        elif len(args) and isinstance(args[0], str):
+            return [conceptT, V(name=nameX, v=path), error]
+        
+        if len(args) > 1:
+            selfInfo = self._context[0].findConceptInfo(self)
+            
+            relation_attrs = selfInfo.get('relationAttrs', {})
+    
+            if len(relation_attrs) != len(args):
+                error = ("extraV", ) + tuple(args)
+            else:
+                newVariable = 'p' + str(600 + self.newVariableIndex)
+                self.newVariableIndex+=1
+                
+                info = {arg: V(name=None, v=(newVariable, value))  for arg, value in zip(args, relation_attrs.keys())}
+                args = (newVariable,)
+                error = ('VarMaps', info)
+
+        if len(args) and isinstance(args[0], str):
             name = args[0]
             
             if "path" in kwargs:
                 path = kwargs['path']
                 
-                return [conceptT, V(name=name, v=path)]
+                return [conceptT, V(name=name, v=path), error]
             else:
-                return [conceptT, V(name=name)]
+                return [conceptT, V(name=name), error]
         elif "path" in kwargs:
             path = kwargs['path']
                                     
-            return [conceptT, V(name=None, v=path)]
+            return [conceptT, V(name=None, v=path), error]
         else:
             return [conceptT]
 

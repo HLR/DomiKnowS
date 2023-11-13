@@ -61,12 +61,15 @@ def intersection_of_lists(lists):
     return ordered_common_elements
 
 def findDatanodesForRootConcept(dn, rootConcept):
-    if "DataNodesConcepts" in dn.myBuilder:
+    if dn.myBuilder != None and "DataNodesConcepts" in dn.myBuilder:
         if rootConcept.name in dn.myBuilder["DataNodesConcepts"]:
             return dn.myBuilder["DataNodesConcepts"][rootConcept.name]
-    
+
     dns = dn.findDatanodes(select = rootConcept)
-    dn.myBuilder["DataNodesConcepts"][rootConcept.name] = dns
+    
+    if dn.myBuilder != None:
+        dn.myBuilder["DataNodesConcepts"][rootConcept.name] = dns
+        
     return dns
     
 def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False):
@@ -83,7 +86,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
         
         # Check if we already found this variable
         if variable.name in lcVariablesDns:
-             dnsList = lcVariablesDns[variable.name]  
+            dnsList = lcVariablesDns[variable.name]  
         else:
             rootConcept = dn.findRootConceptOrRelation(conceptName)
             rootDns = findDatanodesForRootConcept(dn, rootConcept)
