@@ -239,6 +239,7 @@ class GBIModel(torch.nn.Module):
                 if model_has_GBI_inference:
                     self.server_model.inferTypes.append('GBI')
 
+                # reset model parameters
                 self.set_pretrained(self.server_model, reload_parameters)
                 
                 print(f'Finishing GBI - Constraints are satisfied after {c_iter} iteration')
@@ -268,7 +269,10 @@ class GBIModel(torch.nn.Module):
             
         if model_has_GBI_inference:
             self.server_model.inferTypes.append('GBI')
-            
+        
+        # reset model parameters
+        self.set_pretrained(self.server_model, reload_parameters)
+
         print(f'Finishing GBI - Constraints not are satisfied after {self.gbi_iters} iteration')
         return c_loss, node_l, node_l.myBuilder
  
