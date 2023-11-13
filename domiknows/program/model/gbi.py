@@ -58,23 +58,36 @@ class GBIModel(torch.nn.Module):
         return num_satisfied, num_constraints
     
     def reg_loss(self, model_updated, model, exclude_names=set()):
-        orig_params = []
-        lambda_params = []
+        orig_params = {}
+        lambda_params = {}
 
         for key in model.keys():
+            key_prefix = '/'.join(key.split('/')[:3])
+
+            # print(key, key_prefix)
+
             w_orig = model[key]
             w_curr = model_updated[key]
-            
+
+            if key_prefix not in orig_params:
+                orig_params[key_prefix] = []
+                lambda_params[key_prefix] = []
+
             if key not in exclude_names:
-                orig_params.append(w_orig.flatten())
-                lambda_params.append(w_curr.flatten())
+                orig_params[key_prefix].append(w_orig.flatten())
+                lambda_params[key_prefix].append(w_curr.flatten())
             else:
                 print('skipping %s' % key)
 
-        orig_params = torch.cat(orig_params, dim=0)
-        lambda_params = torch.cat(lambda_params, dim=0)
+        result_norm = 0.0
 
-        return torch.linalg.norm(orig_params - lambda_params, dim=0, ord=2)
+        for key in orig_params.keys():
+            orig_params_module = torch.cat(orig_params[key], dim=0)
+            lambda_params_module = torch.cat(lambda_params[key], dim=0)
+
+            result_norm += torch.linalg.norm(orig_params_module - lambda_params_module, dim=0, ord=2)
+
+        return result_norm
     
     # Finds the last layer in each submodel of a PyTorch model
     def find_last_layers_in_submodels(self, model, name=""):
@@ -107,31 +120,45 @@ class GBIModel(torch.nn.Module):
     # Resets the last layer of each submodel of a PyTorch model
     def reset_last_layers_in_submodels(self, model, last_layers):
         for name, last_layer in model.named_parameters():
-            if isinstance(last_layer, (nn.Linear, nn.Conv2d)):
-                last_layer.bias.data += torch.randn_like(last_layer.bias.data) * 1e-6
-                last_layer.weight.data += torch.randn_like(last_layer.weight.data) * 1e-6
+            # if isinstance(last_layer, (nn.Linear, nn.Conv2d)):
+            last_layer.data += 0.0
 
     # ----
-    
-    def forward(self, datanode, build=None, print_grads=False):
-        eval_f = open('gbi_log.txt', 'a', buffering=1)
+    def set_pretrained(self, model, orig_params):
+        model.load_state_dict(orig_params)
 
+    def get_argmax_from_node(self, node):
+        probs_named = {}
+        for var_name, var_val in node.getAttribute('variableSet').items():
+            if var_name.endswith('>'):# and var_val.requires_grad:
+                probs_named[var_name] = F.log_softmax(var_val, dim=-1).flatten()
+
+        argmax_vals = {name: torch.argmax(param).item() for name, param in probs_named.items()}
+        return argmax_vals
+
+    def forward(self, datanode, build=None, print_grads=False):
         # Get constraint satisfaction for the current DataNode
         num_satisfied, num_constraints = self.get_constraints_satisfaction(datanode)
         model_has_GBI_inference = False
-        
+
         # --- Test if to start GBI for this data_item
-        # if num_satisfied == num_constraints:
-        #     eval_f.close()
-        #     return 0.0, datanode, datanode.myBuilder
-        
+        if num_satisfied == num_constraints:
+            return 0.0, datanode, datanode.myBuilder
         # ------- Continue with GBI
-        
+
+        # to be optimized by gbi
         optimized_parameters = {name: param for name, param in self.server_model.named_parameters()}
+
+        # for regularization calculation
         original_parameters = {name: param.clone().detach() for name, param in self.server_model.named_parameters()}
-        
-        last_layers = self.find_last_layers_in_submodels(self.server_model)
-        self.reset_last_layers_in_submodels(self.server_model, last_layers)
+
+        # for reloading parameters after gbi
+        reload_parameters = self.server_model.state_dict()
+        for name, param in reload_parameters.items():
+            reload_parameters[name] = param.clone().detach()
+
+        # last_layers = self.find_last_layers_in_submodels(self.server_model)
+        self.reset_last_layers_in_submodels(self.server_model, None)
         
         # Print original and cloned parameters to verify they are the same but different in memory location
         for name, param in self.server_model.named_parameters():
@@ -167,18 +194,14 @@ class GBIModel(torch.nn.Module):
             probs = []
             for var_name, var_val in node_l.getAttribute('variableSet').items():
                 if var_name.endswith('>'):# and var_val.requires_grad:
-                    print('var_name: {var_name}; argmax_prediction: ', torch.argmax(var_val, dim=-1))
                     probs.append(F.log_softmax(var_val, dim=-1).flatten())
 
-            log_probs = torch.cat(probs, dim=0).mean()
+            log_probs_cat = torch.cat(probs, dim=0)
+            log_probs = log_probs_cat.mean()
+
             if print_grads:
                 print('probs mean:')
                 print(log_probs)
-
-            if print_grads:
-                argmax_vals = [torch.argmax(prob) for prob in probs]
-                print('argmax predictions:')
-                print(argmax_vals)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
@@ -186,25 +209,26 @@ class GBIModel(torch.nn.Module):
             c_loss = log_probs * ((num_constraints_l - num_satisfied_l) / num_constraints_l) + reg_loss
 
             if c_loss != c_loss:
-                continue
-            if print_grads:
-                print("iter={}, c_loss={:.2f}, c_loss.grad_fn={}, num_constraints_l={}, satisfied={}".format(c_iter, c_loss.item(), c_loss.grad_fn.__class__.__name__, num_constraints_l, num_satisfied_l))
-                print("reg_loss={:.2f}, reg_loss.grad_fn={}, log_probs={:.2f}, log_probs.grad_fn={}\n".format(reg_loss.item(), reg_loss.grad_fn.__class__.__name__, log_probs.item(), log_probs.grad_fn.__class__.__name__))
+                print('NaN loss, breaking')
+                break
             
+            if print_grads:
+                print("iter={}, c_loss={:.4f}, c_loss.grad_fn={}, num_constraints_l={}, satisfied={}".format(c_iter, c_loss.item(), c_loss.grad_fn.__class__.__name__, num_constraints_l, num_satisfied_l))
+                print("reg_loss={:.4f}, reg_loss.grad_fn={}, log_probs={:.4f}, log_probs.grad_fn={}\n".format(reg_loss.item(), reg_loss.grad_fn.__class__.__name__, log_probs.item(), log_probs.grad_fn.__class__.__name__))
+                
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 # --- End early if constraints are satisfied
                 if model_has_GBI_inference:
                     self.server_model.inferTypes.append('GBI')
-                    
+
+                self.set_pretrained(self.server_model, reload_parameters)
+                
                 print(f'Finishing GBI - Constraints are satisfied after {c_iter} iteration')
                 return c_loss, node_l, node_l.myBuilder
                         
             # --- Backward pass on self.server_model
             if c_loss.requires_grad:
-                # Zero gradients of self.server_model params before backward pass
-                c_opt.zero_grad()
-                
                 # Compute gradients
                 c_loss.backward()
                 
