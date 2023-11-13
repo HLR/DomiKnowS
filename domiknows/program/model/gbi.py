@@ -173,8 +173,25 @@ class GBIModel(torch.nn.Module):
         # -- self.server_mode is the model that gets optimized by GBI
         self.server_model.reset()        
 
+        # START NaN Test Changes
+        index = datanode.getAttribute('image/reps')[0].item()
+
         modelLParams = self.server_model.parameters()
-        c_opt = SGD(modelLParams, lr=1e-1)
+        
+        # test on val.pickle for the VQA tasks, using features_mini.npy
+        # the first two items should have all constraints satisfied before GBI
+        assert index >= 2
+
+        if index == 2: # cause NaN predictions on the first item where GBI is used
+            c_opt = SGD(modelLParams, lr=100)
+        else: # check GBI behavior on subsequent items
+            c_opt = SGD(modelLParams, lr=1e-1)
+        # END NaN Test Changes
+
+        # START Original Code
+        # modelLParams = self.server_model.parameters()
+        # c_opt = SGD(modelLParams, lr=1e-1)
+        # END Original Code
         
         # Remove "GBI" from the list of inference types if model has it
         if hasattr(self.server_model, 'inferTypes'):
