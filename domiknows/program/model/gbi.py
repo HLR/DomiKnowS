@@ -171,10 +171,14 @@ class GBIModel(torch.nn.Module):
                     probs.append(F.log_softmax(var_val, dim=-1).flatten())
 
             log_probs = torch.cat(probs, dim=0).mean()
-            print('probs mean:')
-            print(log_probs)
+            if print_grads:
+                print('probs mean:')
+                print(log_probs)
 
-            # eval_f.write(f'\ngbi|{c_iter}|' + '|'.join([str(argmax_val) for argmax_val in argmax_vals]))
+            if print_grads:
+                argmax_vals = [torch.argmax(prob) for prob in probs]
+                print('argmax predictions:')
+                print(argmax_vals)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
@@ -183,22 +187,18 @@ class GBIModel(torch.nn.Module):
 
             if c_loss != c_loss:
                 continue
-            
-            print("iter={}, c_loss={:.2f}, c_loss.grad_fn={}, num_constraints_l={}, satisfied={}".format(c_iter, c_loss.item(), c_loss.grad_fn.__class__.__name__, num_constraints_l, num_satisfied_l))
-            print("reg_loss={:.2f}, reg_loss.grad_fn={}, log_probs={:.2f}, log_probs.grad_fn={}\n".format(reg_loss.item(), reg_loss.grad_fn.__class__.__name__, log_probs.item(), log_probs.grad_fn.__class__.__name__))
+            if print_grads:
+                print("iter={}, c_loss={:.2f}, c_loss.grad_fn={}, num_constraints_l={}, satisfied={}".format(c_iter, c_loss.item(), c_loss.grad_fn.__class__.__name__, num_constraints_l, num_satisfied_l))
+                print("reg_loss={:.2f}, reg_loss.grad_fn={}, log_probs={:.2f}, log_probs.grad_fn={}\n".format(reg_loss.item(), reg_loss.grad_fn.__class__.__name__, log_probs.item(), log_probs.grad_fn.__class__.__name__))
             
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
                 # --- End early if constraints are satisfied
                 if model_has_GBI_inference:
                     self.server_model.inferTypes.append('GBI')
-                eval_f.close()
-                return c_loss, datanode, datanode.myBuilder
-            elif no_of_not_satisfied > 100:
-                if model_has_GBI_inference:
-                    self.server_model.inferTypes.append('GBI')
-                eval_f.close()
-                return c_loss, datanode, datanode.myBuilder # ? float("nan")
+                    
+                print(f'Finishing GBI - Constraints are satisfied after {c_iter} iteration')
+                return c_loss, node_l, node_l.myBuilder
                         
             # --- Backward pass on self.server_model
             if c_loss.requires_grad:
@@ -219,20 +219,17 @@ class GBIModel(torch.nn.Module):
                 c_opt.step()
                 
                 if print_grads:
-                    #  Print the params of the model parameters which have grad
+                    # Print the params of the model parameters which have grad
                     print("Params after model step which have grad")
                     for name, param in self.server_model.named_parameters():
                         if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
                             print(name, 'param sum ', torch.sum(torch.abs(param)).item())
-
-        node_l_builder = None
-        if node_l is not None:
-            node_l_builder = node_l.myBuilder
             
         if model_has_GBI_inference:
             self.server_model.inferTypes.append('GBI')
-        eval_f.close()
-        return c_loss, node_l, node_l_builder # ? float("nan")
+            
+        print(f'Finishing GBI - Constraints not are satisfied after {self.gbi_iters} iteration')
+        return c_loss, node_l, node_l.myBuilder
  
     def calculateGBISelection(self, datanode, conceptsRelations):
         c_loss, updatedDatanode, updatedBuilder = self.forward(datanode)
@@ -254,12 +251,14 @@ class GBIModel(torch.nn.Module):
                    
             for i, (dn, originalDn) in enumerate(zip(dns, originalDns)): 
                 v = dn.getAttribute(currentConcept) # Get learned probabilities
+                #print(f'Net(depth={i}inGBI); pred: {torch.argmax(v, dim=-1)}')
                 if v is None:
                     continue
                 
                 # Calculate GBI results
                 vGBI = torch.zeros(v.size(), dtype=torch.float, device=updatedDatanode.current_device)
                 vArgmaxIndex = torch.argmax(v).item()
+                #print(f'vArgmaxIndex: {vArgmaxIndex}')
                 vGBI[vArgmaxIndex] = 1
                                 
                 # Add GBI inference result to the original datanode 
@@ -277,3 +276,4 @@ class GBIModel(torch.nn.Module):
                 datanode.attributes["variableSet"][keyGBIInVariableSet]=gbiForConcept
                 updatedDatanode.attributes["variableSet"][keyGBIInVariableSet]=gbiForConcept
 
+        return

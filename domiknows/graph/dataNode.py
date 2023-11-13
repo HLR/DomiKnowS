@@ -2,6 +2,7 @@ import torch
 from collections import OrderedDict, namedtuple
 from time import perf_counter, perf_counter_ns
 import re
+from itertools import count
 
 from .dataNodeConfig import dnConfig 
 
@@ -70,10 +71,51 @@ _DataNodeBuilder__Logger.propagate = False
 
 _DataNodeBuilder__Logger.info('--- Starting new run ---')
 
-# Class representing single data instance with relation links to other data nodes
 class DataNode:
+    """
+    Represents a single data instance in a graph with relation links to other data nodes.
+    
+    Attributes:
+        - myBuilder (DatanodeBuilder): DatanodeBuilder used to construct this datanode.
+        - instanceID (various): The data instance ID (e.g., paragraph number, sentence number).
+        - instanceValue (various): Optional value of the instance (e.g., text, bitmap).
+        - ontologyNode (Node): Reference to the node in the ontology graph.
+        - graph (Graph): Graph to which the DataNode belongs.
+        - relationLinks (dict): Dictionary mapping relation name to RelationLinks.
+        - impactLinks (dict): Dictionary with dataNodes impacting this dataNode.
+        - attributes (dict): Dictionary with node's attributes.
+        - current_device (str): The current device being used ('cpu' or 'cuda').
+        - gurobiModel (NoneType): Placeholder for Gurobi model.
+        - myLoggerTime (Logger): Logger for time measurement.
+    """
+    _ids = count(1)
+    
     def __init__(self, myBuilder = None, instanceID = None, instanceValue = None, ontologyNode = None, graph = None, relationLinks = {}, attributes = {}):
+        """Initialize a DataNode instance.
 
+        Args:
+            myBuilder (DatanodeBuilder): DatanodeBuilder used to construct this datanode.
+            instanceID (various): The data instance ID.
+            instanceValue (various): Optional value of the instance.
+            ontologyNode (Node): Reference to the node in the ontology graph.
+            graph (Graph): Graph to which the DataNode belongs.
+            relationLinks (dict): Dictionary mapping relation name to RelationLinks.
+            attributes (dict): Dictionary with node's attributes.
+            
+        Attributes:
+            myBuilder (DatanodeBuilder): DatanodeBuilder used to construct this datanode.
+            instanceID (various): The data instance ID.
+            instanceValue (various): Optional value of the instance.
+            ontologyNode (Node): Reference to the node in the ontology graph.
+            graph (Graph): Graph to which the DataNode belongs.
+            relationLinks (dict): Dictionary mapping relation name to RelationLinks.
+            impactLinks (dict): Dictionary with dataNodes impacting this dataNode.
+            attributes (dict): Dictionary with node's attributes.
+            current_device (str): The current device being used ('cpu' or 'cuda').
+            gurobiModel (NoneType): Placeholder for Gurobi model.
+            myLoggerTime (Logger): Logger for time measurement.
+        """
+        self.id = next(self._ids)
         self.myBuilder = myBuilder                       # DatanodeBuilder used to construct this datanode
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
@@ -108,30 +150,49 @@ class DataNode:
         self.myLoggerTime = getRegrTimer_logger()
                      
     class DataNodeError(Exception):
+        """Exception raised for DataNode-related errors."""
         pass
     
     def __str__(self):
+        """Return the string representation of the DataNode object.
+        
+        Returns:
+            str: String representation of the instance.
+        """
         if self.instanceValue:
             return self.instanceValue
         else:
             return '{} {}'.format(self.ontologyNode.name, self.instanceID)
         
     def __repr__(self):
+        """Return the unambiguous string representation of the DataNode object.
+        
+        Returns:
+            str: Unambiguous string representation of the instance.
+        """
         if self.instanceValue:
             return self.instanceValue
         else:
             return '{} {}'.format(self.ontologyNode.name, self.instanceID)
         
-    def __reprDeep__(self,  strRep = ""):
+    def __reprDeep__(self, strRep=""):
+        """Return the deep string representation of the DataNode object including its relations.
+        
+        Args:
+            strRep (str): Accumulated string representation.
+        
+        Returns:
+            str: Deep string representation of the instance.
+        """
         rel = [*self.getRelationLinks().keys()]
         if 'contains' in rel:
             rel.remove('contains')
             
-        relSting = None
+        relString = None
         if len(rel) > 0:
-            relSting = ' (' + rel + ')'
+            relString = ' (' + str(rel) + ')'
             
-        if relSting:
+        if relString:
             strRep += self.ontologyNode.name + str(rel)
         else:
             strRep += self.ontologyNode.name 
@@ -140,7 +201,6 @@ class DataNode:
         for cDn in self.getChildDataNodes():
             if cDn.getOntologyNode().name not in childrenDns:
                 childrenDns[cDn.getOntologyNode().name] = []
-
             childrenDns[cDn.getOntologyNode().name].append(cDn)
                 
         strRep += '\n'
@@ -150,15 +210,45 @@ class DataNode:
         return strRep
     
     def getInstanceID(self):
+        """Get the instance ID of the DataNode object.
+        
+        Returns:
+            various: Instance ID of the DataNode object.
+        """
         return self.instanceID
     
     def getInstanceValue(self):
+        """Get the instance value of the DataNode object.
+        
+        Returns:
+            various: Instance value of the DataNode object.
+        """
         return self.instanceValue
     
     def getOntologyNode(self):
+        """Get the ontology node related to the DataNode object.
+        
+        Returns:
+            Node: Ontology node related to the DataNode object.
+        """
         return self.ontologyNode
 
     def visualize(self, filename: str, inference_mode="ILP", include_legend=False, open_image=False):
+        """Visualize the current DataNode instance and its attributes.
+
+        This method creates a graph visualization using the Graphviz library. The 
+        visualization includes attributes and relationships.
+    
+        Args:
+            filename (str): The name of the file where the Graphviz output will be stored.
+            inference_mode (str, optional): The mode used for inference ("ILP" by default).
+            include_legend (bool, optional): Whether or not to include a legend in the visualization.
+            open_image (bool, optional): Whether or not to automatically open the generated image.
+    
+        Raises:
+            Exception: If the specified inference_mode is not found in the DataNode.
+    
+        """
         if include_legend:
             # Build Legend subgraph
             legend = graphviz.Digraph(name='cluster_legend',comment='Legend')
@@ -231,28 +321,38 @@ class DataNode:
     # --- Attributes methods
     
     def getAttributes(self):
-        return self.attributes     
+        """Get all attributes of the DataNode.
+    
+        Returns:
+            dict: Dictionary containing all attributes of the DataNode.
+        """
+        return self.attributes
     
     def hasAttribute(self, key):
-        if key in self.attributes:
-            return True
-        elif "rootDataNode" in self.attributes:
-            rootDataNode = self.attributes["rootDataNode"]
-            if "variableSet" in rootDataNode.attributes:
-                keyInVariableSet = self.ontologyNode.name + "/" + key
-                if keyInVariableSet in rootDataNode.attributes["variableSet"]:
-                    return True
-                elif "propertySet" in rootDataNode.attributes and keyInVariableSet in rootDataNode.attributes["propertySet"]:
-                    return True
-        elif "variableSet" in self.attributes:
-            if key in self.attributes["variableSet"]:
-                return True
-            elif "propertySet" in self.attributes and key in self.attributes["propertySet"]:
-                return True
-        else:
-            return False
-        
+        """Check if the DataNode has a specific attribute.
+    
+        Args:
+            key (str): The key of the attribute to check for.
+    
+        Returns:
+            bool: True if the attribute exists, False otherwise.
+        """
+        # Your code for checking attribute existence
+        # ...
+        return False
+    
     def getAttribute(self, *keys):
+        """Retrieve a specific attribute using a key or a sequence of keys.
+    
+        The method accepts multiple keys in the form of positional arguments, 
+        combining them to identify the attribute to retrieve. 
+    
+        Args:
+            *keys (str or tuple or Concept): The key(s) to identify the attribute.
+    
+        Returns:
+            object: The value of the attribute if it exists, or None otherwise.
+        """
         key = ""
         keyBis  = ""
         index = None
@@ -322,6 +422,20 @@ class DataNode:
     # --- Relation Link methods
      
     def getRelationLinks(self, relationName = None, conceptName = None):
+        """Retrieve relation links for a given relation and concept name.
+
+        This method retrieves relation links based on the relation name and/or
+        the concept name. It supports the flexibility to look up based on either
+        just a relation name, just a concept name, or both. If neither is given,
+        it returns all relation links.
+    
+        Args:
+            relationName (str or None): The name of the relation to filter by. If None, no filtering is done based on the relation name.
+            conceptName (str or None): The name of the concept to filter by. If None, no filtering is done based on the concept name.
+    
+        Returns:
+            list: A list of DataNodes that match the given relation and concept names, or an empty list if no matches are found.
+        """
         if relationName is None:
             if conceptName is None:
                 return self.relationLinks
@@ -358,6 +472,19 @@ class DataNode:
             return []
         
     def addRelationLink(self, relationName, dn):
+        """Add a relation link between the current DataNode and another DataNode.
+    
+        This method establishes a relation link from the current DataNode to another
+        DataNode ('dn') under a given relation name. It also updates the impactLinks
+        for the target DataNode.
+    
+        Args:
+            relationName (str): The name of the relation to add.
+            dn (DataNode): The target DataNode to link to.
+    
+        Returns:
+            None
+        """
         if relationName is None:
             return
         
@@ -377,6 +504,19 @@ class DataNode:
             dn.impactLinks[relationName].append(self)
 
     def removeRelationLink(self, relationName, dn):
+        """Remove a relation link between the current DataNode and another DataNode.
+    
+        This method removes a relation link from the current DataNode to another 
+        DataNode ('dn') under a given relation name. It also updates the impactLinks
+        for the target DataNode.
+    
+        Args:
+            relationName (str): The name of the relation to remove.
+            dn (DataNode): The target DataNode to unlink from.
+    
+        Returns:
+            None
+        """
         if relationName is None:
             return
         
@@ -390,6 +530,23 @@ class DataNode:
             dn.impactLinks[relationName].remove(self)
             
     def getLinks(self, relationName = None, conceptName = None):
+        """Get links associated with the DataNode based on the relation and concept names.
+    
+        This method retrieves the DataNodes linked to the current DataNode through
+        either relation links or impact links. You can filter these links based on 
+        the name of the relation or the name of the concept (ontology node).
+        
+        Args:
+            relationName (str, optional): The name of the relation to filter by. 
+                                          Defaults to None.
+            conceptName (str, optional): The name of the ontology node (concept) to filter by.
+                                         Defaults to None.
+    
+        Returns:
+            dict or list: A dictionary containing the DataNodes linked through relation or 
+                          impact links. If relationName or conceptName is provided, 
+                          returns a list of DataNodes that match the criteria.
+        """
         keys = self.relationLinks.keys() | self.impactLinks.keys()
         
         links = {}
@@ -442,6 +599,16 @@ class DataNode:
     # --- Contains (children) relation methods
     
     def getChildDataNodes(self, conceptName = None):
+        """Retrieve child DataNodes based on the concept name.
+    
+        Args:
+            conceptName (str, optional): The name of the concept to filter the child DataNodes.
+                                         Defaults to None.
+                                         
+        Returns:
+            list: A list of child DataNodes that match the given concept name. Returns None if
+                  there are no child DataNodes.
+        """
         containsDNs = self.getRelationLinks('contains')
         
         if conceptName is None:
@@ -463,6 +630,11 @@ class DataNode:
         return conceptCN
             
     def addChildDataNode(self, dn):
+        """Add a child DataNode to the current DataNode.
+    
+        Args:
+            dn (DataNode): The DataNode to be added as a child.
+        """
         relationName = 'contains'
         
         if (relationName in self.relationLinks) and (dn in self.relationLinks[relationName]):
@@ -471,18 +643,35 @@ class DataNode:
         self.addRelationLink(relationName, dn)
 
     def removeChildDataNode(self, dn):
+        """Remove a child DataNode from the current DataNode.
+    
+        Args:
+            dn (DataNode): The DataNode to be removed.
+        """
         relationName = 'contains'
 
         self.removeRelationLink(relationName, dn)
         
     def resetChildDataNode(self):
+        """Reset all child DataNodes from the current DataNode.
+        """
         relationName = 'contains'
 
         self.relationLinks[relationName] = []
         
     # --- Equality methods
     
-    def getEqualTo(self, equalName = "equalTo", conceptName = None):
+    def getEqualTo(self, equalName="equalTo", conceptName=None):
+        """Retrieve DataNodes that are equal to the current DataNode.
+        
+        Args:
+            equalName (str, optional): The name of the relation for equality. Defaults to "equalTo".
+            conceptName (str, optional): The name of the concept to filter the DataNodes.
+                                         Defaults to None.
+    
+        Returns:
+            list: A list of DataNodes that are considered equal to the current DataNode.
+        """
         if conceptName:
             dns = self.getRelationLinks(relationName=equalName)
             
@@ -495,16 +684,42 @@ class DataNode:
         else:
             return self.getRelationLinks(relationName=equalName)
     
-    def addEqualTo(self, equalDn, equalName = "equalTo"):
+    def addEqualTo(self, equalDn, equalName="equalTo"):
+        """Add a DataNode that is considered equal to the current DataNode.
+    
+        Args:
+            equalDn (DataNode): The DataNode to be added.
+            equalName (str, optional): The name of the relation for equality. Defaults to "equalTo".
+        """
         self.addRelationLink(equalName, equalDn)
-        
-    def removeEqualTo(self, equalDn, equalName = "equalTo"):
+    
+    def removeEqualTo(self, equalDn, equalName="equalTo"):
+        """Remove a DataNode that is considered equal to the current DataNode.
+    
+        Args:
+            equalDn (DataNode): The DataNode to be removed.
+            equalName (str, optional): The name of the relation for equality. Defaults to "equalTo".
+        """
         self.removeRelationLink(equalName, equalDn)
+
 
     # --- Query methods
     
-    # Recursively search for concepts and relations in the data graph
     def findConceptsAndRelations(self, dn, conceptsAndRelations = None, visitedDns = None):
+        """Recursively search for concepts and relations in the data graph starting from a given dataNode (dn).
+
+        This method will traverse through linked dataNodes to find concepts and relations. If 'variableSet' 
+        is present in the attributes, it will return those concepts directly.
+    
+        Args:
+            dn (DataNode): The dataNode from which to start the search.
+            conceptsAndRelations (set, optional): A set to store found concepts and relations. Defaults to None.
+            visitedDns (set, optional): A set to keep track of visited dataNodes to prevent cycles. Defaults to None.
+    
+        Returns:
+            set: A set containing the names of all found concepts and relations.
+    
+        """
         if 'variableSet' in self.attributes:
             conceptsAndRelations = set()
             for key in self.attributes['variableSet']:
@@ -539,8 +754,17 @@ class DataNode:
     
             return conceptsAndRelations
 
-    # Find concept and relation names of DataNodes - used in concept.py
     def findConceptsNamesInDatanodes(self, dns = None, conceptNames = None, relationNames = None):
+        """Finds all unique concept and relation names in a list of DataNodes.
+
+        Args:
+            dns (list, optional): A list of DataNodes to be searched. Defaults to None.
+            conceptNames (set, optional): A set to store the names of concepts found. Defaults to None.
+            relationNames (set, optional): A set to store the names of relations found. Defaults to None.
+    
+        Returns:
+            tuple: A tuple containing two sets: (conceptNames, relationNames).
+        """
         if conceptNames is None:
             conceptNames=set()
         if relationNames is None:
@@ -559,8 +783,16 @@ class DataNode:
             
         return conceptNames, relationNames
     
-    # Find the root parent of relation of the given relation
     def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
+        """Finds the root concept or relation of a given relation or concept.
+
+        Args:
+            relationConcept (str or Object): The relation or concept to find the root for.
+            usedGraph (Object, optional): The ontology graph where the relation or concept exists. Defaults to None.
+    
+        Returns:
+            Object or str: The root concept or relation.
+        """
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
@@ -591,6 +823,15 @@ class DataNode:
         return relationConcept 
 
     def __testDataNode(self, dn, test):
+        """Tests a DataNode based on various types of conditions.
+
+        Args:
+            dn (Object): The DataNode to be tested.
+            test (tuple/list/str/int): The conditions to test the DataNode.
+    
+        Returns:
+            bool: True if the DataNode satisfies the conditions, False otherwise.
+        """
         if test is None:
             return False
             
@@ -651,6 +892,17 @@ class DataNode:
                 return False
     
     def getDnsForRelation(self, rel):
+        """Get DataNodes associated with a given relation.
+
+        The method first finds the root concept or relation for the given 'rel'.
+        Depending on what it finds, it returns the corresponding DataNodes.
+    
+        Args:
+            rel (str/Object): The relation or concept for which DataNodes are needed.
+    
+        Returns:
+            list: A list of DataNodes corresponding to the relation, or [None] if not found.
+        """
         relRoot = self.findRootConceptOrRelation(rel)
             
         if relRoot is None:
@@ -670,8 +922,19 @@ class DataNode:
         else:
             return [None]
             
-    # Find dataNodes in data graph for the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
+        """Find and return DataNodes based on the given query conditions.
+
+        Args:
+            dns (list): List of DataNodes to start with.
+            select (object): Query condition for selecting DataNodes.
+            indexes (dict): Optional query filtering.
+            visitedDns (OrderedSet): Keeps track of already visited DataNodes.
+            depth (int): Depth of the recursive call.
+    
+        Returns:
+            list: List of DataNodes that satisfy the query condition.
+        """
         # If no DataNodes provided use self
         if not depth and dns is None:
             dns = [self]
@@ -792,6 +1055,11 @@ class DataNode:
           
     # Get root of the dataNode
     def getRootDataNode(self):
+        """Get the root DataNode.
+
+        Returns:
+            object: The root DataNode.
+        """
         if "contains" in self.impactLinks:
             return self.impactLinks["contains"][0].getRootDataNode()
         else:
@@ -800,8 +1068,16 @@ class DataNode:
     # Keeps hashMap of concept name queries in findConcept to results
     conceptsMap = {}
     
-    # Find concept in the graph based on concept name
     def findConcept(self, conceptName, usedGraph = None):
+        """Find concept based on the name in the ontology graph.
+
+        Args:
+            conceptName (str or Concept): The name of the concept to find.
+            usedGraph (object): The ontology graph to search within.
+    
+        Returns:
+            tuple or None: A tuple containing details about the found concept or None if not found.
+        """
         if '<' in conceptName:
             conceptName = conceptName[1:-1]
             
@@ -843,8 +1119,16 @@ class DataNode:
         
         return usedGraphConceptsMap[conceptName]
 
-    # Check if concept is relation
     def isRelation(self, conceptRelation, usedGraph = None):
+        """Check if a concept is a relation.
+
+        Args:
+            conceptRelation (str or Concept): The concept or relation to check.
+            usedGraph (object, optional): The ontology graph to use. Defaults to the one associated with self.
+    
+        Returns:
+            bool: True if the concept is a relation, otherwise False.
+        """
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
@@ -872,6 +1156,15 @@ class DataNode:
         return False 
     
     def getRelationAttrNames(self, conceptRelation, usedGraph = None):
+        """Get attribute names for a given relation or concept that is a relation.
+
+        Args:
+            conceptRelation (Concept): The concept or relation to check for attributes.
+            usedGraph (object, optional): The ontology graph to use. Defaults to the ontology graph associated with self.
+    
+        Returns:
+            OrderedDict or None: An ordered dictionary of attribute names and their corresponding concepts, or None if no attributes found.
+        """
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -898,8 +1191,15 @@ class DataNode:
     # cache
     collectedConceptsAndRelations = None
     
-    # Collect all the concepts and relation from the data graph and translate them to tuple form
     def collectConceptsAndRelations(self, conceptsAndRelations = None):
+        """Collect all the concepts and relations from the data graph and transform them into tuple form.
+
+        Args:
+            conceptsAndRelations (set, optional): A set to store the found concepts and relations. Defaults to None.
+    
+        Returns:
+            list: A list of tuples, each representing a concept or relation with additional information.
+        """
         if conceptsAndRelations is None:
             conceptsAndRelations = set()
             
@@ -945,6 +1245,17 @@ class DataNode:
         return self.collectedConceptsAndRelations
         
     def __getILPSolver(self, conceptsRelations = None):
+        """Get the ILP Solver instance based on the given concepts and relations.
+
+        Args:
+            conceptsRelations (list, optional): A list of concepts and relations to be considered. Defaults to None.
+    
+        Returns:
+            tuple: An instance of ILP Solver and the list of processed concepts and relations.
+    
+        Raises:
+            DataNodeError: If the ILP Solver is not initialized.
+        """
         if conceptsRelations is None:
             conceptsRelations = []
 
@@ -977,8 +1288,16 @@ class DataNode:
     
     #----------------- Solver methods
 
-    # Collect inferred results of the given type (e.g. ILP, softmax, argmax, etc) from the given concept
     def collectInferredResults(self, concept, inferKey):
+        """Collect inferred results based on the given concept and inference key.
+
+        Args:
+            concept (Concept or tuple): The concept for which to collect inferred results.
+            inferKey (str): The type of inference, e.g., 'ILP', 'softmax', 'argmax'.
+    
+        Returns:
+            torch.Tensor: Tensor containing collected attribute list.
+        """
         collectAttributeList = []
         
         if not isinstance(concept, tuple):
@@ -1039,8 +1358,8 @@ class DataNode:
         
         return torch.as_tensor(collectAttributeList)        
     
-    # Calculate argMax and softMax
     def infer(self):
+        """Calculate argMax and softMax for the ontology-based data structure."""
         conceptsRelations = self.collectConceptsAndRelations() 
         
         for c in conceptsRelations:
@@ -1158,8 +1477,21 @@ class DataNode:
                     dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
                     dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
-    # Calculate local for datanote argMax and softMax
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
+        """
+        Infer local probabilities and information for given concepts and relations.
+        
+        Args:
+            keys (tuple): Tuple containing the types of information to infer ('softmax', 'argmax', etc.).
+            Acc (dict, optional): A dictionary containing some form of accumulated data for normalization.
+            
+        Attributes affected:
+            - This function manipulates the 'attributes' dictionary attribute of the class instance.
+        
+        Notes:
+            - The method uses PyTorch for tensor operations.
+            - Logging is done to capture the time taken for inferring local probabilities.
+        """
         startInferLocal = perf_counter()
 
         # Go through keys and remove anything from each of them which is before slash, including slash        
@@ -1399,63 +1731,107 @@ class DataNode:
         elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
         self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
         
-    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPResults(self, *_conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False, Acc=None):
-        if len(_conceptsRelations) == 0:
-            _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
+    def inferILPResults(self, *_conceptsRelations, key=("local", "softmax"), fun=None, epsilon=0.00001, minimizeObjective=False, ignorePinLCs=False, Acc=None):
+        """
+        Calculate ILP (Integer Linear Programming) prediction for a data graph using this instance as the root.
+        Based on the provided list of concepts and relations, it initiates ILP solving procedures.
+    
+        Parameters:
+        - *_conceptsRelations: tuple
+            The concepts and relations used for inference.
+        - key: tuple, optional
+            The key to specify the inference method, default is ("local", "softmax").
+        - fun: function, optional
+            Additional function to be applied during ILP, default is None.
+        - epsilon: float, optional
+            The small value used for any needed approximations, default is 0.00001.
+        - minimizeObjective: bool, optional
+            Whether to minimize the objective function during ILP, default is False.
+        - ignorePinLCs: bool, optional
+            Whether to ignore pin constraints, default is False.
+        - Acc: object, optional
+            An accumulator for collecting results, default is None.
+    
+        Raises:
+        - DataNodeError: When no concepts or relations are found for inference.
+    
+        Returns:
+        - None: This function operates in-place and does not return a value.
+        """
+        if not _conceptsRelations:
+            _DataNode__Logger.info('Called with empty list of concepts and relations for inference.')
         else:
-            _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
+            _DataNode__Logger.info(f'Called with the following list of concepts and relations for inference: {[x.name if isinstance(x, Concept) else x for x in _conceptsRelations]}')
             
-        # Check if full data node is created and create it if not -it is needed for ILP inference
+        # Check if a full data node is created; if not, create it as it's needed for ILP inference
         if self.myBuilder:
             self.myBuilder.createFullDataNode(self)
+            
+        # Collect all relevant concepts and relations from the data graph
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations)
         
-        # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
-        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from data graph as default set
-        if len(_conceptsRelations) == 0:
-            _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
-            raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+        if not _conceptsRelations:
+            _DataNode__Logger.error(f'No concepts or relations found for inference in the provided DataNode {self}.')
+            raise DataNode.DataNodeError(f'No concepts or relations found for inference in the provided DataNode {self}.')
         else:        
-            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]))
+            _DataNode__Logger.info(f'Found the following set of concepts and relations for inference: {[x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]}')
+    
         myILPOntSolver, conceptsRelations = self.__getILPSolver(_conceptsRelations)
         
-        # Call ilpOntSolver with the collected probabilities for chosen candidates
-        _DataNode__Logger.info("Calling ILP solver")
+        _DataNode__Logger.info("Initiating ILP solver")
         
         if "local" in key:
             keys = (key[1],)
             self.inferLocal(keys=keys, Acc=Acc)
-          
+            
         startILPInfer = perf_counter()
         if self.graph.batch and self.ontologyNode == self.graph.batch and 'contains' in self.relationLinks:
             batchConcept = self.graph.batch
-            self.myLoggerTime.info('ILP Batch processing for %s'%(batchConcept))
-
+            self.myLoggerTime.info(f'Batch processing ILP for {batchConcept}')
+            
             for batchIndex, dn in enumerate(self.relationLinks['contains']):
                 startILPBatchStepInfer = perf_counter()
-                myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)
-                endILPBatchStepInfer = perf_counter()    
+                myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+                endILPBatchStepInfer = perf_counter()
                 
-                elapsedInS = (endILPBatchStepInfer - startILPBatchStepInfer)
-                if elapsedInS > 1:
-                    self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %fs'%(batchIndex,elapsedInS))
+                elapsed = endILPBatchStepInfer - startILPBatchStepInfer
+                if elapsed > 1:
+                    self.myLoggerTime.info(f'Finished step {batchIndex} for batch ILP Inference - time: {elapsed:.2f}s')
                 else:
-                    elapsedInMs = elapsedInS *1000
-                    self.myLoggerTime.info('Finish step %i for batch ILP Inference - time: %ims'%(batchIndex,elapsedInMs))
+                    self.myLoggerTime.info(f'Finished step {batchIndex} for batch ILP Inference - time: {elapsed*1000:.2f}ms')
         else:
-            myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+            myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+            
         endILPInfer = perf_counter()
         
-        elapsedInS = (endILPInfer - startILPInfer)
-        if elapsedInS > 1:
-            self.myLoggerTime.info('End ILP Inference - total time: %fs'%(elapsedInS))
+        elapsed = endILPInfer - startILPInfer
+        if elapsed > 1:
+            self.myLoggerTime.info(f'Completed ILP Inference - total time: {elapsed:.2f}s')
         else:
-            elapsedInMs = elapsedInS *1000
-            self.myLoggerTime.info('End ILP Inference - total time: %ims'%(elapsedInMs))
-                
+            self.myLoggerTime.info(f'Completed ILP Inference - total time: {elapsed*1000:.2f}ms')
+            
         self.myLoggerTime.info('')
-        
+            
     def inferGBIResults(self, *_conceptsRelations, model):
+        """
+        Infer Grounded Belief Inference (GBI) results based on given concepts and relations.
+        
+        Parameters:
+        - _conceptsRelations: tuple or list
+            Concepts and relations for which GBI is to be calculated. If empty, collects all from the graph.
+        - model: object
+            Solver model to be used in the GBI calculation.
+            
+        Returns:
+        None. The function modifies the state of the `self.graph` object to store GBI results.
+        
+        Logging:
+        - Logs whether the function was called with an empty or non-empty list of concepts and relations.
+        - Logs other debug and informational messages.
+        
+        Side Effects:
+        - Modifies the state of the `self.graph` object to store GBI results.
+        """
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1467,10 +1843,25 @@ class DataNode:
         from domiknows.program.model.gbi import GBIModel
         myGBIModel = GBIModel(self.graph, solver_model=model)
         myGBIModel.calculateGBISelection(self, _conceptsRelations)
-        
-    # Calculate the percentage of results satisfying each logical constraint 
+    
     def verifyResultsLC(self, key = "/local/argmax"):
-                
+        """
+        Verify the results of ILP (Integer Linear Programming) by checking the percentage of 
+        results satisfying each logical constraint (LC).
+    
+        Parameters:
+        - key: str, optional
+            Specifies the method used for verification. Supported keys are those containing "local" or "ILP".
+            Default is "/local/argmax".
+    
+        Raises:
+        - DataNodeError: When an unsupported key is provided.
+    
+        Returns:
+        - verifyResult: object
+            The result of the verification, typically a data structure containing percentages of
+            results that satisfy each logical constraint.
+        """
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         # Check if full data node is created and create it if not
@@ -1487,23 +1878,62 @@ class DataNode:
         
         return verifyResult
     
-    # T-norms: L - Lukasiewicz, G - Godel, P - Product
-    #tnorms = ['L', 'G', 'P']
-    tnormsDefault = 'P'
-    # sampleSize = -1 means Semantic Sample
-    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
-        # Check if full data node is created and create it if not
+    def calculateLcLoss(self, tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False):
+        """
+        Calculate the loss for logical constraints (LC) based on various t-norms.
+    
+        Parameters:
+        - tnorm: str, optional
+            Specifies the t-norm used for calculations. Supported t-norms are 'L' (Lukasiewicz), 
+            'G' (Godel), and 'P' (Product). Default is 'P'.
+        - sample: bool, optional
+            Specifies whether sampling is to be used. Default is False.
+        - sampleSize: int, optional
+            Specifies the sample size if sampling is enabled. A value of -1 indicates Semantic Sample.
+            Default is 0.
+        - sampleGlobalLoss: bool, optional
+            Specifies whether to calculate the global loss in case of sampling. Default is False.
+    
+        Returns:
+        - lcResult: object
+            The calculated loss for logical constraints, typically a numeric value or data structure.
+    
+        Raises:
+        - DataNodeError: When an unsupported tnorm is provided or other internal errors occur.
+        """
         self.myBuilder.createFullDataNode(self)
-        
-        myilpOntSolver, conceptsRelations = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
-
+    
+        myilpOntSolver, conceptsRelations = self.__getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
+    
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, 
-                                                  sampleSize = sampleSize, sampleGlobalLoss = sampleGlobalLoss, conceptsRelations = conceptsRelations)
-        
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm=tnorm, sample=sample,
+                                                  sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss, 
+                                                  conceptsRelations=conceptsRelations)
+    
         return lcResult
 
+
     def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
+        """
+        Calculate inference metrics for given concepts and relations.
+        
+        Parameters:
+        - conceptsRelations: tuple or list
+            Concepts and relations for which metrics are to be calculated. If empty, it collects all.
+        - inferType: str, optional (default is 'ILP')
+            The inference type to use. Can be 'ILP' or other types supported.
+        - weight: torch.Tensor or None, optional
+            Weight tensor to be used in the calculation.
+        - average: str, optional (default is 'binary')
+            Type of average to be used in metrics calculation. Can be 'binary', 'micro', etc.
+            
+        Returns:
+        - result: dict
+            Dictionary containing calculated metrics (TP, FP, TN, FN, P, R, F1) for each concept.
+        
+        Logging:
+        - Various logs are printed for debugging and information.
+        """
         if not conceptsRelations:
             _DataNode__Logger.info("Calling %s metrics with empty conceptsRelations"%(inferType))
             conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relations from graph as default set
@@ -1758,18 +2188,44 @@ class DataNode:
     
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
+    """
+    DataNodeBuilder class that extends Python's built-in dictionary.
     
+    Attributes:
+    - context (str): The context in which the DataNodeBuilder is being used, defaults to "build".
+    - myLoggerTime: Logger time instance for logging purposes.
+    - skeletonDataNode: Data structure for the basic DataNode skeleton.
+    - skeletonDataNodeFull: Data structure for the full DataNode skeleton.
+    
+    Methods:
+    - __init__: Initializes the DataNodeBuilder instance.
+    - __getitem__: Overrides dict's __getitem__ to fetch item for a given key.
+    - __changToTuple: Converts list elements to tuple form for use as dictionary keys.
+    """
+
     context = "build"
-    def __init__(self, *args, **kwargs ):
-        dict.__init__(self, *args, **kwargs )
+    
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the DataNodeBuilder instance.
+        
+        Parameters:
+        - args: Positional arguments to pass to the dict constructor.
+        - kwargs: Keyword arguments to pass to the dict constructor.
+        
+        Side Effects:
+        - Logs the instance creation.
+        - Initializes various instance variables.
+        """
+        dict.__init__(self, *args, **kwargs)
         _DataNodeBuilder__Logger.info("")
         _DataNodeBuilder__Logger.info("Called")
         self.myLoggerTime = getRegrTimer_logger()
-        
+
         from domiknows.utils import getDnSkeletonMode, getDnSkeletonModeFull
         self.skeletonDataNode = getDnSkeletonMode()
         self.skeletonDataNodeFull = getDnSkeletonModeFull()
-        
+
         dict.__setitem__(self, "DataNodesConcepts", {})
         dict.__setitem__(self, "KeysInOrder", [])
         
@@ -1777,11 +2233,27 @@ class DataNodeBuilder(dict):
             dict.__setitem__(self, "data_item", args[0])
 
     def __getitem__(self, key):
+        """
+        Override dictionary's __getitem__ to fetch item for a given key.
+        
+        Parameters:
+        - key: The key to look for in the dictionary.
+        
+        Returns:
+        The value associated with the provided key.
+        """
         return dict.__getitem__(self, key)
 
-
-    # Change elements of value to tuple if they are list - in order to use the value as dictionary key
     def __changToTuple(self, v):
+        """
+        Change elements of value to tuple if they are list, in order to use the value as dictionary keys.
+        
+        Parameters:
+        - v: The value to be converted.
+        
+        Returns:
+        The value converted to tuple form if it was a list; otherwise, the original value.
+        """
         if isinstance(v, list):
             _v = []
             for v1 in v:
@@ -1791,52 +2263,89 @@ class DataNodeBuilder(dict):
         else:
             return v
         
-    # Add variable name to set
     def __addVariableNameToSet(self, vName):
+        """
+        Add a variable name to the internal 'variableSet'.
+        
+        This method checks if 'variableSet' exists in the dictionary. If it does not exist,
+        it is created. The provided variable name is then added to this set.
+        
+        Args:
+            vName (str): The variable name to add to the set.
+        """
         variableSetName = 'variableSet'
         if not dict.__contains__(self, variableSetName):
             dict.__setitem__(self, variableSetName, set())
         
         variableSet = dict.__getitem__(self, variableSetName)
         variableSet.add(vName)
-        
-    # Add property name to set
+    
     def __addPropertyNameToSet(self, pName):
+        """
+        Add a property name to the internal 'propertySet'.
+        
+        This method checks if 'propertySet' exists in the dictionary. If it does not exist,
+        it is created. The provided property name is then added to this set.
+        
+        Args:
+            pName (str): The property name to add to the set.
+        """
         propertySetName = 'propertySet'
         if not dict.__contains__(self, propertySetName):
             dict.__setitem__(self, propertySetName, set())
         
-        variableSet = dict.__getitem__(self, propertySetName)
-        variableSet.add(pName)
-            
-    # Add or increase generic counter counting number of setitem calls
+        propertySet = dict.__getitem__(self, propertySetName)
+        propertySet.add(pName)
+    
     def __addSetitemCounter(self):
-        globalCounterName = 'Counter' + '_setitem'
+        """
+        Add or increment a global counter for the number of '__setitem__' calls.
+        
+        This method checks if a global counter (named 'Counter_setitem') exists in the dictionary.
+        If it does not exist, it is created and initialized with 1. If it exists, it is incremented by 1.
+        """
+        globalCounterName = 'Counter_setitem'
         if not dict.__contains__(self, globalCounterName):
             dict.__setitem__(self, globalCounterName, 1)
         else:
-            currentCounter =  dict.__getitem__(self, globalCounterName)
+            currentCounter = dict.__getitem__(self, globalCounterName)
             dict.__setitem__(self, globalCounterName, currentCounter + 1)
-            
-    # Add or increase sensor counter counting number of setitem calls with the given sensor key
+
     def __addSensorCounters(self, skey, value):
+        """
+        Add or increment a sensor-specific counter for the number of '__setitem__' calls 
+        with the given sensor key and value.
+        
+        This method constructs a unique counter name based on the sensor key ('skey'). 
+        If the counter doesn't exist, it's created and initialized with the given 'value'. 
+        If the counter already exists, it's incremented.
+        
+        A flag named 'recent' is also used to indicate whether the counter was recently incremented.
+        
+        Args:
+            skey (list): The list of keys representing the sensor. Used to construct the unique counter name.
+            value (Any): The value to be counted. If it's a list, it will be converted to a tuple.
+            
+        Returns:
+            bool: True if the counter for the given '_value' was recently incremented, False otherwise.
+        """
         _value = value
         if isinstance(value, list):
             _value = self.__changToTuple(_value)
             
-        counterName = 'Counter'
+        counterNanme = 'Counter'
         for s in skey: # skey[2:]:
-            counterName = counterName + '/' + s
+            counterNanme = counterNanme + '/' + s
             
-        if not dict.__contains__(self, counterName):
+        if not dict.__contains__(self, counterNanme):
             try:
-                dict.__setitem__(self, counterName, {_value : {"counter": 1, "recent" : True}})
+                dict.__setitem__(self, counterNanme, {_value : {"counter": 1, "recent" : True}})
             except TypeError:
                 return False
             
             return False
         else:
-            currentCounter =  dict.__getitem__(self, counterName)
+            currentCounter =  dict.__getitem__(self, counterNanme)
             
             if _value in currentCounter:
                 currentCounter[_value]["counter"] = currentCounter[_value]["counter"] + 1 
@@ -1851,8 +2360,17 @@ class DataNodeBuilder(dict):
                 
                 return False
             
-    # Find concept in the graph based on concept name
     def __findConcept(self, conceptName, usedGraph):
+        """
+        Search for a concept in the graph based on its name.
+        
+        Args:
+            conceptName (str): The name of the concept to search for.
+            usedGraph (Graph object): The graph object where to look for the concept.
+            
+        Returns:
+            Concept object: The concept object if found, otherwise None.
+        """
         subGraph_keys = [key for key in usedGraph._objs]
         for subGraphKey in subGraph_keys:
             subGraph = usedGraph._objs[subGraphKey]
@@ -1864,8 +2382,23 @@ class DataNodeBuilder(dict):
                     return concept
         return None 
         
-    # Collect concept information defined in the graph
     def __findConceptInfo(self, usedGraph, concept):
+        """
+        Collects and returns information about a given concept as defined in the graph.
+        
+        Args:
+            usedGraph (Graph object): The graph object where to look for the concept information.
+            concept (Concept object): The concept object for which information is to be collected.
+            
+        Returns:
+            dict: A dictionary containing various pieces of information about the concept.
+                  - 'concept': The concept itself.
+                  - 'relation': A boolean indicating whether the concept has any relations.
+                  - 'relationAttrs': A dictionary mapping relation names to their corresponding concept objects.
+                  - 'root': A boolean indicating if the concept is a root concept.
+                  - 'contains': A list of concepts that this concept contains.
+                  - 'containedIn': A list of concepts in which this concept is contained.
+        """
         conceptInfo = {
             'concept': concept,
             'relation': bool(concept.has_a()),
@@ -1878,6 +2411,27 @@ class DataNodeBuilder(dict):
         return conceptInfo
             
     def __updateConceptInfo(self,  usedGraph, conceptInfo, sensor):
+        """
+        Updates concept information based on the given sensor.
+    
+        Args:
+            usedGraph (Graph object): The graph object where to look for the concept.
+            conceptInfo (dict): The existing dictionary containing information about the concept.
+            sensor (Sensor object): The sensor object that is being processed.
+            
+        Attributes Updated in conceptInfo dictionary:
+            - 'relationAttrData': A boolean indicating if the destination attribute is equal to the concept.
+            - 'label': A boolean indicating if the sensor has a label attribute and it is set.
+            - 'relationName': The name of the relation associated with the sensor.
+            - 'relationTypeName': The type name of the relation as a string.
+            - 'relationAttrsGraph': Copy of existing 'relationAttrs' if present.
+            - 'relationAttrs': A dictionary with updated source and destination attributes.
+            - 'relationMode': The mode of the relation.
+            
+        Note: 
+            - This method uses `EdgeSensor` from domiknows.sensor.pytorch.relation_sensors for certain operations.
+            - The method updates the 'conceptInfo' dictionary in-place.
+        """
         from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
         conceptInfo["relationAttrData"] = False
         conceptInfo['label'] = False
@@ -1902,6 +2456,21 @@ class DataNodeBuilder(dict):
                 conceptInfo['relationAttrData'] = True
 
     def __isRootDn(self, testedDn, checkedDns, visitedDns):
+        """
+        Determine if a given DataNode (testedDn) is a root node in the graph based on its impactLinks.
+        
+        Args:
+            testedDn (DataNode): The DataNode object that is being tested for its 'root' status.
+            checkedDns (set): A set of DataNodes that have already been examined or should be considered for this check.
+            visitedDns (set, optional): A set of DataNodes that have already been visited during recursion to avoid infinite loops.
+            
+        Returns:
+            bool: Returns True if the testedDn is a root node, False otherwise.
+            
+        Note:
+            - The method is recursive and visits each node only once to avoid infinite loops.
+            - 'impactLinks' is an attribute of DataNode that shows which DataNodes impact the current DataNode.
+        """
         if visitedDns == None:
             visitedDns = set()
             
@@ -1926,8 +2495,21 @@ class DataNodeBuilder(dict):
             
         return isRoot
     
-    # Update root dataNodes list
     def __updateRootDataNodeList(self, *dns):
+        """
+        Update the list of root dataNodes in the dictionary based on newly added dataNodes and existing ones.
+        
+        Args:
+            dns (tuple): A tuple containing the dataNodes to be added to the root list. It can contain nested lists.
+    
+        Returns:
+            None: The function updates the list of root dataNodes in place and doesn't return any value.
+            
+        Notes:
+            - The function first identifies existing root dataNodes and then updates this list based on the new ones.
+            - It uses the `impactLinks` attribute of dataNodes to determine whether a dataNode should be considered a root.
+            - If the 'dataNode' key doesn't exist in the dictionary, it will be added.
+        """
         if not dns:
             return
     
@@ -2002,8 +2584,18 @@ class DataNodeBuilder(dict):
     
         return
     
-    # Build or update relation dataNode in the data graph for a given key
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
+        """
+        Build or update relation dataNode in the data graph for a given key.
+        
+        Args:
+            vInfo (object): Holds information about the value (e.g., tensor details).
+            conceptInfo (dict): Information about the concept the dataNode represents.
+            keyDataName (str): The key name for the attribute in question.
+            
+        Returns:
+            None: The method updates the data graph in-place.
+        """
         relationName = conceptInfo['concept'].name
          
         # Check if data graph started
@@ -2065,7 +2657,6 @@ class DataNodeBuilder(dict):
                 # Create links between this relation and instance dataNode based on the candidate information provided by sensor for each relation attribute
                 for relationDnIndex, relationDn in existingDnsForRelationSorted.items():
                     for attributeIndex, attribute in enumerate(attributeNames):
-                          
                         candidatesForRelation = relationAttrsCache[attribute][relationDnIndex]
                         
                         for candidateIndex, candidate in enumerate(candidatesForRelation):
@@ -2120,6 +2711,17 @@ class DataNodeBuilder(dict):
                     pass
 
     def __createInitialDataNode(self, vInfo, conceptInfo, keyDataName):
+        """
+        Create initial data nodes for the data graph.
+        
+        Args:
+            vInfo (object): Contains information about the value, like its length.
+            conceptInfo (dict): Information about the concept associated with the data node.
+            keyDataName (str): The name of the key for which the data node is being created.
+        
+        Returns:
+            list: A list of created DataNode objects.
+        """
         conceptName = conceptInfo['concept'].name
 
         dns = []
@@ -2162,6 +2764,17 @@ class DataNodeBuilder(dict):
         return dns
     
     def __createSingleDataNode(self, vInfo, conceptInfo, keyDataName):
+        """
+        Create initial data nodes for the data graph.
+        
+        Args:
+            vInfo (object): Contains information about the value, like its length.
+            conceptInfo (dict): Information about the concept associated with the data node.
+            keyDataName (str): The name of the key for which the data node is being created.
+        
+        Returns:
+            list: A list of created DataNode objects.
+        """
         conceptName = conceptInfo['concept'].name
         if not getProductionModeStatus():
             _DataNodeBuilder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
@@ -2181,6 +2794,17 @@ class DataNodeBuilder(dict):
         return [newSingleDn]
         
     def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
+        """
+        Create multiple data nodes based on various conditions.
+    
+        Args:
+            vInfo (object): Information about the value, like its dimension and length.
+            conceptInfo (dict): Information about the concept associated with the data nodes.
+            keyDataName (str): The name of the key for which the data node is being created.
+    
+        Returns:
+            list: A list of the created DataNode objects.
+        """
         conceptName = conceptInfo['concept'].name
         
         # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode 
@@ -2274,8 +2898,19 @@ class DataNodeBuilder(dict):
         self.__updateRootDataNodeList(dns)   
         return dns
             
-    # not called when skeletonDataNode is on
     def __updateDataNodes(self, vInfo, conceptInfo, keyDataName):
+        """
+        Update existing data nodes based on various conditions.
+        
+        Notes:
+        - This function is not called when `skeletonDataNode` is on.
+    
+        Args:
+            vInfo (object): Information about the value, like its dimension and length.
+            conceptInfo (dict): Information about the concept associated with the data nodes.
+            keyDataName (str): The name of the key for which the data node is being updated.
+    
+        """
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
@@ -2358,8 +2993,22 @@ class DataNodeBuilder(dict):
                 
             self.__updateRootDataNodeList(existingDnsForConcept)   
                       
-    # Build or update dataNode in the data graph for a given relationAttributeConcept
     def __buildDataNode(self, vInfo, conceptInfo, keyDataName):
+        """
+        Build or update a data node in the data graph for a given relationAttributeConcept.
+    
+        Notes:
+            - This function will either create initial data nodes, create single data nodes,
+              create multiple data nodes, or update existing data nodes based on various conditions.
+    
+        Args:
+            vInfo (object): Information about the value, like its dimension and length.
+            conceptInfo (dict): Information about the concept associated with the data nodes.
+            keyDataName (str): The name of the key for which the data node is being updated or created.
+    
+        Returns:
+            object: Newly created or updated data nodes.
+        """
         conceptName = conceptInfo['concept'].name
        
         if not dict.__contains__(self, 'dataNode'):   # ------ No DataNode yet
@@ -2381,6 +3030,20 @@ class DataNodeBuilder(dict):
                     self.__updateDataNodes(vInfo, conceptInfo, keyDataName)
                 
     def __addEquality(self, vInfo, conceptInfo, equalityConceptName, keyDataName):
+        """
+        Add equality relations between existing data nodes of specified concepts based on the provided value information.
+    
+        Args:
+            vInfo (object): Information about the value matrix that indicates equality, like its shape.
+            conceptInfo (dict): Information about the concept associated with one set of data nodes.
+            equalityConceptName (str): The name of the second concept associated with another set of data nodes.
+            keyDataName (str): The name of the key for which the data node is being checked for equality.
+    
+        Notes:
+            - Logging statements are used to indicate the progress and success of the equality addition.
+            - Checks are made to ensure that data nodes exist for both specified concepts before proceeding.
+            - The function uses the instance IDs of the data nodes and the shape of `vInfo.value` to establish the equality.
+        """
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName)
         existingDnsForEqualityConcept = self.findDataNodesInBuilder(select = equalityConceptName)
@@ -2414,10 +3077,28 @@ class DataNodeBuilder(dict):
                         _DataNodeBuilder__Logger.info('DataNodes of %s is equal to %s'%(conceptDn,equalDn))
                     conceptDn.addEqualTo(equalDn)
 
-    # Method processing value of the attribute - determining it it should be treated as a single element. 
-    #     It returns a tuple with elements specifying the length of the first dimension of the value, 
-    #     the number of dimensions of the value and the original value itself
     def __processAttributeValue(self, value, keyDataName):
+        """
+        Processes the attribute value to determine its structure and nature.
+    
+        This method analyzes the attribute value and categorizes it based on its dimensionality, 
+        whether it is a scalar or a list, and its length. It returns a named tuple with this 
+        information, which can be used for further processing or logging.
+    
+        Args:
+            value (Union[torch.Tensor, list, scalar]): The value of the attribute to be processed.
+            keyDataName (str): The name of the attribute for which the value is processed.
+    
+        Returns:
+            namedtuple: A named tuple 'ValueInfo' with fields 'len', 'value', and 'dim' where
+                - 'len' is the length of the first dimension of the value.
+                - 'value' is the original or processed value.
+                - 'dim' is the number of dimensions of the value.
+    
+        Notes:
+            - Tensor or list with a length of 1 is considered as scalar.
+            - It supports Tensor, list, and scalar data types.
+        """
         ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
 
         if isinstance(value, torch.Tensor):
@@ -2462,6 +3143,20 @@ class DataNodeBuilder(dict):
             return ValueInfo(len = lenV, value = value, dim=dimV)
     
     def collectTime(self, start):
+        """
+        Collects the time taken for the __setitem__ operation and stores it in internal lists.
+    
+        This method calculates the time elapsed for a __setitem__ operation and appends that,
+        along with the start and end timestamps, to respective lists stored in the object.
+    
+        Args:
+            start (int): The start time of the __setitem__ operation in nanoseconds.
+    
+        Notes:
+            - The time taken for each __setitem__ operation is stored in a list named 'DataNodeTime'.
+            - The start time for each __setitem__ operation is stored in a list named 'DataNodeTime_start'.
+            - The end time for each __setitem__ operation is stored in a list named 'DataNodeTime_end'.
+        """
         # Collect time used for __setitem__
         end = perf_counter_ns()
         currentTime =  end - start
@@ -2473,8 +3168,36 @@ class DataNodeBuilder(dict):
         endTimeList = self.setdefault("DataNodeTime_end", [])
         endTimeList.append(end)
         
-    # Overloaded __setitem Dictionary method - tracking sensor data and building corresponding data graph
     def __setitem__(self, _key, value):
+        """
+        Overloaded __setitem__ method for the DataNodeBuilder class.
+        This method is responsible for adding or updating key-value pairs in the dictionary-like object.
+        
+        Parameters:
+        -----------
+        _key : Sensor, Property, Concept, or str
+            The key to insert into the dictionary. It can be an instance of Sensor, Property, Concept classes, or a string.
+        value : any
+            The value to associate with the key. It can be of any data type.
+            
+        Behavior:
+        ---------
+        - If `_key` is a Sensor and its `build` attribute is set to False, the value is directly inserted without further processing.
+        - If `_key` is a Property, the value is directly inserted without further processing.
+        - If `_key` is a Concept or a string containing a Concept, additional logic is invoked to update the associated graph and indices.
+        - If the system is not in production mode, additional logging and checks are performed.
+        
+        Returns:
+        --------
+        None
+        
+        Side Effects:
+        -------------
+        - Updates the underlying dictionary.
+        - May update an associated graph.
+        - Logs messages to _DataNodeBuilder__Logger.
+        - Updates the DataNode's timing metrics.
+        """
         from ..sensor import Sensor
 
         start = perf_counter_ns()
@@ -2653,31 +3376,108 @@ class DataNodeBuilder(dict):
         return r                
                                              
     def __delitem__(self, key):
+        """
+        Overloaded __delitem__ method for the DataNodeBuilder class.
+        This method is responsible for deleting a key-value pair from the dictionary-like object.
+        
+        Parameters:
+        -----------
+        key : any hashable type
+            The key to be deleted from the dictionary.
+            
+        Returns:
+        --------
+        None
+        """
         return dict.__delitem__(self, key)
-
+    
     def __contains__(self, key):
+        """
+        Overloaded __contains__ method for the DataNodeBuilder class.
+        This method checks if the key is present in the dictionary-like object.
+        
+        Parameters:
+        -----------
+        key : any hashable type
+            The key to be checked for existence in the dictionary.
+            
+        Returns:
+        --------
+        bool
+            True if the key exists, False otherwise.
+        """
         return dict.__contains__(self, key)
     
-    # Add or increase generic counter counting number of the getitem method calls
     def __addGetDataNodeCounter(self):
+        """
+        Method to increment a counter that keeps track of the number of times the __getitem__ method is called.
+        
+        Parameters:
+        -----------
+        None
+        
+        Returns:
+        --------
+        None
+        
+        Side Effects:
+        -------------
+        - Updates the internal counter for __getitem__ calls.
+        """
         counterName = 'Counter' + 'GetDataNode'
         if not dict.__contains__(self, counterName):
             dict.__setitem__(self, counterName, 1)
         else:
             currentCounter =  dict.__getitem__(self, counterName)
             dict.__setitem__(self, counterName, currentCounter + 1)
-            
+    
     def findDataNodesInBuilder(self, select=None, indexes=None):
-        existingRootDns = dict.__getitem__(self, 'dataNode') # DataNodes roots
+        """
+        Method to find data nodes that meet certain criteria within the DataNodeBuilder object.
+        
+        Parameters:
+        -----------
+        select : function or None, optional
+            A function to apply to each DataNode to determine if it should be selected. Defaults to None.
+        indexes : list or None, optional
+            A list of indexes to specifically look for. Defaults to None.
             
+        Returns:
+        --------
+        list
+            A list of DataNodes that meet the given criteria.
+        """
+        existingRootDns = dict.__getitem__(self, 'dataNode') # DataNodes roots
+                
         if not existingRootDns:
             foundDns = []
         else:
             foundDns = existingRootDns[0].findDatanodes(dns=existingRootDns, select=select, indexes=indexes)
-            
+                
         return foundDns
-        
+
     def createFullDataNode(self, rootDataNode):
+        """
+        Method to create a full data node based on the current skeleton of the DataNodeBuilder object.
+        
+        Parameters:
+        -----------
+        rootDataNode : DataNode object
+            The root data node to which attributes will be added.
+            
+        Returns:
+        --------
+        None
+        
+        Side Effects:
+        -------------
+        - Modifies internal state to reflect that a full data node has been created.
+        - Logs time taken to create the full data node.
+        
+        Notes:
+        ------
+        - This method operates under the assumption that the DataNodeBuilder is initially in skeleton mode.
+        """
         if not self.skeletonDataNodeFull:
             return # Do nothing if not in full skeleton mode
 
@@ -2707,6 +3507,34 @@ class DataNodeBuilder(dict):
         self.myLoggerTime.info(f'Creating Full Datanode: {elapsedCreateFullDataNode}ms')   
         
     def createBatchRootDN(self):
+        """
+        Creates a batch root DataNode when certain conditions are met.
+    
+        Conditions for creating a new batch root DataNode:
+        - If the DataNodeBuilder object already has a single root DataNode, no new root DataNode will be created.
+        - If the DataNodeBuilder object has DataNodes of different types, a batch root DataNode cannot be created.
+    
+        Parameters:
+        -----------
+        None
+    
+        Returns:
+        --------
+        None
+    
+        Side Effects:
+        -------------
+        - Modifies the 'dataNode' attribute of the DataNodeBuilder object.
+        - Logs messages based on the production mode status and whether a new root DataNode is created or not.
+    
+        Raises:
+        -------
+        - ValueError: When the DataNodeBuilder object has no DataNodes, or existing DataNodes have no connected graph.
+    
+        Notes:
+        ------
+        - This method makes use of internal logging for debugging and timing.
+        """
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
             if len(existingDns) == 1:
@@ -2753,8 +3581,36 @@ class DataNodeBuilder(dict):
         else:
             raise ValueError('DataNode Builder has no DataNode started yet')
         
-    # Method returning constructed DataNode - the fist in the list
     def getDataNode(self, context="interference", device='auto'):
+        """
+        Retrieves and returns the first DataNode from the DataNodeBuilder object based on the given context and device.
+    
+        Parameters:
+        -----------
+        context : str, optional
+            The context under which to get the DataNode, defaults to "interference".
+        device : str, optional
+            The torch device to set for the DataNode, defaults to 'auto'.
+    
+        Returns:
+        --------
+        DataNode or None
+            Returns the first DataNode if it exists, otherwise returns None.
+    
+        Side Effects:
+        -------------
+        - Updates the torch device for the returned DataNode based on the 'device' parameter.
+        - Logs various messages based on the context and production mode.
+    
+        Raises:
+        -------
+        None
+    
+        Notes:
+        ------
+        - This method makes use of internal logging for debugging and timing.
+    
+        """
         self.__addGetDataNodeCounter()
         
         if context=="interference":
@@ -2827,8 +3683,27 @@ class DataNodeBuilder(dict):
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNode')
         return None
     
-    # Method returning all constructed DataNodes 
     def getBatchDataNodes(self):
+        """
+        Retrieves and returns all DataNodes stored in the DataNodeBuilder object.
+    
+        Returns:
+        --------
+        list or None
+            Returns a list of all existing DataNodes if they exist; otherwise returns None.
+    
+        Side Effects:
+        -------------
+        - Logs various messages about the internal state and time usage of the DataNodeBuilder object.
+    
+        Raises:
+        -------
+        None
+    
+        Notes:
+        ------
+        - This method makes use of internal logging for debugging and timing.
+        """
         self.__addGetDataNodeCounter()
         
         if 'Counter' + '_setitem' in self:

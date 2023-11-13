@@ -157,6 +157,22 @@ class dbUpdate():
 
 class LearningBasedProgram():
     def __init__(self, graph, Model, logger=None, db=False, **kwargs):
+        """
+        This function initializes an object with a graph, a model, a logger, and other optional
+        parameters.
+        
+        :param graph: The `graph` parameter is an object that represents a graph or network structure.
+        It is likely used in the `Model` class to define the architecture of the neural network
+        :param Model: The `Model` parameter is the class that represents the machine learning model you
+        want to use. It should have an `__init__` method that takes the `graph` and any additional
+        keyword arguments (`**kwargs`) as parameters. The `Model` class is used to create an instance of
+        the
+        :param logger: The `logger` parameter is an optional logger object that can be used for logging
+        messages and debugging information. If no logger is provided, a default logger will be used
+        :param db: The `db` parameter is a boolean flag that indicates whether or not to perform
+        database updates. If `db` is `True`, database updates will be performed. If `db` is `False`, no
+        database updates will be performed, defaults to False (optional)
+        """
         self.graph = graph
 
         self.logger = logger or logging.getLogger(__name__)
@@ -196,6 +212,17 @@ class LearningBasedProgram():
             self.model.device = self.device
 
     def calculateMetricDelta(self, metric1, metric2):
+        """
+        The function calculates the difference between two metrics and returns the delta.
+        
+        :param metric1: The first metric, represented as a dictionary. Each key in the dictionary
+        represents a category, and the corresponding value is another dictionary where the keys
+        represent subcategories and the values represent the metric values
+        :param metric2: The `metric2` parameter is a dictionary representing a metric. It has a nested
+        structure where the keys represent categories and the values represent subcategories and their
+        corresponding values
+        :return: a dictionary called metricDelta.
+        """
         metricDelta = {}
         for k, v in metric1.value().items():
             metricDelta[k] = {}
@@ -208,6 +235,18 @@ class LearningBasedProgram():
         return metricDelta
 
     def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+        """
+        The function `call_epoch` logs information about the loss and metrics of a model during an epoch
+        and updates a database if specified.
+        
+        :param name: The name of the epoch or task being performed. It is used for logging purposes
+        :param dataset: The `dataset` parameter is the input dataset that will be used for training or
+        evaluation. It is typically a collection of data samples that the model will process
+        :param epoch_fn: The `epoch_fn` parameter is a function that represents a single epoch of
+        training or evaluation. It takes the `dataset` as input and performs the necessary operations
+        for that epoch, such as forward and backward passes, updating model parameters, and calculating
+        metrics
+        """
         if dataset is not None:
             self.logger.info(f'{name}:')
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
@@ -270,6 +309,31 @@ class LearningBasedProgram():
         test_every_epoch=False,
         Optim=None,
         **kwargs):
+        """
+        The `train` function is used to train a model on a given training set, with optional validation
+        and testing sets, for a specified number of epochs.
+        
+        :param training_set: The training set is the dataset used to train the model. It typically
+        consists of input data and corresponding target labels
+        :param valid_set: The valid_set parameter is used to specify the validation dataset. It is
+        typically a separate portion of the training dataset that is used to evaluate the model's
+        performance during training and tune hyperparameters
+        :param test_set: The `test_set` parameter is used to specify the dataset that will be used for
+        testing the model's performance after each epoch of training. It is typically a separate dataset
+        from the training and validation sets, and is used to evaluate the model's generalization
+        ability on unseen data
+        :param device: The device on which the model will be trained (e.g., 'cpu' or 'cuda')
+        :param train_epoch_num: The number of epochs to train the model for. An epoch is a complete pass
+        through the entire training dataset, defaults to 1 (optional)
+        :param test_every_epoch: The parameter "test_every_epoch" is a boolean flag that determines
+        whether to perform testing after every epoch during training. If set to True, testing will be
+        performed after each epoch. If set to False, testing will only be performed once at the end of
+        training, defaults to False (optional)
+        :param Optim: The `Optim` parameter is used to specify the optimizer to be used for training the
+        model. It should be a class that implements the optimization algorithm, such as
+        `torch.optim.SGD` or `torch.optim.Adam`. The optimizer is responsible for updating the model's
+        parameters based on the computed gradients
+        """
         if device is not None:
             self.to(device)
         if Optim is not None and list(self.model.parameters()):
@@ -293,6 +357,14 @@ class LearningBasedProgram():
         self.stop = None
 
     def train_epoch(self, dataset, **kwargs):
+        """
+        The function `train_epoch` trains a model on a dataset for one epoch, updating the model's
+        parameters based on the calculated loss and performing gradient descent if an optimizer is
+        provided.
+        
+        :param dataset: The `dataset` parameter is the training dataset that contains the input data and
+        corresponding labels. It is used to iterate over the data items during training
+        """
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
@@ -308,11 +380,29 @@ class LearningBasedProgram():
             yield (loss, metric, *output[:1])
 
     def test(self, dataset, device=None, **kwargs):
+        """
+        The function `test` is used to test a model on a given dataset, with an optional device argument
+        for specifying the device to run the test on.
+        
+        :param dataset: The dataset parameter is the dataset object that contains the testing data. It
+        is used to evaluate the performance of the model on the testing data
+        :param device: The "device" parameter is used to specify the device on which the model should be
+        tested. It can be set to "None" if you want to test the model on the CPU, or it can be set to a
+        specific device such as "cuda" if you want to test the model on
+        """
         if device is not None:
             self.to(device)
         self.call_epoch('Testing', dataset, self.test_epoch, **kwargs)
 
     def test_epoch(self, dataset, **kwargs):
+        """
+        The function `test_epoch` is used to evaluate a model on a dataset during the testing phase,
+        yielding the loss, metric, and output for each data item.
+        
+        :param dataset: The `dataset` parameter is the input dataset that you want to test your model
+        on. It could be a list, generator, or any other iterable object that provides the data items to
+        be tested. Each data item should be in a format that can be processed by your model
+        """
         self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():
@@ -331,12 +421,25 @@ class LearningBasedProgram():
         return next(self.populate_epoch([data_item], grad = grad))
 
     def populate_epoch(self, dataset, grad = False):
+        """
+        The `populate_epoch` function is used to iterate over a dataset and yield the output of a model
+        for each data item, either with or without gradient calculations.
+        
+        :param dataset: The `dataset` parameter is the input data that you want to use to populate the
+        model. It could be a list, array, or any other iterable object that contains the data items
+        :param grad: The `grad` parameter is a boolean flag that determines whether or not to compute
+        gradients during the epoch. If `grad` is set to `False`, the epoch will be executed in
+        evaluation mode without computing gradients. If `grad` is set to `True`, the epoch will be
+        executed in training, defaults to False (optional)
+        """
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         
-        if isinstance(dataset, list):
+        try:
             lenI = len(dataset)
             print(f"\nNumber of iterations in epoch: {lenI}")
+        except:
+            pass
 
         if not grad:
             with torch.no_grad():
@@ -358,12 +461,38 @@ class LearningBasedProgram():
                 yield detuple(*output[:1])
 
     def save(self, path, **kwargs):
+        """
+        The function saves the state dictionary of a model to a specified path using the torch.save()
+        function.
+        
+        :param path: The path where the model's state dictionary will be saved
+        """
         torch.save(self.model.state_dict(), path, **kwargs)
 
     def load(self, path, **kwargs):
+        """
+        The function loads a saved model state dictionary from a specified path.
+        
+        :param path: The path parameter is the file path to the saved model state dictionary
+        """
         self.model.load_state_dict(torch.load(path, **kwargs))
 
     def verifyResultsLC(self,data,constraint_names=None,device=None):
+        """
+        The function `verifyResultsLC` calculates and prints the accuracy of constraint verification
+        results for a given dataset.
+        
+        :param data: The `data` parameter is the input data that will be used to populate the datanode.
+        It is passed to the `populate` method of the current object (`self`) along with an optional
+        `device` parameter
+        :param constraint_names: The `constraint_names` parameter is a list of constraint names that you
+        want to verify the results for. If this parameter is not provided or is set to `None`, then the
+        function will verify the results for all constraints available in the `verifyResult` dictionary
+        :param device: The `device` parameter is used to specify the device on which the calculations
+        should be performed. It is an optional parameter and if not provided, the default device will be
+        used
+        :return: None.
+        """
         import numpy as np
         datanode_ac,datanode_t=[],[]
         all_ac, all_t = [], []

@@ -11,7 +11,11 @@ def test_setup_graph_exception():
                                    '', 
                                    "The Path 'rel_pair_entity1' from the variable x, defined in LC_person_attendance is not valid"
                                    "The relation rel_pair_entity1 is from a pair to a named_entity, but you have used it from a named_entity to a pair." 
-                                   "You can use the .reversed property to change the direction.").replace(" ", "")
+                                   "You can change 'rel_pair_entity1' to 'rel_pair_entity1.reversed' to go from named_entity to the pair, which is what is required here.").replace(" ", "")
+        
+        ### The Path 'rel_pair_entity1' from the variable x, defined in LC_person_attendance is not valid.
+        ### The relation rel_pair_entity1 is from a pair to a named_entity, but you have used it from a named_entity to a pair. 
+        ### You can change `rel_pair_entity1` to `rel_pair_entity1.reversed` to go from named_entity to the pair, which is what is required here.
         
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
