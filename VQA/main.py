@@ -152,7 +152,7 @@ if __name__ == '__main__':
         """
         return [l if l != -1 else label_sizes[depth] - 1 for l in label_list]
 
-    def row_to_dataitem(row, batch_size=1):
+    def row_to_dataitem(row_index, row, batch_size=1):
         """
         Convert sg_test_loader item to domiknows dataitem dict.
         """
@@ -163,7 +163,8 @@ if __name__ == '__main__':
             # print(fix_label(row[depth + 1], depth))
             result[f'level{depth}_label'] = torch.tensor(fix_label(row[depth + 1], depth))
         
-        result['reps'] = torch.randn((batch_size))
+        # result['reps'] = torch.randn((batch_size))
+        result['reps'] = torch.tensor([row_index] * batch_size) # store index as reps
 
         return result
     
@@ -218,7 +219,7 @@ if __name__ == '__main__':
 
         for row_idx, row in enumerate(sg_test_loader):
             # preprocess data
-            dataitem = row_to_dataitem(row)
+            dataitem = row_to_dataitem(row_idx, row)
 
             # input data to model
             node = program.populate_one(dataitem, grad = True)
