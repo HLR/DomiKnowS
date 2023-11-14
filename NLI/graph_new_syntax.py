@@ -16,7 +16,7 @@ with Graph('NLI_Graph') as graph:
         nli_class = pair(name="nli_class", ConceptClass=EnumConcept,
                             values=["entailment", "neutral", "contradiction"])
         
-        ifL(pair('x'), exactL(nli_class.entailment('x'), nli_class.neutral('x'), nli_class.contradiction('x')))
+        ifL(pair('x'), exactL(nli_class.entailment(path=('x',)), nli_class.neutral(path=('x',)), nli_class.contradiction(path=('x',))))
 
         ### Ent(X1, X2) => !CON(X2, X1)
         ### New Syntax
@@ -27,16 +27,19 @@ with Graph('NLI_Graph') as graph:
             ),
             notL(
                 nli_class.contradiction('y', 'x')
-            )
+            ),
+            active= True
         )
+        
         ### old syntax
+        # Ent(X1, X2) => !CON(X2, X1)
         ifL(
             andL(
                 nli_class.entailment('x'), 
                 existsL(
                     pair('y', 
                         path=(
-                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed) ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed), ### the original premise is a hypothesis in this new pair
                             ('x', rel_pair_hypothesis, rel_pair_premise.reversed) ### the hypothesis is a premise in this new pair
                         )
                     )
@@ -46,13 +49,43 @@ with Graph('NLI_Graph') as graph:
                 notL(
                     nli_class.contradiction(
                         path=(
-                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed) ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed), ### the original premise is a hypothesis in this new pair
                             ('x', rel_pair_hypothesis, rel_pair_premise.reversed) ### the hypothesis is a premise in this new pair
                         )
                     )
                 )
-            )
+            ),
+            active= False
         )
+        
+        ### corrected old syntax
+        # Ent(X1, X2) => !CON(X2, X1)
+        ifL(
+            andL(
+                nli_class.entailment('x'), 
+                existsL(
+                    pair('y', 
+                        path=(
+                            ('x', rel_pair_premise, rel_pair_premise.reversed), ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_hypothesis, rel_pair_hypothesis.reversed ) ### the hypothesis is a premise in this new pair
+                        )
+                    )
+                )
+            ),
+            andL(
+                notL(
+                    nli_class.contradiction(
+                        path=(
+                            ('x', rel_pair_premise, rel_pair_premise.reversed ), ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_hypothesis, rel_pair_hypothesis.reversed) ### the hypothesis is a premise in this new pair
+                        )
+                    )
+                )
+            ),
+            active= False
+        )
+        
+        '''
 
         ### Neu(X1, X2) => !CON(X2, X1)
         ### New Syntax
@@ -72,7 +105,7 @@ with Graph('NLI_Graph') as graph:
                 existsL(
                     pair('y', 
                         path=(
-                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed) ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed), ### the original premise is a hypothesis in this new pair
                             ('x', rel_pair_hypothesis, rel_pair_premise.reversed) ### the hypothesis is a premise in this new pair
                         )
                     )
@@ -82,7 +115,7 @@ with Graph('NLI_Graph') as graph:
                 notL(
                     nli_class.contradiction(
                         path=(
-                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed) ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed), ### the original premise is a hypothesis in this new pair
                             ('x', rel_pair_hypothesis, rel_pair_premise.reversed) ### the hypothesis is a premise in this new pair
                         )
                     )
@@ -106,7 +139,7 @@ with Graph('NLI_Graph') as graph:
                 existsL(
                     pair('y', 
                         path=(
-                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed) ### the original premise is a hypothesis in this new pair
+                            ('x', rel_pair_premise, rel_pair_hypothesis.reversed), ### the original premise is a hypothesis in this new pair
                             ('x', rel_pair_hypothesis, rel_pair_premise.reversed) ### the hypothesis is a premise in this new pair
                         )
                     )
@@ -114,7 +147,7 @@ with Graph('NLI_Graph') as graph:
             ),
             nli_class.contradiction(
                 path=(
-                    ('x', rel_pair_premise, rel_pair_hypothesis.reversed) ### the original premise is a hypothesis in this new pair
+                    ('x', rel_pair_premise, rel_pair_hypothesis.reversed), ### the original premise is a hypothesis in this new pair
                     ('x', rel_pair_hypothesis, rel_pair_premise.reversed) ### the hypothesis is a premise in this new pair
                 )
             )
@@ -149,7 +182,7 @@ with Graph('NLI_Graph') as graph:
                         ), 
                         pair('z',
                             path=(
-                                ('y', rel_pair_hypothesis, rel_pair_hypothesis.reversed) ### the hypothesis of the second pair is a hypothesis in this new pair
+                                ('y', rel_pair_hypothesis, rel_pair_hypothesis.reversed), ### the hypothesis of the second pair is a hypothesis in this new pair
                                 ('x', rel_pair_premise, rel_pair_premise.reversed) ### the premise of the first pair is a premise in this new pair
                             )
                         ),
@@ -165,7 +198,7 @@ with Graph('NLI_Graph') as graph:
                     ), 
                     pair('z',
                         path=(
-                            ('y', rel_pair_hypothesis, rel_pair_hypothesis.reversed) ### the hypothesis of the second pair is a hypothesis in this new pair
+                            ('y', rel_pair_hypothesis, rel_pair_hypothesis.reversed), ### the hypothesis of the second pair is a hypothesis in this new pair
                             ('x', rel_pair_premise, rel_pair_premise.reversed) ### the premise of the first pair is a premise in this new pair
                         )
                     ),
@@ -240,4 +273,4 @@ with Graph('NLI_Graph') as graph:
                 nli_class.entailment(path=('t', t_pair3))
             )
         )
-
+    '''
