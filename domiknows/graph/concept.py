@@ -9,6 +9,14 @@ from ..utils import enum
 @BaseGraphTree.localize_namespace
 class Concept(BaseGraphTree):
     _rels = {}  # category_name : creation callback
+    newVariableIndex = 0
+
+    @classmethod
+    def get_new_variable_index(cls):
+        # This method returns the current value of newVariableIndex and increments it
+        index = cls.newVariableIndex
+        cls.newVariableIndex += 1
+        return index
 
     @classmethod
     def relation_type(cls, name=None):
@@ -54,7 +62,6 @@ class Concept(BaseGraphTree):
         self._out = OrderedDict()  # relation category_name : list of relation inst
         
         self.var_name = None
-        self.newVariableIndex = 0
         
     def get_batch(self):
         return self.batch
@@ -102,8 +109,7 @@ class Concept(BaseGraphTree):
             if len(relation_attrs) != len(args):
                 error = ("extraV", ) + tuple(args)
             else:
-                newVariable = 'p' + str(600 + self.newVariableIndex)
-                self.newVariableIndex+=1
+                newVariable = 'p' + str(600 + Concept.get_new_variable_index())
                 
                 info = {arg: V(name=None, v=(newVariable, value))  for arg, value in zip(args, relation_attrs.keys())}
                 args = (newVariable,)
