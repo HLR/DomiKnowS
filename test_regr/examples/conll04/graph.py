@@ -36,16 +36,18 @@ with Graph('global') as graph:
         live_in = pair(name='live_in')
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
-
+        
+        ''' We should not define it
         work_for.has_a(people, organization)
         located_in.has_a(location, location)
         live_in.has_a(people, location)
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
-
+        '''
         # LC2
-        ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
-        
+        #ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
+        ifL(existsL(work_for('x', 'y')), andL(people('x'), organization('y')), active = True)
+
         # LC3
         ifL(word, atMostL(people, organization, location, other, o), active = True)
         
