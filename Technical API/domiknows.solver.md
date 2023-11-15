@@ -46,10 +46,6 @@
 
 ## Submodules
 
-## domiknows.solver.allennlpInferenceSolver module
-
-## domiknows.solver.allennlplogInferenceSolver module
-
 ## domiknows.solver.dummyILPOntSolver module
 
 ### *class* domiknows.solver.dummyILPOntSolver.dummyILPOntSolver(graph, ontologiesTuple, \_ilpConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
@@ -94,6 +90,20 @@ Bases: `object`
 
 ## domiknows.solver.gekkoILPOntSolver module
 
+### *class* domiknows.solver.gekkoILPOntSolver.gekkoILPOntSolver(graph, ontologiesTuple, \_ilpConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
+
+Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
+
+#### addRelationsConstrains(m, tokens, conceptNames, x, y, graphResultsForPhraseRelation)
+
+#### addTokenConstrains(m, tokens, conceptNames, x, graphResultsForPhraseToken)
+
+#### addTripleRelationsConstrains(m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation)
+
+#### calculateILPSelection(phrase, fun=None, epsilon=1e-05, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None)
+
+#### ilpSolver *= 'GEKKO'*
+
 ## domiknows.solver.gurobiILPBooleanMethods module
 
 ### *class* domiknows.solver.gurobiILPBooleanMethods.gurobiILPBooleanProcessor(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
@@ -132,6 +142,66 @@ Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanPro
 
 ## domiknows.solver.gurobiILPOntSolver module
 
+### *class* domiknows.solver.gurobiILPOntSolver.gurobiILPOntSolver(graph, ontologiesTuple, \_ilpConfig, reuse_model=False)
+
+Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
+
+#### addGraphConstrains(m, rootDn, \*conceptsRelations)
+
+#### addLogicalConstrains(m, dn, lcs, p, key=None)
+
+#### addMulticlassExclusivity(conceptsRelations, rootDn, m)
+
+#### addOntologyConstrains(m, rootDn, \*\_conceptsRelations)
+
+#### calculateILPSelection(dn, \*conceptsRelations, key=('local', 'softmax'), fun=None, epsilon=1e-05, minimizeObjective=False, ignorePinLCs=False)
+
+#### calculateLcLoss(dn, tnorm='L', sample=False, sampleSize=0, sampleGlobalLoss=False, conceptsRelations=None)
+
+#### calulateSampleLossForVariable(currentLcName, lcVariables, lcSuccesses, sampleSize, eliminateDuplicateSamples, replace_mul=False)
+
+#### conceptIsBinary(concept)
+
+#### conceptIsMultiClass(concept)
+
+#### countLCVariables(rootDn, \*conceptsRelations)
+
+#### createILPVariable(m, dn, currentConceptRelation, notV=False)
+
+#### createILPVariables(m, x, rootDn, \*conceptsRelations, key=('local', 'softmax'), fun=None, epsilon=1e-05)
+
+#### eliminateDuplicateSamples(lcVariables, sampleSize)
+
+#### fixedLSupport(\_dn, conceptName, vDn, i, m)
+
+#### generateSemanticSample(rootDn, conceptsRelations)
+
+#### getConcept(concept)
+
+#### getConceptName(concept)
+
+#### getDatanodesForConcept(rootDn, currentName, conceptToDNSCash=None)
+
+#### getMLResult(dn, xPkey, e, p, loss=False, sample=False)
+
+#### getProbability(dn, conceptRelation, key=('local', 'softmax'), fun=None, epsilon=1e-05)
+
+#### get_logical_constraints()
+
+#### ilpSolver *= 'Gurobi'*
+
+#### isConceptFixed(conceptName)
+
+#### isVariableFixed(dn, conceptName, e)
+
+#### reset_logical_constraints()
+
+#### set_logical_constraints(new_logical_constraints)
+
+#### valueToBeSkipped(x)
+
+#### verifyResultsLC(dn, key='/argmax')
+
 ## domiknows.solver.ilpBooleanMethods module
 
 ### *class* domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
@@ -166,6 +236,36 @@ Bases: `object`
 
 ## domiknows.solver.ilpBooleanMethodsCalculator module
 
+### *class* domiknows.solver.ilpBooleanMethodsCalculator.booleanMethodsCalculator(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
+
+Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
+
+#### and2Var(\_, var1, var2, onlyConstrains=False)
+
+#### andVar(\_, \*var, onlyConstrains=False)
+
+#### countVar(\_, \*var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName='COUNT')
+
+#### epqVar(\_, var1, var2, onlyConstrains=False)
+
+#### fixedVar(\_, \_var, onlyConstrains=False)
+
+#### ifVar(\_, var1, var2, onlyConstrains=False)
+
+#### nand2Var(\_, var1, var2, onlyConstrains=False)
+
+#### nandVar(\_, \*var, onlyConstrains=False)
+
+#### norVar(\_, \*var, onlyConstrains=False)
+
+#### notVar(\_, var, onlyConstrains=False)
+
+#### or2Var(\_, var1, var2, onlyConstrains=False)
+
+#### orVar(\_, \*var, onlyConstrains=False)
+
+#### xorVar(\_, var1, var2, onlyConstrains=False)
+
 ## domiknows.solver.ilpConfig module
 
 ## domiknows.solver.ilpOntSolver module
@@ -194,9 +294,93 @@ Bases: `object`
 
 ## domiknows.solver.lcLossBooleanMethods module
 
+### *class* domiknows.solver.lcLossBooleanMethods.lcLossBooleanMethods(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
+
+Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
+
+#### and2Var(\_, var1, var2, onlyConstrains=False)
+
+#### andVar(\_, \*var, onlyConstrains=False)
+
+#### countVar(\_, \*var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName='COUNT')
+
+#### epqVar(\_, var1, var2, onlyConstrains=False)
+
+#### fixedVar(\_, \_var, onlyConstrains=False)
+
+#### ifVar(\_, var1, var2, onlyConstrains=False)
+
+#### ifVarS(\_, var1, var2, onlyConstrains=False)
+
+#### nand2Var(\_, var1, var2, onlyConstrains=False)
+
+#### nandVar(\_, \*var, onlyConstrains=False)
+
+#### norVar(\_, \*var, onlyConstrains=False)
+
+#### notVar(\_, var, onlyConstrains=False)
+
+#### or2Var(\_, var1, var2, onlyConstrains=False)
+
+#### orVar(\_, \*var, onlyConstrains=False)
+
+#### setTNorm(tnorm='L')
+
+#### xorVar(\_, var1, var2, onlyConstrains=False)
+
 ## domiknows.solver.lcLossSampleBooleanMethods module
 
+### *class* domiknows.solver.lcLossSampleBooleanMethods.lcLossSampleBooleanMethods(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
+
+Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
+
+#### and2Var(\_, var1, var2, onlyConstrains=False)
+
+#### andVar(\_, \*var, onlyConstrains=False)
+
+#### countVar(\_, \*var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName='COUNT')
+
+#### epqVar(\_, var1, var2, onlyConstrains=False)
+
+#### fixedVar(\_, var, onlyConstrains=False)
+
+#### ifNone(var)
+
+#### ifVar(\_, var1, var2, onlyConstrains=False)
+
+#### nand2Var(\_, var1, var2, onlyConstrains=False)
+
+#### nandVar(\_, \*var, onlyConstrains=False)
+
+#### norVar(\_, \*var, onlyConstrains=False)
+
+#### notVar(\_, var, onlyConstrains=False)
+
+#### or2Var(\_, var1, var2, onlyConstrains=False)
+
+#### orVar(\_, \*var, onlyConstrains=False)
+
+#### xorVar(\_, var1, var2, onlyConstrains=False)
+
 ## domiknows.solver.mini_solver_debug module
+
+### *class* domiknows.solver.mini_solver_debug.MiniProbSolverDebug(graph, ontologiesTuple, \_ilpConfig, SessionType=None, \*\*kwargs)
+
+Bases: [`MiniSolverDebug`](#domiknows.solver.mini_solver_debug.MiniSolverDebug)
+
+#### ilpSolver *= 'mini_prob_debug'*
+
+### *class* domiknows.solver.mini_solver_debug.MiniSolverDebug(graph, ontologiesTuple, \_ilpConfig, constructor=None, SessionType=None, \*\*kwargs)
+
+Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
+
+#### calculateILPSelection(data, \*predicates_list)
+
+#### ilpSolver *= 'mini_debug'*
+
+#### set_predication(predicate, idx, value)
+
+#### solve_legacy(data, \*predicates_list)
 
 ## domiknows.solver.solver module
 

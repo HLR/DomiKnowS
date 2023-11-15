@@ -8,11 +8,11 @@
 
 Bases: [`SolverSession`](#domiknows.solver.session.solver_session.SolverSession)
 
-#### CMAP *= {CTYPE.EQ: (1, '='), CTYPE.GE: (1, '>'), CTYPE.GT: (-1, '<'), CTYPE.LE: (1, '<'), CTYPE.LT: (-1, '>')}*
+#### CMAP *= {<CTYPE.EQ: '=='>: (1, '='), <CTYPE.LT: '<'>: (-1, '>'), <CTYPE.LE: '<='>: (1, '<'), <CTYPE.GT: '>'>: (-1, '<'), <CTYPE.GE: '>='>: (1, '>')}*
 
-#### OMAP *= {OTYPE.MAX: -1, OTYPE.MIN: 1}*
+#### OMAP *= {<OTYPE.MAX: 'max'>: -1, <OTYPE.MIN: 'min'>: 1}*
 
-#### VMAP *= {VTYPE.BIN: 'B', VTYPE.DEC: 'C', VTYPE.INT: 'I'}*
+#### VMAP *= {<VTYPE.BIN: <class 'bool'>>: 'B', <VTYPE.INT: <class 'int'>>: 'I', <VTYPE.DEC: <class 'float'>>: 'C'}*
 
 #### constr(lhs, ctype, rhs, name=None)
 
