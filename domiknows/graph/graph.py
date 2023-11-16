@@ -379,6 +379,15 @@ class Graph(BaseGraphTree):
         pathVariable = path[0]
         pathPart = path[0]
             
+        if len(path) == 1:
+            if requiredLeftConcept == requiredEndOfPathConceptRoot:
+                return
+            else:
+                exceptionStr1 = f"The variable {pathVariable}, defined in the path for {lc_name} is not valid. The concept of {pathVariable} is a of type {requiredLeftConcept},"
+                exceptionStr2 = f"but the required concept by the logical constraint element is {requiredEndOfPathConceptRoot}."
+                exceptionStr3 = f"The variable used inside the path should match its type with {requiredEndOfPathConceptRoot}."
+                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+            
         for pathIndex, pathElement in enumerate(path[1:], start=1):   
             if isinstance(pathElement, (eqL,)):
                 continue
@@ -701,14 +710,14 @@ class Graph(BaseGraphTree):
                     
                     if isinstance(path[0], tuple): # this path is a combination of paths 
                         for subpath in path: 
-                            if len(subpath) < 2:  
-                                continue  # skip this subpath as it has only the starting point variable
+                            if len(subpath) < 1:  
+                                continue  # skip this subpath it is empty
                                 
                             self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                             
                     else: # this path is a single path
-                        if len(path) < 2:
-                            continue # skip this path as it has only the starting point variable
+                        if len(path) < 1:
+                            continue # skip this path it is empty
                             
                         self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                        

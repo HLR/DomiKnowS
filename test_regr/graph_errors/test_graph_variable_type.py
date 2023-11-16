@@ -11,7 +11,8 @@ def test_setup_graph_exception():
         sanitized_pattern = re.sub(
             r'[^\x20-\x7E]', 
             '', 
-            ("In constraint testLC, the variable x is defined to have the type accident_details but is later reused in weather_condition.__getattr__('clear')(path=('x')) which is incorrect!"
+            ("The variable x, defined in the path for testLC is not valid. The concept of x is a of type accident_details," 
+             "but the required concept by the logical constraint element is weather_details."
              "The variable used inside the path should match its type with weather_details.")
         ).replace(" ", "")
         

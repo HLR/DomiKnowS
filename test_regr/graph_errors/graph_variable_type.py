@@ -15,8 +15,10 @@ def setup_graph(fix_constraint=False):
         weather_details = Concept(name='weather_details')
 
         # Task Concepts
-        accident_cause = accident_details(name='accident_cause', ConceptClass=EnumConcept, values=['human error', 'mechanical failure', 'road conditions', 'weather conditions', 'other'])
-        weather_condition = weather_details(name='weather_condition', ConceptClass=EnumConcept, values=['clear', 'cloudy', 'rainy', 'snowy', 'foggy', 'stormy', 'other'])
+        accident_cause = accident_details(name='accident_cause', ConceptClass=EnumConcept, 
+                                        values=['human error', 'mechanical failure', 'road conditions', 'weather conditions', 'other'])
+        weather_condition = weather_details(name='weather_condition', ConceptClass=EnumConcept, 
+                                        values=['clear', 'cloudy', 'rainy', 'snowy', 'foggy', 'stormy', 'other'])
         
         # Constraints
         # If the accident cause is weather condition, then the weather quality is not clear.
