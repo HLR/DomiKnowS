@@ -1,5 +1,6 @@
 from . import DataNode
 import torch
+from domiknows.graph import fixedL, ifL
 
 dataSizeInit = 5
 
@@ -14,7 +15,8 @@ def findConcept(conceptName, usedGraph):
                
                 return concept
             
-    return None 
+    return None 
+
 def findConceptInfo(usedGraph, concept):
     conceptInfo = {
         'concept': concept,
@@ -98,7 +100,7 @@ def createDummyDataNode(graph):
                    
                     for i in range(attrConceptInfo['count']):
                         if d == 0:
-                            newDN = DataNode(instanceID = instanceID, ontologyNode = attrConceptInfo['concept'])
+                            newDN = DataNode(instanceID = instanceID, ontologyNode = relationConceptInfo['concept'])
                             relationDns.append(newDN)
                             instanceID += 1
                         else:
@@ -124,7 +126,7 @@ def createDummyDataNode(graph):
                     continue
                 
                 m = conceptRootConceptInfo['count']
-                random_tensor = torch.rand(m, 1)
+                random_tensor = torch.rand(m, 1, device=rootDataNode.current_device)
                 final_tensor = torch.cat((1 - random_tensor, random_tensor), dim=1)
                 rootDataNode.attributes["variableSet"][conceptRootConceptInfo['concept'].name +'/<' + conceptInfo['concept'].name + '>'] = final_tensor
                 continue
@@ -136,3 +138,111 @@ def createDummyDataNode(graph):
         dn.attributes["rootDataNode"] = rootDataNode
                 
     return rootDataNode
+
+def ifConstrainSatisfactionMsg(current_lcSatisfaction, constInputIndex, InstantiationsAndSatisfactionMsg, InstantiationsAndSatisfactionMsgs):
+    currentLc = current_lcSatisfaction['lc']
+
+    ifResult = not current_lcSatisfaction['lcResult'][constInputIndex][0].item()
+
+    ifKey = next(reversed(current_lcSatisfaction['input']))
+    ifLc = current_lcSatisfaction['input'][ifKey]
+
+    # Create an iterator for the keys of ifLc
+    key_iterator = iter(ifLc)
+
+    # Get the first key and its corresponding value
+    ifPromiseKey = next(key_iterator)
+    ifPromise = ifLc[ifPromiseKey][constInputIndex][0].item()
+
+    # Get the next key and its corresponding value
+    ifConclusionKey = next(key_iterator)
+    ifConclusion = ifLc[ifConclusionKey][constInputIndex][0].item()
+
+    if ifResult:
+        InstantiationsAndSatisfactionMsg = f'IfL premise is {ifPromise} and its conclusion is {ifConclusion}\n' + InstantiationsAndSatisfactionMsg
+    else:
+        InstantiationsAndSatisfactionMsg = f'When in IfL the premise is True, the conclusion should also be True\n' + InstantiationsAndSatisfactionMsg
+
+    if ifConclusionKey.startswith("_lc"):
+        InstantiationsAndSatisfactionMsg = f'{currentLc.e[-1]}(**) -> {ifConclusion}\n' + InstantiationsAndSatisfactionMsg
+    else:
+        InstantiationsAndSatisfactionMsg = f'{currentLc.e[-1][0]}(\'{ifConclusionKey}\') -> {ifConclusion}\n' + InstantiationsAndSatisfactionMsg
+
+    if ifPromiseKey.startswith("_lc"):
+        InstantiationsAndSatisfactionMsg = f'{currentLc.e[0]}(**) -> {ifPromise}\n' + InstantiationsAndSatisfactionMsg
+    else:
+        InstantiationsAndSatisfactionMsg = f'{currentLc.e[0][0]}(\'{ifPromiseKey}\') -> {ifPromise}\n' + InstantiationsAndSatisfactionMsg
+
+    if ifResult:
+        InstantiationsAndSatisfactionMsg = f'The constraint is satisfied because:\n' + InstantiationsAndSatisfactionMsg
+    else:
+        InstantiationsAndSatisfactionMsg = f'The constraint is Not satisfied because:\n' + InstantiationsAndSatisfactionMsg
+
+    InstantiationsAndSatisfactionMsgs.append(InstantiationsAndSatisfactionMsg)
+    
+    return 
+    if ifConclusionKey.startswith("_lc"):
+        if isinstance(currentLc.e[-1], ifL):
+            ifConstrainSatisfactionMsg(current_lcSatisfaction, constInputIndex, "", InstantiationsAndSatisfactionMsgs)
+
+def instanceReportOfConstraints(dn):
+    m = None     
+    sampleSize = 1
+    p = sampleSize
+   
+    key = "/local/softmax"
+    dn.inferLocal()
+    
+    mySolver, _ = dn.getILPSolver(conceptsRelations = dn.collectConceptsAndRelations())
+    mySolver.current_device = dn.current_device
+    mySolver.myLcLossSampleBooleanMethods.sampleSize = sampleSize        
+    mySolver.myLcLossSampleBooleanMethods.current_device = dn.current_device
+
+    lcCounter = 0 # Count processed lcs
+    lcSatisfaction = {}
+    for graph in mySolver.myGraph: # Loop through graphs
+        for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
+
+            if not lc.headLC or not lc.active: # Process only active and head lcs
+                continue
+                
+            if type(lc) is fixedL: # Skip fixedL lc
+                continue
+                
+            lcCounter +=  1
+            
+            lcName = lc.lcName
+                
+            lcSatisfaction[lcName] = {}
+            current_lcSatisfaction = lcSatisfaction[lcName]
+            current_lcSatisfaction['lc'] = lc
+            
+            lcResult, lcInput, inputLc = \
+                mySolver.constructLogicalConstrains(lc, mySolver.myLcLossSampleBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = True)
+            current_lcSatisfaction['lcResult'] = lcResult
+            current_lcSatisfaction['lcInput'] = lcInput
+            current_lcSatisfaction['input'] = inputLc
+
+    for lc in lcSatisfaction:
+        current_lcSatisfaction = lcSatisfaction[lc]
+        InstantiationsAndSatisfactionMsgs = []
+        noConstInput = len(current_lcSatisfaction['lcResult'])
+        for constInputIndex in range(noConstInput):
+            '''
+            Instantiations and satisfaction:
+                For 
+                `x` being Pair 3, connecting Phrase 1 and Phrase 5 to each other. 
+                work_for('x') == 1
+                person('x', arg1) == 0 (phrase1)
+                organization('x', arg2) ==1 (phrase 5)
+                The constraint is Not satisfied because:
+                work_for('x') --> True
+                andL(**) --> False 
+                When in IfL the premise is True, the conclusion should also be True. 
+            '''
+            
+            ifConstrainSatisfactionMsg(current_lcSatisfaction, constInputIndex, "", InstantiationsAndSatisfactionMsgs)
+                    
+        current_lcSatisfaction['InstantiationsAndSatisfactionMsgs'] = InstantiationsAndSatisfactionMsgs
+        
+    return lcSatisfaction

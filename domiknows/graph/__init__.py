@@ -10,4 +10,4 @@ from .candidates import CandidateSelection, combinationC
 from .property import Property
 from .trial import Trial
 from .dataNode import DataNode, DataNodeBuilder
-from .dataNodeDummy import createDummyDataNode
+from .dataNodeDummy import createDummyDataNode, instanceReportOfConstraints

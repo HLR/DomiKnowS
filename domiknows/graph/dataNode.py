@@ -409,12 +409,12 @@ class DataNode:
                 if "variableSet" in rootDataNode.attributes:
                     if keyInVariableSet in rootDataNode.attributes["variableSet"]:
                         return rootDataNode.attributes["variableSet"][keyInVariableSet][self.instanceID]
-                    elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
+                    elif "propertySet" in rootDataNode.attributes and keyInVariableSet in rootDataNode.attributes["propertySet"]:
                         return rootDataNode.attributes["propertySet"][keyInVariableSet][self.instanceID]
             elif "variableSet" in self.attributes:
                 if key in self.attributes["variableSet"]:
                     return self.attributes["variableSet"][key]
-                elif key in self.attributes["propertySet"]:
+                elif "propertySet" in self.attributes and key in self.attributes["propertySet"]:
                     return self.attributes["propertySet"][key]
                 
         return None   
@@ -1244,7 +1244,7 @@ class DataNode:
         self.collectedConceptsAndRelations = returnCandR
         return self.collectedConceptsAndRelations
         
-    def __getILPSolver(self, conceptsRelations = None):
+    def getILPSolver(self, conceptsRelations = None):
         """Get the ILP Solver instance based on the given concepts and relations.
 
         Args:
@@ -1776,7 +1776,7 @@ class DataNode:
         else:        
             _DataNode__Logger.info(f'Found the following set of concepts and relations for inference: {[x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]}')
     
-        myILPOntSolver, conceptsRelations = self.__getILPSolver(_conceptsRelations)
+        myILPOntSolver, conceptsRelations = self.getILPSolver(_conceptsRelations)
         
         _DataNode__Logger.info("Initiating ILP solver")
         
@@ -1862,7 +1862,7 @@ class DataNode:
             The result of the verification, typically a data structure containing percentages of
             results that satisfy each logical constraint.
         """
-        myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
+        myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         # Check if full data node is created and create it if not
         self.myBuilder.createFullDataNode(self)
@@ -1903,7 +1903,7 @@ class DataNode:
         """
         self.myBuilder.createFullDataNode(self)
     
-        myilpOntSolver, conceptsRelations = self.__getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
+        myilpOntSolver, conceptsRelations = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
     
         self.inferLocal()
         lcResult = myilpOntSolver.calculateLcLoss(self, tnorm=tnorm, sample=sample,

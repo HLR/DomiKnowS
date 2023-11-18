@@ -29,7 +29,7 @@ with Graph('global') as graph:
         #disjoint(people, organization, location, other, o)
 
         # LC0
-        nandL(people, organization, active = True)
+        #nandL(people, organization, active = True)
         
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')
@@ -37,16 +37,17 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
+        '''
         work_for.has_a(people, organization)
         located_in.has_a(location, location)
         live_in.has_a(people, location)
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
-
+        '''
+        
         # LC2
-        #ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1)), organization(path=('x', rel_pair_word2))), active = True)
-        ifL(work_for('x', 'y'), andL(people('x'), organization('y')))
+        ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1)), organization(path=('x', rel_pair_word2))), active = True)
 
         # LC3
-        ifL(word, atMostL(people, organization, location, other, o), active = True)
+        ifL(word('x'), atMostL(people, organization, location, other, o), active = True)
         

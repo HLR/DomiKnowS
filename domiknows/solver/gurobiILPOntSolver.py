@@ -691,7 +691,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.debug('Skipping not active Logical Constraint %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 continue
 
-            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
+            result = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -937,7 +937,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             return vDns
     
-    def __constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
+    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
         if key == None:
             key = ""
             
@@ -1106,7 +1106,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if isinstance(e, LcElement):
 
                     if isinstance(e, CandidateSelection): # -- nested LogicalConstrain - process recursively 
-                        lcVariablesDnsNew = self.__constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
+                        lcVariablesDnsNew = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
                                                                      lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                          
                         lcVariablesDns = lcVariablesDnsNew
@@ -1126,13 +1126,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
 
                         if sample:
-                            vDns, sampleInfoLC, lcVariablesLC = self.__constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
+                            vDns, sampleInfoLC, lcVariablesLC = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
                                                                                    lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                             sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                             
                             lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
                         else:
-                            vDns = self.__constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
+                            vDns = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
                                                                      lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                             
                             vDns = self.__addLossTovDns(loss, vDns)
@@ -1739,10 +1739,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     if isFiexd != None:
                         if isFiexd == 1:
-                            dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.ones(productSize, device = self.current_device)
+                            dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.ones((productSize,), device = self.current_device)
                             continue
                         
-                    dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.zeros(productSize, device = self.current_device)
+                    dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.zeros((productSize,), device = self.current_device)
              
         from itertools import product
         for j, p in enumerate(product(*productArgs, repeat=1)):
@@ -1818,7 +1818,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo, inputLc = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
+                    lossList, sampleInfo, inputLc = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     current_lcLosses['sampleInfo'] = sampleInfo
                     current_lcLosses['input'] = inputLc
@@ -1834,7 +1834,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         current_lcLosses['lossRate'].append(liList)
                 else:
                     # lossList will contain float result for lc loss calculation
-                    lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
+                    lossList = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                              
                 endLC = perf_counter_ns()
@@ -2097,7 +2097,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_verifyResult = lcVerifyResult[lcName]
                 
                 # verifyList will contain result for the lc verification
-                verifyList, lcVariables = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, verify=True)
+                verifyList, lcVariables = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, verify=True)
                 current_verifyResult['verifyList'] = verifyList
                 
                 verifyListLen = 0

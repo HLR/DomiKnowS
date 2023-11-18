@@ -463,6 +463,9 @@ def test_main_conll04(case):
                         assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[tnorm][i].item(), 4)
         
         #------- Calculate sample logical constraints losses 
+       
+        #sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = -1)
+        sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1)
         sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1000)
 
                         
