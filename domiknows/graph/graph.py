@@ -286,7 +286,7 @@ class Graph(BaseGraphTree):
 
         def handle_variable_name(lc_variable_name, lcPath):
             if lc_variable_name not in found_variables:
-                raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined")
+                raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
 
             if lc_variable_name not in used_variables:
                 used_variables[lc_variable_name] = []

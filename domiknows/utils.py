@@ -180,16 +180,16 @@ def enum(inst, cls=None, offset=0):
         enum = inst.items()
     elif isinstance(inst, dict):
         enum = inst.items()
-        if inst:  # if dict not empty
-            # NB: stacklevel
-            #     1 - utils.enum()
-            #     2 - concept.Concept.relation_type.<local>.update.<local>.create()
-            #     3 - concept.Concept.__getattr__.<local>.handle()
-            #     4 - __main__()
-            warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
-                          'For this instance, {} is used.'
-                          .format(OrderedDict((k, v.name) for k, v in inst.items())),
-                          stacklevel=4)
+        # if inst:  # if dict not empty
+        #     # NB: stacklevel
+        #     #     1 - utils.enum()
+        #     #     2 - concept.Concept.relation_type.<local>.update.<local>.create()
+        #     #     3 - concept.Concept.__getattr__.<local>.handle()
+        #     #     4 - __main__()
+        #     warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
+        #                   'For this instance, {} is used.'
+        #                   .format(OrderedDict((k, v.name) for k, v in inst.items())),
+        #                   stacklevel=4)
     elif isinstance(inst, Iterable):
         enum = enumerate(inst, offset)
     else:

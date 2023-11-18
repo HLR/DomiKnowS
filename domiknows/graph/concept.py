@@ -43,6 +43,8 @@ class Concept(BaseGraphTree):
                 
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
+                    if 'is_a' in dst._out:
+                        dst = dst._out['is_a'][0].dst
                     rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
@@ -229,10 +231,12 @@ class Concept(BaseGraphTree):
                     
                     return ecHandle
             else:
-                raise AttributeError(*e.args)
+                raise AttributeError(f"The concept {self.name} does not have an attribute with the value '{e.args}'. You should probably use a different base concept for this.")
         def handle(*args, **kwargs):
             if not args and not kwargs:
                 return self._out.setdefault(rel, [])
+            if 'name' in kwargs:
+                raise TypeError(f"You cannot name the concepts or relations in the graph, you have done this to connect {self.name} to {args[0].name}")
             return Rel(self, *args, **kwargs)
         return handle
 
