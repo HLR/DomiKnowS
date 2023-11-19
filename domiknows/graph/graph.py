@@ -214,13 +214,16 @@ class Graph(BaseGraphTree):
                 variable_name = e.name
                 if e_before:
                     if variable_name in found_variables:
-                        raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} already defined in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}")
-
+                        exceptionStr1 = f"In logical constraint {headLc} {lc} variable {variable_name} associated with concept {e_before[1]} already defined "
+                        exceptionStr2 = f"in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}"
+                        raise Exception(exceptionStr1 + exceptionStr2)
+            
                     variable_info = (lc, variable_name, e_before)
                     found_variables[variable_name] = variable_info
                 else:
-                    raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept")
-
+                    exceptionStr = f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept"
+                    raise Exception(exceptionStr)
+                
             # checking for extra variable:
             elif e and isinstance(e, tuple) and e[0] == 'extraV':
                 predicate = lc.e[0][1]

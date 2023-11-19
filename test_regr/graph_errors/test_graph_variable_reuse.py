@@ -8,9 +8,8 @@ def test_setup_graph_exception():
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
         sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', 
-                                   "For constraint constraint_only_one_entity_fixed: You have used the variable x, which is already defined in `organization('x')` which is not allowed. Fix this by:\n"
-                                   "- If you meant that the same variable 'x' defined before should be of type organization: organization(path=('x'))"
-                                   "- If you meant another instance 'y' should be of type organization: organization('y')").replace(" ", "")
+                                   "In logical constraint constraint_only_one_entity_fixed orL variable x associated with concept organization already defined "
+                                   "in orL and associated with concept person").replace(" ", "")
         
         ### you have used the notion person(path=('x', entity)) which is incorrect.
         ### entity is a concept and cannot be used as part of the path. 
