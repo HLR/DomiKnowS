@@ -1,13 +1,13 @@
 import pytest
-from domiknows.graph import createDummyDataNode, instanceReportOfConstraints
+from domiknows.graph import createDummyDataNode, satisfactioReportOfConstraints
 from graph import graph
 
 def test_dummy_data_node_inference():
     testDummyDn = createDummyDataNode(graph)
     
-    # run instanceReportOfConstraints
+    # run satisfactioReportOfConstraints
     try:
-        instanceReportOfConstraints(testDummyDn)
+        satisfactioReportOfConstraints(testDummyDn)
     except Exception:
         pytest.fail("infer raised an exception")
         

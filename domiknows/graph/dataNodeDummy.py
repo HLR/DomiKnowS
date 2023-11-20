@@ -1,6 +1,6 @@
 from . import DataNode
 import torch
-from domiknows.graph import fixedL, ifL
+from domiknows.graph import fixedL, ifL, V
 
 dataSizeInit = 5
 
@@ -139,53 +139,122 @@ def createDummyDataNode(graph):
                 
     return rootDataNode
 
-def ifConstrainSatisfactionMsg(current_lcSatisfaction, constInputIndex, InstantiationsAndSatisfactionMsg, InstantiationsAndSatisfactionMsgs):
-    currentLc = current_lcSatisfaction['lc']
+def lcConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, lcResult, lcTestIndex, lcSatisfactionMsg, headLc):
+    currentLc = next(inputIterator)
+    currentLcInput = current_lcSatisfaction['input'][currentLc]
 
-    ifResult = not current_lcSatisfaction['lcResult'][constInputIndex][0].item()
+    if lcResult:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is satisfied (True) because:\n'
+    else:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is Not satisfied (False) because:\n'
+        
+    # Create an iterator for the operands of currentLc
+    operands_iterator = iter(currentLcInput)
+    index = 0
+    for operand in operands_iterator:
+        # Get the first key and its corresponding value
+        currentOperand = currentLcInput[operand][lcTestIndex][0].item()
+         
+        if isinstance(currentLc.e[index], V):
+            if len(currentLc.e) < index+1:
+                continue
+            index += 1
+            
+        if operand.startswith("_lc"):
+            lcSatisfactionMsg += f'\t{currentLc.e[index]}(**) -> {currentOperand}\n'
+       
+            operandResult = currentLcInput[currentOperand][lcTestIndex][0].item()
+            if isinstance(currentLc.e[1], ifL):
+                lcSatisfactionMsg = ifConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, operandResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+            else:
+                lcSatisfactionMsg = lcConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, operandResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+        elif operand.startswith("_"): # anonymous - no variable in the lc
+            lcSatisfactionMsg += f'\t{currentLc.e[index][1]} -> {currentOperand}\n'
+        else:
+            if len(currentLc.e) > index+1 and isinstance(currentLc.e[index+1], V) and currentLc.e[index+1].v != None:
+                currentV = currentLc.e[index+1].v
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{currentV[0]}\', {currentV[1]}) -> {currentOperand}\n'
+            else:
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{operand}\') -> {currentOperand}\n'
+                
+        index += 1
+            
+    return lcSatisfactionMsg
 
-    ifKey = next(reversed(current_lcSatisfaction['input']))
-    ifLc = current_lcSatisfaction['input'][ifKey]
+def ifConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, ifResult, lcTestIndex, lcSatisfactionMsg, headLc):
+    currentLc = next(inputIterator)
+    currentLcInput = current_lcSatisfaction['input'][currentLc]
 
-    # Create an iterator for the keys of ifLc
-    key_iterator = iter(ifLc)
+    if ifResult:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is satisfied (True) because:\n' 
+    else:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is Not satisfied (False) because:\n'
+        
+    # Create an iterator for the keys of currentLc
+    operands_iterator = iter(currentLcInput)
 
     # Get the first key and its corresponding value
-    ifPromiseKey = next(key_iterator)
-    ifPromise = ifLc[ifPromiseKey][constInputIndex][0].item()
+    ifPromiseKey = next(operands_iterator)
+    ifPromise = currentLcInput[ifPromiseKey][lcTestIndex][0].item()
 
     # Get the next key and its corresponding value
-    ifConclusionKey = next(key_iterator)
-    ifConclusion = ifLc[ifConclusionKey][constInputIndex][0].item()
-
+    ifConclusionKey = next(operands_iterator)
+    ifConclusion = currentLcInput[ifConclusionKey][lcTestIndex][0].item()
+    
+    # Create an iterator for the operands of currentLc
+    operands_iterator = iter(currentLcInput)
+    index = 0
+    promiseIndex = None
+    conclusionIndex = None
+    for operand in operands_iterator:
+        # Get the first key and its corresponding value
+        currentOperand = currentLcInput[operand][lcTestIndex][0].item()
+        
+        if isinstance(currentLc.e[index], V):
+            if len(currentLc.e) < index+1:
+                continue
+            index += 1
+            
+        if operand.startswith("_lc"):
+            lcSatisfactionMsg += f'\t{currentLc.e[index]}(**) -> {currentOperand}\n'
+        elif operand.startswith("_"): # anonymous - no variable in the lc
+            lcSatisfactionMsg += f'\t{currentLc.e[index][1]} -> {currentOperand}\n'
+        else:
+            if len(currentLc.e) > index+1 and isinstance(currentLc.e[index+1], V) and currentLc.e[index+1].v != None:
+                currentV = currentLc.e[index+1].v
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{currentV[0]}\', {currentV[1]}) -> {currentOperand}\n'
+            else:
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{operand}\') -> {currentOperand}\n'
+                
+        if promiseIndex == None:
+            promiseIndex = index
+        else:
+            conclusionIndex = index
+            
+        index += 1
+        
     if ifResult:
-        InstantiationsAndSatisfactionMsg = f'IfL premise is {ifPromise} and its conclusion is {ifConclusion}\n' + InstantiationsAndSatisfactionMsg
+        lcSatisfactionMsg += f'\t{currentLc} premise is {ifPromise} and its conclusion is {ifConclusion}\n' 
     else:
-        InstantiationsAndSatisfactionMsg = f'When in IfL the premise is True, the conclusion should also be True\n' + InstantiationsAndSatisfactionMsg
-
-    if ifConclusionKey.startswith("_lc"):
-        InstantiationsAndSatisfactionMsg = f'{currentLc.e[-1]}(**) -> {ifConclusion}\n' + InstantiationsAndSatisfactionMsg
-    else:
-        InstantiationsAndSatisfactionMsg = f'{currentLc.e[-1][0]}(\'{ifConclusionKey}\') -> {ifConclusion}\n' + InstantiationsAndSatisfactionMsg
+        lcSatisfactionMsg += f'\tWhen in {currentLc} the premise is True, the conclusion should also be True\n'
 
     if ifPromiseKey.startswith("_lc"):
-        InstantiationsAndSatisfactionMsg = f'{currentLc.e[0]}(**) -> {ifPromise}\n' + InstantiationsAndSatisfactionMsg
-    else:
-        InstantiationsAndSatisfactionMsg = f'{currentLc.e[0][0]}(\'{ifPromiseKey}\') -> {ifPromise}\n' + InstantiationsAndSatisfactionMsg
-
-    if ifResult:
-        InstantiationsAndSatisfactionMsg = f'The constraint is satisfied because:\n' + InstantiationsAndSatisfactionMsg
-    else:
-        InstantiationsAndSatisfactionMsg = f'The constraint is Not satisfied because:\n' + InstantiationsAndSatisfactionMsg
-
-    InstantiationsAndSatisfactionMsgs.append(InstantiationsAndSatisfactionMsg)
-    
-    return 
+        promiseResult = currentLcInput[ifPromiseKey][lcTestIndex][0].item()
+        if isinstance(currentLc.e[promiseIndex], ifL):
+            lcSatisfactionMsg = ifConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, promiseResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+        else:
+            lcSatisfactionMsg = lcConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, promiseResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+            
     if ifConclusionKey.startswith("_lc"):
-        if isinstance(currentLc.e[-1], ifL):
-            ifConstrainSatisfactionMsg(current_lcSatisfaction, constInputIndex, "", InstantiationsAndSatisfactionMsgs)
+        conclusionResult = currentLcInput[ifConclusionKey][lcTestIndex][0].item()
+        if isinstance(currentLc.e[conclusionIndex], ifL):
+            lcSatisfactionMsg = ifConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, conclusionResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+        else:
+            lcSatisfactionMsg = lcConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, conclusionResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+    
+    return lcSatisfactionMsg
 
-def instanceReportOfConstraints(dn):
+def satisfactioReportOfConstraints(dn):
     m = None     
     sampleSize = 1
     p = sampleSize
@@ -215,7 +284,6 @@ def instanceReportOfConstraints(dn):
                 
             lcSatisfaction[lcName] = {}
             current_lcSatisfaction = lcSatisfaction[lcName]
-            current_lcSatisfaction['lc'] = lc
             
             lcResult, lcInput, inputLc = \
                 mySolver.constructLogicalConstrains(lc, mySolver.myLcLossSampleBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = True)
@@ -225,24 +293,22 @@ def instanceReportOfConstraints(dn):
 
     for lc in lcSatisfaction:
         current_lcSatisfaction = lcSatisfaction[lc]
-        InstantiationsAndSatisfactionMsgs = []
-        noConstInput = len(current_lcSatisfaction['lcResult'])
-        for constInputIndex in range(noConstInput):
-            '''
-            Instantiations and satisfaction:
-                For 
-                `x` being Pair 3, connecting Phrase 1 and Phrase 5 to each other. 
-                work_for('x') == 1
-                person('x', arg1) == 0 (phrase1)
-                organization('x', arg2) ==1 (phrase 5)
-                The constraint is Not satisfied because:
-                work_for('x') --> True
-                andL(**) --> False 
-                When in IfL the premise is True, the conclusion should also be True. 
-            '''
+        lcSatisfactionMsgs = []
+        lenOfLcTests = len(current_lcSatisfaction['lcResult'])
+        
+        for lcTestIndex in range(lenOfLcTests):
+            inputIterator = reversed(current_lcSatisfaction['input'])
+
+            currentLc = next(reversed(current_lcSatisfaction['input']))
+            lcResult = not current_lcSatisfaction['lcResult'][lcTestIndex][0].item()
+            lcSatisfactionMsg = ''
+            if isinstance(currentLc, ifL):
+                lcSatisfactionMsg = ifConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, lcResult, lcTestIndex, lcSatisfactionMsg, "")
+            else:
+                lcSatisfactionMsg = lcConstrainSatisfactionMsg(current_lcSatisfaction, inputIterator, lcResult, lcTestIndex, lcSatisfactionMsg, "")
             
-            ifConstrainSatisfactionMsg(current_lcSatisfaction, constInputIndex, "", InstantiationsAndSatisfactionMsgs)
-                    
-        current_lcSatisfaction['InstantiationsAndSatisfactionMsgs'] = InstantiationsAndSatisfactionMsgs
+            lcSatisfactionMsgs.append(lcSatisfactionMsg)
+
+        current_lcSatisfaction['lcSatisfactionMsgs'] = lcSatisfactionMsgs
         
     return lcSatisfaction

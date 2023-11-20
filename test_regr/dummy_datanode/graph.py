@@ -29,7 +29,7 @@ with Graph('global') as graph:
         #disjoint(people, organization, location, other, o)
 
         # LC0
-        #nandL(people, organization, active = True)
+        nandL(people, organization, active = True)
         
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')
