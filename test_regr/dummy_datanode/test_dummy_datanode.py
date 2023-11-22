@@ -1,15 +1,15 @@
 import pytest
-from domiknows.graph import createDummyDataNode, satisfactioReportOfConstraints
+from domiknows.graph import createDummyDataNode, satisfactionReportOfConstraints
 from graph import graph
 
 def test_dummy_data_node_inference():
     testDummyDn = createDummyDataNode(graph)
     
-    # run satisfactioReportOfConstraints
+    # run satisfactionReportOfConstraints
     try:
-        satisfactioReportOfConstraints(testDummyDn)
+        satisfactionReportOfConstraints(testDummyDn)
     except Exception:
-        pytest.fail("infer raised an exception")
+        pytest.fail("satisfaction report raised an exception")
         
     # Checking if inferILPResults doesn't raise any exception
     try:
