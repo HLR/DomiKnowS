@@ -2,7 +2,39 @@
 
 
 ### 5. Evaluation
+#### Logical Constraints Verification
 
+An application graph, which has defined logical constraints, can be executed using the command:
+```python3
+python graph.py
+```
+The result of this graph execution is either:
+	No output, indicating that the logical constraints are both syntactically and semantically correct.
+    An exception, detailing the first error encountered in the logical constraints, whether in syntax or semantics.
+    
+Additional tools defined in dataNodeDummy.py enhance the testing of logical constraints before further development of the ML model:
+	```python3
+	def createDummyDataNode(graph):
+	```
+	This method creates a sample data node based on the provided graph, with randomly assigned probabilities to entities.
+	
+	```python3
+	def satisfactionReportOfConstraints(dn):
+	```
+	This method takes a data node as input, specifically the dummy data node created using the previous method. It generates a dictionary, with an entry for each logical constraint in the processed graph. Each entry contains information about the candidates gathered from the processed data node used to evaluate the constraint. The information under the key "lcSatisfactionMsgs" is divided into two sections: "Satisfied" and "Not Satisfied". These entries indicate whether the logical constraint was satisfied for a given set of candidates. Each message provides detailed evaluation of the constraint in the following example form:
+	```
+	ifL is satisfied (True) because:
+		word('x') -> True
+		atMostL(**) -> True
+		ifL premise is True and its conclusion is True
+	atMostL(**) is satisfied (True) because:
+		people -> 0.0
+		organization -> 0.0
+		location -> 0.0
+		other -> 0.0
+		O -> 0.0
+	```
+	
 #### Metrics
 DomiKnows provides some tools to evaluate models on different aspects. First, we encode a set of predefined metrics such as F1, Precision, Recall, and Accuracy over concept classes which can be used as follows: 
 
