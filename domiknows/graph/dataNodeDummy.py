@@ -139,6 +139,21 @@ def createDummyDataNode(graph):
                 
     return rootDataNode
 
+
+def construct_ls_path_string(value):
+    path_elements = []
+    if isinstance(value[1], tuple):
+        for subpath in value:
+            # Convert each subpath element to a string
+            subpath_elements = ["\'" + subpath[0] + "\'"] + [str(e) for e in subpath[1:]]
+            path_elements.append("(" + ", ".join(subpath_elements) + ")")
+    else:
+        # Convert each value element to a string
+        value_elements = ["\'" + value[0] + "\'"] + [str(e) for e in value[1:]]
+        path_elements.append(", ".join(value_elements))
+        
+    return "".join(path_elements)
+
 def lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResult, lcTestIndex, lcSatisfactionMsg, headLc):
     nestedLc = []
     for _, e in enumerate(currentLc.e):
@@ -171,17 +186,18 @@ def lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResu
             lcSatisfactionMsg += f'\t{currentLc.e[index]}(**) -> {currentOperand}\n'
        
             # call nested lc satisfaction
-            operandResult = currentLcInput[currentOperand][lcTestIndex][0].item()
-            if isinstance(currentLc.e[1], ifL):
+            operandResult = currentOperand
+            if isinstance(currentLc.e[index], ifL):
                 lcSatisfactionMsg = ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator),operandResult, lcTestIndex, lcSatisfactionMsg, "(**)")
             else:
                 lcSatisfactionMsg = lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator), operandResult, lcTestIndex, lcSatisfactionMsg, "(**)")
         elif operand.startswith("_"): # anonymous - no variable in the lc
             lcSatisfactionMsg += f'\t{currentLc.e[index][1]} -> {currentOperand}\n'
         else:
-            if len(currentLc.e) > index+1 and isinstance(currentLc.e[index+1], V) and currentLc.e[index+1].v != None:
-                currentV = currentLc.e[index+1].v
-                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{currentV[0]}\', {currentV[1]}) -> {currentOperand}\n'
+            if len(currentLc.e) > index + 1 and isinstance(currentLc.e[index + 1], V) and currentLc.e[index + 1].v is not None:
+                currentV = currentLc.e[index + 1].v
+                path = construct_ls_path_string(currentV)
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}({path}) -> {currentOperand}\n'
             else:
                 lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{operand}\') -> {currentOperand}\n'
                 
@@ -224,9 +240,10 @@ def ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, ifResu
         elif operand.startswith("_"): # anonymous - no variable in the lc
             lcSatisfactionMsg += f'\t{currentLc.e[index][1]} -> {currentOperand}\n'
         else:
-            if len(currentLc.e) > index+1 and isinstance(currentLc.e[index+1], V) and currentLc.e[index+1].v != None:
-                currentV = currentLc.e[index+1].v
-                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{currentV[0]}\', {currentV[1]}) -> {currentOperand}\n'
+            if len(currentLc.e) > index+1 and isinstance(currentLc.e[index+1], V) and currentLc.e[index+1].v != None: 
+                currentV = currentLc.e[index + 1].v
+                path = construct_ls_path_string(currentV)
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}({path}) -> {currentOperand}\n'
             else:
                 lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{operand}\') -> {currentOperand}\n'
                 
@@ -297,7 +314,9 @@ def satisfactionReportOfConstraints(dn):
 
     for lcName in lcSatisfaction:
         lcSatisfactionTest = lcSatisfaction[lcName]
-        lcSatisfactionMsgs = []
+        lcSatisfactionMsgs = {}
+        lcSatisfactionMsgs["Satisfied"] = []
+        lcSatisfactionMsgs["NotSatisfied"] = []
         lenOfLcTests = len(lcSatisfactionTest['lcResult'])
         
         for lcTestIndex in range(lenOfLcTests):
@@ -311,7 +330,10 @@ def satisfactionReportOfConstraints(dn):
             else:
                 lcSatisfactionMsg = lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResult, lcTestIndex, lcSatisfactionMsg, "")
             
-            lcSatisfactionMsgs.append(lcSatisfactionMsg)
+            if lcResult:
+                lcSatisfactionMsgs["Satisfied"].append(lcSatisfactionMsg)
+            else:
+                lcSatisfactionMsgs["NotSatisfied"].append(lcSatisfactionMsg)
 
         lcSatisfactionTest['lcSatisfactionMsgs'] = lcSatisfactionMsgs
         
