@@ -214,13 +214,16 @@ class Graph(BaseGraphTree):
                 variable_name = e.name
                 if e_before:
                     if variable_name in found_variables:
-                        raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} already defined in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}")
-
+                        exceptionStr1 = f"In logical constraint {headLc} {lc} variable {variable_name} associated with concept {e_before[1]} already defined "
+                        exceptionStr2 = f"in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}"
+                        raise Exception(exceptionStr1 + exceptionStr2)
+            
                     variable_info = (lc, variable_name, e_before)
                     found_variables[variable_name] = variable_info
                 else:
-                    raise Exception(f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept")
-
+                    exceptionStr = f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept"
+                    raise Exception(exceptionStr)
+                
             # checking for extra variable:
             elif e and isinstance(e, tuple) and e[0] == 'extraV':
                 predicate = lc.e[0][1]
@@ -286,7 +289,7 @@ class Graph(BaseGraphTree):
 
         def handle_variable_name(lc_variable_name, lcPath):
             if lc_variable_name not in found_variables:
-                raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined")
+                raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
 
             if lc_variable_name not in used_variables:
                 used_variables[lc_variable_name] = []
@@ -379,6 +382,15 @@ class Graph(BaseGraphTree):
         pathVariable = path[0]
         pathPart = path[0]
             
+        if len(path) == 1:
+            if requiredLeftConcept == requiredEndOfPathConceptRoot:
+                return
+            else:
+                exceptionStr1 = f"The variable {pathVariable}, defined in the path for {lc_name} is not valid. The concept of {pathVariable} is a of type {requiredLeftConcept},"
+                exceptionStr2 = f"but the required concept by the logical constraint element is {requiredEndOfPathConceptRoot}."
+                exceptionStr3 = f"The variable used inside the path should match its type with {requiredEndOfPathConceptRoot}."
+                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+            
         for pathIndex, pathElement in enumerate(path[1:], start=1):   
             if isinstance(pathElement, (eqL,)):
                 continue
@@ -447,23 +459,158 @@ class Graph(BaseGraphTree):
                     exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
                     raise Exception(f"{exceptionStr1} {exceptionStr2}")
 
-    def handleVarsPath(self, lc, varMaps):
-        '''Handles variable paths within a given logical constraint.
 
-        This method replaces variable instances within the logical constraint equation with their 
-        mapped values. It also recursively processes nested logical constraints.
+    def are_keys_new(self, given_dict, dict_list):
+        """
+        Check if all keys in 'given_dict' are not present in any dictionary within 'dict_list'.
+
+        This method iterates over each key in 'given_dict' and checks if it exists in any of the dictionaries
+        contained within 'dict_list'. If a key from 'given_dict' is found in any dictionary in 'dict_list',
+        the method returns False, indicating that not all keys are new. Otherwise, it returns True,
+        indicating all keys in 'given_dict' are new (i.e., not present in any dictionary in 'dict_list').
+
+        Parameters:
+        given_dict (dict): A dictionary whose keys are to be checked.
+        dict_list (list of dict): A list of dictionaries against which the keys of 'given_dict' are to be checked.
+
+        Returns:
+        bool: True if all keys in 'given_dict' are new, False otherwise.
+        """
+        for key in given_dict:
+            for d in dict_list:
+                if key in d:
+                    return False
+        return True
+
+    def collectVarMaps(self, lc, varMapsList):
+        """
+        Collects variable mappings (VarMaps) from a logical constraint (lc) and updates the list of collected VarMaps.
     
-        Args:
-        lc (LogicalConstrain): The logical constraint containing the equations to process.
-        varMaps (dict): Mapping of variable names to their actual values.
-        '''
-        from domiknows.graph import V, LogicalConstrain
+        This method recursively traverses the elements of the logical constraint 'lc' to identify and process VarMaps.
+        It differentiates between the definition of new variables and the usage of existing ones. For new variables, 
+        it clones the current VarMap, adds the name of the logical constraint, and appends it to 'varMapsList'. For 
+        existing variables, it updates the path variable in the current VarMap to match the one used in their 
+        definition. The method modifies 'lc' by removing VarMaps that define new variables.
+    
+        Parameters:
+        lc (LogicalConstrain): The logical constraint from which VarMaps are to be collected.
+        varMapsList (list): A list that accumulates VarMaps. This list collects only the definitions of variables.
+    
+        Returns:
+        list: The updated list of variable mappings (VarMaps) after processing 'lc'.
         
-        for i, e in enumerate(lc.e):
-            if isinstance(e, V) and e.name in varMaps:
-                lc.e[i] = varMaps[e.name]
+        Note:
+        - The method assumes the existence of specific types and structures within 'lc', such as 'VarMaps' tuples.
+        - The method is recursive and alters the structure of 'lc' by removing defining VarMaps.
+        """
+        from domiknows.graph import LogicalConstrain
+        import copy
+        
+        newE = []
+        # collect VarMaps from lc
+        for e in lc.e:
             if isinstance(e, LogicalConstrain):
-                self.handleVarsPath(e, varMaps)              
+                self.collectVarMaps(e, varMapsList) # recursive
+                newE.append(e)
+            # check if VarMap
+            elif isinstance(e, tuple) and e[0] == 'VarMaps':
+                currentVarMap = e[1]
+                
+                # check if variables in the current VarMap are new, have not been found already
+                # If they are new it means it it their definition in the lc
+                if self.are_keys_new(currentVarMap, varMapsList):
+                    cloned_CurrentVarMaps = copy.deepcopy(currentVarMap)
+                    # add info about the lc to varMap  - this is the lc in which this variables are defined
+                    cloned_CurrentVarMaps["lcName"] = lc.name 
+                    
+                    # Add this VarMaps to the collected VarMapss in the varMapsList
+                    # This list collect only definition of variables 
+                    # The current varMap will be removed from the current lc
+                    varMapsList.append(cloned_CurrentVarMaps)
+                else:
+                    # variables in VarMaps are already found 
+                    # It means that this is the usage of these variables in the lc
+                    for variableName in currentVarMap:
+                        # Find previous definition in varMapsList of the variable in the current VarMap
+                        definedVaribleList = [d.get(variableName, None) for d in varMapsList]
+                        
+                        if definedVaribleList:
+                            definedVarible = definedVaribleList[0]
+                            variable = currentVarMap[variableName]
+                        
+                            # Update the path variable in the current varMap to the one used in variable definition
+                            if isinstance(variable, tuple) and len(variable) > 1 and isinstance(variable[1], tuple):
+                                new_inner_tuple = (definedVarible[1][0],) + variable[1][1:]
+                                variable = (variable[0], new_inner_tuple) + variable[2:]
+                                currentVarMap[variableName] = variable
+
+                    # keep this varMap in the lc - it will be used when processing the lc variable syntax
+                    newE.append(e)
+            else:
+                # it is not varMap - keep it in lc
+                newE.append(e)
+              
+        lc.e = newE # Update logical constraint element - defining VarMaps are removed
+        return varMapsList
+                   
+    def handleVarsPath(self, lc, varMaps):
+        """
+        Processes and updates the variable paths in a logical constraint (lc) based on the mappings provided in varMaps.
+    
+        This method iterates through the elements of 'lc' and performs various transformations based on the type
+        of each element and the presence of variable mappings in 'varMaps'. The method handles nested logical 
+        constraints recursively, updates variables already in V form, and modifies variable paths using mappings 
+        from 'varMaps'. Additionally, it removes all 'VarMaps' elements from 'lc'.
+    
+        Parameters:
+        lc (LogicalConstrain): The logical constraint to be processed.
+        varMaps (dict): A dictionary containing mappings of variable names to their respective V instances or paths.
+    
+        Note:
+        - The method assumes a specific structure of 'lc' and 'varMaps', with 'lc' containing elements like 
+          LogicalConstrain, V, Concept, and tuples with 'VarMaps'.
+        - It employs a flag 'needsVariableUpdate' to track if the next element requires variable path updates.
+        - The method is recursive for nested logical constraints and alters the structure of 'lc'.
+        """
+
+        from domiknows.graph import V, LogicalConstrain, Concept
+        
+        # process logical constraint variable syntax is used - translate it to the path V syntax of logical constraints 
+        newE = []
+        needsVariableUpdate = False # flag set by lc element concept if VarMap is present in the current lc
+        for i, e in enumerate(lc.e):
+            if isinstance(e, LogicalConstrain):
+                self.handleVarsPath(e, varMaps) # recursive
+            elif isinstance(e, V) and e.name in varMaps: # check if the current lc element is already in the V  form and its name is in varMaps
+                # this is the variable syntax for a single variable usage
+                # replace the V with the mapping for this found in varMap
+                e = varMaps[e.name]
+            elif needsVariableUpdate: # ths flag was set by the previous lc element
+                usedVarMap = lc.e[i+1][1] # get varMaps to use
+                usedVarMapIt= iter(usedVarMap.items())
+                firstUsedV = next(usedVarMapIt)[1][1]
+                secondUsedV = next(usedVarMapIt)[1][1]
+
+                # create new paths based on variables from varMaps
+                firstNewPath = firstUsedV + (firstUsedV[1].reversed,)
+                secondNewPath = secondUsedV + (secondUsedV[1].reversed,)
+                
+                path = (firstNewPath, secondNewPath)  
+                
+                updated_e = V(name="", v=path)
+                e = updated_e
+                needsVariableUpdate = False
+            elif isinstance(e, tuple) and isinstance(e[0], Concept) and len(lc.e) > i+2:
+                if isinstance(lc.e[i+2], tuple) and lc.e[i+2][0] == 'VarMaps':
+                    # set the flag if the next element needs to be updated because the variable syntax is used
+                    needsVariableUpdate = True
+            
+            if isinstance(e, tuple) and e[0] == 'VarMaps':
+                pass # removed all VarMaps from lc
+            else:
+                newE.append(e)
+                    
+        lc.e = newE #Update logical constraint element - all VarMaps are removed
                 
     def __exit__(self, exc_type, exc_value, traceback):
         '''Handles the exiting logic for the context manager.
@@ -492,7 +639,7 @@ class Graph(BaseGraphTree):
         from . import Concept
         from .relation import IsA, HasA
     
-        # Iterate through all local variables in that frame
+        # --- Iterate through all local variables in that frame
         for var_name, var_value in frame.f_locals.items():
             # Check if any of them are instances of the Concept class or Relation subclass
             if isinstance(var_value, (Concept, HasA, IsA)):
@@ -505,39 +652,29 @@ class Graph(BaseGraphTree):
                         var_value.reversed.var_name = var_name + ".reversed"
                         self.varNameReversedMap[var_value.reversed.name] = var_value.reversed
 
+        # --- Process logical constraints variable syntax
+        for lc_name, lc in self.logicalConstrains.items():
+            if not lc.active or not lc.headLC:
+                continue
+
+            # collect VarMaps - store info about lc variable syntax if used in this logical constraint
+            varMapsList = self.collectVarMaps(lc, [])
+            
+            # process variable syntax - translate it to the path syntax
+            if varMapsList:
+                self.handleVarsPath(lc, varMapsList[0])
                     
+        # --- Check if the logical constrains are correct ---
+        
         lc_info = {}
         LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])
-
-        # --- Check if the logical constrains are correct ---
         
         # --- Gather information about variables used and defined in the logical constrains and 
         #     report errors if some of them are not defined and used or defined more than once
         for lc_name, lc in self.logicalConstrains.items():
             if not lc.active or not lc.headLC:
                 continue
-
-            # process VarMaps
-            varMapsList = []
-            newE = []
-            for e in lc.e:
-                if isinstance(e, tuple) and e[0] == 'VarMaps':
-                    varMapsList.append(e[1])
-                else:
-                    newE.append(e)
-                    
-            lc.e = newE
-            
-            varMaps = {}
-            if varMapsList:
-                for dictionary in varMapsList:
-                    for key, value in dictionary.items():
-                        if key in varMaps:
-                            raise ValueError(f"Duplicate key found: {key}")
-                        varMaps[key] = value
-                        
-                    self.handleVarsPath(lc, varMaps)
-            
+                
             # find variable defined in the logical constrain - report error if some of them are defined more than once
             found_variables = self.find_lc_variable(lc, headLc=lc.name)
 
@@ -576,14 +713,14 @@ class Graph(BaseGraphTree):
                     
                     if isinstance(path[0], tuple): # this path is a combination of paths 
                         for subpath in path: 
-                            if len(subpath) < 2:  
-                                continue  # skip this subpath as it has only the starting point variable
+                            if len(subpath) < 1:  
+                                continue  # skip this subpath it is empty
                                 
                             self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                             
                     else: # this path is a single path
-                        if len(path) < 2:
-                            continue # skip this path as it has only the starting point variable
+                        if len(path) < 1:
+                            continue # skip this path it is empty
                             
                         self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
                        

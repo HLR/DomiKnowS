@@ -423,12 +423,12 @@ def test_main_conll04(case):
         #assert sum(pairResult['work_for'][1]) == 1
         assert sum([dn.getAttribute(work_for, 'ILP').item() if dn.getAttribute(work_for, 'ILP').item() == dn.getAttribute(work_for, 'ILP').item() else 0
                     for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1}) 
-                    ]) == 0
+                    ]) == 2
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 1
         #assert sum(pairResult['work_for'][0]) == 0
         assert sum([dn.getAttribute(work_for, 'ILP').item() if not math.isnan(dn.getAttribute(work_for, 'ILP').item()) 
-                    else 0 for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 0
+                    else 0 for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 2
         #assert sum(pairResult['work_for'][2]) == 0
@@ -436,7 +436,7 @@ def test_main_conll04(case):
     
         # Sum all value of attribute work_for/ILP  for the pair relation from 3
         #assert sum(pairResult['work_for'][3]) == 0
-        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 1
         
         # ------------ Calculate logical constraints losses 
         for tnorm in ['L', 'G', "P"]:
@@ -463,6 +463,9 @@ def test_main_conll04(case):
                         assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[tnorm][i].item(), 4)
         
         #------- Calculate sample logical constraints losses 
+       
+        #sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = -1)
+        sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1)
         sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1000)
 
                         

@@ -9,6 +9,14 @@ from ..utils import enum
 @BaseGraphTree.localize_namespace
 class Concept(BaseGraphTree):
     _rels = {}  # category_name : creation callback
+    newVariableIndex = 0
+
+    @classmethod
+    def get_new_variable_index(cls):
+        # This method returns the current value of newVariableIndex and increments it
+        index = cls.newVariableIndex
+        cls.newVariableIndex += 1
+        return index
 
     @classmethod
     def relation_type(cls, name=None):
@@ -35,6 +43,8 @@ class Concept(BaseGraphTree):
                 
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
+                    if 'is_a' in dst._out:
+                        dst = dst._out['is_a'][0].dst
                     rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
@@ -54,7 +64,6 @@ class Concept(BaseGraphTree):
         self._out = OrderedDict()  # relation category_name : list of relation inst
         
         self.var_name = None
-        self.newVariableIndex = 0
         
     def get_batch(self):
         return self.batch
@@ -102,8 +111,7 @@ class Concept(BaseGraphTree):
             if len(relation_attrs) != len(args):
                 error = ("extraV", ) + tuple(args)
             else:
-                newVariable = 'p' + str(600 + self.newVariableIndex)
-                self.newVariableIndex+=1
+                newVariable = 'p' + str(600 + Concept.get_new_variable_index())
                 
                 info = {arg: V(name=None, v=(newVariable, value))  for arg, value in zip(args, relation_attrs.keys())}
                 args = (newVariable,)
@@ -223,10 +231,12 @@ class Concept(BaseGraphTree):
                     
                     return ecHandle
             else:
-                raise AttributeError(*e.args)
+                raise AttributeError(f"The concept {self.name} does not have an attribute with the value '{e.args}'. You should probably use a different base concept for this.")
         def handle(*args, **kwargs):
             if not args and not kwargs:
                 return self._out.setdefault(rel, [])
+            if 'name' in kwargs:
+                raise TypeError(f"You cannot name the concepts or relations in the graph, you have done this to connect {self.name} to {args[0].name}")
             return Rel(self, *args, **kwargs)
         return handle
 

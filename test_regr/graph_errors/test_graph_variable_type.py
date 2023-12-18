@@ -1,5 +1,5 @@
 import pytest
-from graph_multi_variable import setup_graph
+from graph_variable_type import setup_graph
 import re
 
 def test_setup_graph_exception():
@@ -11,14 +11,11 @@ def test_setup_graph_exception():
         sanitized_pattern = re.sub(
             r'[^\x20-\x7E]', 
             '', 
-            ("Logical constraint LC1 ifL: Each predicate can only have one new variable definition."
-             "For the predicate work_for, you have used both x and y as new variables."
-             "Either wrap both under on variable, if you intended to initialize x based on another value,"
-             "then the second argument should be a path=(...).")
+            ("The variable x, defined in the path for testLC is not valid. The concept of x is a of type accident_details," 
+             "but the required concept by the logical constraint element is weather_details."
+             "The variable used inside the path should match its type with weather_details.")
         ).replace(" ", "")
         
-        print(sanitized_pattern)
-
         print(repr(sanitized_error_message))
         print(repr(sanitized_pattern))
         

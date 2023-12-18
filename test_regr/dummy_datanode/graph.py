@@ -37,16 +37,35 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
+        '''
         work_for.has_a(people, organization)
         located_in.has_a(location, location)
         live_in.has_a(people, location)
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
-
+        '''
+        
         # LC2
-        #ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1)), organization(path=('x', rel_pair_word2))), active = True)
-        ifL(work_for('x', 'y'), andL(people('x'), organization('y')))
-
+        ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1)), organization(path=('x', rel_pair_word2))), active = True)
+         
+        # Exist person which lives and works in the same location
+        existsL(
+            andL(
+                people('p'), # person p
+                live_in('l', path=('p', rel_pair_word1.reversed)), 
+                work_for('w', path=('p', rel_pair_word1.reversed)),
+                orgbase_on('o', path=(('w', rel_pair_word2, rel_pair_word1.reversed),('l', rel_pair_word2, rel_pair_word2.reversed)))
+                )
+        )
+        '''
+        existsL(
+            andL(
+                people('p'), # person p
+                location('p_live_in_location', path=('p', rel_pair_word1.reversed, rel_pair_word2)),
+                location('p_work_in_location', path=('p_live_in_location')) # the same location
+                )
+        )
+        '''          
         # LC3
-        ifL(word, atMostL(people, organization, location, other, o), active = True)
+        ifL(word('x'), atMostL(people, organization, location, other, o), active = True)
         

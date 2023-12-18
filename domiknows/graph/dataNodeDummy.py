@@ -1,5 +1,6 @@
 from . import DataNode
 import torch
+from domiknows.graph import LogicalConstrain, fixedL, ifL, V
 
 dataSizeInit = 5
 
@@ -14,7 +15,8 @@ def findConcept(conceptName, usedGraph):
                
                 return concept
             
-    return None 
+    return None 
+
 def findConceptInfo(usedGraph, concept):
     conceptInfo = {
         'concept': concept,
@@ -98,7 +100,7 @@ def createDummyDataNode(graph):
                    
                     for i in range(attrConceptInfo['count']):
                         if d == 0:
-                            newDN = DataNode(instanceID = instanceID, ontologyNode = attrConceptInfo['concept'])
+                            newDN = DataNode(instanceID = instanceID, ontologyNode = relationConceptInfo['concept'])
                             relationDns.append(newDN)
                             instanceID += 1
                         else:
@@ -124,7 +126,7 @@ def createDummyDataNode(graph):
                     continue
                 
                 m = conceptRootConceptInfo['count']
-                random_tensor = torch.rand(m, 1)
+                random_tensor = torch.rand(m, 1, device=rootDataNode.current_device)
                 final_tensor = torch.cat((1 - random_tensor, random_tensor), dim=1)
                 rootDataNode.attributes["variableSet"][conceptRootConceptInfo['concept'].name +'/<' + conceptInfo['concept'].name + '>'] = final_tensor
                 continue
@@ -136,3 +138,203 @@ def createDummyDataNode(graph):
         dn.attributes["rootDataNode"] = rootDataNode
                 
     return rootDataNode
+
+
+def construct_ls_path_string(value):
+    path_elements = []
+    if isinstance(value[1], tuple):
+        for subpath in value:
+            # Convert each subpath element to a string
+            subpath_elements = ["\'" + subpath[0] + "\'"] + [str(e) for e in subpath[1:]]
+            path_elements.append("(" + ", ".join(subpath_elements) + ")")
+    else:
+        # Convert each value element to a string
+        value_elements = ["\'" + value[0] + "\'"] + [str(e) for e in value[1:]]
+        path_elements.append(", ".join(value_elements))
+        
+    return "".join(path_elements)
+
+def lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResult, lcTestIndex, lcSatisfactionMsg, headLc):
+    nestedLc = []
+    for _, e in enumerate(currentLc.e):
+        if isinstance(e, LogicalConstrain):
+            currentNestedLc = next(lcIterator)
+            nestedLc.append(currentNestedLc)
+     
+    nestedLcIterator = reversed(nestedLc)  
+    
+    currentLcInput = lcSatisfactionTest['lcs'][currentLc]
+
+    if lcResult:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is satisfied (True) because:\n'
+    else:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is Not satisfied (False) because:\n'
+        
+    # Create an iterator for the operands of currentLc
+    operands_iterator = iter(currentLcInput)
+    index = 0
+    for operand in operands_iterator:
+        # Get the first key and its corresponding value
+        currentOperand = currentLcInput[operand][lcTestIndex][0].item()
+         
+        if isinstance(currentLc.e[index], V):
+            if len(currentLc.e) < index+1:
+                continue
+            index += 1
+            
+        if operand.startswith("_lc"):
+            lcSatisfactionMsg += f'\t{currentLc.e[index]}(**) -> {currentOperand}\n'
+       
+            # call nested lc satisfaction
+            operandResult = currentOperand
+            if isinstance(currentLc.e[index], ifL):
+                lcSatisfactionMsg = ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator),operandResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+            else:
+                lcSatisfactionMsg = lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator), operandResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+        elif operand.startswith("_"): # anonymous - no variable in the lc
+            lcSatisfactionMsg += f'\t{currentLc.e[index][1]} -> {currentOperand}\n'
+        else:
+            if len(currentLc.e) > index + 1 and isinstance(currentLc.e[index + 1], V) and currentLc.e[index + 1].v is not None:
+                currentV = currentLc.e[index + 1].v
+                path = construct_ls_path_string(currentV)
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}({path}) -> {currentOperand}\n'
+            else:
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{operand}\') -> {currentOperand}\n'
+                
+        index += 1
+            
+    return lcSatisfactionMsg
+
+def ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, ifResult, lcTestIndex, lcSatisfactionMsg, headLc):
+    currentLcInput = lcSatisfactionTest['lcs'][currentLc]
+
+    nestedLc = []
+    for _, e in enumerate(currentLc.e):
+        if isinstance(e, LogicalConstrain):
+            currentNestedLc = next(lcIterator)
+            nestedLc.append(currentNestedLc)
+     
+    nestedLcIterator = reversed(nestedLc)    
+           
+    if ifResult:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is satisfied (True) because:\n' 
+    else:
+        lcSatisfactionMsg += f'{currentLc}{headLc} is Not satisfied (False) because:\n'
+        
+    # Create an iterator for the operands of currentLc
+    operands_iterator = iter(currentLcInput)
+    index = 0
+    promiseIndex = None
+    conclusionIndex = None
+    for operand in operands_iterator:
+        # Get the first key and its corresponding value
+        currentOperand = currentLcInput[operand][lcTestIndex][0].item()
+        
+        if isinstance(currentLc.e[index], V):
+            if len(currentLc.e) < index+1:
+                continue
+            index += 1
+            
+        if operand.startswith("_lc"):
+            lcSatisfactionMsg += f'\t{currentLc.e[index]}(**) -> {currentOperand}\n'
+        elif operand.startswith("_"): # anonymous - no variable in the lc
+            lcSatisfactionMsg += f'\t{currentLc.e[index][1]} -> {currentOperand}\n'
+        else:
+            if len(currentLc.e) > index+1 and isinstance(currentLc.e[index+1], V) and currentLc.e[index+1].v != None: 
+                currentV = currentLc.e[index + 1].v
+                path = construct_ls_path_string(currentV)
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}({path}) -> {currentOperand}\n'
+            else:
+                lcSatisfactionMsg += f'\t{currentLc.e[index][1]}(\'{operand}\') -> {currentOperand}\n'
+                
+        if promiseIndex == None:
+            promiseIndex = index
+            promiseResult = currentOperand
+        else:
+            conclusionIndex = index
+            conclusionResult = currentOperand
+            
+        index += 1
+        
+    if ifResult:
+        lcSatisfactionMsg += f'\t{currentLc} premise is {promiseResult} and its conclusion is {conclusionResult}\n' 
+    else:
+        lcSatisfactionMsg += f'\tWhen in {currentLc} the premise is True, the conclusion should also be True\n'
+
+    if isinstance(currentLc.e[promiseIndex], LogicalConstrain):
+        if isinstance(currentLc.e[promiseIndex], ifL):
+            lcSatisfactionMsg = ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator), promiseResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+        else:
+            lcSatisfactionMsg = lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator), promiseResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+            
+    if isinstance(currentLc.e[conclusionIndex], LogicalConstrain):
+        if isinstance(currentLc.e[conclusionIndex], ifL):
+            lcSatisfactionMsg = ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator), conclusionResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+        else:
+            lcSatisfactionMsg = lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, next(nestedLcIterator), conclusionResult, lcTestIndex, lcSatisfactionMsg, "(**)")
+    
+    return lcSatisfactionMsg
+
+def satisfactionReportOfConstraints(dn):
+    m = None     
+    sampleSize = 1
+    p = sampleSize
+   
+    key = "/local/softmax"
+    dn.inferLocal()
+    
+    mySolver, _ = dn.getILPSolver(conceptsRelations = dn.collectConceptsAndRelations())
+    mySolver.current_device = dn.current_device
+    mySolver.myLcLossSampleBooleanMethods.sampleSize = sampleSize        
+    mySolver.myLcLossSampleBooleanMethods.current_device = dn.current_device
+
+    lcCounter = 0 # Count processed lcs
+    lcSatisfaction = {}
+    for graph in mySolver.myGraph: # Loop through graphs
+        for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
+
+            if not lc.headLC or not lc.active: # Process only active and head lcs
+                continue
+                
+            if type(lc) is fixedL: # Skip fixedL lc
+                continue
+                
+            lcCounter +=  1
+            
+            lcName = lc.lcName
+                
+            lcSatisfaction[lcName] = {}
+            lcSatisfactionTest = lcSatisfaction[lcName]
+            
+            lcResult, lcVariables, inputLc = \
+                mySolver.constructLogicalConstrains(lc, mySolver.myLcLossSampleBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = True)
+            lcSatisfactionTest['lcResult'] = lcResult
+            lcSatisfactionTest['lcVariables'] = lcVariables
+            lcSatisfactionTest['lcs'] = inputLc
+
+    for lcName in lcSatisfaction:
+        lcSatisfactionTest = lcSatisfaction[lcName]
+        lcSatisfactionMsgs = {}
+        lcSatisfactionMsgs["Satisfied"] = []
+        lcSatisfactionMsgs["NotSatisfied"] = []
+        lenOfLcTests = len(lcSatisfactionTest['lcResult'])
+        
+        for lcTestIndex in range(lenOfLcTests):
+            lcIterator = reversed(lcSatisfactionTest['lcs'])
+
+            currentLc = next(lcIterator)
+            lcResult = not lcSatisfactionTest['lcResult'][lcTestIndex][0].item()
+            lcSatisfactionMsg = ''
+            if isinstance(currentLc, ifL):
+                lcSatisfactionMsg = ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResult, lcTestIndex, lcSatisfactionMsg, "")
+            else:
+                lcSatisfactionMsg = lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResult, lcTestIndex, lcSatisfactionMsg, "")
+            
+            if lcResult:
+                lcSatisfactionMsgs["Satisfied"].append(lcSatisfactionMsg)
+            else:
+                lcSatisfactionMsgs["NotSatisfied"].append(lcSatisfactionMsg)
+
+        lcSatisfactionTest['lcSatisfactionMsgs'] = lcSatisfactionMsgs
+        
+    return lcSatisfaction
