@@ -9,7 +9,7 @@
 `python main.py`
 
 # Results
-This task involves the classification of objects in a scene. Objects are classified with respec to a hierarchy of labels (see: `hierarchy.json`). The hierarchy has four levels (i.e., each object has a maximum of four labels).
+This task involves the classification of objects in a scene. Objects are classified with respect to a hierarchy of labels (see: `hierarchy.json`). The hierarchy has four levels (i.e., each object has a maximum of four labels).
 
 ## Overall metrics
 The following table shows classification metrics for each of the four levels with and without `GBI`:
@@ -34,7 +34,7 @@ The following table shows classification metrics for each of the four levels wit
 |         | w/ GBI - w/o GBI | 2.06%   | 7.15%     | \-8.95% | 8.76%   | 0.00%        | 2.06%   | 1.11%   |
 
 ## Satisfied constraints
-The following table shows classification metrics for each of the four levels with and without `GBI`, but limited to samples where the model initially does not satisfy constraints and `GBI` satisfies constraints:
+The following table shows classification metrics for each of the four levels with and without `GBI`, but limited to samples where the model initially does not satisfy the hierarchical constraints and `GBI` satisfies the hierarchical constraints:
 
 |         |                  |         | Macro avg |          |         | Weighted Avg |         |         |      |
 | ------- | ---------------- | ------- | --------- | -------- | ------- | ------------ | ------- | ------- | ---- |
