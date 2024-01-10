@@ -1,5 +1,11 @@
-# Inference (ILP)
+# Inference
 
+There are two main inference tools in DomiKnows framework:
+
+- [ILP](#ILP)
+- [GBI](#gbi)
+
+## ILP
 The following is the tutorial on the ILP solver for infernece.
 
 - [Class Overview](#class-overview)
@@ -9,9 +15,8 @@ The following is the tutorial on the ILP solver for infernece.
 - [Softmax and Argmax Inference](#softmax-and-argmax-inference)
 - [Inference Result Access](#inference-result-access)
 - [Inference Metrics](#inference-metrics)
-- [Verification of Logical constraint Consistency](#verification-of-logical-constraint-consistency)
 
-## Class Overview
+### Class Overview
 
 - package `domiknows.solver`:
 - `ilpOntSolver`,
@@ -27,7 +32,7 @@ The following is the tutorial on the ILP solver for infernece.
 - package `domiknows.graph`:
 - `dataNode`:
 
-## ILP Solver
+### ILP Solver
 
 The solver builds the ILP (Integer Linear Programming) model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to example tokens.
 The actual used ILP is Zero-One linear programming in which the variables are restricted to be either 0 or 1.
@@ -35,7 +40,7 @@ It solves the ILP model and provides the most optimized assignment. The model ob
 
 The solver can be called on the [DataNode](QUERY.md) (usually the root DataNode of the Data Graph) with the method:
 
-### ILP Inference
+#### ILP Inference
 ```python
 inferILPResults(*_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
 ```
@@ -90,7 +95,7 @@ The `domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logic
 
 The solver ILP model is solved by Gurobi and the found solutions for optimal classification of variables and relations is returned.
 
-### ILP Loss for Logical Constrains 
+#### ILP Loss for Logical Constrains 
 
 Solver can also calculate the loss for each logical constraint:
 
@@ -115,7 +120,7 @@ Example of loss calculation:
                                  device=device)
 ```
 
-### Softmax and Argmax Inference
+#### Softmax and Argmax Inference
 
 In addition to ILP inference the standard softmax and agmax can be also calculated on learned predictions.
 
@@ -135,7 +140,7 @@ dn.inferLocal()
 
 It adds attributes: <concept>/local/softmax and <concept>/local/argmax to each datanote.
 
-### Inference Result Access
+#### Inference Result Access
 
 The results of the inference solution are added to nodes in the Data Graph with key appropriate for the inference (e.g.: ILP). 
 
@@ -156,7 +161,7 @@ dn.collectInferedResults(concept, inferKey),
 - `inferKey` - is a name of the key  for the inference type e.g. `ILP`, `argmax`, `softmax`, `local/argmax`, `local/softmax`
 
 
-### Inference Metrics
+#### Inference Metrics
 
 The inference results can be compared to ground truth (stored in the dataNote with key `label`) and metrics can be calculated using  dataNode method:
 
@@ -190,5 +195,10 @@ ILP metrics work_for {'TP': tensor(0.), 'FP': tensor(0.), 'TN': tensor(4.), 'FN'
 ILP metrics people {'TP': tensor(1.), 'FP': tensor(1.), 'TN': tensor(0.), 'FN': tensor(0.), 'P': tensor(0.5000), 'R': tensor(1.), 'F1': tensor(0.6667)}
 ```
 
+## GBI
 
+GBI inference [1] tool is used in a similar manner to ILP. There is an equivalent method to ILP methods for GBI for example instead of `inferILPResults` user can invoke `inferGBIResults`. This method of GBI utilization is different from using GBI during traning and it's only used during inference time.
+
+
+[1] "Gradient-Based Inference for Networks with Output Constraints" Jay Yoon Lee et. al
 
