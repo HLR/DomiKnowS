@@ -11,7 +11,8 @@ The following describes the workflow that allows the user to train its model wit
     - [Eval: `eval()`](#eval-eval)
   - [Programs](#Programs)
     - [Inferece Mask Loss (IML)](#inferece-mask-loss-iml-1)
-    - [Priaml Dual (PD)](priaml-dual-pd-2)
+    - [Priaml Dual (PD)](#priaml-dual-pd-2)
+    - [GBI](#gbi)
     
 ## Class Overview
 
@@ -93,6 +94,15 @@ prgram = PrimalDualProgram( graph, Model=SolverModel, poi=(sentence, phrase, pai
 
 Here instead of `POImodel` we use `SolverModel`.
 
+### GBI [[3]](#3)
+
+GBI model can also be easily defined by:
+
+```python
+prgram = GBIProgram( graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],loss=..., metric=...)
+            
+```
+
 
 ## References
 
@@ -103,3 +113,6 @@ Inference-Masked Loss for Deep Structured Output Learning, Proceedings of the Tw
 
 <a id="2">[2] https://papers.nips.cc/paper/2019/file/cf708fc1decf0337aded484f8f4519ae-Paper.pdf </a> 
 A Primal-Dual Formulation for Deep Learning with Constraints, 33rd Conference on Neural Information Processing Systems (NeurIPS 2019), Vancouver, Canada.
+
+<a id="2">[3] https://ojs.aaai.org/index.php/AAAI/article/view/4316 </a> 
+"Gradient-Based Inference for Networks with Output Constraints" Jay Yoon Lee et. al
