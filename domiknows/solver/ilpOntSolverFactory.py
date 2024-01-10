@@ -59,12 +59,6 @@ class ilpOntSolverFactory:
                 else:
                     from .gurobiILPOntSolver1 import gurobiILPOntSolver
                 SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "GEKKO":
-                if __package__ is None or __package__ == '':
-                    from domiknows.solver.gekkoILPOntSolver import gekkoILPOntSolver
-                else:
-                    from .gekkoILPOntSolver import gekkoILPOntSolver
-                SolverClass = cls.getClass(gekkoILPOntSolver, *SupplementalClasses)
             elif _ilpConfig['ilpSolver'] == "mini_prob_debug":
                 if __package__ is None or __package__ == '':
                     from domiknows.solver.mini_solver_debug import MiniProbSolverDebug

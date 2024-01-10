@@ -9,3 +9,4 @@ setuptools
 graphviz
 dnspython
 scikit-learn
+spacy
