@@ -1,6 +1,7 @@
 from . import DataNode
 import torch
 from domiknows.graph import LogicalConstrain, fixedL, ifL, V
+from domiknows.graph import EnumConcept
 
 dataSizeInit = 5
 
@@ -20,6 +21,7 @@ def findConcept(conceptName, usedGraph):
 def findConceptInfo(usedGraph, concept):
     conceptInfo = {
         'concept': concept,
+        'multiplicity': len(concept.enum) if isinstance(concept, EnumConcept) else 2,
         'relation': bool(concept.has_a()),
         'relationAttrs': {rel.name: findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
         'contains': [contain.dst for contain in concept._out.get('contains', [])],
@@ -123,12 +125,20 @@ def createDummyDataNode(graph):
                 conceptRootConceptInfo = conceptInfos[conceptInfo['is_a'][0].name]
                 
                 if 'count' not in conceptRootConceptInfo:
-                    continue
+                    m = 1
+                else:
+                    m = conceptRootConceptInfo['count']
+                    
+                # Assuming m, multiplicity, and rootDataNode.current_device are already defined
+                random_tensor = torch.rand(m, conceptInfo['multiplicity'], device=rootDataNode.current_device)
+
+                # Normalize the tensor so that the sum of each row equals 1
+                final_tensor = random_tensor / random_tensor.sum(dim=1, keepdim=True)
                 
-                m = conceptRootConceptInfo['count']
-                random_tensor = torch.rand(m, 1, device=rootDataNode.current_device)
-                final_tensor = torch.cat((1 - random_tensor, random_tensor), dim=1)
-                rootDataNode.attributes["variableSet"][conceptRootConceptInfo['concept'].name +'/<' + conceptInfo['concept'].name + '>'] = final_tensor
+                if 'count' not in conceptRootConceptInfo:
+                    rootDataNode.attributes["variableSet"]['<' + conceptInfo['concept'].name + '>'] = final_tensor
+                else:
+                    rootDataNode.attributes["variableSet"][conceptRootConceptInfo['concept'].name + '/<' + conceptInfo['concept'].name + '>'] = final_tensor
                 continue
         
     # Iterate over the data nodes in "allDns" and add the "rootDataNode" attribute to them
