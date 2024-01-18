@@ -60,8 +60,20 @@ def get_pred_from_node(node, suffix):
     #     digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
     #     summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
 
-    digit0_pred, digit1_pred = node.getAttribute(f'image/<digits>{suffix}')
-    summation_pred = node.getAttribute(f'pair/<summations>{suffix}')
+    digit_id = f'image/<digits>{suffix}'
+    summation_id = f'pair/<summations>{suffix}'
+
+    # get predictions from node
+    digits = node.getAttribute(digit_id)
+    sum_vals = node.getAttribute(summation_id)
+
+    # if no GBI results, fallback on argmax prediction
+    if suffix == '/GBI' and digits is None:
+        digits = node.getAttribute(f'image/<digits>/local/argmax')
+        sum_vals = node.getAttribute(f'pair/<summations>/local/argmax')
+    
+    digit0_pred, digit1_pred = digits
+    summation_pred = sum_vals
 
     digit0_pred = torch.argmax(digit0_pred)
     digit1_pred = torch.argmax(digit1_pred)
