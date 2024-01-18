@@ -7,27 +7,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from data import get_readers
-from functools import partial
 import torch
-from tqdm import tqdm
-from sklearn.metrics import classification_report
-from operator import itemgetter
-from domiknows.program import IMLProgram, SolverPOIProgram
-from domiknows.program.callbackprogram import hook
-from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
-from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from domiknows.program.model.pytorch import SolverModel
-from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
+from domiknows.program import SolverPOIProgram
 from domiknows import setProductionLogMode
 from domiknows.program.model.base import Mode
-import os
-from itertools import chain
 from domiknows.utils import detuple
 import torch.nn.functional as F
 import argparse
-import numpy
+from tqdm import tqdm
 
-from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
+from model import build_program
 from graph import graph, image_batch, image, image_pair
 import config
 
@@ -39,6 +28,7 @@ setDnSkeletonMode(True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', default=False, action='store_true', help='Enable CUDA')
+parser.add_argument('--domiknows-gbi', default=False, action='store_true', help='Use the DomiKnowS implementation of GBI.')
 
 args = parser.parse_args()
 
@@ -54,133 +44,152 @@ def get_pred_from_node(node, suffix):
     Get digit and summation value prediction from datanodes
     If the model doesn't predict a summation value, then a dummy value is returned
     """
-    pair_node = node.findDatanodes(select='pair')[0]
-    digit0_node = node.findDatanodes(select='image')[0]
-    digit1_node = node.findDatanodes(select='image')[1]
+    # pair_node = node.findDatanodes(select='pair')[0]
+    # digit0_node = node.findDatanodes(select='image')[0]
+    # digit1_node = node.findDatanodes(select='image')[1]
+
+    # if args.cuda:
+    #     digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
+    #     digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
+    #     summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}')).cpu()
+    # else:
+    #     print(pair_node.getAttributes().keys())
+    #     print(f'<summations>{suffix}')
+
+    #     digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+    #     digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+    #     summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
+
+    digit0_pred, digit1_pred = node.getAttribute(f'image/<digits>{suffix}')
+    summation_pred = node.getAttribute(f'pair/<summations>{suffix}')
+
+    digit0_pred = torch.argmax(digit0_pred)
+    digit1_pred = torch.argmax(digit1_pred)
+    summation_pred = torch.argmax(summation_pred)
 
     if args.cuda:
-        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
-        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
-        summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}')).cpu()
-    else:
-        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
-        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
-        summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
+        digit0_pred = digit0_pred.cpu()
+        digit1_pred = digit1_pred.cpu()
+        summation_pred = summation_pred.cpu()
 
     return digit0_pred, digit1_pred, summation_pred
 
 
-#def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax'], print_incorrect=False):
-    """
-    Print report showing accuracy, constraint violation metrics for a given test set
-    """
+# def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax'], print_incorrect=False):
+#     """
+#     Print report showing accuracy, constraint violation metrics for a given test set
+#     """
 
-    digits_results = {
-        'label': []
-    }
+#     digits_results = {
+#         'label': []
+#     }
 
-    summation_results = {
-        'label': []
-    }
+#     summation_results = {
+#         'label': []
+#     }
 
-    satisfied = {}
+#     satisfied = {}
 
-    satisfied_overall = {}
+#     satisfied_overall = {}
 
-    for suffix in infer_suffixes:
-        digits_results[suffix] = []
-        summation_results[suffix] = []
+#     for suffix in infer_suffixes:
+#         digits_results[suffix] = []
+#         summation_results[suffix] = []
 
-    # iter through test data
-    for i, node in enumerate(program.populate(reader, device=device)):
+#     # iter through test data
+#     for i, node in enumerate(program.populate(reader, device=device)):
 
-        # e.g. /local/argmax or /ILP
-        for suffix in infer_suffixes:
-            # get predictions and add to list
-            digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
+#         # e.g. /local/argmax or /ILP
+#         for suffix in infer_suffixes:
+#             # get predictions and add to list
+#             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
 
-            digits_results[suffix].append(digit0_pred)
-            digits_results[suffix].append(digit1_pred)
+#             digits_results[suffix].append(digit0_pred)
+#             digits_results[suffix].append(digit1_pred)
 
-            summation_results[suffix].append(summation_pred)
+#             summation_results[suffix].append(summation_pred)
 
-        # get labels and add to list
-        pair_node = node.findDatanodes(select='pair')[0]
-        digit0_node = node.findDatanodes(select='image')[0]
-        digit1_node = node.findDatanodes(select='image')[1]
+#         # get labels and add to list
+#         pair_node = node.findDatanodes(select='pair')[0]
+#         digit0_node = node.findDatanodes(select='image')[0]
+#         digit1_node = node.findDatanodes(select='image')[1]
 
-        if args.cuda:
-            digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
-            digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
-            summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
-        else:
-            digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-            digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-            summation_results['label'].append(pair_node.getAttribute('summation_label'))
+#         if args.cuda:
+#             digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
+#             digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
+#             summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
+#         else:
+#             digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+#             digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+#             summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
-        if print_incorrect and (digits_results['/local/argmax'][-1] != digits_results['label'][-1] or digits_results['/local/argmax'][-2] != digits_results['label'][-2]):
-            for suffix in infer_suffixes:
-                print("%s: %d + %d = %d" % (suffix,
-                                        digits_results[suffix][-1],
-                                        digits_results[suffix][-2],
-                                        summation_results[suffix][-1]))
+#         if print_incorrect and (digits_results['/local/argmax'][-1] != digits_results['label'][-1] or digits_results['/local/argmax'][-2] != digits_results['label'][-2]):
+#             for suffix in infer_suffixes:
+#                 print("%s: %d + %d = %d" % (suffix,
+#                                         digits_results[suffix][-1],
+#                                         digits_results[suffix][-2],
+#                                         summation_results[suffix][-1]))
 
-            print()
+#             print()
 
-        # get constraint verification stats
-        for suffix in infer_suffixes:
-            verifyResult = node.verifyResultsLC(key=suffix)
-            if verifyResult:
-                satisfied_constraints = []
-                ifSatisfied_avg = 0.0
-                ifSatisfied_total = 0
-                for lc_idx, lc in enumerate(verifyResult):
-                    # add constraint satisfaction to total list (across all samples)
-                    if lc not in satisfied:
-                        satisfied[lc] = []
-                    satisfied[lc].append(verifyResult[lc]['satisfied'])
-                    satisfied_constraints.append(verifyResult[lc]['satisfied'])
+#         # get constraint verification stats
+#         for suffix in infer_suffixes:
+#             verifyResult = node.verifyResultsLC(key=suffix)
+#             if verifyResult:
+#                 satisfied_constraints = []
+#                 ifSatisfied_avg = 0.0
+#                 ifSatisfied_total = 0
+#                 for lc_idx, lc in enumerate(verifyResult):
+#                     # add constraint satisfaction to total list (across all samples)
+#                     if lc not in satisfied:
+#                         satisfied[lc] = []
+#                     satisfied[lc].append(verifyResult[lc]['satisfied'])
+#                     satisfied_constraints.append(verifyResult[lc]['satisfied'])
 
-                    # build average ifSatisfied value for this single sample
-                    if 'ifSatisfied' in verifyResult[lc]:
-                        if verifyResult[lc]['ifSatisfied'] == verifyResult[lc]['ifSatisfied']:
-                            ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
-                            ifSatisfied_total += 1
+#                     # build average ifSatisfied value for this single sample
+#                     if 'ifSatisfied' in verifyResult[lc]:
+#                         if verifyResult[lc]['ifSatisfied'] == verifyResult[lc]['ifSatisfied']:
+#                             ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
+#                             ifSatisfied_total += 1
 
-                # add average ifSatisifed value to overall stats
-                if suffix not in satisfied_overall:
-                    satisfied_overall[suffix] = []
+#                 # add average ifSatisifed value to overall stats
+#                 if suffix not in satisfied_overall:
+#                     satisfied_overall[suffix] = []
 
-                satisfied_overall[suffix].append(ifSatisfied_avg / ifSatisfied_total)
+#                 satisfied_overall[suffix].append(ifSatisfied_avg / ifSatisfied_total)
 
-    # print each report gathered
-    for suffix in infer_suffixes:
-        print('============== RESULTS FOR:', suffix, '==============')
+#     # print each report gathered
+#     for suffix in infer_suffixes:
+#         print('============== RESULTS FOR:', suffix, '==============')
 
-        if verbose:
-            for j, (digit_pred, digit_gt) in enumerate(zip(digits_results[suffix], digits_results['label'])):
-                print(f'digit {j % 2}: pred {digit_pred}, gt {digit_gt}')
+#         if verbose:
+#             for j, (digit_pred, digit_gt) in enumerate(zip(digits_results[suffix], digits_results['label'])):
+#                 print(f'digit {j % 2}: pred {digit_pred}, gt {digit_gt}')
 
-                if j % 2 == 1:
-                    print(f'summation: pred {summation_results[suffix][j // 2]},'
-                          f'gt {summation_results["label"][j // 2]}\n')
+#                 if j % 2 == 1:
+#                     print(f'summation: pred {summation_results[suffix][j // 2]},'
+#                           f'gt {summation_results["label"][j // 2]}\n')
 
-        print(classification_report(digits_results['label'], digits_results[suffix], digits=5))
-        #print(classification_report(summation_results['label'], summation_results[suffix], digits=5))
+#         print(classification_report(digits_results['label'], digits_results[suffix], digits=5))
+#         #print(classification_report(summation_results['label'], summation_results[suffix], digits=5))
 
-        print('==========================================')
+#         print('==========================================')
 
-    # print constraint satisfactions
-    for suffix in infer_suffixes:
-        suffixSatisfiedNumpy = numpy.array(satisfied_overall[suffix])
-        print('Average constraint satisfactions: %s - %f' % (suffix, numpy.nanmean(suffixSatisfiedNumpy)))
+#     # print constraint satisfactions
+#     for suffix in infer_suffixes:
+#         suffixSatisfiedNumpy = numpy.array(satisfied_overall[suffix])
+#         print('Average constraint satisfactions: %s - %f' % (suffix, numpy.nanmean(suffixSatisfiedNumpy)))
 
 
-_, _, _, _ = build_program(device=device, test=True)
+graph, image, image_pair, image_batch = build_program(device=device, test=True)
+
+infer_types = ['local/argmax', 'local/softmax']
+if args.domiknows_gbi:
+    infer_types.append('GBI')
 
 program = SolverPOIProgram(graph,
                            poi=(image_batch, image, image_pair),
-                           inferTypes=['local/argmax', 'local/softmax'],
+                           inferTypes=infer_types,
                            metric={})
 
 # load model.pth
@@ -210,12 +219,12 @@ def populate_forward(model, data_item):
     return node, output[1]
 
 
-def get_constraints_satisfaction(node):
+def get_constraints_satisfaction(node, suffix='/local/argmax'):
     """
     Get constraint satisfaction from datanode
     Returns number of satisfied constraints and total number of constraints
     """
-    verifyResult = node.verifyResultsLC()
+    verifyResult = node.verifyResultsLC(key=suffix)
 
     assert verifyResult
 
@@ -231,24 +240,31 @@ def get_constraints_satisfaction(node):
     return num_satisifed, num_constraints
 
 
-def are_both_digits_correct(node):
+def are_both_digits_correct(node, suffix='/local/argmax'):
     """
     Returns boolean indicating whether datanode contains a correct prediction for both digits or not
     """
+
     # get label
-    pair_node = node.findDatanodes(select='pair')[0]
-    digit0_node = node.findDatanodes(select='image')[0]
-    digit1_node = node.findDatanodes(select='image')[1]
+    # pair_node = node.findDatanodes(select='pair')[0]
+    # digit0_node = node.findDatanodes(select='image')[0]
+    # digit1_node = node.findDatanodes(select='image')[1]
+    
+    # if args.cuda:
+    #     digit0_label = digit0_node.getAttribute('digit_label').cpu().item()
+    #     digit1_label = digit1_node.getAttribute('digit_label').cpu().item()
+    # else:
+    #     digit0_label = digit0_node.getAttribute('digit_label').item()
+    #     digit1_label = digit1_node.getAttribute('digit_label').item()
+
+    digit0_label, digit1_label = node.getAttribute('image/digit_label')
 
     if args.cuda:
-        digit0_label = digit0_node.getAttribute('digit_label').cpu().item()
-        digit1_label = digit1_node.getAttribute('digit_label').cpu().item()
-    else:
-        digit0_label = digit0_node.getAttribute('digit_label').item()
-        digit1_label = digit1_node.getAttribute('digit_label').item()
+        digit0_label = digit0_label.cpu().item()
+        digit1_label = digit1_label.cpu().item()
 
     # get pred
-    digit0_pred, digit1_pred, _ = get_pred_from_node(node, '/local/argmax')
+    digit0_pred, digit1_pred, _ = get_pred_from_node(node, suffix)
 
     return digit0_label == digit0_pred and digit1_label == digit1_pred
 
@@ -260,7 +276,11 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     gbi_iters: number of gradient based inference optimization steps
     label_names: names of concepts used to get log probabilities from
     is_correct: function with parameter datanode that returns whether or not the prediction is correct
+
+    returns: list of sample indices that initially did not satisfy constraints
     """
+
+    unsat_initial = []
 
     total = 0
     incorrect_initial = 0
@@ -289,6 +309,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             continue
         else:
             unsatisfied_initial += 1
+            unsat_initial.append(data_iter)
 
         # --- Continue with GBI
         
@@ -303,18 +324,18 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
         print('Starting GBI:')
 
         # -- Make copy of original model
-        model_l, c_opt = get_lambda(model, lr=1e-2)
+        model_l, c_opt = get_lambda(model, lr=1e-1)
         
         # -- model_l is the model that gets optimized by GBI
         model_l.mode(Mode.TRAIN)
         model_l.train()
-        model_l.reset()
+        # model_l.reset()
 
         satisfied = False
 
-        for c_iter in range(gbi_iters):
-            c_opt.zero_grad()
+        print('GBI START')
 
+        for c_iter in range(gbi_iters):
             # -- forward pass through model_l
             node_l, builder_l = populate_forward(model_l, data_item)
 
@@ -341,15 +362,17 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
                         probs[c[0].name] = c_prob'''
 
             # -- collect probs from datanode (in skeleton mode) 
-            probs = {}
+            probs = []
             for var_name, var_val in node_l.getAttribute('variableSet').items():
-                if not var_name.endswith('/label') and var_val.grad_fn is not None:
-                    p = torch.sum(F.log_softmax(var_val, dim=-1))
+                if var_name.endswith('>'):# and var_val.requires_grad:
+                    probs.append(F.log_softmax(var_val, dim=-1).flatten())
 
-                    probs[var_name] = p
+            log_probs_cat = torch.cat(probs, dim=0)
+            log_probs = log_probs_cat.mean()
 
             # get total log prob
-            log_probs = sum(probs.values()) / len(probs)
+            # log_probs = sum(probs.values) / len(probs)
+            # print(log_probs)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
@@ -399,5 +422,69 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     print('after incorrect: %.2f' % (incorrect_after / total))
     print('after unsatisifed: %.2f' % (unsatisfied_after / total))
 
+    return unsat_initial
 
-run_gbi(program, validloader, 1000, 50, ['digits0', 'digits1'], are_both_digits_correct)
+
+def run_gbi_domiknows(program, dataloader, data_iters, gbi_iters, label_names, is_correct):
+    """
+    Runs the domiknows implementation of gradient-based inference on program. Prints pre- and post- accuracy/constraint violations.
+    data_iters: number of datapoints to test in validloader
+    gbi_iters: number of gradient based inference optimization steps
+    label_names: names of concepts used to get log probabilities from
+    is_correct: function with parameter datanode that returns whether or not the prediction is correct
+
+    returns: list of sample indices that initially did not satisfy constraints
+    """
+
+    unsat_initial = []
+
+    total = 0
+    incorrect_initial = 0
+    unsatisfied_initial = 0
+    incorrect_after = 0
+    unsatisfied_after = 0
+    
+    for i, dataitem in enumerate(tqdm(dataloader, total=data_iters)):
+        total += 1
+
+        node = program.populate_one(dataitem, grad = True)
+        node.inferLocal()
+
+        # pre-gbi stats (argmax)
+        num_satisfied_argmax, num_constraints_argmax = get_constraints_satisfaction(node)
+        if num_satisfied_argmax != num_constraints_argmax:
+            unsatisfied_initial += 1
+            unsat_initial.append(i)
+        
+        if not is_correct(node):
+            incorrect_initial += 1
+        
+        # post-gbi stats
+        num_satisfied_gbi, num_constraints_gbi = get_constraints_satisfaction(node, suffix='/GBI')
+        if num_satisfied_gbi != num_constraints_gbi:
+            print('UNSATISFIED')
+            unsatisfied_after += 1
+        else:
+            print('SATISFIED')
+
+        # print('GBI', torch.argmax(node.getAttribute('image/<digits>/GBI'), dim=-1).tolist())
+        # print('LABEL', node.getAttribute('image/digit_label').tolist())
+
+        if not is_correct(node, suffix='/GBI'):
+            print('INCORRECT')
+            incorrect_after += 1
+        else:
+            print('CORRECT')
+
+    print('num samples: %d' % total)
+    print('initial incorrect: %.2f' % (incorrect_initial / total))
+    print('initial unsatisfied: %.2f' % (unsatisfied_initial / total))
+    print('after incorrect: %.2f' % (incorrect_after / total))
+    print('after unsatisifed: %.2f' % (unsatisfied_after / total))
+
+    return unsat_initial
+
+if args.domiknows_gbi:
+    run_gbi_domiknows(program, validloader, 1000, 50, ['digits0', 'digits1'], are_both_digits_correct)
+else:
+    run_gbi(program, validloader, 1000, 50, ['digits0', 'digits1'], are_both_digits_correct)

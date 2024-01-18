@@ -1,20 +1,14 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
-from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
-from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram, LearningBasedProgram
-from domiknows.program.model.ilpu import ILPUModel
-from domiknows.program.model.iml import IMLModel
-from domiknows.program.metric import ValueTracker, MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
-from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 
 from graph import *
 
 import time
 
-from digit_label import digit_labels
 import config
 
 class Net(torch.nn.Module):
