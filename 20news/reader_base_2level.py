@@ -1,8 +1,9 @@
 import torch
-from transformers import BertTokenizer
+from transformers import BertTokenizer, RobertaTokenizer
 
 
-tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+# tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 def collate_label_set(data):
     level1 = [
         "comp.os", "comp.sys", "comp.windows", "comp.graphics", "rec.motorcycles", "rec.sport", "rec.autos", "talk.religion",

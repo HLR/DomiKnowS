@@ -25,9 +25,9 @@
             "support": 370
         },
         "talk.politics": {
-            "precision_ilp": 0.804739336492891,
-            "recall_ilp": 0.8645621181262729,
-            "f1_ilp": 0.8335787923416789,
+            "precision_ilp": 0.8076190476190476,
+            "recall_ilp": 0.8635437881873728,
+            "f1_ilp": 0.8346456692913385,
             "precision_normal": 0.7973856209150327,
             "recall_normal": 0.869653767820774,
             "f1_normal": 0.8319532391622018,
@@ -37,9 +37,9 @@
             "support": 982
         },
         "talk.religion": {
-            "precision_ilp": 0.31125827814569534,
-            "recall_ilp": 0.20434782608695654,
-            "f1_ilp": 0.24671916010498693,
+            "precision_ilp": 0.3137254901960784,
+            "recall_ilp": 0.20869565217391303,
+            "f1_ilp": 0.2506527415143603,
             "precision_normal": 0.3087248322147651,
             "recall_normal": 0.2,
             "f1_normal": 0.24274406332453827,
@@ -49,9 +49,9 @@
             "support": 230
         },
         "alt.atheism": {
-            "precision_ilp": 0.5321888412017167,
+            "precision_ilp": 0.5276595744680851,
             "recall_ilp": 0.42758620689655175,
-            "f1_ilp": 0.4741873804971319,
+            "f1_ilp": 0.47238095238095235,
             "precision_normal": 0.5321888412017167,
             "recall_normal": 0.42758620689655175,
             "f1_normal": 0.4741873804971319,
@@ -85,9 +85,9 @@
             "support": 380
         },
         "comp.os": {
-            "precision_ilp": 0.6370192307692307,
-            "recall_ilp": 0.7181571815718157,
-            "f1_ilp": 0.6751592356687899,
+            "precision_ilp": 0.6363636363636364,
+            "recall_ilp": 0.7208672086720868,
+            "f1_ilp": 0.6759847522236341,
             "precision_normal": 0.6437346437346437,
             "recall_normal": 0.7100271002710027,
             "f1_normal": 0.6752577319587629,
@@ -97,9 +97,9 @@
             "support": 369
         },
         "comp.graphics": {
-            "precision_ilp": 0.7257142857142858,
+            "precision_ilp": 0.7236467236467237,
             "recall_ilp": 0.6864864864864865,
-            "f1_ilp": 0.7055555555555556,
+            "f1_ilp": 0.7045769764216366,
             "precision_normal": 0.7277936962750716,
             "recall_normal": 0.6864864864864865,
             "f1_normal": 0.7065368567454798,
@@ -121,9 +121,9 @@
             "support": 361
         },
         "comp.sys": {
-            "precision_ilp": 0.7973333333333333,
-            "recall_ilp": 0.8136054421768707,
-            "f1_ilp": 0.8053872053872053,
+            "precision_ilp": 0.7997329773030708,
+            "recall_ilp": 0.8149659863945579,
+            "f1_ilp": 0.807277628032345,
             "precision_normal": 0.7910643889618922,
             "recall_normal": 0.819047619047619,
             "f1_normal": 0.8048128342245989,
@@ -145,9 +145,9 @@
             "support": 368
         },
         "sci.space": {
-            "precision_ilp": 0.6571428571428571,
+            "precision_ilp": 0.6584867075664622,
             "recall_ilp": 0.875,
-            "f1_ilp": 0.7505827505827506,
+            "f1_ilp": 0.751458576429405,
             "precision_normal": 0.6591375770020534,
             "recall_normal": 0.8722826086956522,
             "f1_normal": 0.7508771929824561,
@@ -157,9 +157,9 @@
             "support": 368
         },
         "sci.crypt": {
-            "precision_ilp": 0.834319526627219,
-            "recall_ilp": 0.7833333333333333,
-            "f1_ilp": 0.8080229226361032,
+            "precision_ilp": 0.8323529411764706,
+            "recall_ilp": 0.7861111111111111,
+            "f1_ilp": 0.8085714285714286,
             "precision_normal": 0.8484848484848485,
             "recall_normal": 0.7777777777777778,
             "f1_normal": 0.8115942028985507,
@@ -169,9 +169,9 @@
             "support": 360
         },
         "sci.electronics": {
-            "precision_ilp": 0.7050147492625368,
-            "recall_ilp": 0.6512261580381471,
-            "f1_ilp": 0.6770538243626062,
+            "precision_ilp": 0.7079646017699115,
+            "recall_ilp": 0.6539509536784741,
+            "f1_ilp": 0.6798866855524078,
             "precision_normal": 0.7091988130563798,
             "recall_normal": 0.6512261580381471,
             "f1_normal": 0.6789772727272727,
@@ -181,9 +181,9 @@
             "support": 367
         },
         "rec.sport": {
-            "precision_ilp": 0.9843081312410842,
-            "recall_ilp": 0.9274193548387096,
-            "f1_ilp": 0.9550173010380624,
+            "precision_ilp": 0.9856938483547926,
+            "recall_ilp": 0.9260752688172043,
+            "f1_ilp": 0.954954954954955,
             "precision_normal": 0.9829545454545454,
             "recall_normal": 0.9301075268817204,
             "f1_normal": 0.9558011049723756,
@@ -196,9 +196,9 @@
             "level_precision": 0.7793794505874019,
             "level_recall": 0.7817352899273401,
             "level_f1": 0.777976137512849,
-            "level_precision_ilp": 0.7794254398777438,
-            "level_recall_ilp": 0.7814503490525717,
-            "level_f1_ilp": 0.7779502945378824,
+            "level_precision_ilp": 0.7801005801196926,
+            "level_recall_ilp": 0.7818777603647245,
+            "level_f1_ilp": 0.7785591526839868,
             "level_precision_sequential": 0.7797970506806073,
             "level_recall_sequential": 0.7811654081778032,
             "level_f1_sequential": 0.7782472306990066,
@@ -207,9 +207,9 @@
     },
     "level2": {
         "mideast": {
-            "precision_ilp": 0.8466076696165191,
-            "recall_ilp": 0.8130311614730878,
-            "f1_ilp": 0.8294797687861272,
+            "precision_ilp": 0.8511904761904762,
+            "recall_ilp": 0.8101983002832861,
+            "f1_ilp": 0.8301886792452831,
             "precision_normal": 0.8580060422960725,
             "recall_normal": 0.8045325779036827,
             "f1_normal": 0.8304093567251462,
@@ -219,9 +219,9 @@
             "support": 353
         },
         "ibm": {
-            "precision_ilp": 0.715625,
-            "recall_ilp": 0.6122994652406417,
-            "f1_ilp": 0.659942363112392,
+            "precision_ilp": 0.7165109034267912,
+            "recall_ilp": 0.6149732620320856,
+            "f1_ilp": 0.6618705035971222,
             "precision_normal": 0.7255520504731862,
             "recall_normal": 0.6149732620320856,
             "f1_normal": 0.6657018813314037,
@@ -231,9 +231,9 @@
             "support": 374
         },
         "mac": {
-            "precision_ilp": 0.6883720930232559,
+            "precision_ilp": 0.6915887850467289,
             "recall_ilp": 0.8199445983379502,
-            "f1_ilp": 0.7484197218710493,
+            "f1_ilp": 0.7503168567807351,
             "precision_normal": 0.6973995271867612,
             "recall_normal": 0.817174515235457,
             "f1_normal": 0.7525510204081632,
@@ -243,9 +243,9 @@
             "support": 361
         },
         "guns": {
-            "precision_ilp": 0.5951807228915663,
+            "precision_ilp": 0.5980629539951574,
             "recall_ilp": 0.7329376854599406,
-            "f1_ilp": 0.6569148936170213,
+            "f1_ilp": 0.6586666666666666,
             "precision_normal": 0.6084788029925187,
             "recall_normal": 0.7240356083086054,
             "f1_normal": 0.6612466124661247,
@@ -255,9 +255,9 @@
             "support": 337
         },
         "baseball": {
-            "precision_ilp": 0.9713375796178344,
-            "recall_ilp": 0.8333333333333334,
-            "f1_ilp": 0.8970588235294117,
+            "precision_ilp": 0.9712460063897763,
+            "recall_ilp": 0.8306010928961749,
+            "f1_ilp": 0.8954344624447717,
             "precision_normal": 0.9711538461538461,
             "recall_normal": 0.8278688524590164,
             "f1_normal": 0.8938053097345133,
@@ -267,9 +267,9 @@
             "support": 366
         },
         "hockey": {
-            "precision_ilp": 0.9147286821705426,
+            "precision_ilp": 0.917098445595855,
             "recall_ilp": 0.9365079365079365,
-            "f1_ilp": 0.9254901960784312,
+            "f1_ilp": 0.9267015706806283,
             "precision_normal": 0.9194805194805195,
             "recall_normal": 0.9365079365079365,
             "f1_normal": 0.927916120576671,
@@ -294,9 +294,9 @@
             "level_precision": 0.7647474702739342,
             "level_recall": 0.7553839902478667,
             "level_f1": 0.7570071263014864,
-            "level_precision_ilp": 0.757146091997141,
-            "level_recall_ilp": 0.7594473791141813,
-            "level_f1_ilp": 0.7549986702675637,
+            "level_precision_ilp": 0.7591549709398104,
+            "level_recall_ilp": 0.7590410402275498,
+            "level_f1_ilp": 0.755856031745073,
             "level_precision_sequential": 0.7647474702739342,
             "level_recall_sequential": 0.7553839902478667,
             "level_f1_sequential": 0.7570071263014864,
@@ -307,9 +307,9 @@
         "level_precision": 0.7755810008456885,
         "level_recall": 0.7748945147679325,
         "level_f1": 0.7725325998977474,
-        "level_precision_ilp": 0.7736417399690768,
-        "level_recall_ilp": 0.7757383966244726,
-        "level_f1_ilp": 0.771992072245767,
+        "level_precision_ilp": 0.7746631176522147,
+        "level_recall_ilp": 0.7759493670886077,
+        "level_f1_ilp": 0.7726654416469966,
         "level_precision_sequential": 0.7758901923071029,
         "level_recall_sequential": 0.7744725738396626,
         "level_f1_sequential": 0.7727333175215491,

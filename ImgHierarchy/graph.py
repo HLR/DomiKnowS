@@ -3,6 +3,7 @@ import json
 import sys, os
 sys.path.append(".")
 sys.path.append("../..")
+sys.path.append("../../..")
 
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.concept import EnumConcept
@@ -55,7 +56,7 @@ Relation.clear()
 
 
 with Graph('VQA', reuse_model=True) as graph:
-    image_group = Concept(name='image_group', batch=True)
+    image_group = Concept(name='image_group')
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
 
@@ -77,12 +78,21 @@ with Graph('VQA', reuse_model=True) as graph:
                 if key in hierarchy['level1']:
                     # ifL(orL(*[level2.__getattr__(key1) for key1 in structure[key]]), level1.__getattr__(key))
                     ifL(level1.__getattr__(key), exactL(*[level2.__getattr__(key1) for key1 in structure[key]]))
+                    # child_keys = structure[key]
+                    # child_keys.add('None')
+                    # ifL(level1.__getattr__(key), exactL(*[level2.__getattr__(key1) for key1 in child_keys]))
                 elif key in hierarchy['level2']:
                     # ifL(orL(*[level3.__getattr__(key1) for key1 in structure[key]]), level2.__getattr__(key))
                     ifL(level2.__getattr__(key), exactL(*[level3.__getattr__(key1) for key1 in structure[key]]))
+                    # child_keys = structure[key]
+                    # child_keys.add('None')
+                    # ifL(level2.__getattr__(key), exactL(*[level3.__getattr__(key1) for key1 in child_keys]))
                 elif key in hierarchy['level3']:
                     # ifL(orL(*[level4.__getattr__(key1) for key1 in structure[key]]), level3.__getattr__(key))
                     ifL(level3.__getattr__(key), exactL(*[level4.__getattr__(key1) for key1 in structure[key]]))
+                    # child_keys = structure[key]
+                    # child_keys.add('None')
+                    # ifL(level3.__getattr__(key), exactL(*[level4.__getattr__(key1) for key1 in child_keys]))
             else:
                 if key in hierarchy['level1']:
                     ifL(level1.__getattr__(key), andL(level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')))

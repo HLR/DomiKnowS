@@ -5,8 +5,9 @@ from tqdm import tqdm
 import sys
 sys.path.append(".")
 sys.path.append("../..")
+sys.path.append("../../..")
 
-from domiknows.program.model_program import SolverPOIProgram
+from domiknows.program.model_program import SolverPOIProgram, InferILPVarProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.loss import NBCrossEntropyLoss
@@ -42,27 +43,42 @@ def main(device):
     f = open(f"{prefix}logger.txt", "w")
 
     program = SolverPOIProgram(graph, inferTypes=[
-        #'ILP', 
+        'ILP', 
         'local/argmax'],
+        # probKey = ("local" , "normalizedProbAcc"),
         # probKey = ("local" , "normalizedProb"),
         # probAcc = {'level1': 0.5673, 'level2': 0.5445, 'level3': 0.4342, 'level4': 0.1768},
         poi = (image_group, image, level1, level2, level3, level4),
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric={
-                #'ILP': PRF1Tracker(DatanodeCMMetric()),
+                'ILP': PRF1Tracker(DatanodeCMMetric()),
                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
+    
+    program = InferILPVarProgram(graph, inferTypes=[
+        'ILP', 
+        'local/argmax'],
+        # probKey = ("local" , "normalizedProbAcc"),
+        # probKey = ("local" , "normalizedProb"),
+        # probAcc = {'level1': 0.5673, 'level2': 0.5445, 'level3': 0.4342, 'level4': 0.1768},
+        poi = (image_group, image, level1, level2, level3, level4),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+            metric={
+                'ILP': PRF1Tracker(DatanodeCMMetric()),
+                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
+    
     return program
 
 if __name__ == '__main__':
     from domiknows.utils import setProductionLogMode, getRegrTimer_logger
+    import logging
+    logging.basicConfig(level=logging.INFO)
+
     productionMode = True
     if productionMode:
-        setProductionLogMode(no_UseTimeLog=False)
+        setProductionLogMode(no_UseTimeLog=True)
     myLoggerTime = getRegrTimer_logger()
     from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
-    import logging
-    logging.basicConfig(level=logging.INFO)
 
     from torch.utils.data import Dataset, DataLoader
     from reader import VQADataset
@@ -79,9 +95,9 @@ if __name__ == '__main__':
 
     # change data size
     dataset = VQADataset(data, prefix=prefix)
-    # dataset = torch.utils.data.Subset(dataset, [i for i in range(2000)])
+    # dataset = torch.utils.data.Subset(dataset, [i for i in range(50)])
     # change batch size
-    batch_size=500
+    batch_size=250
     print(f'batch_size = {batch_size}')
     myLoggerTime.info(f'batch_size = {batch_size}')
     myLoggerTime.info(f'batch_size = {batch_size}')
@@ -91,7 +107,7 @@ if __name__ == '__main__':
     myLoggerTime.info(f"elapsed time for dataloader {end - start}")
     
     # test_reader = VQAReader('val.npy', 'npy')
-    device = 'cuda:1'
+    device = 'cpu'
     if torch.cuda.is_available():
     # Check if 'cuda:1' is available
         if torch.cuda.device_count() > 1:
@@ -109,6 +125,9 @@ if __name__ == '__main__':
         device = 'cpu'
         
     program = main(device)
+
+    # for datanode in tqdm(program.populate(dataloader, device=device)):
+    #     pass
 
     # program.test(dataloader, device=device)
     # program.test(list(iter(dataloader))[:40], device=device)
@@ -176,8 +195,8 @@ if __name__ == '__main__':
         print(f'inferTypes = {program.kwargs["inferTypes"]}')
         myLoggerTime.info(f'inferTypes = {program.kwargs["inferTypes"]}')
         
-    calculate_sequential = False
-    run_metrics = False
+    calculate_sequential = True
+    run_metrics = True
 
     ### load hierarchy_flat.json and reverse its order
     with open(f'{prefix}hierarchy_flat.json') as f:
@@ -193,17 +212,23 @@ if __name__ == '__main__':
                 reverse_flat_hierarchy[_level][val] = key
     from tqdm import tqdm
 
-    run_consistent_metric = False
+    run_consistent_metric = True
     consistent_all = 0
     consistent_positive = 0
     consistent_positive_ilp = 0
+    # all_trues = []
+    # all_preds = []
     if run_consistent_metric:
         for datanode in tqdm(program.populate(dataloader, device=device)):
+            # print("here we go!")
             for child in datanode.getChildDataNodes('image'):
-                consistent_all += 4
+                # consistent_all += 4
                 consistent_labels = []
                 consistent_preds = []
                 consistent_preds_ilp = []
+                # consistent_labels_n = []
+                # consistent_preds_n = []
+                # consistent_preds_ilp_n = []
                 for _concept in [level1, level2, level3, level4]:
                     label = child.getAttribute(_concept.name, 'label').item()
                     label_class = _concept.enum[label]
@@ -215,8 +240,14 @@ if __name__ == '__main__':
                     pred_ilp_class = _concept.enum[pred_ilp]
 
                     consistent_labels.append(label_class)
+                    # consistent_labels_n.append(label)
                     consistent_preds.append(pred_class)
+                    # consistent_preds_n.append(pred)
                     consistent_preds_ilp.append(pred_ilp_class)
+                    # consistent_preds_ilp_n.append(pred_ilp)
+                # all_trues.append(consistent_labels_n)
+                # all_preds.append(consistent_preds_n)
+                consistent_all += len(consistent_labels)
                 if consistent_labels == consistent_preds:
                     consistent_positive += len(consistent_labels)
                 else:
@@ -224,6 +255,7 @@ if __name__ == '__main__':
                     while i > 0:
                         if consistent_labels[:i] == consistent_preds[:i]:
                             consistent_positive += i
+                            break
                         i = i - 1
                 if consistent_labels == consistent_preds_ilp:
                     consistent_positive_ilp += len(consistent_labels)
@@ -232,6 +264,7 @@ if __name__ == '__main__':
                     while i > 0:
                         if consistent_labels[:i] == consistent_preds_ilp[:i]:
                             consistent_positive_ilp += i
+                            break
                         i = i - 1
         print(f"consistent accuracy: {consistent_positive/consistent_all}")
         print(f"consistent ILP accuracy: {consistent_positive_ilp/consistent_all}")

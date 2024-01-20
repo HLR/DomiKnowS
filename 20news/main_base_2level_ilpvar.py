@@ -9,11 +9,11 @@ sys.path.append("../..")
 
 from transformers import AutoTokenizer, BertModel, RobertaModel
 
-from domiknows.program.model_program import SolverPOIProgram
+from domiknows.program.model_program import SolverPOIProgram, InferILPVarProgram
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 
 
 
@@ -114,7 +114,17 @@ def main(device, seed):
             metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-    return program
+    
+    program1 = InferILPVarProgram(graph, inferTypes=[
+        'ILP', 
+        'local/argmax'],
+        poi = (news_group, news, level1, level2),
+        loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0)),
+            metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    
+    return program, program1
 
 if __name__ == '__main__':
     import random
@@ -168,9 +178,9 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset['train'], batch_size=24, collate_fn=collate_label_set)
     test_loader = DataLoader(dataset['test'], batch_size=200, collate_fn=collate_label_set)
 
-    device = 'cuda:2'
-    program = main(device, seed)
-    # program.train(dataloader, train_epoch_num=10, Optim=lambda param: torch.optim.AdamW(param, lr=1e-5), device=device)
+    device = 'cuda:1'
+    program, program1 = main(device, seed)
+    program1.train(dataloader, train_epoch_num=2, Optim=lambda param: torch.optim.AdamW(param, lr=1e-5), device=device)
 
     # program.test(test_loader, device=device)
     # program.test(list(iter(dataloader))[:40], device=device)
@@ -308,7 +318,7 @@ if __name__ == '__main__':
     # print(consistent_positive / consistent_total)
     # print(consistent_positive_ilp / consistent_total)
 
-    for datanode in tqdm(program.populate(test_loader, device=device)):
+    for datanode in tqdm(program1.populate(test_loader, device=device)):
         for child in datanode.getChildDataNodes('news'):
             consistent_total += 1
             for _concept in [level1, level2]:
