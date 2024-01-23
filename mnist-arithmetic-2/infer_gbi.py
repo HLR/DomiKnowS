@@ -358,7 +358,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     return unsat_initial
 
 
-def run_gbi_domiknows(program, dataloader, data_iters, is_correct):
+def run_gbi_domiknows(program, dataloader, data_iters, is_correct, save_interval=100, output_folder='gbi_checkpoints'):
     """
     Runs the domiknows implementation of gradient-based inference on program. Prints pre- and post- accuracy/constraint violations.
     data_iters: number of datapoints to test in validloader
@@ -411,6 +411,14 @@ def run_gbi_domiknows(program, dataloader, data_iters, is_correct):
             incorrect_after += 1
         else:
             print('CORRECT')
+        
+        # save at interval
+        if args.training and i % save_interval == 0:
+            params_filename = f'n{i}_gbiiters{args.gbi_iters}_lr{args.lr}_reg{args.reg_weight}.pth'
+            torch.save(program.model.state_dict(), f'{output_folder}/{params_filename}')
+
+    params_filename = f'n{i}_gbiiters{args.gbi_iters}_lr{args.lr}_reg{args.reg_weight}.pth'
+    torch.save(program.model.state_dict(), f'{output_folder}/{params_filename}')
 
     print('num samples: %d' % total)
     print('initial incorrect: %.2f' % (incorrect_initial / total))
@@ -424,6 +432,3 @@ if args.pytorch_gbi:
     run_gbi(program, validloader, args.num_samples, args.gbi_iters, ['digits0', 'digits1'], are_both_digits_correct)
 else:
     run_gbi_domiknows(program, validloader, args.num_samples, are_both_digits_correct)
-
-if args.training:
-    torch.save(program.model.state_dict(), f'gbi_model_{args.num_samples}.pth')

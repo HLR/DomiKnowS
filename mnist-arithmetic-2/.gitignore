@@ -4,3 +4,4 @@ checkpoints/*
 /checkpoints/
 __pycache__
 __pycache__/*
+gbi_checkpoints/*
