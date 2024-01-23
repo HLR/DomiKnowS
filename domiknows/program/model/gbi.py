@@ -22,7 +22,7 @@ class GBIModel(torch.nn.Module):
             gbi_iters = 50,
             lr=1e-1,
             reg_weight=1,
-            reset_params=False,
+            reset_params=True,
             device='auto'
         ):
         '''
