@@ -355,7 +355,7 @@ class PoiModel(TorchModel):
         return loss, metric
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with = None, probKey = ("local" , "softmax"), device='auto', probAcc=None, ignore_modules=False):
+    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with = None, probKey = ("local" , "softmax"), device='auto', probAcc=None, ignore_modules=False, kwargs = None):
         """
         The function initializes an object with various parameters for graph-based inference.
         
@@ -405,6 +405,7 @@ class SolverModel(PoiModel):
             
         self.probKey = probKey
         self.probAcc = probAcc
+        self.kwargs = kwargs
 
     def inference(self, builder):
         """
@@ -447,7 +448,7 @@ class SolverModel(PoiModel):
                     'argmax': lambda :datanode.infer(),
                     'softmax': lambda :datanode.infer(),
                     'ILP': lambda :datanode.inferILPResults(*self.inference_with, key=self.probKey, fun=None, epsilon=None, Acc=self.probAcc),
-                    'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self),
+                    'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self, kwargs = self.kwargs),
                 }[infertype]()
                 # sub_end = time.time()
                 # print("Time taken for inference of type ", infertype, " : ", sub_end-sub_start)
