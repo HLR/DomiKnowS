@@ -209,7 +209,7 @@ if args.domiknows_gbi:
         graph,
         SolverModel,
         poi=(image_batch, image, image_pair),
-        inferTypes=['local/argmax', 'local/softmax'],
+        inferTypes=['local/argmax', 'local/softmax', 'GBI'],
         metric={},
         gbi_iters=100
     )
