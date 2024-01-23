@@ -30,9 +30,16 @@ setDnSkeletonMode(True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', default=False, action='store_true', help='Enable CUDA')
-parser.add_argument('--domiknows-gbi', default=True, action='store_true', help='Use the DomiKnowS implementation of GBI.')
+parser.add_argument('--pytorch-gbi', default=False, action='store_true', help='Use the Pytorch implementation of GBI')
 parser.add_argument('--num-samples', default=1000, type=int, help='Number of samples to do inference on.')
-parser.add_argument('--save', default=False, action='store_true', help='Save checkpoint at the end of GBI')
+
+# gbi hyperparameters
+parser.add_argument('--gbi-iters', default=100, type=int, help='Number of GBI iterations')
+parser.add_argument('--lr', default=1e-1, type=float, help='Learning rate for GBI')
+parser.add_argument('--reg-weight', default=1, type=float, help='Weight for regularization loss')
+
+# enable training mode
+parser.add_argument('--training', default=False, action='store_true', help='Use GBI to update model parameters. Will output a trained checkpoint file.')
 
 args = parser.parse_args()
 
@@ -199,27 +206,25 @@ def get_pred_from_node(node, suffix):
 
 graph, image, image_pair, image_batch = build_program(device=device, test=True)
 
-if args.domiknows_gbi:
-    # program = SolverPOIProgram(graph,
-    #                         poi=(image_batch, image, image_pair),
-    #                         inferTypes=['local/argmax', 'local/softmax', 'GBI'],
-    #                         metric={})
+if args.pytorch_gbi:
+    program = SolverPOIProgram(
+        graph,
+        poi=(image_batch, image, image_pair),
+        inferTypes=['local/argmax', 'local/softmax'],
+        metric={}
+    )
 
+else:
     program = GBIProgram(
         graph,
         SolverModel,
         poi=(image_batch, image, image_pair),
         inferTypes=['local/argmax', 'local/softmax', 'GBI'],
         metric={},
-        gbi_iters=100
-    )
-
-else:
-    program = SolverPOIProgram(
-        graph,
-        poi=(image_batch, image, image_pair),
-        inferTypes=['local/argmax', 'local/softmax'],
-        metric={}
+        gbi_iters=args.gbi_iters,
+        lr=args.lr,
+        reg_weight=args.reg_weight,
+        reset_params=(not args.training)
     )
 
 # load model.pth
@@ -358,7 +363,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
         print('Starting GBI:')
 
         # -- Make copy of original model
-        model_l, c_opt = get_lambda(model, lr=1e-1)
+        model_l, c_opt = get_lambda(model, lr=args.lr)
         
         # -- model_l is the model that gets optimized by GBI
         model_l.mode(Mode.TRAIN)
@@ -410,7 +415,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
 
             #  -- Constraint loss: NLL * binary satisfaction + regularization loss
             # reg loss is calculated based on L2 distance of weights between optimized model and original weights
-            c_loss = log_probs * (1 - is_satisifed) + reg_loss(model_l, model)
+            c_loss = log_probs * (1 - is_satisifed) + args.reg_weight * reg_loss(model_l, model)
 
             print("iter=%d, c_loss=%.4f, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
 
@@ -459,7 +464,7 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     return unsat_initial
 
 
-def run_gbi_domiknows(program, dataloader, data_iters, gbi_iters, label_names, is_correct):
+def run_gbi_domiknows(program, dataloader, data_iters, is_correct):
     """
     Runs the domiknows implementation of gradient-based inference on program. Prints pre- and post- accuracy/constraint violations.
     data_iters: number of datapoints to test in validloader
@@ -521,10 +526,10 @@ def run_gbi_domiknows(program, dataloader, data_iters, gbi_iters, label_names, i
 
     return unsat_initial
 
-if args.domiknows_gbi:
-    run_gbi_domiknows(program, validloader, args.num_samples, 50, ['digits0', 'digits1'], are_both_digits_correct)
+if args.pytorch_gbi:
+    run_gbi(program, validloader, args.num_samples, args.gbi_iters, ['digits0', 'digits1'], are_both_digits_correct)
 else:
-    run_gbi(program, validloader, args.num_samples, 50, ['digits0', 'digits1'], are_both_digits_correct)
+    run_gbi_domiknows(program, validloader, args.num_samples, are_both_digits_correct)
 
-if args.save:
+if args.training:
     torch.save(program.model.state_dict(), f'gbi_model_{args.num_samples}.pth')
