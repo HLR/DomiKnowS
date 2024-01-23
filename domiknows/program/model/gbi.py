@@ -32,8 +32,6 @@ class GBIModel(torch.nn.Module):
         reset_params: Reset parameters after each iteration
         '''
 
-        print(gbi_iters, lr, reg_weight, reset_params)
-
         super().__init__()
         
         if solver_model is None:
