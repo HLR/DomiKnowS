@@ -104,12 +104,12 @@ class SumBalanceDataset:
         }
 
 
-def make_sum(samples, eval=False):
+def make_sum(samples, do_eval=False):
     return {
         'pixels': torch.stack(tuple(map(lambda s: s[0], samples)), dim=0),
         'summation': torch.tensor([[sum(map(lambda s: s[1], samples))]]),
-        'digit': [samples[0][1], samples[1][1]],
-        'eval': eval
+        'digit': torch.tensor([samples[0][1], samples[1][1]]),
+        'eval': torch.tensor(do_eval)
     }
 
 
@@ -154,14 +154,14 @@ def get_readers(num_train):
         sampler=valid_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=lambda x: make_sum(x, eval=True)
+        collate_fn=lambda x: make_sum(x, do_eval=True)
         )
     testloader = DataLoader(
         testset,
         sampler=test_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=lambda x: make_sum(x, eval=True)
+        collate_fn=lambda x: make_sum(x, do_eval=True)
         )
 
     return trainloader, trainloader_mini, validloader, testloader

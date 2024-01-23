@@ -24,7 +24,7 @@ from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLos
 import config
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'], help='Method of integrating constraints')
+parser.add_argument('--model_name', type=str, choices=['GBI', 'Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'], help='Method of integrating constraints')
 parser.add_argument('--num_train', type=int, default=10000, help='Number of training iterations per epoch')
 parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'], help='None: no logs, TimeOnly: only output timing logs, All: output all logs. Logs will be found in the logs directory.')
 parser.add_argument('--cuda', default=False, action='store_true', help='Enable CUDA for training')
@@ -212,6 +212,26 @@ elif model_name in ['DigitLabel', 'Explicit', 'Baseline']:
                               loss=MacroAverageTracker(NBCrossEntropyLoss()),
                               metric={})
 
+elif model_name == 'GBI':
+    class CallbackProgram(SolverPOIProgram):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.after_train_epoch = []
+
+        def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+            if name == 'Testing':
+                for fn in self.after_train_epoch:
+                    fn(kwargs)
+            else:
+                super().call_epoch(name, dataset, epoch_fn, **kwargs)
+
+
+    program = CallbackProgram(graph,
+                              poi=(image_batch, image, image_pair),
+                              inferTypes=['local/argmax', 'GBI'],
+                              loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                              metric={})
+
 '''class Program(CallbackProgram, IMLProgram):
     pass
 
@@ -356,6 +376,18 @@ elif model_name == 'Baseline' and num_train == 500:
                   device=device,
                   test_every_epoch=True)
 
+elif model_name == 'GBI':
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.0005)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True,
+                  c_warmup_iters=0)
 
 #optim = program.model.params()
 

@@ -8,9 +8,11 @@ logging.basicConfig(level=logging.INFO)
 
 from data import get_readers
 import torch
-from domiknows.program import SolverPOIProgram
+from domiknows.program import SolverPOIProgram, GBIProgram
 from domiknows import setProductionLogMode
 from domiknows.program.model.base import Mode
+from domiknows.program.model_program import SolverModel
+from domiknows.program.lossprogram import LossProgram
 from domiknows.utils import detuple
 import torch.nn.functional as F
 import argparse
@@ -28,7 +30,9 @@ setDnSkeletonMode(True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', default=False, action='store_true', help='Enable CUDA')
-parser.add_argument('--domiknows-gbi', default=False, action='store_true', help='Use the DomiKnowS implementation of GBI.')
+parser.add_argument('--domiknows-gbi', default=True, action='store_true', help='Use the DomiKnowS implementation of GBI.')
+parser.add_argument('--num-samples', default=1000, type=int, help='Number of samples to do inference on.')
+parser.add_argument('--save', default=False, action='store_true', help='Save checkpoint at the end of GBI')
 
 args = parser.parse_args()
 
@@ -36,7 +40,7 @@ device = 'cuda' if args.cuda else 'cpu'
 
 setProductionLogMode()
 
-trainloader, trainloader_mini, validloader, testloader = get_readers(config.num_train)
+trainloader, trainloader_mini, validloader, testloader = get_readers(args.num_samples)
 
 
 def get_pred_from_node(node, suffix):
@@ -195,17 +199,32 @@ def get_pred_from_node(node, suffix):
 
 graph, image, image_pair, image_batch = build_program(device=device, test=True)
 
-infer_types = ['local/argmax', 'local/softmax']
 if args.domiknows_gbi:
-    infer_types.append('GBI')
+    # program = SolverPOIProgram(graph,
+    #                         poi=(image_batch, image, image_pair),
+    #                         inferTypes=['local/argmax', 'local/softmax', 'GBI'],
+    #                         metric={})
 
-program = SolverPOIProgram(graph,
-                           poi=(image_batch, image, image_pair),
-                           inferTypes=infer_types,
-                           metric={})
+    program = GBIProgram(
+        graph,
+        SolverModel,
+        poi=(image_batch, image, image_pair),
+        inferTypes=['local/argmax', 'local/softmax'],
+        metric={},
+        gbi_iters=100
+    )
+
+else:
+    program = SolverPOIProgram(
+        graph,
+        poi=(image_batch, image, image_pair),
+        inferTypes=['local/argmax', 'local/softmax'],
+        metric={}
+    )
 
 # load model.pth
 model_path = 'checkpoints/primaldual_500.pth'
+# model_path = 'gbi_model_100.pth'
 
 state_dict = torch.load(model_path)
 
@@ -300,7 +319,10 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     incorrect_after = 0
     unsatisfied_after = 0
 
-    for data_iter, data_item in enumerate(dataloader):
+    for data_iter, data_item in enumerate(dataloader, total=min(len(dataloader), data_iters)):
+        if data_iter >= data_iters:
+            break
+
         total += 1
 
         # end early based on number of test samples
@@ -456,7 +478,10 @@ def run_gbi_domiknows(program, dataloader, data_iters, gbi_iters, label_names, i
     incorrect_after = 0
     unsatisfied_after = 0
     
-    for i, dataitem in enumerate(tqdm(dataloader, total=data_iters)):
+    for i, dataitem in enumerate(tqdm(dataloader, total=min(len(dataloader), data_iters))):
+        if i >= data_iters:
+            break
+
         total += 1
 
         node = program.populate_one(dataitem, grad = True)
@@ -497,6 +522,9 @@ def run_gbi_domiknows(program, dataloader, data_iters, gbi_iters, label_names, i
     return unsat_initial
 
 if args.domiknows_gbi:
-    run_gbi_domiknows(program, validloader, 1000, 50, ['digits0', 'digits1'], are_both_digits_correct)
+    run_gbi_domiknows(program, validloader, args.num_samples, 50, ['digits0', 'digits1'], are_both_digits_correct)
 else:
-    run_gbi(program, validloader, 1000, 50, ['digits0', 'digits1'], are_both_digits_correct)
+    run_gbi(program, validloader, args.num_samples, 50, ['digits0', 'digits1'], are_both_digits_correct)
+
+if args.save:
+    torch.save(program.model.state_dict(), f'gbi_model_{args.num_samples}.pth')
