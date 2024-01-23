@@ -41,3 +41,8 @@ More command line arguments for `train.py` and `test.py` can be found with the `
 | ExplicitSum + ILP | +89.54% | +84.61% | -% |
 | ExplicitSum | +89.54% | +84.61% | 2.88% |
 | Supervised | +89.53% | +84.30% | 2.86% |
+
+## GBI
+Run `python infer_gbi.py` to use GBI to satisfy constraints during inference. Use the `--training` flag to retain the tuned-parameters after each example, and to save the checkpoints.
+
+The `--gbi-iters`, `--lr`, `--reg-weight` flags can be used to change the number of iterations to run GBI for, the size of the gradient steps, and the strength of regularization. `gbi_training_sweep.py` runs every combination of these parameters with the `--training` flag.
