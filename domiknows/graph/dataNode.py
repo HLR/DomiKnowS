@@ -1812,7 +1812,7 @@ class DataNode:
             
         self.myLoggerTime.info('')
             
-    def inferGBIResults(self, *_conceptsRelations, model):
+    def inferGBIResults(self, *_conceptsRelations, model, kwargs):
         """
         Infer Grounded Belief Inference (GBI) results based on given concepts and relations.
         
@@ -1841,7 +1841,16 @@ class DataNode:
         _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
 
         from domiknows.program.model.gbi import GBIModel
-        myGBIModel = GBIModel(self.graph, solver_model=model)
+        from inspect import signature
+        cmodelSignature = signature(GBIModel.__init__)
+        
+        cmodelKwargs = {}
+        for param in cmodelSignature.parameters.values():
+            paramName = param.name
+            if paramName in kwargs:
+                cmodelKwargs[paramName] = kwargs[paramName]
+        
+        myGBIModel = GBIModel(self.graph, solver_model=model, **cmodelKwargs)
         myGBIModel.calculateGBISelection(self, _conceptsRelations)
     
     def verifyResultsLC(self, key = "/local/argmax"):

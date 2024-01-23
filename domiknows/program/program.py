@@ -187,6 +187,8 @@ class LearningBasedProgram():
             paramName = param.name
             if paramName in kwargs:
                 self.modelKwargs[paramName] = kwargs[paramName]
+            if paramName == "kwargs":
+                self.modelKwargs[paramName] = kwargs
                 
         self.model = Model(graph, **self.modelKwargs)
         self.opt = None
