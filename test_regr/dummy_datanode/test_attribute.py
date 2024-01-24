@@ -24,3 +24,6 @@ ac_, t_ = 0, 0
 
 datanode=createDummyDataNode(graph)
 print(datanode.getAttribute(a))
+datanode.inferILPResults()
+verifyResult = datanode.verifyResultsLC()
+verifyResultILP = datanode.verifyResultsLC()
