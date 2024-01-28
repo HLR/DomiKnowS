@@ -1,4 +1,4 @@
-from domiknows.graph.dataNodeDummy import createDummyDataNode
+from domiknows.graph.dataNodeDummy import createDummyDataNode, satisfactionReportOfConstraints
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import nandL, orL, andL, existsL, notL, atLeastL, atMostL, ifL
 from domiknows.graph.relation import disjoint
@@ -27,3 +27,5 @@ print(datanode.getAttribute(a))
 datanode.inferILPResults()
 verifyResult = datanode.verifyResultsLC()
 verifyResultILP = datanode.verifyResultsLC()
+
+report = satisfactionReportOfConstraints(datanode)

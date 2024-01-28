@@ -1577,7 +1577,7 @@ class DataNode:
                             v = v.float()
                             
                         vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
-                        dn.attributes[keySoftmax] = vSoftmaxT
+                        dn.attributes[keySoftmax] = vSoftmaxT.squeeze(0)
                 
                 if "normalizedProb" in keys:
                     keyNormalizedProb = "<" + c[0].name + ">/local/normalizedProb"
@@ -1720,7 +1720,7 @@ class DataNode:
                     keyArgmax  = "<" + c[0].name + ">/local/argmax"
                     if not dn.hasAttribute(keyArgmax):
                         v = dn.getAttribute(c[0])
-                        vArgmax = torch.zeros(v.shape)
+                        vArgmax = torch.zeros(v.shape).squeeze(0)
                         vArgmaxCalculated = torch.argmax(v, keepdim=True)
                         vArgmaxIndex = torch.argmax(v).item()
                         vArgmax[vArgmaxIndex] = 1
@@ -1874,7 +1874,8 @@ class DataNode:
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         # Check if full data node is created and create it if not
-        self.myBuilder.createFullDataNode(self)
+        if self.myBuilder != None:
+            self.myBuilder.createFullDataNode(self)
         
         if "local" in key:
             self.inferLocal(keys=[key])            
