@@ -25,12 +25,18 @@ class GBIModel(torch.nn.Module):
             reset_params=True,
             device='auto'
         ):
-        '''
-        gbi_iters: Maximum number of updates for GBI
-        lr: Learning rate for GBI updates
-        reg_weight: Coefficient for weighting regularization loss
-        reset_params: Reset parameters after each iteration
-        '''
+        """
+        This class specifies a model that uses gradient-based inference (GBI) for each inference step.
+        
+        :param graph: The `graph` parameter is an object that represents the logical constraints of a
+        graph. It contains information about the nodes, edges, and constraints of the graph
+        :param solver_model: Underlying model to perform GBI on. (Optional)
+        :param gbi_iters: The maximum number of gradient update steps to perform. GBI will exit early if all constraints are specified. Defaults to 50. (Optional)
+        :param lr: The step size of each update step. Defaults to 1e-1. (Optional)
+        :param reg_weight: The weight of the regularization loss. Increasing this value will result in parameter updates that are closer to the original, unoptimized parameters. Defaults to 1. (Optional)
+        :param reset_params: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN` or the constraints aren't satisfied after `gbi_iters` updates. Set this to `True` if GBI is to only be used during inference. Defaults to `True`. (Optional)
+        :param device: The device to use for GBI updates. Defaults to 'auto'. (Optional)
+        """
 
         super().__init__()
         
