@@ -280,8 +280,9 @@ class GBIModel(torch.nn.Module):
         
         # reset model parameters
         self.server_model.zero_grad()
-        if self.reset_params:
-            self.set_pretrained(self.server_model, reload_parameters)
+
+        # reset parameters regardless of self.reset_params flag because constraints aren't satisfied
+        self.set_pretrained(self.server_model, reload_parameters)
 
         print(f'Finishing GBI - Constraints not are satisfied after {self.gbi_iters} iteration')
         return c_loss, node_l, node_l.myBuilder
