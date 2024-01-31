@@ -96,13 +96,62 @@ Here instead of `POImodel` we use `SolverModel`.
 
 ### GBI [[3]](#3)
 
-GBI model can also be easily defined by:
+#### Overview
+Gradient-based inference (GBI) [[3]](#3) performs gradient steps to optimize over some black-box function. In DomiKnowS, the function being optimized is the number of constraint violations.
 
+For each example, GBI will optimize the following loss:
 ```python
-prgram = GBIProgram( graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],loss=..., metric=...)
-            
+log_probs * (num_constraint_violations / total_constraints) + reg_strength * regularization_loss
 ```
 
+Here, `log_probs` refers to the mean log probabilities over all the outputs of the model, and `regularization_loss` refers to the L2 distance between the original (frozen) parameters and the new parameters. `reg_strength` is a hyperparameter that controls how much GBI should stray from the original parameters.
+
+GBIModel is defined in `domiknows.model.gbi`. Several hyperparameters can be specified at initialization:
+
+* **gbi_iters**: The maximum number of gradient update steps to perform. GBI will exit early if all constraints are specified.
+* **lr**: The step size of each update step.
+* **reg_weight**: The regularization strength, as described previously.
+* **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN`. **During training, this should be set to `False`.**
+
+#### GBI for training
+Normally GBI is used only during inference. Here, GBI is adapted for training by simply omitting the final parameter reset at the end of each inference step. *Because of this, the workflow for using GBI during training will be similar to the workflow for using GBI for inference-only.*
+
+#### Usage
+In DomiKnowS, GBI can be used in a similar way as ILP. For example, instead of calling `inferILPResults` the user can invoke `inferGBIResults`. The user can also add `GBI` to the `inferTypes` parameter. **Importantly, to use GBI for training, the user should specify `reset_params=False`.** For example:
+
+```python
+program = SolverPOIProgram(
+    graph,
+    poi=(image_batch, image, image_pair),
+    inferTypes=['local/argmax', 'local/softmax', 'GBI'],
+    reset_params=False
+)
+```
+
+When populating the program, make sure to set `grad=True` as GBI requires gradients to perform updates. For example:
+```python
+node = program.populate_one(dataitem, grad=True)
+```
+
+Parameters for `GBIModel` can be specified when initializing the program. For example:
+```python
+program = SolverPOIProgram(
+    graph,
+    poi=(image_batch, image, image_pair),
+    inferTypes=['local/argmax', 'local/softmax', 'GBI'],
+    gbi_iters=100,
+    lr=1e-1,
+    reg_weight=1.5,
+    reset_params=False
+)
+```
+
+The training loop can then be specified as:
+```python
+for dataitem in dataloader:
+    node = program.populate_one(dataitem, grad=True)
+    node.inferLocal()
+```
 
 ## References
 

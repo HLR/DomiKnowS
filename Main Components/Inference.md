@@ -196,9 +196,53 @@ ILP metrics people {'TP': tensor(1.), 'FP': tensor(1.), 'TN': tensor(0.), 'FN': 
 ```
 
 ## GBI
+### Overview
+Gradient-based inference (GBI) [1] performs gradient steps to optimize over some black-box function. In DomiKnowS, the function being optimized is the number of constraint violations.
 
-GBI inference [1] tool is used in a similar manner to ILP. There is an equivalent method to ILP methods for GBI for example instead of `inferILPResults` user can invoke `inferGBIResults`. This method of GBI utilization is different from using GBI during traning and it's only used during inference time.
+For each example, GBI will optimize the following loss:
+```python
+log_probs * (num_constraint_violations / total_constraints) + reg_strength * regularization_loss
+```
 
+Here, `log_probs` refers to the mean log probabilities over all the outputs of the model, and `regularization_loss` refers to the L2 distance between the original (frozen) parameters and the new parameters. `reg_strength` is a hyperparameter that controls how much GBI should stray from the original parameters.
+
+GBIModel is defined in `domiknows.model.gbi`. Several hyperparameters can be specified at initialization:
+
+* **gbi_iters**: The maximum number of gradient update steps to perform. GBI will exit early if all constraints are specified.
+* **lr**: The step size of each update step.
+* **reg_weight**: The regularization strength, as described previously.
+* **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN`. **During inference, this should be set to `True`.** The default value for this parameter is `True`.
+
+### Usage
+In DomiKnowS, GBI can be used in a similar way as ILP. For example, instead of calling `inferILPResults` the user can invoke `inferGBIResults`. The user can also add `GBI` to the `inferTypes` parameter. For example:
+
+```python
+program = SolverPOIProgram(
+    graph,
+    poi=(image_batch, image, image_pair),
+    inferTypes=['local/argmax', 'local/softmax', 'GBI']
+)
+```
+
+When populating the program, make sure to set `grad=True` as GBI requires gradients to perform updates. For example:
+```python
+node = program.populate_one(dataitem, grad=True)
+```
+
+Parameters for `GBIModel` can be specified when initializing the program. For example:
+```python
+program = SolverPOIProgram(
+    graph,
+    poi=(image_batch, image, image_pair),
+    inferTypes=['local/argmax', 'local/softmax', 'GBI'],
+    gbi_iters=100,
+    lr=1e-1,
+    reg_weight=1.5,
+    reset_params=True
+)
+```
+
+Here, by setting `reset_params=True` (which is also the default), GBI will be used for inference only, as the parameters are reset after each iteration.
 
 [1] "Gradient-Based Inference for Networks with Output Constraints" Jay Yoon Lee et. al
 
