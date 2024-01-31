@@ -211,7 +211,7 @@ GBIModel is defined in `domiknows.model.gbi`. Several hyperparameters can be spe
 * **gbi_iters**: The maximum number of gradient update steps to perform. GBI will exit early if all constraints are specified.
 * **lr**: The step size of each update step.
 * **reg_weight**: The regularization strength, as described previously.
-* **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN`. **During inference, this should be set to `True`.** The default value for this parameter is `True`.
+* **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN` or the constraints aren't satisfied after `gbi_iters` updates. **During inference, this should be set to `True`.** The default value for this parameter is `True`.
 
 ### Usage
 In DomiKnowS, GBI can be used in a similar way as ILP. For example, instead of calling `inferILPResults` the user can invoke `inferGBIResults`. The user can also add `GBI` to the `inferTypes` parameter. For example:

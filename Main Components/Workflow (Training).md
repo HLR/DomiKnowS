@@ -111,10 +111,10 @@ GBIModel is defined in `domiknows.model.gbi`. Several hyperparameters can be spe
 * **gbi_iters**: The maximum number of gradient update steps to perform. GBI will exit early if all constraints are specified.
 * **lr**: The step size of each update step.
 * **reg_weight**: The regularization strength, as described previously.
-* **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN`. **During training, this should be set to `False`.**
+* **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN` or the constraints aren't satisfied after `gbi_iters` updates. **During training, this should be set to `False`.**
 
 #### GBI for training
-Normally GBI is used only during inference. Here, GBI is adapted for training by simply omitting the final parameter reset at the end of each inference step. *Because of this, the workflow for using GBI during training will be similar to the workflow for using GBI for inference-only.*
+Normally GBI is used only during inference. Here, GBI is adapted for training by simply omitting the final parameter reset at the end of certain inference steps. *Because of this, the workflow for using GBI during training will be similar to the workflow for using GBI for inference-only.*
 
 #### Usage
 In DomiKnowS, GBI can be used in a similar way as ILP. For example, instead of calling `inferILPResults` the user can invoke `inferGBIResults`. The user can also add `GBI` to the `inferTypes` parameter. **Importantly, to use GBI for training, the user should specify `reset_params=False`.** For example:
