@@ -2090,7 +2090,7 @@ class DataNode:
             # Calculate confusion matrix
             try:
                 if isMulticlass:
-                    cm = metrics.confusion_matrix(labels, preds)
+                    cm = metrics.confusion_matrix(labels, preds, labels=labelsList)
                 elif isMulticlassLabel:
                     cm = metrics.multilabel_confusion_matrix(labels, preds, labels=labelsList)
                     cm = cm[cr[2]]
