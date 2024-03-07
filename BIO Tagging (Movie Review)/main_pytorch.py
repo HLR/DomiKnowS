@@ -3,6 +3,7 @@ from transformers import T5ForConditionalGeneration, AdamW
 from transformers import T5Tokenizer
 import torch
 from torch.nn import CrossEntropyLoss
+from model import PytorchFilteredT5Model
 model_name='t5-small'
 tokenizer = T5Tokenizer.from_pretrained(model_name)
 new_tokens = ['<B>', '<I>', '<O>']
@@ -10,8 +11,7 @@ tokenizer.add_tokens(new_tokens)
 train_inputs, train_targets, val_inputs, val_targets=parse_and_return_dataset(tokenizer)
 
 device='cuda:1'
-model = T5ForConditionalGeneration.from_pretrained(model_name)
-model.resize_token_embeddings(len(tokenizer))
+model=PytorchFilteredT5Model(model_name, tokenizer)
 optimizer = AdamW(model.parameters(), lr=5e-4)
 loss_fct = CrossEntropyLoss(ignore_index=-100)
 
@@ -26,7 +26,7 @@ for epoch in range(epochs):
 
         outputs = model(input_ids=inputs['input_ids'].to(device), 
                         attention_mask=inputs['attention_mask'].to(device),
-                        labels=labels)
+                        labels=labels[:,:-1])
         
         loss = loss_fct(outputs.logits.view(-1, outputs.logits.size(-1)), labels.view(-1))
         loss.backward()
