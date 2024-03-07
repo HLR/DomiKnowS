@@ -14,13 +14,13 @@ with Graph('global') as graph:
     NER_contains, = NERSentence.contains(tag)
     Generated_label=tag(name="label", ConceptClass=EnumConcept, values=['B', 'I', 'O'])
         
-    #next_word = Concept(name="next_word")
-    #(first_word, second_word) = next_word.has_a(arg1=Generated_label, arg2=Generated_label)
+    next_word = Concept(name="next_word")
+    (first_word, second_word) = next_word.has_a(arg1=Generated_label, arg2=Generated_label)
     
-    #ifL(getattr(Generated_label, '<O>')('x'), 
-    #        notL(
-    #                andL(
-     #                   next_word('y', path=("x", first_word.reversed)), 
-    #                    getattr(Generated_label, '<I>')('t', path=("y", second_word))
-    #            )
-    #    ))
+    ifL(getattr(Generated_label, 'O')('x'), 
+            notL(
+                    andL(
+                        next_word('y', path=("x", first_word.reversed)), 
+                        getattr(Generated_label, 'I')('t', path=("y", second_word))
+                )
+        ))
