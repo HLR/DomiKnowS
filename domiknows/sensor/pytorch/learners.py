@@ -146,3 +146,25 @@ class FullyConnectedLearnerRelu(TorchLearner):
         _tensor = self.inputs[0]
         output = self.model(_tensor)
         return output
+
+
+class GenerativeLearning(TorchLearner):
+    def __init__(self, *pres, model, edges=None, loss=None, metric=None, label=False, **kwargs):
+        super().__init__(*pres, edges=edges, label=label, **kwargs)
+        self.model = model
+        self._loss = loss
+        self._metric = metric
+        self._train_model = True
+
+    def forward(
+            self,
+    ) -> Any:
+        _tensor = self.inputs[0]
+        if self._train_model:
+            return self.model(_tensor)
+        return self.model.generate(_tensor)
+
+    def train(self, mode= True):
+        return_val = super().train(mode)
+        self._train_model = mode
+        return return_val
