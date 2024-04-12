@@ -4,9 +4,11 @@ from transformers import AutoTokenizer
 from models import Tokenizer, T5WithLoraGenerativeCLF
 import torch
 
+
 class ValueTracker(MetricTracker):
     def forward(self, values):
         return values
+
 
 class T5LossFunction(torch.nn.CrossEntropyLoss):
     def __init__(self):
@@ -75,11 +77,11 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
         JointSensor(context["questions"], context["stories"], context["relations"],
                     context["question_ids"], context["labels"], forward=make_question, device=device)
 
-    tokenizer = Tokenizer("t5-base", label=all_labels)
+    tokenizer = Tokenizer("t5-small", label=all_labels)
 
     print("USING T5")
 
-    T5Model = T5WithLoraGenerativeCLF("google/flan-t5-base", tokenizer=tokenizer, device=device, max_length=5)
+    T5Model = T5WithLoraGenerativeCLF("google/flan-t5-small", tokenizer=tokenizer, device=device, max_length=5)
 
     question["input_ids"] = JointSensor(rel_context_contain_question, "question", "story",
                                         forward=tokenizer, device=device)
@@ -88,8 +90,6 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
                                          module=T5Model, device=device)
 
     question[raw_answer] = JointSensor("labels", forward=lambda x: x, device=device, label=True)
-
-
 
     def make_answer(_, raw_answer, label):
         answer = raw_answer.argmax(dim=-1)
@@ -100,44 +100,7 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
         = JointSensor(question[rel_context_contain_question], question[raw_answer], question["labels"],
                       forward=make_answer, device=device)
 
-    answer[relations] = JointSensor("_answer", forward = lambda y: y, device=device)
-
-    # def make_relation_labels(_, labels):
-    #     # print("Label:", labels)
-    #     # labels = [label[0] for label in labels]
-    #     # labels = torch.LongTensor(labels)
-    #     return labels
-    #
-    # answer[relations] = JointSensor(rel_question_contain_answer, question["labels"], label=True,
-    #                                 forward=make_relation_labels,
-    #                                 device=device)
-
-    # answer[relations] = ModuleLearner(rel_question_contain_answer, "input_ids", question["labels"],
-    #                                   module=T5Model)
-
-    # def make_relation(question, stories):
-    #     return torch.ones(len(question.split("@@")), 1)
-    #
-    # relations[rel_context_contain_question] = JointSensor(question["question"], question["story"],
-    #                                                       forward=make_relation)
-
-    # inverse[inv_question1.reversed, inv_question2.reversed] = \
-    #     CompositionCandidateSensor(
-    #         relations=(inv_question1.reversed, inv_question2.reversed),
-    #         forward=check_symmetric, device=device)
-    #
-    # transitive[tran_quest1.reversed, tran_quest2.reversed, tran_quest3.reversed] = \
-    #     CompositionCandidateSensor(
-    #         relations=(tran_quest1.reversed, tran_quest2.reversed, tran_quest3.reversed),
-    #         forward=check_transitive, device=device)
-    #
-    # tran_topo[tran_topo_quest1.reversed, tran_topo_quest2.reversed,
-    # tran_topo_quest3.reversed, tran_topo_quest4.reversed] = \
-    #     CompositionCandidateSensor(
-    #         relations=(tran_topo_quest1.reversed, tran_topo_quest2.reversed
-    #                    , tran_topo_quest3.reversed, tran_topo_quest4.reversed),
-    #         forward=check_transitive_topo, device=device)
-    # poi_list.extend([inverse, transitive, tran_topo])
+    answer[relations] = JointSensor("_answer", forward=lambda y: y, device=device)
 
     poi_list = [relations, question, raw_answer, answer]
 
