@@ -121,6 +121,24 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
     # relations[rel_context_contain_question] = JointSensor(question["question"], question["story"],
     #                                                       forward=make_relation)
 
+    # inverse[inv_question1.reversed, inv_question2.reversed] = \
+    #     CompositionCandidateSensor(
+    #         relations=(inv_question1.reversed, inv_question2.reversed),
+    #         forward=check_symmetric, device=device)
+    #
+    # transitive[tran_quest1.reversed, tran_quest2.reversed, tran_quest3.reversed] = \
+    #     CompositionCandidateSensor(
+    #         relations=(tran_quest1.reversed, tran_quest2.reversed, tran_quest3.reversed),
+    #         forward=check_transitive, device=device)
+    #
+    # tran_topo[tran_topo_quest1.reversed, tran_topo_quest2.reversed,
+    # tran_topo_quest3.reversed, tran_topo_quest4.reversed] = \
+    #     CompositionCandidateSensor(
+    #         relations=(tran_topo_quest1.reversed, tran_topo_quest2.reversed
+    #                    , tran_topo_quest3.reversed, tran_topo_quest4.reversed),
+    #         forward=check_transitive_topo, device=device)
+    # poi_list.extend([inverse, transitive, tran_topo])
+
     poi_list = [relations, question, raw_answer, answer]
 
     from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
