@@ -118,14 +118,14 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
     if pmd:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
-                                    loss=ValueTracker(T5LossFunction()),
+                                    loss=MacroAverageTracker(T5LossFunction()),
                                     beta=beta,
                                     device=device)
     else:
         program = SolverPOIProgram(graph,
                                    poi=poi_list,
                                    inferTypes=infer_list,
-                                   loss=ValueTracker(T5LossFunction()),
+                                   loss=MacroAverageTracker(T5LossFunction()),
                                    device=device)
 
     return program
