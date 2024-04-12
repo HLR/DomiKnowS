@@ -15,6 +15,8 @@ def train(program, train_set, epoch, lr, cur_device):
                   Optim=optimizer,
                   device=cur_device)
 
+    program.save("Models/trained_model")
+
 
 def main(args):
     SEED = 382
