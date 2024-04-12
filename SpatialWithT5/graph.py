@@ -17,7 +17,7 @@ with Graph('spatial_QA_rule') as graph:
     raw_answer = question(name="raw_answer")
 
     # This is not WORKING as the framework cannot look through 3-dim
-    relation = answer(name="relation", ConceptClass=EnumConcept,
+    relations = answer(name="relation", ConceptClass=EnumConcept,
                        values=["left", "right", "above", "below", "behind", "front",
                                "near", "far", "disconnected", "touch", "overlap", "covered by",
                                "inside", "cover", "contain"])

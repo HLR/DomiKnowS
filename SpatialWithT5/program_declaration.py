@@ -1,26 +1,33 @@
+from domiknows.program.metric import MetricTracker
 from transformers import AutoTokenizer
 
 from models import Tokenizer, T5WithLoraGenerativeCLF
 import torch
 
+class ValueTracker(MetricTracker):
+    def forward(self, values):
+        return values
 
-# class T5LossFunction(torch.nn.CrossEntropyLoss):
-#     def __init__(self):
-#         super().__init__()
-#
-#     def forward(self, input, target, *args, **kwargs):
-#         """
-#         :param input: (batch size, seq length, num class)
-#         :param target: (batch size, seq length)
-#         """
-#         # Changing the input from (batch size, seq length, num class) -> (batch size, num class, seq length)
-#         input = input.transpose(1, 2)
-#         return super().forward(input, target)
+class T5LossFunction(torch.nn.CrossEntropyLoss):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input, target, *args, **kwargs):
+        """
+        :param input: (batch size, seq length, num class)
+        :param target: (batch size, seq length)
+        """
+        # Changing the input from (batch size, seq length, num class) -> (batch size, num class, seq length)
+        # ori_loss = super().forward(input, target)
+        input = input.transpose(1, 2)
+        # loss = super().forward(input, target)
+        # print(loss, ori_loss)
+        return super().forward(input, target)
 
 
 def program_declaration(device='cpu', pmd=False, beta=0.5):
     from graph import graph, context, question, rel_context_contain_question, \
-        rel_question_contain_answer, relation, answer, raw_answer
+        rel_question_contain_answer, relations, answer, raw_answer
     from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
     from domiknows.sensor.pytorch.learners import ModuleLearner
 
@@ -77,10 +84,12 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
     question["input_ids"] = JointSensor(rel_context_contain_question, "question", "story",
                                         forward=tokenizer, device=device)
 
-    question["raw_answer"] = JointSensor("labels", forward=lambda x: x, device=device, label=True)
+    question[raw_answer] = ModuleLearner(rel_context_contain_question, "input_ids", "labels",
+                                         module=T5Model, device=device)
 
-    question["raw_answer"] = ModuleLearner(rel_context_contain_question, "input_ids", "labels",
-                                           module=T5Model, device=device)
+    question[raw_answer] = JointSensor("labels", forward=lambda x: x, device=device, label=True)
+
+
 
     def make_answer(_, raw_answer, label):
         answer = raw_answer.argmax(dim=-1)
@@ -88,10 +97,10 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
         return torch.ones(len(raw_answer), 1), answer, label
 
     answer[rel_question_contain_answer, "_answer", "_label"] \
-        = JointSensor(question[rel_context_contain_question], question["raw_answer"], question["labels"],
+        = JointSensor(question[rel_context_contain_question], question[raw_answer], question["labels"],
                       forward=make_answer, device=device)
 
-    answer[relation] = JointSensor("_answer", forward = lambda y: y, device=device)
+    answer[relations] = JointSensor("_answer", forward = lambda y: y, device=device)
 
     # def make_relation_labels(_, labels):
     #     # print("Label:", labels)
@@ -112,7 +121,7 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
     # relations[rel_context_contain_question] = JointSensor(question["question"], question["story"],
     #                                                       forward=make_relation)
 
-    poi_list = [relation, question, raw_answer, answer]
+    poi_list = [relations, question, raw_answer, answer]
 
     from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
     from domiknows.program.loss import NBCrossEntropyLoss
@@ -120,7 +129,7 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
     from domiknows.program.lossprogram import PrimalDualProgram
     from domiknows.program.model.pytorch import SolverModel
 
-    infer_list = ['local/argmax']
+    infer_list = []
     if pmd:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
@@ -131,7 +140,7 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
         program = SolverPOIProgram(graph,
                                    poi=poi_list,
                                    inferTypes=infer_list,
-                                   loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                   loss=MacroAverageTracker(T5LossFunction()),
                                    device=device)
 
     return program

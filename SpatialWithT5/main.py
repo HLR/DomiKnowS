@@ -22,9 +22,9 @@ def train(program, train_set, epoch, lr, cur_device):
 def eval(program, testing_set, cur_device):
     for datanode in tqdm(program.populate(testing_set, device=cur_device), "Checking accuracy"):
         for question in datanode.getChildDataNodes():
-            print(question)
-            for answer in question.getChildDataNodes():
-                print(answer)
+            # Compare answer
+            pass
+
     return
 
 
@@ -62,7 +62,7 @@ def main(args):
                                 )
 
     program = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta)
-    # eval(program, test_data, cur_device=cur_device)
+    eval(program, test_data, cur_device=cur_device)
     if args.loaded_file is not None:
         # program.load("Models/" + args.loaded_file,
         #              map_location={'cuda:0': cur_device, 'cuda:1': cur_device, 'cuda:2': cur_device,
