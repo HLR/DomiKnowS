@@ -5,10 +5,12 @@ from reader import DomiKnowS_reader
 import torch
 import numpy as np
 import random
+import transformers
 
 
 def train(program, train_set, epoch, lr, cur_device):
-    optimizer = lambda param: torch.optim.AdamW(param, lr=lr)
+    optimizer = lambda param: transformers.optimization.Adafactor(param, lr=lr, scale_parameter=False,
+                                                                  relative_step=False)
     program.train(train_set, c_warmup_iters=0, train_epoch_num=epoch,
                   Optim=optimizer,
                   device=cur_device)
@@ -58,8 +60,8 @@ if __name__ == '__main__':
     parser.add_argument("--lr", dest="lr", type=float, default=1e-5)
     parser.add_argument("--cuda", dest="cuda", type=int, default=0)
     parser.add_argument("--test_size", dest="test_size", type=int, default=12)
-    parser.add_argument("--train_size", dest="train_size", type=int, default=16)
-    parser.add_argument("--batch_size", dest="batch_size", type=int, default=4)
+    parser.add_argument("--train_size", dest="train_size", type=int, default=10000000)
+    parser.add_argument("--batch_size", dest="batch_size", type=int, default=1)
     parser.add_argument("--pmd", dest="pmd", type=bool, default=False)
     parser.add_argument("--beta", dest="beta", type=float, default=0.5)
     args = parser.parse_args()

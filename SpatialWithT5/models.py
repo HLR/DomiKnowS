@@ -8,7 +8,7 @@ from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_tr
 
 
 class T5WithLoraGenerativeCLF(nn.Module):
-    def __init__(self, model_name, tokenizer, device="cpu", adapter=False):
+    def __init__(self, model_name, tokenizer, max_length, device="cpu", adapter=False):
         super().__init__()
 
         self.cur_device = device
@@ -38,6 +38,7 @@ class T5WithLoraGenerativeCLF(nn.Module):
 
         token_labels = tokenizer.token_labels
         self.interested_tokens = list(token_labels.values())
+        self.output_length = max_length
         # self._space_token = tokenizer(" ")["input_ids"][0]
         # self._comma_token = tokenizer(",")["input_ids"][1]
         # self._eos_token = tokenizer(" ")["input_ids"][-1]
@@ -47,20 +48,21 @@ class T5WithLoraGenerativeCLF(nn.Module):
         #                                                                                                    tokenizer)
         # self.output_length = self.max_group * self.token_each_label + 1  # (+ End of sentence)
 
-    def forward(self, _, cat_input_ids, cat_encoded_label):
+    def forward(self, _, cat_input_ids, encoded_label):
         if self.train_t5_mode:
-            return self._train_forward(cat_input_ids, cat_encoded_label)
+            return self._train_forward(cat_input_ids, encoded_label)
         return self._inference_forward(cat_input_ids)
 
-    def _train_forward(self, cat_input_ids, cat_encoded_label):
+    def _train_forward(self, cat_input_ids, encoded_label):
         input_ids = cat_input_ids[0, :, :]
         attention_mask = cat_input_ids[1, :, :]
-        label_input_ids = cat_encoded_label[0, :, :]
-        label_attention_mask = cat_encoded_label[1, :, :]
+        label_input_ids = encoded_label
+        # print(input_ids, attention_mask, label_input_ids)
         # Need label to generate
         logits = self.model(input_ids, attention_mask=attention_mask,
-                            labels=label_input_ids, decoder_attention_mask=label_attention_mask).logits
-        return logits[:, :, self.interested_tokens]
+                            labels=label_input_ids).logits
+        # print(logits[:, :self.output_length, self.interested_tokens])
+        return logits[:, :self.output_length, self.interested_tokens]
 
     def _inference_forward(self, cat_input_ids):
         input_ids = cat_input_ids[0, :, :]
@@ -71,7 +73,7 @@ class T5WithLoraGenerativeCLF(nn.Module):
                'max_new_tokens': self.output_length + 1})
         logits = self.model(input_ids, attention_mask=attention_mask,
                             decoder_input_ids=seq).logits
-        return logits[:, :, self.interested_tokens]
+        return logits[:, :10, self.interested_tokens]
 
     def train(self: T, mode: bool = True) -> T:
         return_val = super().train(mode)
@@ -94,7 +96,11 @@ class Tokenizer:
                 self.tokenizer.add_tokens(new_token)
                 self.token_labels[label[i]] = self.tokenizer(new_token)["input_ids"][0]
 
-    def __call__(self, _, questions, stories, return_long=False):
+        # Adding EOS token and padding
+        self.token_labels["eos"] = 1
+        self.token_labels["pad"] = 0
+
+    def __call__(self, _, questions, stories, return_long=True):
         prompts = []
         for ind, question in enumerate(questions):
             prompts.append("Answer based on the context:\n\n" + stories[ind] + "\n\n" + question)

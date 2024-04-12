@@ -12,18 +12,23 @@ with Graph('spatial_QA_rule') as graph:
     question = Concept(name="question")
     answer = Concept(name="answer")
     rel_context_contain_question, = context.contains(question)
-    # rel_context_contain_answer, = context.contains(answer)
     rel_question_contain_answer, = question.contains(answer)
 
-    # answer -> context (small -> big)
+    # relations = answer(name="relation", ConceptClass=EnumConcept,
+    #                    values=["left", "right", "above", "below", "behind", "front",
+    #                            "near", "far", "disconnected", "touch", "overlap", "covered by",
+    #                            "inside", "cover", "contain"])
 
-    # context -> answer (big -> small)
+    relations = answer(name="relation")
+    # Two issues:
+    # 1. End of Sentence (Ignore word after EoS) to limit the scope of sentence
 
-    relations = answer(name="relation", ConceptClass=EnumConcept,
-                       values=["left", "right", "above", "below", "behind", "front",
-                               "near", "far", "disconnected", "touch", "overlap", "covered by",
-                               "inside", "cover", "contain"])
 
     # Example of Old relations
+    # [
+    # [rel1, rel2],
+    # [rel2, rel3]
+    # ]
     # ifL(andL(getattr(relations, 'left')('x'), existsL(inverse('s', path=('x', inverse)))),
     #         getattr(relations, 'right')(path=('s', inv_question2)))
+
