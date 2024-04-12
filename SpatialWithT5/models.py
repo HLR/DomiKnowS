@@ -70,10 +70,10 @@ class T5WithLoraGenerativeCLF(nn.Module):
 
         seq = self.model.generate(
             **{'input_ids': input_ids, 'attention_mask': attention_mask, 'min_new_tokens': self.output_length,
-               'max_new_tokens': self.output_length + 1})
+               'max_new_tokens': self.output_length})
         logits = self.model(input_ids, attention_mask=attention_mask,
                             decoder_input_ids=seq).logits
-        return logits[:, :10, self.interested_tokens]
+        return logits[:, :self.output_length, self.interested_tokens]
 
     def train(self: T, mode: bool = True) -> T:
         return_val = super().train(mode)
