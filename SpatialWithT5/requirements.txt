@@ -1,0 +1,8 @@
+DomiKnowS==0.533
+peft==0.10.0
+pandas==2.2.1
+numpy==1.26.4
+sentencepiece==0.2.0
+torch==2.2.1
+tqdm==4.66.2
+transformers==4.39.2
