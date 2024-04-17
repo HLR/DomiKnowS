@@ -3,6 +3,7 @@ from transformers import AutoTokenizer
 
 from models import Tokenizer, T5WithLoraGenerativeCLF
 import torch
+from utils import check_symmetric
 
 
 class ValueTracker(MetricTracker):
@@ -29,8 +30,9 @@ class T5LossFunction(torch.nn.CrossEntropyLoss):
 
 def program_declaration(device='cpu', pmd=False, beta=0.5):
     from graph import graph, context, question, rel_context_contain_question, \
-        rel_question_contain_answer, relations, answer, raw_answer
+        rel_question_contain_answer, relations, answer, raw_answer, inverse, inv_question1, inv_question2
     from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
+    from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
     from domiknows.sensor.pytorch.learners import ModuleLearner
 
     context["questions"] = ReaderSensor(keyword="questions")
@@ -102,7 +104,12 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
 
     answer[relations] = JointSensor("_answer", forward=lambda y: y, device=device)
 
-    poi_list = [relations, question, raw_answer, answer]
+    inverse[inv_question1.reversed, inv_question2.reversed] = \
+        CompositionCandidateSensor(
+            relations=(inv_question1.reversed, inv_question2.reversed),
+            forward=check_symmetric, device=device)
+
+    poi_list = [relations, question, raw_answer, answer, inverse]
 
     from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
     from domiknows.program.loss import NBCrossEntropyLoss

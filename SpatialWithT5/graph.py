@@ -41,9 +41,9 @@ with Graph('spatial_QA_rule') as graph:
     # Checking consistency across different questions in batch
     # # Inverse Constrains
 
-    # # If question 1 has relation1, question 2 should have opposite relation 1
-    # inverse = Concept(name="inverse")
-    # inv_question1, inv_question2 = inverse.has_a(arg1=question, arg2=question)
+    # If question 1 has relation1, question 2 should have opposite relation 1
+    inverse = Concept(name="inverse")
+    inv_question1, inv_question2 = inverse.has_a(arg1=question, arg2=question)
 
     # # List of opposite relations
     # above <-> below, left <-> right, front <-> behind

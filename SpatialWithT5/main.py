@@ -62,7 +62,7 @@ def main(args):
                                 )
 
     program = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta)
-    eval(program, test_data, cur_device=cur_device)
+    # eval(program, test_data, cur_device=cur_device)
     if args.loaded_file is not None:
         # program.load("Models/" + args.loaded_file,
         #              map_location={'cuda:0': cur_device, 'cuda:1': cur_device, 'cuda:2': cur_device,
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser.add_argument("--epoch", dest="epoch", type=int, default=1)
     parser.add_argument("--lr", dest="lr", type=float, default=1e-5)
     parser.add_argument("--cuda", dest="cuda", type=int, default=0)
-    parser.add_argument("--test_size", dest="test_size", type=int, default=12)
+    parser.add_argument("--test_size", dest="test_size", type=int, default=100)
     parser.add_argument("--train_size", dest="train_size", type=int, default=100)
     parser.add_argument("--batch_size", dest="batch_size", type=int, default=4)
     parser.add_argument("--pmd", dest="pmd", type=bool, default=False)

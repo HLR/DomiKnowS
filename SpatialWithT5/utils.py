@@ -1,4 +1,5 @@
 def check_symmetric(arg1, arg2):
+    # print("CHECKING INVERSE")
     if arg1 == arg2:
         return False
     relation_arg2 = arg2.getAttribute("relation")
@@ -8,6 +9,7 @@ def check_symmetric(arg1, arg2):
     if relation_describe[0] == "symmetric":
         qid1 = arg1.getAttribute("id").item()
         if qid1 == int(relation_describe[1]):
+            # print("FOUND INVERSE")
             return True
     return False
 
