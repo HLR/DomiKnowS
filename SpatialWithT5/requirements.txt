@@ -1,4 +1,4 @@
-DomiKnowS==0.533
+DomiKnowS==0.545.dev0
 peft==0.10.0
 pandas==2.2.1
 numpy==1.26.4
@@ -7,3 +7,4 @@ torch==2.2.1
 tqdm==4.66.2
 transformers==4.39.2
 spacy==3.7.4
+accelerate==0.29.1

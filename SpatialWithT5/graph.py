@@ -12,15 +12,14 @@ with Graph('spatial_QA_rule') as graph:
     question = Concept(name="question")
     answer = Concept(name="answer")
     rel_context_contain_question, = context.contains(question)
+    rel_context_contain_answer, = context.contains(answer)
     rel_question_contain_answer, = question.contains(answer)
 
-    raw_answer = question(name="raw_answer")
-
     # This is not WORKING as the framework cannot look through 3-dim
-    relations = answer(name="relation", ConceptClass=EnumConcept,
-                       values=["left", "right", "above", "below", "behind", "front",
+    answer_relations = answer(name="answer_relations", ConceptClass=EnumConcept,
+                              values=["left", "right", "above", "below", "behind", "front",
                                "near", "far", "disconnected", "touch", "overlap", "covered by",
-                               "inside", "cover", "contain"])
+                               "inside", "cover", "contain", "<pad>", "<eos>"])
 
     # relations = answer(name="relation")
     # Two issues:

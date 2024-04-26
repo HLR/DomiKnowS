@@ -62,7 +62,7 @@ class T5WithLoraGenerativeCLF(nn.Module):
         logits = self.model(input_ids, attention_mask=attention_mask,
                             labels=label_input_ids).logits
         # print(logits[:, :self.output_length, self.interested_tokens])
-        return logits[:, :self.output_length, self.interested_tokens]
+        return torch.flatten(logits[:, :self.output_length, self.interested_tokens], start_dim=0, end_dim=1)
 
     def _inference_forward(self, cat_input_ids):
         input_ids = cat_input_ids[0, :, :]
@@ -73,7 +73,7 @@ class T5WithLoraGenerativeCLF(nn.Module):
                'max_new_tokens': self.output_length})
         logits = self.model(input_ids, attention_mask=attention_mask,
                             decoder_input_ids=seq).logits
-        return logits[:, :self.output_length, self.interested_tokens]
+        return torch.flatten(logits[:, :self.output_length, self.interested_tokens], start_dim=0, end_dim=1)
 
     def train(self: T, mode: bool = True) -> T:
         return_val = super().train(mode)

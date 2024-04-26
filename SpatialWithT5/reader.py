@@ -348,7 +348,6 @@ def DomiKnowS_reader(file, question_type, size=300000, *,
                      rule_text=False,
                      reasoning_steps=None,
                      STEPGAME_status="train"):
-    print(type_dataset, reasoning_steps)
     if type_dataset == "STEPGAME":
         dataset = StepGame_reader(file, STEPGAME_status, size, file_number=reasoning_steps)
     elif type_dataset == "BOOLQ":
