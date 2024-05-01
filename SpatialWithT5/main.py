@@ -10,8 +10,9 @@ from tqdm import tqdm
 
 
 def train(program, train_set, epoch, lr, cur_device):
-    optimizer = lambda param: transformers.optimization.Adafactor(param, lr=lr, scale_parameter=False,
-                                                                  relative_step=False)
+    # optimizer = lambda param: transformers.optimization.Adafactor(param, lr=lr, scale_parameter=False,
+    #                                                               relative_step=False)
+    optimizer = lambda param: torch.optim.AdamW(param, lr=lr)
     program.train(train_set, train_epoch_num=epoch,
                   Optim=optimizer,
                   device=cur_device)
@@ -31,7 +32,11 @@ def eval(program, testing_set, cur_device):
             for answer in question.getChildDataNodes():
                 pred = answer.getAttribute(answer_relations, 'local/argmax').argmax().item()
                 label = answer.getAttribute(answer_relations, 'label').item()
+                # print(pred, label)
+                # padding label
                 check_generate_answer = check_generate_answer and (pred == label)
+                if label == 15:
+                    break
             count_correct += int(check_generate_answer)
             # Compare answer
             # pass
@@ -74,15 +79,17 @@ def main(args):
 
     program = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta)
     if args.loaded_file is not None:
-        # program.load("Models/" + args.loaded_file,
-        #              map_location={'cuda:0': cur_device, 'cuda:1': cur_device, 'cuda:2': cur_device,
-        #                            'cuda:3': cur_device, 'cuda:4': cur_device, 'cuda:5': cur_device})
+        program.load("Models/" + args.loaded_file,
+                     map_location={'cuda:0': cur_device, 'cuda:1': cur_device, 'cuda:2': cur_device,
+                                   'cuda:3': cur_device, 'cuda:4': cur_device, 'cuda:5': cur_device})
 
         # EVAL
-        eval(program, test_data, cur_device=cur_device)
     else:
         train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device)
-        eval(program, test_data, cur_device=cur_device)
+    print("Acc seen:")
+    eval(program, train_data, cur_device=cur_device)
+    print("Acc unseen:")
+    eval(program, test_data, cur_device=cur_device)
 
 
 if __name__ == '__main__':
