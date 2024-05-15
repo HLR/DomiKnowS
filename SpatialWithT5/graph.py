@@ -51,9 +51,9 @@ with Graph('spatialQArule') as graph:
     #
 
     # # Transitive constrains
-    # transitive = Concept(name="transitive")
+    transitive = Concept(name="transitive")
     # Consists of three relation e.g. if question 1 with rel1 and question 2 with rel2, question 3 should have rel3
-    # tran_quest1, tran_quest2, tran_quest3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
+    tran_quest1, tran_quest2, tran_quest3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
     #
     # # if question 1 with rel1 and question 2 with rel1, question 3 should have rel1
     # transitive_1 = [left, right, above, below, behind, front, inside, contain]
@@ -84,6 +84,29 @@ with Graph('spatialQArule') as graph:
     #                  rel2(path=('t', tran_quest2))),
     #             rel2(path=('t', tran_quest3)))
     #
+    transitive_3_1 = ['inside', 'coveredby']
+    transitive_3_2 = ['left', 'right', 'above', 'below', 'behind', 'front', 'near', 'far', 'disconnected']
+    transitive_3_3 = ['left', 'right', 'above', 'below', 'behind', 'front', 'near', 'far', 'disconnected']
+    for ans1_str, ans2_str, ans3_str in zip(transitive_3_1,transitive_3_2,transitive_3_3):
+
+        post_fix="_"+ans1_str+"_"+ans2_str+"_"+ans3_str+"_transitivity1"
+        ans1=answer_relations.__getattr__(ans1_str)
+        ans2=answer_relations.__getattr__(ans2_str)
+        ans3=answer_relations.__getattr__(ans3_str)
+
+        ifL(transitive('atrans'+post_fix),
+            ifL(andL(
+                question("q1"+post_fix,path=('atrans'+post_fix,tran_quest1)),
+                question("q2"+post_fix,path=('atrans'+post_fix,tran_quest2)),
+                question("q3"+post_fix,path=('atrans'+post_fix,tran_quest3))
+                ),
+                ifL(andL(
+                        ans1(path=('q1'+post_fix,rel_question_contain_answer)),
+                        ans2(path=('q2'+post_fix,rel_question_contain_answer))),
+                    ans3(path=('q3'+post_fix,rel_question_contain_answer)),
+                )
+            )
+        )
 
     # # Transitive + topo constrains
     # tran_topo = Concept(name="transitive_topo")
