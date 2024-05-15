@@ -38,9 +38,6 @@ from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 
-sys.path.append("Domiknows/domiknows")
-sys.path.append("../..")
-
 Graph.clear()
 Concept.clear()
 Relation.clear()
