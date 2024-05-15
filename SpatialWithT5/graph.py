@@ -7,55 +7,40 @@ CONSTRAIN_ACTIVE = True
 Graph.clear()
 Concept.clear()
 Relation.clear()
-with Graph('spatial_QA_rule') as graph:
+with Graph('spatialQArule') as graph:
     context = Concept(name="context")
     question = Concept(name="question")
     answer = Concept(name="answer")
     rel_context_contain_question, = context.contains(question)
-    rel_context_contain_answer, = context.contains(answer)
     rel_question_contain_answer, = question.contains(answer)
 
-    # This is not WORKING as the framework cannot look through 3-dim
     answer_relations = answer(name="answer_relations", ConceptClass=EnumConcept,
                               values=["left", "right", "above", "below", "behind", "front",
-                               "near", "far", "disconnected", "touch", "overlap", "covered by",
+                               "near", "far", "disconnected", "touch", "overlap", "coveredby",
                                "inside", "cover", "contain", "<pad>", "<eos>"])
-
-    # relations = answer(name="relation")
-    # Two issues:
-    # 1. End of Sentence (Ignore word after EoS) to limit the scope of sentence
-
-
-    # Example of Old relations
-    # Checking consistency within the same question
-    # exactL(left, right)
-    # exactL(above, below)
-    # exactL(behind, front)
-    # exactL(near, far)
-    # exactL(disconnected, touch)
-    #
-
-    # CHECK on utilis.py to find how we define each concept
-
-    # Checking consistency across different questions in batch
-    # # Inverse Constrains
-
-    # If question 1 has relation1, question 2 should have opposite relation 1
+    
     inverse = Concept(name="inverse")
     inv_question1, inv_question2 = inverse.has_a(arg1=question, arg2=question)
 
     # # List of opposite relations
     # above <-> below, left <-> right, front <-> behind
-    # inverse_list1 = [(above, below), (left, right), (front, behind), (coveredby, cover),
-    #                  (inside, contain)]
-    #
+    inverse_list1 = [('above', 'below'), ('left', 'right'), ('front', 'behind'), ('coveredby', 'cover'),
+                      ('inside', 'contain')]
+    
+    for ans1_str, ans2_str in inverse_list1:
 
-    # for ans1, ans2 in inverse_list1:
-    #     ifL(andL(ans1('x'), existsL(inverse('s', path=('x', inverse)))),
-    #         ans2(path=('s', inv_question2)))
-    #
-    #     ifL(andL(ans2('x'), existsL(inverse('s', path=('x', inverse)))),
-    #         ans1(path=('s', inv_question2)))
+        post_fix="_"+ans1_str+"_"+ans2_str
+        ans1=answer_relations.__getattr__(ans1_str)
+        ans2=answer_relations.__getattr__(ans2_str)
+
+        ifL(inverse('aconnect'+post_fix),
+            ifL(andL(question("q1"+post_fix,path=('aconnect'+post_fix,inv_question1)),question("q2"+post_fix,path=('aconnect'+post_fix,inv_question2))),
+                ifL(andL(
+                        ans1(path=('q1'+post_fix,rel_question_contain_answer)),
+                        notL(existsL(ans2(path=('q2'+post_fix,rel_question_contain_answer))))),
+                )
+            )
+        )
     #
     # # Similar to Inverse relation
     # inverse_list2 = [(near, near), (far, far), (touch, touch), (disconnected, disconnected), (overlap, overlap),
