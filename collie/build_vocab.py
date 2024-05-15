@@ -8,7 +8,7 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 import pickle
 
-top_k = 5000
+top_k = 1000
 
 dataset = load_dataset("roneneldan/TinyStories", split="validation", streaming=True)
 

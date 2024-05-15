@@ -48,9 +48,14 @@ if __name__ == "__main__":
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import pickle
     from colors import color
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--vocab_file', type=str, default='vocab_val.pkl')
+    args = parser.parse_args()
 
     # load model
-    with open('data/vocab_val_1k.pkl', 'rb') as f_in:
+    with open(args.vocab_file, 'rb') as f_in:
         label_map = TokenMap(pickle.load(f_in))
 
     print(color('Vocabulary size:', fg='green'), len(label_map))
