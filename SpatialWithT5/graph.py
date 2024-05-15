@@ -35,9 +35,9 @@ with Graph('spatialQArule') as graph:
 
         ifL(inverse('aconnect'+post_fix),
             ifL(andL(question("q1"+post_fix,path=('aconnect'+post_fix,inv_question1)),question("q2"+post_fix,path=('aconnect'+post_fix,inv_question2))),
-                ifL(andL(
+                ifL(
                         ans1(path=('q1'+post_fix,rel_question_contain_answer)),
-                        notL(existsL(ans2(path=('q2'+post_fix,rel_question_contain_answer))))),
+                        notL(existsL(ans2(path=('q2'+post_fix,rel_question_contain_answer)))),
                 )
             )
         )
