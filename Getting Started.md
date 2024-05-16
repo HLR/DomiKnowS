@@ -29,8 +29,9 @@ To ensure that Domiknows works correctly,we can verify the installation by runni
 Following is an example of a simple classifier:
 
 ```python
-import sys, torch
+import torch, logging
 from transformers import AdamW
+
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.program import SolverPOIProgram
 from domiknows.program.loss import NBCrossEntropyLoss
@@ -38,20 +39,23 @@ from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 
+logging.basicConfig(level=logging.INFO)
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
 with Graph(name='global') as graph:
-    x = Concept(name='x')
-    y = x(name='y')
+    xcon = Concept(name='xcon')
+    ycon = xcon(name='ycon')
 
-reader = [{"value": [[10, 10]], "y": [0, 1]}, {"value": [[-1, -1]], "y": [0, 1]}, {"value": [[-20, -20]], "y": [1, 0]}]
-x["value"] = ReaderSensor(keyword="value")
-x[y] = ReaderSensor(keyword="y", label=True)
-x[y] = ModuleLearner("value", module=torch.nn.Linear(2, 2))
-program = SolverPOIProgram(graph, poi=[y, ], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
-program.train(reader, train_epoch_num=1, Optim=lambda param: AdamW(param, lr=1e-4, eps=1e-8))
+reader = [{"value": [[10.0, 10.0]], "y": [[1]]}, {"value": [[-1.0, -1.0]], "y": [[0]]}, {"value": [[-20.0, -20.0]], "y": [[0]]}]
+xcon["value"] = ReaderSensor(keyword="value")
+xcon[ycon] = ModuleLearner("value", module=torch.nn.Linear(2, 2),device=torch.device("cpu"))
+xcon[ycon] = ReaderSensor(keyword="y", label=True)
+program = SolverPOIProgram(graph,poi=[xcon,ycon],inferTypes=['local/softmax'], 
+                           loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                           Optim=lambda param: AdamW(param, lr = 1e-2 ))
+program.train(reader, train_epoch_num=10)
 ```
 
 ## Examples
