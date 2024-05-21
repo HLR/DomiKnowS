@@ -28,14 +28,13 @@ class ValueTracker(MetricTracker):
 #         return super().forward(input, target)
 
 
-def program_declaration(device='cpu', pmd=False, beta=0.5):
+def program_declaration(device='cpu', pmd=False, beta=1, constraints=False):
     from graph import (graph, context, question, rel_context_contain_question,
                        rel_question_contain_answer, answer_relations,
-                       answer, inverse, inv_question1, inv_question2, rel_context_contain_answer)
+                       answer, inverse, inv_question1, inv_question2)
     from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
     from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor
     from domiknows.sensor.pytorch.learners import ModuleLearner
-
     context["questions"] = ReaderSensor(keyword="questions")
     context["stories"] = ReaderSensor(keyword="stories")
     context["relations"] = ReaderSensor(keyword="relation")
@@ -122,12 +121,15 @@ def program_declaration(device='cpu', pmd=False, beta=0.5):
     answer[answer_relations] = ModuleLearner(question[rel_context_contain_question], question["input_ids"], question["labels"],
                                                module=T5Model, device=device)
 
-    inverse[inv_question1.reversed, inv_question2.reversed] = \
-        CompositionCandidateSensor(
-            relations=(inv_question1.reversed, inv_question2.reversed),
-            forward=check_symmetric, device=device)
+    poi_list = [answer_relations, question, answer]
 
-    poi_list = [answer_relations, question, inverse, answer]
+    if constraints:
+        inverse[inv_question1.reversed, inv_question2.reversed] = \
+            CompositionCandidateSensor(
+                relations=(inv_question1.reversed, inv_question2.reversed),
+                forward=check_symmetric, device=device)
+
+        poi_list.append(inverse)
 
     from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
     from domiknows.program.loss import NBCrossEntropyLoss

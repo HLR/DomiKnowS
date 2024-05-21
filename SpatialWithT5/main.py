@@ -9,13 +9,18 @@ import transformers
 from tqdm import tqdm
 
 
-def train(program, train_set, epoch, lr, cur_device):
+def train(program, train_set, epoch, lr, cur_device, pmd=True, warmup_epochs=2):
     # optimizer = lambda param: transformers.optimization.Adafactor(param, lr=lr, scale_parameter=False,
     #                                                               relative_step=False)
     optimizer = lambda param: torch.optim.AdamW(param, lr=lr)
-    program.train(train_set, train_epoch_num=epoch,
-                  Optim=optimizer,
-                  device=cur_device)
+    if pmd:
+        program.train(train_set, c_warmup_iters=warmup_epochs, train_epoch_num=epoch,
+                      Optim=optimizer,
+                      device=cur_device)
+    else:
+        program.train(train_set, train_epoch_num=epoch,
+                      Optim=optimizer,
+                      device=cur_device)
 
     program.save("Models/trained_model.pt")
 
@@ -35,20 +40,23 @@ def eval(program, testing_set, cur_device):
                 # print(pred, label)
                 # padding label
                 check_generate_answer = check_generate_answer and (pred == label)
+                # 15 refers to EOS token mapping label
                 if label == 15:
                     break
             count_correct += int(check_generate_answer)
-            # Compare answer
-            # pass
-    print("Acc:", count_correct / count_questions * 100, "%")
-    return
+    # print("Acc:", , "%")
+    return count_correct / count_questions * 100
 
 
-def main(args):
+def set_seed():
     SEED = 382
     np.random.seed(SEED)
     random.seed(SEED)
     torch.manual_seed(SEED)
+
+
+def main(args):
+    set_seed()
 
     cuda_number = args.cuda
     if cuda_number == -1:
@@ -77,7 +85,7 @@ def main(args):
                                 STEPGAME_status=None,
                                 )
 
-    program = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta)
+    program = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta, constraints=args.constraints)
     if args.loaded_file is not None:
         program.load("Models/" + args.loaded_file,
                      map_location={'cuda:0': cur_device, 'cuda:1': cur_device, 'cuda:2': cur_device,
@@ -85,11 +93,26 @@ def main(args):
 
         # EVAL
     else:
-        train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device)
-    print("Acc seen:")
-    eval(program, train_data, cur_device=cur_device)
-    print("Acc unseen:")
-    eval(program, test_data, cur_device=cur_device)
+        # print("Training with no constraint loss")
+        train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=0, pmd=args.pmd)
+        # print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
+        # print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
+        # if args.compare_constraints:
+        #     print("Training with no constraints loss")
+        #     program_2 = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta, constraints=args.constraints)
+        #     train(program_2, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=10 ** 6)
+        #     print(f"Acc seen: {eval(program_2, train_data, cur_device=cur_device)}")
+        #     print(f"Acc unseen: {eval(program_2, test_data, cur_device=cur_device)}")
+    print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
+    print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
+
+    if args.compare_constraints:
+        print("Loading the same setting without constraint learning")
+        set_seed()
+        program = program_declaration(device=cur_device, pmd=args.pmd, beta=0, constraints=args.constraints)
+        train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=0, pmd=args.pmd)
+        print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
+        print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
 
 
 if __name__ == '__main__':
@@ -103,5 +126,7 @@ if __name__ == '__main__':
     parser.add_argument("--pmd", dest="pmd", type=bool, default=False)
     parser.add_argument("--beta", dest="beta", type=float, default=0.5)
     parser.add_argument("--loaded_file", dest="loaded_file", type=str, default=None)
+    parser.add_argument("--constraints", dest="constraints", type=bool, default=False)
+    parser.add_argument("--compare_constraints", dest="compare_constraints", type=bool, default=False)
     args = parser.parse_args()
     main(args)
