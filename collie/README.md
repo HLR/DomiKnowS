@@ -12,4 +12,4 @@ For efficiency, this example currently uses models trained on the [TinyStories d
 
 Run `python build_vocab.py` to find and output the most used tokens in the corpus.
 
-Then, run `python program.py --vocab_file vocab_val.pkl` where the `vocab_file` argument specifies the path to the output from `build_vocab.py`.
+Then, run `python program.py --vocab_file vocab_val.pkl` where the `vocab_file` argument specifies the path to the output from `build_vocab.py`. Run `python program.py --help` for descriptions of all the arguments.

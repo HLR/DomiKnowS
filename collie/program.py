@@ -85,10 +85,10 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--vocab_file', type=str, default='vocab_val.pkl')
-    parser.add_argument('--pad_size', type=int, default=32)
-    parser.add_argument('--model_mode', type=str, default='generate', choices=['tf', 'generate'])
-    parser.add_argument('--ILP', default=False, action='store_true')
+    parser.add_argument('--vocab_file', type=str, default='vocab_val.pkl', help="Path to the vocabulary file, generated from build_vocab.py")
+    parser.add_argument('--pad_size', type=int, default=32, help="Maximum length of generation")
+    parser.add_argument('--model_mode', type=str, default='generate', choices=['tf', 'generate'], help="tf: Teacher-forcing during the forward pass, generate: Greedy decoding during the forward pass")
+    parser.add_argument('--ILP', default=False, action='store_true', help="Add this flag to enable ILP inference")
 
     args = parser.parse_args()
 
