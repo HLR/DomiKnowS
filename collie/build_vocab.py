@@ -27,10 +27,15 @@ for row in tqdm(dataset, total=21990):
 sorted_tokens = sorted(seen_tokens.items(), key=lambda x: x[1], reverse=True)
 vocab_subset = [t for t, _ in sorted_tokens[:top_k]]
 
+vocab_subset += [tokenizer.eos_token_id]
+
 for t in reversed(vocab_subset):
+    if t == tokenizer.eos_token_id:
+        continue
+
     print(tokenizer.decode([t]), seen_tokens[t])
 
 label_map = {token: i for i, token in enumerate(vocab_subset)}
 
-with open("vocab_val.pkl", "wb") as f:
+with open("data/vocab_val.pkl", "wb") as f:
     pickle.dump(label_map, f)
