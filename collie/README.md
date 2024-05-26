@@ -1,10 +1,13 @@
 This task involves imposing constraints on generated tokens, loosely based off of [Yao et al., 2023](https://arxiv.org/abs/2307.08689).
 
-For example, a constraint could be: if the generated sentence contains the token " The", then there must be at least three tokens generated total. We specify this as:
+For example, a constraint could be: if the generated sentence contains the token " The", then there must be at least 16 tokens generated total. We specify this as:
 ```python
 ifL(
-    atLeastAL(get_token_concept(' The'), 1),
-    atMostAL(token, 3)
+    existsAL(get_token_concept(' The')("x")),
+    atMostAL(
+        notL(get_token_concept('<|endoftext|>')("y")), # only consider non-EOS tokens
+        16
+    )
 )
 ```
 
