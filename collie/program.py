@@ -1,4 +1,5 @@
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.program import LearningBasedProgram, SolverPOIProgram
 
@@ -20,7 +21,7 @@ def build_program(
         ilp: bool = False
     ) -> LearningBasedProgram:
 
-    graph, (text, token, contains, generated_token) = build_graph(label_map, tokenizer)
+    graph, (text, token, contains, generated_token, is_before_rel, first_token, second_token) = build_graph(label_map, tokenizer)
 
     text["instruction_tokens"] = ReaderSensor(keyword="instruction_tokens")
     text["target_tokens"] = ReaderSensor(keyword="target_tokens")
@@ -42,9 +43,9 @@ def build_program(
             torch.ones((pad_size - len(testing_seq[0]),)) * tokenizer.eos_token_id
         ], dim=0)
 
-        return torch.ones((pad_size, 1)), target_out, testing_out
+        return torch.ones((pad_size, 1)), target_out, testing_out, torch.arange(pad_size)
 
-    token[contains, 'target', '_testing_generated'] = JointSensor(text["target_tokens"], text["_testing_generated_tokens"], forward=_add_sequence)
+    token[contains, 'target', '_testing_generated', 'token_index'] = JointSensor(text["target_tokens"], text["_testing_generated_tokens"], forward=_add_sequence)
     token[generated_token] = FunctionalSensor(token[contains], "target", forward=lambda _, x: label_map.map_vocab(x), label=True)
 
     model = TinyModel(
@@ -56,17 +57,27 @@ def build_program(
         mode=model_mode
     )
 
-    token[generated_token, 'is_before_eos'] = JointSensor(
+    token[generated_token] = ModuleLearner(
         token[contains],
         text["instruction_tokens"],
         'target',
         '_testing_generated',
-        forward=model.forward
+        module=model
+    )
+
+    # edge sensors
+    def is_before_edges(*args, arg1, arg2):
+        # print('is_before_edges', arg1.getAttribute('token_index'), arg2.getAttribute('token_index'))
+        return arg1.getAttribute('token_index') < arg2.getAttribute('token_index')
+    
+    is_before_rel[first_token.reversed, second_token.reversed] = CompositionCandidateSensor(
+        relations=(first_token.reversed, second_token.reversed),
+        forward=is_before_edges
     )
 
     return SolverPOIProgram(
         graph,
-        poi=(text, token),
+        poi=(text, token, is_before_rel),
         inferTypes=['local/argmax', 'ILP'] if ilp else ['local/argmax']
     )
 
@@ -130,7 +141,7 @@ if __name__ == "__main__":
 
     for token_node in node.getChildDataNodes():
         if args.ILP:
-            ilp_preds.append(token_node.getAttribute('<generated_token>/ILP').item())
+            ilp_preds.append(torch.argmax(token_node.getAttribute('<generated_token>/ILP')))
 
         preds.append(torch.argmax(token_node.getAttribute('<generated_token>'), dim=0).item())
         labels.append(token_node.getAttribute('<generated_token>/label').item())
@@ -146,6 +157,7 @@ if __name__ == "__main__":
         print_tkns(sample_tkn, cutoff_idx, ilp_preds, tokenizer, label_map)
 
     constr_names = [
+        'no non-EOS tokens can follow an EOS token',
         'at most 16 tokens are generated',
         'at most 32 tokens are generated',
         'at least one of the " The" token is generated',
@@ -154,9 +166,9 @@ if __name__ == "__main__":
     ]
 
     # output constraint violations
-    print(color('Constraint satisfaction rate:', fg='green'))
+    print(color('Constraint satisfaction rate:', fg='green', style='bold'))
     verify = node.verifyResultsLC()
     for i, (k, v) in enumerate(verify.items()):
-        print('Constraint:', color(constr_names[i], fg='green'))
+        print(color('Constraint:', fg='green', style='bold'), color(constr_names[i], fg='green'))
         print(k, v['satisfied'])
 

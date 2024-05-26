@@ -4,20 +4,6 @@ from transformers import PreTrainedModel, PreTrainedTokenizer
 from typing import Literal
 
 
-def make_eos_mask(pred_ids: torch.Tensor, eos_idx: int) -> torch.Tensor:
-    assert len(pred_ids.shape) == 1
-
-    eos_positions = (pred_ids == eos_idx).nonzero(as_tuple=False)
-    if len(eos_positions) == 0:
-        return torch.ones(pred_ids.shape, dtype=torch.bool)
-    else:
-        first_eos_position = eos_positions.min(dim=0).values[0]
-
-        result = torch.zeros(pred_ids.shape, dtype=torch.bool)
-        result[:first_eos_position] = True
-
-        return result
-
 class TinyModel(torch.nn.Module):
     def __init__(
             self,
@@ -61,15 +47,12 @@ class TinyModel(torch.nn.Module):
 
             target_logits_subset = target_logits[:, self.lmap.label_list]
 
-            pred_ids = torch.argmax(target_logits_subset, dim=-1)
-
-            return target_logits_subset, make_eos_mask(pred_ids, self.eos_idx).unsqueeze(1)
+            return target_logits_subset
         
         elif self.mode == 'generate':
             input_ids = input_ids[0].tolist()
             generated_logits = []
 
-            eos_pos = None
             for i in range(self.pad_size):
                 logits = self.model(torch.tensor(input_ids).unsqueeze(0)).logits[0]
                 target_logits = logits[-1, :]
@@ -81,10 +64,10 @@ class TinyModel(torch.nn.Module):
                 next_id = self.lmap.inv_label_map[torch.argmax(target_logits_subset).item()]
                 input_ids.append(next_id)
 
-                if next_id == self.eos_idx:
-                    print('Model: hit EOS, breaking')
-                    eos_pos = i
-                    break
+                # if next_id == self.eos_idx:
+                #     print('Model: hit EOS, breaking')
+                #     eos_pos = i
+                #     break
 
             gen_logits = torch.stack(generated_logits)
             gen_ids = torch.argmax(gen_logits, dim=-1)
@@ -104,8 +87,4 @@ class TinyModel(torch.nn.Module):
                     torch.ones((self.pad_size - gen_ids.shape[0],), dtype=torch.long) * self.lmap.label_map[self.eos_idx]
                 ], dim=0)
 
-            # make eos mask
-            eos_mask = torch.zeros(gen_ids.shape, dtype=torch.bool)
-            eos_mask[:eos_pos] = True
-
-            return gen_logits, eos_mask.unsqueeze(1)
+            return gen_logits
