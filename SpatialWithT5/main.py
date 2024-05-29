@@ -30,13 +30,22 @@ def eval(program, testing_set, cur_device):
     count_questions = 0
     count_correct = 0
     for datanode in tqdm(program.populate(testing_set, device=cur_device), "Checking accuracy"):
-
+        preds = []
+        labels = []
         for question in datanode.getChildDataNodes():
             count_questions += 1
             check_generate_answer = True
+            pred_each = []
+            labels_each = []
             for answer in question.getChildDataNodes():
                 pred = answer.getAttribute(answer_relations, 'local/argmax').argmax().item()
                 label = answer.getAttribute(answer_relations, 'label').item()
+                pred_each.append(["left", "right", "above", "below", "behind", "front",
+                               "near", "far", "disconnected", "touch", "overlap", "coveredby",
+                               "inside", "cover", "contain", "<eos>", "<pad>"][pred])
+                labels_each.append(["left", "right", "above", "below", "behind", "front",
+                               "near", "far", "disconnected", "touch", "overlap", "coveredby",
+                               "inside", "cover", "contain", "<eos>", "<pad>"][label])
                 # print(pred, label)
                 # padding label
                 check_generate_answer = check_generate_answer and (pred == label)
@@ -44,6 +53,11 @@ def eval(program, testing_set, cur_device):
                 if label == 15:
                     break
             count_correct += int(check_generate_answer)
+            preds.append(pred_each)
+            labels.append(labels_each)
+        # print("preds: {:}, label: {:}".format(preds, labels))
+
+
     # print("Acc:", , "%")
     return count_correct / count_questions * 100
 
@@ -109,7 +123,7 @@ def main(args):
     if args.compare_constraints:
         print("Loading the same setting without constraint learning")
         set_seed()
-        program = program_declaration(device=cur_device, pmd=args.pmd, beta=0, constraints=args.constraints)
+        program = program_declaration(device=cur_device, pmd=args.pmd, beta=0, constraints=True)
         train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=0, pmd=args.pmd)
         print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
         print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")

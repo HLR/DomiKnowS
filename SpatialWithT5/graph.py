@@ -17,7 +17,7 @@ with Graph('spatialQArule') as graph:
     answer_relations = answer(name="answer_relations", ConceptClass=EnumConcept,
                               values=["left", "right", "above", "below", "behind", "front",
                                "near", "far", "disconnected", "touch", "overlap", "coveredby",
-                               "inside", "cover", "contain", "<pad>", "<eos>"])
+                               "inside", "cover", "contain", "<eos>", "<pad>"])
     
     inverse = Concept(name="inverse")
     inv_question1, inv_question2 = inverse.has_a(arg1=question, arg2=question)
@@ -36,8 +36,8 @@ with Graph('spatialQArule') as graph:
         ifL(inverse('aconnect'+post_fix),
             ifL(andL(question("q1"+post_fix,path=('aconnect'+post_fix,inv_question1)),question("q2"+post_fix,path=('aconnect'+post_fix,inv_question2))),
                 ifL(
-                        ans1(path=('q1'+post_fix,rel_question_contain_answer)),
-                        notL(existsL(ans2(path=('q2'+post_fix,rel_question_contain_answer)))),
+                        existsL(ans1(path=('q1'+post_fix,rel_question_contain_answer))),
+                        existsL(ans2(path=('q2'+post_fix,rel_question_contain_answer))),
                 )
             )
         )
