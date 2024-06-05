@@ -31,7 +31,25 @@ A basic program can be initiate with a graph. For example:
 program = LearningBasedProgram(graph)
 ```
 
-Additional arguments may be required for other programs.
+Our main and the most basic LearningBasedProgram that is the parent of other program that we will introduce furthue is `SolverPOIProgram`. Let's look an example:
+```python
+program = SolverPOIProgram(graph,poi=[relation[org]],inferTypes=['local/softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()))
+```
+The first parameter is always our graph that we defined earlier. `poi` which stands for Point of Interest defines the label in our graph that we want to train our prameters on. For example imagin that your relation concept has two labels `org` and `family`. In this senario you may want to create and define separete `SolverPOIProgram` to train them. You can also train them togheter by including them in the same list `poi=[relation[org], relation[family]]` or `poi=[relation]`.
+
+Keep in mind that poi should include the final label(s) that you want to train but also your concept path to get to them in the knowledge graph otherwise DomiKnows may not know how to get to the desired label in your graph pathing. Imagin this graph:
+
+```python
+with Graph(name='global') as graph:
+    x = Concept(name='x')
+    y = Concept(name='y')
+    y_label = y(name='y_label')
+
+    x_contain_y, =x.contains(y)
+```
+
+in this example if we want to train a model to estimate y_label we need to include x_contain_y in our poi: `poi=[y,x[x_contain_y]]`.
+
 
 ### Train: `train()`
 
