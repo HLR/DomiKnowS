@@ -104,6 +104,8 @@ class LossModel(torch.nn.Module):
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
+        print("CModel - constr_loss:", constr_loss)
+
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
             globalLoss = constr_loss['globalLoss']

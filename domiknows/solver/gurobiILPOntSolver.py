@@ -44,6 +44,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.reuse_model = True
             
         self.model = collections.deque([], 20)
+
+        self.current_device = "cpu"
         
     def set_logical_constraints(self, new_logical_constraints):
         self.logical_constraints = new_logical_constraints
@@ -2091,7 +2093,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('\n')
                 self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
                 
-                lcName = lc.lcName
+                lcName = lc.name
                     
                 lcVerifyResult[lcName] = {}
                 current_verifyResult = lcVerifyResult[lcName]

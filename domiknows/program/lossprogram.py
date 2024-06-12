@@ -56,6 +56,8 @@ class LossProgram(LearningBasedProgram):
         self.copt = None
         self.beta = beta
 
+        print('initialized lossprogram')
+
     def to(self, device):
         super().to(device=device)
         if self.device is not None:
@@ -185,15 +187,68 @@ class LossProgram(LearningBasedProgram):
         self.cmodel.train()
         self.cmodel.reset()
         for data in dataset:
+            # print('data', data)
             if self.opt is not None:
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
             mloss, metric, *output = self.model(data)  # output = (datanode, builder)
+
+            label_map = ["left", "right", "above", "below", "behind", "front",
+                               "near", "far", "disconnected", "touch", "overlap", "coveredby",
+                               "inside", "cover", "contain", "<eos>", "<pad>"]
+
+            print("-" * 80)
+            print("** model loss", mloss)
+
+            datanode, builder = output
+
+            # print(datanode.getAttributes().keys())  
+            for question in datanode.getChildDataNodes():
+                print(
+                    "%s: id=%d, relation=%s" % (
+                        question.getAttribute("question"),
+                        question.getAttribute("id").item(),
+                        question.getAttribute("relation")
+                    )
+                )
+
+                predicted = []
+                predictedILP = []
+                labels = []
+                for answer in question.getChildDataNodes():
+                    attr = answer.getAttributes()
+
+                    if "<answer_relations>/ILP" in attr:
+                        predILP = torch.argmax(attr["<answer_relations>/ILP"]).item()
+                        predictedILP.append(label_map[predILP])
+                    
+                    pred = torch.argmax(attr["<answer_relations>/local/argmax"]).item()
+                    label = attr["<answer_relations>/label"].item()
+
+                    predicted.append(label_map[pred])
+                    labels.append(label_map[label])
+
+                print('predicted:', predicted)
+
+                if predictedILP:
+                    print('predictedILP:', predictedILP)
+                
+                print('labels:', labels)
+                print()
+
+            for constr_name, values in datanode.verifyResultsLC().items():
+                if values['satisfied'] < 100:
+                    print(f"Constraint {constr_name} not satisfied: {values['satisfied']}%")
+
+            print()
+
             if iter < c_warmup_iters:
                 loss = mloss
             else:
                 closs, *_ = self.cmodel(output[1])
+
+                print("** constraint loss", closs)
                 if torch.is_nonzero(closs):
                     loss = mloss + self.beta * closs
                     self.logger.info('closs is not zero')

@@ -11,6 +11,7 @@ from ordered_set import OrderedSet
 from domiknows import getRegrTimer_logger, getProductionModeStatus
 from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
+from domiknows.graph.relation import Contains
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -904,10 +905,14 @@ class DataNode:
             list: A list of DataNodes corresponding to the relation, or [None] if not found.
         """
         relRoot = self.findRootConceptOrRelation(rel)
-            
+
         if relRoot is None:
             return [None]
         
+        if isinstance(relRoot, Contains):
+            relRoot = "contains"
+
+        # relRoot.name = 'question-contains-0-answer'
         if not isinstance(relRoot, str):
             relRoot = relRoot.name     
         
@@ -917,7 +922,7 @@ class DataNode:
                 return self.impactLinks[relRoot]
             else:
                 return [None]
-        elif relRoot in self.relationLinks:
+        elif relRoot in self.relationLinks: # {"contains": [answer 0...]}
             return self.relationLinks[relRoot]
         else:
             return [None]
