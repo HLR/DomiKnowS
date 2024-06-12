@@ -25,7 +25,7 @@ def train(program, train_set, epoch, lr, cur_device, pmd=True, warmup_epochs=2):
     program.save("Models/trained_model.pt")
 
 
-def eval(program, testing_set, cur_device):
+def eval(program, testing_set, cur_device, key='local/argmax'):
     from graph import answer_relations
     count_questions = 0
     count_correct = 0
@@ -38,7 +38,7 @@ def eval(program, testing_set, cur_device):
             pred_each = []
             labels_each = []
             for answer in question.getChildDataNodes():
-                pred = answer.getAttribute(answer_relations, 'local/argmax').argmax().item()
+                pred = answer.getAttribute(answer_relations, key).argmax().item()
                 label = answer.getAttribute(answer_relations, 'label').item()
                 pred_each.append(["left", "right", "above", "below", "behind", "front",
                                "near", "far", "disconnected", "touch", "overlap", "coveredby",

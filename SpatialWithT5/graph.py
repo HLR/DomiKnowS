@@ -27,6 +27,8 @@ with Graph('spatialQArule') as graph:
     inverse_list1 = [('above', 'below'), ('left', 'right'), ('front', 'behind'), ('coveredby', 'cover'),
                       ('inside', 'contain')]
     
+    inverse_list1 += [(x, y) for y, x in inverse_list1]
+
     for ans1_str, ans2_str in inverse_list1:
 
         post_fix="_"+ans1_str+"_"+ans2_str
@@ -35,11 +37,22 @@ with Graph('spatialQArule') as graph:
 
         ifL(inverse('aconnect'+post_fix),
             ifL(andL(question("q1"+post_fix,path=('aconnect'+post_fix,inv_question1)),question("q2"+post_fix,path=('aconnect'+post_fix,inv_question2))),
-                ifL(
+                andL(
+                    ifL(
                         existsL(ans1(path=('q1'+post_fix,rel_question_contain_answer))),
                         existsL(ans2(path=('q2'+post_fix,rel_question_contain_answer))),
-                )
-            )
+                        name="if_answers(%s, %s)" % (ans1_str, ans2_str)
+                    ),
+                    ifL(
+                        existsL(ans1(path=('q2'+post_fix,rel_question_contain_answer))),
+                        existsL(ans2(path=('q1'+post_fix,rel_question_contain_answer))),
+                        name="if_answers_r(%s, %s)" % (ans1_str, ans2_str)
+                    ),
+                ),
+                name="if_questions(%s, %s)" % (ans1_str, ans2_str)
+                # existsL(ans1(path=('q1'+post_fix,rel_question_contain_answer)))
+            ),
+            name="if_inverse(%s)" % post_fix
         )
     #
     # # Similar to Inverse relation
