@@ -87,7 +87,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             labelIndex = conceptRelation[2]
             # If value is for multi-class concept, then we need to convert it to binary
-            value = torch.zeros(2, dtype=torch.float) if self.conceptIsMultiClass(conceptRelation) else valueI
+            value = torch.zeros(2, dtype=torch.float) if self.conceptIsMultiClass(conceptRelation) else valueI.squeeze(0)
             value[0] = 1 - valueI[labelIndex] if self.conceptIsMultiClass(conceptRelation) else value[0]
             value[1] = valueI[labelIndex] if self.conceptIsMultiClass(conceptRelation) else value[1]
             
@@ -864,7 +864,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 xP = torch.zeros(usedSampleSize, device = self.current_device, requires_grad=True)
         else:
             xV = dn.getAttribute(xPkey)
-            xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV))
+            xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV.squeeze(0)))
             xP = xEp[:,e[1]]
           
         if sampleSize > -1: 

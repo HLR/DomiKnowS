@@ -136,7 +136,7 @@ def createDummyDataNode(graph):
                 final_tensor = random_tensor / random_tensor.sum(dim=1, keepdim=True)
                 
                 if 'count' not in conceptRootConceptInfo:
-                    rootDataNode.attributes["variableSet"]['<' + conceptInfo['concept'].name + '>'] = final_tensor
+                    rootDataNode.attributes['<' + conceptInfo['concept'].name + '>'] = final_tensor
                 else:
                     rootDataNode.attributes["variableSet"][conceptRootConceptInfo['concept'].name + '/<' + conceptInfo['concept'].name + '>'] = final_tensor
                 continue
@@ -146,9 +146,12 @@ def createDummyDataNode(graph):
         if dn == rootDataNode:
             continue
         dn.attributes["rootDataNode"] = rootDataNode
-                
+        
+    if not rootDataNode.attributes.get("variableSet"):
+        # Remove "variableSet" from rootDataNode.attributes
+        rootDataNode.attributes.pop("variableSet", None)  # None is the default value if "variableSet" is not found
+          
     return rootDataNode
-
 
 def construct_ls_path_string(value):
     path_elements = []
@@ -333,6 +336,8 @@ def satisfactionReportOfConstraints(dn):
             lcIterator = reversed(lcSatisfactionTest['lcs'])
 
             currentLc = next(lcIterator)
+            if lcSatisfactionTest['lcResult'][lcTestIndex][0] == None:
+                continue
             lcResult = not lcSatisfactionTest['lcResult'][lcTestIndex][0].item()
             lcSatisfactionMsg = ''
             if isinstance(currentLc, ifL):
