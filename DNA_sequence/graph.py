@@ -48,19 +48,11 @@ with Graph('dna_and_gene_knowledge') as graph:
         )
     )
 
-    dna_sequence['sequence'] = ReaderSensor(keyword = 'sequence')
 
     # Only allow maximum of 100 nucleotides in a DNA sequence
-    # atMostL(len(dna_sequence['sequence']), 10000)
 
     # dna_sequence['label'] = ModuleLearner('sequence', module = nn.Linear(100, 1))
-    dna_sequence['label'] = ReaderSensor(keyword = 'label', label = True)
 
-    
-    # Gene family concepts 
-    gene_family = dna_sequence(name='gene_family')
-    classification = Concept(name='classification')
-
-    GeneFamily = gene_family(name = "gene_family_rel", ConceptClass = EnumConcept,\
+    gene_family = dna_sequence(name = "gene_family", ConceptClass = EnumConcept,\
                             values = ['gene_family_1', 'gene_family_2',\
                             'gene_family_3', 'gene_family_4', 'gene_family_5', 'gene_family_6'])
