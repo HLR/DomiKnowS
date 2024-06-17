@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from graph import graph, dna_sequence, nucleotide, A, T, C, G, N, rel_complementary_A_T, \
     rel_complementary_C_G, dna_sequence_contains_nucleotide, disjoint, ifL, orL, andL, atMostL, gene_family, classification
 
-from reader import read_domiknows_data, truncate, split_data
+from reader import read_domiknows_data, truncate
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.concept import EnumConcept
 from domiknows.graph.relation import disjoint
@@ -37,11 +37,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 # Download and preprocess DNA sequence data
-data_path = "/Users/sifatulislamanindho/Documents/projects/domiknows dna project/human.txt"  
+data_path = "human.txt"  
 train, test = read_domiknows_data(data_path)
 dna_sequence['input_sequence'] = ReaderSensor(keyword = 'input_sequence')
 dna_sequence['output_sequence'] = ReaderSensor(keyword = 'output_sequence')
-
 
 dna_sequence['encoded_sequence'] = FunctionalSensor('output_sequence', forward=preprocess_data)
 dna_sequence[gene_family] = ModuleLearner('encoded_sequences', module=nn.Linear(601, 2))
@@ -54,4 +53,5 @@ program.train(train, train_epoch_num=5, Optim=torch.optim.Adam, device='auto')
 program.test(test, device='auto')
 print(program.model.loss)
 # print("LABELS:", labels[:5])
-print("DONE")
+for datanode in program.populate(dataset=test):
+    print('datanode:', datanode)
