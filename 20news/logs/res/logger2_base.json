@@ -1,0 +1,240 @@
+{
+    "level1": {
+        "rec.autos": {
+            "precision_ilp": 0.8144927536231884,
+            "recall_ilp": 0.7937853107344632,
+            "f1_ilp": 0.8040057224606582,
+            "precision_normal": 0.8134110787172012,
+            "recall_normal": 0.788135593220339,
+            "f1_normal": 0.8005738880918221,
+            "support": 354
+        },
+        "comp.windows": {
+            "precision_ilp": 0.6495901639344263,
+            "recall_ilp": 0.8567567567567568,
+            "f1_ilp": 0.7389277389277389,
+            "precision_normal": 0.6515463917525773,
+            "recall_normal": 0.8540540540540541,
+            "f1_normal": 0.7391812865497076,
+            "support": 370
+        },
+        "talk.politics": {
+            "precision_ilp": 0.8477822580645161,
+            "recall_ilp": 0.8564154786150713,
+            "f1_ilp": 0.8520770010131712,
+            "precision_normal": 0.818957345971564,
+            "recall_normal": 0.879837067209776,
+            "f1_normal": 0.8483063328424153,
+            "support": 982
+        },
+        "talk.religion": {
+            "precision_ilp": 0.07692307692307693,
+            "recall_ilp": 0.008695652173913044,
+            "f1_ilp": 0.015625,
+            "precision_normal": 0.15384615384615385,
+            "recall_normal": 0.008695652173913044,
+            "f1_normal": 0.01646090534979424,
+            "support": 230
+        },
+        "alt.atheism": {
+            "precision_ilp": 0.4114583333333333,
+            "recall_ilp": 0.27241379310344827,
+            "f1_ilp": 0.3278008298755187,
+            "precision_normal": 0.4245810055865922,
+            "recall_normal": 0.2620689655172414,
+            "f1_normal": 0.32409381663113,
+            "support": 290
+        },
+        "sci.med": {
+            "precision_ilp": 0.8451776649746193,
+            "recall_ilp": 0.8975741239892183,
+            "f1_ilp": 0.8705882352941177,
+            "precision_normal": 0.8491048593350383,
+            "recall_normal": 0.894878706199461,
+            "f1_normal": 0.8713910761154856,
+            "support": 371
+        },
+        "soc.religion": {
+            "precision_ilp": 0.5286343612334802,
+            "recall_ilp": 0.9473684210526315,
+            "f1_ilp": 0.6786050895381716,
+            "precision_normal": 0.5294117647058824,
+            "recall_normal": 0.9473684210526315,
+            "f1_normal": 0.679245283018868,
+            "support": 380
+        },
+        "comp.graphics": {
+            "precision_ilp": 0.8461538461538461,
+            "recall_ilp": 0.3864864864864865,
+            "f1_ilp": 0.5306122448979592,
+            "precision_normal": 0.8597560975609756,
+            "recall_normal": 0.3810810810810811,
+            "f1_normal": 0.5280898876404494,
+            "support": 370
+        },
+        "comp.os": {
+            "precision_ilp": 0.5737327188940092,
+            "recall_ilp": 0.6747967479674797,
+            "f1_ilp": 0.6201743462017434,
+            "precision_normal": 0.6045918367346939,
+            "recall_normal": 0.6422764227642277,
+            "f1_normal": 0.6228646517739816,
+            "support": 369
+        },
+        "rec.motorcycles": {
+            "precision_ilp": 0.7720364741641338,
+            "recall_ilp": 0.703601108033241,
+            "f1_ilp": 0.736231884057971,
+            "precision_normal": 0.8175895765472313,
+            "recall_normal": 0.6952908587257618,
+            "f1_normal": 0.7514970059880239,
+            "support": 361
+        },
+        "comp.sys": {
+            "precision_ilp": 0.7947295423023578,
+            "recall_ilp": 0.7795918367346939,
+            "f1_ilp": 0.7870879120879121,
+            "precision_normal": 0.7527675276752768,
+            "recall_normal": 0.8326530612244898,
+            "f1_normal": 0.7906976744186046,
+            "support": 735
+        },
+        "misc.forsale": {
+            "precision_ilp": 0.80306905370844,
+            "recall_ilp": 0.8532608695652174,
+            "f1_ilp": 0.8274044795783926,
+            "precision_normal": 0.8279569892473119,
+            "recall_normal": 0.8369565217391305,
+            "f1_normal": 0.8324324324324325,
+            "support": 368
+        },
+        "sci.space": {
+            "precision_ilp": 0.7665847665847666,
+            "recall_ilp": 0.8478260869565217,
+            "f1_ilp": 0.8051612903225808,
+            "precision_normal": 0.7722772277227723,
+            "recall_normal": 0.8478260869565217,
+            "f1_normal": 0.8082901554404146,
+            "support": 368
+        },
+        "sci.crypt": {
+            "precision_ilp": 0.768595041322314,
+            "recall_ilp": 0.775,
+            "f1_ilp": 0.7717842323651453,
+            "precision_normal": 0.78125,
+            "recall_normal": 0.7638888888888888,
+            "f1_normal": 0.7724719101123595,
+            "support": 360
+        },
+        "rec.sport": {
+            "precision_ilp": 0.9507978723404256,
+            "recall_ilp": 0.9610215053763441,
+            "f1_ilp": 0.9558823529411764,
+            "precision_normal": 0.9445910290237467,
+            "recall_normal": 0.9623655913978495,
+            "f1_normal": 0.9533954727030626,
+            "support": 744
+        },
+        "sci.electronics": {
+            "precision_ilp": 0.6537313432835821,
+            "recall_ilp": 0.5967302452316077,
+            "f1_ilp": 0.6239316239316239,
+            "precision_normal": 0.6816720257234726,
+            "recall_normal": 0.5776566757493188,
+            "f1_normal": 0.6253687315634218,
+            "support": 367
+        },
+        "total": {
+            "level_precision": 0.7437907031872624,
+            "level_recall": 0.754096025074797,
+            "level_f1": 0.7362167607981296,
+            "level_precision_ilp": 0.7411189180874147,
+            "level_recall_ilp": 0.7509616754523436,
+            "level_f1_ilp": 0.7355066473241454,
+            "support": 7019
+        }
+    },
+    "level2": {
+        "mideast": {
+            "precision_ilp": 0.8773006134969326,
+            "recall_ilp": 0.8101983002832861,
+            "f1_ilp": 0.8424153166421208,
+            "precision_normal": 0.9150326797385621,
+            "recall_normal": 0.7932011331444759,
+            "f1_normal": 0.849772382397572,
+            "support": 353
+        },
+        "ibm": {
+            "precision_ilp": 0.6390977443609023,
+            "recall_ilp": 0.6818181818181818,
+            "f1_ilp": 0.6597671410090556,
+            "precision_normal": 0.6512968299711815,
+            "recall_normal": 0.6042780748663101,
+            "f1_normal": 0.6269070735090152,
+            "support": 374
+        },
+        "mac": {
+            "precision_ilp": 0.7981366459627329,
+            "recall_ilp": 0.7119113573407202,
+            "f1_ilp": 0.7525622254758418,
+            "precision_normal": 0.8187702265372169,
+            "recall_normal": 0.7008310249307479,
+            "f1_normal": 0.755223880597015,
+            "support": 361
+        },
+        "guns": {
+            "precision_ilp": 0.5882352941176471,
+            "recall_ilp": 0.7418397626112759,
+            "f1_ilp": 0.6561679790026247,
+            "precision_normal": 0.6072351421188631,
+            "recall_normal": 0.6973293768545994,
+            "f1_normal": 0.6491712707182321,
+            "support": 337
+        },
+        "baseball": {
+            "precision_ilp": 0.9404761904761905,
+            "recall_ilp": 0.8633879781420765,
+            "f1_ilp": 0.9002849002849004,
+            "precision_normal": 0.9546827794561934,
+            "recall_normal": 0.8633879781420765,
+            "f1_normal": 0.9067431850789096,
+            "support": 366
+        },
+        "hockey": {
+            "precision_ilp": 0.8725961538461539,
+            "recall_ilp": 0.9603174603174603,
+            "f1_ilp": 0.9143576826196474,
+            "precision_normal": 0.8829268292682927,
+            "recall_normal": 0.9576719576719577,
+            "f1_normal": 0.9187817258883249,
+            "support": 378
+        },
+        "misc": {
+            "precision_ilp": 0.5394190871369294,
+            "recall_ilp": 0.4452054794520548,
+            "f1_ilp": 0.4878048780487805,
+            "precision_normal": 0.5942028985507246,
+            "recall_normal": 0.4212328767123288,
+            "f1_normal": 0.49298597194388777,
+            "support": 292
+        },
+        "total": {
+            "level_precision": 0.7815820114393007,
+            "level_recall": 0.7293783015034538,
+            "level_f1": 0.7513038754728013,
+            "level_precision_ilp": 0.758487729206706,
+            "level_recall_ilp": 0.7545713124746037,
+            "level_f1_ilp": 0.7535552993732073,
+            "support": 2461
+        }
+    },
+    "total": {
+        "level_precision": 0.7536012949180921,
+        "level_recall": 0.7476793248945147,
+        "level_f1": 0.740133363035932,
+        "level_precision_ilp": 0.7456278467967581,
+        "level_recall_ilp": 0.7518987341772151,
+        "level_f1_ilp": 0.7401920621651519,
+        "support": 9480
+    }
+}

@@ -1,0 +1,43 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0551</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-30" temporalFunction="false" functionInDocument="CREATION_TIME">10/30/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891030-0149 = 891030 891030-0149.
+Trustcorp Inc. to Change Name 10/30/89 WALL STREET JOURNAL (J) TTCO SOCI TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) BANKS (BNK) TOLEDO, Ohio
+</EXTRAINFO>
+
+<TEXT>
+Trustcorp Inc. will <EVENT eid="e1" class="OCCURRENCE" stem="become">become</EVENT> Society Bank amp Trust when its <EVENT eid="e3" class="OCCURRENCE" stem="merger">merger</EVENT> is <EVENT eid="e4" class="ASPECTUAL" stem="complete">completed</EVENT> with Society Corp. of Cleveland, the bank <EVENT eid="e5" class="REPORTING" stem="say">said</EVENT>.
+
+Society Corp., which is also a bank, <EVENT eid="e6" class="I_ACTION" stem="agree">agreed</EVENT> in <TIMEX3 tid="t15" type="DATE" value="1989-06" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">June</TIMEX3> to <EVENT eid="e8" class="OCCURRENCE" stem="buy">buy</EVENT> Trustcorp for 12.4 million shares of stock with a market value of about $450 million. The <EVENT eid="e9" class="OCCURRENCE" stem="transaction">transaction</EVENT> is <EVENT eid="e10" class="I_STATE" stem="expect">expected</EVENT> to <EVENT eid="e12" class="ASPECTUAL" stem="close">close</EVENT> <TIMEX3 tid="t17" type="DATE" value="1989-12" mod="APPROX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">around year end</TIMEX3>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e9" eiid="ei88" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei84" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei85" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei87" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei82" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei90" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei86" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei83" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei89" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l14" relType="IS_INCLUDED" eventInstanceID="ei89" relatedToTime="t0" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei82" relatedToTime="t0" />
+<TLINK lid="l2" relType="AFTER" eventInstanceID="ei82" relatedToEventInstance="ei84"  />
+<TLINK lid="l3" relType="BEFORE" eventInstanceID="ei85" relatedToTime="t0" />
+<TLINK lid="l4" relType="IS_INCLUDED" eventInstanceID="ei86" relatedToTime="t15"  />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei87" relatedToEventInstance="ei83" />
+<TLINK lid="l6" relType="INCLUDES" eventInstanceID="ei88" relatedToEventInstance="ei87" />
+<TLINK lid="l7" relType="IS_INCLUDED" eventInstanceID="ei88" relatedToEventInstance="ei83" />
+<TLINK lid="l8" relType="IS_INCLUDED" eventInstanceID="ei90" relatedToTime="t17" />
+<SLINK lid="l9" relType="EVIDENTIAL" eventInstanceID="ei85" subordinatedEventInstance="ei82" />
+<SLINK lid="l10" relType="MODAL" eventInstanceID="ei86" subordinatedEventInstance="ei87" />
+<SLINK lid="l11" relType="MODAL" eventInstanceID="ei89" subordinatedEventInstance="ei90" />
+<ALINK lid="l12" relType="CULMINATES" eventInstanceID="ei84" relatedToEventInstance="ei83" />
+<ALINK lid="l13" relType="CULMINATES" eventInstanceID="ei90" relatedToEventInstance="ei88" />
+
+</TimeML>

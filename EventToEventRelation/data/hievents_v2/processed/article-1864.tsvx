@@ -1,0 +1,67 @@
+Text	The body of a young man has been found in Cork city, in a yard off Douglas Street just after 11am today. The remains have not yet been identified. A post mortem is due to be carried out at Cork University Hospital later today. A search operation for 18-year-old student Caolan Mulrooney was being carried out in the area at the time of the discovery. The search operation for Mr Mulrooney has now been suspended. Irish Examiner reporter Eoin English said the discovery was made at a place known as Blue Anchor Lane at the Capwell Road end of Douglas Street, a narrow lane running perpendicular to Douglas Street. "The scene has been sealed off for a full forensic and technical examination of the scene," he said.
+Event	1	found	Occurrence	33
+Event	2	operation	Occurrence	236
+Event	3	carried	I_Action	297
+Event	4	discovery	Occurrence	340
+Event	5	operation	Occurrence	362
+Event	6	suspended	I_Action	402
+Event	7	said	Reporting	450
+Event	8	discovery	Occurrence	459
+Event	9	made	I_Action	473
+Event	10	sealed	Occurrence	633
+Event	11	said	Reporting	708
+Relation	1	2	SubSuper	true	found	operation
+Relation	1	3	NoRel	true	found	carried
+Relation	1	4	Coref	true	found	discovery
+Relation	1	5	SubSuper	true	found	operation
+Relation	1	6	NoRel	true	found	suspended
+Relation	1	7	NoRel	true	found	said
+Relation	1	8	Coref	true	found	discovery
+Relation	1	9	NoRel	true	found	made
+Relation	1	10	NoRel	true	found	sealed
+Relation	1	11	NoRel	true	found	said
+Relation	2	3	NoRel	true	operation	carried
+Relation	2	4	SuperSub	true	operation	discovery
+Relation	2	5	Coref	true	operation	operation
+Relation	2	6	NoRel	true	operation	suspended
+Relation	2	7	NoRel	true	operation	said
+Relation	2	8	SuperSub	true	operation	discovery
+Relation	2	9	NoRel	true	operation	made
+Relation	2	10	NoRel	true	operation	sealed
+Relation	2	11	NoRel	true	operation	said
+Relation	3	4	NoRel	true	carried	discovery
+Relation	3	5	NoRel	true	carried	operation
+Relation	3	6	NoRel	true	carried	suspended
+Relation	3	7	NoRel	true	carried	said
+Relation	3	8	NoRel	true	carried	discovery
+Relation	3	9	NoRel	true	carried	made
+Relation	3	10	NoRel	true	carried	sealed
+Relation	3	11	NoRel	true	carried	said
+Relation	4	5	SubSuper	true	discovery	operation
+Relation	4	6	NoRel	true	discovery	suspended
+Relation	4	7	NoRel	true	discovery	said
+Relation	4	8	Coref	true	discovery	discovery
+Relation	4	9	NoRel	true	discovery	made
+Relation	4	10	NoRel	true	discovery	sealed
+Relation	4	11	NoRel	true	discovery	said
+Relation	5	6	NoRel	true	operation	suspended
+Relation	5	7	NoRel	true	operation	said
+Relation	5	8	SuperSub	true	operation	discovery
+Relation	5	9	NoRel	true	operation	made
+Relation	5	10	NoRel	true	operation	sealed
+Relation	5	11	NoRel	true	operation	said
+Relation	6	7	NoRel	true	suspended	said
+Relation	6	8	NoRel	true	suspended	discovery
+Relation	6	9	NoRel	true	suspended	made
+Relation	6	10	NoRel	true	suspended	sealed
+Relation	6	11	NoRel	true	suspended	said
+Relation	7	8	NoRel	true	said	discovery
+Relation	7	9	NoRel	true	said	made
+Relation	7	10	NoRel	true	said	sealed
+Relation	7	11	NoRel	true	said	said
+Relation	8	9	NoRel	true	discovery	made
+Relation	8	10	NoRel	true	discovery	sealed
+Relation	8	11	NoRel	true	discovery	said
+Relation	9	10	NoRel	true	made	sealed
+Relation	9	11	NoRel	true	made	said
+Relation	10	11	NoRel	true	sealed	said

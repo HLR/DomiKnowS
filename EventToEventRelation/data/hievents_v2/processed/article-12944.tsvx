@@ -1,0 +1,121 @@
+Text	The coincident index was up 0.2 percent last month, after an unrevised gain of 0.2 percent in February, suggesting that current conditions continue to improve. The lagging index increased 0.3 percent, after a revised 0.1 percent advance first reported as 0.2 percent. Earlier Thursday, the U.S. Labor Department reported more Americans than expected filed for unemployment benefit in the week ended April 14, which also happens to coincide with the April payroll employment survey week, echoing the International Monetary Fund's view that job creation this year and next will be modest at best. Applications for unemployment insurance payments decreased by 2,000 from the previous week's upwardly revised figure of 388,000, to 386,000, according to data from the Labor Department issued Thursday in Washington. However, the level of claims was above market expectations for a 370,000 reading. The four-week moving average, which normally provides a better indication of the underlying trend in labor markets, was 374,750, an increase of 5,500 from the previous week's upwardly revised average of 369,250 for first-time benefit applicants. The number of people filing for benefits after an initial week of aid increased by 26,000, to 3.30 million in the week ended April 7. The continuing claims figure doesn't include the number of Americans receiving extended benefits under federal programs. The four-week moving average for the week ended April 7 fell 21,500 to 3.32 million from the preceding week's revised average of 3.34 million. 
+Event	1	gain	StateChange	71
+Event	2	improve	StateChange	151
+Event	3	increased	StateChange	178
+Event	4	advance	Occurrence	229
+Event	5	reported	Reporting	243
+Event	6	reported	Reporting	312
+Event	7	filed	Occurrence	350
+Event	8	echoing	Occurrence	487
+Event	9	decreased	StateChange	644
+Event	10	issued	Reporting	780
+Event	11	claims	HalfGeneric	833
+Event	12	increase	StateChange	1025
+Event	13	filing	Occurrence	1160
+Event	14	increased	StateChange	1209
+Event	15	fell	StateChange	1450
+Relation	1	2	SubSuper	true	gain	improve
+Relation	1	3	NoRel	true	gain	increased
+Relation	1	4	NoRel	true	gain	advance
+Relation	1	5	NoRel	true	gain	reported
+Relation	1	6	NoRel	true	gain	reported
+Relation	1	7	NoRel	true	gain	filed
+Relation	1	8	NoRel	true	gain	echoing
+Relation	1	9	NoRel	true	gain	decreased
+Relation	1	10	NoRel	true	gain	issued
+Relation	1	11	NoRel	true	gain	claims
+Relation	1	12	NoRel	true	gain	increase
+Relation	1	13	NoRel	true	gain	filing
+Relation	1	14	NoRel	true	gain	increased
+Relation	1	15	NoRel	true	gain	fell
+Relation	2	3	SuperSub	true	improve	increased
+Relation	2	4	SuperSub	true	improve	advance
+Relation	2	5	NoRel	true	improve	reported
+Relation	2	6	NoRel	true	improve	reported
+Relation	2	7	NoRel	true	improve	filed
+Relation	2	8	NoRel	true	improve	echoing
+Relation	2	9	NoRel	true	improve	decreased
+Relation	2	10	NoRel	true	improve	issued
+Relation	2	11	NoRel	true	improve	claims
+Relation	2	12	NoRel	true	improve	increase
+Relation	2	13	NoRel	true	improve	filing
+Relation	2	14	NoRel	true	improve	increased
+Relation	2	15	NoRel	true	improve	fell
+Relation	3	4	NoRel	true	increased	advance
+Relation	3	5	NoRel	true	increased	reported
+Relation	3	6	NoRel	true	increased	reported
+Relation	3	7	NoRel	true	increased	filed
+Relation	3	8	NoRel	true	increased	echoing
+Relation	3	9	NoRel	true	increased	decreased
+Relation	3	10	NoRel	true	increased	issued
+Relation	3	11	NoRel	true	increased	claims
+Relation	3	12	NoRel	true	increased	increase
+Relation	3	13	NoRel	true	increased	filing
+Relation	3	14	NoRel	true	increased	increased
+Relation	3	15	NoRel	true	increased	fell
+Relation	4	5	NoRel	true	advance	reported
+Relation	4	6	NoRel	true	advance	reported
+Relation	4	7	NoRel	true	advance	filed
+Relation	4	8	NoRel	true	advance	echoing
+Relation	4	9	NoRel	true	advance	decreased
+Relation	4	10	NoRel	true	advance	issued
+Relation	4	11	NoRel	true	advance	claims
+Relation	4	12	NoRel	true	advance	increase
+Relation	4	13	NoRel	true	advance	filing
+Relation	4	14	NoRel	true	advance	increased
+Relation	4	15	NoRel	true	advance	fell
+Relation	5	6	NoRel	true	reported	reported
+Relation	5	7	NoRel	true	reported	filed
+Relation	5	8	NoRel	true	reported	echoing
+Relation	5	9	NoRel	true	reported	decreased
+Relation	5	10	NoRel	true	reported	issued
+Relation	5	11	NoRel	true	reported	claims
+Relation	5	12	NoRel	true	reported	increase
+Relation	5	13	NoRel	true	reported	filing
+Relation	5	14	NoRel	true	reported	increased
+Relation	5	15	NoRel	true	reported	fell
+Relation	6	7	NoRel	true	reported	filed
+Relation	6	8	NoRel	true	reported	echoing
+Relation	6	9	NoRel	true	reported	decreased
+Relation	6	10	NoRel	true	reported	issued
+Relation	6	11	NoRel	true	reported	claims
+Relation	6	12	NoRel	true	reported	increase
+Relation	6	13	NoRel	true	reported	filing
+Relation	6	14	NoRel	true	reported	increased
+Relation	6	15	NoRel	true	reported	fell
+Relation	7	8	NoRel	true	filed	echoing
+Relation	7	9	NoRel	true	filed	decreased
+Relation	7	10	NoRel	true	filed	issued
+Relation	7	11	NoRel	true	filed	claims
+Relation	7	12	NoRel	true	filed	increase
+Relation	7	13	NoRel	true	filed	filing
+Relation	7	14	NoRel	true	filed	increased
+Relation	7	15	NoRel	true	filed	fell
+Relation	8	9	NoRel	true	echoing	decreased
+Relation	8	10	NoRel	true	echoing	issued
+Relation	8	11	NoRel	true	echoing	claims
+Relation	8	12	NoRel	true	echoing	increase
+Relation	8	13	NoRel	true	echoing	filing
+Relation	8	14	NoRel	true	echoing	increased
+Relation	8	15	NoRel	true	echoing	fell
+Relation	9	10	NoRel	true	decreased	issued
+Relation	9	11	SubSuper	true	decreased	claims
+Relation	9	12	NoRel	true	decreased	increase
+Relation	9	13	SubSuper	true	decreased	filing
+Relation	9	14	NoRel	true	decreased	increased
+Relation	9	15	NoRel	true	decreased	fell
+Relation	10	11	NoRel	true	issued	claims
+Relation	10	12	NoRel	true	issued	increase
+Relation	10	13	NoRel	true	issued	filing
+Relation	10	14	NoRel	true	issued	increased
+Relation	10	15	NoRel	true	issued	fell
+Relation	11	12	NoRel	true	claims	increase
+Relation	11	13	Coref	true	claims	filing
+Relation	11	14	SuperSub	true	claims	increased
+Relation	11	15	SuperSub	true	claims	fell
+Relation	12	13	NoRel	true	increase	filing
+Relation	12	14	NoRel	true	increase	increased
+Relation	12	15	NoRel	true	increase	fell
+Relation	13	14	SuperSub	true	filing	increased
+Relation	13	15	SuperSub	true	filing	fell
+Relation	14	15	NoRel	true	increased	fell

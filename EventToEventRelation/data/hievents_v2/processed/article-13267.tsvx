@@ -1,0 +1,232 @@
+Text	Fabrice Muamba will attend the Barclays Premier League match between Bolton and Tottenham at the Reebok Stadium. It will mark the first time the Wanderers midfielder has attended a game since he suffered a cardiac arrest in an FA Cup tie between Bolton and Spurs at White Hart Lane on March 17. Bolton manager Owen Coyle said: "We are absolutely delighted that we will be able to welcome Fabrice and his family back to the Reebok, and we are all looking forward to seeing him." He added: "It's fitting that the match is between these two clubs and that Fabrice is able to come along. "I know Fabrice is very keen to show his appreciation to both sets of fans for their support." The 24-year-old, whose heart stopped beating for 78 minutes following his collapse, spent a month at the London Chest Hospital before being discharged on April 16. The speed of Muamba's recovery amazed medical professionals. He started talking two days after his collapse and began walking just over a fortnight later, although it is not yet known if he will play professional football again. Since his discharge the midfielder has continued his rehabilitation at home and on Saturday the former England Under-21 midfielder took to his Twitter account for the first time since the incident. In his message he thanked people for their "prayers, love and support'' and wished his team-mates well ahead of their match at Sunderland, which they drew 2-2.
+Event	1	suffered	I_Action	195
+Event	2	arrest	Occurrence	214
+Event	3	tie	Occurrence	234
+Event	4	said	Reporting	321
+Event	5	added	Reporting	481
+Event	6	beating	Occurrence	716
+Event	7	collapse	Occurrence	753
+Event	8	spent	Occurrence	763
+Event	9	discharged	Occurrence	819
+Event	10	recovery	Occurrence	865
+Event	11	amazed	StateChange	874
+Event	12	talking	Occurrence	915
+Event	13	collapse	Occurrence	942
+Event	14	walking	Occurrence	961
+Event	15	discharge	Occurrence	1082
+Event	16	rehabilitation	Occurrence	1125
+Event	17	took	Occurrence	1203
+Event	18	incident	Occurrence	1260
+Event	19	thanked	Reporting	1288
+Event	20	wished	Reporting	1346
+Event	21	drew	Occurrence	1420
+Relation	1	2	NoRel	true	suffered	arrest
+Relation	1	3	NoRel	true	suffered	tie
+Relation	1	4	NoRel	true	suffered	said
+Relation	1	5	NoRel	true	suffered	added
+Relation	1	6	NoRel	true	suffered	beating
+Relation	1	7	NoRel	true	suffered	collapse
+Relation	1	8	NoRel	true	suffered	spent
+Relation	1	9	NoRel	true	suffered	discharged
+Relation	1	10	NoRel	true	suffered	recovery
+Relation	1	11	NoRel	true	suffered	amazed
+Relation	1	12	NoRel	true	suffered	talking
+Relation	1	13	NoRel	true	suffered	collapse
+Relation	1	14	NoRel	true	suffered	walking
+Relation	1	15	NoRel	true	suffered	discharge
+Relation	1	16	NoRel	true	suffered	rehabilitation
+Relation	1	17	NoRel	true	suffered	took
+Relation	1	18	NoRel	true	suffered	incident
+Relation	1	19	NoRel	true	suffered	thanked
+Relation	1	20	NoRel	true	suffered	wished
+Relation	1	21	NoRel	true	suffered	drew
+Relation	2	3	SubSuper	true	arrest	tie
+Relation	2	4	NoRel	true	arrest	said
+Relation	2	5	NoRel	true	arrest	added
+Relation	2	6	NoRel	true	arrest	beating
+Relation	2	7	Coref	true	arrest	collapse
+Relation	2	8	NoRel	true	arrest	spent
+Relation	2	9	NoRel	true	arrest	discharged
+Relation	2	10	NoRel	true	arrest	recovery
+Relation	2	11	NoRel	true	arrest	amazed
+Relation	2	12	NoRel	true	arrest	talking
+Relation	2	13	Coref	true	arrest	collapse
+Relation	2	14	NoRel	true	arrest	walking
+Relation	2	15	NoRel	true	arrest	discharge
+Relation	2	16	NoRel	true	arrest	rehabilitation
+Relation	2	17	NoRel	true	arrest	took
+Relation	2	18	Coref	true	arrest	incident
+Relation	2	19	NoRel	true	arrest	thanked
+Relation	2	20	NoRel	true	arrest	wished
+Relation	2	21	NoRel	true	arrest	drew
+Relation	3	4	NoRel	true	tie	said
+Relation	3	5	NoRel	true	tie	added
+Relation	3	6	NoRel	true	tie	beating
+Relation	3	7	SuperSub	true	tie	collapse
+Relation	3	8	NoRel	true	tie	spent
+Relation	3	9	NoRel	true	tie	discharged
+Relation	3	10	NoRel	true	tie	recovery
+Relation	3	11	NoRel	true	tie	amazed
+Relation	3	12	NoRel	true	tie	talking
+Relation	3	13	SuperSub	true	tie	collapse
+Relation	3	14	NoRel	true	tie	walking
+Relation	3	15	NoRel	true	tie	discharge
+Relation	3	16	NoRel	true	tie	rehabilitation
+Relation	3	17	NoRel	true	tie	took
+Relation	3	18	SuperSub	true	tie	incident
+Relation	3	19	NoRel	true	tie	thanked
+Relation	3	20	NoRel	true	tie	wished
+Relation	3	21	NoRel	true	tie	drew
+Relation	4	5	NoRel	true	said	added
+Relation	4	6	NoRel	true	said	beating
+Relation	4	7	NoRel	true	said	collapse
+Relation	4	8	NoRel	true	said	spent
+Relation	4	9	NoRel	true	said	discharged
+Relation	4	10	NoRel	true	said	recovery
+Relation	4	11	NoRel	true	said	amazed
+Relation	4	12	NoRel	true	said	talking
+Relation	4	13	NoRel	true	said	collapse
+Relation	4	14	NoRel	true	said	walking
+Relation	4	15	NoRel	true	said	discharge
+Relation	4	16	NoRel	true	said	rehabilitation
+Relation	4	17	NoRel	true	said	took
+Relation	4	18	NoRel	true	said	incident
+Relation	4	19	NoRel	true	said	thanked
+Relation	4	20	NoRel	true	said	wished
+Relation	4	21	NoRel	true	said	drew
+Relation	5	6	NoRel	true	added	beating
+Relation	5	7	NoRel	true	added	collapse
+Relation	5	8	NoRel	true	added	spent
+Relation	5	9	NoRel	true	added	discharged
+Relation	5	10	NoRel	true	added	recovery
+Relation	5	11	NoRel	true	added	amazed
+Relation	5	12	NoRel	true	added	talking
+Relation	5	13	NoRel	true	added	collapse
+Relation	5	14	NoRel	true	added	walking
+Relation	5	15	NoRel	true	added	discharge
+Relation	5	16	NoRel	true	added	rehabilitation
+Relation	5	17	NoRel	true	added	took
+Relation	5	18	NoRel	true	added	incident
+Relation	5	19	NoRel	true	added	thanked
+Relation	5	20	NoRel	true	added	wished
+Relation	5	21	NoRel	true	added	drew
+Relation	6	7	NoRel	true	beating	collapse
+Relation	6	8	NoRel	true	beating	spent
+Relation	6	9	NoRel	true	beating	discharged
+Relation	6	10	NoRel	true	beating	recovery
+Relation	6	11	NoRel	true	beating	amazed
+Relation	6	12	NoRel	true	beating	talking
+Relation	6	13	NoRel	true	beating	collapse
+Relation	6	14	NoRel	true	beating	walking
+Relation	6	15	NoRel	true	beating	discharge
+Relation	6	16	NoRel	true	beating	rehabilitation
+Relation	6	17	NoRel	true	beating	took
+Relation	6	18	NoRel	true	beating	incident
+Relation	6	19	NoRel	true	beating	thanked
+Relation	6	20	NoRel	true	beating	wished
+Relation	6	21	NoRel	true	beating	drew
+Relation	7	8	NoRel	true	collapse	spent
+Relation	7	9	NoRel	true	collapse	discharged
+Relation	7	10	NoRel	true	collapse	recovery
+Relation	7	11	NoRel	true	collapse	amazed
+Relation	7	12	NoRel	true	collapse	talking
+Relation	7	13	Coref	true	collapse	collapse
+Relation	7	14	NoRel	true	collapse	walking
+Relation	7	15	NoRel	true	collapse	discharge
+Relation	7	16	NoRel	true	collapse	rehabilitation
+Relation	7	17	NoRel	true	collapse	took
+Relation	7	18	Coref	true	collapse	incident
+Relation	7	19	NoRel	true	collapse	thanked
+Relation	7	20	NoRel	true	collapse	wished
+Relation	7	21	NoRel	true	collapse	drew
+Relation	8	9	SuperSub	true	spent	discharged
+Relation	8	10	NoRel	true	spent	recovery
+Relation	8	11	NoRel	true	spent	amazed
+Relation	8	12	NoRel	true	spent	talking
+Relation	8	13	NoRel	true	spent	collapse
+Relation	8	14	NoRel	true	spent	walking
+Relation	8	15	SuperSub	true	spent	discharge
+Relation	8	16	NoRel	true	spent	rehabilitation
+Relation	8	17	NoRel	true	spent	took
+Relation	8	18	NoRel	true	spent	incident
+Relation	8	19	NoRel	true	spent	thanked
+Relation	8	20	NoRel	true	spent	wished
+Relation	8	21	NoRel	true	spent	drew
+Relation	9	10	NoRel	true	discharged	recovery
+Relation	9	11	NoRel	true	discharged	amazed
+Relation	9	12	NoRel	true	discharged	talking
+Relation	9	13	NoRel	true	discharged	collapse
+Relation	9	14	NoRel	true	discharged	walking
+Relation	9	15	Coref	true	discharged	discharge
+Relation	9	16	NoRel	true	discharged	rehabilitation
+Relation	9	17	NoRel	true	discharged	took
+Relation	9	18	NoRel	true	discharged	incident
+Relation	9	19	NoRel	true	discharged	thanked
+Relation	9	20	NoRel	true	discharged	wished
+Relation	9	21	NoRel	true	discharged	drew
+Relation	10	11	SuperSub	true	recovery	amazed
+Relation	10	12	SuperSub	true	recovery	talking
+Relation	10	13	NoRel	true	recovery	collapse
+Relation	10	14	SuperSub	true	recovery	walking
+Relation	10	15	NoRel	true	recovery	discharge
+Relation	10	16	SubSuper	true	recovery	rehabilitation
+Relation	10	17	NoRel	true	recovery	took
+Relation	10	18	NoRel	true	recovery	incident
+Relation	10	19	NoRel	true	recovery	thanked
+Relation	10	20	NoRel	true	recovery	wished
+Relation	10	21	NoRel	true	recovery	drew
+Relation	11	12	NoRel	true	amazed	talking
+Relation	11	13	NoRel	true	amazed	collapse
+Relation	11	14	NoRel	true	amazed	walking
+Relation	11	15	NoRel	true	amazed	discharge
+Relation	11	16	SubSuper	true	amazed	rehabilitation
+Relation	11	17	NoRel	true	amazed	took
+Relation	11	18	NoRel	true	amazed	incident
+Relation	11	19	NoRel	true	amazed	thanked
+Relation	11	20	NoRel	true	amazed	wished
+Relation	11	21	NoRel	true	amazed	drew
+Relation	12	13	NoRel	true	talking	collapse
+Relation	12	14	NoRel	true	talking	walking
+Relation	12	15	NoRel	true	talking	discharge
+Relation	12	16	SubSuper	true	talking	rehabilitation
+Relation	12	17	NoRel	true	talking	took
+Relation	12	18	NoRel	true	talking	incident
+Relation	12	19	NoRel	true	talking	thanked
+Relation	12	20	NoRel	true	talking	wished
+Relation	12	21	NoRel	true	talking	drew
+Relation	13	14	NoRel	true	collapse	walking
+Relation	13	15	NoRel	true	collapse	discharge
+Relation	13	16	NoRel	true	collapse	rehabilitation
+Relation	13	17	NoRel	true	collapse	took
+Relation	13	18	Coref	true	collapse	incident
+Relation	13	19	NoRel	true	collapse	thanked
+Relation	13	20	NoRel	true	collapse	wished
+Relation	13	21	NoRel	true	collapse	drew
+Relation	14	15	NoRel	true	walking	discharge
+Relation	14	16	SubSuper	true	walking	rehabilitation
+Relation	14	17	NoRel	true	walking	took
+Relation	14	18	NoRel	true	walking	incident
+Relation	14	19	NoRel	true	walking	thanked
+Relation	14	20	NoRel	true	walking	wished
+Relation	14	21	NoRel	true	walking	drew
+Relation	15	16	NoRel	true	discharge	rehabilitation
+Relation	15	17	NoRel	true	discharge	took
+Relation	15	18	NoRel	true	discharge	incident
+Relation	15	19	NoRel	true	discharge	thanked
+Relation	15	20	NoRel	true	discharge	wished
+Relation	15	21	NoRel	true	discharge	drew
+Relation	16	17	NoRel	true	rehabilitation	took
+Relation	16	18	NoRel	true	rehabilitation	incident
+Relation	16	19	NoRel	true	rehabilitation	thanked
+Relation	16	20	NoRel	true	rehabilitation	wished
+Relation	16	21	NoRel	true	rehabilitation	drew
+Relation	17	18	NoRel	true	took	incident
+Relation	17	19	NoRel	true	took	thanked
+Relation	17	20	NoRel	true	took	wished
+Relation	17	21	NoRel	true	took	drew
+Relation	18	19	NoRel	true	incident	thanked
+Relation	18	20	NoRel	true	incident	wished
+Relation	18	21	NoRel	true	incident	drew
+Relation	19	20	NoRel	true	thanked	wished
+Relation	19	21	NoRel	true	thanked	drew
+Relation	20	21	NoRel	true	wished	drew

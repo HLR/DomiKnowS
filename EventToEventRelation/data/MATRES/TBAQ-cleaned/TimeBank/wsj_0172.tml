@@ -1,0 +1,61 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0172</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME">11/02/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0018 = 891102 891102-0018.
+Business Brief -- First of America Bank Corp.: @ Midwest Financial Group @ Acquired for $250 Million 11/02/89 WALL STREET JOURNAL (J) FABK TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) BANKS (BNK)
+</EXTRAINFO>
+
+<TEXT>
+First of America Bank Corp. <EVENT eid="e1" class="REPORTING" stem="say">said</EVENT> it <EVENT eid="e2" class="ASPECTUAL" stem="complete">completed</EVENT> its <EVENT eid="e3" class="OCCURRENCE" stem="acquisition">acquisition</EVENT> of Midwest Financial Group Inc. for about $250 million. First of America, which <TIMEX3 tid="t41" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> <EVENT eid="e4" class="STATE" stem="have">has</EVENT> 45 banks and $12.5 billion in assets, <EVENT eid="e5" class="REPORTING" stem="announce">announced</EVENT> an <EVENT eid="e6" class="I_ACTION" stem="agreement">agreement</EVENT> to <EVENT eid="e8" class="OCCURRENCE" stem="acquire">acquire</EVENT> the Peoria, Ill., bank holding company in <TIMEX3 tid="t67" type="DATE" value="1990-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">January</TIMEX3>.
+
+Midwest Financial has $2.3 billion in assets and eight banks. The Midwest Financial subsidiary banks will <EVENT eid="e11" class="ASPECTUAL" stem="continue">continue</EVENT> to <EVENT eid="e13" class="OCCURRENCE" stem="operate">operate</EVENT> under their current names until <TIMEX3 tid="t75" type="DATE" value="1990" mod="START" temporalFunction="false" functionInDocument="NONE">early 1990</TIMEX3>, when each will <EVENT eid="e16" class="OCCURRENCE" stem="adopt">adopt</EVENT> the First of America name.
+
+Kalamazoo, Mich.-based First of America <EVENT eid="e17" class="REPORTING" stem="say">said</EVENT> it will <EVENT eid="e18" class="OCCURRENCE" stem="eliminate">eliminate</EVENT> the 13 management positions of the former Midwest Financial parent company. First of America <EVENT eid="e19" class="REPORTING" stem="say">said</EVENT> some of the managers will <EVENT eid="e20" class="OCCURRENCE" stem="take">take</EVENT> other jobs with First of America. But it <EVENT eid="e22" class="REPORTING" stem="say">said</EVENT> that severance <EVENT eid="e23" class="OCCURRENCE" stem="payment">payments</EVENT> to those executives not <EVENT eid="e24" class="OCCURRENCE" stem="stay">staying</EVENT> with the company will <EVENT eid="e25" class="OCCURRENCE" stem="reduce">reduce</EVENT> First of America's operating results for 1989 by $3 million to $4 million, or 15 cents to 20 cents a share.
+</TEXT>
+
+<MAKEINSTANCE eventID="e5" eiid="ei152" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei166" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei155" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei164" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e19" eiid="ei160" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei151" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei161" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei150" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e1" eiid="ei148" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei159" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei162" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei165" tense="PRESPART" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei153" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e8" eiid="ei154" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei158" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei149" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei156" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei157" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l23" relType="ENDED_BY" eventInstanceID="ei150" relatedToEventInstance="ei149" />
+<TLINK lid="l1" relType="IBEFORE" eventInstanceID="ei164" relatedToEventInstance="ei166" />
+<TLINK lid="l2" relType="AFTER" timeID="t0" relatedToEventInstance="ei148" />
+<TLINK lid="l3" relType="INCLUDES" timeID="t41" relatedToTime="t0" />
+<TLINK lid="l4" relType="INCLUDES" timeID="t41" relatedToEventInstance="ei151" />
+<TLINK lid="l5" relType="BEFORE" eventInstanceID="ei152" relatedToTime="t0" />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei154" relatedToTime="t67"  />
+<TLINK lid="l7" relType="AFTER" eventInstanceID="ei155" relatedToTime="t0" />
+<TLINK lid="l8" relType="ENDED_BY" eventInstanceID="ei156" relatedToTime="t75"  />
+<TLINK lid="l9" relType="BEGINS" timeID="t75" relatedToEventInstance="ei157"  />
+<TLINK lid="l10" relType="BEFORE" eventInstanceID="ei158" relatedToTime="t0" />
+<TLINK lid="l11" relType="SIMULTANEOUS" eventInstanceID="ei160" relatedToEventInstance="ei158" />
+<TLINK lid="l12" relType="SIMULTANEOUS" eventInstanceID="ei162" relatedToEventInstance="ei158" />
+<SLINK lid="l15" relType="EVIDENTIAL" eventInstanceID="ei148" subordinatedEventInstance="ei149" />
+<SLINK lid="l16" relType="EVIDENTIAL" eventInstanceID="ei152" subordinatedEventInstance="ei153" />
+<SLINK lid="l17" relType="MODAL" eventInstanceID="ei153" subordinatedEventInstance="ei154" />
+<SLINK lid="l18" relType="EVIDENTIAL" eventInstanceID="ei158" subordinatedEventInstance="ei159" />
+<SLINK lid="l19" relType="EVIDENTIAL" eventInstanceID="ei160" subordinatedEventInstance="ei161" />
+<SLINK lid="l20" relType="EVIDENTIAL" eventInstanceID="ei162" subordinatedEventInstance="ei166" />
+<ALINK lid="l21" relType="CULMINATES" eventInstanceID="ei149" relatedToEventInstance="ei150" />
+<ALINK lid="l22" relType="CONTINUES" eventInstanceID="ei155" relatedToEventInstance="ei156" />
+
+</TimeML>

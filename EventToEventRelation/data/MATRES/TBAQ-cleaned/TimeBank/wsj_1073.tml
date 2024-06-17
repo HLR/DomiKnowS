@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_1073</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-25" temporalFunction="false" functionInDocument="CREATION_TIME">10/25/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891025-0157 = 891025 891025-0157.
+Advanced Medical Makes Purchase 10/25/89 WALL STREET JOURNAL (J) AMA HENG TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) MEDICAL AND BIOTECHNOLOGY (MTC) SAN FRANCISCO
+</EXTRAINFO>
+
+<TEXT>
+Advanced Medical Technologies Inc. <EVENT eid="e2" class="REPORTING" stem="say">said</EVENT> it <EVENT eid="e3" class="OCCURRENCE" stem="purchase">purchased</EVENT> 93% of a unit of Henley Group Inc.
+
+Advanced Medical <EVENT eid="e4" class="OCCURRENCE" stem="pay">paid</EVENT> $106 million in cash for its share in a unit of Henley's Fisher Scientific subsidiary. The unit makes intravenous pumps used by hospitals and <EVENT eid="e9" class="OCCURRENCE" stem="have">had</EVENT> more than $110 million in <EVENT eid="e30" class="OCCURRENCE" stem="sale">sales</EVENT> <TIMEX3 tid="t31" type="DATE" value="1988" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last year</TIMEX3>, according to Advanced Medical.
+</TEXT>
+
+<MAKEINSTANCE eventID="e2" eiid="ei1989" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei1990" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei1991" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei1992" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e30" eiid="ei1993" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l1" relType="SIMULTANEOUS" eventInstanceID="ei1992" relatedToEventInstance="ei1993" origin="USER" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei1991" relatedToTime="t0" origin="USER" />
+<TLINK lid="l3" relType="BEFORE" eventInstanceID="ei1989" relatedToTime="t0" origin="USER" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei1992" relatedToTime="t0" origin="USER" />
+<TLINK lid="l5" relType="DURING" eventInstanceID="ei1993" relatedToTime="t31" origin="USER" />
+<SLINK lid="l6" relType="EVIDENTIAL" eventInstanceID="ei1989" subordinatedEventInstance="ei1990" />
+
+</TimeML>

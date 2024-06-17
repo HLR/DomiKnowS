@@ -1,0 +1,137 @@
+Text	Adam Lambert and Adam Levine are two of the many celebrities who cheered for President Obama's gay marriage support. Robin Roberts from ABC News reported last Wednesday that Obama affirmed the legalization of marriage between same sex couples. The statement became hot news over social networking sites in minutes. It was followed with celebrities reacting positively to it with former 'American Idol' contestant, Adam Lambert, expressing his thoughts over Twitter. Lambert has a boyfriend but emphasized that he still has no plans of tying the knot. The Sue Sylvester of 'Glee,' Jane Lynch, expressed her joy to the President with a shoutout tweet of "Obama: Marriage? Gay is okay!" It was in 2010 when the comedian married her girlfriend. Even the straight guys like Adam Levine of Maroon 5 thanked Obama for the exemplary leadership the President has shown. Neil Patrick Harris was never left out and wrote a simple 'Bravo!' for the fair US President. 
+Event	1	cheered	Occurrence	65
+Event	2	support	Occurrence	108
+Event	3	reported	Reporting	145
+Event	4	affirmed	I_Action	180
+Event	5	statement	Occurrence	248
+Event	6	became	StateChange	258
+Event	7	followed	Occurrence	322
+Event	8	reacting	Occurrence	348
+Event	9	expressing	Reporting	428
+Event	10	emphasized	Reporting	494
+Event	11	expressed	Reporting	592
+Event	12	tweet	Reporting	643
+Event	13	married	Occurrence	717
+Event	14	thanked	Occurrence	793
+Event	15	shown	Perception	854
+Event	16	wrote	Occurrence	904
+Relation	1	2	NoRel	true	cheered	support
+Relation	1	3	NoRel	true	cheered	reported
+Relation	1	4	NoRel	true	cheered	affirmed
+Relation	1	5	NoRel	true	cheered	statement
+Relation	1	6	NoRel	true	cheered	became
+Relation	1	7	NoRel	true	cheered	followed
+Relation	1	8	SubSuper	true	cheered	reacting
+Relation	1	9	NoRel	true	cheered	expressing
+Relation	1	10	NoRel	true	cheered	emphasized
+Relation	1	11	NoRel	true	cheered	expressed
+Relation	1	12	NoRel	true	cheered	tweet
+Relation	1	13	NoRel	true	cheered	married
+Relation	1	14	NoRel	true	cheered	thanked
+Relation	1	15	NoRel	true	cheered	shown
+Relation	1	16	NoRel	true	cheered	wrote
+Relation	2	3	NoRel	true	support	reported
+Relation	2	4	NoRel	true	support	affirmed
+Relation	2	5	Coref	true	support	statement
+Relation	2	6	NoRel	true	support	became
+Relation	2	7	NoRel	true	support	followed
+Relation	2	8	NoRel	true	support	reacting
+Relation	2	9	NoRel	true	support	expressing
+Relation	2	10	NoRel	true	support	emphasized
+Relation	2	11	NoRel	true	support	expressed
+Relation	2	12	NoRel	true	support	tweet
+Relation	2	13	NoRel	true	support	married
+Relation	2	14	NoRel	true	support	thanked
+Relation	2	15	SuperSub	true	support	shown
+Relation	2	16	NoRel	true	support	wrote
+Relation	3	4	NoRel	true	reported	affirmed
+Relation	3	5	NoRel	true	reported	statement
+Relation	3	6	NoRel	true	reported	became
+Relation	3	7	NoRel	true	reported	followed
+Relation	3	8	NoRel	true	reported	reacting
+Relation	3	9	NoRel	true	reported	expressing
+Relation	3	10	NoRel	true	reported	emphasized
+Relation	3	11	NoRel	true	reported	expressed
+Relation	3	12	NoRel	true	reported	tweet
+Relation	3	13	NoRel	true	reported	married
+Relation	3	14	NoRel	true	reported	thanked
+Relation	3	15	NoRel	true	reported	shown
+Relation	3	16	NoRel	true	reported	wrote
+Relation	4	5	NoRel	true	affirmed	statement
+Relation	4	6	NoRel	true	affirmed	became
+Relation	4	7	NoRel	true	affirmed	followed
+Relation	4	8	NoRel	true	affirmed	reacting
+Relation	4	9	NoRel	true	affirmed	expressing
+Relation	4	10	NoRel	true	affirmed	emphasized
+Relation	4	11	NoRel	true	affirmed	expressed
+Relation	4	12	NoRel	true	affirmed	tweet
+Relation	4	13	NoRel	true	affirmed	married
+Relation	4	14	NoRel	true	affirmed	thanked
+Relation	4	15	NoRel	true	affirmed	shown
+Relation	4	16	NoRel	true	affirmed	wrote
+Relation	5	6	NoRel	true	statement	became
+Relation	5	7	NoRel	true	statement	followed
+Relation	5	8	NoRel	true	statement	reacting
+Relation	5	9	NoRel	true	statement	expressing
+Relation	5	10	NoRel	true	statement	emphasized
+Relation	5	11	NoRel	true	statement	expressed
+Relation	5	12	NoRel	true	statement	tweet
+Relation	5	13	NoRel	true	statement	married
+Relation	5	14	NoRel	true	statement	thanked
+Relation	5	15	SuperSub	true	statement	shown
+Relation	5	16	NoRel	true	statement	wrote
+Relation	6	7	NoRel	true	became	followed
+Relation	6	8	NoRel	true	became	reacting
+Relation	6	9	NoRel	true	became	expressing
+Relation	6	10	NoRel	true	became	emphasized
+Relation	6	11	NoRel	true	became	expressed
+Relation	6	12	NoRel	true	became	tweet
+Relation	6	13	NoRel	true	became	married
+Relation	6	14	NoRel	true	became	thanked
+Relation	6	15	NoRel	true	became	shown
+Relation	6	16	NoRel	true	became	wrote
+Relation	7	8	NoRel	true	followed	reacting
+Relation	7	9	NoRel	true	followed	expressing
+Relation	7	10	NoRel	true	followed	emphasized
+Relation	7	11	NoRel	true	followed	expressed
+Relation	7	12	NoRel	true	followed	tweet
+Relation	7	13	NoRel	true	followed	married
+Relation	7	14	NoRel	true	followed	thanked
+Relation	7	15	NoRel	true	followed	shown
+Relation	7	16	NoRel	true	followed	wrote
+Relation	8	9	NoRel	true	reacting	expressing
+Relation	8	10	NoRel	true	reacting	emphasized
+Relation	8	11	NoRel	true	reacting	expressed
+Relation	8	12	NoRel	true	reacting	tweet
+Relation	8	13	NoRel	true	reacting	married
+Relation	8	14	SuperSub	true	reacting	thanked
+Relation	8	15	NoRel	true	reacting	shown
+Relation	8	16	SuperSub	true	reacting	wrote
+Relation	9	10	NoRel	true	expressing	emphasized
+Relation	9	11	NoRel	true	expressing	expressed
+Relation	9	12	NoRel	true	expressing	tweet
+Relation	9	13	NoRel	true	expressing	married
+Relation	9	14	NoRel	true	expressing	thanked
+Relation	9	15	NoRel	true	expressing	shown
+Relation	9	16	NoRel	true	expressing	wrote
+Relation	10	11	NoRel	true	emphasized	expressed
+Relation	10	12	NoRel	true	emphasized	tweet
+Relation	10	13	NoRel	true	emphasized	married
+Relation	10	14	NoRel	true	emphasized	thanked
+Relation	10	15	NoRel	true	emphasized	shown
+Relation	10	16	NoRel	true	emphasized	wrote
+Relation	11	12	NoRel	true	expressed	tweet
+Relation	11	13	NoRel	true	expressed	married
+Relation	11	14	NoRel	true	expressed	thanked
+Relation	11	15	NoRel	true	expressed	shown
+Relation	11	16	NoRel	true	expressed	wrote
+Relation	12	13	NoRel	true	tweet	married
+Relation	12	14	NoRel	true	tweet	thanked
+Relation	12	15	NoRel	true	tweet	shown
+Relation	12	16	NoRel	true	tweet	wrote
+Relation	13	14	NoRel	true	married	thanked
+Relation	13	15	NoRel	true	married	shown
+Relation	13	16	NoRel	true	married	wrote
+Relation	14	15	NoRel	true	thanked	shown
+Relation	14	16	NoRel	true	thanked	wrote
+Relation	15	16	NoRel	true	shown	wrote

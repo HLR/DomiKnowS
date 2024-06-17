@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 *.log
 
 # Created by https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
@@ -246,3 +247,26 @@ data/MNIST/raw/train-labels-idx1-ubyte.gz
 ### example folder
 /examples/
 /examples
+=======
+/CodeDemo/
+.vector_cache/
+.DS_Store
+mnist-arithmetic-2/set_inclusion/logs/datanode.log
+T5Procedural/image
+T5Procedural/image.png
+T5Procedural/updated_loc_info.pt
+
+# Ignore __pycache__ directories
+**/__pycache__
+CIFAR100/True_999999999__0.1.txt
+ImgHierarchy/logs/ilpOntSolver.log
+ImgHierarchy/logs/datanode.log
+demo/__pycache__/main.cpython-39.pyc
+demo/__pycache__/main.cpython-39.pyc
+VQA/eval_gbi_domiknows.csv
+T5Procedural/updated_loc_info_simple_normalized.pt
+demo/__pycache__/main.cpython-39.pyc
+ImgHierarchy/logs/regrTimer.log
+ImgHierarchy/logger_manual.txt
+ImgHierarchy/logger.json
+>>>>>>> 91b17141a344a22906f8c3bcbd6c7e9fe018dd24

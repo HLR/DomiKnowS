@@ -1,0 +1,52 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0263</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-01" temporalFunction="false" functionInDocument="CREATION_TIME">11/01/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891101-0102 = 891101 891101-0102.
+Dividend News: @ Unifirst Corp. 11/01/89 WALL STREET JOURNAL (J) UNF DIVIDENDS (DIV) EARNINGS (ERN)
+</EXTRAINFO>
+
+<TEXT>
+UNIFIRST Corp. <EVENT eid="e1" class="I_ACTION">declared</EVENT> a 2-for-1 stock <EVENT eid="e1989" class="OCCURRENCE">split</EVENT>. The Wilmington, Mass., garment service company also <EVENT eid="e2" class="OCCURRENCE">boosted</EVENT> its quarterly dividend 20% to three cents a share adjusted for the <EVENT eid="e1990" class="OCCURRENCE">split</EVENT>. The dividend had been five cents a share. The split and quarterly dividend will be <EVENT eid="e1995" class="STATE">payable</EVENT> <TIMEX3 tid="t17" type="DATE" value="1990-01-03" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Jan. 3</TIMEX3> to stock of record <TIMEX3 tid="t18" type="DATE" value="1989-11-16" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Nov. 16</TIMEX3>, the company <EVENT eid="e4" class="REPORTING">said</EVENT>. The <EVENT eid="e2044" class="OCCURRENCE">split</EVENT> will <EVENT eid="e5" class="OCCURRENCE">raise</EVENT> the number of shares outstanding to about 10.2 million. Separately, UniFirst <EVENT eid="e6" class="REPORTING">reported</EVENT> that net income <EVENT eid="e7" class="OCCURRENCE">rose</EVENT> 21% to $3 million, or 29 cents a share adjusted for the <EVENT eid="e2065" class="OCCURRENCE">split</EVENT>, for <TIMEX3 tid="t20" type="DATE" value="1989-Q4" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t19">the fourth quarter</TIMEX3> <EVENT eid="e9" class="ASPECTUAL">ended</EVENT> <TIMEX3 tid="t19" type="DATE" value="1989-08-26" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Aug. 26</TIMEX3>. <TIMEX3 tid="t2096" type="DATE" value="1988-11-01" mod="APPROX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">A year earlier</TIMEX3> UniFirst <EVENT eid="e10" class="OCCURRENCE">earned</EVENT> $2.4 million, or 24 cents a share adjusted for the <EVENT eid="e1994" class="OCCURRENCE">split</EVENT>. Sales <EVENT eid="e12" class="OCCURRENCE">rose</EVENT> to $52.4 million from $50.1 million.
+</TEXT>
+
+<MAKEINSTANCE eventID="e10" eiid="ei2121" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei2115" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei2120" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1990" eiid="ei2110" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e2065" eiid="ei2119" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e6" eiid="ei2117" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1994" eiid="ei2122" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e1" eiid="ei2107" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei2109" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2044" eiid="ei2114" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e7" eiid="ei2118" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1995" eiid="ei2112" tense="FUTURE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e1989" eiid="ei2108" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei2113" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei2123" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l1" relType="IDENTITY" eventInstanceID="ei2114" relatedToEventInstance="ei2108" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei2114" relatedToEventInstance="ei2115" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei2119" relatedToEventInstance="ei2114" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei2117" relatedToTime="t0" />
+<TLINK lid="l5" relType="BEFORE" eventInstanceID="ei2113" relatedToTime="t0" />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei2118" relatedToTime="t20"  />
+<TLINK lid="l7" relType="IS_INCLUDED" eventInstanceID="ei2112" relatedToTime="t17" />
+<TLINK lid="l8" relType="IDENTITY" eventInstanceID="ei2108" relatedToEventInstance="ei2110" />
+<TLINK lid="l9" relType="SIMULTANEOUS" eventInstanceID="ei2109" relatedToEventInstance="ei2107" />
+<TLINK lid="l10" relType="BEFORE" eventInstanceID="ei2123" relatedToTime="t0" />
+<TLINK lid="l11" relType="BEFORE" eventInstanceID="ei2107" relatedToTime="t0" />
+<TLINK lid="l12" relType="ENDED_BY" timeID="t20" relatedToEventInstance="ei2120" />
+<TLINK lid="l13" relType="IS_INCLUDED" eventInstanceID="ei2120" relatedToTime="t19" />
+<TLINK lid="l14" relType="SIMULTANEOUS" eventInstanceID="ei2107" relatedToEventInstance="ei2108" />
+<TLINK lid="l15" relType="INCLUDES" timeID="t2096" relatedToEventInstance="ei2121" />
+<TLINK lid="l16" relType="IDENTITY" eventInstanceID="ei2122" relatedToEventInstance="ei2114" />
+<SLINK lid="l17" relType="EVIDENTIAL" eventInstanceID="ei2117" subordinatedEventInstance="ei2118" />
+<SLINK lid="l18" relType="EVIDENTIAL" eventInstanceID="ei2113" subordinatedEventInstance="ei2112" />
+<SLINK lid="l19" relType="FACTIVE" eventInstanceID="ei2107" subordinatedEventInstance="ei2108" />
+
+</TimeML>

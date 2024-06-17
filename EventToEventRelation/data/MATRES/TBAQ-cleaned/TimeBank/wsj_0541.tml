@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0541</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-30" temporalFunction="false" functionInDocument="CREATION_TIME">10/30/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891030-0160 = 891030 891030-0160.
+Automatic Data Processing 10/30/89 WALL STREET JOURNAL (J) AUD BUYBACKS, REDEMPTIONS, SWAP OFFERS (BBK) ROSELAND, N.J.
+</EXTRAINFO>
+
+<TEXT>
+Automatic Data Processing Inc. <EVENT eid="e1" class="I_STATE">plans</EVENT> to <EVENT eid="e3" class="OCCURRENCE">redeem</EVENT> on <TIMEX3 tid="t18" type="DATE" value="1989-11-16" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Nov. 16</TIMEX3> its $150 million of 6.5% convertible subordinated debentures <EVENT eid="e19" class="STATE">due</EVENT> <TIMEX3 tid="t20" type="DATE" value="2011-03-01" temporalFunction="false" functionInDocument="NONE">March 1, 2011</TIMEX3>.
+
+The computing-services concern will <EVENT eid="e4" class="OCCURRENCE">pay</EVENT> $1,059.04 for each $1,000 face amount of debt. The conversion price for the debentures is $41.725 a share. In New York Stock Exchange composite trading <TIMEX3 tid="t21" type="DATE" value="1989-10-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3>, Automatic Data <EVENT eid="e6" class="OCCURRENCE">closed</EVENT> at $46.50 a share, down $2.25.
+
+If all the debt is <EVENT eid="e7" class="OCCURRENCE">converted</EVENT> to common, Automatic Data will <EVENT eid="e8" class="OCCURRENCE">issue</EVENT> about 3.6 million shares; <TIMEX3 tid="t24" type="DATE" value="1989-10-23" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last Monday</TIMEX3>, the company <EVENT eid="e25" class="STATE">had</EVENT> nearly 73 million shares outstanding.
+
+Automatic Data is <EVENT eid="e9" class="OCCURRENCE">redeeming</EVENT> the bonds because the after-tax cost of the interest on the bonds is higher than the dividend yield on the common, a spokesman <EVENT eid="e14" class="REPORTING">said</EVENT>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e19" eiid="ei88" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e25" eiid="ei94" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei92" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei87" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei96" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei90" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei86" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei93" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei95" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei89" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l1" relType="INCLUDES" eventInstanceID="ei86" relatedToTime="t0" />
+<TLINK lid="l2" relType="IS_INCLUDED" eventInstanceID="ei87" relatedToTime="t18"  />
+<TLINK lid="l3" relType="SIMULTANEOUS" eventInstanceID="ei86" relatedToEventInstance="ei88" />
+<TLINK lid="l4" relType="ENDED_BY" eventInstanceID="ei88" relatedToTime="t20" />
+<TLINK lid="l5" relType="AFTER" eventInstanceID="ei89" relatedToTime="t0" />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei90" relatedToTime="t21" />
+<TLINK lid="l8" relType="BEFORE" eventInstanceID="ei92" relatedToEventInstance="ei93" />
+<TLINK lid="l9" relType="INCLUDES" timeID="t24" relatedToEventInstance="ei94" />
+<TLINK lid="l10" relType="INCLUDES" eventInstanceID="ei95" relatedToTime="t0" />
+<TLINK lid="l11" relType="BEFORE" eventInstanceID="ei96" relatedToTime="t0" />
+<SLINK lid="l12" relType="CONDITIONAL" eventInstanceID="ei92" subordinatedEventInstance="ei93"  />
+<SLINK lid="l13" relType="MODAL" eventInstanceID="ei86" subordinatedEventInstance="ei87" />
+<SLINK lid="l14" relType="EVIDENTIAL" eventInstanceID="ei96" subordinatedEventInstance="ei95" />
+
+</TimeML>

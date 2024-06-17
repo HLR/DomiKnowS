@@ -1,0 +1,57 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0168</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME">11/02/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0022 = 891102 891102-0022.
+Business Brief -- Meridian National Corp.: @ McAlpines Acquire 10.2% @ Of Common for $1 Million 11/02/89 WALL STREET JOURNAL (J) MRCO TENDER OFFERS, MERGERS, ACQUISITIONS (TNM)
+</EXTRAINFO>
+
+<TEXT>
+Meridian National Corp. <EVENT eid="e1" class="REPORTING">said</EVENT> it <EVENT eid="e2" class="OCCURRENCE">sold</EVENT> 750,000 shares of its common stock to the McAlpine family interests, for $1 million, or $1.35 a share. The <EVENT eid="e4" class="OCCURRENCE">sale</EVENT> <EVENT eid="e5" class="OCCURRENCE">represents</EVENT> 10.2% of Meridian's shares outstanding.
+
+The McAlpine family, which <EVENT eid="e6" class="OCCURRENCE">operates</EVENT> a number of multinational companies, including a London-based engineering and construction company, also <EVENT eid="e7" class="OCCURRENCE">lent</EVENT> to Meridian National $500,000. That amount is <EVENT eid="e22" class="STATE">convertible</EVENT> into shares of Meridian common stock at $2 a share during its <TIMEX3 tid="t23" type="DURATION" value="P1Y" temporalFunction="false" functionInDocument="NONE">one-year term</TIMEX3>. The loan may be <EVENT eid="e10" class="OCCURRENCE">extended</EVENT> by the McAlpine group for <TIMEX3 tid="t25" type="DURATION" value="P1Y" temporalFunction="true" functionInDocument="NONE" beginPoint="t0">an additional year</TIMEX3> with an <EVENT eid="e12" class="OCCURRENCE">increase</EVENT> in the conversion price to $2.50 a share.
+
+The <EVENT eid="e14" class="OCCURRENCE">sale</EVENT> of shares to the McAlpine family along with the recent <EVENT eid="e15" class="OCCURRENCE">sale</EVENT> of 750,000 shares of Meridian stock to Haden MacLellan Holding PLC of Surrey, England and a recent public <EVENT eid="e16" class="OCCURRENCE">offering</EVENT> have <EVENT eid="e17" class="OCCURRENCE">increased</EVENT> Meridian's net worth to $8.5 million, <EVENT eid="e18" class="REPORTING">said</EVENT> William Feniger, chief executive officer of Toledo, Ohio-based Meridian.
+</TEXT>
+
+<MAKEINSTANCE eventID="e6" eiid="ei130" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei133" tense="NONE" aspect="PERFECTIVE" polarity="POS" pos="VERB" modality="may" />
+<MAKEINSTANCE eventID="e2" eiid="ei127" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei140" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei134" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei128" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e1" eiid="ei126" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei132" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e5" eiid="ei129" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei139" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei136" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e16" eiid="ei138" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e7" eiid="ei131" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei137" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l23" relType="BEFORE" eventInstanceID="ei140" relatedToTime="t0" />
+<TLINK lid="l1" relType="AFTER" timeID="t0" relatedToEventInstance="ei126" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei127" relatedToTime="t0" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei128" relatedToEventInstance="ei127" />
+<TLINK lid="l4" relType="IDENTITY" eventInstanceID="ei128" relatedToEventInstance="ei129" />
+<TLINK lid="l5" relType="INCLUDES" eventInstanceID="ei130" relatedToTime="t0" />
+<TLINK lid="l6" relType="BEFORE" eventInstanceID="ei131" relatedToTime="t0" />
+<TLINK lid="l7" relType="SIMULTANEOUS" eventInstanceID="ei131" relatedToEventInstance="ei127" />
+<TLINK lid="l8" relType="IDENTITY" eventInstanceID="ei131" relatedToEventInstance="ei132" />
+<TLINK lid="l9" relType="IS_INCLUDED" eventInstanceID="ei132" relatedToTime="t23"  />
+<TLINK lid="l10" relType="AFTER" eventInstanceID="ei133" relatedToTime="t23" />
+<TLINK lid="l11" relType="SIMULTANEOUS" eventInstanceID="ei133" relatedToTime="t25"  />
+<TLINK lid="l12" relType="SIMULTANEOUS" eventInstanceID="ei134" relatedToEventInstance="ei133" />
+<TLINK lid="l14" relType="IDENTITY" eventInstanceID="ei136" relatedToEventInstance="ei127" />
+<TLINK lid="l15" relType="BEFORE" eventInstanceID="ei137" relatedToEventInstance="ei136" />
+<TLINK lid="l16" relType="BEFORE" eventInstanceID="ei138" relatedToTime="t0" />
+<SLINK lid="l18" relType="EVIDENTIAL" eventInstanceID="ei140" subordinatedEventInstance="ei139" />
+<SLINK lid="l19" relType="EVIDENTIAL" eventInstanceID="ei126" subordinatedEventInstance="ei127" />
+<ALINK lid="l20" relType="INITIATES" eventInstanceID="ei136" relatedToEventInstance="ei139" />
+<ALINK lid="l21" relType="INITIATES" eventInstanceID="ei137" relatedToEventInstance="ei139" />
+<ALINK lid="l22" relType="INITIATES" eventInstanceID="ei138" relatedToEventInstance="ei139" />
+
+</TimeML>

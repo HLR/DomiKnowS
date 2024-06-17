@@ -1,0 +1,141 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>APW19980227.0487</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="TIME" value="1998-02-27T08:09:00" temporalFunction="false" functionInDocument="CREATION_TIME">02/27/1998 08:09:00</TIMEX3></DCT>
+
+<EXTRAINFO>
+APW19980227.0487 NEWS STORY 02/27/1998 08:09:00
+w2392 Cx1f wstmu i Cx13 Cx11 BC-Israel-Rabin 02-27 0300
+BC-Israel-Rabin,0300
+Friend of Rabin's assassin regretted praying for Rabin's death
+UR By DANNA HARMAN QC UR Associated Press Writer QC
+</EXTRAINFO>
+
+<TEXT>
+<EVENT eid="e1" class="OCCURRENCE">Taking</EVENT> the stand in her own defense, a friend of Yitzhak Rabin's assassin <EVENT eid="e2" class="REPORTING">said</EVENT> <TIMEX3 tid="t70" type="DATE" value="1998-02-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3> that she <EVENT eid="e3" class="I_STATE">regretted</EVENT> <EVENT eid="e4" class="I_ACTION">calling</EVENT> the prime minister a traitor and <EVENT eid="e8" class="I_ACTION">praying</EVENT> for his <EVENT eid="e9" class="OCCURRENCE">death</EVENT>. Margalit Har-Shefi, 22, has <EVENT eid="e10" class="I_ACTION">pleaded</EVENT> innocent to <EVENT eid="e12" class="I_ACTION">charges</EVENT> that she <EVENT eid="e13" class="I_ACTION">failed</EVENT> to <EVENT eid="e15" class="REPORTING">report</EVENT> Yigal Amir's <EVENT eid="e16" class="I_STATE">plan</EVENT> to <EVENT eid="e17" class="OCCURRENCE">kill</EVENT> Rabin. She <EVENT eid="e18" class="OCCURRENCE">took</EVENT> the stand for <TIMEX3 tid="t71" type="DURATION" value="PT4H" mod="MORE_THAN" temporalFunction="false" functionInDocument="NONE">more than four hours</TIMEX3> <TIMEX3 tid="t72" type="DATE" value="1998-02-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3> in a Tel Aviv magistrate's court. Amir, 27, is <EVENT eid="e19" class="STATE">serving</EVENT> a life sentence for the <TIMEX3 tid="t73" type="DATE" value="1995-11" temporalFunction="false" functionInDocument="NONE">November 1995</TIMEX3> <EVENT eid="e20" class="OCCURRENCE">assassination</EVENT> of Rabin at a Tel Aviv peace <EVENT eid="e21" class="OCCURRENCE">rally</EVENT>. Newspaper reports have <EVENT eid="e22" class="REPORTING">said</EVENT> Amir was <EVENT eid="e23" class="I_STATE">infatuated</EVENT> with Har-Shefi and may have been <EVENT eid="e24" class="I_ACTION">trying</EVENT> to <EVENT eid="e25" class="OCCURRENCE">impress</EVENT> her by <EVENT eid="e26" class="OCCURRENCE">killing</EVENT> the prime minister. Har-Shefi <EVENT eid="e27" class="I_ACTION">acknowledged</EVENT> she <EVENT eid="e28" class="I_ACTION">told</EVENT> police interrogators that Rabin was a <EVENT eid="e29" class="STATE">traitor</EVENT> and that she <EVENT eid="e30" class="I_ACTION">prayed</EVENT> for him to have a heart attack and <EVENT eid="e34" class="OCCURRENCE">die</EVENT>. She <EVENT eid="e35" class="REPORTING">said</EVENT> Rabin's <EVENT eid="e36" class="OCCURRENCE">murder</EVENT> was ``a black stain on Israel,'' Israel radio and Israel army radio <EVENT eid="e37" class="REPORTING">reported</EVENT>. Har-Shefi <EVENT eid="e38" class="REPORTING">said</EVENT> she <EVENT eid="e39" class="PERCEPTION">heard</EVENT> Amir <EVENT eid="e40" class="OCCURRENCE">talk</EVENT> about <EVENT eid="e41" class="OCCURRENCE">killing</EVENT> Rabin but did not <EVENT eid="e42" class="REPORTING">tell</EVENT> the police because she did not <EVENT eid="e43" class="I_STATE">believe</EVENT> he was <EVENT eid="e44" class="STATE">serious</EVENT>. Instead, she <EVENT eid="e45" class="OCCURRENCE">turned</EVENT> to her community rabbi in the Jewish West Bank settlement of Beit El and <EVENT eid="e46" class="REPORTING">told</EVENT> him about Amir's statements. The rabbi <EVENT eid="e48" class="REPORTING">said</EVENT> <EVENT eid="e49" class="I_ACTION">called</EVENT> the <EVENT eid="e50" class="OCCURRENCE">talk</EVENT> about <EVENT eid="e51" class="OCCURRENCE">killing</EVENT> Rabin ``nonsense,'' and <EVENT eid="e53" class="REPORTING">said</EVENT> Jews are <EVENT eid="e54" class="I_STATE">prohibited</EVENT> from killing one another, the radio reports <EVENT eid="e56" class="REPORTING">said</EVENT>. Har-Shefi <EVENT eid="e57" class="OCCURRENCE">described</EVENT> Amir as an ``original thinker,'' as well as delusional and a liar. She also <EVENT eid="e58" class="I_ACTION">denied</EVENT> <EVENT eid="e59" class="I_ACTION">accusations</EVENT> <EVENT eid="e60" class="I_ACTION">made</EVENT> by Amir's brother, Hagai, that she <EVENT eid="e61" class="OCCURRENCE">joined</EVENT> an anti-Arab underground movement. She <EVENT eid="e62" class="REPORTING">said</EVENT> she <EVENT eid="e63" class="OCCURRENCE">gave</EVENT> the Amir brothers false information regarding the location of a weapons and ammunition cache when they <EVENT eid="e64" class="I_ACTION">asked</EVENT> her to <EVENT eid="e65" class="I_ACTION">help</EVENT> <EVENT eid="e66" class="OCCURRENCE">organize</EVENT> such a movement.
+</TEXT>
+
+<LASTEXTRAINFO>
+(PROFILE (WS SL:BC-Israel-Rabin; CT:i; (REG:MEST;) (REG:INDI;) (REG:ENGL;) (REG:AFRI;) (REG:ASIA;) (LANG:ENGLISH;)) )
+AP-NY-02-27-98 0809EST
+</LASTEXTRAINFO>
+
+<MAKEINSTANCE eventID="e66" eiid="ei447" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei413" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e36" eiid="ei418" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e57" eiid="ei438" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei402" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei416" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e58" eiid="ei439" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei388" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei431" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e43" eiid="ei425" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei408" tense="NONE" aspect="PERFECTIVE_PROGRESSIVE" polarity="POS" pos="VERB" modality="may" />
+<MAKEINSTANCE eventID="e10" eiid="ei395" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e56" eiid="ei437" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei432" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e22" eiid="ei406" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei400" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e15" eiid="ei399" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e60" eiid="ei441" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e19" eiid="ei403" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei389" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e30" eiid="ei414" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei390" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e27" eiid="ei411" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e51" eiid="ei433" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e21" eiid="ei405" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e64" eiid="ei445" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e38" eiid="ei420" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e63" eiid="ei444" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei407" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e61" eiid="ei442" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e41" eiid="ei423" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei397" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e26" eiid="ei410" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e9" eiid="ei394" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e25" eiid="ei409" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e42" eiid="ei424" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei417" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e37" eiid="ei419" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e62" eiid="ei443" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei401" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei422" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e53" eiid="ei435" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei398" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei393" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei404" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e48" eiid="ei430" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e46" eiid="ei428" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei421" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e65" eiid="ei446" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e45" eiid="ei427" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei391" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e54" eiid="ei436" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e28" eiid="ei412" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e59" eiid="ei440" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e44" eiid="ei426" tense="PAST" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<TLINK lid="l65" relType="IS_INCLUDED" eventInstanceID="ei420" relatedToTime="t70" />
+<TLINK lid="l64" relType="BEFORE" eventInstanceID="ei406" relatedToTime="t70" />
+<TLINK lid="l63" relType="IS_INCLUDED" eventInstanceID="ei397" relatedToTime="t70" />
+<TLINK lid="l62" relType="IS_INCLUDED" eventInstanceID="ei395" relatedToTime="t70" />
+<TLINK lid="l1" relType="AFTER" eventInstanceID="ei443" relatedToEventInstance="ei445"  />
+<TLINK lid="l2" relType="IS_INCLUDED" eventInstanceID="ei443" relatedToEventInstance="ei388" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei440" relatedToEventInstance="ei441" />
+<TLINK lid="l4" relType="IS_INCLUDED" eventInstanceID="ei439" relatedToEventInstance="ei388" />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei438" relatedToEventInstance="ei388" />
+<TLINK lid="l6" relType="IDENTITY" eventInstanceID="ei419" relatedToEventInstance="ei437" />
+<TLINK lid="l7" relType="IDENTITY" eventInstanceID="ei435" relatedToEventInstance="ei430" />
+<TLINK lid="l8" relType="IDENTITY" eventInstanceID="ei433" relatedToEventInstance="ei423" />
+<TLINK lid="l9" relType="IDENTITY" eventInstanceID="ei432" relatedToEventInstance="ei422" />
+<TLINK lid="l10" relType="INCLUDES" eventInstanceID="ei388" relatedToEventInstance="ei389" />
+<TLINK lid="l11" relType="IS_INCLUDED" eventInstanceID="ei389" relatedToTime="t70" />
+<TLINK lid="l12" relType="AFTER" eventInstanceID="ei428" relatedToEventInstance="ei427" />
+<TLINK lid="l13" relType="IDENTITY" eventInstanceID="ei402" relatedToEventInstance="ei388" />
+<TLINK lid="l14" relType="DURING" eventInstanceID="ei402" relatedToTime="t71"  />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei402" relatedToTime="t72" />
+<TLINK lid="l16" relType="INCLUDES" eventInstanceID="ei403" relatedToTime="t0" />
+<TLINK lid="l17" relType="IS_INCLUDED" eventInstanceID="ei404" relatedToTime="t73" />
+<TLINK lid="l18" relType="BEFORE" eventInstanceID="ei404" relatedToEventInstance="ei403" />
+<TLINK lid="l19" relType="INCLUDES" eventInstanceID="ei405" relatedToEventInstance="ei404" />
+<TLINK lid="l20" relType="IAFTER" eventInstanceID="ei409" relatedToEventInstance="ei410" />
+<TLINK lid="l21" relType="IS_INCLUDED" eventInstanceID="ei411" relatedToEventInstance="ei388" />
+<TLINK lid="l22" relType="AFTER" eventInstanceID="ei427" relatedToEventInstance="ei421" />
+<TLINK lid="l24" relType="IS_INCLUDED" eventInstanceID="ei417" relatedToEventInstance="ei388" />
+<TLINK lid="l25" relType="IDENTITY" eventInstanceID="ei418" relatedToEventInstance="ei404" />
+<TLINK lid="l26" relType="SIMULTANEOUS" eventInstanceID="ei426" relatedToEventInstance="ei422" />
+<SLINK lid="l27" relType="MODAL" eventInstanceID="ei422" subordinatedEventInstance="ei423" />
+<SLINK lid="l28" relType="EVIDENTIAL" eventInstanceID="ei420" subordinatedEventInstance="ei425" />
+<SLINK lid="l29" relType="EVIDENTIAL" eventInstanceID="ei421" subordinatedEventInstance="ei422" />
+<SLINK lid="l30" relType="MODAL" eventInstanceID="ei446" subordinatedEventInstance="ei447" />
+<SLINK lid="l31" relType="MODAL" eventInstanceID="ei445" subordinatedEventInstance="ei446" />
+<SLINK lid="l32" relType="EVIDENTIAL" eventInstanceID="ei443" subordinatedEventInstance="ei444" />
+<SLINK lid="l33" relType="MODAL" eventInstanceID="ei440" subordinatedEventInstance="ei442" />
+<SLINK lid="l34" relType="NEG_EVIDENTIAL" eventInstanceID="ei439" subordinatedEventInstance="ei440" />
+<SLINK lid="l35" relType="EVIDENTIAL" eventInstanceID="ei437" subordinatedEventInstance="ei435" />
+<SLINK lid="l36" relType="EVIDENTIAL" eventInstanceID="ei435" subordinatedEventInstance="ei436" />
+<SLINK lid="l37" relType="EVIDENTIAL" eventInstanceID="ei389" subordinatedEventInstance="ei390" />
+<SLINK lid="l38" relType="FACTIVE" eventInstanceID="ei390" subordinatedEventInstance="ei391" />
+<SLINK lid="l39" relType="FACTIVE" eventInstanceID="ei431" subordinatedEventInstance="ei432" />
+<SLINK lid="l41" relType="EVIDENTIAL" eventInstanceID="ei430" subordinatedEventInstance="ei431" />
+<SLINK lid="l43" relType="FACTIVE" eventInstanceID="ei390" subordinatedEventInstance="ei393" />
+<SLINK lid="l44" relType="MODAL" eventInstanceID="ei393" subordinatedEventInstance="ei394" />
+<SLINK lid="l45" relType="MODAL" eventInstanceID="ei397" subordinatedEventInstance="ei398" />
+<SLINK lid="l46" relType="COUNTER_FACTIVE" eventInstanceID="ei398" subordinatedEventInstance="ei399" />
+<SLINK lid="l47" relType="EVIDENTIAL" eventInstanceID="ei399" subordinatedEventInstance="ei400" />
+<SLINK lid="l49" relType="MODAL" eventInstanceID="ei400" subordinatedEventInstance="ei401" />
+<SLINK lid="l50" relType="EVIDENTIAL" eventInstanceID="ei406" subordinatedEventInstance="ei407" />
+<SLINK lid="l51" relType="EVIDENTIAL" eventInstanceID="ei406" subordinatedEventInstance="ei408" />
+<SLINK lid="l52" relType="MODAL" eventInstanceID="ei408" subordinatedEventInstance="ei409" />
+<SLINK lid="l53" relType="EVIDENTIAL" eventInstanceID="ei420" subordinatedEventInstance="ei424" />
+<SLINK lid="l54" relType="FACTIVE" eventInstanceID="ei411" subordinatedEventInstance="ei412" />
+<SLINK lid="l55" relType="EVIDENTIAL" eventInstanceID="ei412" subordinatedEventInstance="ei413" />
+<SLINK lid="l56" relType="EVIDENTIAL" eventInstanceID="ei412" subordinatedEventInstance="ei414" />
+<SLINK lid="l58" relType="EVIDENTIAL" eventInstanceID="ei417" subordinatedEventInstance="ei418" />
+<SLINK lid="l59" relType="EVIDENTIAL" eventInstanceID="ei419" subordinatedEventInstance="ei417" />
+<SLINK lid="l60" relType="MODAL" eventInstanceID="ei425" subordinatedEventInstance="ei426" />
+<SLINK lid="l61" relType="EVIDENTIAL" eventInstanceID="ei420" subordinatedEventInstance="ei421" />
+
+</TimeML>

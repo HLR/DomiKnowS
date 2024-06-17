@@ -1,0 +1,599 @@
+2023-06-05 13:09:59,127 - INFO - dataNodeBuilder:<module> - --- Starting new run ---
+2023-06-05 13:10:11,120 - INFO - dataNodeBuilder:__init__ - 
+2023-06-05 13:10:11,120 - INFO - dataNodeBuilder:__init__ - Called
+2023-06-05 13:10:11,133 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/BinaryLabel/readersensor-1, key type - <class 'domiknows.sensor.pytorch.sensors.ReaderSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1])
+2023-06-05 13:10:11,133 - INFO - dataNodeBuilder:__createInitialdDataNode - Creating initial dataNode - provided value has length 1
+2023-06-05 13:10:11,133 - INFO - dataNodeBuilder:__createInitialdDataNode - Created single dataNode with id 0 of type TextSequence
+2023-06-05 13:10:11,133 - INFO - dataNodeBuilder:__updateRootDataNodeList - Updated elements in the root dataNodes list - [TextSequence 0]
+2023-06-05 13:10:11,133 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/<Category>/functionalsensor-2, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1])
+2023-06-05 13:10:11,134 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute <Category>/label in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,134 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/Text/readersensor, key type - <class 'domiknows.sensor.pytorch.sensors.ReaderSensor'>, value - <class 'list'>, length 1
+2023-06-05 13:10:11,134 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute Text in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,136 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/TokenText/functionalsensor, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 192])
+2023-06-05 13:10:11,136 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute TokenText in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,137 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/mask/functionalsensor-1, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 192])
+2023-06-05 13:10:11,137 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute mask in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,706 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/<Category>/modulelearner, key type - <class 'domiknows.sensor.pytorch.learners.ModuleLearner'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 2])
+2023-06-05 13:10:11,706 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute <Category> in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,710 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/ParentLabels/readersensor-2, key type - <class 'domiknows.sensor.pytorch.sensors.ReaderSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1])
+2023-06-05 13:10:11,711 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute ParentLabels in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,711 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/<ParentCategory>/functionalsensor-5, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1])
+2023-06-05 13:10:11,711 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute <ParentCategory>/label in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,712 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/ParentTokenText/functionalsensor-3, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 192])
+2023-06-05 13:10:11,712 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute ParentTokenText in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,713 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/ParentMask/functionalsensor-4, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 192])
+2023-06-05 13:10:11,713 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute ParentMask in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,737 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/<ParentCategory>/modulelearner-1, key type - <class 'domiknows.sensor.pytorch.learners.ModuleLearner'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 13])
+2023-06-05 13:10:11,737 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute <ParentCategory> in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,746 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/SubLabels/readersensor-3, key type - <class 'domiknows.sensor.pytorch.sensors.ReaderSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1])
+2023-06-05 13:10:11,746 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute SubLabels in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,746 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/<SubCategory>/functionalsensor-8, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1])
+2023-06-05 13:10:11,746 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute <SubCategory>/label in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,747 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/SubTokenText/functionalsensor-6, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 192])
+2023-06-05 13:10:11,747 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute SubTokenText in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,748 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/SubMask/functionalsensor-7, key type - <class 'domiknows.sensor.pytorch.sensors.FunctionalSensor'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 192])
+2023-06-05 13:10:11,748 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute SubMask in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,774 - INFO - dataNodeBuilder:__setitem__ - key - FakeNews/TextSequence/<SubCategory>/modulelearner-2, key type - <class 'domiknows.sensor.pytorch.learners.ModuleLearner'>, value - <class 'torch.Tensor'>, shape torch.Size([1, 31])
+2023-06-05 13:10:11,774 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute <SubCategory> in existing dataNodes - found 1 dataNodes of type TextSequence
+2023-06-05 13:10:11,774 - INFO - dataNodeBuilder:getDataNode - Returning dataNode with id 0 of type TextSequence
+2023-06-05 13:10:11,774 - INFO - dataNode:findConceptsAndRelations - Found concept Category in dataNode TextSequence 0
+2023-06-05 13:10:11,775 - INFO - dataNode:findConceptsAndRelations - Found concept ParentCategory in dataNode TextSequence 0
+2023-06-05 13:10:11,775 - INFO - dataNode:findConceptsAndRelations - Found concept SubCategory in dataNode TextSequence 0
+2023-06-05 13:10:11,786 - INFO - dataNodeBuilder:getDataNode - Returning dataNode with id 0 of type TextSequence
+2023-06-05 13:10:11,787 - INFO - dataNode:getInferMetrics - Calling local/argmax metrics with conceptsRelations - (EnumConcept(name='Category', fullname='FakeNews/Category'),)
+2023-06-05 13:10:11,787 - INFO - dataNode:getInferMetrics - Calculating metrics for concept Category
+2023-06-05 13:10:11,788 - INFO - dataNode:getInferMetrics - Concept Category predictions from DataNode tensor([[0., 1.]], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,788 - INFO - dataNode:getInferMetrics - Concept Category labels from DataNode tensor([0])
+2023-06-05 13:10:11,789 - INFO - dataNode:getInferMetrics - Concept Category is Multiclass 
+2023-06-05 13:10:11,789 - INFO - dataNode:getInferMetrics - Using average micro for Multiclass metrics calculation
+2023-06-05 13:10:11,789 - INFO - dataNode:getInferMetrics - Calculating metrics for all class Labels of  Category 
+2023-06-05 13:10:11,789 - INFO - dataNode:getInferMetrics - Calling local/argmax metrics with conceptsRelations - ('NoAnno', 'HasAnno')
+2023-06-05 13:10:11,789 - INFO - dataNode:getInferMetrics - Calculating metrics for concept Category
+2023-06-05 13:10:11,789 - INFO - dataNode:getInferMetrics - Concept NoAnno predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,790 - INFO - dataNode:getInferMetrics - Concept NoAnno labels from DataNode tensor([0])
+2023-06-05 13:10:11,790 - INFO - dataNode:getInferMetrics - Index of class Labels NoAnno is 0
+2023-06-05 13:10:11,790 - WARNING - dataNode:getInferMetrics - Concept NoAnno - found all zero labels [0]
+2023-06-05 13:10:11,791 - WARNING - dataNode:getInferMetrics - Concept NoAnno - found all zero predictions [0]
+2023-06-05 13:10:11,791 - INFO - dataNode:getInferMetrics - Concept NoAnno confusion matrix [[0 0]
+ [0 1]]
+2023-06-05 13:10:11,792 - INFO - dataNode:getInferMetrics - Concept NoAnno precision 1.0
+2023-06-05 13:10:11,792 - INFO - dataNode:getInferMetrics - Concept NoAnno recall 1.0
+2023-06-05 13:10:11,793 - INFO - dataNode:getInferMetrics - Concept NoAnno f1 1.0
+2023-06-05 13:10:11,793 - INFO - dataNode:getInferMetrics - Calculating metrics for concept Category
+2023-06-05 13:10:11,794 - INFO - dataNode:getInferMetrics - Concept HasAnno predictions from DataNode tensor([1.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,794 - INFO - dataNode:getInferMetrics - Concept HasAnno labels from DataNode tensor([0])
+2023-06-05 13:10:11,794 - INFO - dataNode:getInferMetrics - Index of class Labels HasAnno is 1
+2023-06-05 13:10:11,795 - WARNING - dataNode:getInferMetrics - Concept HasAnno - found all zero labels [0]
+2023-06-05 13:10:11,795 - INFO - dataNode:getInferMetrics - Concept HasAnno - Predictions used for metrics calculation [1]
+2023-06-05 13:10:11,795 - INFO - dataNode:getInferMetrics - Concept HasAnno confusion matrix [[0. 1.]
+ [0. 0.]]
+2023-06-05 13:10:11,796 - WARNING - dataNode:getInferMetrics - Concept HasAnno precision 0.0
+2023-06-05 13:10:11,796 - WARNING - dataNode:getInferMetrics - Concept HasAnno recall 0.0
+2023-06-05 13:10:11,797 - WARNING - dataNode:getInferMetrics - Concept HasAnno f1 0.0
+2023-06-05 13:10:11,797 - WARNING - dataNode:getInferMetrics - Concept Category - found all zero labels [0]
+2023-06-05 13:10:11,797 - INFO - dataNode:getInferMetrics - Concept Category - Predictions used for metrics calculation [1]
+2023-06-05 13:10:11,798 - INFO - dataNode:getInferMetrics - Concept Category confusion matrix [[0 1]
+ [0 0]]
+2023-06-05 13:10:11,798 - WARNING - dataNode:getInferMetrics - Concept Category precision 0.0
+2023-06-05 13:10:11,799 - WARNING - dataNode:getInferMetrics - Concept Category recall 0.0
+2023-06-05 13:10:11,800 - WARNING - dataNode:getInferMetrics - Concept Category f1 0.0
+2023-06-05 13:10:11,800 - INFO - dataNodeBuilder:getDataNode - Returning dataNode with id 0 of type TextSequence
+2023-06-05 13:10:11,800 - INFO - dataNode:getInferMetrics - Calling local/argmax metrics with conceptsRelations - (EnumConcept(name='ParentCategory', fullname='FakeNews/ParentCategory'),)
+2023-06-05 13:10:11,800 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,801 - INFO - dataNode:getInferMetrics - Concept ParentCategory predictions from DataNode tensor([[0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0.]], device='cuda:0',
+       grad_fn=<StackBackward>)
+2023-06-05 13:10:11,801 - INFO - dataNode:getInferMetrics - Concept ParentCategory labels from DataNode tensor([12])
+2023-06-05 13:10:11,801 - INFO - dataNode:getInferMetrics - Concept ParentCategory is Multiclass 
+2023-06-05 13:10:11,801 - INFO - dataNode:getInferMetrics - Using average micro for Multiclass metrics calculation
+2023-06-05 13:10:11,802 - INFO - dataNode:getInferMetrics - Calculating metrics for all class Labels of  ParentCategory 
+2023-06-05 13:10:11,802 - INFO - dataNode:getInferMetrics - Calling local/argmax metrics with conceptsRelations - ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'none')
+2023-06-05 13:10:11,802 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,802 - INFO - dataNode:getInferMetrics - Concept 1 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,802 - INFO - dataNode:getInferMetrics - Concept 1 labels from DataNode tensor([12])
+2023-06-05 13:10:11,803 - INFO - dataNode:getInferMetrics - Index of class Labels 1 is 0
+2023-06-05 13:10:11,803 - INFO - dataNode:getInferMetrics - Concept 1 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,803 - WARNING - dataNode:getInferMetrics - Concept 1 - found all zero predictions [0]
+2023-06-05 13:10:11,804 - INFO - dataNode:getInferMetrics - Concept 1 confusion matrix [[0. 1.]
+ [0. 0.]]
+2023-06-05 13:10:11,805 - WARNING - dataNode:getInferMetrics - Concept 1 precision 0.0
+2023-06-05 13:10:11,805 - WARNING - dataNode:getInferMetrics - Concept 1 recall 0.0
+2023-06-05 13:10:11,806 - WARNING - dataNode:getInferMetrics - Concept 1 f1 0.0
+2023-06-05 13:10:11,806 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,807 - INFO - dataNode:getInferMetrics - Concept 2 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,807 - INFO - dataNode:getInferMetrics - Concept 2 labels from DataNode tensor([12])
+2023-06-05 13:10:11,807 - INFO - dataNode:getInferMetrics - Index of class Labels 2 is 1
+2023-06-05 13:10:11,807 - INFO - dataNode:getInferMetrics - Concept 2 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,807 - WARNING - dataNode:getInferMetrics - Concept 2 - found all zero predictions [0]
+2023-06-05 13:10:11,808 - INFO - dataNode:getInferMetrics - Concept 2 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,808 - WARNING - dataNode:getInferMetrics - Concept 2 precision 0.0
+2023-06-05 13:10:11,809 - WARNING - dataNode:getInferMetrics - Concept 2 recall 0.0
+2023-06-05 13:10:11,809 - WARNING - dataNode:getInferMetrics - Concept 2 f1 0.0
+2023-06-05 13:10:11,810 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,810 - INFO - dataNode:getInferMetrics - Concept 3 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,810 - INFO - dataNode:getInferMetrics - Concept 3 labels from DataNode tensor([12])
+2023-06-05 13:10:11,811 - INFO - dataNode:getInferMetrics - Index of class Labels 3 is 2
+2023-06-05 13:10:11,811 - INFO - dataNode:getInferMetrics - Concept 3 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,811 - WARNING - dataNode:getInferMetrics - Concept 3 - found all zero predictions [0]
+2023-06-05 13:10:11,811 - INFO - dataNode:getInferMetrics - Concept 3 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,812 - WARNING - dataNode:getInferMetrics - Concept 3 precision 0.0
+2023-06-05 13:10:11,812 - WARNING - dataNode:getInferMetrics - Concept 3 recall 0.0
+2023-06-05 13:10:11,813 - WARNING - dataNode:getInferMetrics - Concept 3 f1 0.0
+2023-06-05 13:10:11,813 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,814 - INFO - dataNode:getInferMetrics - Concept 4 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,814 - INFO - dataNode:getInferMetrics - Concept 4 labels from DataNode tensor([12])
+2023-06-05 13:10:11,814 - INFO - dataNode:getInferMetrics - Index of class Labels 4 is 3
+2023-06-05 13:10:11,814 - INFO - dataNode:getInferMetrics - Concept 4 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,814 - WARNING - dataNode:getInferMetrics - Concept 4 - found all zero predictions [0]
+2023-06-05 13:10:11,815 - INFO - dataNode:getInferMetrics - Concept 4 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,815 - WARNING - dataNode:getInferMetrics - Concept 4 precision 0.0
+2023-06-05 13:10:11,816 - WARNING - dataNode:getInferMetrics - Concept 4 recall 0.0
+2023-06-05 13:10:11,816 - WARNING - dataNode:getInferMetrics - Concept 4 f1 0.0
+2023-06-05 13:10:11,817 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,817 - INFO - dataNode:getInferMetrics - Concept 5 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,817 - INFO - dataNode:getInferMetrics - Concept 5 labels from DataNode tensor([12])
+2023-06-05 13:10:11,818 - INFO - dataNode:getInferMetrics - Index of class Labels 5 is 4
+2023-06-05 13:10:11,818 - INFO - dataNode:getInferMetrics - Concept 5 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,818 - WARNING - dataNode:getInferMetrics - Concept 5 - found all zero predictions [0]
+2023-06-05 13:10:11,818 - INFO - dataNode:getInferMetrics - Concept 5 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,819 - WARNING - dataNode:getInferMetrics - Concept 5 precision 0.0
+2023-06-05 13:10:11,819 - WARNING - dataNode:getInferMetrics - Concept 5 recall 0.0
+2023-06-05 13:10:11,820 - WARNING - dataNode:getInferMetrics - Concept 5 f1 0.0
+2023-06-05 13:10:11,820 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,821 - INFO - dataNode:getInferMetrics - Concept 6 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,821 - INFO - dataNode:getInferMetrics - Concept 6 labels from DataNode tensor([12])
+2023-06-05 13:10:11,821 - INFO - dataNode:getInferMetrics - Index of class Labels 6 is 5
+2023-06-05 13:10:11,821 - INFO - dataNode:getInferMetrics - Concept 6 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,821 - WARNING - dataNode:getInferMetrics - Concept 6 - found all zero predictions [0]
+2023-06-05 13:10:11,822 - INFO - dataNode:getInferMetrics - Concept 6 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,823 - WARNING - dataNode:getInferMetrics - Concept 6 precision 0.0
+2023-06-05 13:10:11,823 - WARNING - dataNode:getInferMetrics - Concept 6 recall 0.0
+2023-06-05 13:10:11,824 - WARNING - dataNode:getInferMetrics - Concept 6 f1 0.0
+2023-06-05 13:10:11,824 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,825 - INFO - dataNode:getInferMetrics - Concept 7 predictions from DataNode tensor([1.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,825 - INFO - dataNode:getInferMetrics - Concept 7 labels from DataNode tensor([12])
+2023-06-05 13:10:11,825 - INFO - dataNode:getInferMetrics - Index of class Labels 7 is 6
+2023-06-05 13:10:11,825 - INFO - dataNode:getInferMetrics - Concept 7 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,825 - INFO - dataNode:getInferMetrics - Concept 7 - Predictions used for metrics calculation [1]
+2023-06-05 13:10:11,826 - INFO - dataNode:getInferMetrics - Concept 7 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,827 - WARNING - dataNode:getInferMetrics - Concept 7 precision 0.0
+2023-06-05 13:10:11,827 - WARNING - dataNode:getInferMetrics - Concept 7 recall 0.0
+2023-06-05 13:10:11,828 - WARNING - dataNode:getInferMetrics - Concept 7 f1 0.0
+2023-06-05 13:10:11,828 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,828 - INFO - dataNode:getInferMetrics - Concept 8 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,829 - INFO - dataNode:getInferMetrics - Concept 8 labels from DataNode tensor([12])
+2023-06-05 13:10:11,829 - INFO - dataNode:getInferMetrics - Index of class Labels 8 is 7
+2023-06-05 13:10:11,829 - INFO - dataNode:getInferMetrics - Concept 8 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,829 - WARNING - dataNode:getInferMetrics - Concept 8 - found all zero predictions [0]
+2023-06-05 13:10:11,830 - INFO - dataNode:getInferMetrics - Concept 8 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,830 - WARNING - dataNode:getInferMetrics - Concept 8 precision 0.0
+2023-06-05 13:10:11,831 - WARNING - dataNode:getInferMetrics - Concept 8 recall 0.0
+2023-06-05 13:10:11,831 - WARNING - dataNode:getInferMetrics - Concept 8 f1 0.0
+2023-06-05 13:10:11,831 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,832 - INFO - dataNode:getInferMetrics - Concept 9 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,832 - INFO - dataNode:getInferMetrics - Concept 9 labels from DataNode tensor([12])
+2023-06-05 13:10:11,832 - INFO - dataNode:getInferMetrics - Index of class Labels 9 is 8
+2023-06-05 13:10:11,832 - INFO - dataNode:getInferMetrics - Concept 9 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,832 - WARNING - dataNode:getInferMetrics - Concept 9 - found all zero predictions [0]
+2023-06-05 13:10:11,833 - INFO - dataNode:getInferMetrics - Concept 9 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,833 - WARNING - dataNode:getInferMetrics - Concept 9 precision 0.0
+2023-06-05 13:10:11,834 - WARNING - dataNode:getInferMetrics - Concept 9 recall 0.0
+2023-06-05 13:10:11,835 - WARNING - dataNode:getInferMetrics - Concept 9 f1 0.0
+2023-06-05 13:10:11,835 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,835 - INFO - dataNode:getInferMetrics - Concept 10 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,835 - INFO - dataNode:getInferMetrics - Concept 10 labels from DataNode tensor([12])
+2023-06-05 13:10:11,836 - INFO - dataNode:getInferMetrics - Index of class Labels 10 is 9
+2023-06-05 13:10:11,836 - INFO - dataNode:getInferMetrics - Concept 10 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,836 - WARNING - dataNode:getInferMetrics - Concept 10 - found all zero predictions [0]
+2023-06-05 13:10:11,836 - INFO - dataNode:getInferMetrics - Concept 10 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,837 - WARNING - dataNode:getInferMetrics - Concept 10 precision 0.0
+2023-06-05 13:10:11,837 - WARNING - dataNode:getInferMetrics - Concept 10 recall 0.0
+2023-06-05 13:10:11,838 - WARNING - dataNode:getInferMetrics - Concept 10 f1 0.0
+2023-06-05 13:10:11,838 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,839 - INFO - dataNode:getInferMetrics - Concept 11 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,839 - INFO - dataNode:getInferMetrics - Concept 11 labels from DataNode tensor([12])
+2023-06-05 13:10:11,839 - INFO - dataNode:getInferMetrics - Index of class Labels 11 is 10
+2023-06-05 13:10:11,839 - INFO - dataNode:getInferMetrics - Concept 11 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,839 - WARNING - dataNode:getInferMetrics - Concept 11 - found all zero predictions [0]
+2023-06-05 13:10:11,840 - INFO - dataNode:getInferMetrics - Concept 11 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,840 - WARNING - dataNode:getInferMetrics - Concept 11 precision 0.0
+2023-06-05 13:10:11,840 - WARNING - dataNode:getInferMetrics - Concept 11 recall 0.0
+2023-06-05 13:10:11,841 - WARNING - dataNode:getInferMetrics - Concept 11 f1 0.0
+2023-06-05 13:10:11,841 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,842 - INFO - dataNode:getInferMetrics - Concept 12 predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,842 - INFO - dataNode:getInferMetrics - Concept 12 labels from DataNode tensor([12])
+2023-06-05 13:10:11,842 - INFO - dataNode:getInferMetrics - Index of class Labels 12 is 11
+2023-06-05 13:10:11,842 - INFO - dataNode:getInferMetrics - Concept 12 - labels used for metrics calculation [12]
+2023-06-05 13:10:11,842 - WARNING - dataNode:getInferMetrics - Concept 12 - found all zero predictions [0]
+2023-06-05 13:10:11,843 - INFO - dataNode:getInferMetrics - Concept 12 confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,843 - WARNING - dataNode:getInferMetrics - Concept 12 precision 0.0
+2023-06-05 13:10:11,844 - WARNING - dataNode:getInferMetrics - Concept 12 recall 0.0
+2023-06-05 13:10:11,844 - WARNING - dataNode:getInferMetrics - Concept 12 f1 0.0
+2023-06-05 13:10:11,845 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,845 - INFO - dataNode:getInferMetrics - Concept none predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,845 - INFO - dataNode:getInferMetrics - Concept none labels from DataNode tensor([12])
+2023-06-05 13:10:11,845 - INFO - dataNode:getInferMetrics - Index of class Labels none is 12
+2023-06-05 13:10:11,846 - INFO - dataNode:getInferMetrics - Concept none - labels used for metrics calculation [12]
+2023-06-05 13:10:11,846 - WARNING - dataNode:getInferMetrics - Concept none - found all zero predictions [0]
+2023-06-05 13:10:11,846 - INFO - dataNode:getInferMetrics - Concept none confusion matrix [[0. 0.]
+ [1. 0.]]
+2023-06-05 13:10:11,847 - WARNING - dataNode:getInferMetrics - Concept none precision 0.0
+2023-06-05 13:10:11,847 - WARNING - dataNode:getInferMetrics - Concept none recall 0.0
+2023-06-05 13:10:11,848 - WARNING - dataNode:getInferMetrics - Concept none f1 0.0
+2023-06-05 13:10:11,848 - INFO - dataNode:getInferMetrics - Concept ParentCategory - labels used for metrics calculation [12]
+2023-06-05 13:10:11,848 - INFO - dataNode:getInferMetrics - Concept ParentCategory - Predictions used for metrics calculation [6]
+2023-06-05 13:10:11,849 - INFO - dataNode:getInferMetrics - Concept ParentCategory confusion matrix [[0 0]
+ [1 0]]
+2023-06-05 13:10:11,849 - WARNING - dataNode:getInferMetrics - Concept ParentCategory precision 0.0
+2023-06-05 13:10:11,850 - WARNING - dataNode:getInferMetrics - Concept ParentCategory recall 0.0
+2023-06-05 13:10:11,850 - WARNING - dataNode:getInferMetrics - Concept ParentCategory f1 0.0
+2023-06-05 13:10:11,851 - INFO - dataNodeBuilder:getDataNode - Returning dataNode with id 0 of type TextSequence
+2023-06-05 13:10:11,851 - INFO - dataNode:getInferMetrics - Calling local/argmax metrics with conceptsRelations - (EnumConcept(name='SubCategory', fullname='FakeNews/SubCategory'),)
+2023-06-05 13:10:11,851 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,852 - INFO - dataNode:getInferMetrics - Concept SubCategory predictions from DataNode tensor([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+         0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0.]], device='cuda:0',
+       grad_fn=<StackBackward>)
+2023-06-05 13:10:11,852 - INFO - dataNode:getInferMetrics - Concept SubCategory labels from DataNode tensor([30])
+2023-06-05 13:10:11,852 - INFO - dataNode:getInferMetrics - Concept SubCategory is Multiclass 
+2023-06-05 13:10:11,852 - INFO - dataNode:getInferMetrics - Using average micro for Multiclass metrics calculation
+2023-06-05 13:10:11,852 - INFO - dataNode:getInferMetrics - Calculating metrics for all class Labels of  SubCategory 
+2023-06-05 13:10:11,853 - INFO - dataNode:getInferMetrics - Calling local/argmax metrics with conceptsRelations - ('1a', '1b', '1c', '3a', '4a', '4b', '4c', '4d', '7a', '7b', '7c', '8a', '9a', '9b', '9c', '9d', '9e', '10a', '10b', '10c', '10d', '11a', '11b', '11c', '11d', '11e', '12a', '12b', '12c', '12d', 'none')
+2023-06-05 13:10:11,853 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,853 - INFO - dataNode:getInferMetrics - Concept 1a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,853 - INFO - dataNode:getInferMetrics - Concept 1a labels from DataNode tensor([30])
+2023-06-05 13:10:11,854 - INFO - dataNode:getInferMetrics - Index of class Labels 1a is 0
+2023-06-05 13:10:11,854 - INFO - dataNode:getInferMetrics - Concept 1a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,854 - WARNING - dataNode:getInferMetrics - Concept 1a - found all zero predictions [0]
+2023-06-05 13:10:11,854 - INFO - dataNode:getInferMetrics - Concept 1a confusion matrix [[0. 1.]
+ [0. 0.]]
+2023-06-05 13:10:11,855 - WARNING - dataNode:getInferMetrics - Concept 1a precision 0.0
+2023-06-05 13:10:11,856 - WARNING - dataNode:getInferMetrics - Concept 1a recall 0.0
+2023-06-05 13:10:11,856 - WARNING - dataNode:getInferMetrics - Concept 1a f1 0.0
+2023-06-05 13:10:11,856 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,857 - INFO - dataNode:getInferMetrics - Concept 1b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,857 - INFO - dataNode:getInferMetrics - Concept 1b labels from DataNode tensor([30])
+2023-06-05 13:10:11,857 - INFO - dataNode:getInferMetrics - Index of class Labels 1b is 1
+2023-06-05 13:10:11,857 - INFO - dataNode:getInferMetrics - Concept 1b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,857 - WARNING - dataNode:getInferMetrics - Concept 1b - found all zero predictions [0]
+2023-06-05 13:10:11,858 - INFO - dataNode:getInferMetrics - Concept 1b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,858 - WARNING - dataNode:getInferMetrics - Concept 1b precision 0.0
+2023-06-05 13:10:11,859 - WARNING - dataNode:getInferMetrics - Concept 1b recall 0.0
+2023-06-05 13:10:11,859 - WARNING - dataNode:getInferMetrics - Concept 1b f1 0.0
+2023-06-05 13:10:11,860 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,860 - INFO - dataNode:getInferMetrics - Concept 1c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,860 - INFO - dataNode:getInferMetrics - Concept 1c labels from DataNode tensor([30])
+2023-06-05 13:10:11,861 - INFO - dataNode:getInferMetrics - Index of class Labels 1c is 2
+2023-06-05 13:10:11,861 - INFO - dataNode:getInferMetrics - Concept 1c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,861 - WARNING - dataNode:getInferMetrics - Concept 1c - found all zero predictions [0]
+2023-06-05 13:10:11,861 - INFO - dataNode:getInferMetrics - Concept 1c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,862 - WARNING - dataNode:getInferMetrics - Concept 1c precision 0.0
+2023-06-05 13:10:11,862 - WARNING - dataNode:getInferMetrics - Concept 1c recall 0.0
+2023-06-05 13:10:11,863 - WARNING - dataNode:getInferMetrics - Concept 1c f1 0.0
+2023-06-05 13:10:11,863 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,864 - INFO - dataNode:getInferMetrics - Concept 3a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,864 - INFO - dataNode:getInferMetrics - Concept 3a labels from DataNode tensor([30])
+2023-06-05 13:10:11,864 - INFO - dataNode:getInferMetrics - Index of class Labels 3a is 3
+2023-06-05 13:10:11,864 - INFO - dataNode:getInferMetrics - Concept 3a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,864 - WARNING - dataNode:getInferMetrics - Concept 3a - found all zero predictions [0]
+2023-06-05 13:10:11,865 - INFO - dataNode:getInferMetrics - Concept 3a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,865 - WARNING - dataNode:getInferMetrics - Concept 3a precision 0.0
+2023-06-05 13:10:11,866 - WARNING - dataNode:getInferMetrics - Concept 3a recall 0.0
+2023-06-05 13:10:11,866 - WARNING - dataNode:getInferMetrics - Concept 3a f1 0.0
+2023-06-05 13:10:11,867 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,867 - INFO - dataNode:getInferMetrics - Concept 4a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,867 - INFO - dataNode:getInferMetrics - Concept 4a labels from DataNode tensor([30])
+2023-06-05 13:10:11,867 - INFO - dataNode:getInferMetrics - Index of class Labels 4a is 4
+2023-06-05 13:10:11,868 - INFO - dataNode:getInferMetrics - Concept 4a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,868 - WARNING - dataNode:getInferMetrics - Concept 4a - found all zero predictions [0]
+2023-06-05 13:10:11,868 - INFO - dataNode:getInferMetrics - Concept 4a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,869 - WARNING - dataNode:getInferMetrics - Concept 4a precision 0.0
+2023-06-05 13:10:11,870 - WARNING - dataNode:getInferMetrics - Concept 4a recall 0.0
+2023-06-05 13:10:11,870 - WARNING - dataNode:getInferMetrics - Concept 4a f1 0.0
+2023-06-05 13:10:11,871 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,871 - INFO - dataNode:getInferMetrics - Concept 4b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,871 - INFO - dataNode:getInferMetrics - Concept 4b labels from DataNode tensor([30])
+2023-06-05 13:10:11,872 - INFO - dataNode:getInferMetrics - Index of class Labels 4b is 5
+2023-06-05 13:10:11,872 - INFO - dataNode:getInferMetrics - Concept 4b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,872 - WARNING - dataNode:getInferMetrics - Concept 4b - found all zero predictions [0]
+2023-06-05 13:10:11,872 - INFO - dataNode:getInferMetrics - Concept 4b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,873 - WARNING - dataNode:getInferMetrics - Concept 4b precision 0.0
+2023-06-05 13:10:11,874 - WARNING - dataNode:getInferMetrics - Concept 4b recall 0.0
+2023-06-05 13:10:11,874 - WARNING - dataNode:getInferMetrics - Concept 4b f1 0.0
+2023-06-05 13:10:11,874 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,875 - INFO - dataNode:getInferMetrics - Concept 4c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,875 - INFO - dataNode:getInferMetrics - Concept 4c labels from DataNode tensor([30])
+2023-06-05 13:10:11,875 - INFO - dataNode:getInferMetrics - Index of class Labels 4c is 6
+2023-06-05 13:10:11,875 - INFO - dataNode:getInferMetrics - Concept 4c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,875 - WARNING - dataNode:getInferMetrics - Concept 4c - found all zero predictions [0]
+2023-06-05 13:10:11,876 - INFO - dataNode:getInferMetrics - Concept 4c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,877 - WARNING - dataNode:getInferMetrics - Concept 4c precision 0.0
+2023-06-05 13:10:11,877 - WARNING - dataNode:getInferMetrics - Concept 4c recall 0.0
+2023-06-05 13:10:11,878 - WARNING - dataNode:getInferMetrics - Concept 4c f1 0.0
+2023-06-05 13:10:11,878 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,878 - INFO - dataNode:getInferMetrics - Concept 4d predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,879 - INFO - dataNode:getInferMetrics - Concept 4d labels from DataNode tensor([30])
+2023-06-05 13:10:11,879 - INFO - dataNode:getInferMetrics - Index of class Labels 4d is 7
+2023-06-05 13:10:11,879 - INFO - dataNode:getInferMetrics - Concept 4d - labels used for metrics calculation [30]
+2023-06-05 13:10:11,879 - WARNING - dataNode:getInferMetrics - Concept 4d - found all zero predictions [0]
+2023-06-05 13:10:11,879 - INFO - dataNode:getInferMetrics - Concept 4d confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,880 - WARNING - dataNode:getInferMetrics - Concept 4d precision 0.0
+2023-06-05 13:10:11,881 - WARNING - dataNode:getInferMetrics - Concept 4d recall 0.0
+2023-06-05 13:10:11,881 - WARNING - dataNode:getInferMetrics - Concept 4d f1 0.0
+2023-06-05 13:10:11,881 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,882 - INFO - dataNode:getInferMetrics - Concept 7a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,882 - INFO - dataNode:getInferMetrics - Concept 7a labels from DataNode tensor([30])
+2023-06-05 13:10:11,882 - INFO - dataNode:getInferMetrics - Index of class Labels 7a is 8
+2023-06-05 13:10:11,882 - INFO - dataNode:getInferMetrics - Concept 7a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,882 - WARNING - dataNode:getInferMetrics - Concept 7a - found all zero predictions [0]
+2023-06-05 13:10:11,883 - INFO - dataNode:getInferMetrics - Concept 7a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,883 - WARNING - dataNode:getInferMetrics - Concept 7a precision 0.0
+2023-06-05 13:10:11,884 - WARNING - dataNode:getInferMetrics - Concept 7a recall 0.0
+2023-06-05 13:10:11,885 - WARNING - dataNode:getInferMetrics - Concept 7a f1 0.0
+2023-06-05 13:10:11,885 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,886 - INFO - dataNode:getInferMetrics - Concept 7b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,886 - INFO - dataNode:getInferMetrics - Concept 7b labels from DataNode tensor([30])
+2023-06-05 13:10:11,886 - INFO - dataNode:getInferMetrics - Index of class Labels 7b is 9
+2023-06-05 13:10:11,886 - INFO - dataNode:getInferMetrics - Concept 7b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,886 - WARNING - dataNode:getInferMetrics - Concept 7b - found all zero predictions [0]
+2023-06-05 13:10:11,887 - INFO - dataNode:getInferMetrics - Concept 7b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,887 - WARNING - dataNode:getInferMetrics - Concept 7b precision 0.0
+2023-06-05 13:10:11,888 - WARNING - dataNode:getInferMetrics - Concept 7b recall 0.0
+2023-06-05 13:10:11,888 - WARNING - dataNode:getInferMetrics - Concept 7b f1 0.0
+2023-06-05 13:10:11,889 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,889 - INFO - dataNode:getInferMetrics - Concept 7c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,889 - INFO - dataNode:getInferMetrics - Concept 7c labels from DataNode tensor([30])
+2023-06-05 13:10:11,890 - INFO - dataNode:getInferMetrics - Index of class Labels 7c is 10
+2023-06-05 13:10:11,890 - INFO - dataNode:getInferMetrics - Concept 7c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,890 - WARNING - dataNode:getInferMetrics - Concept 7c - found all zero predictions [0]
+2023-06-05 13:10:11,890 - INFO - dataNode:getInferMetrics - Concept 7c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,891 - WARNING - dataNode:getInferMetrics - Concept 7c precision 0.0
+2023-06-05 13:10:11,892 - WARNING - dataNode:getInferMetrics - Concept 7c recall 0.0
+2023-06-05 13:10:11,892 - WARNING - dataNode:getInferMetrics - Concept 7c f1 0.0
+2023-06-05 13:10:11,892 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,893 - INFO - dataNode:getInferMetrics - Concept 8a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,893 - INFO - dataNode:getInferMetrics - Concept 8a labels from DataNode tensor([30])
+2023-06-05 13:10:11,893 - INFO - dataNode:getInferMetrics - Index of class Labels 8a is 11
+2023-06-05 13:10:11,893 - INFO - dataNode:getInferMetrics - Concept 8a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,893 - WARNING - dataNode:getInferMetrics - Concept 8a - found all zero predictions [0]
+2023-06-05 13:10:11,894 - INFO - dataNode:getInferMetrics - Concept 8a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,895 - WARNING - dataNode:getInferMetrics - Concept 8a precision 0.0
+2023-06-05 13:10:11,895 - WARNING - dataNode:getInferMetrics - Concept 8a recall 0.0
+2023-06-05 13:10:11,896 - WARNING - dataNode:getInferMetrics - Concept 8a f1 0.0
+2023-06-05 13:10:11,896 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,896 - INFO - dataNode:getInferMetrics - Concept 9a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,897 - INFO - dataNode:getInferMetrics - Concept 9a labels from DataNode tensor([30])
+2023-06-05 13:10:11,897 - INFO - dataNode:getInferMetrics - Index of class Labels 9a is 12
+2023-06-05 13:10:11,897 - INFO - dataNode:getInferMetrics - Concept 9a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,897 - WARNING - dataNode:getInferMetrics - Concept 9a - found all zero predictions [0]
+2023-06-05 13:10:11,897 - INFO - dataNode:getInferMetrics - Concept 9a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,898 - WARNING - dataNode:getInferMetrics - Concept 9a precision 0.0
+2023-06-05 13:10:11,899 - WARNING - dataNode:getInferMetrics - Concept 9a recall 0.0
+2023-06-05 13:10:11,900 - WARNING - dataNode:getInferMetrics - Concept 9a f1 0.0
+2023-06-05 13:10:11,900 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,901 - INFO - dataNode:getInferMetrics - Concept 9b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,901 - INFO - dataNode:getInferMetrics - Concept 9b labels from DataNode tensor([30])
+2023-06-05 13:10:11,901 - INFO - dataNode:getInferMetrics - Index of class Labels 9b is 13
+2023-06-05 13:10:11,901 - INFO - dataNode:getInferMetrics - Concept 9b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,901 - WARNING - dataNode:getInferMetrics - Concept 9b - found all zero predictions [0]
+2023-06-05 13:10:11,902 - INFO - dataNode:getInferMetrics - Concept 9b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,902 - WARNING - dataNode:getInferMetrics - Concept 9b precision 0.0
+2023-06-05 13:10:11,903 - WARNING - dataNode:getInferMetrics - Concept 9b recall 0.0
+2023-06-05 13:10:11,903 - WARNING - dataNode:getInferMetrics - Concept 9b f1 0.0
+2023-06-05 13:10:11,904 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,904 - INFO - dataNode:getInferMetrics - Concept 9c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,904 - INFO - dataNode:getInferMetrics - Concept 9c labels from DataNode tensor([30])
+2023-06-05 13:10:11,904 - INFO - dataNode:getInferMetrics - Index of class Labels 9c is 14
+2023-06-05 13:10:11,905 - INFO - dataNode:getInferMetrics - Concept 9c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,905 - WARNING - dataNode:getInferMetrics - Concept 9c - found all zero predictions [0]
+2023-06-05 13:10:11,905 - INFO - dataNode:getInferMetrics - Concept 9c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,906 - WARNING - dataNode:getInferMetrics - Concept 9c precision 0.0
+2023-06-05 13:10:11,906 - WARNING - dataNode:getInferMetrics - Concept 9c recall 0.0
+2023-06-05 13:10:11,907 - WARNING - dataNode:getInferMetrics - Concept 9c f1 0.0
+2023-06-05 13:10:11,907 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,908 - INFO - dataNode:getInferMetrics - Concept 9d predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,908 - INFO - dataNode:getInferMetrics - Concept 9d labels from DataNode tensor([30])
+2023-06-05 13:10:11,908 - INFO - dataNode:getInferMetrics - Index of class Labels 9d is 15
+2023-06-05 13:10:11,908 - INFO - dataNode:getInferMetrics - Concept 9d - labels used for metrics calculation [30]
+2023-06-05 13:10:11,908 - WARNING - dataNode:getInferMetrics - Concept 9d - found all zero predictions [0]
+2023-06-05 13:10:11,909 - INFO - dataNode:getInferMetrics - Concept 9d confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,909 - WARNING - dataNode:getInferMetrics - Concept 9d precision 0.0
+2023-06-05 13:10:11,910 - WARNING - dataNode:getInferMetrics - Concept 9d recall 0.0
+2023-06-05 13:10:11,910 - WARNING - dataNode:getInferMetrics - Concept 9d f1 0.0
+2023-06-05 13:10:11,911 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,911 - INFO - dataNode:getInferMetrics - Concept 9e predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,911 - INFO - dataNode:getInferMetrics - Concept 9e labels from DataNode tensor([30])
+2023-06-05 13:10:11,912 - INFO - dataNode:getInferMetrics - Index of class Labels 9e is 16
+2023-06-05 13:10:11,912 - INFO - dataNode:getInferMetrics - Concept 9e - labels used for metrics calculation [30]
+2023-06-05 13:10:11,912 - WARNING - dataNode:getInferMetrics - Concept 9e - found all zero predictions [0]
+2023-06-05 13:10:11,912 - INFO - dataNode:getInferMetrics - Concept 9e confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,913 - WARNING - dataNode:getInferMetrics - Concept 9e precision 0.0
+2023-06-05 13:10:11,913 - WARNING - dataNode:getInferMetrics - Concept 9e recall 0.0
+2023-06-05 13:10:11,914 - WARNING - dataNode:getInferMetrics - Concept 9e f1 0.0
+2023-06-05 13:10:11,915 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,915 - INFO - dataNode:getInferMetrics - Concept 10a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,915 - INFO - dataNode:getInferMetrics - Concept 10a labels from DataNode tensor([30])
+2023-06-05 13:10:11,915 - INFO - dataNode:getInferMetrics - Index of class Labels 10a is 17
+2023-06-05 13:10:11,916 - INFO - dataNode:getInferMetrics - Concept 10a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,916 - WARNING - dataNode:getInferMetrics - Concept 10a - found all zero predictions [0]
+2023-06-05 13:10:11,916 - INFO - dataNode:getInferMetrics - Concept 10a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,917 - WARNING - dataNode:getInferMetrics - Concept 10a precision 0.0
+2023-06-05 13:10:11,917 - WARNING - dataNode:getInferMetrics - Concept 10a recall 0.0
+2023-06-05 13:10:11,918 - WARNING - dataNode:getInferMetrics - Concept 10a f1 0.0
+2023-06-05 13:10:11,918 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,919 - INFO - dataNode:getInferMetrics - Concept 10b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,919 - INFO - dataNode:getInferMetrics - Concept 10b labels from DataNode tensor([30])
+2023-06-05 13:10:11,919 - INFO - dataNode:getInferMetrics - Index of class Labels 10b is 18
+2023-06-05 13:10:11,919 - INFO - dataNode:getInferMetrics - Concept 10b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,919 - WARNING - dataNode:getInferMetrics - Concept 10b - found all zero predictions [0]
+2023-06-05 13:10:11,920 - INFO - dataNode:getInferMetrics - Concept 10b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,920 - WARNING - dataNode:getInferMetrics - Concept 10b precision 0.0
+2023-06-05 13:10:11,921 - WARNING - dataNode:getInferMetrics - Concept 10b recall 0.0
+2023-06-05 13:10:11,921 - WARNING - dataNode:getInferMetrics - Concept 10b f1 0.0
+2023-06-05 13:10:11,922 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,922 - INFO - dataNode:getInferMetrics - Concept 10c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,922 - INFO - dataNode:getInferMetrics - Concept 10c labels from DataNode tensor([30])
+2023-06-05 13:10:11,922 - INFO - dataNode:getInferMetrics - Index of class Labels 10c is 19
+2023-06-05 13:10:11,923 - INFO - dataNode:getInferMetrics - Concept 10c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,923 - WARNING - dataNode:getInferMetrics - Concept 10c - found all zero predictions [0]
+2023-06-05 13:10:11,923 - INFO - dataNode:getInferMetrics - Concept 10c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,924 - WARNING - dataNode:getInferMetrics - Concept 10c precision 0.0
+2023-06-05 13:10:11,924 - WARNING - dataNode:getInferMetrics - Concept 10c recall 0.0
+2023-06-05 13:10:11,925 - WARNING - dataNode:getInferMetrics - Concept 10c f1 0.0
+2023-06-05 13:10:11,925 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,926 - INFO - dataNode:getInferMetrics - Concept 10d predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,926 - INFO - dataNode:getInferMetrics - Concept 10d labels from DataNode tensor([30])
+2023-06-05 13:10:11,926 - INFO - dataNode:getInferMetrics - Index of class Labels 10d is 20
+2023-06-05 13:10:11,926 - INFO - dataNode:getInferMetrics - Concept 10d - labels used for metrics calculation [30]
+2023-06-05 13:10:11,926 - WARNING - dataNode:getInferMetrics - Concept 10d - found all zero predictions [0]
+2023-06-05 13:10:11,927 - INFO - dataNode:getInferMetrics - Concept 10d confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,927 - WARNING - dataNode:getInferMetrics - Concept 10d precision 0.0
+2023-06-05 13:10:11,928 - WARNING - dataNode:getInferMetrics - Concept 10d recall 0.0
+2023-06-05 13:10:11,928 - WARNING - dataNode:getInferMetrics - Concept 10d f1 0.0
+2023-06-05 13:10:11,928 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,929 - INFO - dataNode:getInferMetrics - Concept 11a predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,930 - INFO - dataNode:getInferMetrics - Concept 11a labels from DataNode tensor([30])
+2023-06-05 13:10:11,930 - INFO - dataNode:getInferMetrics - Index of class Labels 11a is 21
+2023-06-05 13:10:11,930 - INFO - dataNode:getInferMetrics - Concept 11a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,930 - WARNING - dataNode:getInferMetrics - Concept 11a - found all zero predictions [0]
+2023-06-05 13:10:11,931 - INFO - dataNode:getInferMetrics - Concept 11a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,931 - WARNING - dataNode:getInferMetrics - Concept 11a precision 0.0
+2023-06-05 13:10:11,932 - WARNING - dataNode:getInferMetrics - Concept 11a recall 0.0
+2023-06-05 13:10:11,932 - WARNING - dataNode:getInferMetrics - Concept 11a f1 0.0
+2023-06-05 13:10:11,932 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,933 - INFO - dataNode:getInferMetrics - Concept 11b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,933 - INFO - dataNode:getInferMetrics - Concept 11b labels from DataNode tensor([30])
+2023-06-05 13:10:11,933 - INFO - dataNode:getInferMetrics - Index of class Labels 11b is 22
+2023-06-05 13:10:11,934 - INFO - dataNode:getInferMetrics - Concept 11b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,934 - WARNING - dataNode:getInferMetrics - Concept 11b - found all zero predictions [0]
+2023-06-05 13:10:11,934 - INFO - dataNode:getInferMetrics - Concept 11b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,935 - WARNING - dataNode:getInferMetrics - Concept 11b precision 0.0
+2023-06-05 13:10:11,935 - WARNING - dataNode:getInferMetrics - Concept 11b recall 0.0
+2023-06-05 13:10:11,936 - WARNING - dataNode:getInferMetrics - Concept 11b f1 0.0
+2023-06-05 13:10:11,936 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,937 - INFO - dataNode:getInferMetrics - Concept 11c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,937 - INFO - dataNode:getInferMetrics - Concept 11c labels from DataNode tensor([30])
+2023-06-05 13:10:11,937 - INFO - dataNode:getInferMetrics - Index of class Labels 11c is 23
+2023-06-05 13:10:11,937 - INFO - dataNode:getInferMetrics - Concept 11c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,937 - WARNING - dataNode:getInferMetrics - Concept 11c - found all zero predictions [0]
+2023-06-05 13:10:11,938 - INFO - dataNode:getInferMetrics - Concept 11c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,938 - WARNING - dataNode:getInferMetrics - Concept 11c precision 0.0
+2023-06-05 13:10:11,938 - WARNING - dataNode:getInferMetrics - Concept 11c recall 0.0
+2023-06-05 13:10:11,940 - WARNING - dataNode:getInferMetrics - Concept 11c f1 0.0
+2023-06-05 13:10:11,940 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,941 - INFO - dataNode:getInferMetrics - Concept 11d predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,941 - INFO - dataNode:getInferMetrics - Concept 11d labels from DataNode tensor([30])
+2023-06-05 13:10:11,941 - INFO - dataNode:getInferMetrics - Index of class Labels 11d is 24
+2023-06-05 13:10:11,941 - INFO - dataNode:getInferMetrics - Concept 11d - labels used for metrics calculation [30]
+2023-06-05 13:10:11,941 - WARNING - dataNode:getInferMetrics - Concept 11d - found all zero predictions [0]
+2023-06-05 13:10:11,942 - INFO - dataNode:getInferMetrics - Concept 11d confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,942 - WARNING - dataNode:getInferMetrics - Concept 11d precision 0.0
+2023-06-05 13:10:11,943 - WARNING - dataNode:getInferMetrics - Concept 11d recall 0.0
+2023-06-05 13:10:11,943 - WARNING - dataNode:getInferMetrics - Concept 11d f1 0.0
+2023-06-05 13:10:11,943 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,944 - INFO - dataNode:getInferMetrics - Concept 11e predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,944 - INFO - dataNode:getInferMetrics - Concept 11e labels from DataNode tensor([30])
+2023-06-05 13:10:11,944 - INFO - dataNode:getInferMetrics - Index of class Labels 11e is 25
+2023-06-05 13:10:11,945 - INFO - dataNode:getInferMetrics - Concept 11e - labels used for metrics calculation [30]
+2023-06-05 13:10:11,945 - WARNING - dataNode:getInferMetrics - Concept 11e - found all zero predictions [0]
+2023-06-05 13:10:11,946 - INFO - dataNode:getInferMetrics - Concept 11e confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,946 - WARNING - dataNode:getInferMetrics - Concept 11e precision 0.0
+2023-06-05 13:10:11,947 - WARNING - dataNode:getInferMetrics - Concept 11e recall 0.0
+2023-06-05 13:10:11,947 - WARNING - dataNode:getInferMetrics - Concept 11e f1 0.0
+2023-06-05 13:10:11,947 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,948 - INFO - dataNode:getInferMetrics - Concept 12a predictions from DataNode tensor([1.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,949 - INFO - dataNode:getInferMetrics - Concept 12a labels from DataNode tensor([30])
+2023-06-05 13:10:11,949 - INFO - dataNode:getInferMetrics - Index of class Labels 12a is 26
+2023-06-05 13:10:11,949 - INFO - dataNode:getInferMetrics - Concept 12a - labels used for metrics calculation [30]
+2023-06-05 13:10:11,949 - INFO - dataNode:getInferMetrics - Concept 12a - Predictions used for metrics calculation [1]
+2023-06-05 13:10:11,949 - INFO - dataNode:getInferMetrics - Concept 12a confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,950 - WARNING - dataNode:getInferMetrics - Concept 12a precision 0.0
+2023-06-05 13:10:11,951 - WARNING - dataNode:getInferMetrics - Concept 12a recall 0.0
+2023-06-05 13:10:11,951 - WARNING - dataNode:getInferMetrics - Concept 12a f1 0.0
+2023-06-05 13:10:11,951 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,952 - INFO - dataNode:getInferMetrics - Concept 12b predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,952 - INFO - dataNode:getInferMetrics - Concept 12b labels from DataNode tensor([30])
+2023-06-05 13:10:11,952 - INFO - dataNode:getInferMetrics - Index of class Labels 12b is 27
+2023-06-05 13:10:11,952 - INFO - dataNode:getInferMetrics - Concept 12b - labels used for metrics calculation [30]
+2023-06-05 13:10:11,952 - WARNING - dataNode:getInferMetrics - Concept 12b - found all zero predictions [0]
+2023-06-05 13:10:11,953 - INFO - dataNode:getInferMetrics - Concept 12b confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,954 - WARNING - dataNode:getInferMetrics - Concept 12b precision 0.0
+2023-06-05 13:10:11,954 - WARNING - dataNode:getInferMetrics - Concept 12b recall 0.0
+2023-06-05 13:10:11,955 - WARNING - dataNode:getInferMetrics - Concept 12b f1 0.0
+2023-06-05 13:10:11,955 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,955 - INFO - dataNode:getInferMetrics - Concept 12c predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,955 - INFO - dataNode:getInferMetrics - Concept 12c labels from DataNode tensor([30])
+2023-06-05 13:10:11,956 - INFO - dataNode:getInferMetrics - Index of class Labels 12c is 28
+2023-06-05 13:10:11,956 - INFO - dataNode:getInferMetrics - Concept 12c - labels used for metrics calculation [30]
+2023-06-05 13:10:11,956 - WARNING - dataNode:getInferMetrics - Concept 12c - found all zero predictions [0]
+2023-06-05 13:10:11,956 - INFO - dataNode:getInferMetrics - Concept 12c confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,957 - WARNING - dataNode:getInferMetrics - Concept 12c precision 0.0
+2023-06-05 13:10:11,958 - WARNING - dataNode:getInferMetrics - Concept 12c recall 0.0
+2023-06-05 13:10:11,958 - WARNING - dataNode:getInferMetrics - Concept 12c f1 0.0
+2023-06-05 13:10:11,958 - INFO - dataNode:getInferMetrics - Calculating metrics for concept SubCategory
+2023-06-05 13:10:11,959 - INFO - dataNode:getInferMetrics - Concept 12d predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,959 - INFO - dataNode:getInferMetrics - Concept 12d labels from DataNode tensor([30])
+2023-06-05 13:10:11,959 - INFO - dataNode:getInferMetrics - Index of class Labels 12d is 29
+2023-06-05 13:10:11,959 - INFO - dataNode:getInferMetrics - Concept 12d - labels used for metrics calculation [30]
+2023-06-05 13:10:11,959 - WARNING - dataNode:getInferMetrics - Concept 12d - found all zero predictions [0]
+2023-06-05 13:10:11,960 - INFO - dataNode:getInferMetrics - Concept 12d confusion matrix [[1. 0.]
+ [0. 0.]]
+2023-06-05 13:10:11,961 - WARNING - dataNode:getInferMetrics - Concept 12d precision 0.0
+2023-06-05 13:10:11,962 - WARNING - dataNode:getInferMetrics - Concept 12d recall 0.0
+2023-06-05 13:10:11,962 - WARNING - dataNode:getInferMetrics - Concept 12d f1 0.0
+2023-06-05 13:10:11,962 - INFO - dataNode:getInferMetrics - Calculating metrics for concept ParentCategory
+2023-06-05 13:10:11,963 - INFO - dataNode:getInferMetrics - Concept none predictions from DataNode tensor([0.], device='cuda:0', grad_fn=<StackBackward>)
+2023-06-05 13:10:11,963 - INFO - dataNode:getInferMetrics - Concept none labels from DataNode tensor([12])
+2023-06-05 13:10:11,963 - INFO - dataNode:getInferMetrics - Index of class Labels none is 12
+2023-06-05 13:10:11,963 - INFO - dataNode:getInferMetrics - Concept none - labels used for metrics calculation [12]
+2023-06-05 13:10:11,964 - WARNING - dataNode:getInferMetrics - Concept none - found all zero predictions [0]
+2023-06-05 13:10:11,964 - INFO - dataNode:getInferMetrics - Concept none confusion matrix [[0. 0.]
+ [1. 0.]]
+2023-06-05 13:10:11,965 - WARNING - dataNode:getInferMetrics - Concept none precision 0.0
+2023-06-05 13:10:11,965 - WARNING - dataNode:getInferMetrics - Concept none recall 0.0
+2023-06-05 13:10:11,966 - WARNING - dataNode:getInferMetrics - Concept none f1 0.0
+2023-06-05 13:10:11,966 - INFO - dataNode:getInferMetrics - Concept SubCategory - labels used for metrics calculation [30]
+2023-06-05 13:10:11,966 - INFO - dataNode:getInferMetrics - Concept SubCategory - Predictions used for metrics calculation [26]
+2023-06-05 13:10:11,967 - INFO - dataNode:getInferMetrics - Concept SubCategory confusion matrix [[0 0]
+ [1 0]]
+2023-06-05 13:10:11,967 - WARNING - dataNode:getInferMetrics - Concept SubCategory precision 0.0
+2023-06-05 13:10:11,968 - WARNING - dataNode:getInferMetrics - Concept SubCategory recall 0.0
+2023-06-05 13:10:11,968 - WARNING - dataNode:getInferMetrics - Concept SubCategory f1 0.0
+2023-06-05 13:10:11,969 - INFO - dataNodeBuilder:getDataNode - Returning dataNode with id 0 of type TextSequence

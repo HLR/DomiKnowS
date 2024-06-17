@@ -1,0 +1,16 @@
+level1 accuracy: 0.764638837441231
+level1 ILP accuracy: 0.7612195469440092
+level1 accuracy with none: 0.764638837441231
+level1 ILP accuracy with none: 0.7612195469440092
+level1 total changed for ILP is 70, correct changes are 10(0.14285714285714285%), wrong changes are 34(0.4857142857142857%)
+level1 Sequential accuracy: 0.7589400199458612
+level1 Sequential accuracy with none: 0.7589400199458612
+level1 Total changed for sequential is 126, correct changes are 22(0.1746031746031746%), wrong changes are 62(0.49206349206349204%)
+level2 accuracy: 0.7192198293376676
+level2 ILP accuracy: 0.7257212515237709
+level2 accuracy with none: 0.8684997862943439
+level2 ILP accuracy with none: 0.8676449636700385
+level2 total changed for ILP is 30, correct changes are 17(0.5666666666666667%), wrong changes are 1(0.03333333333333333%)
+level2 Sequential accuracy: 0.7192198293376676
+level2 Sequential accuracy with none: 0.8684997862943439
+level2 consistent accuracy: 0.7192198293376676

@@ -1,0 +1,137 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>CNN19980227.2130.0067</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1998-02-27" temporalFunction="false" functionInDocument="CREATION_TIME">19980227</TIMEX3></DCT>
+
+<EXTRAINFO>
+CNN19980227.2130.0067 NEWS STORY
+</EXTRAINFO>
+
+<TEXT>
+Live from Atalanta, good evening Lynne Russell, CNN headline news. New evidence is <EVENT eid="e4" class="I_STATE">suggesting</EVENT> that a series of <EVENT eid="e91" class="OCCURRENCE">bombings</EVENT> in Atalanta and <TIMEX3 tid="t93" type="DATE" value="1998-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last month</TIMEX3>'s <EVENT eid="e6" class="OCCURRENCE">explosion</EVENT> at an Alabama women's clinic might be <EVENT eid="e8" class="STATE">related</EVENT>. Pierre Thomas has the latest.
+
+Atlanta <TIMEX3 tid="t95" type="DATE" value="1996" temporalFunction="false" functionInDocument="NONE">nineteen ninety-six</TIMEX3>. A bomb blast <EVENT eid="e11" class="OCCURRENCE">shocks</EVENT> the Olympic games. One person is <EVENT eid="e12" class="OCCURRENCE">killed</EVENT>.
+
+<TIMEX3 tid="t96" type="DATE" value="1997-01" temporalFunction="false" functionInDocument="NONE">January nineteen ninety-seven</TIMEX3>. Atlanta again. This time a <EVENT eid="e149" class="OCCURRENCE">bomb</EVENT> at an abortion clinic. More people are <EVENT eid="e16" class="OCCURRENCE">hurt</EVENT>. And just <TIMEX3 tid="t97" type="DATE" value="1998-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last month</TIMEX3>, an off duty policeman is <EVENT eid="e17" class="OCCURRENCE">killed</EVENT> when a bomb <EVENT eid="e98" class="OCCURRENCE">explodes</EVENT> at another abortion clinic. Location, Birmingham, Alabama.
+
+This man, Eric Rudolph has already been <EVENT eid="e22" class="OCCURRENCE">charged</EVENT> in the Birmingham <EVENT eid="e23" class="OCCURRENCE">bombing</EVENT>. <TIMEX3 tid="t178" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Now</TIMEX3> officials are <EVENT eid="e25" class="I_ACTION">investigating</EVENT> whether, Rudolph, who remains at large, is <EVENT eid="e27" class="STATE">linked</EVENT> to all three <EVENT eid="e28" class="OCCURRENCE">attacks</EVENT>. The reason, authorities have <EVENT eid="e30" class="OCCURRENCE">discovered</EVENT> tantalizing new evidence.
+
+Steel plates <EVENT eid="e33" class="OCCURRENCE">recovered</EVENT> at the Olympic park bombing <EVENT eid="e34" class="I_STATE">appear</EVENT> to <EVENT eid="e36" class="OCCURRENCE">match</EVENT> those <EVENT eid="e37" class="OCCURRENCE">found</EVENT> at the abortion clinic <EVENT eid="e38" class="OCCURRENCE">bombing</EVENT> in Atlanta. Those plates may have <EVENT eid="e42" class="OCCURRENCE">come</EVENT> from a machine shop in north Carolina, where a friend of Rudolph <EVENT eid="e44" class="OCCURRENCE">worked</EVENT>.
+
+And nails <EVENT eid="e45" class="OCCURRENCE">found</EVENT> in the Atlanta abortion clinic <EVENT eid="e101" class="OCCURRENCE">bombing</EVENT> are identical to those <EVENT eid="e46" class="OCCURRENCE">discovered</EVENT> at Rudolph's storage shed in north Carolina. A senior law enforcement source <EVENT eid="e49" class="REPORTING">tells</EVENT> CNN, there is a lot of circumstantial evidence and it would be extraordinary to <EVENT eid="e53" class="STATE">have</EVENT> all these bits and pieces and there not be a connection.
+
+And law enforcement sources <EVENT eid="e54" class="REPORTING">say</EVENT> they can't <EVENT eid="e55" class="OCCURRENCE">ignore</EVENT> letters penned under the name army of god. Army of god is a secret organization that hates abortion providers, homosexuals and the US government.
+
+Army of god letters <EVENT eid="e105" class="I_ACTION">claim</EVENT> responsibility for the Atlanta abortion clinic <EVENT eid="e106" class="OCCURRENCE">bombing</EVENT>, a <TIMEX3 tid="t107" type="DATE" value="1997" temporalFunction="false" functionInDocument="NONE">nineteen ninety-seven</TIMEX3> <EVENT eid="e61" class="OCCURRENCE">attack</EVENT> on a gay lounge and the Birmingham <EVENT eid="e63" class="OCCURRENCE">assault</EVENT>.
+
+An intense <EVENT eid="e64" class="OCCURRENCE">manhunt</EVENT> conducted by the FBI and the bureau of alcohol, tobacco and firearms <EVENT eid="e66" class="ASPECTUAL">continues</EVENT> for Rudolph in the wilderness of western north Carolina. And <TIMEX3 tid="t108" type="DATE" value="1998-WXX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this week</TIMEX3>, FBI director Louie Freeh <EVENT eid="e109" class="OCCURRENCE">assigned</EVENT> more agents to the <EVENT eid="e67" class="OCCURRENCE">search</EVENT>.
+
+Freeh also <EVENT eid="e68" class="I_ACTION">ordered</EVENT> the <EVENT eid="e69" class="OCCURRENCE">investigation</EVENT> consolidate information under the Atlanta task force, another indication officials <EVENT eid="e72" class="I_STATE">suspect</EVENT> a link between all the <EVENT eid="e73" class="OCCURRENCE">bombings</EVENT>. Privately, authorities <EVENT eid="e74" class="REPORTING">say</EVENT> Rudolph has <EVENT eid="e76" class="OCCURRENCE">become</EVENT> a focus of their <EVENT eid="e77" class="OCCURRENCE">investigation</EVENT>. Publicly, they are <EVENT eid="e111" class="I_STATE">unwilling</EVENT> to <EVENT eid="e79" class="OCCURRENCE">make</EVENT> any sweeping <EVENT eid="e80" class="OCCURRENCE">assertion</EVENT>. The reason, they <EVENT eid="e82" class="OCCURRENCE">remember</EVENT> Richard Jewell. pierre thomas, CNN, Washington.
+</TEXT>
+
+<MAKEINSTANCE eventID="e4" eiid="ei1998" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei1999" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e6" eiid="ei2000" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e8" eiid="ei2001" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" modality="might" />
+<MAKEINSTANCE eventID="e11" eiid="ei2003" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei2004" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e149" eiid="ei2005" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e16" eiid="ei2006" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei2007" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e98" eiid="ei2008" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2009" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei2010" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e25" eiid="ei2011" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e27" eiid="ei2012" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" modality="none" />
+<MAKEINSTANCE eventID="e28" eiid="ei2013" tense="NONE" aspect="NONE" polarity="POS" cardinality="3" pos="NOUN" />
+<MAKEINSTANCE eventID="e30" eiid="ei2014" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei2015" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei2016" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e36" eiid="ei2017" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e37" eiid="ei2018" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e38" eiid="ei2019" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e42" eiid="ei2020" tense="NONE" aspect="PERFECTIVE" polarity="POS" pos="ADJECTIVE" modality="may" />
+<MAKEINSTANCE eventID="e44" eiid="ei2021" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e45" eiid="ei2022" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e101" eiid="ei2023" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e46" eiid="ei2024" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei2025" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e53" eiid="ei2028" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e54" eiid="ei2030" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e55" eiid="ei2031" tense="NONE" aspect="NONE" polarity="NEG" pos="VERB" modality="can" />
+<MAKEINSTANCE eventID="e105" eiid="ei2032" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e106" eiid="ei2034" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e61" eiid="ei2035" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e63" eiid="ei2036" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e64" eiid="ei2037" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e66" eiid="ei2038" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e109" eiid="ei2039" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e67" eiid="ei2040" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e68" eiid="ei2041" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e69" eiid="ei2042" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e72" eiid="ei2043" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e73" eiid="ei2045" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e74" eiid="ei2046" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e76" eiid="ei2047" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e77" eiid="ei2048" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e111" eiid="ei2049" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e79" eiid="ei2050" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e80" eiid="ei2051" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e82" eiid="ei2052" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l67" relType="IS_INCLUDED" eventInstanceID="ei2032" relatedToTime="t0" />
+<TLINK lid="l66" relType="IS_INCLUDED" eventInstanceID="ei2016" relatedToTime="t0" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei2052" relatedToEventInstance="ei2049" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei1999" relatedToEventInstance="ei2000" />
+<TLINK lid="l3" relType="INCLUDES" timeID="t93" relatedToEventInstance="ei2000"  />
+<TLINK lid="l4" relType="INCLUDES" eventInstanceID="ei1998" relatedToTime="t0" />
+<TLINK lid="l8" relType="INCLUDES" timeID="t96" relatedToEventInstance="ei2005" />
+<TLINK lid="l9" relType="IBEFORE" eventInstanceID="ei2005" relatedToEventInstance="ei2006" />
+<TLINK lid="l10" relType="INCLUDES" timeID="t97" relatedToEventInstance="ei2008" />
+<TLINK lid="l11" relType="IAFTER" eventInstanceID="ei2007" relatedToEventInstance="ei2008"  />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei2009" relatedToTime="t0" />
+<TLINK lid="l13" relType="AFTER" eventInstanceID="ei2009" relatedToEventInstance="ei2010" />
+<TLINK lid="l14" relType="IDENTITY" eventInstanceID="ei2010" relatedToEventInstance="ei2008" />
+<TLINK lid="l15" relType="INCLUDES" timeID="t178" relatedToEventInstance="ei2011" />
+<TLINK lid="l16" relType="IDENTITY" eventInstanceID="ei2013" relatedToEventInstance="ei1999" />
+<TLINK lid="l18" relType="INCLUDES" eventInstanceID="ei2013" relatedToEventInstance="ei2005" />
+<TLINK lid="l19" relType="INCLUDES" eventInstanceID="ei2013" relatedToEventInstance="ei2008" />
+<TLINK lid="l20" relType="IDENTITY" eventInstanceID="ei2000" relatedToEventInstance="ei2008" />
+<TLINK lid="l21" relType="AFTER" eventInstanceID="ei2011" relatedToEventInstance="ei2014" />
+<TLINK lid="l23" relType="BEFORE" eventInstanceID="ei2015" relatedToEventInstance="ei2005" />
+<TLINK lid="l24" relType="AFTER" eventInstanceID="ei2018" relatedToEventInstance="ei2005" />
+<TLINK lid="l25" relType="BEFORE" eventInstanceID="ei2018" relatedToEventInstance="ei2010" />
+<TLINK lid="l26" relType="AFTER" eventInstanceID="ei2018" relatedToEventInstance="ei2015" />
+<TLINK lid="l27" relType="AFTER" eventInstanceID="ei2018" relatedToEventInstance="ei2019" />
+<TLINK lid="l28" relType="IDENTITY" eventInstanceID="ei2019" relatedToEventInstance="ei2005" />
+<TLINK lid="l29" relType="BEFORE" eventInstanceID="ei2021" relatedToTime="t0" />
+<TLINK lid="l30" relType="INCLUDES" eventInstanceID="ei2021" relatedToEventInstance="ei2020" />
+<TLINK lid="l31" relType="AFTER" eventInstanceID="ei2022" relatedToEventInstance="ei2023" />
+<TLINK lid="l32" relType="IDENTITY" eventInstanceID="ei2023" relatedToEventInstance="ei2019" />
+<TLINK lid="l33" relType="AFTER" eventInstanceID="ei2024" relatedToEventInstance="ei2022" />
+<TLINK lid="l34" relType="IS_INCLUDED" eventInstanceID="ei2025" relatedToTime="t0" />
+<TLINK lid="l36" relType="IDENTITY" eventInstanceID="ei2030" relatedToEventInstance="ei2025" />
+<TLINK lid="l37" relType="INCLUDES" timeID="t107" relatedToEventInstance="ei2035" />
+<TLINK lid="l38" relType="INCLUDES" eventInstanceID="ei2038" relatedToTime="t0" />
+<TLINK lid="l39" relType="INCLUDES" timeID="t108" relatedToEventInstance="ei2039" />
+<TLINK lid="l40" relType="BEFORE" eventInstanceID="ei2039" relatedToEventInstance="ei2040" />
+<TLINK lid="l41" relType="IDENTITY" eventInstanceID="ei2040" relatedToEventInstance="ei2037" />
+<TLINK lid="l42" relType="INCLUDES" timeID="t108" relatedToEventInstance="ei2041" />
+<TLINK lid="l43" relType="BEFORE" eventInstanceID="ei2041" relatedToEventInstance="ei2043" />
+<TLINK lid="l44" relType="IDENTITY" eventInstanceID="ei2045" relatedToEventInstance="ei1999" />
+<TLINK lid="l45" relType="INCLUDES" eventInstanceID="ei2046" relatedToTime="t0" />
+<TLINK lid="l46" relType="INCLUDES" eventInstanceID="ei2048" relatedToEventInstance="ei2047" />
+<TLINK lid="l47" relType="SIMULTANEOUS" eventInstanceID="ei2049" relatedToEventInstance="ei2046" />
+<TLINK lid="l48" relType="IDENTITY" eventInstanceID="ei2050" relatedToEventInstance="ei2051" />
+<SLINK lid="l65" relType="FACTIVE" eventInstanceID="ei2009" subordinatedEventInstance="ei2010" />
+<SLINK lid="l49" relType="MODAL" eventInstanceID="ei1998" subordinatedEventInstance="ei2001" />
+<SLINK lid="l50" relType="MODAL" eventInstanceID="ei2011" subordinatedEventInstance="ei2012" />
+<SLINK lid="l51" relType="MODAL" eventInstanceID="ei2016" subordinatedEventInstance="ei2017" />
+<SLINK lid="l55" relType="EVIDENTIAL" eventInstanceID="ei2030" subordinatedEventInstance="ei2031" />
+<SLINK lid="l60" relType="MODAL" eventInstanceID="ei2041" subordinatedEventInstance="ei2042" />
+<SLINK lid="l62" relType="EVIDENTIAL" eventInstanceID="ei2046" subordinatedEventInstance="ei2047" />
+<SLINK lid="l63" relType="MODAL" eventInstanceID="ei2049" subordinatedEventInstance="ei2050" />
+<ALINK lid="l64" relType="CONTINUES" eventInstanceID="ei2038" relatedToEventInstance="ei2037" />
+
+</TimeML>

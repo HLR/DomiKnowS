@@ -1,0 +1,172 @@
+Text	Syrian rebels delivered six U.N. ceasefire monitors caught up in attack that killed at least 21 civilians to U.N. colleagues on Wednesday, a rebel commander said. "We gave the six with their cars to a U.N. convoy near the entrance of Khan Sheikhoun. They are all safe, in good heath and on their way to Damascus," Free Syrian Army commander Abu Hassan said by satellite phone from the site of the handover. Video footage released by the Free Syrian Army showed a United Nations convoy, including damaged U.N. vehicles on flatbed trucks, driving off from the area. Abu Hassan said the monitors, whose cars were damaged in the attack at a funeral in Khan Sheikhoun on Tuesday, had been under protection of the rebels since then. Rebels said the attack was carried out by government forces, while pro-government media accused unidentified gunmen of carrying it out. (Reporting by Mariam Karouny and Khaled Yacoub Oweis; Editing by Louise Ireland) 
+Event	1	delivered	Occurrence	14
+Event	2	caught	I_Action	52
+Event	3	attack	Occurrence	65
+Event	4	killed	Occurrence	77
+Event	5	said	Reporting	157
+Event	6	gave	Occurrence	167
+Event	7	said	Reporting	352
+Event	8	handover	Occurrence	397
+Event	9	released	Occurrence	421
+Event	10	driving	Occurrence	537
+Event	11	said	Reporting	575
+Event	12	damaged	Occurrence	610
+Event	13	attack	Occurrence	625
+Event	14	funeral	Occurrence	637
+Event	15	said	Reporting	734
+Event	16	attack	Occurrence	743
+Event	17	carried	I_Action	754
+Event	18	accused	Occurrence	815
+Relation	1	2	NoRel	true	delivered	caught
+Relation	1	3	NoRel	true	delivered	attack
+Relation	1	4	NoRel	true	delivered	killed
+Relation	1	5	NoRel	true	delivered	said
+Relation	1	6	Coref	true	delivered	gave
+Relation	1	7	NoRel	true	delivered	said
+Relation	1	8	Coref	true	delivered	handover
+Relation	1	9	NoRel	true	delivered	released
+Relation	1	10	NoRel	true	delivered	driving
+Relation	1	11	NoRel	true	delivered	said
+Relation	1	12	NoRel	true	delivered	damaged
+Relation	1	13	NoRel	true	delivered	attack
+Relation	1	14	NoRel	true	delivered	funeral
+Relation	1	15	NoRel	true	delivered	said
+Relation	1	16	NoRel	true	delivered	attack
+Relation	1	17	NoRel	true	delivered	carried
+Relation	1	18	NoRel	true	delivered	accused
+Relation	2	3	NoRel	true	caught	attack
+Relation	2	4	NoRel	true	caught	killed
+Relation	2	5	NoRel	true	caught	said
+Relation	2	6	NoRel	true	caught	gave
+Relation	2	7	NoRel	true	caught	said
+Relation	2	8	NoRel	true	caught	handover
+Relation	2	9	NoRel	true	caught	released
+Relation	2	10	NoRel	true	caught	driving
+Relation	2	11	NoRel	true	caught	said
+Relation	2	12	NoRel	true	caught	damaged
+Relation	2	13	NoRel	true	caught	attack
+Relation	2	14	NoRel	true	caught	funeral
+Relation	2	15	NoRel	true	caught	said
+Relation	2	16	NoRel	true	caught	attack
+Relation	2	17	NoRel	true	caught	carried
+Relation	2	18	NoRel	true	caught	accused
+Relation	3	4	SuperSub	true	attack	killed
+Relation	3	5	NoRel	true	attack	said
+Relation	3	6	NoRel	true	attack	gave
+Relation	3	7	NoRel	true	attack	said
+Relation	3	8	NoRel	true	attack	handover
+Relation	3	9	NoRel	true	attack	released
+Relation	3	10	NoRel	true	attack	driving
+Relation	3	11	NoRel	true	attack	said
+Relation	3	12	SuperSub	true	attack	damaged
+Relation	3	13	Coref	true	attack	attack
+Relation	3	14	SubSuper	true	attack	funeral
+Relation	3	15	NoRel	true	attack	said
+Relation	3	16	Coref	true	attack	attack
+Relation	3	17	NoRel	true	attack	carried
+Relation	3	18	NoRel	true	attack	accused
+Relation	4	5	NoRel	true	killed	said
+Relation	4	6	NoRel	true	killed	gave
+Relation	4	7	NoRel	true	killed	said
+Relation	4	8	NoRel	true	killed	handover
+Relation	4	9	NoRel	true	killed	released
+Relation	4	10	NoRel	true	killed	driving
+Relation	4	11	NoRel	true	killed	said
+Relation	4	12	NoRel	true	killed	damaged
+Relation	4	13	SubSuper	true	killed	attack
+Relation	4	14	SubSuper	true	killed	funeral
+Relation	4	15	NoRel	true	killed	said
+Relation	4	16	SubSuper	true	killed	attack
+Relation	4	17	NoRel	true	killed	carried
+Relation	4	18	NoRel	true	killed	accused
+Relation	5	6	NoRel	true	said	gave
+Relation	5	7	NoRel	true	said	said
+Relation	5	8	NoRel	true	said	handover
+Relation	5	9	NoRel	true	said	released
+Relation	5	10	NoRel	true	said	driving
+Relation	5	11	NoRel	true	said	said
+Relation	5	12	NoRel	true	said	damaged
+Relation	5	13	NoRel	true	said	attack
+Relation	5	14	NoRel	true	said	funeral
+Relation	5	15	NoRel	true	said	said
+Relation	5	16	NoRel	true	said	attack
+Relation	5	17	NoRel	true	said	carried
+Relation	5	18	NoRel	true	said	accused
+Relation	6	7	NoRel	true	gave	said
+Relation	6	8	Coref	true	gave	handover
+Relation	6	9	NoRel	true	gave	released
+Relation	6	10	NoRel	true	gave	driving
+Relation	6	11	NoRel	true	gave	said
+Relation	6	12	NoRel	true	gave	damaged
+Relation	6	13	NoRel	true	gave	attack
+Relation	6	14	NoRel	true	gave	funeral
+Relation	6	15	NoRel	true	gave	said
+Relation	6	16	NoRel	true	gave	attack
+Relation	6	17	NoRel	true	gave	carried
+Relation	6	18	NoRel	true	gave	accused
+Relation	7	8	NoRel	true	said	handover
+Relation	7	9	NoRel	true	said	released
+Relation	7	10	NoRel	true	said	driving
+Relation	7	11	NoRel	true	said	said
+Relation	7	12	NoRel	true	said	damaged
+Relation	7	13	NoRel	true	said	attack
+Relation	7	14	NoRel	true	said	funeral
+Relation	7	15	NoRel	true	said	said
+Relation	7	16	NoRel	true	said	attack
+Relation	7	17	NoRel	true	said	carried
+Relation	7	18	NoRel	true	said	accused
+Relation	8	9	NoRel	true	handover	released
+Relation	8	10	NoRel	true	handover	driving
+Relation	8	11	NoRel	true	handover	said
+Relation	8	12	NoRel	true	handover	damaged
+Relation	8	13	NoRel	true	handover	attack
+Relation	8	14	NoRel	true	handover	funeral
+Relation	8	15	NoRel	true	handover	said
+Relation	8	16	NoRel	true	handover	attack
+Relation	8	17	NoRel	true	handover	carried
+Relation	8	18	NoRel	true	handover	accused
+Relation	9	10	NoRel	true	released	driving
+Relation	9	11	NoRel	true	released	said
+Relation	9	12	NoRel	true	released	damaged
+Relation	9	13	NoRel	true	released	attack
+Relation	9	14	NoRel	true	released	funeral
+Relation	9	15	NoRel	true	released	said
+Relation	9	16	NoRel	true	released	attack
+Relation	9	17	NoRel	true	released	carried
+Relation	9	18	NoRel	true	released	accused
+Relation	10	11	NoRel	true	driving	said
+Relation	10	12	NoRel	true	driving	damaged
+Relation	10	13	NoRel	true	driving	attack
+Relation	10	14	NoRel	true	driving	funeral
+Relation	10	15	NoRel	true	driving	said
+Relation	10	16	NoRel	true	driving	attack
+Relation	10	17	NoRel	true	driving	carried
+Relation	10	18	NoRel	true	driving	accused
+Relation	11	12	NoRel	true	said	damaged
+Relation	11	13	NoRel	true	said	attack
+Relation	11	14	NoRel	true	said	funeral
+Relation	11	15	NoRel	true	said	said
+Relation	11	16	NoRel	true	said	attack
+Relation	11	17	NoRel	true	said	carried
+Relation	11	18	NoRel	true	said	accused
+Relation	12	13	SubSuper	true	damaged	attack
+Relation	12	14	SubSuper	true	damaged	funeral
+Relation	12	15	NoRel	true	damaged	said
+Relation	12	16	SubSuper	true	damaged	attack
+Relation	12	17	NoRel	true	damaged	carried
+Relation	12	18	NoRel	true	damaged	accused
+Relation	13	14	SubSuper	true	attack	funeral
+Relation	13	15	NoRel	true	attack	said
+Relation	13	16	Coref	true	attack	attack
+Relation	13	17	NoRel	true	attack	carried
+Relation	13	18	NoRel	true	attack	accused
+Relation	14	15	NoRel	true	funeral	said
+Relation	14	16	SuperSub	true	funeral	attack
+Relation	14	17	NoRel	true	funeral	carried
+Relation	14	18	NoRel	true	funeral	accused
+Relation	15	16	NoRel	true	said	attack
+Relation	15	17	NoRel	true	said	carried
+Relation	15	18	NoRel	true	said	accused
+Relation	16	17	NoRel	true	attack	carried
+Relation	16	18	NoRel	true	attack	accused
+Relation	17	18	NoRel	true	carried	accused

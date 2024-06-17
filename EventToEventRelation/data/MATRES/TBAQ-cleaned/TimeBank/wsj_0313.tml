@@ -1,0 +1,74 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0313</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-01" temporalFunction="false" functionInDocument="CREATION_TIME">11/01/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891101-0051 = 891101 891101-0051.
+Business Brief -- Murphy Oil Corp.: @ Ocean Drilling Unit to Sell @ Contract-Drilling Operation 11/01/89 WALL STREET JOURNAL (J) ODR MUR TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) EARNINGS (ERN)
+</EXTRAINFO>
+
+<TEXT>
+Ocean Drilling amp Exploration Co. will <EVENT eid="e1" class="OCCURRENCE">sell</EVENT> its contract-drilling business, and <EVENT eid="e3" class="OCCURRENCE">took</EVENT> a $50.9 million <EVENT eid="e4" class="STATE">loss</EVENT> from discontinued <EVENT eid="e5" class="OCCURRENCE">operations</EVENT> in <TIMEX3 tid="t62" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the third quarter</TIMEX3> because of the planned <EVENT eid="e7" class="OCCURRENCE">sale</EVENT>.
+
+The New Orleans oil and gas exploration and diving operations company <EVENT eid="e9" class="REPORTING">added</EVENT> that it doesn't <EVENT eid="e10" class="I_STATE">expect</EVENT> any further adverse financial impact from the <EVENT eid="e64" class="OCCURRENCE">restructuring</EVENT>.
+
+In <TIMEX3 tid="t63" type="DURATION" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the third quarter</TIMEX3>, the company, which is 61%-owned by Murphy Oil Corp. of Arkansas, <EVENT eid="e48" class="STATE">had</EVENT> a net <EVENT eid="e15" class="STATE">loss</EVENT> of $46.9 million, or 91 cents a share, compared with a restated <EVENT eid="e17" class="STATE">loss</EVENT> of $9 million, or 18 cents a share, <TIMEX3 tid="t65" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t63">a year ago</TIMEX3>. <TIMEX3 tid="t66" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">The latest period</TIMEX3> <EVENT eid="e51" class="STATE">had</EVENT> profit from continuing <EVENT eid="e18" class="OCCURRENCE">operations</EVENT> of $4 million. Revenue <EVENT eid="e21" class="OCCURRENCE">gained</EVENT> 13% to $77.3 million from $68.5 million.
+
+Ocean Drilling <EVENT eid="e22" class="REPORTING">said</EVENT> it will <EVENT eid="e23" class="OCCURRENCE">offer</EVENT> 15% to 20% of the contract-drilling business through an initial public offering in <TIMEX3 tid="t67" type="DATE" value="FUTURE_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the near future</TIMEX3>. It has long been <EVENT eid="e27" class="I_ACTION">rumored</EVENT> that Ocean Drilling would <EVENT eid="e59" class="OCCURRENCE">sell</EVENT> the unit to <EVENT eid="e31" class="OCCURRENCE">concentrate</EVENT> on its core oil and gas business.
+
+Ocean Drilling <EVENT eid="e33" class="REPORTING">said</EVENT> it won't <EVENT eid="e34" class="OCCURRENCE">hold</EVENT> any shares of the new company after the <EVENT eid="e60" class="OCCURRENCE">restructuring</EVENT>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e60" eiid="ei250" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e31" eiid="ei247" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei243" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei226" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e21" eiid="ei239" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei249" tense="FUTURE" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei234" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e3" eiid="ei224" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei238" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e7" eiid="ei228" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e27" eiid="ei245" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei229" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei230" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e59" eiid="ei246" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="would" />
+<MAKEINSTANCE eventID="e17" eiid="ei235" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e1" eiid="ei223" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei248" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei225" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e22" eiid="ei242" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e48" eiid="ei233" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e51" eiid="ei236" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e64" eiid="ei232" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l1" relType="AFTER" eventInstanceID="ei223" relatedToTime="t0" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei224" relatedToTime="t0" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei224" relatedToEventInstance="ei225" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei226" relatedToEventInstance="ei225" />
+<TLINK lid="l5" relType="DURING" eventInstanceID="ei226" relatedToTime="t62"  />
+<TLINK lid="l7" relType="IDENTITY" eventInstanceID="ei228" relatedToEventInstance="ei223" />
+<TLINK lid="l9" relType="INCLUDES" eventInstanceID="ei232" relatedToEventInstance="ei228" />
+<TLINK lid="l10" relType="ENDED_BY" timeID="t63" relatedToEventInstance="ei233"  />
+<TLINK lid="l11" relType="IDENTITY" eventInstanceID="ei233" relatedToEventInstance="ei234" />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei235" relatedToEventInstance="ei234" />
+<TLINK lid="l14" relType="ENDED_BY" timeID="t66" relatedToEventInstance="ei236" />
+<TLINK lid="l15" relType="BEFORE" eventInstanceID="ei238" relatedToEventInstance="ei236" />
+<TLINK lid="l16" relType="DURING" eventInstanceID="ei239" relatedToTime="t66" />
+<TLINK lid="l17" relType="IDENTITY" eventInstanceID="ei242" relatedToEventInstance="ei229" />
+<TLINK lid="l18" relType="BEFORE" eventInstanceID="ei242" relatedToTime="t0" />
+<TLINK lid="l21" relType="BEFORE" eventInstanceID="ei245" relatedToTime="t0" />
+<TLINK lid="l22" relType="IDENTITY" eventInstanceID="ei248" relatedToEventInstance="ei242" />
+<TLINK lid="l23" relType="AFTER" eventInstanceID="ei249" relatedToEventInstance="ei250"  />
+<TLINK lid="l24" relType="IDENTITY" eventInstanceID="ei250" relatedToEventInstance="ei232" />
+<TLINK lid="l25" relType="BEGINS" eventInstanceID="ei235" relatedToTime="t65" />
+<TLINK lid="l26" relType="ENDS" eventInstanceID="ei234" relatedToTime="t65" />
+<SLINK lid="l28" relType="EVIDENTIAL" eventInstanceID="ei229" subordinatedEventInstance="ei230" />
+<SLINK lid="l30" relType="EVIDENTIAL" eventInstanceID="ei242" subordinatedEventInstance="ei243" />
+<SLINK lid="l31" relType="MODAL" eventInstanceID="ei245" subordinatedEventInstance="ei246" />
+<SLINK lid="l32" relType="MODAL" eventInstanceID="ei246" subordinatedEventInstance="ei247" />
+<SLINK lid="l33" relType="EVIDENTIAL" eventInstanceID="ei248" subordinatedEventInstance="ei249" />
+
+</TimeML>

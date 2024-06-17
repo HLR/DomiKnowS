@@ -1,0 +1,211 @@
+Text	"Majid Jamali Fashi, the Mossad spy and the person who assassinated Masoud Ali Mohammadi, our nation's nuclear scientist, was hanged Tuesday morning (local time)," IRNA said. Local media reported August 28 that Jamali Fashi was sentenced to death after being "convicted of Moharebeh (waging war against God) for placing a bomb-laden bike and blowing it up in front of martyr Ali Mohammadi's home, in collaboration with the Zionist regime and Mossad". Jamali Fashi stood trial as the main suspect in the killing of Ali Mohammadi, a particle physics professor at Tehran University who was killed in a bomb attack outside his home in January 2010. Jamali Fashi also faced charges of cooperating with Israel's spy agency Mossad and of receiving $US120,000 for passing on intelligence to its agents. The Islamic republic has blamed the Jewish state and the United States for the killing of four of its scientists and nuclear experts since 2010. Western powers and Israel suspect Iran is seeking an atomic weapons capability under the guise of its civilian nuclear and space programs - a charge Tehran vehemently denies. 
+Event	1	assassinated	Occurrence	55
+Event	2	hanged	Occurrence	126
+Event	3	said	Reporting	169
+Event	4	reported	Reporting	187
+Event	5	sentenced	Occurrence	228
+Event	6	convicted	Occurrence	260
+Event	7	placing	Occurrence	312
+Event	8	blowing	Occurrence	342
+Event	9	collaboration	Occurrence	400
+Event	10	stood	I_Action	464
+Event	11	trial	Occurrence	470
+Event	12	killing	Occurrence	503
+Event	13	killed	Occurrence	587
+Event	14	attack	Occurrence	604
+Event	15	faced	I_Action	663
+Event	16	charges	I_Action	669
+Event	17	blamed	I_Action	820
+Event	18	killing	Occurrence	874
+Event	19	charge	Occurrence	1082
+Event	20	denies	I_Action	1107
+Relation	1	2	NoRel	true	assassinated	hanged
+Relation	1	3	NoRel	true	assassinated	said
+Relation	1	4	NoRel	true	assassinated	reported
+Relation	1	5	NoRel	true	assassinated	sentenced
+Relation	1	6	NoRel	true	assassinated	convicted
+Relation	1	7	NoRel	true	assassinated	placing
+Relation	1	8	SubSuper	true	assassinated	blowing
+Relation	1	9	SubSuper	true	assassinated	collaboration
+Relation	1	10	NoRel	true	assassinated	stood
+Relation	1	11	NoRel	true	assassinated	trial
+Relation	1	12	Coref	true	assassinated	killing
+Relation	1	13	Coref	true	assassinated	killed
+Relation	1	14	SubSuper	true	assassinated	attack
+Relation	1	15	NoRel	true	assassinated	faced
+Relation	1	16	NoRel	true	assassinated	charges
+Relation	1	17	NoRel	true	assassinated	blamed
+Relation	1	18	SubSuper	true	assassinated	killing
+Relation	1	19	NoRel	true	assassinated	charge
+Relation	1	20	NoRel	true	assassinated	denies
+Relation	2	3	NoRel	true	hanged	said
+Relation	2	4	NoRel	true	hanged	reported
+Relation	2	5	NoRel	true	hanged	sentenced
+Relation	2	6	NoRel	true	hanged	convicted
+Relation	2	7	NoRel	true	hanged	placing
+Relation	2	8	NoRel	true	hanged	blowing
+Relation	2	9	NoRel	true	hanged	collaboration
+Relation	2	10	NoRel	true	hanged	stood
+Relation	2	11	NoRel	true	hanged	trial
+Relation	2	12	NoRel	true	hanged	killing
+Relation	2	13	NoRel	true	hanged	killed
+Relation	2	14	NoRel	true	hanged	attack
+Relation	2	15	NoRel	true	hanged	faced
+Relation	2	16	NoRel	true	hanged	charges
+Relation	2	17	NoRel	true	hanged	blamed
+Relation	2	18	NoRel	true	hanged	killing
+Relation	2	19	NoRel	true	hanged	charge
+Relation	2	20	NoRel	true	hanged	denies
+Relation	3	4	NoRel	true	said	reported
+Relation	3	5	NoRel	true	said	sentenced
+Relation	3	6	NoRel	true	said	convicted
+Relation	3	7	NoRel	true	said	placing
+Relation	3	8	NoRel	true	said	blowing
+Relation	3	9	NoRel	true	said	collaboration
+Relation	3	10	NoRel	true	said	stood
+Relation	3	11	NoRel	true	said	trial
+Relation	3	12	NoRel	true	said	killing
+Relation	3	13	NoRel	true	said	killed
+Relation	3	14	NoRel	true	said	attack
+Relation	3	15	NoRel	true	said	faced
+Relation	3	16	NoRel	true	said	charges
+Relation	3	17	NoRel	true	said	blamed
+Relation	3	18	NoRel	true	said	killing
+Relation	3	19	NoRel	true	said	charge
+Relation	3	20	NoRel	true	said	denies
+Relation	4	5	NoRel	true	reported	sentenced
+Relation	4	6	NoRel	true	reported	convicted
+Relation	4	7	NoRel	true	reported	placing
+Relation	4	8	NoRel	true	reported	blowing
+Relation	4	9	NoRel	true	reported	collaboration
+Relation	4	10	NoRel	true	reported	stood
+Relation	4	11	NoRel	true	reported	trial
+Relation	4	12	NoRel	true	reported	killing
+Relation	4	13	NoRel	true	reported	killed
+Relation	4	14	NoRel	true	reported	attack
+Relation	4	15	NoRel	true	reported	faced
+Relation	4	16	NoRel	true	reported	charges
+Relation	4	17	NoRel	true	reported	blamed
+Relation	4	18	NoRel	true	reported	killing
+Relation	4	19	NoRel	true	reported	charge
+Relation	4	20	NoRel	true	reported	denies
+Relation	5	6	NoRel	true	sentenced	convicted
+Relation	5	7	NoRel	true	sentenced	placing
+Relation	5	8	NoRel	true	sentenced	blowing
+Relation	5	9	NoRel	true	sentenced	collaboration
+Relation	5	10	NoRel	true	sentenced	stood
+Relation	5	11	SubSuper	true	sentenced	trial
+Relation	5	12	NoRel	true	sentenced	killing
+Relation	5	13	NoRel	true	sentenced	killed
+Relation	5	14	NoRel	true	sentenced	attack
+Relation	5	15	NoRel	true	sentenced	faced
+Relation	5	16	NoRel	true	sentenced	charges
+Relation	5	17	NoRel	true	sentenced	blamed
+Relation	5	18	NoRel	true	sentenced	killing
+Relation	5	19	NoRel	true	sentenced	charge
+Relation	5	20	NoRel	true	sentenced	denies
+Relation	6	7	NoRel	true	convicted	placing
+Relation	6	8	NoRel	true	convicted	blowing
+Relation	6	9	NoRel	true	convicted	collaboration
+Relation	6	10	NoRel	true	convicted	stood
+Relation	6	11	SubSuper	true	convicted	trial
+Relation	6	12	NoRel	true	convicted	killing
+Relation	6	13	NoRel	true	convicted	killed
+Relation	6	14	NoRel	true	convicted	attack
+Relation	6	15	NoRel	true	convicted	faced
+Relation	6	16	NoRel	true	convicted	charges
+Relation	6	17	NoRel	true	convicted	blamed
+Relation	6	18	NoRel	true	convicted	killing
+Relation	6	19	NoRel	true	convicted	charge
+Relation	6	20	NoRel	true	convicted	denies
+Relation	7	8	NoRel	true	placing	blowing
+Relation	7	9	SubSuper	true	placing	collaboration
+Relation	7	10	NoRel	true	placing	stood
+Relation	7	11	NoRel	true	placing	trial
+Relation	7	12	NoRel	true	placing	killing
+Relation	7	13	NoRel	true	placing	killed
+Relation	7	14	SubSuper	true	placing	attack
+Relation	7	15	NoRel	true	placing	faced
+Relation	7	16	NoRel	true	placing	charges
+Relation	7	17	NoRel	true	placing	blamed
+Relation	7	18	NoRel	true	placing	killing
+Relation	7	19	NoRel	true	placing	charge
+Relation	7	20	NoRel	true	placing	denies
+Relation	8	9	SubSuper	true	blowing	collaboration
+Relation	8	10	NoRel	true	blowing	stood
+Relation	8	11	NoRel	true	blowing	trial
+Relation	8	12	SuperSub	true	blowing	killing
+Relation	8	13	SuperSub	true	blowing	killed
+Relation	8	14	SubSuper	true	blowing	attack
+Relation	8	15	NoRel	true	blowing	faced
+Relation	8	16	NoRel	true	blowing	charges
+Relation	8	17	NoRel	true	blowing	blamed
+Relation	8	18	NoRel	true	blowing	killing
+Relation	8	19	NoRel	true	blowing	charge
+Relation	8	20	NoRel	true	blowing	denies
+Relation	9	10	NoRel	true	collaboration	stood
+Relation	9	11	NoRel	true	collaboration	trial
+Relation	9	12	SuperSub	true	collaboration	killing
+Relation	9	13	SuperSub	true	collaboration	killed
+Relation	9	14	SuperSub	true	collaboration	attack
+Relation	9	15	NoRel	true	collaboration	faced
+Relation	9	16	NoRel	true	collaboration	charges
+Relation	9	17	NoRel	true	collaboration	blamed
+Relation	9	18	NoRel	true	collaboration	killing
+Relation	9	19	NoRel	true	collaboration	charge
+Relation	9	20	NoRel	true	collaboration	denies
+Relation	10	11	NoRel	true	stood	trial
+Relation	10	12	NoRel	true	stood	killing
+Relation	10	13	NoRel	true	stood	killed
+Relation	10	14	NoRel	true	stood	attack
+Relation	10	15	NoRel	true	stood	faced
+Relation	10	16	NoRel	true	stood	charges
+Relation	10	17	NoRel	true	stood	blamed
+Relation	10	18	NoRel	true	stood	killing
+Relation	10	19	NoRel	true	stood	charge
+Relation	10	20	NoRel	true	stood	denies
+Relation	11	12	NoRel	true	trial	killing
+Relation	11	13	NoRel	true	trial	killed
+Relation	11	14	NoRel	true	trial	attack
+Relation	11	15	NoRel	true	trial	faced
+Relation	11	16	NoRel	true	trial	charges
+Relation	11	17	NoRel	true	trial	blamed
+Relation	11	18	NoRel	true	trial	killing
+Relation	11	19	NoRel	true	trial	charge
+Relation	11	20	NoRel	true	trial	denies
+Relation	12	13	Coref	true	killing	killed
+Relation	12	14	SubSuper	true	killing	attack
+Relation	12	15	NoRel	true	killing	faced
+Relation	12	16	NoRel	true	killing	charges
+Relation	12	17	NoRel	true	killing	blamed
+Relation	12	18	SubSuper	true	killing	killing
+Relation	12	19	NoRel	true	killing	charge
+Relation	12	20	NoRel	true	killing	denies
+Relation	13	14	SubSuper	true	killed	attack
+Relation	13	15	NoRel	true	killed	faced
+Relation	13	16	NoRel	true	killed	charges
+Relation	13	17	NoRel	true	killed	blamed
+Relation	13	18	SubSuper	true	killed	killing
+Relation	13	19	NoRel	true	killed	charge
+Relation	13	20	NoRel	true	killed	denies
+Relation	14	15	NoRel	true	attack	faced
+Relation	14	16	NoRel	true	attack	charges
+Relation	14	17	NoRel	true	attack	blamed
+Relation	14	18	NoRel	true	attack	killing
+Relation	14	19	NoRel	true	attack	charge
+Relation	14	20	NoRel	true	attack	denies
+Relation	15	16	NoRel	true	faced	charges
+Relation	15	17	NoRel	true	faced	blamed
+Relation	15	18	NoRel	true	faced	killing
+Relation	15	19	NoRel	true	faced	charge
+Relation	15	20	NoRel	true	faced	denies
+Relation	16	17	NoRel	true	charges	blamed
+Relation	16	18	NoRel	true	charges	killing
+Relation	16	19	NoRel	true	charges	charge
+Relation	16	20	NoRel	true	charges	denies
+Relation	17	18	NoRel	true	blamed	killing
+Relation	17	19	NoRel	true	blamed	charge
+Relation	17	20	NoRel	true	blamed	denies
+Relation	18	19	NoRel	true	killing	charge
+Relation	18	20	NoRel	true	killing	denies
+Relation	19	20	NoRel	true	charge	denies

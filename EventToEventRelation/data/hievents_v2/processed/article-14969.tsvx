@@ -1,0 +1,191 @@
+Text	The Olympic torch has begun its journey to London after surviving a scare when the sacred flame was extinguished shortly before it was used to light the 'cheese grater', The Telegraph reports. A gust of wind put the flame out as it was being carried out in a bowl from the temple of Hera, where it had been lit from the rays of the sun, into the ancient stadium in Olympia. The Priestess carrying the flame had to leave the arena and re-light the bowl from a lamp that had been lit earlier as insurance against the flame going out. The London torch was then successfully lit and the first leg of the relay was run through the ancient Olympic stadium by Liverpool-born Greek swimming world champion Spyros Gianniotis. He handed the torch to Alex Loukos from Newham, 19, who was a member of the victorious London bid team in Singapore in 2005. The torch will travel around Greece for a week before arriving in Cornwall on Friday May 18. Armenia's Greco-Roman wrestling team headed by Olympic champion Levon Julfalakyan came back home with one gold and two bronze winners.
+Event	1	begun	I_Action	22
+Event	2	journey	Occurrence	32
+Event	3	surviving	I_Action	56
+Event	4	scare	Occurrence	68
+Event	5	extinguished	Occurrence	100
+Event	6	used	I_Action	135
+Event	7	light	Occurrence	143
+Event	8	reports	Reporting	184
+Event	9	put	Occurrence	208
+Event	10	carried	Occurrence	242
+Event	11	lit	Occurrence	307
+Event	12	carrying	Occurrence	388
+Event	13	leave	Occurrence	414
+Event	14	light	Occurrence	437
+Event	15	lit	Occurrence	478
+Event	16	lit	Occurrence	571
+Event	17	run	Occurrence	610
+Event	18	handed	Occurrence	720
+Event	19	came	Occurrence	1017
+Relation	1	2	NoRel	true	begun	journey
+Relation	1	3	NoRel	true	begun	surviving
+Relation	1	4	NoRel	true	begun	scare
+Relation	1	5	NoRel	true	begun	extinguished
+Relation	1	6	NoRel	true	begun	used
+Relation	1	7	NoRel	true	begun	light
+Relation	1	8	NoRel	true	begun	reports
+Relation	1	9	NoRel	true	begun	put
+Relation	1	10	NoRel	true	begun	carried
+Relation	1	11	NoRel	true	begun	lit
+Relation	1	12	NoRel	true	begun	carrying
+Relation	1	13	NoRel	true	begun	leave
+Relation	1	14	NoRel	true	begun	light
+Relation	1	15	NoRel	true	begun	lit
+Relation	1	16	NoRel	true	begun	lit
+Relation	1	17	NoRel	true	begun	run
+Relation	1	18	NoRel	true	begun	handed
+Relation	1	19	NoRel	true	begun	came
+Relation	2	3	NoRel	true	journey	surviving
+Relation	2	4	NoRel	true	journey	scare
+Relation	2	5	NoRel	true	journey	extinguished
+Relation	2	6	NoRel	true	journey	used
+Relation	2	7	SuperSub	true	journey	light
+Relation	2	8	NoRel	true	journey	reports
+Relation	2	9	NoRel	true	journey	put
+Relation	2	10	NoRel	true	journey	carried
+Relation	2	11	NoRel	true	journey	lit
+Relation	2	12	NoRel	true	journey	carrying
+Relation	2	13	NoRel	true	journey	leave
+Relation	2	14	SuperSub	true	journey	light
+Relation	2	15	NoRel	true	journey	lit
+Relation	2	16	SuperSub	true	journey	lit
+Relation	2	17	SuperSub	true	journey	run
+Relation	2	18	SuperSub	true	journey	handed
+Relation	2	19	NoRel	true	journey	came
+Relation	3	4	NoRel	true	surviving	scare
+Relation	3	5	NoRel	true	surviving	extinguished
+Relation	3	6	NoRel	true	surviving	used
+Relation	3	7	NoRel	true	surviving	light
+Relation	3	8	NoRel	true	surviving	reports
+Relation	3	9	NoRel	true	surviving	put
+Relation	3	10	NoRel	true	surviving	carried
+Relation	3	11	NoRel	true	surviving	lit
+Relation	3	12	NoRel	true	surviving	carrying
+Relation	3	13	NoRel	true	surviving	leave
+Relation	3	14	NoRel	true	surviving	light
+Relation	3	15	NoRel	true	surviving	lit
+Relation	3	16	NoRel	true	surviving	lit
+Relation	3	17	NoRel	true	surviving	run
+Relation	3	18	NoRel	true	surviving	handed
+Relation	3	19	NoRel	true	surviving	came
+Relation	4	5	SuperSub	true	scare	extinguished
+Relation	4	6	NoRel	true	scare	used
+Relation	4	7	NoRel	true	scare	light
+Relation	4	8	NoRel	true	scare	reports
+Relation	4	9	SuperSub	true	scare	put
+Relation	4	10	SubSuper	true	scare	carried
+Relation	4	11	NoRel	true	scare	lit
+Relation	4	12	SubSuper	true	scare	carrying
+Relation	4	13	NoRel	true	scare	leave
+Relation	4	14	NoRel	true	scare	light
+Relation	4	15	NoRel	true	scare	lit
+Relation	4	16	NoRel	true	scare	lit
+Relation	4	17	NoRel	true	scare	run
+Relation	4	18	NoRel	true	scare	handed
+Relation	4	19	NoRel	true	scare	came
+Relation	5	6	NoRel	true	extinguished	used
+Relation	5	7	NoRel	true	extinguished	light
+Relation	5	8	NoRel	true	extinguished	reports
+Relation	5	9	Coref	true	extinguished	put
+Relation	5	10	SubSuper	true	extinguished	carried
+Relation	5	11	NoRel	true	extinguished	lit
+Relation	5	12	SubSuper	true	extinguished	carrying
+Relation	5	13	NoRel	true	extinguished	leave
+Relation	5	14	NoRel	true	extinguished	light
+Relation	5	15	NoRel	true	extinguished	lit
+Relation	5	16	NoRel	true	extinguished	lit
+Relation	5	17	NoRel	true	extinguished	run
+Relation	5	18	NoRel	true	extinguished	handed
+Relation	5	19	NoRel	true	extinguished	came
+Relation	6	7	NoRel	true	used	light
+Relation	6	8	NoRel	true	used	reports
+Relation	6	9	NoRel	true	used	put
+Relation	6	10	NoRel	true	used	carried
+Relation	6	11	NoRel	true	used	lit
+Relation	6	12	NoRel	true	used	carrying
+Relation	6	13	NoRel	true	used	leave
+Relation	6	14	NoRel	true	used	light
+Relation	6	15	NoRel	true	used	lit
+Relation	6	16	NoRel	true	used	lit
+Relation	6	17	NoRel	true	used	run
+Relation	6	18	NoRel	true	used	handed
+Relation	6	19	NoRel	true	used	came
+Relation	7	8	NoRel	true	light	reports
+Relation	7	9	NoRel	true	light	put
+Relation	7	10	SubSuper	true	light	carried
+Relation	7	11	NoRel	true	light	lit
+Relation	7	12	SubSuper	true	light	carrying
+Relation	7	13	NoRel	true	light	leave
+Relation	7	14	Coref	true	light	light
+Relation	7	15	NoRel	true	light	lit
+Relation	7	16	Coref	true	light	lit
+Relation	7	17	NoRel	true	light	run
+Relation	7	18	NoRel	true	light	handed
+Relation	7	19	NoRel	true	light	came
+Relation	8	9	NoRel	true	reports	put
+Relation	8	10	NoRel	true	reports	carried
+Relation	8	11	NoRel	true	reports	lit
+Relation	8	12	NoRel	true	reports	carrying
+Relation	8	13	NoRel	true	reports	leave
+Relation	8	14	NoRel	true	reports	light
+Relation	8	15	NoRel	true	reports	lit
+Relation	8	16	NoRel	true	reports	lit
+Relation	8	17	NoRel	true	reports	run
+Relation	8	18	NoRel	true	reports	handed
+Relation	8	19	NoRel	true	reports	came
+Relation	9	10	SubSuper	true	put	carried
+Relation	9	11	NoRel	true	put	lit
+Relation	9	12	SubSuper	true	put	carrying
+Relation	9	13	NoRel	true	put	leave
+Relation	9	14	NoRel	true	put	light
+Relation	9	15	NoRel	true	put	lit
+Relation	9	16	NoRel	true	put	lit
+Relation	9	17	NoRel	true	put	run
+Relation	9	18	NoRel	true	put	handed
+Relation	9	19	NoRel	true	put	came
+Relation	10	11	NoRel	true	carried	lit
+Relation	10	12	Coref	true	carried	carrying
+Relation	10	13	SuperSub	true	carried	leave
+Relation	10	14	SuperSub	true	carried	light
+Relation	10	15	NoRel	true	carried	lit
+Relation	10	16	SuperSub	true	carried	lit
+Relation	10	17	NoRel	true	carried	run
+Relation	10	18	NoRel	true	carried	handed
+Relation	10	19	NoRel	true	carried	came
+Relation	11	12	NoRel	true	lit	carrying
+Relation	11	13	NoRel	true	lit	leave
+Relation	11	14	NoRel	true	lit	light
+Relation	11	15	NoRel	true	lit	lit
+Relation	11	16	NoRel	true	lit	lit
+Relation	11	17	NoRel	true	lit	run
+Relation	11	18	NoRel	true	lit	handed
+Relation	11	19	NoRel	true	lit	came
+Relation	12	13	SuperSub	true	carrying	leave
+Relation	12	14	SuperSub	true	carrying	light
+Relation	12	15	NoRel	true	carrying	lit
+Relation	12	16	SuperSub	true	carrying	lit
+Relation	12	17	NoRel	true	carrying	run
+Relation	12	18	NoRel	true	carrying	handed
+Relation	12	19	NoRel	true	carrying	came
+Relation	13	14	NoRel	true	leave	light
+Relation	13	15	NoRel	true	leave	lit
+Relation	13	16	NoRel	true	leave	lit
+Relation	13	17	NoRel	true	leave	run
+Relation	13	18	NoRel	true	leave	handed
+Relation	13	19	NoRel	true	leave	came
+Relation	14	15	NoRel	true	light	lit
+Relation	14	16	Coref	true	light	lit
+Relation	14	17	NoRel	true	light	run
+Relation	14	18	NoRel	true	light	handed
+Relation	14	19	NoRel	true	light	came
+Relation	15	16	NoRel	true	lit	lit
+Relation	15	17	NoRel	true	lit	run
+Relation	15	18	NoRel	true	lit	handed
+Relation	15	19	NoRel	true	lit	came
+Relation	16	17	NoRel	true	lit	run
+Relation	16	18	NoRel	true	lit	handed
+Relation	16	19	NoRel	true	lit	came
+Relation	17	18	NoRel	true	run	handed
+Relation	17	19	NoRel	true	run	came
+Relation	18	19	NoRel	true	handed	came

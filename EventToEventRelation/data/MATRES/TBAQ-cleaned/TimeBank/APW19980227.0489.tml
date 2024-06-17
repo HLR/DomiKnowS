@@ -1,0 +1,88 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>APW19980227.0489</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="TIME" value="1998-02-27T08:13:00" temporalFunction="false" functionInDocument="CREATION_TIME">02/27/1998 08:13:00</TIMEX3></DCT>
+
+<EXTRAINFO>
+APW19980227.0489 NEWS STORY 02/27/1998 08:13:00
+w2394 Cx1f wstmu i Cx13 Cx11 BC-OAU-Rwanda 02-27 0216
+BC-OAU-Rwanda
+OAU to investigate Rwandan genocide
+</EXTRAINFO>
+
+<TEXT>
+ADDIS ABABA, Ethiopia (AP)_ The Organization of African Unity <EVENT eid="e2" class="REPORTING" stem="say">said</EVENT> <TIMEX3 tid="t41" type="DATE" value="1998-02-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3> it would <EVENT eid="e3" class="I_ACTION" stem="investigate">investigate</EVENT> the Hutu-organized <EVENT eid="e4" class="OCCURRENCE" stem="genocide">genocide</EVENT> of more than 500,000 minority Tutsis in Rwanda <TIMEX3 tid="t42" type="DATE" value="1994" mod="APPROX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">nearly four years ago</TIMEX3>. Foreign ministers of member-states <EVENT eid="e5" class="OCCURRENCE" stem="meet">meeting</EVENT> in the Ethiopian capital <EVENT eid="e6" class="I_ACTION" stem="agree">agreed</EVENT> to <EVENT eid="e7" class="OCCURRENCE" stem="set">set</EVENT> up a seven-member panel to <EVENT eid="e8" class="I_ACTION" stem="investigate">investigate</EVENT> who <EVENT eid="e9" class="OCCURRENCE" stem="shoot">shot</EVENT> down Rwandan President Juvenal Habyarimana's plane on <TIMEX3 tid="t43" type="DATE" value="1994-04-06" temporalFunction="false" functionInDocument="NONE">April 6, 1994</TIMEX3>. The <EVENT eid="e10" class="OCCURRENCE" stem="assassination">assassination</EVENT> <EVENT eid="e11" class="I_ACTION" stem="touch">touched</EVENT> off a murderous <EVENT eid="e12" class="OCCURRENCE" stem="rampage">rampage</EVENT> by Hutu security forces and civilians, who <EVENT eid="e14" class="OCCURRENCE" stem="slaughter">slaughtered</EVENT> mainly Tutsis but also Hutus who <EVENT eid="e15" class="I_STATE" stem="favour">favored</EVENT> <EVENT eid="e16" class="OCCURRENCE" stem="reconciliation">reconciliation</EVENT> with the minority. It also <EVENT eid="e17" class="ASPECTUAL" stem="reignite">reignited</EVENT> the civil <EVENT eid="e18" class="OCCURRENCE" stem="war">war</EVENT>. The panel also will <EVENT eid="e19" class="I_ACTION" stem="look">look</EVENT> at the <EVENT eid="e20" class="OCCURRENCE" stem="exodus">exodus</EVENT> of about 2 million Rwanda Hutus to neighboring countries where they <EVENT eid="e22" class="STATE" stem="live">lived</EVENT> in U.N.-run refugee camps for <TIMEX3 tid="t44" type="DURATION" value="P2Y6M" temporalFunction="false" functionInDocument="NONE">2 1/2 years</TIMEX3>. The <EVENT eid="e24" class="OCCURRENCE" stem="investigation">investigation</EVENT> will <EVENT eid="e25" class="I_ACTION" stem="consider">consider</EVENT> the role of ``internal and external forces prior to the <EVENT eid="e27" class="OCCURRENCE" stem="genocide">genocide</EVENT> and subsequently, and the role of the United Nations and its agencies and the OAU before, during and after the <EVENT eid="e29" class="OCCURRENCE" stem="genocide">genocide</EVENT>,'' the OAU <EVENT eid="e30" class="REPORTING" stem="say">said</EVENT>. The panel will be <EVENT eid="e31" class="STATE" stem="base">based</EVENT> in Addis Ababa, and will <EVENT eid="e32" class="ASPECTUAL" stem="finish">finish</EVENT> its <EVENT eid="e33" class="OCCURRENCE" stem="investigation">investigation</EVENT> within <TIMEX3 tid="t45" type="DURATION" value="P1Y" mod="EQUAL_OR_LESS" temporalFunction="false" functionInDocument="NONE">a year</TIMEX3>, it <EVENT eid="e34" class="REPORTING" stem="say">said</EVENT>. It is to be <EVENT eid="e35" class="STATE" stem="fund">funded</EVENT> by voluntary contributions from within and outside the continent. (aa-kjd)
+</TEXT>
+
+<LASTEXTRAINFO>
+(PROFILE (WS SL:BC-OAU-Rwanda; CT:i; (REG:EURO;) (REG:BRIT;) (REG:SCAN;) (REG:ENGL;) (REG:AFRI;) (LANG:ENGLISH;)) )
+AP-NY-02-27-98 0813EST
+</LASTEXTRAINFO>
+
+<MAKEINSTANCE eventID="e3" eiid="ei2056" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="would" />
+<MAKEINSTANCE eventID="e11" eiid="ei2064" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei2069" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei2060" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei2079" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e16" eiid="ei2068" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e34" eiid="ei2084" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei2083" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e6" eiid="ei2059" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2073" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei2085" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei2062" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei2075" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e32" eiid="ei2082" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei2061" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e19" eiid="ei2071" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e31" eiid="ei2081" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei2057" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e30" eiid="ei2080" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei2067" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei2058" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei2066" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei2055" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei2070" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e12" eiid="ei2065" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e24" eiid="ei2074" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei2063" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e27" eiid="ei2077" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e20" eiid="ei2072" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l42" relType="IS_INCLUDED" eventInstanceID="ei2080" relatedToTime="t41" />
+<TLINK lid="l2" relType="IS_INCLUDED" eventInstanceID="ei2057" relatedToEventInstance="ei2058" />
+<TLINK lid="l3" relType="INCLUDES" eventInstanceID="ei2058" relatedToEventInstance="ei2055" />
+<TLINK lid="l4" relType="INCLUDES" eventInstanceID="ei2058" relatedToEventInstance="ei2059" />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei2062" relatedToEventInstance="ei2063"  />
+<TLINK lid="l7" relType="IDENTITY" eventInstanceID="ei2063" relatedToEventInstance="ei2064" />
+<TLINK lid="l8" relType="BEFORE" eventInstanceID="ei2064" relatedToEventInstance="ei2065" />
+<TLINK lid="l9" relType="INCLUDES" eventInstanceID="ei2065" relatedToEventInstance="ei2066" />
+<TLINK lid="l10" relType="BEFORE" eventInstanceID="ei2067" relatedToEventInstance="ei2065" />
+<TLINK lid="l11" relType="IDENTITY" eventInstanceID="ei2063" relatedToEventInstance="ei2069" />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei2069" relatedToEventInstance="ei2070" />
+<TLINK lid="l13" relType="BEFORE" eventInstanceID="ei2072" relatedToEventInstance="ei2073" />
+<TLINK lid="l14" relType="DURING" eventInstanceID="ei2073" relatedToEventInstance="ei2074"  />
+<TLINK lid="l15" relType="INCLUDES" eventInstanceID="ei2074" relatedToEventInstance="ei2061" />
+<TLINK lid="l16" relType="INCLUDES" eventInstanceID="ei2074" relatedToEventInstance="ei2071" />
+<TLINK lid="l17" relType="INCLUDES" eventInstanceID="ei2074" relatedToEventInstance="ei2075" />
+<TLINK lid="l21" relType="AFTER" eventInstanceID="ei2081" relatedToTime="t0" />
+<TLINK lid="l22" relType="AFTER" eventInstanceID="ei2082" relatedToTime="t0" />
+<TLINK lid="l23" relType="DURING" eventInstanceID="ei2083" relatedToEventInstance="ei2084"  />
+<TLINK lid="l24" relType="IDENTITY" eventInstanceID="ei2083" relatedToEventInstance="ei2074" />
+<TLINK lid="l25" relType="AFTER" eventInstanceID="ei2085" relatedToTime="t0" />
+<SLINK lid="l27" relType="EVIDENTIAL" eventInstanceID="ei2055" subordinatedEventInstance="ei2056" />
+<SLINK lid="l28" relType="FACTIVE" eventInstanceID="ei2056" subordinatedEventInstance="ei2057" />
+<SLINK lid="l29" relType="MODAL" eventInstanceID="ei2059" subordinatedEventInstance="ei2060" />
+<SLINK lid="l30" relType="MODAL" eventInstanceID="ei2060" subordinatedEventInstance="ei2061" />
+<SLINK lid="l31" relType="FACTIVE" eventInstanceID="ei2061" subordinatedEventInstance="ei2062" />
+<SLINK lid="l32" relType="MODAL" eventInstanceID="ei2067" subordinatedEventInstance="ei2068" />
+<SLINK lid="l33" relType="FACTIVE" eventInstanceID="ei2071" subordinatedEventInstance="ei2072" />
+<SLINK lid="l35" relType="EVIDENTIAL" eventInstanceID="ei2080" subordinatedEventInstance="ei2075" />
+<SLINK lid="l36" relType="EVIDENTIAL" eventInstanceID="ei2084" subordinatedEventInstance="ei2081" />
+<SLINK lid="l37" relType="EVIDENTIAL" eventInstanceID="ei2084" subordinatedEventInstance="ei2082" />
+<ALINK lid="l40" relType="REINITIATES" eventInstanceID="ei2069" relatedToEventInstance="ei2070" />
+<ALINK lid="l39" relType="INITIATES" eventInstanceID="ei2064" relatedToEventInstance="ei2065" />
+<ALINK lid="l38" relType="CULMINATES" eventInstanceID="ei2082" relatedToEventInstance="ei2083" />
+
+</TimeML>
