@@ -26,6 +26,7 @@ def read_domiknows_data(data_path):
     '''Load DNA sequence data from a file, convert to list of dictionaries and return train and test splits.'''
     data = []
     with open(data_path, 'r') as file:
+        columns = file.readline().strip().split('\t')
         sum_length = 0
         cnt = 0
         for line in file:
@@ -33,14 +34,12 @@ def read_domiknows_data(data_path):
             sum_length += len(sequence)
             cnt += 1
 
-        avg_length = sum_length / cnt
-        for line in file:
-            sequence, label = line.strip().split('\t')
-            data.append({'sequence': truncate(sequence, avg_length), 'label': int(label)})
+            data.append({'sequence': truncate(sequence, 100), 'label': int(label)})
         
         train = []
         test = []
-        for i in range (0, len(data)):
+        # print("data:", data)
+        for i in range(0, len(data)):
             if i % 4 == 0:
                 test.append(data[i])
             else:

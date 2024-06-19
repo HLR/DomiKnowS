@@ -39,12 +39,11 @@ logging.basicConfig(level=logging.INFO)
 data_path = "human.txt"  
 train, test = read_domiknows_data(data_path)
 
-dna_sequence['input_sequence'] = ReaderSensor(keyword = 'input_sequence')
-dna_sequence['output_sequence'] = ReaderSensor(keyword = 'output_sequence')
+dna_sequence['sequence'] = ReaderSensor(keyword = 'sequence')
 
-dna_sequence['encoded_sequence'] = FunctionalSensor('output_sequence', forward=preprocess_data)
-dna_sequence[gene_family] = ModuleLearner('encoded_sequences', module=nn.Linear(601, 6))
-dna_sequence[gene_family] = ReaderSensor(keyword = 'gene_family', label = True)
+dna_sequence['sequence'] = FunctionalSensor('sequence', forward=preprocess_data)
+dna_sequence[gene_family] = ModuleLearner('sequence', module=nn.Linear(601, 6))
+dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
 
 program = SolverPOIProgram(graph, poi = [dna_sequence[gene_family]], 
             loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
