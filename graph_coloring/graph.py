@@ -16,4 +16,8 @@ with Graph('global') as graph:
     firestationCity = city(name='firestationCity')
     
     # Constraint - For each city x either it is a firestationCity or exists a city y which is in neighbor relation to city x and y is a firestationCity        
-    orL(firestationCity('x'), existsL(firestationCity('y', path=('x', neighbor.name, city2.name))))
+    orL(firestationCity('x'), existsL(
+        ifL(neighbor("z",path=('x', city1.reversed))
+            ,firestationCity("p",path=('z', city2))
+        )
+    ))
