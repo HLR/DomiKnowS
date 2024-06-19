@@ -6,8 +6,7 @@ sys.path.append('../..')
 
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
-from domiknows.program import LearningBasedProgram
-from domiknows.program.model.pytorch import model_helper, PoiModel
+from domiknows.program import SolverPOIProgram
 
 from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
 from sensors import DummyCityLearner
@@ -33,7 +32,7 @@ def model_declaration():
     # --- Learners
     city[firestationCity] = DummyCityLearner('index')
     
-    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[world, city, city[firestationCity], neighbor]))
+    program = SolverPOIProgram(graph, poi=[world, city, city[firestationCity], neighbor])
     return program
 
 
