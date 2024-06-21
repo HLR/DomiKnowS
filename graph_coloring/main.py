@@ -2,7 +2,7 @@ import sys, torch, argparse
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
 from domiknows.program import SolverPOIProgram
-from reader import CityReader, DummyCityLearner
+from reader import CityReader
 from domiknows.sensor.pytorch.learners import TorchLearner
 from graph import get_graph
 parser = argparse.ArgumentParser(description='Check a graphical structure and existL constraint in domiknows')
