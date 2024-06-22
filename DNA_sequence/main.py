@@ -19,15 +19,12 @@ from domiknows.sensor.pytorch.learners import ModuleLearner
 
 
 
-def preprocess_data(sequences, labels):
-    """Converts sequences to a tensor of one-hot encoded sequences and labels to a tensor."""
+def preprocess_data(sequences):
     nucleotide_to_idx = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
     encoded_sequences = [[nucleotide_to_idx[nucleotide] for nucleotide in seq] for seq in sequences]
+
     
-    sequences_tensor = torch.tensor(encoded_sequences, dtype=torch.long)
-    labels_tensor = torch.tensor(labels, dtype=torch.long)
-    
-    return encoded_sequences
+    return torch.FloatTensor(encoded_sequences)
 
 
 # Set up logging
@@ -41,8 +38,8 @@ train, test = read_domiknows_data(data_path)
 
 dna_sequence['sequence'] = ReaderSensor(keyword = 'sequence')
 
-dna_sequence['sequence'] = FunctionalSensor('sequence', forward=preprocess_data)
-dna_sequence[gene_family] = ModuleLearner('sequence', module=nn.Linear(601, 6))
+dna_sequence['sequence2'] = FunctionalSensor('sequence', forward=preprocess_data)
+dna_sequence[gene_family] = ModuleLearner('sequence2', module=nn.Linear(601, 6))
 dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
 
 program = SolverPOIProgram(graph, poi = [dna_sequence[gene_family]], 
@@ -52,5 +49,5 @@ program.train(train, train_epoch_num=5, Optim=torch.optim.Adam, device='auto')
 program.test(test, device='auto')
 print(program.model.loss)
 # print("LABELS:", labels[:5])
-for datanode in program.populate(dataset=test):
-    print('datanode:', datanode)
+#for datanode in program.populate(dataset=test):
+#    print('datanode:', datanode)
