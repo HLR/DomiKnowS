@@ -2,8 +2,7 @@ import torch, logging
 from torch import nn
 from transformers import AdamW
 from sklearn.model_selection import train_test_split
-from graph import graph, dna_sequence, nucleotide, A, T, C, G, N, rel_complementary_A_T, \
-    rel_complementary_C_G, dna_sequence_contains_nucleotide, disjoint, ifL, orL, andL, atMostL, gene_family
+from graph import graph, dna_sequence, nucleotide, A, T, C, G, N, disjoint, ifL, orL, andL, atMostL, gene_family
 
 from reader import read_domiknows_data, truncate
 from domiknows.graph import Graph, Concept, Relation
@@ -37,9 +36,8 @@ data_path = "human.txt"
 train, test = read_domiknows_data(data_path)
 
 dna_sequence['sequence'] = ReaderSensor(keyword = 'sequence')
-
 dna_sequence['sequence2'] = FunctionalSensor('sequence', forward=preprocess_data)
-dna_sequence[gene_family] = ModuleLearner('sequence2', module=nn.Linear(601, 6))
+dna_sequence[gene_family] = ModuleLearner('sequence2', module=nn.Linear(10, 6))
 dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
 
 program = SolverPOIProgram(graph, poi = [dna_sequence[gene_family]], 
@@ -49,5 +47,5 @@ program.train(train, train_epoch_num=5, Optim=torch.optim.Adam, device='auto')
 program.test(test, device='auto')
 print(program.model.loss)
 # print("LABELS:", labels[:5])
-#for datanode in program.populate(dataset=test):
-#    print('datanode:', datanode)
+for datanode in program.populate(dataset=test):
+   print('datanode:', datanode)

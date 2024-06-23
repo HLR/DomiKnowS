@@ -27,11 +27,11 @@ with Graph('dna_and_gene_knowledge') as graph:
     N = nucleotide(name='N')
 
     # A & T are complementary, C & G are complementary
-    rel_complementary_A_T = nucleotide.has_a(arg1=A, arg2=T)
-    rel_complementary_C_G = nucleotide.has_a(arg1=C, arg2=G)
+    complementary = Concept("complementary")
+    complementary.has_a(arg1=A, arg2=T)
+    complementary.has_a(arg1=C, arg2=G)
 
-    # DNA sequences contain nucleotide bases
-    dna_sequence_contains_nucleotide = dna_sequence.contains(nucleotide)
+    dna_sequence.contains(nucleotide)
 
     # nucleotides are disjoint
     disjoint(A, T, C, G, N)
