@@ -669,7 +669,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if m: m.update()
                     
                     m.addConstr(varsInfo['varSumLinExpr'] - BigM *varCOUNT >= updatedLimit - BigM, name='Count %s:'%(logicMethodName))
-                    m.addConstr(varsInfo['varSumLinExpr'] - BigM *varCOUNT <= updatedLimit, name='Count %s:'%(logicMethodName))   
+                    m.addConstr(varsInfo['varSumLinExpr'] - BigM *varCOUNT <= updatedLimit - (1 - varCOUNT), name='Count %s:'%(logicMethodName))  
                                  
             # This check is common for '<=' and '=='
             elif updatedLimit < 0: # The constraint not is satisfied - the limit is negative or zero so ilp sum cannot be less than it - ilp sum is zero or more
