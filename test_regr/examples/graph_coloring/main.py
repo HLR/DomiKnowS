@@ -1,28 +1,52 @@
+
 import sys
-import pytest
+sys.path.append('../../../../domiknows/')
 
-sys.path.append('.')
-sys.path.append('../..')
+import torch, argparse, time
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
+from domiknows.program import SolverPOIProgram
 
+from domiknows.sensor.pytorch.learners import TorchLearner
+from graph import get_graph
 
-def model_declaration():
-    import torch
+for test_number, test_cases in enumerate([
+    [],
+    ["--firestations", "4","--atleastaL", "3"],
+    ["--firestations", "4","5","6","7","--atmostaL", "2"],
+    ["--firestations", "1","2","6","--constraint","ifLnotLexistL"],
+    ["--firestations", "1", "--constraint", "orLnotLexistL"]
+]):
+    from domiknows.sensor import Sensor
+    Sensor.clear()
 
-    from domiknows.sensor.pytorch.sensors import ReaderSensor
-    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
-    from domiknows.program import LearningBasedProgram
-    from domiknows.program.model.pytorch import model_helper, PoiModel
+    parser = argparse.ArgumentParser(description='Check a graphical structure and existL constraint in domiknows')
+    parser.add_argument('--firestations', dest='firestations', default=[], help='list of cities to be defauled as firestation from 1 to 9', type=int, nargs='+')
+    parser.add_argument('--constraint', dest='constraint',default="None", choices=["None","orL", "existL","ifLnotLexistL","orLnotLexistL"], help="Choose a constraint")
+    parser.add_argument('--atmostaL', dest='atmostaL',default=10,type=int)
+    parser.add_argument('--atleastaL', dest='atleastaL',default=0,type=int)
 
-    from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
-    from sensors import DummyCityLearner
+    args = parser.parse_args(test_cases)
+    
+    graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity = get_graph(args.constraint,args.atmostaL,args.atleastaL,test_number)
+    
 
-    graph.detach()
+    class DummyCityLearner(TorchLearner):
+        def __init__(self, *pre, fire_stations=[i+1 for i in range(9)]):
+            TorchLearner.__init__(self,*pre)
+            self.fire_stations=fire_stations
 
-    # --- City
+        def forward(self, x):
+            result = torch.zeros(len(x), 2)
+            result[:, 1] = -1000
+            for i in self.fire_stations:
+                result[i-1,1]=1000
+            return result
+
+    dataset = [{'world': [0], 'city': [1, 2, 3, 4, 5, 6, 7, 8, 9], 'links': {1: [2, 3, 4, 5], 2: [1, 6], 3: [1], 4: [1], 5: [1], 6: [2, 7, 8, 9], 7: [6], 8: [6], 9: [6]}}]
     world['index'] = ReaderSensor(keyword='world')
     city['index'] = ReaderSensor(keyword='city')
     city[world_contains_city] = EdgeSensor(city['index'], world['index'], relation=world_contains_city, forward=lambda x, _: torch.ones_like(x).unsqueeze(-1))
-
 
     def readNeighbors(index, data, arg1, arg2):
         city1, city2 = arg1, arg2
@@ -33,55 +57,24 @@ def model_declaration():
 
     neighbor[city1.reversed, city2.reversed] = CompositionCandidateReaderSensor(city['index'], keyword='links', relations=(city1.reversed, city2.reversed), forward=readNeighbors)
 
-    # --- Learners
-    city[firestationCity] = DummyCityLearner('index')
-    
-    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[world, city, city[firestationCity], neighbor]))
-    return program
 
+    city[firestationCity] = DummyCityLearner('index',fire_stations=list(args.firestations))
+    program = SolverPOIProgram(graph, poi=[world, city, city[firestationCity], neighbor])
 
-@pytest.mark.gurobi
-def test_graph_coloring_main():
-    from reader import CityReader
-    from graph import city, neighbor, firestationCity
-
-    lbp = model_declaration()
-
-    dataset = CityReader().run()  # Adding the info on the reader
-
-    for datanode in lbp.populate(dataset=dataset):
-        assert datanode != None
-        assert len(datanode.getChildDataNodes()) == 9
-
-        for child_node in datanode.getChildDataNodes():
-            assert child_node.ontologyNode == city
-            assert child_node.getAttribute('<' + firestationCity.name + '>')[0] == 0
-            assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
-
-        # call solver
-        conceptsRelations = (firestationCity)  
-        datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=True) 
-
-        result = []
-        for child_node in datanode.getChildDataNodes():
-            s = child_node.getAttribute('index')
-            f = child_node.getAttribute(firestationCity, 'ILP').item()
-            if f > 0:
-                r = (s, True)
-            else:
-                r = (s, False)
-            result.append(r)
-
-        for child_index, child_node in enumerate(datanode.getChildDataNodes()):
-            if child_index + 1 == 1:
-                assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
-            elif child_index + 1 == 6:
-                assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
-            else:
-                assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
-                
-    verifyResult = datanode.verifyResultsLC()
-
-
-if __name__ == '__main__':
-    pytest.main([__file__])
+    for datanode in program.populate(dataset=dataset):    
+        datanode.inferILPResults() 
+        fire_stations=[int(child_node.getAttribute('<' + firestationCity.name + '>',"ILP").item()) for child_node in datanode.getChildDataNodes()]
+        if test_number==0:
+            assert sum(fire_stations)==0
+        if test_number==1:
+            assert sum(fire_stations)==3
+            assert fire_stations[4-1]==1
+        if test_number==2:
+            assert sum(fire_stations)==2
+            assert fire_stations[4-1]+fire_stations[5-1]+fire_stations[6-1]+fire_stations[7-1]==2
+        if test_number==3:
+            assert sum(fire_stations)==2
+            assert fire_stations[1-1] and fire_stations[6-1]
+        if test_number==4:
+            assert sum(fire_stations)==1
+            fire_stations[1-1]==0
