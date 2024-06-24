@@ -38,7 +38,7 @@ train, test = read_domiknows_data(data_path)
 dna_sequence['sequence'] = ReaderSensor(keyword = 'sequence')
 dna_sequence['sequence2'] = FunctionalSensor('sequence', forward=preprocess_data)
 dna_sequence[gene_family] = ModuleLearner('sequence2', module=nn.Linear(10, 6))
-dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
+# dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
 
 program = SolverPOIProgram(graph, poi = [dna_sequence[gene_family]], 
             loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
