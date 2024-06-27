@@ -426,4 +426,13 @@ class EnumConcept(Concept):
     def get_concept(self, value):
         valueIndex = self.get_index(value)
         return (self, value, valueIndex, len(self.enum))
+
+    @classmethod
+    def clear(cls):
+        """
+            Clear the static variables of the class.
+        """
+        cls._rels = {}
+        cls.newVariableIndex = 0
+        super().clear()
         
