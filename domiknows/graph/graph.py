@@ -1033,3 +1033,11 @@ class Graph(BaseGraphTree):
         iri (str): The IRI of the ontology. Default is None.
         local (str): The local identification of the ontology. Default is None.
     """
+
+    @classmethod
+    def clear(cls):
+        """
+            Clear the static variables of the class.
+        """
+        cls.varNameReversedMap = {}
+        super().clear()
