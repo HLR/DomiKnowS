@@ -394,6 +394,14 @@ class Concept(BaseGraphTree):
             node = node.sup
         return node
 
+    @classmethod
+    def clear(cls):
+        """
+            Clear the static variables of the class.
+        """
+        cls._rels = {}
+        cls.newVariableIndex = 0
+        super().clear()
 
 class EnumConcept(Concept):
     def __init__(self, name=None, values=[]):
@@ -427,12 +435,5 @@ class EnumConcept(Concept):
         valueIndex = self.get_index(value)
         return (self, value, valueIndex, len(self.enum))
 
-    @classmethod
-    def clear(cls):
-        """
-            Clear the static variables of the class.
-        """
-        cls._rels = {}
-        cls.newVariableIndex = 0
-        super().clear()
+
         
