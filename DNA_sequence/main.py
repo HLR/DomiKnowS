@@ -20,7 +20,18 @@ from domiknows.sensor.pytorch.learners import ModuleLearner
 
 def preprocess_data(sequences):
     nucleotide_to_idx = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
-    encoded_sequences = [[nucleotide_to_idx[nucleotide] for nucleotide in seq] for seq in sequences]
+    # encoded_sequences = [[nucleotide_to_idx[nucleotide] for nucleotide in seq] for seq in sequences]
+    encoded_sequences = []
+    for seq_pair in sequences: # each seq is a list pair of RNA sequences
+        encoded_seq_pair = []
+        for seq in seq_pair:
+            encoded_seq = []
+            for nucleotide in seq:
+                encoded_seq.append(nucleotide_to_idx[nucleotide])
+            encoded_seq_pair.append(encoded_seq)
+        encoded_sequences.append(encoded_seq)
+
+        
 
     
     return torch.FloatTensor(encoded_sequences)
@@ -52,7 +63,7 @@ dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
 program = SolverPOIProgram(graph, poi = [dna_sequence[gene_family]],  inferTypes=['local/softmax'], #"ILP"
             loss=MacroAverageTracker(NBCrossEntropyLoss()))#
 
-program.train(train, train_epoch_num=5, Optim=torch.optim.Adam, device='cpu', metric=PRF1Tracker())
+program.train(train, train_epoch_num=5, Optim=torch.optim.Adam, device='cpu')#, metric=PRF1Tracker())
 program.test(test, device='cpu')
 print(program.model.loss)
 # print("LABELS:", labels[:5])

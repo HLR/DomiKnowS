@@ -19,8 +19,24 @@ def truncate(sequences, max_length=50):
             padding_char = 'N'
             padded_sequence = sequence + padding_char * padding_length
             truncated_sequences.append(padded_sequence)
-    
-    return truncated_sequences
+
+    complementary_sequences = []
+    for sequence in truncated_sequences:
+        complementary_sequence = ''
+        for nucleotide in sequence:
+            if nucleotide == 'A':
+                complementary_sequence += 'T'
+            elif nucleotide == 'T':
+                complementary_sequence += 'A'
+            elif nucleotide == 'C':
+                complementary_sequence += 'G'
+            elif nucleotide == 'G':
+                complementary_sequence += 'C'
+            else:
+                complementary_sequence += 'N'
+        complementary_sequences.append(complementary_sequence)
+    # print("complementary_sequences:", complementary_sequences)
+    return [truncated_sequences, complementary_sequences]
 
 def read_domiknows_data(data_path):
     '''Load DNA sequence data from a file, convert to list of dictionaries and return train and test splits.'''
