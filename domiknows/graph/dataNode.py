@@ -903,14 +903,18 @@ class DataNode:
         Returns:
             list: A list of DataNodes corresponding to the relation, or [None] if not found.
         """
+        
         relRoot = self.findRootConceptOrRelation(rel)
             
         if relRoot is None:
             return [None]
         
         if not isinstance(relRoot, str):
-            relRoot = relRoot.name     
-        
+            relRoot = relRoot.name  
+
+        if "contains" in relRoot:
+            relRoot = "contains" #TODO fix the generic name for multiple constaints
+
         if relRoot.endswith(".reversed"):
             relRoot = relRoot[:-len(".reversed")]
             if relRoot in self.impactLinks: 
