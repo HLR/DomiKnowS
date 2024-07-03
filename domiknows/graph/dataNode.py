@@ -11,6 +11,7 @@ from ordered_set import OrderedSet
 from domiknows import getRegrTimer_logger, getProductionModeStatus
 from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
+from domiknows.graph.relation import Contains
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -908,12 +909,12 @@ class DataNode:
             
         if relRoot is None:
             return [None]
-        
+
+        if isinstance(relRoot, Contains):
+            relRoot = "contains" #TODO fix the generic name for multiple constaints
+
         if not isinstance(relRoot, str):
             relRoot = relRoot.name  
-
-        if "contains" in relRoot:
-            relRoot = "contains" #TODO fix the generic name for multiple constaints
 
         if relRoot.endswith(".reversed"):
             relRoot = relRoot[:-len(".reversed")]
