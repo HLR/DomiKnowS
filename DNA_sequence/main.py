@@ -30,10 +30,6 @@ def preprocess_data(sequences):
                 encoded_seq.append(nucleotide_to_idx[nucleotide])
             encoded_seq_pair.append(encoded_seq)
         encoded_sequences.append(encoded_seq)
-
-        
-
-    
     return torch.FloatTensor(encoded_sequences)
 
 
@@ -55,9 +51,9 @@ class dummylearner(torch.nn.Module):
         return torch.sum(x,dim=0).squeeze(0)
 
 
-dna_sequence['sequence'] = ReaderSensor(keyword = 'sequence')
-dna_sequence['sequence2'] = FunctionalSensor('sequence', forward=preprocess_data)
-dna_sequence[gene_family] = ModuleLearner('sequence2', module=dummylearner()) #TODO make LSTM later LMs T5
+dna_sequence['strands'] = ReaderSensor(keyword = 'strand')
+dna_sequence['strands2'] = FunctionalSensor('strands', forward=preprocess_data)
+dna_sequence[gene_family] = ModuleLearner('strands2', module=dummylearner()) #TODO make LSTM later LMs T5
 dna_sequence[gene_family] = ReaderSensor(keyword = 'label', label = True)
 
 program = SolverPOIProgram(graph, poi = [dna_sequence[gene_family]],  inferTypes=['local/softmax'], #"ILP"

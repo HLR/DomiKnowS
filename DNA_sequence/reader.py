@@ -50,7 +50,7 @@ def read_domiknows_data(data_path):
             sum_length += len(sequence)
             cnt += 1
 
-            data.append({'sequence': truncate(sequence, 10), 'label': [int(label)-1]})
+            data.append({'strand': truncate(sequence, 10), 'label': [int(label)-1]})
         
         train = []
         test = []
