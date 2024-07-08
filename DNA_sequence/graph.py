@@ -23,7 +23,7 @@ with Graph('dna_and_gene_knowledge') as graph:
     strand1 = Concept(name='Strand_1')
     strand2 = Concept(name='Strand_2')
 
-    # Nucleotide base concepts
+    # nucleotide base concepts
     nucleotide_base = Concept(name='Nucleotide_base')
     a = nucleotide_base(name='A')
     c = nucleotide_base(name='C')
@@ -33,7 +33,7 @@ with Graph('dna_and_gene_knowledge') as graph:
 
     disjoint(a, t, c, g, n)
 
-    # Strand concepts and relations
+    # strand concepts and relations
     (rel_strand1_contains_base,) = strand1.contains(nucleotide_base)
     (rel_strand2_contains_base,) = strand2.contains(nucleotide_base)
     (rel_dna_sequence_contains_strand1,) = dna_sequence.contains(strand1)
