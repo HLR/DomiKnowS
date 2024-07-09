@@ -24,13 +24,11 @@ def preprocess_data(sequences):
     encoded_sequences = []
     # print("sequences:", sequences)
     
+    encoded_seq = []
     for seq in sequences:
-        encoded_seq = []
         for nucleotide in seq:
             encoded_seq.append([nucleotide_to_idx[nucleotide]])
-        encoded_sequences.append(encoded_seq)
-        break
-
+        
     # print("encoded_sequences:", encoded_seq)
     return torch.FloatTensor(encoded_seq)
 
@@ -47,7 +45,7 @@ train, test = read_domiknows_data(data_path)
 class dummylearner(torch.nn.Module):
     def __init__(self):
         super(dummylearner,self).__init__()  
-        self.l1=nn.LSTM(10, 6)
+        self.l1=nn.LSTM(100, 6)
     def forward(self,x):
         # print("x:", x)
         # exit()
