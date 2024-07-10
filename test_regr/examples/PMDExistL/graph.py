@@ -1,4 +1,4 @@
-def get_graph():
+def get_graph(args, at_least_L=False, at_most_L=False):
     from domiknows.graph import Graph, Concept, Relation
     from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL
     from domiknows.graph import EnumConcept
@@ -13,10 +13,21 @@ def get_graph():
 
         b_answer = b(name="answer_b", ConceptClass=EnumConcept, values=["zero", "one"])
 
+        expected_zero = b_answer.__getattr__("zero")
         expected_one = b_answer.__getattr__("one")
 
-        ifL(a("x"),
-            existsL(expected_one(path=('x', a_contain_b))))
+        expected_value = expected_one
+        if args.test_train:
+            expected_value = expected_zero
+        if at_least_L:
+            ifL(a("x"),
+                atLeastAL(expected_value(path=('x', a_contain_b))))
+        elif at_most_L:
+            ifL(a("x"),
+                atMostAL(expected_value(path=('x', a_contain_b))))
+        else:
+            ifL(a("x"),
+                existsL(expected_value(path=('x', a_contain_b))))
 
         # print("no constraint.")
     return graph, a, b, a_contain_b, b_answer
