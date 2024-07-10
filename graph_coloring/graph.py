@@ -1,13 +1,14 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL
+from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL
 
-Graph.clear()
-Concept.clear()
-Relation.clear()
+def get_graph(constraint,atmost,atleast):
 
-def get_graph(constraint):
+    Graph.clear()
+    Concept.clear()
+    Relation.clear()
 
     with Graph('global') as graph:
+        
         world = Concept(name='world')
         city = Concept(name='city')
         (world_contains_city,) = world.contains(city)
@@ -16,6 +17,10 @@ def get_graph(constraint):
         (city1, city2) = neighbor.has_a(arg1=city, arg2=city)
         
         firestationCity = city(name='firestationCity')
+
+
+        atMostAL(firestationCity,atmost)
+        atLeastAL(firestationCity,atleast)
 
         if constraint=="existL":
             orL(firestationCity('x'), existsL(
@@ -41,5 +46,6 @@ def get_graph(constraint):
                 firestationCity("p",path=('z', city2))
             ))
         else:
-            print("no constraint.")
+            pass
+            #print("no constraint.")
     return graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
