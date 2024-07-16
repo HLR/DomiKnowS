@@ -10,7 +10,7 @@ from domiknows.sensor.pytorch.learners import TorchLearner
 from graph import get_graph
 parser = argparse.ArgumentParser(description='Check a csp structure and atmostal/atleastal constraint in domiknows')
 parser.add_argument('--colored', dest='colored', default=False,action='store_true',help="color every orb")
-parser.add_argument('--constraint', dest='constraint',default="foreach_bag_atLeastAL", choices=["None","simple_constraint","foreach_bag_existsL","foreach_bag_existsL_notL","foreach_bag_atLeastAL","foreach_bag_atMostAL", "atleastAL_notatmostL", "atleastAL_notexistL", "ifL_atMostL_infeasible"], help="Choose a constraint")
+parser.add_argument('--constraint', dest='constraint',default="foreach_bag_atLeastAL", choices=["None","simple_constraint","foreach_bag_existsL","foreach_bag_existsL_notL","foreach_bag_atLeastAL","foreach_bag_atMostAL", "atleastAL_notatmostL", "atleastAL_notexactL", "ifL_atMostL_infeasible"], help="Choose a constraint")
 parser.add_argument('--atmostaL', dest='atmostaL',default=25,type=int)
 parser.add_argument('--atleastaL', dest='atleastaL',default=2,type=int)
 

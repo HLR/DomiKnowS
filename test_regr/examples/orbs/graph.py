@@ -49,7 +49,7 @@ def get_graph(constraint,atmost,atleast):
                     atMostL(colored_orbs("y",path=("x",csp_range_contains_orbs)), 1)
                 )
             )
-        elif constraint=='atleastAL_notexistL':
+        elif constraint=='atleastAL_notexactL':
             # 1) there must be at least 5 colored orbs total
             # 2) there can NOT be exactly 5 colored orbs in each bag
 
