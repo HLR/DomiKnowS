@@ -33,7 +33,7 @@ class DummyLearner(TorchLearner):
 
     def forward(self, x):
         # Dummy result always return 1
-        result = torch.stack((torch.zeros(len(x)), torch.ones(len(x)) * 10000), dim=-1)
+        result = torch.stack((torch.ones(len(x)) * 4, torch.ones(len(x)) * 6), dim=-1)
         return result
 
 
@@ -42,7 +42,7 @@ class TestTrainLearner(torch.nn.Module):
         super().__init__()
         self.linear1 = torch.nn.Linear(1, 2)
         with torch.no_grad():
-            self.linear1.weight.copy_(torch.tensor([[0.0], [10.0]]))
+            self.linear1.weight.copy_(torch.tensor([[2.0], [8.0]]))
 
     def forward(self, _, x):
         return self.linear1(x.unsqueeze(-1))

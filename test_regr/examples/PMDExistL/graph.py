@@ -17,8 +17,11 @@ def get_graph(args, at_least_L=False, at_most_L=False):
         expected_one = b_answer.__getattr__("one")
 
         expected_value = expected_one
+        existsL(expected_one)
+
         if args.test_train:
             expected_value = expected_zero
+
         if at_least_L:
             ifL(a("x"),
                 atLeastAL(expected_value(path=('x', a_contain_b))))
