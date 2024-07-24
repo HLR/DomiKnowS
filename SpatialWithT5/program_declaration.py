@@ -131,7 +131,19 @@ def program_declaration(device='cpu', pmd=False, beta=1, constraints=False):
                 relations=(inv_question1.reversed, inv_question2.reversed),
                 forward=check_symmetric, device=device)
 
-        poi_list.append(inverse)
+        transitive[tran_quest1.reversed, tran_quest2.reversed, tran_quest3.reversed] = \
+            CompositionCandidateSensor(
+                relations=(tran_quest1.reversed, tran_quest2.reversed, tran_quest3.reversed),
+                forward=check_transitive, device=device)
+
+        tran_topo[tran_topo_quest1.reversed, tran_topo_quest2.reversed,
+        tran_topo_quest3.reversed, tran_topo_quest4.reversed] = \
+            CompositionCandidateSensor(
+                relations=(tran_topo_quest1.reversed, tran_topo_quest2.reversed
+                           , tran_topo_quest3.reversed, tran_topo_quest4.reversed),
+                forward=check_transitive_topo, device=device)
+
+        poi_list.extend([inverse, transitive, tran_topo])
 
     from domiknows.program.metric import PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
     from domiknows.program.loss import NBCrossEntropyLoss
@@ -139,7 +151,7 @@ def program_declaration(device='cpu', pmd=False, beta=1, constraints=False):
     from domiknows.program.lossprogram import PrimalDualProgram
     from domiknows.program.model.pytorch import SolverModel
 
-    infer_list = ['local/softmax']  #
+    infer_list = ['local/softmax', 'ILP']  #
     if pmd:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,

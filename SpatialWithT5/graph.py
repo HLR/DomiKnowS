@@ -114,7 +114,7 @@ with Graph('spatialQArule') as graph:
 
     # Transitive + topo constrains
     tran_topo = Concept(name="transitive_topo")
-    tran_topo_quest1, tran_topo_quest2, tran_topo_quest3, tran_topo_quest4 = transitive.has_a(arg111=question,
+    tran_topo_quest1, tran_topo_quest2, tran_topo_quest3, tran_topo_quest4 = tran_topo.has_a(arg111=question,
                                                                                               arg222=question,
                                                                                               arg333=question,
                                                                                               arg444=question)
@@ -129,7 +129,7 @@ with Graph('spatialQArule') as graph:
             ans2 = answer_relations.__getattr__(answer1_str)
             ans3 = answer_relations.__getattr__(answer2_str)
             ans4 = answer_relations.__getattr__(answer1_str)
-            ifL(transitive('atranstopo' + post_fix),
+            ifL(tran_topo('atranstopo' + post_fix),
                 ifL(andL(
                     question("q1" + post_fix, path=('atranstopo' + post_fix, tran_topo_quest1)),
                     question("q2" + post_fix, path=('atranstopo' + post_fix, tran_topo_quest2)),
