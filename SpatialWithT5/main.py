@@ -38,7 +38,7 @@ def eval(program, testing_set, cur_device, key='local/argmax'):
             pred_each = []
             labels_each = []
             for answer in question.getChildDataNodes():
-                pred = answer.getAttribute(answer_relations, key).argmax().item()
+                pred = answer.getAttribute(answer_relations, 'local/argmax').argmax().item()
                 label = answer.getAttribute(answer_relations, 'label').item()
                 pred_each.append(["left", "right", "above", "below", "behind", "front",
                                "near", "far", "disconnected", "touch", "overlap", "coveredby",
@@ -109,14 +109,6 @@ def main(args):
     else:
         # print("Training with no constraint loss")
         train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=0, pmd=args.pmd)
-        # print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
-        # print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
-        # if args.compare_constraints:
-        #     print("Training with no constraints loss")
-        #     program_2 = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta, constraints=args.constraints)
-        #     train(program_2, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=10 ** 6)
-        #     print(f"Acc seen: {eval(program_2, train_data, cur_device=cur_device)}")
-        #     print(f"Acc unseen: {eval(program_2, test_data, cur_device=cur_device)}")
     print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
     print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
 

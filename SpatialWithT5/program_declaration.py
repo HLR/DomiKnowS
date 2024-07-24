@@ -3,7 +3,7 @@ from transformers import AutoTokenizer
 
 from models import Tokenizer, T5WithLoraGenerativeCLF
 import torch
-from utils import check_symmetric
+from utils import check_symmetric, check_transitive, check_transitive_topo
 
 
 class ValueTracker(MetricTracker):
@@ -31,7 +31,9 @@ class ValueTracker(MetricTracker):
 def program_declaration(device='cpu', pmd=False, beta=1, constraints=False):
     from graph import (graph, context, question, rel_context_contain_question,
                        rel_question_contain_answer, answer_relations,
-                       answer, inverse, inv_question1, inv_question2)
+                       answer, inverse, inv_question1, inv_question2,
+                       transitive, tran_quest1, tran_quest2, tran_quest3,
+                       tran_topo, tran_topo_quest1, tran_topo_quest2, tran_topo_quest3, tran_topo_quest4)
     from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
     from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor
     from domiknows.sensor.pytorch.learners import ModuleLearner
