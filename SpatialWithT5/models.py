@@ -54,8 +54,8 @@ class T5WithLoraGenerativeCLF(nn.Module):
         return self._inference_forward(cat_input_ids)
 
     def _train_forward(self, cat_input_ids, encoded_label):
-        input_ids = cat_input_ids[0, :, :]
-        attention_mask = cat_input_ids[1, :, :]
+        input_ids = cat_input_ids[:, 0, :]
+        attention_mask = cat_input_ids[:, 1, :]
         label_input_ids = encoded_label
         # print(input_ids, attention_mask, label_input_ids)
         # Need label to generate
@@ -65,8 +65,8 @@ class T5WithLoraGenerativeCLF(nn.Module):
         return torch.flatten(logits[:, :self.output_length, self.interested_tokens], start_dim=0, end_dim=1)
 
     def _inference_forward(self, cat_input_ids):
-        input_ids = cat_input_ids[0, :, :]
-        attention_mask = cat_input_ids[1, :, :]
+        input_ids = cat_input_ids[:, 0, :]
+        attention_mask = cat_input_ids[:, 1, :]
 
         seq = self.model.generate(
             **{'input_ids': input_ids, 'attention_mask': attention_mask, 'min_new_tokens': self.output_length,
@@ -111,7 +111,7 @@ class Tokenizer:
 
         input_ids = torch.Tensor(input_ids) if not return_long else torch.LongTensor(input_ids)
         attention_mask = torch.Tensor(attention_mask) if not return_long else torch.LongTensor(attention_mask)
-        return torch.stack((input_ids, attention_mask))
+        return torch.stack((input_ids, attention_mask), dim=1)
 
     def __len__(self):
         return len(self.tokenizer)

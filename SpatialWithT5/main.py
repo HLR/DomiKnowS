@@ -25,7 +25,7 @@ def train(program, train_set, epoch, lr, cur_device, pmd=True, warmup_epochs=2):
     program.save("Models/trained_model.pt")
 
 
-def eval(program, testing_set, cur_device):
+def eval(program, testing_set, cur_device, key='local/argmax'):
     from graph import answer_relations
     count_questions = 0
     count_correct = 0
@@ -109,14 +109,6 @@ def main(args):
     else:
         # print("Training with no constraint loss")
         train(program, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=0, pmd=args.pmd)
-        # print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
-        # print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
-        # if args.compare_constraints:
-        #     print("Training with no constraints loss")
-        #     program_2 = program_declaration(device=cur_device, pmd=args.pmd, beta=args.beta, constraints=args.constraints)
-        #     train(program_2, train_data, epoch=args.epoch, lr=args.lr, cur_device=cur_device, warmup_epochs=10 ** 6)
-        #     print(f"Acc seen: {eval(program_2, train_data, cur_device=cur_device)}")
-        #     print(f"Acc unseen: {eval(program_2, test_data, cur_device=cur_device)}")
     print(f"Acc seen: {eval(program, train_data, cur_device=cur_device)}")
     print(f"Acc unseen: {eval(program, test_data, cur_device=cur_device)}")
 
