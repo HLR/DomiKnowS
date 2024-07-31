@@ -37,26 +37,38 @@ def eval(program, testing_set, cur_device, key='local/argmax'):
             check_generate_answer = True
             pred_each = []
             labels_each = []
+            expected_answer = set()
+            for answer in question.getChildDataNodes():
+                label = answer.getAttribute(answer_relations, 'label').item()
+                label = ["left", "right", "above", "below", "behind", "front",
+                         "near", "far", "disconnected", "touch", "overlap", "coveredby",
+                         "inside", "cover", "contain", "<eos>", "<pad>"][label]
+                if label == "<eos>":
+                    break
+                expected_answer.add(label)
+                labels_each.append(label)
             for answer in question.getChildDataNodes():
                 pred = answer.getAttribute(answer_relations, 'local/argmax').argmax().item()
-                label = answer.getAttribute(answer_relations, 'label').item()
-                pred_each.append(["left", "right", "above", "below", "behind", "front",
-                               "near", "far", "disconnected", "touch", "overlap", "coveredby",
-                               "inside", "cover", "contain", "<eos>", "<pad>"][pred])
-                labels_each.append(["left", "right", "above", "below", "behind", "front",
-                               "near", "far", "disconnected", "touch", "overlap", "coveredby",
-                               "inside", "cover", "contain", "<eos>", "<pad>"][label])
-                # print(pred, label)
-                # padding label
-                check_generate_answer = check_generate_answer and (pred == label)
-                # 15 refers to EOS token mapping label
-                if label == 15:
+                pred = ["left", "right", "above", "below", "behind", "front",
+                        "near", "far", "disconnected", "touch", "overlap", "coveredby",
+                        "inside", "cover", "contain", "<eos>", "<pad>"][pred]
+                pred_each.append(pred)
+                if pred == "<eos>":
                     break
+                if pred == "<pad>":
+                    continue
+                if pred not in expected_answer:
+                    check_generate_answer = False
+                    break
+                expected_answer.remove(pred)
+
+            if len(expected_answer) > 0:
+                check_generate_answer = False
+
             count_correct += int(check_generate_answer)
             preds.append(pred_each)
             labels.append(labels_each)
         # print("preds: {:}, label: {:}".format(preds, labels))
-
 
     # print("Acc:", , "%")
     return count_correct / count_questions * 100
