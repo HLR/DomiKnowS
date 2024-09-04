@@ -17,20 +17,19 @@ def get_graph(args, at_least_L=False, at_most_L=False):
         expected_one = b_answer.__getattr__("one")
 
         expected_value = expected_one
-        existsL(expected_one)
+        #existsL(expected_zero)
 
-        if args.test_train:
-            expected_value = expected_zero
+        #if args.test_train:
+        #    expected_value = expected_zero
 
-        if at_least_L:
-            ifL(a("x"),
-                atLeastAL(expected_value(path=('x', a_contain_b))))
-        elif at_most_L:
-            ifL(a("x"),
-                atMostAL(expected_value(path=('x', a_contain_b))))
-        else:
-            ifL(a("x"),
-                existsL(expected_value(path=('x', a_contain_b))))
+
+        atLeastAL(expected_value,2)
+        #elif at_most_L:
+        #    ifL(a("x"),
+        #        atMostAL(expected_value(path=('x', a_contain_b)),2))
+        #else:
+        #    ifL(a("x"),
+        #        existsL(expected_value(path=('x', a_contain_b))))
 
         # print("no constraint.")
     return graph, a, b, a_contain_b, b_answer

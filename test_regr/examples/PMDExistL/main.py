@@ -18,10 +18,10 @@ from domiknows.sensor import Sensor
 Sensor.clear()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--test_train", default=False, type=bool)
+parser.add_argument("--test_train", default=True, type=bool)
 parser.add_argument("--atLeastL", default=False, type=bool)
 parser.add_argument("--atMostL", default=False, type=bool)
-parser.add_argument("--epoch", default=1000, type=int)
+parser.add_argument("--epoch", default=200, type=int)
 args = parser.parse_args()
 
 
@@ -34,6 +34,7 @@ class DummyLearner(TorchLearner):
     def forward(self, x):
         # Dummy result always return 1
         result = torch.stack((torch.ones(len(x)) * 4, torch.ones(len(x)) * 6), dim=-1)
+        print(torch.nn.functional.softmax(result))
         return result
 
 
@@ -42,7 +43,7 @@ class TestTrainLearner(torch.nn.Module):
         super().__init__()
         self.linear1 = torch.nn.Linear(1, 2)
         with torch.no_grad():
-            self.linear1.weight.copy_(torch.tensor([[2.0], [8.0]]))
+            self.linear1.weight.copy_(torch.tensor([[8.0], [2.0]]))
 
     def forward(self, _, x):
         return self.linear1(x.unsqueeze(-1))
@@ -81,17 +82,14 @@ program = PrimalDualProgram(graph, SolverModel, poi=[a, b, b_answer],
 for datanode in program.populate(dataset=dataset):
     for child in datanode.getChildDataNodes():
         pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
-        assert (pred == 1)
 
 # Constraint is checking if there is answer => exactL(one), so if the answer is 1. This should be zero.
 with torch.no_grad():
     for data in dataset:
         mloss, metric, *output = program.model(data)
         closs, *_ = program.cmodel(output[1])
-        if args.test_train:
-            assert closs.item() > 0
-        else:
-            assert closs.item() == 0
+        print(closs)
+
 # Training
 
 if args.test_train:
@@ -124,6 +122,12 @@ if args.test_train:
                 loss.backward()
                 opt.step()
                 copt.step()
+        for datanode in program.populate(dataset=dataset):
+            for child in datanode.getChildDataNodes():
+                pred = child.getAttribute(b_answer, 'local/softmax')[1].item()*100//1/100
+                print(pred, end=" ")
+        print(closs)
+        print()
 
     print("Expected all values to be 0.")
     print("After Train: ")

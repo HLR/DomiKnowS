@@ -391,9 +391,33 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 return countSuccess
         else:
             if limitOp == '>=': # > limit
+                #Existsl
+                def exists_at_least_one(t, beta=100.0):
+                    max_smooth = (1 / beta) * torch.log(torch.sum(torch.exp(beta * t)))
+                    # print(max_smooth)
+                    # return -max_smooth
+                    loss = -torch.log(max_smooth)
+                    return torch.clamp(loss, min=0)
+
+
+                def exists_at_least_s(t, s, beta=10.0):
+                    count = torch.sum(torch.sigmoid(beta * (t - 0.5)))
+                    print(torch.sigmoid(beta * (t - 0.5)))
+                    loss = torch.relu(s - count)
+                    return loss
+
+                if limit ==1:return exists_at_least_one(varSum)
+                else: return exists_at_least_s(varSum, limit)
                 countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), tZero), tOne) # min(max(varSum - limit, 0), 1)
                 
             elif limitOp == '<=': # < limit
+                #atmostL
+                def exists_at_most_s(t, s, beta=10.0):
+                    count = torch.sum(torch.sigmoid(beta * (t - 0.5)))
+                    print(torch.sigmoid(beta * (t - 0.5)))
+                    loss = torch.relu(count - s)
+                    return loss
+                return exists_at_most_s(varSum, limit)
                 countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
                     
             if onlyConstrains:
