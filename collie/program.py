@@ -100,18 +100,28 @@ if __name__ == "__main__":
     parser.add_argument('--pad_size', type=int, default=32, help="Maximum length of generation")
     parser.add_argument('--model_mode', type=str, default='generate', choices=['tf', 'generate'], help="tf: Teacher-forcing during the forward pass, generate: Greedy decoding during the forward pass")
     parser.add_argument('--ILP', default=False, action='store_true', help="Add this flag to enable ILP inference")
+    parser.add_argument('--max_vocab_size', type=int, default=None, required=False, help="Maximum size of the vocabulary")
 
     args = parser.parse_args()
 
     # load model
-    with open(args.vocab_file, 'rb') as f_in:
-        label_map = TokenMap(pickle.load(f_in))
-
-    print(color('Vocabulary size:', fg='green'), len(label_map))
-
     print(color('Loading model', fg='green'))
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
     model = AutoModelForCausalLM.from_pretrained("roneneldan/TinyStories-1M")
+
+    with open(args.vocab_file, 'rb') as f_in:
+        vocab_data = pickle.load(f_in)
+
+        # add eos token to the vocabulary
+        max_idx = max(vocab_data.values())
+        vocab_idx = tokenizer.eos_token_id
+        if vocab_idx not in vocab_data:
+            vocab_data[vocab_idx] = max_idx + 1
+
+        # build vocabulary from data
+        label_map = TokenMap(vocab_data, max_length=args.max_vocab_size)
+
+    print(color('Vocabulary size:', fg='green'), len(label_map))
 
     # build program
     program = build_program(

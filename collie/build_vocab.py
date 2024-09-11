@@ -8,7 +8,7 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 import pickle
 
-top_k = 1000
+top_k = 10000
 
 dataset = load_dataset("roneneldan/TinyStories", split="validation", streaming=True)
 
@@ -37,5 +37,5 @@ for t in reversed(vocab_subset):
 
 label_map = {token: i for i, token in enumerate(vocab_subset)}
 
-with open("data/vocab_val.pkl", "wb") as f:
+with open("data/vocab_val_10k.pkl", "wb") as f:
     pickle.dump(label_map, f)
