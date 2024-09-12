@@ -366,10 +366,54 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return epqLoss
         else:
             return epqSuccess
-     
+
+
+
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         logicMethodName = "COUNT"
-        
+
+        method=0
+
+        if method==0: # log sum exp
+            exists_at_least_one = lambda t, beta=100.0: torch.clamp(-torch.log((1 / beta) * torch.log(torch.sum(torch.exp(beta * t)))), min=0,max=1)
+            exists_at_least_s = lambda t, s, beta=10.0: torch.clamp(torch.relu(s - torch.sum(torch.sigmoid(beta * (t - 0.5)))),max=1)
+            exists_at_most_s = lambda t, s, beta=10.0: torch.clamp(torch.relu(torch.sum(torch.sigmoid(beta * (t - 0.5))) - s),max=1)
+            exists_exactly_s = lambda t, s, beta=10.0: torch.clamp(torch.abs(s - torch.sum(torch.sigmoid(beta * (t - 0.5)))),max=1)
+        elif method==1: # Godel logic
+            exists_at_least_one = lambda t: 1 - torch.max(t)
+            exists_at_least_s = lambda t, s: 1- torch.min(torch.sort(t, descending=True)[0][:s])
+            exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][:len(t)-s])
+            exists_exactly_s = lambda t, s: 1 - torch.min((torch.sort(t, descending=True)[0][:s] + torch.sort(1 - t, descending=True)[0][:len(t)-s]))
+        elif method == 2: # Łukasiewicz logic
+            exists_at_least_one = lambda t: 1 - torch.clamp(torch.sum(t), max=1)
+            exists_at_least_s = lambda t, s: 1 - torch.clamp(torch.sum(torch.sort(t, descending=True)[0][:s])-(s-1), min=0)
+            exists_at_most_s = lambda t, s: 1 - torch.clamp(torch.sum(torch.sort(1 - t, descending=True)[0][:len(t)-s])-(len(t)-s-1), min=0)
+            exists_exactly_s = lambda t, s: 1 - torch.clamp(torch.sum(torch.sort(t, descending=True)[0][:s])-(s-1)+torch.sum(torch.sort(1 - t, descending=True)[0][:len(t)-s])-(len(t)-s-1), min=0)
+
+        elif method == 3:  #  Product logic
+
+            def calc_probabilities(probs, k):
+                n = len(probs)
+                dp = torch.zeros(k + 1)
+                dp[0] = 1.0
+                for i in range(n):
+                    dp[1:min(k, i + 1) + 1] = dp[1:min(k, i + 1) + 1] * (1 - probs[i]) + dp[:min(k, i + 1)] * probs[i]
+                    dp[0] *= (1 - probs[i])
+                return dp
+
+            exists_at_least_one = lambda t: 1 - torch.prod(1 - t)
+            exists_at_least_s = lambda probs, m: torch.sum(calc_probabilities(probs, len(probs))[m:])
+            exists_at_most_s = lambda probs, m: torch.sum(calc_probabilities(probs, m))
+            exists_exactly_s = lambda probs, k: calc_probabilities(probs, k)[k]
+
+        else:  # Simplified product logic
+            exists_at_least_one = lambda t: 1 - torch.prod(1 - t)
+            exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][:s])
+            exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][:len(t) - s])
+            exists_exactly_s = lambda t, s: (exists_at_least_s(t, s) + exists_at_most_s) / 2
+
+
+
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
         var = self._fixVar(var)
@@ -382,8 +426,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         
         if  limitOp == '==': # == limit
-            countLoss = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
-
+            #countLoss = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
+            countLoss=exists_exactly_s(varSum, limit)
             if onlyConstrains:
                 return countLoss
             else:
@@ -392,19 +436,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             if limitOp == '>=': # > limit
                 #Existsl
-                def exists_at_least_one(t, beta=100.0):
-                    max_smooth = (1 / beta) * torch.log(torch.sum(torch.exp(beta * t)))
-                    # print(max_smooth)
-                    # return -max_smooth
-                    loss = -torch.log(max_smooth)
-                    return torch.clamp(loss, min=0)
-
-
-                def exists_at_least_s(t, s, beta=10.0):
-                    count = torch.sum(torch.sigmoid(beta * (t - 0.5)))
-                    print(torch.sigmoid(beta * (t - 0.5)))
-                    loss = torch.relu(s - count)
-                    return loss
                 if onlyConstrains:
                     if limit ==1:return exists_at_least_one(varSum)
                     else: return exists_at_least_s(varSum, limit)
@@ -412,11 +443,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 
             elif limitOp == '<=': # < limit
                 #atmostL
-                def exists_at_most_s(t, s, beta=10.0):
-                    count = torch.sum(torch.sigmoid(beta * (t - 0.5)))
-                    print(torch.sigmoid(beta * (t - 0.5)))
-                    loss = torch.relu(count - s)
-                    return loss
+
                 if onlyConstrains:
                     return exists_at_most_s(varSum, limit)
                 countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
