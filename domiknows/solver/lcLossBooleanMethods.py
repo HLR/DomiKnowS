@@ -372,7 +372,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         logicMethodName = "COUNT"
 
-        method=0
+        method=3
 
         if method==0: # log sum exp
             exists_at_least_one = lambda t, beta=100.0: torch.clamp(-torch.log((1 / beta) * torch.log(torch.sum(torch.exp(beta * t)))), min=0,max=1)
@@ -383,7 +383,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             exists_at_least_one = lambda t: 1 - torch.max(t)
             exists_at_least_s = lambda t, s: 1- torch.min(torch.sort(t, descending=True)[0][:s])
             exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][:len(t)-s])
-            exists_exactly_s = lambda t, s: 1 - torch.min((torch.sort(t, descending=True)[0][:s] + torch.sort(1 - t, descending=True)[0][:len(t)-s]))
+            exists_exactly_s = lambda t, s: 1 - torch.min(torch.min(torch.sort(t, descending=True)[0][:s]) , torch.min(torch.sort(1 - t, descending=True)[0][:len(t)-s]))
         elif method == 2: # Łukasiewicz logic
             exists_at_least_one = lambda t: 1 - torch.clamp(torch.sum(t), max=1)
             exists_at_least_s = lambda t, s: 1 - torch.clamp(torch.sum(torch.sort(t, descending=True)[0][:s])-(s-1), min=0)
@@ -392,25 +392,28 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         elif method == 3:  #  Product logic
 
-            def calc_probabilities(probs, k):
-                n = len(probs)
-                dp = torch.zeros(k + 1)
+            def calc_probabilities(t, s):
+                n = len(t)
+                dp = torch.zeros(s + 1, device=self.current_device, dtype=torch.float64)
                 dp[0] = 1.0
+                dp.requires_grad_()
                 for i in range(n):
-                    dp[1:min(k, i + 1) + 1] = dp[1:min(k, i + 1) + 1] * (1 - probs[i]) + dp[:min(k, i + 1)] * probs[i]
-                    dp[0] *= (1 - probs[i])
+                    dp_new = dp.clone()
+                    dp_new[1:min(s, i + 1) + 1] = dp[1:min(s, i + 1) + 1] * (1 - t[i]) + dp[:min(s, i + 1)] * t[i]
+                    dp_new[0] = dp[0] * (1 - t[i])
+                    dp = dp_new
                 return dp
 
-            exists_at_least_one = lambda t: 1 - torch.prod(1 - t)
-            exists_at_least_s = lambda probs, m: torch.sum(calc_probabilities(probs, len(probs))[m:])
-            exists_at_most_s = lambda probs, m: torch.sum(calc_probabilities(probs, m))
-            exists_exactly_s = lambda probs, k: calc_probabilities(probs, k)[k]
+            exists_at_least_one = lambda t: torch.prod(1 - t)
+            exists_at_least_s = lambda t, s: 1 - torch.sum(calc_probabilities(t, len(t))[s:])
+            exists_at_most_s = lambda t, s: 1 - torch.sum(calc_probabilities(t, s))
+            exists_exactly_s = lambda t, s: 1 - calc_probabilities(t, s)[s]
 
         else:  # Simplified product logic
-            exists_at_least_one = lambda t: 1 - torch.prod(1 - t)
+            exists_at_least_one = lambda t: torch.prod(1 - t)
             exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][:s])
             exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][:len(t) - s])
-            exists_exactly_s = lambda t, s: (exists_at_least_s(t, s) + exists_at_most_s) / 2
+            exists_exactly_s = lambda t, s: (exists_at_least_s(t, s) + exists_at_most_s(t, s)) / 2
 
 
 
