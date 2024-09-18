@@ -372,7 +372,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         logicMethodName = "COUNT"
 
-        method=0
+        method=4
 
         if method==0: # log sum exp
             exists_at_least_one = lambda t, beta=100.0: torch.clamp(-torch.log((1 / beta) * torch.log(torch.sum(torch.exp(beta * t)))), min=0,max=1)

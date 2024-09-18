@@ -22,12 +22,17 @@ Sensor.clear()
 parser = argparse.ArgumentParser()
 parser.add_argument("--test_train", default=True, type=bool)
 parser.add_argument("--atLeastL", default=False, type=bool)
-parser.add_argument("--atMostL", default=True, type=bool)
-parser.add_argument("--epoch", default=1000, type=int)
-parser.add_argument("--expected_count", default=3, type=int)
+parser.add_argument("--atMostL", default=False, type=bool)
+parser.add_argument("--epoch", default=500, type=int)
+parser.add_argument("--expected_atLeastL", default=3, type=int)
+parser.add_argument("--expected_atMostL", default=3, type=int)
+parser.add_argument("--expected_value", default=0, type=int)
+parser.add_argument("--N", default=10, type=int)
+parser.add_argument("--M", default=8, type=int)
 args = parser.parse_args()
 
-N = 1  # Setting the b parameters
+N = args.N  # Setting the b parameters
+M = args.M
 graph, a, b, a_contain_b, b_answer = get_graph(args)
 
 
@@ -38,24 +43,27 @@ class DummyLearner(TorchLearner):
     def forward(self, x):
         # Dummy result always return 1
         result = torch.stack((torch.ones(len(x)) * 4, torch.ones(len(x)) * 6), dim=-1)
-        print(torch.nn.functional.softmax(result))
+        # print(torch.nn.functional.softmax(result))
         return result
 
 
 class TestTrainLearner(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        # self.layers = torch.nn.Sequential(
-        #     torch.nn.Linear(N, N),
-        #
-        #     torch.nn.Linear(N, 2)
-        # )
-        self.layers = torch.nn.Linear(N, 2)
+        self.layers = torch.nn.Sequential(
+            torch.nn.Linear(N, N),
+            # torch.nn.ReLU(),
+            torch.nn.Linear(N, 2)
+        )
+        # self.layers = torch.nn.Linear(N, 2)
         # with torch.no_grad():
         #     self.linear1.weight.copy_(torch.tensor([[8.0], [2.0]]))
 
     def forward(self, _, x):
-        return self.layers(x)
+        # print("input:", x)
+        output = self.layers(x)
+        # print(output.softmax(dim=-1))
+        return output
 
 
 def return_contain(b, _):
@@ -63,11 +71,11 @@ def return_contain(b, _):
 
 
 np.random.seed(0)
-torch.manual_seed(880)
+torch.manual_seed(0)
 
 dataset = [{"a": [0],
-            "b": [((np.random.rand(N) - np.random.rand(N)) * 10).tolist() for _ in range(8)],
-            "label": [1] * 8}]
+            "b": [((np.random.rand(N) - np.random.rand(N))).tolist() for _ in range(M)],
+            "label": [0] * M}]
 
 a["index"] = ReaderSensor(keyword="a")
 b["index"] = ReaderSensor(keyword="b")
@@ -117,13 +125,24 @@ for datanode in program.populate(dataset=dataset):
 # Training
 
 if args.test_train:
+    program.model.train()
+    program.model.reset()
+    program.cmodel.train()
+    program.cmodel.reset()
+    program.model.mode(Mode.TRAIN)
+    print("Starting the test case experiment")
     print("Before Train: ")
+    # for datanode in program.populate(dataset=dataset):
+    #     for child in datanode.getChildDataNodes():
+    #         pred = child.getAttribute(b_answer, 'local/softmax')
+    #         # print(child.getAttribute(b_answer, 'label'), pred, end="\n")
+    #         print(pred, end=" ")
+    # print()
     for datanode in program.populate(dataset=dataset):
         for child in datanode.getChildDataNodes():
             pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
             # print(child.getAttribute(b_answer, 'label'), pred, end="\n")
             print(pred, end=" ")
-    print()
 
     # Initial train the model to have the predicted label
     program.model.train()
@@ -135,19 +154,32 @@ if args.test_train:
     opt = torch.optim.Adam(program.model.parameters(), lr=1e-2)
     copt = torch.optim.Adam(program.cmodel.parameters(), lr=1e-3)
 
-    print("Training without PMD")
-    for each in tqdm(range(300)):
+    for each in tqdm(range(20), desc="Training without PMD"):
         for data in dataset:
             loss, metric, *output = program.model(data)
             loss.backward()
             opt.step()
     print()
-    print("After Train without PMD: ")
+    program.model.eval()
+    program.model.reset()
+    program.cmodel.eval()
+    program.cmodel.reset()
+    program.model.mode(Mode.TEST)
 
+    print("After Train without PMD: ")
+    for datanode in program.populate(dataset=dataset):
+        for child in datanode.getChildDataNodes():
+            pred = child.getAttribute(b_answer, 'local/softmax')
+            print(pred, end=" ")
+
+    print()
+    print("After Train without PMD: ")
     for datanode in program.populate(dataset=dataset):
         for child in datanode.getChildDataNodes():
             pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
             print(pred, end=" ")
+
+    print()
 
     program.model.train()
     program.model.reset()
@@ -155,7 +187,7 @@ if args.test_train:
     program.cmodel.reset()
     program.model.mode(Mode.TRAIN)
     # program.cmodel.mode(Mode.TRAIN)
-    for epoch in tqdm(range(args.epoch)):
+    for epoch in tqdm(range(args.epoch), desc="Training with PMD"):
         for data in dataset:
             opt.zero_grad()
             copt.zero_grad()
@@ -168,20 +200,45 @@ if args.test_train:
                 loss = mloss * 0
 
             # print(loss)
+            if loss.item() < 0:
+                break
             if loss:
                 loss.backward()
                 opt.step()
                 copt.step()
-        # for datanode in program.populate(dataset=dataset):
-        #     for child in datanode.getChildDataNodes():
-        #         pred = child.getAttribute(b_answer, 'local/softmax')[1].item()*100//1/100
-        #         print(pred, end=" ")
-        # print(closs)
-        # print()
 
+    program.model.eval()
+    program.model.reset()
+    program.cmodel.eval()
+    program.cmodel.reset()
+    program.model.mode(Mode.TEST)
+    # for datanode in program.populate(dataset=dataset):
+    #     for child in datanode.getChildDataNodes():
+    #         pred = child.getAttribute(b_answer, 'local/softmax')
+    #         print(pred, end=" ")
+    #
+    # print()
+
+    final_result_count = {}
     print("After Train with PMD: ")
     for datanode in program.populate(dataset=dataset):
         for child in datanode.getChildDataNodes():
             pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
             print(pred, end=" ")
+            final_result_count[pred] = final_result_count.get(pred, 0) + 1
     print()
+
+    pass_test_case = True
+
+    expected_value = args.expected_value
+    if args.atLeastL:
+        pass_test_case = pass_test_case and (final_result_count.get(expected_value, 0) >= args.expected_atLeastL)
+
+    if args.atMostL:
+        pass_test_case = pass_test_case and (final_result_count.get(expected_value, 0) <= args.expected_atMostL)
+
+    if not (args.atLeastL or args.atMostL):
+        # print(f"Testing exactL of {expected_value}: {final_result_count.get(expected_value, 0)}")
+        pass_test_case = pass_test_case and (final_result_count.get(expected_value, 0) == args.expected_atLeastL)
+
+    print("It PASSES this case" if pass_test_case else "It FAILS this case")
