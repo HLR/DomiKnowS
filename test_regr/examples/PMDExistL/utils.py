@@ -1,32 +1,17 @@
-import sys
-import argparse
-import time
 from typing import List, Dict, Any
-import itertools
-
 import numpy as np
 import torch
 from torch import nn
 from tqdm import tqdm
-
-from domiknows.sensor.pytorch.sensors import ReaderSensor
-from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, FunctionalSensor
-from domiknows.sensor.pytorch.learners import ModuleLearner, TorchLearner
-from domiknows.program import SolverPOIProgram
+from domiknows.sensor.pytorch.learners import TorchLearner
 from domiknows.program.model.base import Mode
-from domiknows.sensor import Sensor
-from domiknows.program.metric import MacroAverageTracker
-from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
-from domiknows.program.model.pytorch import SolverModel
 
 class DummyLearner(TorchLearner):
-    """A dummy learner that always returns a fixed result."""
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.stack((torch.ones(len(x)) * 4, torch.ones(len(x)) * 6), dim=-1)
 
 class TestTrainLearner(nn.Module):
-    """A test learner with a simple neural network."""
     def __init__(self, input_size: int):
         super().__init__()
         self.layers = nn.Sequential(
@@ -38,11 +23,9 @@ class TestTrainLearner(nn.Module):
         return self.layers(x)
 
 def return_contain(b: torch.Tensor, _: Any) -> torch.Tensor:
-    """Return a tensor of ones with an additional dimension."""
     return torch.ones(len(b)).unsqueeze(-1)
 
 def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
-    """Create a dataset for the experiment."""
     return [{
         "a": [0],
         "b": [((np.random.rand(N) - np.random.rand(N))).tolist() for _ in range(M)],
@@ -50,7 +33,6 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
     }]
 
 def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], num_epochs: int) -> None:
-    """Train the model using the provided program and dataset."""
     program.model.train()
     program.model.reset()
     program.cmodel.train()
@@ -77,7 +59,6 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], num_e
                 copt.step()
 
 def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_answer: Any) -> Dict[int, int]:
-    """Evaluate the model and return the prediction counts."""
     program.model.eval()
     program.model.reset()
     program.cmodel.eval()

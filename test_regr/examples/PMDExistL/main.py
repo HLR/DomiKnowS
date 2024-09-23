@@ -1,37 +1,27 @@
 import sys
 import argparse
-import time
-from typing import List, Dict, Any
-import itertools
-
+from typing import Any
 import numpy as np
 import torch
-from torch import nn
-from tqdm import tqdm
-
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, FunctionalSensor
-from domiknows.sensor.pytorch.learners import ModuleLearner, TorchLearner
-from domiknows.program import SolverPOIProgram
-from domiknows.program.model.base import Mode
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor import Sensor
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
 
-from utils import DummyLearner,TestTrainLearner,return_contain,create_dataset,evaluate_model,train_model
+from utils import TestTrainLearner,return_contain,create_dataset,evaluate_model,train_model
 sys.path.append('../../../../domiknows/')
 from graph import get_graph
 
-# Clear existing sensors
 Sensor.clear()
 
-
 def parse_arguments() -> argparse.Namespace:
-    """Parse command-line arguments."""
+
     parser = argparse.ArgumentParser(description="Machine Learning Experiment")
-    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP", "LSE"], default="G", help="The tnorm method to use for the counting constraints")
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--atLeastL", default=False, type=bool, help="Use at least L constraint")
     parser.add_argument("--atMostL", default=False, type=bool, help="Use at most L constraint")
     parser.add_argument("--epoch", default=500, type=int, help="Number of training epochs")
@@ -44,8 +34,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 
-def setup_graph(args: argparse.Namespace, graph: Any, a: Any, b: Any, a_contain_b: Any, b_answer: Any) -> None:
-    """Set up the graph structure and sensors."""
+def setup_graph(args: argparse.Namespace, a: Any, b: Any, a_contain_b: Any, b_answer: Any) -> None:
     a["index"] = ReaderSensor(keyword="a")
     b["index"] = ReaderSensor(keyword="b")
     b["temp_answer"] = ReaderSensor(keyword="label")
@@ -53,15 +42,13 @@ def setup_graph(args: argparse.Namespace, graph: Any, a: Any, b: Any, a_contain_
     b[b_answer] = ModuleLearner(a_contain_b, "index", module=TestTrainLearner(args.N), device="cpu")
     b[b_answer] = FunctionalSensor(a_contain_b, "temp_answer", forward=lambda _, label: label, label=True)
 
-
-
-def main(args: argparse.Namespace) -> bool:
+def main(args: argparse.Namespace):
     np.random.seed(0)
     torch.manual_seed(0)
 
     graph, a, b, a_contain_b, b_answer = get_graph(args)
     dataset = create_dataset(args.N, args.M)
-    setup_graph(args, graph, a, b, a_contain_b, b_answer)
+    setup_graph(args, a, b, a_contain_b, b_answer)
     program = PrimalDualProgram(
         graph, SolverModel, poi=[a, b, b_answer],
         inferTypes=['local/argmax'],
@@ -87,7 +74,6 @@ def main(args: argparse.Namespace) -> bool:
     print(f"Test case {'PASSED' if pass_test_case else 'FAILED'}")
     print(f"expected_value, before_count, actual_count,pass_test_case): {expected_value, before_count, actual_count,pass_test_case}")
     return pass_test_case, before_count, actual_count
-
 
 if __name__ == "__main__":
     args = parse_arguments()
