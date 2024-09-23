@@ -1893,7 +1893,7 @@ class DataNode:
 
         return verifyResult
 
-    def calculateLcLoss(self, tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False):
+    def calculateLcLoss(self, tnorm='P',counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -1921,7 +1921,7 @@ class DataNode:
         myilpOntSolver, conceptsRelations = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm=tnorm, sample=sample,
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm=tnorm,counting_tnorm=counting_tnorm, sample=sample,
                                                   sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss,
                                                   conceptsRelations=conceptsRelations)
 

@@ -1,194 +1,78 @@
-import os.path
 import subprocess
-import re
+import sys
+import os
+import itertools
+import json
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from collections import defaultdict
 
+def run_test(params):
+    # Convert params to command-line arguments
+    args = []
+    for key, value in params.items():
+        if not str(value)=="False":
+            args.extend([f'--{key}', str(value)])
 
-def calculate_time():
-    with open("logs/regrTimer.log", "r") as f:
-        lines = f.read()
-    result = re.findall(r"End of Loss Calculation - total internl time: (\d)ms", lines)
-    return sum(int(t) for t in result), len(result)
+    # Get the path to the Python interpreter in the current virtual environment
+    python_executable = sys.executable
 
+    # Construct the command to run the main script
+    cmd = [python_executable, 'main.py'] + args
 
-def test_PMD(N = 10):
-    prev_time = 0
-    prev_count = 0
-    if os.path.exists("logs/regrTimer.log"):
-        prev_time, prev_count = calculate_time()
+    # Run the command in a subprocess
+    try:
+        # Use UTF-8 encoding and replace any characters that can't be decoded
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        return params, True, result.stdout
+    except subprocess.CalledProcessError as e:
+        return params, False, e.stderr
 
-    output_count = N
-    passed = []
-    times = []
-    print(f"Test 1: ExactL(1, 3) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "1",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
+def run_tests():
+    """Run tests with different combinations of input arguments."""
+    # Define the parameter combinations to test
+    param_combinations = {
+        'counting_tnorm': ["G" , "P","SP","L" ],
+        'atLeastL': [True, False],
+        'atMostL': [True, False],
+        'epoch': [1000],
+        'expected_atLeastL': [2],
+        'expected_atMostL': [5],
+        'expected_value': [0,1],
+        'N': [10],
+        'M': [8]
+    }
 
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-    print("#" * 30)
+    # Generate all combinations of parameters
+    keys, values = zip(*param_combinations.items())
+    combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
-    print(f"Test 2: AtLeastL(1, 4) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "1",
-                             "--atLeastL", "T",
-                             "--expected_atLeastL", "4",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-    print("#" * 30)
+    # Run tests for each combination using ProcessPoolExecutor with max_workers=4
+    results = defaultdict(list)
+    total_combinations = len(combinations)
 
-    print(f"Test 3: AtLeastL(1, 10) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "1",
-                             "--atLeastL", "T",
-                             "--expected_atLeastL", "10",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
+    with ProcessPoolExecutor(max_workers=4) as executor:
+        for i, (params, test_passed, output) in enumerate(executor.map(run_test, combinations), 1):
+            counting_tnorm = params['counting_tnorm']
+            results[counting_tnorm].append((params, 'PASSED' in output, output))
+            print(f"\nCompleted test {i}/{total_combinations}:")
+            print(f"Parameters: {params}")
+            print(output.split("\n")[-2])
+            print(f"Passed: {'PASSED' in output}")
 
-    print("#" * 30)
+    # Print summary of results per counting_tnorm
+    print("\n--- Test Summary ---")
+    for counting_tnorm, tnorm_results in results.items():
+        passed_tests = sum(1 for _, passed, _ in tnorm_results if passed)
+        print(f"\nResults for counting_tnorm = {counting_tnorm}:")
+        print(f"Passed {passed_tests} out of {len(tnorm_results)} tests.")
 
-    print(f"Test 4: AtMostL(0, 5) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "0",
-                             "--atMostL", "T",
-                             "--expected_atMostL", "4",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-
-    print("#" * 30)
-
-    print(f"Test 5: AtMostL(0, 0) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "0",
-                             "--atMostL", "T",
-                             "--expected_atMostL", "1",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-
-    print("#" * 30)
-
-    print(f"Test 6: AtLeastL(1, 4) AtMostL(1, 6) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "1",
-                             "--atLeastL", "T",
-                             "--expected_atLeastL", "4",
-                             "--atMostL", "T",
-                             "--expected_atMostL", "6",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-
-    print("#" * 30)
-
-    print(f"Test 7: AtLeastL(1, 5) AtMostL(1, 5) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "1",
-                             "--atLeastL", "T",
-                             "--expected_atLeastL", "5",
-                             "--atMostL", "T",
-                             "--expected_atMostL", "5",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-
-    print("#" * 30)
-
-    print(f"Test 8: AtLeastL(0, 2) AtMostL(0, 6) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "0",
-                             "--atLeastL", "T",
-                             "--expected_atLeastL", "2",
-                             "--atMostL", "T",
-                             "--expected_atMostL", "6",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-
-    print("#" * 30)
-
-    print(f"Test 9: AtLeastL(0, 5) AtMostL(0, 5) on {output_count} output")
-    result = subprocess.run(["python", "./main.py",
-                             "--expected_value", "0",
-                             "--atLeastL", "T",
-                             "--expected_atLeastL", "5",
-                             "--atMostL", "T",
-                             "--expected_atMostL", "5",
-                             "--M", f"{output_count}"],
-                            stdout=subprocess.PIPE, text=True)
-    print(result.stdout)
-    cur_time, cur_count = calculate_time()
-    print("Avg time for calculate constraint loss: {:.4f}ms".format((cur_time - prev_time) / (cur_count - prev_count)))
-    passed.append("P" if "PASS" in result.stdout else "X")
-    times.append((cur_time - prev_time) / (cur_count - prev_count))
-    prev_time, prev_count = cur_time, cur_count
-    print("#" * 30)
-
-    return "".join(passed), sum(times) / len(times)
-
+        # Print details of failed tests for this counting_tnorm
+        if passed_tests < len(tnorm_results):
+            print(f"Failed tests for counting_tnorm = {counting_tnorm}:")
+            for params, passed, output in tnorm_results:
+                if not passed:
+                    print(f"Parameters: {params}")
+                    print(f"Error output: {output}")
 
 if __name__ == "__main__":
-    pass_test = []
-    time_test = []
-
-    test, time = test_PMD(10)
-    pass_test.append(test)
-    time_test.append(time)
-
-    test, time = test_PMD(20)
-    pass_test.append(test)
-    time_test.append(time)
-
-    test, time = test_PMD(50)
-    pass_test.append(test)
-    time_test.append(time)
-
-    test, time = test_PMD(100)
-    pass_test.append(test)
-    time_test.append(time)
-
-    print("Pass:", pass_test)
-    print("Time:", time_test)
+    run_tests()
