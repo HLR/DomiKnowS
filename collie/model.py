@@ -10,6 +10,7 @@ class TinyModel(torch.nn.Module):
             model: PreTrainedModel,
             tokenizer: PreTrainedTokenizer,
             label_map: TokenMap,
+            vocab: list[str],
             eos_idx: int = 50256,
             pad_size: int = 48,
             mode: Literal['tf', 'generate'] = 'generate'
@@ -18,6 +19,9 @@ class TinyModel(torch.nn.Module):
         super().__init__()
         self.model = model
         self.tokenizer = tokenizer
+        self.vocab = vocab
+        
+        self.vocab_ids = [self.tokenizer.encode(v)[0] for v in self.vocab]
 
         self.mode = mode
         assert self.mode in {'tf', 'generate'}
@@ -86,5 +90,22 @@ class TinyModel(torch.nn.Module):
                     gen_ids,
                     torch.ones((self.pad_size - gen_ids.shape[0],), dtype=torch.long) * self.lmap.label_map[self.eos_idx]
                 ], dim=0)
+            
+            gen_probs = torch.softmax(gen_logits, dim=-1)
+            
+            # condense token probs
+            gen_probs_new = torch.zeros((gen_probs.shape[0], len(self.vocab) + 1))
+            prob_sum = 0
+            for i, token_id in enumerate(self.vocab_ids):
+                next_prob = gen_probs[:, self.lmap.label_map[token_id]]
+                gen_probs_new[:, i] = next_prob
+                prob_sum += next_prob
+            
+            gen_probs_new[:, -1] = 1 - prob_sum
 
-            return gen_logits
+            print(gen_probs_new.shape)
+            print(gen_probs_new)
+
+            gen_logprobs = torch.log(gen_probs_new)
+
+            return gen_logprobs

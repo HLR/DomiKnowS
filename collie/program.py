@@ -16,12 +16,15 @@ def build_program(
         label_map: TokenMap,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizer,
+        vocab: list[str],
         pad_size: int = 32,
         model_mode: Literal['tf', 'generate'] = 'generate',
         ilp: bool = False
     ) -> LearningBasedProgram:
 
-    graph, (text, token, contains, generated_token, is_before_rel, first_token, second_token) = build_graph(label_map, tokenizer)
+    vocab_ids = [tokenizer.encode(v)[0] for v in vocab]
+
+    graph, (text, token, contains, generated_token, is_before_rel, first_token, second_token) = build_graph(label_map, tokenizer, vocab)
 
     text["instruction_tokens"] = ReaderSensor(keyword="instruction_tokens")
     text["target_tokens"] = ReaderSensor(keyword="target_tokens")
@@ -46,12 +49,30 @@ def build_program(
         return torch.ones((pad_size, 1)), target_out, testing_out, torch.arange(pad_size)
 
     token[contains, 'target', '_testing_generated', 'token_index'] = JointSensor(text["target_tokens"], text["_testing_generated_tokens"], forward=_add_sequence)
-    token[generated_token] = FunctionalSensor(token[contains], "target", forward=lambda _, x: label_map.map_vocab(x), label=True)
 
+    # issue: can't have loss over "other" tokens
+
+    def map_labels(label_vals):
+        print("labels", label_vals)
+
+        new_labels = []
+
+        for label in label_vals:
+            if label in vocab_ids:
+                new_labels.append(vocab_ids.index(label))
+            else:
+                new_labels.append(len(vocab_ids))
+        
+        return torch.tensor(new_labels)
+
+    token[generated_token] = FunctionalSensor(token[contains], "target", forward=lambda _, x: map_labels(x), label=True)
+
+    print(vocab)
     model = TinyModel(
         model,
         tokenizer,
         label_map,
+        vocab=vocab,
         eos_idx=tokenizer.eos_token_id,
         pad_size=pad_size,
         mode=model_mode
@@ -88,6 +109,14 @@ def print_tkns(input_tkns, cutoff_idx, tkns, tokenizer, label_map):
         color('\t'.join([tokenizer.decode(x) for x in label_map.unmap_vocab(tkns)]), fg='red')
     )
 
+def print_tkns_vocab(input_tkns, cutoff_idx, tkns, tokenizer, label_map, vocab):
+    vocab_all = vocab + ['_other']
+    print(tkns)
+    print(
+        '\t'.join([tokenizer.decode(x) for x in input_tkns[0,:cutoff_idx]]) + '\t' +
+        color('\t'.join([vocab_all[x] for x in tkns]), fg='red')
+    )
+
 
 if __name__ == "__main__":
     from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -121,6 +150,8 @@ if __name__ == "__main__":
         # build vocabulary from data
         label_map = TokenMap(vocab_data, max_length=args.max_vocab_size)
 
+    vocab = ['<|endoftext|>', ' The', ' slide']
+
     print(color('Vocabulary size:', fg='green'), len(label_map))
 
     # build program
@@ -128,6 +159,7 @@ if __name__ == "__main__":
         label_map,
         model,
         tokenizer,
+        vocab,
         pad_size=args.pad_size,
         model_mode=args.model_mode,
         ilp=args.ILP
@@ -157,14 +189,14 @@ if __name__ == "__main__":
         labels.append(token_node.getAttribute('<generated_token>/label').item())
 
     print(color('Ground-truth tokens:', fg='green'))
-    print_tkns(sample_tkn, cutoff_idx, labels, tokenizer, label_map)
+    print_tkns_vocab(sample_tkn, cutoff_idx, labels, tokenizer, label_map, vocab)
 
     print(color('Predicted tokens:', fg='green'))
-    print_tkns(sample_tkn, cutoff_idx, preds, tokenizer, label_map)
+    print_tkns_vocab(sample_tkn, cutoff_idx, preds, tokenizer, label_map, vocab)
 
     if args.ILP:
         print(color('ILP predictions:', fg='green'))
-        print_tkns(sample_tkn, cutoff_idx, ilp_preds, tokenizer, label_map)
+        print_tkns_vocab(sample_tkn, cutoff_idx, ilp_preds, tokenizer, label_map, vocab)
 
     constr_names = [
         'no non-EOS tokens can follow an EOS token',
