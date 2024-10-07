@@ -54,7 +54,7 @@ def build_graph(lm: TokenMap, tokenizer: PreTrainedTokenizer, vocab: list[str]):
             )
         )
 
-        # at most 16 tokens are generated
+        # at most 4 tokens are generated
         atMostAL(
             notL(get_token_concept('<|endoftext|>')("x")),
             4
