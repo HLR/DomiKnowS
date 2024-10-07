@@ -3,10 +3,16 @@ from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.program import LearningBasedProgram, SolverPOIProgram
 
+from domiknows.program.metric import MacroAverageTracker
+from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.program.lossprogram import PrimalDualProgram
+from domiknows.program.model.pytorch import SolverModel
+
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from tokens import TokenMap, tokenize
 import torch
 from typing import Literal
+from tqdm import tqdm
 
 from graph import build_graph
 from model import TinyModel
@@ -75,10 +81,19 @@ def build_program(
         forward=is_before_edges
     )
 
-    return SolverPOIProgram(
+    # return SolverPOIProgram(
+    #     graph,
+    #     poi=(text, token, is_before_rel),
+    #     inferTypes=['local/argmax', 'ILP'] if ilp else ['local/argmax']
+    # )
+
+    return PrimalDualProgram(
         graph,
+        SolverModel,
         poi=(text, token, is_before_rel),
-        inferTypes=['local/argmax', 'ILP'] if ilp else ['local/argmax']
+        inferTypes=['local/argmax', 'ILP'] if ilp else ['local/argmax'],
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        beta=10, device='cpu', tnorm="P", counting_tnorm="P"
     )
 
 
@@ -87,6 +102,45 @@ def print_tkns(input_tkns, cutoff_idx, tkns, tokenizer, label_map):
         '\t'.join([tokenizer.decode(x) for x in input_tkns[0,:cutoff_idx]]) + '\t' +
         color('\t'.join([tokenizer.decode(x) for x in label_map.unmap_vocab(tkns)]), fg='red')
     )
+
+def viz_inference(program, sample_data, ILP=False):
+    preds, labels = [], []
+    ilp_preds = []
+
+    node = program.populate_one(sample_data)
+
+    for token_node in node.getChildDataNodes():
+        if ILP:
+            ilp_preds.append(torch.argmax(token_node.getAttribute('<generated_token>/ILP')))
+
+        preds.append(torch.argmax(token_node.getAttribute('<generated_token>'), dim=0).item())
+        labels.append(token_node.getAttribute('<generated_token>/label').item())
+
+    print(color('Ground-truth tokens:', fg='green'))
+    print_tkns(sample_tkn, cutoff_idx, labels, tokenizer, label_map)
+
+    print(color('Predicted tokens:', fg='green'))
+    print_tkns(sample_tkn, cutoff_idx, preds, tokenizer, label_map)
+
+    if args.ILP:
+        print(color('ILP predictions:', fg='green'))
+        print_tkns(sample_tkn, cutoff_idx, ilp_preds, tokenizer, label_map)
+
+    constr_names = [
+        'no non-EOS tokens can follow an EOS token',
+        'at most 16 tokens are generated',
+        'at most 32 tokens are generated',
+        'at least one of the " The" token is generated',
+        'at least one of the " slide" token is generated',
+        'if there is a token " The", then there are at most 16 tokens generated total'
+    ]
+
+    # output constraint violations
+    print(color('Constraint satisfaction rate:', fg='green', style='bold'))
+    verify = node.verifyResultsLC()
+    for i, (k, v) in enumerate(verify.items()):
+        print(color('Constraint:', fg='green', style='bold'), color(constr_names[i], fg='green'))
+        print(k, v['satisfied'])
 
 
 if __name__ == "__main__":
@@ -133,52 +187,39 @@ if __name__ == "__main__":
         ilp=args.ILP
     )
 
-    # forward pass
+    # train
     sample = "At the end, she was happy."    
     sample_tkn = tokenize(sample, tokenizer)
 
     print(color('Running inference', fg='green'))
     cutoff_idx = 4
-    node = program.populate_one({
+    sample_data = {
         'target_tokens': sample_tkn[:,cutoff_idx:],
         'instruction_tokens': sample_tkn[:,:cutoff_idx],
         '_testing_generated_tokens': sample_tkn[:,cutoff_idx:]
-    })
+    }
 
-    # output predictions
-    preds, labels = [], []
-    ilp_preds = []
+    viz_inference(program, sample_data, ILP=args.ILP)
 
-    for token_node in node.getChildDataNodes():
-        if args.ILP:
-            ilp_preds.append(torch.argmax(token_node.getAttribute('<generated_token>/ILP')))
+    opt = torch.optim.Adam(program.model.parameters(), lr=1e-3)
+    copt = torch.optim.Adam(program.cmodel.parameters(), lr=1e-3)
 
-        preds.append(torch.argmax(token_node.getAttribute('<generated_token>'), dim=0).item())
-        labels.append(token_node.getAttribute('<generated_token>/label').item())
+    for _ in tqdm(range(100), desc="Training with PMD"):
+        # train step
+        opt.zero_grad()
+        copt.zero_grad()
+        mloss, _, *output = program.model(sample_data)
+        closs, *_ = program.cmodel(output[1])
 
-    print(color('Ground-truth tokens:', fg='green'))
-    print_tkns(sample_tkn, cutoff_idx, labels, tokenizer, label_map)
+        loss = mloss * 0 + (closs if torch.is_tensor(closs) else 0)
+        print("Loss", loss.item())
+        if loss.item() < 0:
+            print("Negative loss", loss.item())
+            break
+        if loss:
+            loss.backward()
+            opt.step()
+            copt.step()
 
-    print(color('Predicted tokens:', fg='green'))
-    print_tkns(sample_tkn, cutoff_idx, preds, tokenizer, label_map)
-
-    if args.ILP:
-        print(color('ILP predictions:', fg='green'))
-        print_tkns(sample_tkn, cutoff_idx, ilp_preds, tokenizer, label_map)
-
-    constr_names = [
-        'no non-EOS tokens can follow an EOS token',
-        'at most 16 tokens are generated',
-        'at most 32 tokens are generated',
-        'at least one of the " The" token is generated',
-        'at least one of the " slide" token is generated',
-        'if there is a token " The", then there are at most 16 tokens generated total'
-    ]
-
-    # output constraint violations
-    print(color('Constraint satisfaction rate:', fg='green', style='bold'))
-    verify = node.verifyResultsLC()
-    for i, (k, v) in enumerate(verify.items()):
-        print(color('Constraint:', fg='green', style='bold'), color(constr_names[i], fg='green'))
-        print(k, v['satisfied'])
-
+        # output predictions
+        viz_inference(program, sample_data, ILP=args.ILP)

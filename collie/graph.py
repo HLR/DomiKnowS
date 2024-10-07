@@ -50,39 +50,39 @@ def build_graph(lm: TokenMap, tokenizer: PreTrainedTokenizer):
             )
         )
 
-        # at most 16 tokens are generated
+        # at most 4 tokens are generated
         atMostAL(
             notL(get_token_concept('<|endoftext|>')("x")),
-            16
+            4
         )
 
         # at most 32 tokens are generated
-        atMostAL(
-            notL(get_token_concept('<|endoftext|>')("x")),
-            32
-        )
+        # atMostAL(
+        #     notL(get_token_concept('<|endoftext|>')("x")),
+        #     32
+        # )
 
         # at least one of the " The" token is generated
-        existsAL(get_token_concept(' The')("x"))
+        # existsAL(get_token_concept(' The')("x"))
         # atLeastAL(
         #     get_token_concept(' The')("x"),
         #     1
         # )
 
         # at least one of the " slide" token is generated
-        existsAL(get_token_concept(' slide')("x"))
+        # existsAL(get_token_concept(' slide')("x"))
         # atLeastAL(
         #     get_token_concept(' slide')("x"),
         #     1
         # )
 
         # if there is a token " The", then there are at most 16 tokens generated total
-        ifL(
-            existsAL(get_token_concept(' The')("x")),
-            atMostAL(
-                notL(get_token_concept('<|endoftext|>')("y")),
-                16
-            )
-        )
+        # ifL(
+        #     existsAL(get_token_concept(' The')("x")),
+        #     atMostAL(
+        #         notL(get_token_concept('<|endoftext|>')("y")),
+        #         16
+        #     )
+        # )
 
     return graph, (text, token, contains, generated_token, is_before_rel, first_token, second_token)
