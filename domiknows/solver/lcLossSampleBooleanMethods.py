@@ -179,7 +179,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         # -- Consider None
         fixedVar = []
-        for v in var:
+        for v in var: # Looping through the
             if torch.is_tensor(v):
                 fixedVar.append(v)
             else:
@@ -190,16 +190,16 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 elif limitOp == '==':
                     fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
         # --
-         
+         # V = 100,
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
         varSum = torch.zeros([self.sampleSize], device=self.current_device)
         if fixedVar:
-            varSum = fixedVar[0].int()
-            
-        for i in range(1, len(fixedVar)):
-            varSum.add_(fixedVar[i].int())
+            varSum = var[0][0]
+
+        for i in range(1, len(var)):
+            varSum.add_(var[i][0])
 
         # Check condition
         if limitOp == '>=':
