@@ -395,7 +395,7 @@ class LogicalConstrain(LcElement):
         #         varsSetup.append(var)
         varsSetup = []
 
-        var = [currentV for currentV in iter(lcVariableSet0)]
+        var = [currentV[0] for currentV in iter(lcVariableSet0)]
 
         if headConstrain or integrate:
             varsSetup.extend(var)
