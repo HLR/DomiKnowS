@@ -1762,7 +1762,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         return productSize
         
     # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False, conceptsRelations = None):
+    def calculateLcLoss(self, dn, tnorm='L',counting_tnorm=None, sample = False, sampleSize = 0, sampleGlobalLoss = False, conceptsRelations = None):
         start = perf_counter()
 
         m = None 
@@ -1785,6 +1785,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             myBooleanMethods = self.myLcLossBooleanMethods
             self.myLcLossBooleanMethods.setTNorm(tnorm)
+            if counting_tnorm:
+                self.myLcLossBooleanMethods.setCountingTNorm(counting_tnorm)
             
             self.myLogger.info('Calculating loss ')
             self.myLoggerTime.info('Calculating loss ')
