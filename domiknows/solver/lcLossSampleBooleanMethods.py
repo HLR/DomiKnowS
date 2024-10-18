@@ -196,7 +196,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         # Calculate sum 
         varSum = torch.zeros([self.sampleSize], device=self.current_device)
         if fixedVar:
-            varSum = fixedVar[0]
+            varSum = fixedVar[0].clone()
 
         for i in range(1, len(fixedVar)):
             varSum.add_(fixedVar[i])

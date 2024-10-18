@@ -32,6 +32,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--N", default=10, type=int, help="N parameter")
     parser.add_argument("--M", default=8, type=int, help="M parameter")
     parser.add_argument("--model", default="sampling", type=str, help="Model Types [Sampling/PMD]")
+    parser.add_argument("--sample_size", default=-1, type=int, help="Sample size for sampling program")
     return parser.parse_args()
 
 
@@ -58,7 +59,7 @@ def main(args: argparse.Namespace):
             inferTypes=['local/argmax'],
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             sample=True,
-            sampleSize=100,
+            sampleSize=args.sample_size,
             sampleGlobalLoss=False,
             beta=1, device='cpu', tnorm="L", counting_tnorm=args.counting_tnorm
         )
