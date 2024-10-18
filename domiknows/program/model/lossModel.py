@@ -12,7 +12,8 @@ class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
-                 tnorm='P', 
+                 tnorm='P',
+                 counting_tnorm=None,
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         """
         This function initializes a LossModel object with the given parameters and sets up the
@@ -42,6 +43,7 @@ class LossModel(torch.nn.Module):
         self.build = True
         
         self.tnorm = tnorm
+        self.counting_tnorm = counting_tnorm
         self.device = device
         
         self.sample = sample
@@ -102,7 +104,7 @@ class LossModel(torch.nn.Module):
         datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
@@ -131,7 +133,7 @@ class LossModel(torch.nn.Module):
 class PrimalDualModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm='P', device='auto'):
+    def __init__(self, graph, tnorm='P',counting_tnorm=None, device='auto'):
         """
         The above function is the constructor for a class that initializes an object with a graph,
         tnorm, and device parameters.
@@ -147,7 +149,7 @@ class PrimalDualModel(LossModel):
         :param device: The `device` parameter specifies the device on which the computations will be
         performed. It can take the following values:, defaults to auto (optional)
         """
-        super().__init__(graph, tnorm=tnorm, device=device)
+        super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
         
 class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
@@ -277,7 +279,6 @@ class SampleLossModel(torch.nn.Module):
                             if not replace_mul:
                                 loss_value = true_val.sum() / lossTensor.sum()
                                 loss_value = epsilon - ( -1 * torch.log(loss_value) )
-                                # loss_value = -1 * torch.log(loss_value) 
                                 if self.iter_step < self.warmpup:
                                     with torch.no_grad():
                                         min_val = loss_value

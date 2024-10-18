@@ -190,16 +190,16 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 elif limitOp == '==':
                     fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
         # --
-         
+         # V = 100,
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
         varSum = torch.zeros([self.sampleSize], device=self.current_device)
         if fixedVar:
-            varSum = fixedVar[0].int()
-            
+            varSum = fixedVar[0].clone()
+
         for i in range(1, len(fixedVar)):
-            varSum.add_(fixedVar[i].int())
+            varSum.add_(fixedVar[i])
 
         # Check condition
         if limitOp == '>=':
