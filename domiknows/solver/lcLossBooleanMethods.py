@@ -456,15 +456,17 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 if onlyConstrains:
                     if limit ==1:return exists_at_least_one(varSum)
                     else: return exists_at_least_s(varSum, limit)
-                countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), tZero), tOne) # min(max(varSum - limit, 0), 1)
-                
+                else:
+                    countSuccess = 1 - exists_at_least_s(varSum, limit)
+
             elif limitOp == '<=': # < limit
                 #atmostL
 
                 if onlyConstrains:
                     return exists_at_most_s(varSum, limit)
-                countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
-                    
+                else:
+                    countSuccess = 1 - exists_at_most_s(varSum, limit)
+
             if onlyConstrains:
                 countLoss = torch.sub(tOne, countSuccess)
                 return countLoss
