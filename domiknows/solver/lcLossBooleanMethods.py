@@ -457,7 +457,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                     if limit ==1:return exists_at_least_one(varSum)
                     else: return exists_at_least_s(varSum, limit)
                 else:
-                    countSuccess = 1 - exists_at_least_s(varSum, limit)
+                    if limit == 1:
+                        countSuccess = 1 - exists_at_least_one(varSum)
+                    else:
+                        countSuccess = 1 - exists_at_least_s(varSum, limit)
 
             elif limitOp == '<=': # < limit
                 #atmostL
