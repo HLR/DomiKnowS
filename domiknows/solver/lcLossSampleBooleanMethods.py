@@ -174,9 +174,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             
             return epqLoss
         else:       
-            return epqSuccess     
-    
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
+            return epqSuccess
+
+    def countVar(self, _, *var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName="COUNT"):
         # -- Consider None
         fixedVar = []
         for v in var:
@@ -190,35 +190,35 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 elif limitOp == '==':
                     fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
         # --
-         
-        limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
-       
-        # Calculate sum 
+        # V = 100,
+        limitTensor = torch.full([self.sampleSize], limit, device=self.current_device)
+
+        # Calculate sum
         varSum = torch.zeros([self.sampleSize], device=self.current_device)
         if fixedVar:
-            varSum = fixedVar[0].int()
-            
+            varSum = fixedVar[0].clone()
+
         for i in range(1, len(fixedVar)):
-            varSum.add_(fixedVar[i].int())
+            varSum.add_(fixedVar[i])
 
         # Check condition
         if limitOp == '>=':
-            #if varSum >= limit:
+            # if varSum >= limit:
             countSuccess = torch.ge(varSum, limitTensor)
         elif limitOp == '<=':
-            #if varSum <= limit:
+            # if varSum <= limit:
             countSuccess = torch.le(varSum, limitTensor)
         elif limitOp == '==':
-            #if varSum == limit:
+            # if varSum == limit:
             countSuccess = torch.eq(varSum, limitTensor)
-                
+
         if onlyConstrains:
             countLoss = torch.logical_not(countSuccess)
-            
+
             return countLoss
-        else:       
-            return countSuccess    
-        
+        else:
+            return countSuccess
+
     def fixedVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):
             return None
