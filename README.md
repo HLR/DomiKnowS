@@ -17,7 +17,7 @@ While several approaches for integrating symbolic and sub-symbolic models have b
   - [The Source of Constrains](Main%20Components/The%20Source%20of%20Constraints.md)
 - [Walkthrough Example](https://github.com/HLR/DomiKnowS/blob/Doc/Walkthrough%20Examples/): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
 - [Tutorial Examples](https://github.com/HLR/DomiKnowS/tree/Doc/Tutorial%20Examples): Simple and diverse examples are outlined with detailed explanations in a Jupyter google colab file to run.
-- [License](https://github.com/HLR/DomiKnowS/blob/Doc/Licence.md): Contains information about the license of DomiKnowS and its terms of use.
+- [License](https://github.com/HLR/DomiKnowS/blob/Doc/LICENSE.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 
 ## Contribute to DomiKnowS:
