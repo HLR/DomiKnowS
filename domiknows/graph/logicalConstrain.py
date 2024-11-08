@@ -11,27 +11,57 @@ V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
 class LcElement:
     def __init__(self, *e,  name = None):
+        from .relation import Relation
+
+        self.typeName = "Logical Element"
+        if isinstance(self, LogicalConstrain):
+            self.typeName = "Logical Constraint"
+            
         if not e:
-            myLogger.error("Logical Element initialized is empty")
-            raise LcElement.LcElementError("Logical Element initialized is empty")
+            raise LcElement.LcElementError(f"{self.typeName} is empty")
         
         updatedE = []
-        for _, eItem in enumerate(e):
-            if isinstance(eItem, (LcElement, Concept)):
-                updatedE.append(eItem)
-            elif callable(eItem):
-                newEItem = eItem.__call__()
-                updatedE.extend(newEItem)
-            elif isinstance(eItem, list):
-                updatedE.extend(eItem)
-            else:
-                updatedE.append(eItem)
+        lenE = len(e)
+        self.cardinalityException = ""
+        
+        if isinstance(self, eqL):
+            expected_types = {
+                0: (Concept, Relation, tuple),
+                1: str,
+                2: set
+            }
+            
+            for i, eItem in enumerate(e):
+                expected_type = expected_types.get(i)
+                if expected_type and isinstance(eItem, expected_type):
+                    updatedE.append(eItem)
+                else:
+                    error_message = f"{self.typeName} is incorrect - {eItem} is not a valid {i} element of the {self.typeName}"
+                    raise LcElement.LcElementError(error_message)
+        else:
+            for i, eItem in enumerate(e):
+                if isinstance(eItem, (LcElement, Concept, Relation, tuple)): # lc element without path
+                    updatedE.append(eItem)
+                elif callable(eItem): # multiclass label
+                    newEItem = eItem.__call__() # generated label
+                    updatedE.extend(newEItem)
+                elif isinstance(eItem, list): # lc element with path
+                    updatedE.extend(eItem)
+                elif isinstance(eItem, int):
+                    if i<lenE-1:
+                        self.cardinalityException = eItem
+    
+                    updatedE.append(eItem)
+                else:
+                    raise LcElement.LcElementError(f"{self.typeName} is incorrect - {eItem} is not a valid element of the {self.typeName}")
                 
         self.e = updatedE
         
         updatedE = []
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, Concept):
+            if eItem == None:
+                continue
+            if isinstance(eItem, Concept): # binary concept mapping to tuple representation
                 updatedE.append((eItem, eItem.name, None, 1))
             else:
                 updatedE.append(eItem)
@@ -44,37 +74,38 @@ class LcElement:
         conceptOrLc = None
         
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, LcElement):
+            if isinstance(eItem, (LcElement, Relation)):
                 conceptOrLc = eItem
                 break
-            elif isinstance(eItem, tuple):
+            elif isinstance(eItem, tuple): # Concept
                 if isinstance(eItem[0], Concept):
                     conceptOrLc = eItem[0]
                     break
     
         if conceptOrLc is None:
             myLogger.error("Logical Element is incorrect")
-            raise LcElement.LcElementError("Logical Element is incorrect")
+            raise LcElement.LcElementError(f"{self.typeName} {self.name} is incorrect - no concept or logical constrain found")
             
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
                 self.graph = self.__getContext(conceptOrLc)[-1]
+        elif isinstance(conceptOrLc, (Relation,)):
+            self.graph = conceptOrLc.graph
         elif isinstance(conceptOrLc, str):
             self.graph = None
         else:
             self.graph = conceptOrLc.graph
                 
         if self.graph == None:
-            myLogger.error("Logical Element initialized is not associated with graph")
-            raise LcElement.LcElementError("Logical Element initialized is not associated with graph")
-                     
+            raise LcElement.LcElementError(f"{self.typeName} is incorrect - no graph found for the {self.typeName}")
+        
         # Create Logical Element id based on number of existing Logical Element in the graph
         self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
         if name is not None:
             self.name = name
         else:
-            self.name = self.lcName
+            self.name = self.lcName            
      
     class LcElementError(Exception):
         pass
@@ -103,7 +134,7 @@ class LogicalConstrain(LcElement):
         assert self.graph is not None
         self.graph.logicalConstrains[self.lcName] = self
         
-         # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
+        # Go though constraint, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
         for e_item in self.e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False
@@ -162,8 +193,8 @@ class LogicalConstrain(LcElement):
                             else:
                                 new_v.append(v.name)
 
-                    #new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
-                    new_V.append("path={}".format(tuple(new_v)))
+                        #new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
+                        new_V.append("path={}".format(tuple(new_v)))
                 strsE.append("{}".format(tuple(new_V)))
             elif isinstance(eItem, Concept):
                 strsE.append(eItem.name)
@@ -331,143 +362,76 @@ class LogicalConstrain(LcElement):
         # Return results from created ILP constraints - 
         # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
         return rVars
-    
-    
-     # Collects combination setups of ILP variables for logical methods calls for the created Logical Constraint - recursive method
-    def _collectCombinationILPVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
-        
-        # Get set of ILP variables lists for the current variable name
-        cLcVariables = v[lcVariableName]
-        
-        # List of lists containing sets of ILP variables for particular position 
-        newLcVars = []
-        
-        # --- Update the lcVars setup with ILP variables from this iteration
-        
-        if not lcVars: # If ILP variables setup is not initialized yet - this is the first iteration of the _collectILPVariableSetups method
-            if cLcVariables is None:
-                newV = [[None]]
-                newLcVars.append(newV)
-            else:
-                for cV in cLcVariables:
-                    newV = []
-                    for cvElement in cV:
-                        if cvElement is None:
-                            pass
-                        newElement = [cvElement]
-                        newV.append(newElement)
-                    newLcVars.append(newV)
-        else: # Many ILP variables in the current set
-            for indexLcV, lcV in enumerate(lcVars):
-                newV = []
-                if cLcVariables is None:
-                    for _, lcVelement in enumerate(lcV):
-                        newLcVelement = lcVelement.copy()
-                        newLcVelement.append(None)
-                        
-                        newV.append(newLcVelement)
-                else:
-                    for cV in cLcVariables:
-                        for indexElement, lcVelement in enumerate(lcV):
-                        
-                            newLcVelement = lcVelement.copy()
-                            newLcVelement.append(cV[indexElement])
-                            
-                            newV.append(newLcVelement)
-                            
-                    newLcVars.append(newV)                
-                            
-        if lcVariableNames:
-            # Recursive call - lcVars contains currently collected ILP variables setups
-            return self._collectCombinationILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars)
+
+    def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate,
+                       logicMethodName="COUNT"):
+        try:
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
+            pass
+
+        if cLimit == None:
+            cLimit = 1
+
+        lcVariableName0 = lcVariableNames[0]  # First variable
+        lcVariableSet0 = v[lcVariableName0]
+
+        zVars = []  # Output ILP variables
+        # for i, _ in enumerate(lcVariableSet0):
+        #     varsSetup = []
+        #
+        #     var = []
+        #     for currentV in iter(v):
+        #         var.extend(v[currentV][i])
+        #
+        #     if len(var) == 0:
+        #         if not (headConstrain or integrate):
+        #             zVars.append([None])
+        #
+        #         continue
+        #
+        #     if headConstrain or integrate:
+        #         varsSetup.extend(var)
+        #     else:
+        #         varsSetup.append(var)
+        varsSetup = []
+
+        var = [currentV[0] for currentV in iter(lcVariableSet0)]
+
+        if headConstrain or integrate:
+            varsSetup.extend(var)
         else:
-            # Return collected setups
-            return newLcVars
+            varsSetup.append(var)
 
-    def createILPConstrainsCombination(self, lcName, lcFun, model, v, headConstrain):
-        if len(v) < 2:
-            myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
-            return None
-        
-        # Input variable names
-        try:
-            lcVariableNames = [e for e in iter(v)]
-        except StopIteration:
-            pass
-                
-        lcVariableName0 = lcVariableNames[0]
+        # -- Use ILP variable setup to create constrains
+        if headConstrain or integrate:
+            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains=headConstrain,
+                                                         limitOp=cOperation, limit=cLimit,
+                                                         logicMethodName=logicMethodName)])
+        else:
+            for current_var in varsSetup:
+                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains=headConstrain,
+                                                             limitOp=cOperation, limit=cLimit,
+                                                             logicMethodName=logicMethodName)])
 
-        rVars = [] # Output variables
-            
-        # Collect variables setups for ILP constraints
-        sVar = self._collectCombinationILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
-        
-        # Apply collected setups and create ILP constraint
-        for z in sVar:
-            tVars = [] # Collect ILP constraints results
-            for t in z:
-                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
-                
-            rVars.append(tVars)
-        
-        # Return results from created ILP constraints - 
-        # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
-        return rVars
-        
-
-    def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
-        try:
-            lcVariableNames = [e for e in iter(v)]
-        except StopIteration:
-            pass
-        
-        if cLimit== None:
-            cLimit
-        lcVariableName0 = lcVariableNames[0] # First variable
-        lcVariableSet0 =  v[lcVariableName0]
-
-        zVars = [] # Output ILP variables
-        
-        for i, _ in enumerate(lcVariableSet0):
-            varsSetup = []
-
-            var = []
-            for currentV in iter(v):
-                var.extend(v[currentV][i])
-                
-            if len(var) == 0:
-                if not (headConstrain or integrate):
-                    zVars.append([None])
-                    
-                continue
-            
-            if headConstrain or integrate:
-                varsSetup.extend(var)
-            else:
-                varsSetup.append(var)
-             
-            # -- Use ILP variable setup to create constrains   
-            if headConstrain or integrate:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
-                                                             logicMethodName = logicMethodName)])
-            else:
-                for current_var in varsSetup:
-                    zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
-                                                             logicMethodName = logicMethodName)])
-           
         if model is not None:
             model.update()
-            
+
         return zVars
     
-    def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
+    def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
+        
+        # Ignore value of integrate
+        integrate = True
+               
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
-        if cLimit== None:
-            cLimit
+        if cLimit == None:
+            cLimit = 1
+            
         lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
@@ -494,8 +458,10 @@ class LogicalConstrain(LcElement):
              
         # -- Use ILP variable setup to create constrains   
         if headConstrain or integrate:
-            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
-                                                         logicMethodName = logicMethodName)])
+            r = myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                     logicMethodName = logicMethodName)
+            for _ in lcVariableSet0:
+                zVars.append([r])
         else:
             for current_var in varsSetup:
                 zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
@@ -583,6 +549,9 @@ class epqL(LogicalConstrain):
      
 class eqL(LogicalConstrain):
     def __init__(self, *e, active = True, sampleEntries = False, name = None):
+        #if e is len 2 and element index 1 is of type String
+        if len(e) == 2 and isinstance(e[1], str):
+            e = (e[0],  "instanceID", e[1])  
         LogicalConstrain.__init__(self, *e, p=100)
         self.headLC = False
     

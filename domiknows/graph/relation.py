@@ -62,6 +62,7 @@ class Relation(BaseGraphTree):
             self.is_reversed = True
         self.reversed = reverse_of
         self.auto_constraint = auto_constraint
+        self.var_name = None
 
     @property
     def mode(self):
@@ -103,6 +104,10 @@ class Relation(BaseGraphTree):
     @dst.setter
     def dst(self, dst):
         self._dst = dst
+        
+    @property
+    def graph(self):
+        return self._sup
 
     def what(self):
         return {'src': self.src, 'dst': self.dst}

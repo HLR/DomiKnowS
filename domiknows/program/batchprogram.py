@@ -13,7 +13,7 @@ class BatchProgram(LearningBasedProgram):
         self.batch_size = batch_size
 
     def train_epoch(self, dataset):
-        # do not use super() because it call zero_grad for every step definitly
+        # do not use super() because it call zero_grad for every step definitely
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         self.opt.zero_grad()

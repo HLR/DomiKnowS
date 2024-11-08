@@ -12,13 +12,38 @@ class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
-                 tnorm=DataNode.tnormsDefault, 
+                 tnorm='P',
+                 counting_tnorm=None,
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+        """
+        This function initializes a LossModel object with the given parameters and sets up the
+        necessary variables and constraints.
+        
+        :param graph: The `graph` parameter is an object that represents the logical constraints of a
+        graph. It contains information about the nodes, edges, and constraints of the graph
+        :param tnorm: The `tnorm` parameter specifies the type of t-norm to be used in the model.
+        T-norms are a family of binary operations that are used to model logical conjunction (AND) in
+        fuzzy logic. The default value is 'P', which stands for the product t-norm, defaults to P
+        (optional)
+        :param sample: The `sample` parameter is a boolean flag that determines whether to use sampling
+        during training. If set to `True`, the model will use sampling to estimate the loss function. If
+        set to `False`, the model will not use sampling and will use the exact loss function, defaults
+        to False (optional)
+        :param sampleSize: The `sampleSize` parameter determines the size of the sample used for
+        training. It specifies the number of samples that will be randomly selected from the dataset for
+        each training iteration, defaults to 0 (optional)
+        :param sampleGlobalLoss: The parameter `sampleGlobalLoss` is a boolean flag that determines
+        whether to sample the global loss during training. If `sampleGlobalLoss` is set to `True`, the
+        global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
+        :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
+        be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        """
         super().__init__()
         self.graph = graph
         self.build = True
         
         self.tnorm = tnorm
+        self.counting_tnorm = counting_tnorm
         self.device = device
         
         self.sample = sample
@@ -59,6 +84,13 @@ class LossModel(torch.nn.Module):
             self.loss.reset()
 
     def get_lmbd(self, key):
+        """
+        The function `get_lmbd` returns a clamped value from a dictionary based on a given key.
+        
+        :param key: The key parameter is used to access a specific value in the lmbd dictionary
+        :return: the value of `self.lmbd[self.lmbd_index[key]]` after clamping it to a maximum value of
+        `self.lmbd_p[self.lmbd_index[key]]`.
+        """
         return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
 
     def forward(self, builder, build=None):
@@ -68,12 +100,11 @@ class LossModel(torch.nn.Module):
         if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        if (builder.needsBatchRootDN()):
-            builder.addBatchRootDN()
+        builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
@@ -97,20 +128,34 @@ class LossModel(torch.nn.Module):
         # (*out, datanode, builder)
         return lmbd_loss, datanode, builder
     
+# The `PrimalDualModel` class is a subclass of `LossModel` that implements a primal-dual optimization
+# algorithm.
 class PrimalDualModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm=DataNode.tnormsDefault, device='auto'):
-        super().__init__(graph, tnorm=tnorm, device=device)
+    def __init__(self, graph, tnorm='P',counting_tnorm=None, device='auto'):
+        """
+        The above function is the constructor for a class that initializes an object with a graph,
+        tnorm, and device parameters.
+        
+        :param graph: The `graph` parameter is the input graph that the coding assistant is being
+        initialized with. It represents the structure of the graph and can be used to perform various
+        operations on the graph, such as adding or removing nodes and edges, calculating node and edge
+        properties, and traversing the graph
+        :param tnorm: The tnorm parameter is used to specify the type of t-norm to be used in the graph.
+        A t-norm is a binary operation that generalizes the concept of conjunction (logical AND) to
+        fuzzy logic. The 'P' value for tnorm indicates that the product t-norm should, defaults to P
+        (optional)
+        :param device: The `device` parameter specifies the device on which the computations will be
+        performed. It can take the following values:, defaults to auto (optional)
+        """
+        super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
         
 class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    # def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
-    #     super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
-
     def __init__(self, graph, 
-                 tnorm=DataNode.tnormsDefault, 
+                 tnorm='P', 
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         super().__init__()
         self.graph = graph
@@ -149,12 +194,31 @@ class SampleLossModel(torch.nn.Module):
             self.loss.reset()
 
     def get_lmbd(self, key):
+        """
+        The function `get_lmbd` returns the value of `self.lmbd` at the index specified by
+        `self.lmbd_index[key]`, ensuring that the value is non-negative.
+        
+        :param key: The `key` parameter is used to access a specific element in the `self.lmbd` list. It
+        is used as an index to retrieve the corresponding value from the list
+        :return: the value of `self.lmbd[self.lmbd_index[key]]`.
+        """
         if self.lmbd[self.lmbd_index[key]] < 0:
             with torch.no_grad():
                 self.lmbd[self.lmbd_index[key]] = 0
         return self.lmbd[self.lmbd_index[key]]
 
     def forward(self, builder, build=None):
+        """
+        The `forward` function calculates the loss for a PrimalDualModel using a DataNodeBuilder and
+        returns the loss value, the DataNode, and the builder.
+        
+        :param builder: The `builder` parameter is an instance of the `DataNodeBuilder` class. It is
+        used to create a batch root data node and retrieve a data node
+        :param build: The `build` parameter is an optional argument that specifies whether the
+        `DataNodeBuilder` should be invoked or not. If `build` is `None`, then the value of `self.build`
+        is used. If `build` is `True`, then the `createBatchRootDN()` method
+        :return: three values: lmbd_loss, datanode, and builder.
+        """
         if build is None:
             build = self.build
         self.iter_step += 1
@@ -162,9 +226,8 @@ class SampleLossModel(torch.nn.Module):
         if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        if (builder.needsBatchRootDN()):
-            builder.addBatchRootDN()
-        
+        builder.createBatchRootDN()
+
 #       self.loss.reset()
 
         datanode = builder.getDataNode(device=self.device)

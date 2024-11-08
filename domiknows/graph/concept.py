@@ -3,24 +3,48 @@ from itertools import chain, product
 from typing import Type
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
-
+# from .relation import Contains, HasA, IsA
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
 class Concept(BaseGraphTree):
-    _rels = {}  # catogrory_name : creation callback
+    _rels = {}  # category_name : creation callback
+    newVariableIndex = 0
+
+    @classmethod
+    def get_new_variable_index(cls):
+        # This method returns the current value of newVariableIndex and increments it
+        index = cls.newVariableIndex
+        cls.newVariableIndex += 1
+        return index
 
     @classmethod
     def relation_type(cls, name=None):
         def update(Rel):
             if name is not None:
                 Rel.name = classmethod(lambda cls: name)
+                Rel.relation_cls_name = name
 
             def create(src, *args, auto_constraint=None, **kwargs):
                 # add one-by-one
+                if Rel.relation_cls_name == "contains":
+                    arg_names = [arg.name for arg in args]
+                    arg_names = ", ".join(arg_names)
+                    assert len(args) == 1, f"The Contains relationship defined from {src.name} concept to concepts {arg_names} is not valid. The contains relationship can only be between one source and one destination concepts."
+                elif Rel.relation_cls_name == "has_a":
+                    if args:
+                        arg_names = [arg.name for arg in args]
+                        arg_names = " ".join(arg_names)
+                    elif kwargs:
+                        arg_names = [arg.name for arg in kwargs.values()]
+                        arg_names = " ".join(arg_names)
+                    assert len(args) >= 2 or len(kwargs) >= 2, f"The HasA relationship defined from {src.name} concept to concepts {arg_names} is not valid. The HasA relationship must be between one source and at least two destination concepts."
                 rels = []
+                
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
+                    if 'is_a' in dst._out:
+                        dst = dst._out['is_a'][0].dst
                     rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
@@ -30,41 +54,82 @@ class Concept(BaseGraphTree):
 
         return update
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, batch=False):
         '''
         Declare an concept.
         '''
+        self.batch = batch
         BaseGraphTree.__init__(self, name)
+        self._in = OrderedDict()  # relation category_name : list of relation inst
+        self._out = OrderedDict()  # relation category_name : list of relation inst
+        
+        self.var_name = None
+        
+    def get_batch(self):
+        return self.batch
 
-        self._in = OrderedDict()  # relation catogrory_name : list of relation inst
-        self._out = OrderedDict()  # relation catogrory_name : list of relation inst
-
+    def get_var_name(self):
+        return self.var_name
+    
     def __str__(self):
         return self.name
     
     def __rept__(self):
         return type(self) + ":" + self.name
     
+    def assign_suggest_name(self, name=None):
+        cls = type(self)
+        if name is None:
+            name = cls.suggest_name()            
+        assert cls._names[name] == 0, f"The name {name} has been already used in this graph for a concept before, please use a unique name."
+        cls._names[name] += 1
+        self.name = name
+        cls._objs[name] = self
+        
+    def findRootGraph(self, superGraph):
+        if superGraph._sub  == None:
+            return superGraph
+        
+        return self.findRootGraph(superGraph._sub)
+    
     def processLCArgs(self, *args, conceptT=None, **kwargs):
         from domiknows.graph.logicalConstrain import eqL, V
+        
+        error = None
+        
         if len(args) > 1 and isinstance(args[1], eqL):
             nameX = args[0]
             path = (nameX, args[1])
                                     
-            return [conceptT, V(name=nameX, v=path)]
-        elif len(args) and isinstance(args[0], str):
+            return [conceptT, V(name=nameX, v=path), error]
+        
+        if len(args) > 1:
+            selfInfo = self._context[0].findConceptInfo(self)
+            
+            relation_attrs = selfInfo.get('relationAttrs', {})
+    
+            if len(relation_attrs) != len(args):
+                error = ("extraV", ) + tuple(args)
+            else:
+                newVariable = 'p' + str(600 + Concept.get_new_variable_index())
+                
+                info = {arg: V(name=None, v=(newVariable, value))  for arg, value in zip(args, relation_attrs.keys())}
+                args = (newVariable,)
+                error = ('VarMaps', info)
+
+        if len(args) and isinstance(args[0], str):
             name = args[0]
             
             if "path" in kwargs:
                 path = kwargs['path']
                 
-                return [conceptT, V(name=name, v=path)]
+                return [conceptT, V(name=name, v=path), error]
             else:
-                return [conceptT, V(name=name)]
+                return [conceptT, V(name=name), error]
         elif "path" in kwargs:
             path = kwargs['path']
                                     
-            return [conceptT, V(name=None, v=path)]
+            return [conceptT, V(name=None, v=path), error]
         else:
             return [conceptT]
 
@@ -166,10 +231,12 @@ class Concept(BaseGraphTree):
                     
                     return ecHandle
             else:
-                raise AttributeError(*e.args)
+                raise AttributeError(f"The concept {self.name} does not have an attribute with the value '{e.args}'. You should probably use a different base concept for this.")
         def handle(*args, **kwargs):
             if not args and not kwargs:
                 return self._out.setdefault(rel, [])
+            if 'name' in kwargs:
+                raise TypeError(f"You cannot name the concepts or relations in the graph, you have done this to connect {self.name} to {args[0].name}")
             return Rel(self, *args, **kwargs)
         return handle
 

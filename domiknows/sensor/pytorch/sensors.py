@@ -7,7 +7,23 @@ from ...graph import Property
 
 
 class TorchSensor(Sensor):
+    """
+    A second main sensor base class that builds on the bare sensor class and updates and propagates context based on the given data item.
+    This class must be inherited and reimplemeted and is not usable.
+    
+    Inherits from:
+    - Sensor: The base class for sensors.
+    """
     def __init__(self, *pres, edges=None, label=False, device='auto'):
+        """
+        Initializes the TorchSensor with the provided parameters.
+
+        Args:
+        - *pres: Variable-length argument list of predecessors.
+        - edges (optional): Edges associated with this sensor.
+        - label (bool, optional): Flag to indicate if this sensor is a label. Defaults to False.
+        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. Defaults to 'auto'.
+        """
         super().__init__()
         if not edges:
             edges = []
@@ -27,11 +43,25 @@ class TorchSensor(Sensor):
 
     def __call__(
         self,
-        data_item: Dict[str, Any]
+        data_item: Dict[str, Any],
+        force=False
     ) -> Any:
+        """
+        Allows instances of this class to be called as functions. Updates the context and returns data for this sensor.
+
+        Args:
+        - data_item (Dict[str, Any]): The data dictionary to process.
+        - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
+
+        Returns:
+        - Any: The data corresponding to this sensor.
+
+        Raises:
+        - Raises any exceptions that might occur during the update_context call.
+        """
         self.context_helper = data_item
         try:
-            self.update_context(data_item)
+            self.update_context(data_item, force=force)
         except Exception as ex:
             print('Error {} during updating data item {} with sensor {}'.format(ex, data_item, self.fullname))
             raise
@@ -41,6 +71,13 @@ class TorchSensor(Sensor):
         self,
         data_item: Dict[str, Any],
         force=False):
+        """
+        Updates the context of the given data item for this torch sensor. The fucntion that is callaed when __call__ is used.
+
+        Args:
+        - data_item (Dict[str, Any]): The data dictionary to update.
+        - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
+        """
         if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self]
@@ -60,6 +97,15 @@ class TorchSensor(Sensor):
 
     @staticmethod
     def non_label_sensor(sensor):
+        """
+        Checks if the provided sensor is not a label sensor.
+
+        Args:
+        - sensor: The sensor to check.
+
+        Returns:
+        - bool: True if the sensor is not a label sensor, otherwise False.
+        """
         if not isinstance(sensor, Sensor):
             return False
         elif isinstance(sensor, TorchSensor):
@@ -72,6 +118,13 @@ class TorchSensor(Sensor):
         data_item: Dict[str, Any],
         concept=None
     ) -> Any:
+        """
+        Updates the context for the predecessors of this sensor.
+
+        Args:
+        - data_item (Dict[str, Any]): The data dictionary to update context for.
+        - concept (optional): The concept associated with this sensor. Defaults to the sensor's own concept.
+        """
         concept = concept or self.concept
         for edge in self.edges:
             for sensor in edge.find(self.non_label_sensor):
@@ -81,6 +134,20 @@ class TorchSensor(Sensor):
                 sensor(data_item=data_item)
 
     def fetch_value(self, pre, selector=None, concept=None):
+        """
+        Fetches the value for a predecessor using an optional selector.
+
+        Args:
+        - pre: The predecessor to fetch the value for.
+        - selector (optional): An optional selector to find a specific value.
+        - concept (optional): The concept associated with this sensor. Defaults to the sensor's own concept.
+
+        Returns:
+        - The fetched value for the given predecessor.
+
+        Raises:
+        - Raises KeyError if the provided selector key doesn't exist.
+        """
         concept = concept or self.concept
         if selector:
             try:
@@ -91,28 +158,64 @@ class TorchSensor(Sensor):
             return self.context_helper[concept[pre]]
 
     def define_inputs(self):
+        """
+        Defines the inputs for this sensor based on its predecessors.
+        """
         self.inputs = []
         for pre in self.pres:
             self.inputs.append(self.fetch_value(pre))
 
     def forward(self,) -> Any:
+        """
+        Computes the forward pass for this torch sensor.
+
+        Raises:
+        - NotImplementedError: Indicates that subclasses should provide their implementation.
+        """
         raise NotImplementedError
 
     @property
     def prop(self):
+        """
+        Returns the superior of this sensor. This property is used to get the property associated with the sensor.
+
+        Raises:
+        - ValueError: If the sensor doesn't have a superior.
+        """
         if self.sup is None:
             raise ValueError('{} must be used with with property assignment.'.format(type(self)))
         return self.sup
 
     @property
     def concept(self):
+        """
+        Returns the concept associated with this sensor.
+
+        Raises:
+        - ValueError: If the sensor doesn't have a concept associated with it.
+        """
         if self.prop.sup is None:
             raise ValueError('{} must be used with with concept[property] assignment.'.format(type(self)))
         return self.prop.sup
 
 
 class FunctionalSensor(TorchSensor):
+    """
+    A functional sensor extending the TorchSensor with functionality for forward pass operations making it directly usable.
+
+    Inherits from:
+    - TorchSensor: A base class for torch-based sensors in the graph.
+    """
     def __init__(self, *pres, forward=None, build=True, **kwargs):
+        """
+        Initializes the FunctionalSensor with the provided parameters.
+
+        Args:
+        - *pres: Variable-length argument list of predecessors.
+        - forward (callable, optional): The forward function to use for this sensor. Defaults to None.
+        - build (bool, optional): Flag indicating whether to build the sensor immediately. Defaults to True.
+        - **kwargs: Additional keyword arguments.
+        """
         super().__init__(*pres, **kwargs)
         self.forward_ = forward
         self.build = build
@@ -122,6 +225,13 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any],
         concept=None
     ):
+        """
+        Updates the context for the predecessors of this sensor. Extends the behavior to handle more types.
+
+        Args:
+        - data_item (Dict[str, Any]): The data dictionary to update context for.
+        - concept (optional): The concept associated with this sensor. Defaults to the sensor's own concept.
+        """
         from ...graph.relation import Transformed, Relation
         concept = concept or self.concept
         for edge in self.edges:
@@ -149,6 +259,14 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any],
         force=False,
         override=True):
+        """
+        Updates the context of the given data item for this functional sensor.
+
+        Args:
+        - data_item (Dict[str, Any]): The data dictionary to update.
+        - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
+        - override (bool, optional): Flag to decide if overriding the parent node is allowed. Default is True.
+        """
         if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self]
@@ -162,6 +280,17 @@ class FunctionalSensor(TorchSensor):
             data_item[self.prop] = val  # override state under property name
 
     def fetch_value(self, pre, selector=None, concept=None):
+        """
+        Fetches the value for a predecessor using an optional selector. Extends the behavior to handle more types.
+
+        Args:
+        - pre: The predecessor to fetch the value for.
+        - selector (optional): An optional selector to find a specific value.
+        - concept (optional): The concept associated with this sensor. Defaults to the sensor's own concept.
+
+        Returns:
+        - The fetched value for the given predecessor.
+        """
         from ...graph.relation import Transformed, Relation
         concept = concept or self.concept
         if isinstance(pre, (str, Relation)):
@@ -173,12 +302,29 @@ class FunctionalSensor(TorchSensor):
         return pre
 
     def forward_wrap(self):
+        """
+        Wraps the forward method ensuring the results are on the appropriate device.
+
+        Returns:
+        - The result of the forward method, moved to the appropriate device if necessary.
+        """
         value = self.forward(*self.inputs)
         if isinstance(value, torch.Tensor) and value.device is not self.device:
             value = value.to(device=self.device)
         return value
 
     def forward(self, *inputs, **kwinputs):
+        """
+        Computes the forward pass for this functional sensor, making use of a provided forward function if available.
+
+        Args:
+        - *inputs: Variable-length argument list of inputs for the forward function.
+        - **kwinputs: Additional keyword inputs for the forward function.
+
+        Returns:
+        - The result of the forward computation.
+        - Calls the superclass forward method if no forward function was provided during initialization.
+        """
         if self.forward_ is not None:
             return self.forward_(*inputs, **kwinputs)
         return super().forward()
@@ -219,16 +365,43 @@ class TriggerPrefilledSensor(PrefilledSensor):
 
 
 class JointSensor(FunctionalSensor):
+    """
+    Represents a joint sensor that generates multiple properties.
+
+    Inherits from:
+    - FunctionalSensor: A sensor with defined forward functionality.
+    """
     def __init__(self, *args, bundle_call=False, **kwargs):
+        """
+        Initializes the JointSensor with the provided parameters.
+
+        Args:
+        - *args: Variable-length argument list.
+        - bundle_call (bool, optional): Indicates if component sensors should be called when this sensor is called.
+                                        Defaults to False.
+        - **kwargs: Additional keyword arguments.
+        """
         super().__init__(*args, **kwargs)
         self._components = None
         self.bundle_call = bundle_call
 
     @property
     def components(self):
+        """
+        Returns the list of component sensors associated with this joint sensor.
+
+        Returns:
+        - List of component sensors.
+        """
         return self._components
 
     def attached(self, sup):
+        """
+        Configures the joint sensor when attached to a parent node.
+
+        Args:
+        - sup: The parent node to which this sensor is attached.
+        """
         from ...graph.relation import Relation
         from .relation_sensors import EdgeSensor
         super().attached(sup)
@@ -245,6 +418,12 @@ class JointSensor(FunctionalSensor):
                 self.components.append(sensor)
 
     def __iter__(self):
+        """
+        Returns an iterator over the component sensors. Builds the component sensors if they haven't been built yet.
+
+        Yields:
+        - Each individual component sensor.
+        """
         self.build = False
         if self.components is None:
             self._components = []
@@ -257,6 +436,16 @@ class JointSensor(FunctionalSensor):
             yield from self.components
 
     def __call__(self, *args, **kwargs):
+        """
+        Calls the joint sensor, potentially also invoking its component sensors if `bundle_call` is set to True.
+
+        Args:
+        - *args: Variable-length argument list.
+        - **kwargs: Additional keyword arguments.
+
+        Returns:
+        - The value from the main sensor's call.
+        """
         value = super().__call__(*args, **kwargs)
         if self.bundle_call and self.components is not None:
             for sensor in self.components:
@@ -268,6 +457,14 @@ class JointSensor(FunctionalSensor):
         data_item: Dict[str, Any],
         force=False,
         override=True):
+        """
+        Updates the context of the given data item for this joint sensor.
+
+        Args:
+        - data_item (Dict[str, Any]): The data dictionary to update.
+        - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
+        - override (bool, optional): Flag to decide if overriding of the parent data is allowed. Default is True.
+        """
         super().update_context(data_item, force=force, override=override and self.components is None)
 
 

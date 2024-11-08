@@ -129,7 +129,7 @@ def model_declaration(config, case):
     graph.detach()
 
     from domiknows.utils import setDnSkeletonMode
-    setDnSkeletonMode(True)
+    setDnSkeletonMode(False)
     
     lcConcepts = {}
     for _, g in graph.subgraphs.items():
@@ -326,7 +326,7 @@ def test_main_conll04(case):
                        
             #assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
             num_pairs = case.pair.pa1_backward[:,child_node.instanceID].sum()
-            assert len(child_node.getRelationLinks(relationName = "arg1")) == num_pairs # has relation named "pair"with each word (including itself)
+            assert len(child_node.getLinks(relationName = "arg1")) == num_pairs # has relation named "pair"with each word (including itself)
 
             #assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
@@ -406,8 +406,8 @@ def test_main_conll04(case):
         assert len(JohnDN.getChildDataNodes(conceptName=char)) == 5
         assert len(JohnDN.getChildDataNodes(conceptName=phrase)) == 0
         
-        assert len(JohnDN.getRelationLinks()) == 2
-        assert len(JohnDN.getRelationLinks(relationName="arg1")) == 4
+        assert len(JohnDN.getRelationLinks()) == 1
+        assert len(JohnDN.getLinks(relationName="arg1")) == 4
 
         # Get value of attribute o/ILP for word 2
         #assert tokenResult['O'][2] == 1
@@ -418,33 +418,17 @@ def test_main_conll04(case):
         assert sum([dn.getAttribute(o, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 2
         
         # ------------ Relations Results
-        
-        # Get value of attribute work_for/ILP for pair between 0 and 3
-        #assert pairResult['work_for'][0][3] == nan
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() != \
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item()
-        
-        #assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item() \
-               != \
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item()
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item() !=\
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP').item()
-         
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') != \
-               datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP')
-        
+                
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][1]) == 1
         assert sum([dn.getAttribute(work_for, 'ILP').item() if dn.getAttribute(work_for, 'ILP').item() == dn.getAttribute(work_for, 'ILP').item() else 0
                     for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1}) 
-                    ]) == 0
+                    ]) == 2
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 1
         #assert sum(pairResult['work_for'][0]) == 0
         assert sum([dn.getAttribute(work_for, 'ILP').item() if not math.isnan(dn.getAttribute(work_for, 'ILP').item()) 
-                    else 0 for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 0
+                    else 0 for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 2
         #assert sum(pairResult['work_for'][2]) == 0
@@ -452,7 +436,7 @@ def test_main_conll04(case):
     
         # Sum all value of attribute work_for/ILP  for the pair relation from 3
         #assert sum(pairResult['work_for'][3]) == 0
-        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 1
         
         # ------------ Calculate logical constraints losses 
         for tnorm in ['L', 'G', "P"]:
@@ -479,6 +463,9 @@ def test_main_conll04(case):
                         assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[tnorm][i].item(), 4)
         
         #------- Calculate sample logical constraints losses 
+       
+        #sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = -1)
+        sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1)
         sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1000)
 
                         

@@ -22,9 +22,9 @@ setup(
     long_description_content_type='text/markdown',
     
     url='https://github.com/HLR/DomiKnowS',
-    author='Andrzej Uszok',
-    author_email='auszok@ihmc.org',
-
+    author='Andrzej Uszok, Parisa Kordjamshidi',
+    author_email='auszok@ihmc.org, kordjams@msu.edu',
+    
     packages=find_packages(include=['domiknows', 'domiknows.*', 'README.md']),
     
     install_requires=[
