@@ -23,8 +23,18 @@ jobs:
       # Checks-out the repository branch main under $GITHUB_WORKSPACE, so the workflow job can access it
       - uses: actions/checkout@v3
         with:
+          submodules: 'true'
           ref: "main"
-
+          
+      # Create Release
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          body: |
+            Changes in this Release
+            - To be provided manually later
+          
       # Sets up python3
       - uses: actions/setup-python@v4
         with:
@@ -52,3 +62,4 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+          
