@@ -398,6 +398,9 @@ class JointSensor(FunctionalSensor):
     def attached(self, sup):
         """
         Configures the joint sensor when attached to a parent node.
+        This function is also create the sensor to each component of the function
+        (e.g. component["A"] = SensorA, creating Sensor A for component A)
+        The sensor created is eitehr EdgeSensor or FunctionSensor based on the type of component name
 
         Args:
         - sup: The parent node to which this sensor is attached.
@@ -549,7 +552,7 @@ class ReaderSensor(ConstantSensor):
     def fill_data(self, data_item):
         try:
             if isinstance(self.keyword, tuple):
-                self.data = (data_item[keyword] for keyword in self.keyword)
+                self.data = tuple(data_item[keyword] for keyword in self.keyword)
             else:
                 self.data = data_item[self.keyword]
         except KeyError as e:
