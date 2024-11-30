@@ -150,7 +150,11 @@ class PrimalDualModel(LossModel):
         performed. It can take the following values:, defaults to auto (optional)
         """
         super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
-        
+
+class LeftModel(torch.nn.Module): # @daniel
+    pass
+    #TODO
+
 class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 

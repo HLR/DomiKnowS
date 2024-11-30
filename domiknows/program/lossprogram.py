@@ -8,7 +8,7 @@ from domiknows.program.model.pytorch import SolverModel
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
-from .model.lossModel import PrimalDualModel, SampleLossModel
+from .model.lossModel import PrimalDualModel, SampleLossModel, LeftModel
 from .model.base import Mode
 
 from .model.gbi import GBIModel
@@ -287,7 +287,26 @@ class PrimalDualProgram(LossProgram):
 
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
-        
+
+class LeftProgram(LossProgram):
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, Inferences, LCList=[], beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=LeftModel, beta=beta, **kwargs)
+        self.Inferences = []
+        self.LCList = LCList
+        self.lc_tensor_map = self.create_lc_tensor_map()
+
+    def create_lc_tensor_map(self):
+        """
+        Creates a dictionary mapping each LC in LCList to a learnable 1D tensor.
+        """
+        lc_tensor_map = {}
+        for lc in self.LCList:
+            tensor = torch.nn.Parameter(torch.randn(1, requires_grad=True))
+            lc_tensor_map[lc] = tensor
+        return lc_tensor_map
+
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
