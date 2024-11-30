@@ -10,7 +10,8 @@ from domiknows.sensor.pytorch.learners import TorchLearner
 from graph import get_graph
 parser = argparse.ArgumentParser(description='Check a csp structure and atmostal/atleastal constraint in domiknows')
 parser.add_argument('--colored', dest='colored', default=True,action='store_true',help="color every orb")
-parser.add_argument('--constraint', dest='constraint',default="foreach_IfL_atleastL_atmostL", choices=["None","simple_constraint","foreach_bag_existsL","foreach_bag_existsL_notL","foreach_bag_atLeastAL","foreach_bag_atMostAL"], help="Choose a constraint")
+parser.add_argument('--constraint', dest='constraint',default="foreach_IfL_atleastL_atmostL",
+                    choices=["None","simple_constraint","foreach_bag_existsL","foreach_bag_existsL_notL","foreach_bag_atLeastAL","foreach_bag_atMostAL","foreach_IfL_atleastL_bag_existsL_notL","foreach_IfL_atleastL_bag_existsL","foreach_IfL_atleastL_atmostL"], help="Choose a constraint")
 parser.add_argument('--atmostaL', dest='atmostaL',default=1,type=int)
 parser.add_argument('--atleastaL', dest='atleastaL',default=5,type=int)
 
@@ -63,13 +64,11 @@ for datanode in program.populate(dataset=dataset):
     for csp_range_datanode in datanode.getChildDataNodes():
         print(*[int(orb_node.getAttribute('<colored_orbs>',"local/softmax")[1].item()) for orb_node in csp_range_datanode.getChildDataNodes()],end=" | ")
         
-    #assert sum([int(orb_node.getAttribute('<colored_orbs>',"local/softmax")[1].item()) for orb_node in csp_range_datanode.getChildDataNodes()])==0
-    datanode.inferILPResults() 
+    datanode.inferILPResults()
         
     print("\n\nafter inference")
     print("orb color:",end="")
     for csp_range_datanode in datanode.getChildDataNodes():
         print(*[int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()],end=" | ")
 
-    #assert sum([int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()])==2
 print()
