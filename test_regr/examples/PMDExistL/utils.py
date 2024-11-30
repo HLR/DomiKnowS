@@ -7,9 +7,11 @@ from domiknows.sensor.pytorch.learners import TorchLearner
 from domiknows.program.model.base import Mode
 from domiknows.program.lossprogram import PrimalDualProgram
 
+
 class DummyLearner(TorchLearner):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.stack((torch.ones(len(x)) * 4, torch.ones(len(x)) * 6), dim=-1)
+
 
 class TestTrainLearner(nn.Module):
     def __init__(self, input_size: int):
@@ -22,17 +24,21 @@ class TestTrainLearner(nn.Module):
     def forward(self, _, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
 
+
 def return_contain(b: torch.Tensor, _: Any) -> torch.Tensor:
     return torch.ones(len(b)).unsqueeze(-1)
+
 
 def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
     return [{
         "a": [0],
         "b": [((np.random.rand(N) - np.random.rand(N))).tolist() for _ in range(M)],
-        "label": [0] * M
+        "label": [1] * M
     }]
 
-def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], num_epochs: int) -> None:
+
+def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
+                num_epochs: int, constr_loss_only: bool = False) -> None:
     program.model.train()
     program.model.reset()
     program.cmodel.train()
@@ -49,7 +55,11 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], num_e
             mloss, _, *output = program.model(data)
             closs, *_ = program.cmodel(output[1])
 
-            loss = mloss * 0 + (closs if torch.is_tensor(closs) else 0)
+            if constr_loss_only:
+                loss = mloss * 0 + (closs if torch.is_tensor(closs) else 0)
+            else:
+                loss = mloss
+
             if loss.item() < 0:
                 print("Negative loss", loss.item())
                 break
@@ -57,6 +67,7 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], num_e
                 loss.backward()
                 opt.step()
                 copt.step()
+
 
 def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_answer: Any) -> Dict[int, int]:
     program.model.eval()
