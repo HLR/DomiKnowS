@@ -151,9 +151,10 @@ class PrimalDualModel(LossModel):
         """
         super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
 
-class LeftModel(torch.nn.Module): # @daniel
+class ExecutableModel(torch.nn.Module): # @daniel
     pass
     #TODO
+
 
 class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)

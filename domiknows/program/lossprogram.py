@@ -8,7 +8,7 @@ from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
-from .model.lossModel import PrimalDualModel, SampleLossModel, LeftModel
+from .model.lossModel import PrimalDualModel, SampleLossModel, ExecutableModel
 from .model.base import Mode
 
 from .model.gbi import GBIModel
@@ -288,20 +288,11 @@ class PrimalDualProgram(LossProgram):
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
 
-class LeftProgram(LossProgram):
+class ExecutableProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(
-            self,
-            graph,
-            Model,
-            Inferences,
-            LCList: list[LeftLogicElementOutput]=[],
-            beta=1,
-            **kwargs
-        ):
-
-        super().__init__(graph, Model, CModel=LeftModel, beta=beta, **kwargs)
+    def __init__(self, graph, Model, Inferences, LCList=[], beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=ExecutableModel, beta=beta, **kwargs)
         self.Inferences = []
         self.LCList = LCList
         self.lc_tensor_map = self.create_lc_tensor_map()
