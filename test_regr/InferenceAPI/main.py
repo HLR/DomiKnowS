@@ -89,7 +89,7 @@ program = ExecutableProgram(
     loss=MacroAverageTracker(NBCrossEntropyLoss()),
     Inferences=[orL(multiplication(ycon1,ycon2),multiplication(flip(ycon1),flip(ycon2))) for _ in reader2] ,
     Labels=[1 for _ in reader2],
-    LCList=[multiplication,flip,sum_binary],
+    LCList=[multiplication,flip,sum_binary], # use only for debugging
     device='cpu'
 )
 
