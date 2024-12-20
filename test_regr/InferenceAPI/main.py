@@ -9,7 +9,7 @@ from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from domiknows.program.lossprogram import LeftProgram
+from domiknows.program.lossprogram import ExecutableProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.graph.LeftLogic import LeftLogicElement
 
@@ -20,12 +20,23 @@ Concept.clear()
 Relation.clear()
 
 with Graph(name='global') as graph:
+
     xcon = Concept(name='xcon')
 
     ycon1 = xcon(name='ycon1')
     ycon2 = xcon(name='ycon2')
 
-    zcon = xcon(name='zcon', ConceptClass=EnumConcept, values=['1', '2', '3', '4'])
+    multiplication = xcon(name="multiplicationL")
+    multiplication.has_a(multiplication_arg1=xcon, multiplication_arg2=xcon)
+
+    flip = xcon(name="flip")
+    flip.has_a(flip_arg1=xcon)
+
+    zcon = xcon(name='zcon', ConceptClass=EnumConcept, values=['0', '1', '2'])
+
+    sum_binary = zcon(name="sum_binary")
+    sum_binary.has_a(sum_arg1=xcon, sum_arg2=xcon)
+
 
 reader1 = [generate_test_case() for _ in range(data_samples)]
 reader2 = [generate_test_case() for _ in range(data_samples)]
@@ -44,28 +55,21 @@ xcon[ycon2] = ReaderSensor(keyword="y2", label=True)
 
 def text_maker(y1,y2):
     return [[str(y1.sigmoid().argmax().item()),str(y2.sigmoid().argmax().item())]]
+
 xcon["text_tensorlistofys"] = FunctionalSensor(xcon[ycon1],xcon[ycon2], forward=text_maker)
 
 def add_ys(t):
     return torch.FloatTensor([[float(t[0][0]),float(t[0][1])]])
 
 xcon["tensorlistofys"] = FunctionalSensor("text_tensorlistofys", forward=add_ys)
-xcon[zcon] = ModuleLearner("tensorlistofys", module=torch.nn.Sequential(torch.nn.Linear(2, 4), torch.nn.Linear(4, 4)))
+xcon[zcon] = ModuleLearner("tensorlistofys", module=torch.nn.Sequential(torch.nn.Linear(2, 3), torch.nn.Linear(3, 3)))
 xcon[zcon] = ReaderSensor(keyword="z", label=True)
 
-program = SolverPOIProgram(graph,poi=[xcon[ycon1],xcon[ycon2]],inferTypes=['local/softmax'],
-                           loss=MacroAverageTracker(NBCrossEntropyLoss()))
+program = SolverPOIProgram(graph,poi=[xcon[ycon1],xcon[ycon2]],inferTypes=['local/softmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
 program.train(reader1, train_epoch_num=10, Optim=lambda param: AdamW(param, lr = 1e-3,eps = 1e-6 ))
 
 #____________________________
-# y1 = 1 , y2 = 1 , [0,0,1] sumL(y1,y2) = [p1,p2,p3]
-
-sumL=LeftLogicElement(graph,"sumL")
-multiplicationL=LeftLogicElement(graph,"multiplicationL") # y1= 0, y2= 0 -> 1 [1,0,0,0] y1= 1, y2= 1 -> 4 [0,0,0,1]
-inverseL=LeftLogicElement(graph,"inverseL") # y1 =0 - > y1=1
-
-# multiplicationL(inverseL(y1),y2)
-# none learbale
+orL=LeftLogicElement(name="orL")
 
 def sumys(y1, y2):
     sum_result = y1 + y2
@@ -79,12 +83,13 @@ def sumys(y1, y2):
     return output
 
 
-program = LeftProgram(
+program = ExecutableProgram(
     graph, SolverModel, poi=[xcon[zcon]],
     inferTypes=['local/argmax'],
     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-    Inferences=[sumys(data["y1"],data["y2"]) for data in reader2] ,
-    LCList=[sumL(ycon1,ycon2) for _ in range(data_samples)],
+    Inferences=[orL(multiplication(ycon1,ycon2),multiplication(flip(ycon1),flip(ycon2))) for _ in reader2] ,
+    Labels=[1 for _ in reader2],
+    LCList=[multiplication,flip,sum_binary],
     device='cpu'
 )
 
