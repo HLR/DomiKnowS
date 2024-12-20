@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL,atMostAL,atLeastAL
+from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL,atMostAL,atLeastAL, exactL
 
 Graph.clear()
 Concept.clear()
@@ -55,6 +55,16 @@ def get_graph(constraint,atmost,atleast):
                 ifL(atLeastL(colored_orbs("y",path=("x",csp_range_contains_orbs)),atleast),
                     atMostL(colored_orbs("z",path=("x",csp_range_contains_orbs)),atmost)
                     )
+            )
+        elif constraint=='atleastAL_notexistL':
+            # 1) there must be at least 5 colored orbs total
+            # 2) there can NOT be exactly 5 colored orbs in each bag
+            atLeastAL(colored_orbs, 5)
+
+            ifL(csp_range("x"),
+                notL(
+                    exactL(colored_orbs("y",path=("x",csp_range_contains_orbs)), 5)
+                )
             )
         else:
             print("no contraint")

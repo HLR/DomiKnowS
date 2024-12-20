@@ -702,9 +702,20 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     # Create new variable
                     varCOUNT = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'])
                     if m: m.update()
-            
-                    m.addConstr(varsInfo['varSumLinExpr'] - updatedLimit <= BigM * (1 - varCOUNT), name='Count %s:'%(logicMethodName))
-                    m.addConstr(varsInfo['varSumLinExpr'] - updatedLimit >= BigM * (varCOUNT - 1), name='Count %s:'%(logicMethodName))
+
+                    # create indicator variable `GT`` that's 1 iff count > limit
+                    GT = m.addVar(vtype=GRB.BINARY, name='GT')
+                    m.addConstr(((GT == 1) >> (varsInfo['varSumLinExpr'] >= updatedLimit + 1)))
+                    m.addConstr(((GT == 0) >> (varsInfo['varSumLinExpr'] <= updatedLimit)))
+
+                    # create indicator variable `LT`` that's 1 iff count < limit
+                    LT = m.addVar(vtype=GRB.BINARY, name='LT')
+                    m.addConstr(((LT == 1) >> (varsInfo['varSumLinExpr'] <= updatedLimit - 1)))
+                    m.addConstr(((LT == 0) >> (varsInfo['varSumLinExpr'] >= updatedLimit)))
+
+                    # create indicator variable `varCOUNT` that's 1 iff count == limit
+                    m.addConstr((varCOUNT == 1) >> (varsInfo['varSumLinExpr'] == updatedLimit), name='Count %s:'%(logicMethodName))
+                    m.addConstr((varCOUNT == 0) >> (GT + LT >= 1), name='Count %s:'%(logicMethodName))
     
             if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varsInfo['varName']))
             return varCOUNT
