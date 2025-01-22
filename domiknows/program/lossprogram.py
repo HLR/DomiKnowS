@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from domiknows.program.model.pytorch import SolverModel
-
+from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
@@ -301,11 +301,21 @@ class ExecutableProgram(LossProgram):
         """
         Creates a dictionary mapping each LC in LCList to a learnable 1D tensor.
         """
-        lc_tensor_map = {}
+        # lc_tensor_map = {}
+        # for lc in self.LCList:
+        #     tensor = torch.nn.Parameter(torch.randn(1, requires_grad=True))
+        #     lc_tensor_map[lc] = tensor
+        # return lc_tensor_map
+
+        # maps from operation name to learnable tensor
+        lc_tensor_map: dict[str, torch.Tensor] = {}
         for lc in self.LCList:
+            if lc.operation_name in lc_tensor_map:
+                continue
+
             tensor = torch.nn.Parameter(torch.randn(1, requires_grad=True))
-            lc_tensor_map[lc] = tensor
-        return lc_tensor_map
+            lc_tensor_map[lc.operation_name] = tensor
+        
 
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
