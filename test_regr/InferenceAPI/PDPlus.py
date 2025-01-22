@@ -34,14 +34,15 @@ with Graph(name='global') as graph:
     people_arg1,location_arg1 = pair.has_a(people_arg1=people, location_arg1=location)
     work_in = pair(name="work_in")
 
-    #andL(andL(p1_is_real("x"),work_in("z",path=('x', people_arg.reversed))),andL(p2_is_real("y"),work_in("t",path=('y', people_arg.reversed))))
-    #orL(andL(p2_is_real("x"),work_in("z",path=('x', people_arg.reversed))),andL(p3_is_real("y"),work_in("t",path=('y', people_arg.reversed))))
+    andL(andL(p1_is_real("x"),work_in("z",path=('x', people_arg1.reversed))),andL(p2_is_real("y"),work_in("t",path=('y', people_arg1.reversed))))
+    orL(andL(p2_is_real("x"),work_in("z",path=('x', people_arg1.reversed))),andL(p3_is_real("y"),work_in("t",path=('y', people_arg1.reversed))))
 
 data_list = generate_dataset(sample_num=100)
 data_list = reader_format(data_list)
 
 
 people["embedding"] = ReaderSensor(keyword="person1")
+location["embedding"] = ReaderSensor(keyword="location1")
 p1["embedding"] = ReaderSensor(keyword="person1")
 p2["embedding"] = ReaderSensor(keyword="person2")
 p3["embedding"] = ReaderSensor(keyword="person3")
