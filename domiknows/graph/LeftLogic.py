@@ -183,7 +183,7 @@ class LeftLogicElement():
 
         return f"{self.name}({','.join(input_names)})"
 
-    def __call__(self, *inputs: Concept | LeftLogicElementOutput) -> LeftLogicElementOutput:
+    def __call__(self, *inputs):
         """
         For a set of input concepts, create a new concept representing the output of a learnable operation on the inputs.
         """

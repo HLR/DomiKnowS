@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import random
 from torch.utils.data import Dataset, DataLoader
-from NER_utils import generate_people_and_locations, PeopleLocationsDataset, collate_fn ,is_real_person,work_for
+from NER_utils import PeopleLocationsDataset, collate_fn ,is_real_person,work_for, generate_dataset
 
 criterion = nn.BCELoss()
 
@@ -99,30 +99,8 @@ def main():
     is_real_person.to(device)
     work_for.to(device)
 
-    sample_num = 3000
-    data_list = []
-    for i in range(sample_num):
-        data = generate_people_and_locations()
-        while not data["condition_1"]==True:
-            data = generate_people_and_locations()
-        data_list.append(data)
-    for i in range(sample_num):
-        data = generate_people_and_locations()
-        while not data["condition_1"]==False:
-            data = generate_people_and_locations()
-        data_list.append(data)
-    for i in range(sample_num):
-        data = generate_people_and_locations()
-        while not data["condition_2"]==True:
-            data = generate_people_and_locations()
-        data_list.append(data)
-    for i in range(sample_num):
-        data = generate_people_and_locations()
-        while not data["condition_2"]==False:
-            data = generate_people_and_locations()
-        data_list.append(data)
-
-    random.shuffle(data_list)
+    sample_num=1000
+    data_list= generate_dataset(sample_num=sample_num)
 
     train_ratio = 0.8
     train_size = int(train_ratio * sample_num)

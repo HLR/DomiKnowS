@@ -38,6 +38,8 @@ with Graph(name='global') as graph:
     sum_binary.has_a(sum_arg1=xcon, sum_arg2=xcon)
 
 
+
+
 reader1 = [generate_test_case() for _ in range(data_samples)]
 reader2 = [generate_test_case() for _ in range(data_samples)]
 
@@ -87,7 +89,7 @@ program = ExecutableProgram(
     graph, SolverModel, poi=[xcon[zcon]],
     inferTypes=['local/argmax'],
     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-    Inferences=[orL(multiplication(ycon1,ycon2),multiplication(flip(ycon1),flip(ycon2))) for _ in reader2] ,
+    Inferences=[orL(multiplication(ycon1,ycon2),multiplication(flip(ycon1),flip(ycon2))) for j in reader2] ,
     Labels=[1 for _ in reader2],
     LCList=[multiplication,flip,sum_binary], # use only for debugging
     device='cpu'

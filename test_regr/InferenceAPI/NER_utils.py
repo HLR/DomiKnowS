@@ -141,6 +141,51 @@ def collate_fn(batch):
     )
 
 
+def generate_dataset(sample_num=1000):
+    data_list = []
+    for i in range(sample_num):
+        data = generate_people_and_locations()
+        while not data["condition_1"] == True:
+            data = generate_people_and_locations()
+        data_list.append(data)
+    for i in range(sample_num):
+        data = generate_people_and_locations()
+        while not data["condition_1"] == False:
+            data = generate_people_and_locations()
+        data_list.append(data)
+    for i in range(sample_num):
+        data = generate_people_and_locations()
+        while not data["condition_2"] == True:
+            data = generate_people_and_locations()
+        data_list.append(data)
+    for i in range(sample_num):
+        data = generate_people_and_locations()
+        while not data["condition_2"] == False:
+            data = generate_people_and_locations()
+        data_list.append(data)
+
+    random.shuffle(data_list)
+    return data_list
+
+
+def reader_format(data_list):
+    reader_list = []
+    for data in data_list:
+        reader_item = {
+            "person1": [data["people"][0]['person_1_tensor']],
+            "person2": [data["people"][1]['person_2_tensor']],
+            "person3": [data["people"][2]['person_3_tensor']],
+            "person1_label": [data["people"][0]['person_1_label']=="real"],
+            "person2_label": [data["people"][1]['person_2_label']=="real"],
+            "person3_label": [data["people"][2]['person_3_label']=="real"],
+            "location1": [data["locations"][0]['location_1_tensor']],
+            "location2": [data["locations"][1]['location_2_tensor']],
+            "location3": [data["locations"][2]['location_3_tensor']],
+            "condition_1": [data["condition_1"]],
+            "condition_2": [data["condition_2"]],
+        }
+        reader_list.append(reader_item)
+    return reader_list
 
 is_real_person = nn.Sequential(
     nn.Linear(2, 16),
