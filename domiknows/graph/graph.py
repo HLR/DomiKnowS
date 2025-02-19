@@ -3,6 +3,7 @@ from itertools import chain
 import inspect
 from distutils.dep_util import newer
 
+
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
     from property import Property
@@ -64,10 +65,18 @@ class Graph(BaseGraphTree):
         self._batch = None
         self.cacheRootConcepts = {}
 
+
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
         yield from self._concepts
         yield from self._relations
+
+    def __enter__(self):
+        parent_obj = super().__enter__()
+        from . import Concept
+        constraint = Concept(name="constraint")
+        self.constraint = constraint
+        return parent_obj
 
       
     def findRootConceptOrRelation(self, relationConcept):

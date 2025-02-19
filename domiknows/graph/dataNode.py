@@ -1765,6 +1765,7 @@ class DataNode:
         Returns:
         - None: This function operates in-place and does not return a value.
         """
+
         if not _conceptsRelations:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference.')
         else:
@@ -2585,7 +2586,7 @@ class DataNodeBuilder(dict):
                     incomingLinks[dn] = 1
 
         # Find the root dataNodes which have no incoming links
-        newDnsRoots = [dn for dn in allDns if incomingLinks[dn] == 0 or not dn.impactLinks]
+        newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks) and not str(dn)=="constraint 0"]
         newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # if newDnsRoots is empty
