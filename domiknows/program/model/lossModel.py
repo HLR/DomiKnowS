@@ -127,7 +127,8 @@ class LossModel(torch.nn.Module):
         
         # (*out, datanode, builder)
         return lmbd_loss, datanode, builder
-    
+
+
 # The `PrimalDualModel` class is a subclass of `LossModel` that implements a primal-dual optimization
 # algorithm.
 class PrimalDualModel(LossModel):
@@ -151,9 +152,58 @@ class PrimalDualModel(LossModel):
         """
         super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
 
-class ExecutableModel(torch.nn.Module): # @daniel
-    pass
-    #TODO
+
+class LabeledLossModel(LossModel):
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, 
+                 label_key='constraint_labels',
+                 tnorm='P',
+                 counting_tnorm=None,
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+        
+        self.label_key = label_key
+
+        super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss, device=device)
+
+    def forward(self, builder, build=None):
+        if build is None:
+            build = self.build
+            
+        if not build and not isinstance(builder, DataNodeBuilder):
+            raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
+        
+        builder.createBatchRootDN()
+        datanode = builder.getDataNode(device=self.device)
+
+        # Get the constraint labels
+        labels = datanode.getAttribute(self.label_key)
+        
+        # Call the loss calculation returns a dictionary, keys are matching the constraints
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
+        
+        losses = []
+
+        # print('constr_loss', constr_loss)
+        # print(datanode.getAttributes())
+
+        for i, (key, loss_dict) in enumerate(constr_loss.items()):
+            if key not in self.constr:
+                continue
+            
+            loss = loss_dict['lossTensor']
+
+            losses.append(loss * labels[i])
+        
+        loss_scalar = sum(losses)
+
+        # print(loss, loss_scalar)
+        # print('P(x) =', np.round(datanode.getAttribute('<x>/local/softmax').detach().numpy(), 3))
+        # print('P(y) =', np.round(datanode.getAttribute('<y>/local/softmax').detach().numpy(), 3))
+        # print('P(z) =', np.round(datanode.getAttribute('<z>/local/softmax').detach().numpy(), 3))
+
+        # (*out, datanode, builder)
+        return loss_scalar, datanode, builder
 
 
 class SampleLossModel(torch.nn.Module):

@@ -8,7 +8,7 @@ from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
-from .model.lossModel import PrimalDualModel, SampleLossModel, ExecutableModel
+from .model.lossModel import PrimalDualModel, SampleLossModel, LabeledLossModel
 from .model.base import Mode
 
 from .model.gbi import GBIModel
@@ -199,15 +199,23 @@ class LossProgram(LearningBasedProgram):
                     self.logger.info('closs is not zero')
                 else:
                     loss = mloss
+
+            print('loss =', loss)
+            # print(self.copt, loss, iter, c_warmup_iters)
+
             if self.opt is not None and loss:
                 loss.backward()
+
+                # for x in self.model.parameters():
+                #     print(x.grad)
+
                 self.opt.step()
                 iter += 1
             if (
                 self.copt is not None and
                 loss and
-                iter > c_warmup_iters and
-                iter - c_update_iter > c_update_freq
+                iter > c_warmup_iters
+                # iter - c_update_iter > c_update_freq
             ):
                 # NOTE: Based on the face the gradient of lambda in dual
                 #       is reversing signs of their gradient in primal,
@@ -288,34 +296,11 @@ class PrimalDualProgram(LossProgram):
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
 
-class ExecutableProgram(LossProgram):
+class LabeledLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, Inferences, LCList=[], beta=1, **kwargs):
-        super().__init__(graph, Model, CModel=ExecutableModel, beta=beta, **kwargs)
-        self.Inferences = []
-        self.LCList = LCList
-        self.lc_tensor_map = self.create_lc_tensor_map()
-
-    def create_lc_tensor_map(self):
-        """
-        Creates a dictionary mapping each LC in LCList to a learnable 1D tensor.
-        """
-        # lc_tensor_map = {}
-        # for lc in self.LCList:
-        #     tensor = torch.nn.Parameter(torch.randn(1, requires_grad=True))
-        #     lc_tensor_map[lc] = tensor
-        # return lc_tensor_map
-
-        # maps from operation name to learnable tensor
-        lc_tensor_map: dict[str, torch.Tensor] = {}
-        for lc in self.LCList:
-            if lc.operation_name in lc_tensor_map:
-                continue
-
-            tensor = torch.nn.Parameter(torch.randn(1, requires_grad=True))
-            lc_tensor_map[lc.operation_name] = tensor
-        
+    def __init__(self, graph, Model, beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=LabeledLossModel, beta=beta, **kwargs)
 
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
