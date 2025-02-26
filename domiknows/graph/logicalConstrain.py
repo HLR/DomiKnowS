@@ -111,7 +111,7 @@ class LcElement:
         pass
     
     def __str__(self):
-        return self.__class__.__name__
+        return self.lcName
     
     def __repr__(self):
         return  self.lcName + '(' + self.__class__.__name__ + ')'

@@ -153,54 +153,73 @@ class PrimalDualModel(LossModel):
         super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
 
 
-class LabeledLossModel(LossModel):
+class InferenceModel(LossModel):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
-                 label_key='constraint_labels',
                  tnorm='P',
+                 loss=torch.nn.BCELoss,
                  counting_tnorm=None,
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
-        
-        self.label_key = label_key
+
+        # The concept where all the labels for the constraints are stored as properties
+        self.constraint_concept = graph.constraint
+
+        self.graph = graph
 
         super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss, device=device)
+
+        # Initialize loss function (needs to be after module initialization)
+        self.loss_func = loss()
 
     def forward(self, builder, build=None):
         if build is None:
             build = self.build
             
         if not build and not isinstance(builder, DataNodeBuilder):
-            raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
+            raise ValueError('InferenceModel must be invoked with `build` on or with provided DataNode Builder.')
         
         builder.createBatchRootDN()
+
         datanode = builder.getDataNode(device=self.device)
 
+        # Try to get the datanode for the constraints concept
+        constraint_dn_search = builder.findDataNodesInBuilder(select=self.constraint_concept.name)
+        if len(constraint_dn_search) == 0:
+            raise ValueError(f'Constraint datanode (for concept {self.constraint_concept.name}) not found.')
+        elif len(constraint_dn_search) > 1:
+            raise ValueError(f'Multiple constraint datanodes (for concept {self.constraint_concept.name}) found: found {len(constraint_datanode)}, expected one.')
+
+        constraint_datanode = constraint_dn_search[0]
+
         # Get the constraint labels
-        labels = datanode.getAttribute(self.label_key)
+        # read_labels will be of format: {'LC{n}/label': label_value}
+        read_labels = constraint_datanode.getAttributes()
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
+        # Has the format {'LC{n}': {'lossTensor': tensor, ...}
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
         
+        print('calculated loss:', constr_loss)
+        print('retrieved labels:', read_labels)
+
+        # Compile losses
         losses = []
-
-        # print('constr_loss', constr_loss)
-        # print(datanode.getAttributes())
-
-        for i, (key, loss_dict) in enumerate(constr_loss.items()):
-            if key not in self.constr:
+        for i, (lcName, loss_dict) in enumerate(constr_loss.items()):
+            if lcName not in self.constr:
                 continue
             
-            loss = loss_dict['lossTensor']
+            # (??) Assumes that the soft logic conversion of the constraint
+            # is (1 - loss) for the constraint
+            constr_out = 1 - loss_dict['lossTensor']
 
-            losses.append(loss * labels[i])
-        
+            # Target for for constraint lcName
+            lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
+
+            # Calcluate loss
+            losses.append(self.loss_func(constr_out, lbl))
+
         loss_scalar = sum(losses)
-
-        # print(loss, loss_scalar)
-        # print('P(x) =', np.round(datanode.getAttribute('<x>/local/softmax').detach().numpy(), 3))
-        # print('P(y) =', np.round(datanode.getAttribute('<y>/local/softmax').detach().numpy(), 3))
-        # print('P(z) =', np.round(datanode.getAttribute('<z>/local/softmax').detach().numpy(), 3))
 
         # (*out, datanode, builder)
         return loss_scalar, datanode, builder

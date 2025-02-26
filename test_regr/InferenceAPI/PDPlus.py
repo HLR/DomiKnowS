@@ -2,9 +2,9 @@ import logging, torch
 from domiknows.graph import Graph, Concept, Relation, andL, orL
 from NER_utils import generate_dataset, reader_format
 from domiknows.program.loss import NBCrossEntropyLoss
-from domiknows.program.lossprogram import PrimalDualProgram
+from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from domiknows.sensor.pytorch import ModuleSensor
+from domiknows.sensor.pytorch import ModuleSensor, FunctionalSensor
 from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
 from domiknows.program.metric import MacroAverageTracker
 
@@ -87,5 +87,10 @@ pair3[people_arg3.reversed,location_arg3.reversed] = JointSensor(p3["embedding"]
 pair3[work_in3] = ModuleSensor(p3["embedding"],l3["embedding"],module=work_in_model,device="cpu")
 
 # program = PrimalDualProgram(graph,SolverModel,poi=[p1,p2,p3,l1,l2,l3,pair1,pair2,pair3,graph.constraint],loss=MacroAverageTracker(NBCrossEntropyLoss()),device="cpu")
-program = PrimalDualProgram(graph,SolverModel,poi=[p1,p2,p3,l1,l2,l3,pair1,pair2,pair3,graph.constraint],device="cpu")
-program.train(data_list, epochs=1, lr=0.001)
+program = InferenceProgram(
+    graph,
+    SolverModel,
+    poi=[p1,p2,p3,l1,l2,l3,pair1,pair2,pair3,graph.constraint],
+    device="cpu"
+)
+program.train(data_list, epochs=1, lr=0.001, c_warmup_iters=0)

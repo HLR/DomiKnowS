@@ -2586,7 +2586,8 @@ class DataNodeBuilder(dict):
                     incomingLinks[dn] = 1
 
         # Find the root dataNodes which have no incoming links
-        newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks) and not str(dn)=="constraint 0"]
+        # newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
+        newDnsRoots = newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks) and not str(dn)=="constraint 0"]
         newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # if newDnsRoots is empty
@@ -2929,6 +2930,7 @@ class DataNodeBuilder(dict):
             keyDataName (str): The name of the key for which the data node is being updated.
 
         """
+        # print(keyDataName)
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
