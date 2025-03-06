@@ -183,7 +183,7 @@ class FireRescueEnv(gym.Env):
 
 
 def evaluate_policy(env, model, num_episodes=3, render=False):
-
+    mean_reward = 0
     for ep in range(num_episodes):
         obs, _ = env.reset()
         done = False
@@ -196,12 +196,14 @@ def evaluate_policy(env, model, num_episodes=3, render=False):
             # Model predicts action
             action, _states = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
+            mean_reward += reward
             done = terminated or truncated
             step_count += 1
             if render:
                 env.render()
         if render:
             print(f"Episode {ep + 1} finished in {step_count} steps.\n")
+    return mean_reward / num_episodes
 
 env = FireRescueEnv(max_steps=12)
 env_test = FireRescueEnv(max_steps=12)
@@ -223,20 +225,20 @@ print("Episode finished.\n")
 model = DQN(
     policy=MlpPolicy,
     env=env,
-    verbose=1,
+    verbose=0,
     learning_rate=1e-3,
     buffer_size=10000,
     learning_starts=1000,
     batch_size=32,
     gamma=0.95,
-    train_freq=4,  # train every 4 steps
+    train_freq=4,  # train every 2 steps
     target_update_interval=500,
     exploration_fraction=0.2,
     exploration_final_eps=0.01,
     tensorboard_log=None
 )
 
-model.learn(total_timesteps=200*1000)
+model.learn(total_timesteps=2000*1000,progress_bar=True)
 
 print("\nBehavior AFTER training (DQN policy):")
-evaluate_policy(env_test, model, num_episodes=1, render=True)
+print(evaluate_policy(env_test, model, num_episodes=10, render=True))
