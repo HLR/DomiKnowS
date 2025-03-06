@@ -123,16 +123,17 @@ class FireRescueEnv(gym.Env):
         elif rescue_action == 5:
             pass
 
-        if self._manhattan_distance(new_fire_pos, new_rescue_pos) > 2:
-            new_fire_pos = self.fire_pos
-            new_rescue_pos = self.rescue_pos
+        reward = 0
+        terminated = False
+        truncated = False
 
         self.fire_pos = new_fire_pos
         self.rescue_pos = new_rescue_pos
 
-        reward = 0
-        terminated = False
-        truncated = False
+        if self._manhattan_distance(self.fire_pos, self.rescue_pos) > 2:
+            reward -= 1
+        if self.grid[self.rescue_pos[0], self.rescue_pos[1]] in [1, 3]:
+            reward -= 1
 
         if fire_action == 5:
             cell_val = self.grid[self.fire_pos[0], self.fire_pos[1]]
