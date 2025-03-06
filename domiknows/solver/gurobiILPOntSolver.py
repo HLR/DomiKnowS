@@ -1876,6 +1876,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     lossTensor += entry
                     
                 current_lcLosses['lossTensor'] = lossTensor
+                current_lcLosses['conversionTensor'] = 1 - lossTensor
                 if lossTensor != None and torch.is_tensor(lossTensor):
                     current_lcLosses['loss'] = torch.nansum(lossTensor).item()
                 else:
@@ -1987,6 +1988,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 # --- Calculate sample loss for lc variables
                 current_lcLosses['lossTensor'] = []
+                current_lcLosses['conversionTensor'] = []
                 current_lcLosses['lcSuccesses'] = []
                 current_lcLosses['lcVariables'] = []
                 current_lcLosses['loss'] = []
@@ -2010,6 +2012,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         currentLossTensor, _ = self.calulateSampleLossForVariable(currentLcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
                         
                         current_lcLosses['lossTensor'].append(currentLossTensor)
+                        current_lcLosses['conversionTensor'].append(1-currentLossTensor)
                         current_lcLosses['lcVariables'].append(currentLcVariables)
     
                         currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
@@ -2023,6 +2026,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
     
                     current_lcLosses['lossTensor'].append(lossTensor)
+                    current_lcLosses['conversionTensor'].append(1 - lossTensor)
                     current_lcLosses['lcSuccesses'].append(lcSuccesses)
                     current_lcLosses['lcVariables'].append(lcVariables)
             
