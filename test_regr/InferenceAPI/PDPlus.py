@@ -41,7 +41,7 @@ with Graph(name='global') as graph:
     constarint1 = andL(andL(p1_is_real("x"),work_in1("z",path=('x', people_arg1.reversed))),andL(p2_is_real("y"),work_in2("t",path=('y', people_arg2.reversed))))
     constarint2 = orL(andL(p2_is_real("x"),work_in2("z",path=('x', people_arg2.reversed))),andL(p3_is_real("y"),work_in3("t",path=('y', people_arg3.reversed))))
 
-data_list = generate_dataset(sample_num=1)
+data_list = generate_dataset(sample_num=1000)
 data_list = reader_format(data_list)
 
 p1["embedding"] = ReaderSensor(keyword="person1")
@@ -91,6 +91,7 @@ program = InferenceProgram(
     graph,
     SolverModel,
     poi=[p1,p2,p3,l1,l2,l3,pair1,pair2,pair3,graph.constraint],
-    device="cpu"
+    device="cpu",
+    tnorm='G'
 )
-program.train(data_list, epochs=1, lr=0.001, c_warmup_iters=0)
+program.train(data_list, epochs=1, lr=1e-4, c_warmup_iters=0)

@@ -209,9 +209,8 @@ class InferenceModel(LossModel):
             if lcName not in self.constr:
                 continue
             
-            # (??) Assumes that the soft logic conversion of the constraint
-            # is (1 - loss) for the constraint
-            constr_out = 1 - loss_dict['lossTensor']
+            # Get the t-norm translated output of the constraint
+            constr_out = loss_dict['conversionTensor']
 
             # Target for for constraint lcName
             lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
