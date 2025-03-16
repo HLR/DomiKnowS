@@ -78,6 +78,8 @@ class Graph(BaseGraphTree):
         self.constraint = constraint
         return parent_obj
 
+    def get_constraint_concept(self):
+        return self.constraint
       
     def findRootConceptOrRelation(self, relationConcept):
         # If the result is already in cache, return it

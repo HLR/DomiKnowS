@@ -2598,7 +2598,8 @@ class DataNodeBuilder(dict):
         if not getProductionModeStatus():
             _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
         if newDnsRoots:
-            if str(newDnsRoots[0])=="constraint 0": newDnsRoots = newDnsRoots[1:]+[newDnsRoots[0]]
+            if newDnsRoots[0].ontologyNode._is_constraint_concept(): newDnsRoots = newDnsRoots[1:]+[newDnsRoots[0]]
+
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
         return
