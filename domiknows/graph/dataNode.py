@@ -2586,19 +2586,20 @@ class DataNodeBuilder(dict):
                     incomingLinks[dn] = 1
 
         # Find the root dataNodes which have no incoming links
-        # newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
-        newDnsRoots = newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks) and not str(dn)=="constraint 0"]
+        newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
         newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # if newDnsRoots is empty
         if not newDnsRoots:
             newDnsRoots = allDns
-            #newDnsRoots = sorted(newDnsRoots, key=lambda dn: incomingLinks[dn], reverse=True)
             newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # Set the updated root list
         if not getProductionModeStatus():
             _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
+        if newDnsRoots:
+            if newDnsRoots[0].ontologyNode._is_constraint_concept(): newDnsRoots = newDnsRoots[1:]+[newDnsRoots[0]]
+
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
         return
