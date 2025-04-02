@@ -116,6 +116,7 @@ if __name__ == '__main__':
             num_epochs=20,
             operations=['summation', 'subtraction', 'multiplication', 'division'],
             lr=1e-3,
+            temp=2.0
         )
 
         results = loop(config, trainloader, validloader)
