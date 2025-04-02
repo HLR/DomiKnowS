@@ -23,6 +23,17 @@ def get_accuracy_iter(
         net: torch.nn.Module,
         device: str
     ) -> tuple[float, int]:
+    '''
+    Get digit classification accuracy using samples from a DataLoader.
+
+    Input:
+        dataloader: DataLoader object.
+        net: model to be evaluated.
+        device: str indicating device to use (e.g., cpu).
+    
+    Output:
+        tuple of accuracy and total number of samples.
+    '''
 
     correctness_all = []
 
@@ -50,7 +61,22 @@ def loop(
         config: TrainingConfig,
         trainloader: torch.utils.data.DataLoader,
         validloader: torch.utils.data.DataLoader
-    ) -> dict[list[dict[str, list]]]:
+    ) -> list[dict[str, list]]:
+    '''
+    Trains and collects metrics across all operations (specified in config.operations).
+
+    Input:
+        config: TrainingConfig object specifying training hyperparameters.
+        trainloader: DataLoader for training data.
+        validloader: DataLoader for validation data.
+    
+    Output:
+        list of metrics across all epochs & operations.
+        
+        Each dictionary in the list corresponds to metrics for a single epoch.
+        The `operation` key indicates the operation (e.g., 'summation', 'subtraction', etc.)
+        being evaluated.
+    '''
 
     loss = torch.nn.MSELoss()
 
@@ -59,17 +85,18 @@ def loop(
     all_metrics = []
 
     for operation in config.operations:
+        # perform a training run for this operation
         net = Net().to(config.device)
         optim = torch.optim.Adam(net.parameters(), lr=config.lr)
 
         for epoch_idx in range(num_epochs):
             metrics_epoch = {
-                'operation': [],
+                'operation': [], # summation, subtraction, multiplication, division
                 'epoch_idx': [],
                 'iter_idx': [],
-                'loss_summation': [],
-                'correct_digit0': [],
-                'correct_digit1': []
+                'loss_summation': [], # training loss across iters
+                'correct_digit0': [], # training accuracy across iters
+                'correct_digit1': [] # training accuracy across iters
             }
 
             total = len(trainloader) // batch_size
