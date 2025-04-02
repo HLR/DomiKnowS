@@ -2,7 +2,7 @@
 See `proposed_graph.py`.
 
 ## Running mnist-arithmetic with integer approximations
-`python run.py --device {cpu, cuda}` runs all four methods for approximating mnist-sum with integer values. Metrics across all operations/epochs are saved to `results/` by default (see: `training.py`).
+`python run.py --device {cpu, cuda}` runs all four methods for approximating mnist-arithmetic with integer values. Metrics across all operations/epochs are saved to `results/` by default (see: `training.py`).
 
 - `ste_separate_gumbel`: Straight-through estimator of only the one-hot operation w/ Gumbel noise (see below).
 - `ste_separate`: Straight-through estimator of only the one-hot operation w/o Gumbel noise
