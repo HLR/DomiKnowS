@@ -171,7 +171,7 @@ def main(args):
                                     augmented=args.train_file.upper() == "SPARTUN",
                                     batch_size=args.batch_size,
                                     boolQL=boolQ,
-                                    rule=args.text_rules)
+                                    rule_text=args.text_rules)
 
     test_file = "human_test.json" if args.test_file.upper() == "HUMAN" \
         else "test.json"
@@ -180,7 +180,7 @@ def main(args):
                                    size=args.test_size,
                                    augmented=False,
                                    batch_size=args.batch_size,
-                                   rule=args.text_rules)
+                                   rule_text=args.text_rules)
 
     eval_file = "DataSet/human_dev.json" if args.test_file.upper() == "HUMAN" \
         else "DataSet/boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/dev_Spartun.json"
@@ -190,7 +190,7 @@ def main(args):
                                 augmented=False,
                                 batch_size=args.batch_size,
                                 boolQL=boolQ,
-                                rule=args.text_rules)
+                                rule_text=args.text_rules)
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
     if args.loaded:
         program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})

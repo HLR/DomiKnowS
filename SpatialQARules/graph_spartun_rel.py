@@ -28,8 +28,8 @@ with Graph('spatial_QA_rule') as graph:
     inside = question(name="inside")
     cover = question(name="cover")
     contain = question(name="contain")
-    # answer_class = question(name="answer_class", ConceptClass=EnumConcept,
-    #                         values=["yes", "no"])
+    output_for_loss = question(name="output_for_loss")
+
     # Only one label of opposite concepts
     exactL(left, right)
     exactL(above, below)
@@ -52,9 +52,9 @@ with Graph('spatial_QA_rule') as graph:
         ifL(andL(ans2('x'), existsL(inverse('s', path=('x', inverse)))),
             ans1(path=('s', inv_question2)))
 
-    # Only inverse one way
-    inverse_list2 = [(near, near), (far, far), (touch, touch), (disconnected, disconnected), (overlap, overlap),
-                     (coveredby, inside), (cover, contain)]
+    # 2 PMD : = entropy + beta * constraint_loss ( Train with no-constraint first then working on)
+    # symmetric
+    inverse_list2 = [(near, near), (far, far), (touch, touch), (disconnected, disconnected), (overlap, overlap)]
     for ans1, ans2 in inverse_list2:
         ifL(andL(ans1('x'), existsL(inverse('s', path=('x', inverse)))),
             ans2(path=('s', inv_question2)))
@@ -64,6 +64,7 @@ with Graph('spatial_QA_rule') as graph:
     tran_quest1, tran_quest2, tran_quest3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     transitive_1 = [left, right, above, below, behind, front, inside, contain]
+
     for rel in transitive_1:
         ifL(andL(rel('x'),
                  existsL(transitive("t", path=('x', transitive))),
@@ -104,3 +105,13 @@ with Graph('spatial_QA_rule') as graph:
                      rel2(path=('to', tran_topo_quest3))
                      ),
                 rel2(path=('to', tran_topo_quest4)))
+
+    tran_topo_3_1 = [left, right, above, below, behind, front, near, far, disconnected]
+    tran_topo_3_2 = [contain, cover]
+    for rel1 in tran_topo_3_1:
+        for rel2 in tran_topo_3_2:
+            ifL(andL(rel1('x'),
+                     existsL(tran_topo('to', path=('x', tran_topo))),
+                     rel1(path=('to', tran_topo_quest2)),
+                     rel2(path=('to', tran_topo_quest3))),
+                rel1(path=('to', tran_topo_quest4)))
