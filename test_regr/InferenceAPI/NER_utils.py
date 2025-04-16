@@ -5,6 +5,7 @@ import random
 from torch.utils.data import Dataset, DataLoader
 
 
+
 def generate_people_and_locations():
     def is_real(tensor):
         return (tensor[0] > 0 and tensor[1] > 0) or (tensor[0] < 0 and tensor[1] < 0)
@@ -172,17 +173,17 @@ def reader_format(data_list):
     reader_list = []
     for data in data_list:
         reader_item = {
-            "person1": [data["people"][0]['person_1_tensor']],
-            "person2": [data["people"][1]['person_2_tensor']],
-            "person3": [data["people"][2]['person_3_tensor']],
+            "person1": [data["people"][0]['person_1_tensor'].tolist()],
+            "person2": [data["people"][1]['person_2_tensor'].tolist()],
+            "person3": [data["people"][2]['person_3_tensor'].tolist()],
             "person1_label": [data["people"][0]['person_1_label']=="real"],
             "person2_label": [data["people"][1]['person_2_label']=="real"],
             "person3_label": [data["people"][2]['person_3_label']=="real"],
-            "location1": [data["locations"][0]['location_1_tensor']],
-            "location2": [data["locations"][1]['location_2_tensor']],
-            "location3": [data["locations"][2]['location_3_tensor']],
-            "condition_1": [data["condition_1"]],
-            "condition_2": [data["condition_2"]],
+            "location1": [data["locations"][0]['location_1_tensor'].tolist()],
+            "location2": [data["locations"][1]['location_2_tensor'].tolist()],
+            "location3": [data["locations"][2]['location_3_tensor'].tolist()],
+            "condition_1": [data["condition_1"].item() if isinstance(data["condition_1"], torch.Tensor) else data["condition_1"]],
+            "condition_2": [data["condition_2"].item() if isinstance(data["condition_2"], torch.Tensor) else data["condition_2"]],
         }
         reader_list.append(reader_item)
     return reader_list
