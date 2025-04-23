@@ -20,6 +20,9 @@ class Net(torch.nn.Module):
         self.norm = nn.LayerNorm(256)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if len(x.shape) == 1:
+            x = x.unsqueeze(0)
+
         batch_size = x.shape[0]
 
         x = x.reshape(batch_size, 1, 28, 28)

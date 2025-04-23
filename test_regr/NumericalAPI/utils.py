@@ -19,3 +19,26 @@ def batch_iterator(
 
     if len(batch) > 0:
         yield batch
+
+
+def call_once(init_f: Callable) -> Callable:
+    """
+    Decorator, when applied to a function, will result in that function
+    only being able to be called once.
+    Any calls after the first one uses the value cached from the first call.
+    """
+    obj = None
+
+    def _try_call(*args, **kwargs):
+        nonlocal obj
+
+        if obj is not None:
+            print('using cached')
+            return obj
+
+        print('calling init')
+        obj = init_f(*args, **kwargs)
+
+        return obj
+
+    return _try_call

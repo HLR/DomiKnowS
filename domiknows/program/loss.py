@@ -131,3 +131,9 @@ class NBCrossEntropyIMLoss(BCEWithLogitsIMLoss):
         target = target.to(dtype=torch.long)
         target = F.one_hot(target, num_classes=num_classes)
         return super().forward(input, inference, target, weight=weight)
+
+
+class MSELoss(torch.nn.MSELoss):
+    def forward(self, input, target, *args, **kwargs):
+        target = target.float()
+        return super().forward(input, target, *args, **kwargs)

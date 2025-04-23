@@ -16,12 +16,27 @@ def make_sum(samples, do_eval=False):
         'summation': torch.tensor([[sum(map(lambda s: s[1], samples))]]),
         'multiplication': torch.tensor([[samples[0][1] * samples[1][1]]]),
         'subtraction': torch.tensor([[samples[0][1] - samples[1][1]]]),
-        'division': torch.tensor([[samples[0][1] // samples[1][1]]]) if samples[1][1] != 0 else None,
+        'division': torch.tensor([[samples[0][1] / samples[1][1]]]) if samples[1][1] != 0 else None,
         'digit': torch.tensor([samples[0][1], samples[1][1]]),
         'eval': torch.tensor(do_eval)
     }
 
-def get_readers(num_train, num_valid = 1000, num_test = 5000):
+def make_sum_graph(samples, do_eval=False):
+    '''
+    Data generation for graph-run.py
+    '''
+    return {
+        'pixels_1': samples[0][0].unsqueeze(0),
+        'pixels_2': samples[1][0].unsqueeze(0),
+        'summation': torch.tensor([[sum(map(lambda s: s[1], samples))]]),
+        'multiplication': torch.tensor([[samples[0][1] * samples[1][1]]]),
+        'subtraction': torch.tensor([[samples[0][1] - samples[1][1]]]),
+        'division': torch.tensor([[samples[0][1] / samples[1][1]]]) if samples[1][1] != 0 else None,
+        'digit': torch.tensor([samples[0][1], samples[1][1]]),
+        'eval': torch.tensor(do_eval)
+    }
+
+def get_readers(num_train, num_valid = 1000, num_test = 5000, sample_maker=make_sum):
     transform = transforms.Compose([transforms.ToTensor(),
                               transforms.Normalize((0.5,), (0.5,)),
                               Flatten(0)
@@ -40,28 +55,28 @@ def get_readers(num_train, num_valid = 1000, num_test = 5000):
         sampler=train_ids[:num_valid * 2],
         shuffle=False,
         batch_size=2,
-        collate_fn=make_sum
+        collate_fn=sample_maker
     )
     trainloader = DataLoader(
         trainset,
         sampler=train_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=make_sum
+        collate_fn=sample_maker
     )
     validloader = DataLoader(
         trainset,
         sampler=valid_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=lambda x: make_sum(x, do_eval=True)
+        collate_fn=lambda x: sample_maker(x, do_eval=True)
     )
     testloader = DataLoader(
         testset,
         sampler=test_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=lambda x: make_sum(x, do_eval=True)
+        collate_fn=lambda x: sample_maker(x, do_eval=True)
     )
 
     return trainloader, trainloader_mini, validloader, testloader
