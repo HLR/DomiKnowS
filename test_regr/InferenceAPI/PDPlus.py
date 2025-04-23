@@ -74,12 +74,13 @@ class PeopleModel(torch.nn.Module):
     def __init__(self, size):
         super().__init__()
         self.size = size
-        self.layer = torch.nn.Linear(self.size, 256)
-        self.layer2 = torch.nn.Linear(256, 2)
+        self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 256),
+                                         torch.nn.Sigmoid(),
+                                         torch.nn.Linear(256, 2))
 
     def forward(self, p):
         # print(self.layer.weight)
-        return self.layer2(self.layer(p[0])).unsqueeze(0)
+        return self.layer(p[0]).unsqueeze(0)
 
 
 is_real_person = PeopleModel(2).to("cpu")
@@ -96,12 +97,13 @@ class WorkModel(torch.nn.Module):
     def __init__(self, size):
         super().__init__()
         self.size = size
-        self.layer = torch.nn.Linear(self.size, 256)
-        self.layer2 = torch.nn.Linear(256, 2)
+        self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 256),
+                                         torch.nn.Sigmoid(),
+                                         torch.nn.Linear(256, 2))
 
     def forward(self, p, l):
         # print(self.layer.weight)
-        return self.layer2(self.layer(torch.cat([p[0], l[0]]))).unsqueeze(0)
+        return self.layer(torch.cat([p[0], l[0]])).unsqueeze(0)
 
 work_in_model = WorkModel(4).to("cpu")
 pair[people_arg.reversed, location_arg.reversed] = JointSensor(forward=lambda *_: (torch.ones(1, 1), torch.ones(1, 1)))
@@ -168,7 +170,7 @@ print("Training Size :", N*4, file=output_file)
 print("Acc train before training:", check_constraints_acc(program, train), file=output_file)
 print("Acc test before training:", check_constraints_acc(program, test), file=output_file)
 # print(list(program.model.parameters()))
-program.train(train, Optim=lambda param: torch.optim.AdamW(param, 1e-5), train_epoch_num=30, c_lr=1e-4, c_warmup_iters=-1, device="cpu")
+program.train(train, Optim=lambda param: torch.optim.AdamW(param, 1e-3), train_epoch_num=30, c_lr=1e-4, c_warmup_iters=-1, device="cpu")
 print("Acc train after training:", check_constraints_acc(program, train), file=output_file)
 print("Acc test after training:", check_constraints_acc(program, test), file=output_file)
 # print(list(program.model.parameters()))
