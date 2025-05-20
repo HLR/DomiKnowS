@@ -23,18 +23,26 @@ except ImportError:
     # Log messages about pycocotools unavailability will be handled in toBbox_from_mask
 
 # --- Global Constants (Placeholders - Define accurately for CLEVR) ---
-g_attribute_concepts: Dict[str, List[str]] = {
+g_attribute_concepts = {
     'color': ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
     'material': ['rubber', 'metal'],
     'shape': ['cube', 'sphere', 'cylinder'],
     'size': ['small', 'large']
 }
 
-g_relational_concepts: Dict[str, List[str]] = {
-    'left': ['left'],
-    'right': ['right'],
-    'front': ['front'],
-    'behind': ['behind']
+g_relational_concepts = {
+    'spatial_relation': ['left', 'right', 'front', 'behind']
+}
+
+g_synonyms = {
+    "thing": ["thing", "object"],
+    "sphere": ["sphere", "ball", "spheres", "balls"],
+    "cube": ["cube", "block", "cubes", "blocks"],
+    "cylinder": ["cylinder", "cylinders"],
+    "large": ["large", "big"],
+    "small": ["small", "tiny"],
+    "metal": ["metallic", "metal", "shiny"],
+    "rubber": ["rubber", "matte"],
 }
 
 g_last_op_to_question_type: Dict[str, str] = {
@@ -503,7 +511,8 @@ class CLEVRDatasetFilterableView:
             return ' '.join([str(op.get('type', op.get('function'))) for op in program])
         def filt(q_metainfo: Dict[str, Any]) -> bool:
             program_str = convert_program_to_str(q_metainfo["program"])
-            if "query" in program_str or "same_" in program_str or "relate" in program_str:
+            if "query" in program_str or "same_" in program_str or "relate" in program_str or "than" in program_str or "count" in program_str:
+            # if "query" in program_str or "than" in program_str or "count" in program_str:
                 return False
             return True        
         return self.filter(filt, f'filter-program-type-concept-only') 
