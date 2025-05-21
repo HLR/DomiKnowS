@@ -241,6 +241,8 @@ class PoiModel(TorchModel):
             if output_sensor.label:
                 # two targets, skip
                 continue
+
+            print(time.time() - start)
             yield output_sensor, target_sensor
 
     def reset(self):
@@ -330,6 +332,9 @@ class PoiModel(TorchModel):
         loss = 0
         metric = {}
         
+        # import time
+        # counter = 0
+        # start = time.time()
         for prop in self.poi:
             # make sure the sensors are evaluated
             if run:
@@ -352,6 +357,8 @@ class PoiModel(TorchModel):
                         if local_metric is not None:
                             metric[(*sensors,)] = local_metric
         
+        # print(time.time() - start, counter)
+
         return loss, metric
 
 class SolverModel(PoiModel):
@@ -417,11 +424,30 @@ class SolverModel(PoiModel):
         model
         :return: the `datanode` object.
         """
-        # import time
-        # start = time.time()
+
+        from ...graph.executable import LogicDataset
+        from ...graph.logicalConstrain import LogicalConstrain
+        import time
+
+        # Get current lc if we're doing executable logic
+        # (so we can skip all the other LCs when iterating through properties)
+        curr_lc = None
+        execute_lc_key = LogicDataset.curr_lc_key
+        if execute_lc_key in builder:
+            curr_lc = builder[execute_lc_key]
+
+        start = time.time()
         for i, prop in enumerate(self.poi):
+            if isinstance(prop.prop_name, LogicalConstrain):
+                if prop.prop_name.lcName != curr_lc:
+                    continue
+
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
+
+        end = time.time()
+        print("Time taken for inference after datanode creation: ", end-start)
+        # print(len(self.poi))
 #             for output_sensor, target_sensor in self.find_sensors(prop):
 #             # make sure the sensors are evaluated
 #                 output = output_sensor(builder)
@@ -453,8 +479,6 @@ class SolverModel(PoiModel):
                 # sub_end = time.time()
                 # print("Time taken for inference of type ", infertype, " : ", sub_end-sub_start)
     #         print("Done with the inference")
-        # end = time.time()
-        # print("Time taken for inference after datanode creation: ", end-start)
         return datanode
 
     def populate(self, builder, run=True):

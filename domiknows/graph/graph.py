@@ -64,6 +64,7 @@ class Graph(BaseGraphTree):
         self._relations = OrderedDict()
         self._batch = None
         self.cacheRootConcepts = {}
+        self.constraint = None
 
 
     def __iter__(self):
@@ -73,12 +74,18 @@ class Graph(BaseGraphTree):
 
     def __enter__(self):
         parent_obj = super().__enter__()
-        from . import Concept
-        constraint = Concept(name="constraint")
-        self.constraint = constraint
+
+        if self.constraint is None:
+            from . import Concept
+            constraint = Concept(name="constraint")
+            self.constraint = constraint
+
         return parent_obj
 
     def get_constraint_concept(self):
+        if self.constraint is None:
+            raise ValueError('Constraint has not been defined yet, initialize the Graph by calling with Graph(...) first.')
+
         return self.constraint
       
     def findRootConceptOrRelation(self, relationConcept):
@@ -629,6 +636,8 @@ class Graph(BaseGraphTree):
         This method performs clean-up operations like mapping variable names and 
         validating logical constraints. It is automatically called when exiting the 
         'with' block of the context manager.
+
+        Needs to allow for repeat calls.
     
         Args:
         exc_type (type): The type of the exception that caused the context manager to exit.
@@ -1044,3 +1053,66 @@ class Graph(BaseGraphTree):
         iri (str): The IRI of the ontology. Default is None.
         local (str): The local identification of the ontology. Default is None.
     """
+
+    def compile_logic(
+        self,
+        data,
+        logic_keyword = 'constraint',
+        logic_label_keyword = 'label',
+    ):
+        '''
+        Takes a dataset containing keys `logic_keyword` and `logic_label_keyword` and
+        converts it to a LogicDataset and adds the expressions to the graph.
+        Using the LogicDataset during e.g., training lets you switch between these constraints.
+
+        data: and iterable of dicts containing the keys specified by `logic_keyword` and `logic_label_keyword`
+        '''
+
+        from .executable import LogicDataset, add_keyword, get_full_funcs
+        from ..sensor.pytorch.sensors import ReaderSensor
+        import importlib
+
+        # maps concept names to objects
+        # concept *names* are used in the read constraints *not* the variable names
+        concepts_map = self.what()['concepts']
+
+        lc_name_list = []
+        with self:
+            for i, data_item in enumerate(data):
+                if logic_keyword not in data_item:
+                    raise ValueError(f'Invalid data_item at index {i}: must contain keys {logic_keyword} and {logic_label_keyword} but instead just found: {data_item.keys()}')
+
+                lc_string = data_item[logic_keyword] # e.g., andL(x, y)
+
+                # set name of constraint in expression string
+                constr_reader_key = LogicDataset.KEYWORD_FMT.format(index=i)
+
+                # e.g., andL(x, y, name='_constraint_0')
+                lc_string_fmt = add_keyword(lc_string, 'name', constr_reader_key)
+                
+                # e.g., domiknows.graph.logicalConstrain.andL(x, y, name='_constraint_0')
+                lc_string_fmt = get_full_funcs(lc_string_fmt)
+
+                # execute the constraint in the graph context
+                c = eval(
+                    lc_string_fmt,
+                    {
+                        'domiknows': importlib.import_module('domiknows'), # add domiknows into the namespace
+                        **concepts_map
+                    }
+                )
+
+                self.constraint[c] = ReaderSensor(
+                    keyword=constr_reader_key,
+                    is_constraint=True,
+                    label=True
+                )
+
+                lc_name_list.append(str(c))
+        
+        return LogicDataset(
+            data,
+            lc_name_list,
+            logic_keyword=logic_keyword,
+            logic_label_keyword=logic_label_keyword
+        )

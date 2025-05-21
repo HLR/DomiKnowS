@@ -163,7 +163,7 @@ class InferenceModel(LossModel):
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
 
         # The concept where all the labels for the constraints are stored as properties
-        self.constraint_concept = graph.constraint
+        self.constraint_concept = graph.get_constraint_concept()
 
         self.graph = graph
 
@@ -173,6 +173,9 @@ class InferenceModel(LossModel):
         self.loss_func = loss()
 
     def forward(self, builder, build=None):
+        import time
+        start = time.time()
+
         if build is None:
             build = self.build
             
@@ -180,7 +183,6 @@ class InferenceModel(LossModel):
             raise ValueError('InferenceModel must be invoked with `build` on or with provided DataNode Builder.')
         
         builder.createBatchRootDN()
-
         datanode = builder.getDataNode(device=self.device)
 
         # Try to get the datanode for the constraints concept
@@ -195,13 +197,29 @@ class InferenceModel(LossModel):
         # Get the constraint labels
         # read_labels will be of format: {'LC{n}/label': label_value}
         read_labels = constraint_datanode.getAttributes()
+
+        # Get active constraints based on given constraint labels
+        print('read_labels', read_labels)
+        active_lc_names = set(
+            x.split('/')[0] # TODO: parse this better?
+            for x in read_labels
+        )
+
+        # Set active/inactive constraints
+        for lc_name, lc in self.graph.logicalConstrains.items():
+            assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
+            
+            if lc_name in active_lc_names:
+                lc.active = True
+            else:
+                lc.active = False
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         # Has the format {'LC{n}': {'lossTensor': tensor, ...}
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
-        
+
         print('calculated loss:', constr_loss)
-        print('retrieved labels:', read_labels)
+        # print('retrieved labels:', read_labels)
 
         # Compile losses
         losses = []
@@ -215,10 +233,18 @@ class InferenceModel(LossModel):
             # Target for for constraint lcName
             lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
 
+            # Match shapes
+            # TODO: what's the expected shape for constr_out and lbl?
+            assert len(constr_out.shape) <= 2
+            if len(constr_out.shape) == 2:
+                lbl = lbl.unsqueeze(0)
+
             # Calcluate loss
-            losses.append(self.loss_func(constr_out, lbl))
+            losses.append(self.loss_func(constr_out.float(), lbl)) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)
+
+        print('InferenceModel forward time:', time.time() - start)
 
         # (*out, datanode, builder)
         return loss_scalar, datanode, builder
