@@ -65,6 +65,7 @@ class Graph(BaseGraphTree):
         self._batch = None
         self.cacheRootConcepts = {}
         self.constraint = None
+        self.varContext = None # None before calling `with graph...`, dictionary after
 
 
     def __iter__(self):
@@ -660,7 +661,9 @@ class Graph(BaseGraphTree):
         from .relation import IsA, HasA
     
         # --- Iterate through all local variables in that frame
+        self.varContext = {} # used for logical expression compilation
         for var_name, var_value in frame.f_locals.items():
+            self.varContext[var_name] = var_value
             # Check if any of them are instances of the Concept class or Relation subclass
             if isinstance(var_value, (Concept, HasA, IsA)):
                 # If they are, and their var_name attribute is not already set,
@@ -1059,7 +1062,8 @@ class Graph(BaseGraphTree):
         data,
         logic_keyword = 'constraint',
         logic_label_keyword = 'label',
-        extra = None
+        extra_namespace_values = {},
+        verbose = False
     ):
         '''
         Takes a dataset containing keys `logic_keyword` and `logic_label_keyword` and
@@ -1067,16 +1071,19 @@ class Graph(BaseGraphTree):
         Using the LogicDataset during e.g., training lets you switch between these constraints.
 
         data: and iterable of dicts containing the keys specified by `logic_keyword` and `logic_label_keyword`
+
+        extra_namespace_values: dict[str, Any], any values added to this dictionary get added to the namespace used when executing the logical expressions (the variable names are the keys).
         '''
 
         from .executable import LogicDataset, add_keyword, get_full_funcs
         from ..sensor.pytorch.sensors import ReaderSensor
         import importlib
 
+        if self.varContext is None:
+            print('Recorded variable context is None: make sure to initialize any Concepts you need in the graph first (by calling `with graph:`).')
+
         # maps concept names to objects
         # concept *names* are used in the read constraints *not* the variable names
-        concepts_map = self.what()['concepts']
-
         lc_name_list = []
         with self:
             for i, data_item in enumerate(data):
@@ -1094,14 +1101,19 @@ class Graph(BaseGraphTree):
                 # e.g., domiknows.graph.logicalConstrain.andL(x, y, name='_constraint_0')
                 lc_string_fmt = get_full_funcs(lc_string_fmt)
 
+                target_namespace = {
+                    'domiknows': importlib.import_module('domiknows'), # add domiknows into the namespace
+                    **self.varContext,
+                    **extra_namespace_values
+                }
+
+                if verbose:
+                    print(f'executing {lc_string_fmt} in namespace {target_namespace}')
+
                 # execute the constraint in the graph context
-                concepts_map['image_object_contains']=extra
                 c = eval(
                     lc_string_fmt,
-                    {
-                        'domiknows': importlib.import_module('domiknows'), # add domiknows into the namespace
-                        **concepts_map
-                    }
+                    target_namespace
                 )
 
                 self.constraint[c] = ReaderSensor(
