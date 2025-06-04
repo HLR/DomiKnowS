@@ -302,6 +302,48 @@ class InferenceProgram(LossProgram):
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
 
+    def evaluate_condition(self, evaluate_data, device="cpu"):
+        acc = 0
+        total = 0
+
+        for datanode in self.populate(evaluate_data, device=device):
+            verify_constrains = datanode.verifyResultsLC()
+
+            if not verify_constrains:
+                continue
+
+            # This might be a better way for this to finding the label, but this work
+            find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
+            if len(find_constraints_label) < 1:
+                print("No Constraint Labels found")
+                continue
+
+            find_constraints_label = find_constraints_label[0]
+            constraint_labels_dict = find_constraints_label.getAttributes()
+            active_lc_name = set(x.split('/')[0] for x in constraint_labels_dict)
+
+            for lc_name, lc in self.graph.logicalConstrains.items():
+                assert lc_name == str(lc)  # TODO: where does lc_name come from? is it == str(lc)?
+
+                if lc_name in active_lc_name:
+                    lc.active = True
+                else:
+                    lc.active = False
+            # Getting label of constraints and convert to 0-1
+            verify_constrains = {k: v for k, v in verify_constrains.items() if k in active_lc_name}
+
+            condition_list = [1 if verify_constrains[lc]["satisfied"] == 100.0 else 0 for lc in verify_constrains]
+            constraint_labels = [int(constraint_labels_dict[lc + "/label"].item()) for lc in active_lc_name]
+            acc += int(constraint_labels == condition_list)
+            total += 1
+
+        if total == 0:
+            print("No valid constraints found")
+            return -1
+
+        return acc / total
+
+
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
 

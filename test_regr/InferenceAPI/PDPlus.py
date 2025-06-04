@@ -168,6 +168,7 @@ def check_constraints_acc(cur_program, cur_data):
 output_file = open("results.txt", "a")
 # print(list(program.model.parameters()))
 print("Training Size :", N*4, file=output_file)
+program.evaluate_condition(test)
 print("Acc train before training:", check_constraints_acc(program, train), file=output_file)
 print("Acc test before training:", check_constraints_acc(program, test), file=output_file)
 # print(list(program.model.parameters()))
