@@ -16,7 +16,7 @@ from langchain_openai import ChatOpenAI
 #  'shape': ['cube', 'sphere', 'cylinder'],
 #  'size': ['small', 'large']}
 
-def create_graph(dataset,sample_num):
+def create_graph(dataset):
     llm_model = ChatOpenAI(model="gpt-4o", temperature=0.1, api_key=os.environ["OPENAI_API_KEY"], )
     graph_text = """from domiknows.graph import Graph, Concept\nfrom domiknows.graph.logicalConstrain import ifL, andL, existsL\n\nwith Graph('image_graph') as graph:\n
 \timage = Concept(name='image')
@@ -30,7 +30,7 @@ def create_graph(dataset,sample_num):
         graph_text+='\n'
 
     executions = []
-    for i in range(sample_num):
+    for i in range(len(dataset)):
         current_instance = dataset[i]
         execution = create_execution_existL(current_instance['program'],i)
         executions.append(execution)

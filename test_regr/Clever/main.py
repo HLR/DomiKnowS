@@ -11,11 +11,14 @@ import pickle
 from pathlib import Path
 from dataset import make_dataset, default_image_transform
 import os.path as osp
+from modules import ResNetPatcher
 
 MAIN_PATH      = "train"
 CACHE_DIR      = Path("dataset_cache")
 NUM_INSTANCES  = 10
 PICKLE_PROTO   = pickle.HIGHEST_PROTOCOL
+DUMMY = False
+device = "cpu"
 
 CACHE_DIR.mkdir(exist_ok=True)
 
@@ -34,7 +37,7 @@ def build_dataset():
     return ds
 
 dataset = []
-for idx in range(NUM_INSTANCES):
+for idx in range(1,2):
     cache_file = CACHE_DIR / f"instance_{idx}.pkl"
 
     if cache_file.exists():
@@ -50,19 +53,24 @@ for idx in range(NUM_INSTANCES):
                 pickle.dump(ds[idx_], f, protocol=PICKLE_PROTO)
                 print(f"cached to {cache_file}")
 
-questions_executions, graph,image,object,image_object_contains,attribute_names_dict  = create_graph(dataset,NUM_INSTANCES)
+questions_executions, graph,image,object,image_object_contains,attribute_names_dict  = create_graph(dataset)
 
 for i in range(len(dataset)):
     dataset[i]["logic_str"] = questions_executions[i]
     dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])])
 
-image["image"]= FunctionalReaderSensor(keyword="image",forward=lambda data: [data])
-object["emb"]= ReaderSensor(keyword="objects")
+image["pil_image"]= FunctionalReaderSensor(keyword="pil_image",forward=lambda data: [data])
+
+object["bounding_boxes"]= ReaderSensor(keyword="objects_raw")
 object["properties"]= ReaderSensor(keyword="all_objects")
+
+if not DUMMY:
+    model = ResNetPatcher(resnet_model_name='dummy', pretrained=True, device=device)
+    object["emb"] = FunctionalSensor(image["pil_image"],"bounding_boxes", forward=model)
 
 def return_contain(b, _):
     return torch.ones(len(b)).unsqueeze(-1)
-object[image_object_contains] = EdgeSensor(object["emb"], image["image"], relation=image_object_contains, forward=return_contain)
+object[image_object_contains] = EdgeSensor(object["bounding_boxes"], image["pil_image"], relation=image_object_contains, forward=return_contain)
 
 class DummyLinearLearner(TorchLearner):
     def __init__(self, *pre,current_attribute=None):
@@ -78,19 +86,19 @@ class DummyLinearLearner(TorchLearner):
                 result[idx, 0] = 1000
         return result
 
-
-
 def dummy_label_reader(label):
     return torch.ones(len(label)).unsqueeze(-1)
 
 for attr_name,attr_variable in attribute_names_dict.items():
-    object[attr_variable] = DummyLinearLearner(image_object_contains,"properties",current_attribute=attr_name)
-    #object[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(4,2))
+    if DUMMY:
+        object[attr_variable] = DummyLinearLearner(image_object_contains,"properties",current_attribute=attr_name)
+    else:
+        object[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(2048,2).to(device),device=device)
     #object[attr_variable] = FunctionalSensor(image_object_contains, forward=dummy_label_reader, label=True)
 
 dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label')
-program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",tnorm='G')
+program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device=device,tnorm='G')
 #program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
-program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device="cpu")
-acc = program.evaluate_condition(dataset, device="cpu")
+program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device=device)
+acc = program.evaluate_condition(dataset, device=device)
 print("Accuracy on dataset: {:.2f}".format(acc * 100))

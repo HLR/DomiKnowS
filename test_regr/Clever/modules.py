@@ -52,7 +52,7 @@ class ResNetPatcher(torch.nn.Module):
 
     def forward(self, image: Image, bboxes_xyxy: List[Union[List[List[float]], np.ndarray]]) -> List[List[torch.Tensor]]:
 
-
+        image=image[0]
         all_features: List[torch.Tensor] = []
         for bbox in bboxes_xyxy:
             x_min, y_min, x_max, y_max = map(int, bbox)  # Ensure integer coordinates for cropping
@@ -68,6 +68,4 @@ class ResNetPatcher(torch.nn.Module):
 
             all_features.append(features.squeeze().cpu())  # Remove batch dim and move to CPU
 
-        return {
-            "object_features": all_features,
-        }
+        return torch.stack(all_features)
