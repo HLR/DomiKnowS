@@ -242,7 +242,7 @@ class PoiModel(TorchModel):
                 # two targets, skip
                 continue
 
-            print(time.time() - start)
+            #print(time.time() - start)
             yield output_sensor, target_sensor
 
     def reset(self):

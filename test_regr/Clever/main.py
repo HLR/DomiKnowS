@@ -1,9 +1,12 @@
 import torch
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner, TorchLearner
-from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor
 from graph import create_graph
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
+from domiknows.program import SolverPOIProgram
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import pickle
 from pathlib import Path
 from dataset import make_dataset, default_image_transform
@@ -53,7 +56,7 @@ for i in range(len(dataset)):
     dataset[i]["logic_str"] = questions_executions[i]
     dataset[i]["logic_label"] = torch.tensor([1.0])
 
-image["image"]= ReaderSensor(keyword="image")
+image["image"]= FunctionalReaderSensor(keyword="image",forward=lambda data: [data])
 object["location"]= ReaderSensor(keyword="objects")
 
 def return_contain(b, _):
@@ -70,15 +73,14 @@ class DummyLinearLearner(TorchLearner):
         result[:, 1] = 1000
         return result
 
+def label_reader(label):
+    return torch.ones(len(label)).unsqueeze(-1)
+
 for attr_name,attr_variable in attribute_names_dict.items():
     object[attr_variable] = DummyLinearLearner(image_object_contains)
+    #object[attr_variable] = FunctionalSensor(image_object_contains, forward=label_reader, label=True)
 
-transformed_dataset = graph.compile_logic(
-    dataset,
-    logic_keyword='logic_str',
-    logic_label_keyword='logic_label',
-)
-
+dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label',)
 program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",tnorm='G')
-
-program.train(transformed_dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device="cpu")
+#program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
+program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device="cpu")
