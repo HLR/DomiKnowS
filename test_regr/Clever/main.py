@@ -76,6 +76,7 @@ class DummyLinearLearner(TorchLearner):
                 result[idx, 1] = 1000
             else:
                 result[idx, 0] = 1000
+        print('model output argmax:', result.argmax(axis=1))
         return result
 
 
@@ -88,9 +89,9 @@ for attr_name,attr_variable in attribute_names_dict.items():
     #object[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(4,2))
     #object[attr_variable] = FunctionalSensor(image_object_contains, forward=dummy_label_reader, label=True)
 
-dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label')
+dataset = graph.compile_logic(dataset[:3], logic_keyword='logic_str',logic_label_keyword='logic_label', verbose=True)
 program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",tnorm='G')
 #program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
-program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device="cpu")
-acc = program.evaluate_condition(dataset, device="cpu")
+program.train(dataset,epochs=1,lr=1e-4,c_warmup_iters=0,device="cpu")
+# acc = program.evaluate_condition(dataset, device="cpu")
 print("Accuracy on dataset: {:.2f}".format(acc * 100))

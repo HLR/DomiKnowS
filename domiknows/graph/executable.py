@@ -122,6 +122,7 @@ class LogicDataset(Sequence[data_type]):
     def __getitem__(self, index: int) -> data_type:
         data_item = self.data[index]
         curr_lc_name = self.lc_name_list[index]
+        print('----------- getting sample')
         return {
             # store the label in the datanode with key self.KEYWORD_FMT
             # this indicates which constraint to use

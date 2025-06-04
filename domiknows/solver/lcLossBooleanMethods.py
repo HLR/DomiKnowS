@@ -137,12 +137,15 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             andSuccess = torch.clone(var[0])
             for v in var[1:]:
                 andSuccess.mul_(v)
+        
 
         if onlyConstrains:
             andLoss = 1 - andSuccess
-        
+
+            print('andL inputs:', var, '\toutputs:', andLoss)
             return andLoss       
         else:
+            print('andL inputs:', var, '\toutputs:', andSuccess)
             return andSuccess
     
     def or2Var(self, _, var1, var2, onlyConstrains = False):
@@ -193,9 +196,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         if onlyConstrains:
             orLoss = torch.sub(tOne, orSuccess) # 1 - orSuccess
-                
+            
+            print('orL inputs:', var, '\toutputs:', orLoss)
             return orLoss
-        else:            
+        else:
+            print('orL inputs:', var, '\toutputs:', orSuccess)          
             return orSuccess
             
     def nand2Var(self, _, var1, var2, onlyConstrains = False):
@@ -472,8 +477,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
             if onlyConstrains:
                 countLoss = torch.sub(tOne, countSuccess)
+                print('countVar inputs:', var, '\toutputs:', countLoss)
                 return countLoss
             else:
+                print('countVar inputs:', var, '\toutputs:', countSuccess)
                 return countSuccess
         
     def fixedVar(self, _, _var, onlyConstrains = False):
