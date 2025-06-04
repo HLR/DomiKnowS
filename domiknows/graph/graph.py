@@ -1059,6 +1059,7 @@ class Graph(BaseGraphTree):
         data,
         logic_keyword = 'constraint',
         logic_label_keyword = 'label',
+        extra = None
     ):
         '''
         Takes a dataset containing keys `logic_keyword` and `logic_label_keyword` and
@@ -1094,6 +1095,7 @@ class Graph(BaseGraphTree):
                 lc_string_fmt = get_full_funcs(lc_string_fmt)
 
                 # execute the constraint in the graph context
+                concepts_map['image_object_contains']=extra
                 c = eval(
                     lc_string_fmt,
                     {
