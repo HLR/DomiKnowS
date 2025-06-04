@@ -95,8 +95,26 @@ class LogicDataset(Sequence[data_type]):
 
     @staticmethod
     @property
-    def curr_lc_key(cls):
+    def curr_lc_key(cls) -> str:
+        '''
+        This key in each data item specifies which LC is currently active.
+        The value is the LC name (e.g., LC2).
+        '''
         return cls.KEYWORD_FMT.format(index='curr_lc_name')
+
+    @staticmethod
+    @property
+    def do_switch_key(cls) -> str:
+        '''
+        This key (when present in the data item) indicates that we're switching between LCs.
+
+        Only the presence of the key in the data item is used. The value has no meaning.
+
+        This is used in SolverModel.inference: when present will speed up searching through properties
+        by ignoring properties that are logical constraints but aren't the current active LC
+        (set by self.curr_lc_key).
+        '''
+        return cls.KEYWORD_FMT.format(index='do_switch')
 
     def __len__(self):
         return len(self.data)
@@ -109,5 +127,6 @@ class LogicDataset(Sequence[data_type]):
             # this indicates which constraint to use
             self.KEYWORD_FMT.format(index=index): data_item[self.logic_label_keyword],
             self.curr_lc_key: curr_lc_name,
+            self.do_switch_key: None, # the value has no meaning
             **data_item
         }

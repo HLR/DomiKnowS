@@ -429,16 +429,18 @@ class SolverModel(PoiModel):
         from ...graph.logicalConstrain import LogicalConstrain
         import time
 
-        # Get current lc if we're doing executable logic
+        # Get current lc if we're doing executable logic and we're switching between constraints
         # (so we can skip all the other LCs when iterating through properties)
+        # Will only skip if LogicDataset.do_switch_key is present in the input data item
         curr_lc = None
         execute_lc_key = LogicDataset.curr_lc_key
         if execute_lc_key in builder:
             curr_lc = builder[execute_lc_key]
 
+        do_switch = LogicDataset.do_switch_key in builder
         start = time.time()
         for i, prop in enumerate(self.poi):
-            if isinstance(prop.prop_name, LogicalConstrain):
+            if do_switch and isinstance(prop.prop_name, LogicalConstrain):
                 if prop.prop_name.lcName != curr_lc:
                     continue
 
