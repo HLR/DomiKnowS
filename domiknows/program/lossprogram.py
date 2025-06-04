@@ -311,7 +311,7 @@ class InferenceProgram(LossProgram):
             # Finding the label of constraints/condition
             find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
             if len(find_constraints_label) < 1:
-                print("No Constraint Labels found")
+                self.logger.error("No Constraint Labels found")
                 continue
             find_constraints_label = find_constraints_label[0]
             constraint_labels_dict = find_constraints_label.getAttributes()
@@ -337,11 +337,10 @@ class InferenceProgram(LossProgram):
             condition_list = [1 if verify_constrains[lc]["satisfied"] == 100.0 else 0 for lc in verify_constrains]
             constraint_labels = [int(constraint_labels_dict[lc + "/label"].item()) for lc in active_lc_name]
             acc += int(constraint_labels == condition_list)
-            total += 1
 
         if total == 0:
-            print("No valid constraints found")
-            return -1
+            self.logger.error("No Valid Constraint found for this dataset.")
+            return None
 
         return acc / total
 
