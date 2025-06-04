@@ -173,9 +173,6 @@ class InferenceModel(LossModel):
         self.loss_func = loss()
 
     def forward(self, builder, build=None):
-        import time
-        start = time.time()
-
         if build is None:
             build = self.build
             
@@ -243,8 +240,6 @@ class InferenceModel(LossModel):
             losses.append(self.loss_func(constr_out.float(), lbl)) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)
-
-        print('InferenceModel forward time:', time.time() - start)
 
         # (*out, datanode, builder)
         return loss_scalar, datanode, builder

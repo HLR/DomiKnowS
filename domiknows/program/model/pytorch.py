@@ -427,7 +427,6 @@ class SolverModel(PoiModel):
 
         from ...graph.executable import LogicDataset
         from ...graph.logicalConstrain import LogicalConstrain
-        import time
 
         # Get current lc if we're doing executable logic and we're switching between constraints
         # (so we can skip all the other LCs when iterating through properties)
@@ -438,7 +437,6 @@ class SolverModel(PoiModel):
             curr_lc = builder[execute_lc_key]
 
         do_switch = LogicDataset.do_switch_key in builder
-        start = time.time()
         for i, prop in enumerate(self.poi):
             if do_switch and isinstance(prop.prop_name, LogicalConstrain):
                 if prop.prop_name.lcName != curr_lc:
@@ -447,8 +445,6 @@ class SolverModel(PoiModel):
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
 
-        end = time.time()
-        print("Time taken for inference after datanode creation: ", end-start)
         # print(len(self.poi))
 #             for output_sensor, target_sensor in self.find_sensors(prop):
 #             # make sure the sensors are evaluated
