@@ -4,6 +4,7 @@ import importlib
 
 from domiknows.graph import Graph
 from domiknows.sensor.pytorch.sensors import ReaderSensor
+from .logicalConstrain import LogicalConstrain
 
 
 def add_keyword(expr_str: str, kwarg_name: str, kwarg_value: Any) -> str:
@@ -38,14 +39,15 @@ def add_keyword(expr_str: str, kwarg_name: str, kwarg_value: Any) -> str:
 
     return ast.unparse(tree)
 
-def _recurse_call(call: ast.Call):
-    call.func.id = 'domiknows.graph.logicalConstrain.' + call.func.id
+def _recurse_call(call: ast.Call, lc_classes: set[str]):
+    if call.func.id in lc_classes:
+        call.func.id = 'domiknows.graph.logicalConstrain.' + call.func.id
     
     for arg in call.args:
         if not isinstance(arg, ast.Call):
             continue
         
-        _recurse_call(arg)
+        _recurse_call(arg, lc_classes)
 
 def get_full_funcs(expr_str: str) -> str:
     '''
@@ -54,6 +56,8 @@ def get_full_funcs(expr_str: str) -> str:
 
     e.g., andL(x, y) -> domiknows.graph.logicalConstrain.andL(x, y)
     '''
+
+    lc_classes = set([cls.__name__ for cls in LogicalConstrain.__subclasses__()])
 
     tree = ast.parse(expr_str)
 
@@ -65,7 +69,7 @@ def get_full_funcs(expr_str: str) -> str:
     if not isinstance(node, ast.Expr):
         raise ValueError("Constraint string must be an expression")
     
-    _recurse_call(node.value)
+    _recurse_call(node.value, lc_classes)
 
     return ast.unparse(tree)
 
