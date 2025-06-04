@@ -92,3 +92,5 @@ dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_key
 program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",tnorm='G')
 #program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
 program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device="cpu")
+acc = program.evaluate_condition(dataset, device="cpu")
+print("Accuracy on dataset: {:.2f}".format(acc * 100))
