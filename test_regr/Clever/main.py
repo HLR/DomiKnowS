@@ -54,7 +54,7 @@ questions_executions, graph,image,object,image_object_contains,attribute_names_d
 
 for i in range(len(dataset)):
     dataset[i]["logic_str"] = questions_executions[i]
-    dataset[i]["logic_label"] = torch.tensor([1.0])
+    dataset[i]["logic_label"] = bool(dataset[i]['answer'])
 
 image["image"]= FunctionalReaderSensor(keyword="image",forward=lambda data: [data])
 object["emb"]= ReaderSensor(keyword="objects")
@@ -75,14 +75,17 @@ class DummyLinearLearner(TorchLearner):
                 result[idx, self.current_attribute[3:] in [v for k,v in properties[idx].items()]] = 1000
         return result
 
-def label_reader(label):
+
+
+def dummy_label_reader(label):
     return torch.ones(len(label)).unsqueeze(-1)
 
 for attr_name,attr_variable in attribute_names_dict.items():
-    object[attr_variable] = DummyLinearLearner(image_object_contains,"properties",current_attribute=attr_name)
-    #object[attr_variable] = FunctionalSensor(image_object_contains, forward=label_reader, label=True)
+    #object[attr_variable] = DummyLinearLearner(image_object_contains,"properties",current_attribute=attr_name)
+    object[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(4,2))
+    object[attr_variable] = FunctionalSensor(image_object_contains, forward=dummy_label_reader, label=True)
 
-dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label',)
-program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",tnorm='G')
-#program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
+#dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label',)
+#program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",tnorm='G')
+program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
 program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device="cpu")
