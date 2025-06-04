@@ -57,27 +57,29 @@ for i in range(len(dataset)):
     dataset[i]["logic_label"] = torch.tensor([1.0])
 
 image["image"]= FunctionalReaderSensor(keyword="image",forward=lambda data: [data])
-object["location"]= ReaderSensor(keyword="objects")
+object["emb"]= ReaderSensor(keyword="objects")
+object["properties"]= ReaderSensor(keyword="all_objects")
 
 def return_contain(b, _):
     return torch.ones(len(b)).unsqueeze(-1)
-object[image_object_contains] = EdgeSensor(object["location"], image["image"], relation=image_object_contains, forward=return_contain)
-
+object[image_object_contains] = EdgeSensor(object["emb"], image["image"], relation=image_object_contains, forward=return_contain)
 
 class DummyLinearLearner(TorchLearner):
-    def __init__(self, *pre):
+    def __init__(self, *pre,current_attribute=None):
         TorchLearner.__init__(self, *pre)
+        self.current_attribute = current_attribute
 
-    def forward(self, x):
+    def forward(self, x,properties):
         result = torch.zeros(len(x), 2)
-        result[:, 1] = 1000
+        for idx in range(len(x)):
+                result[idx, self.current_attribute[3:] in [v for k,v in properties[idx].items()]] = 1000
         return result
 
 def label_reader(label):
     return torch.ones(len(label)).unsqueeze(-1)
 
 for attr_name,attr_variable in attribute_names_dict.items():
-    object[attr_variable] = DummyLinearLearner(image_object_contains)
+    object[attr_variable] = DummyLinearLearner(image_object_contains,"properties",current_attribute=attr_name)
     #object[attr_variable] = FunctionalSensor(image_object_contains, forward=label_reader, label=True)
 
 dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label',)
