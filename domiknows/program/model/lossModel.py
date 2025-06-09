@@ -279,7 +279,6 @@ class SampleLossModel(torch.nn.Module):
                             if not replace_mul:
                                 loss_value = true_val.sum() / lossTensor.sum()
                                 loss_value = epsilon - ( -1 * torch.log(loss_value) )
-                                # loss_value = -1 * torch.log(loss_value) 
                                 if self.iter_step < self.warmpup:
                                     with torch.no_grad():
                                         min_val = loss_value

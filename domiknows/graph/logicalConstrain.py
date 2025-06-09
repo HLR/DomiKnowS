@@ -373,45 +373,48 @@ class LogicalConstrain(LcElement):
         lcVariableName0 = lcVariableNames[0]  # First variable
         lcVariableSet0 = v[lcVariableName0]
 
-        if type(myIlpBooleanProcessor)==lcLossSampleBooleanMethods:
 
-            zVars,varsSetup = [],[]
-            var = [currentV[0] for currentV in iter(lcVariableSet0)]
-            if headConstrain or integrate:
-                varsSetup.extend(var)
-            else:
-                varsSetup.append(var)
-            if headConstrain or integrate:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-            else:
-                for current_var in varsSetup:
-                    zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-            if model is not None:
-                model.update()
-            return zVars
+        zVars = [] # Output ILP variables
+        # for i, _ in enumerate(lcVariableSet0):
+        #     varsSetup = []
+        #
+        #     var = []
+        #     for currentV in iter(v):
+        #         var.extend(v[currentV][i])
+        #
+        #     if len(var) == 0:
+        #         if not (headConstrain or integrate):
+        #             zVars.append([None])
+        #
+        #         continue
+        #
+        #     if headConstrain or integrate:
+        #         varsSetup.extend(var)
+        #     else:
+        #         varsSetup.append(var)
+        varsSetup = []
+
+        var = [currentV[0] for currentV in iter(lcVariableSet0)]
+
+        if headConstrain or integrate:
+            varsSetup.extend(var)
         else:
-            zVars = []  # Output ILP variables
-            for i, _ in enumerate(lcVariableSet0):
-                varsSetup = []
-                var = []
-                for currentV in iter(v):
-                    var.extend(v[currentV][i])
-                if len(var) == 0:
-                    if not (headConstrain or integrate):
-                        zVars.append([None])
-                    continue
-                if headConstrain or integrate:
-                    varsSetup.extend(var)
-                else:
-                    varsSetup.append(var)
-                if headConstrain or integrate:
-                    zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-                else:
-                    for current_var in varsSetup:
-                        zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-            if model is not None:
-                model.update()
-            return zVars
+            varsSetup.append(var)
+
+        # -- Use ILP variable setup to create constrains
+        if headConstrain or integrate:
+            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
+                                                         logicMethodName = logicMethodName)])
+        else:
+            for current_var in varsSetup:
+                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
+                                                         logicMethodName = logicMethodName)])
+           
+        if model is not None:
+            model.update()
+            
+        return zVars
+
     
     def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
         
