@@ -1,7 +1,7 @@
 from collections import namedtuple
 from domiknows.solver.ilpConfig import ilpConfig 
 from domiknows.graph import Concept
-
+from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 import logging
 import torch
 myLogger = logging.getLogger(ilpConfig['log_name'])
@@ -363,17 +363,16 @@ class LogicalConstrain(LcElement):
         # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
         return rVars
 
-    def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
+    def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName="COUNT"):
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
-        
         if cLimit == None:
             cLimit = 1
-            
-        lcVariableName0 = lcVariableNames[0] # First variable
-        lcVariableSet0 =  v[lcVariableName0]
+        lcVariableName0 = lcVariableNames[0]  # First variable
+        lcVariableSet0 = v[lcVariableName0]
+
 
         zVars = [] # Output ILP variables
         # for i, _ in enumerate(lcVariableSet0):
@@ -415,6 +414,7 @@ class LogicalConstrain(LcElement):
             model.update()
             
         return zVars
+
     
     def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
         

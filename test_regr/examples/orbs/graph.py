@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL
+from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL,atMostAL,atLeastAL
 
 Graph.clear()
 Concept.clear()
@@ -20,8 +20,8 @@ def get_graph(constraint,atmost,atleast):
 
         colored_orbs=orbs(name='colored_orbs')
         if constraint=="simple_constraint":
-            atMostL(colored_orbs,atmost)
-            atLeastL(colored_orbs,atleast)
+            atMostAL(colored_orbs,atmost)
+            atLeastAL(colored_orbs,atleast)
         elif constraint=="foreach_bag_atLeastAL":
             ifL(csp_range("x"), 
                 atLeastL(colored_orbs("y",path=("x",csp_range_contains_orbs)),atleast)
@@ -37,6 +37,24 @@ def get_graph(constraint,atmost,atleast):
         elif constraint=="foreach_bag_existsL_notL": # try with --colored
             ifL(csp_range("x"), 
                 existsL(notL(colored_orbs("y",path=("x",csp_range_contains_orbs))))
+            )
+        elif constraint=="foreach_IfL_atleastL_bag_existsL_notL": # try with --colored
+            ifL(csp_range("x"),
+                ifL(atLeastL(colored_orbs("y",path=("x",csp_range_contains_orbs)),atleast),
+                    existsL(notL(colored_orbs("z",path=("x",csp_range_contains_orbs))))
+                    )
+            )
+        elif constraint=="foreach_IfL_atleastL_bag_existsL":
+            ifL(csp_range("x"),
+                ifL(atLeastL(colored_orbs("y",path=("x",csp_range_contains_orbs)),atleast),
+                    existsL(colored_orbs("z",path=("x",csp_range_contains_orbs)))
+                    )
+            )
+        elif constraint=="foreach_IfL_atleastL_atmostL":
+            ifL(csp_range("x"),
+                ifL(atLeastL(colored_orbs("y",path=("x",csp_range_contains_orbs)),atleast),
+                    atMostL(colored_orbs("z",path=("x",csp_range_contains_orbs)),atmost)
+                    )
             )
         else:
             print("no contraint")

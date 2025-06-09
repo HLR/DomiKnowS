@@ -95,4 +95,5 @@ if __name__ == "__main__":
         'model': ["sampling"],
         "sample_size": [10, 20, 50, 100, 200, -1]  # maximum 2^8 = 256
     }
+
     run_tests(sampling_combinations)
