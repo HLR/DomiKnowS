@@ -5,11 +5,15 @@ def create_execution_existL(program, question_index, parent_img="img",property_p
     values = [v for step in program for v in step.get("value_inputs", [])]
 
     preds = [
-        f'is_{val}("{property_prefix}{i}", '
-        f'path=("{parent_img}", image_object_contains))'
+        f'is_{val}("{property_prefix}{i}")'
         for i, val in enumerate(values)
     ]
 
+    if len(preds)==0:
+        constraint = (
+                f'existsL(obj("prop"))\n\t'
+        )
+        return constraint
     def nest(pred_list, level):
         if len(pred_list) == 1:                         # base case
             return indent * level + pred_list[0]
@@ -23,10 +27,8 @@ def create_execution_existL(program, question_index, parent_img="img",property_p
         )
 
     constraint = (
-        f'ifL(image("{parent_img}"),\n'
-        f'\t{indent}existsL(\n\t'
+        f'existsL(\n\t'
         + nest(preds, 2) + "\n\t"
         f'{indent})\n\t'
-        f')'
     )
     return constraint

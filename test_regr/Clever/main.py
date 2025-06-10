@@ -2,7 +2,7 @@ import torch
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner, TorchLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor
 from graph import create_graph
-from domiknows.program.lossprogram import InferenceProgram
+from domiknows.program.lossprogram import InferenceProgram, PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.program import SolverPOIProgram
 from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
@@ -37,21 +37,35 @@ def build_dataset():
     return ds
 
 dataset = []
-for idx in range(1,2):
-    cache_file = CACHE_DIR / f"instance_{idx}.pkl"
+if DUMMY:
+    for idx in range(10):
+        cache_file = CACHE_DIR / f"instance_{idx}.pkl"
 
+        if cache_file.exists():
+            with cache_file.open("rb") as f:
+                instance = pickle.load(f)
+                dataset.append(instance)
+                print(f"re-loaded {cache_file}")
+        else:
+            ds = build_dataset()
+            for idx_ in range(NUM_INSTANCES):
+                cache_file = CACHE_DIR / f"instance_{idx_}.pkl"
+                with cache_file.open("wb") as f:
+                    pickle.dump(ds[idx_], f, protocol=PICKLE_PROTO)
+                    print(f"cached to {cache_file}")
+else:
+    cache_file = CACHE_DIR / f"existsL_dataset.pkl"
     if cache_file.exists():
         with cache_file.open("rb") as f:
-            instance = pickle.load(f)
-            dataset.append(instance)
+            dataset = pickle.load(f)
             print(f"re-loaded {cache_file}")
     else:
-        ds = build_dataset()
-        for idx_ in range(NUM_INSTANCES):
-            cache_file = CACHE_DIR / f"instance_{idx_}.pkl"
-            with cache_file.open("wb") as f:
-                pickle.dump(ds[idx_], f, protocol=PICKLE_PROTO)
-                print(f"cached to {cache_file}")
+        dataset = build_dataset()
+        with cache_file.open("wb") as f:
+            pickle.dump(dataset, f, protocol=PICKLE_PROTO)
+            print(f"cached to {cache_file}")
+
+dataset = [dataset[i] for i in range(99999999999)]
 
 questions_executions, graph,image,object,image_object_contains,attribute_names_dict  = create_graph(dataset)
 
@@ -98,7 +112,8 @@ for attr_name,attr_variable in attribute_names_dict.items():
 
 dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label')
 program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device=device,tnorm='G')
+#program = PrimalDualProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device=device,tnorm='G')
 #program = SolverPOIProgram(graph,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device="cpu",inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()))
-program.train(dataset,epochs=10,lr=1e-4,c_warmup_iters=0,device=device)
+program.train(dataset,epochs=1,lr=1e-4,c_warmup_iters=0,device=device)
 acc = program.evaluate_condition(dataset, device=device)
 print("Accuracy on dataset: {:.2f}".format(acc * 100))
