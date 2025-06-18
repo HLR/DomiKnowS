@@ -1,10 +1,18 @@
-import torch
+import sys
+sys.path.append('../../../')
+sys.path.append('../../')
+sys.path.append('../')
+sys.path.append('./')
+from domiknows.sensor.pytorch import TorchLearner
 import torch
 import torchvision.transforms as T
 import torchvision.models as models
 from typing import List, Union, Optional, Tuple
 from PIL import Image
 import numpy as np
+from pathlib import Path
+
+
 
 class ResNetPatcher(torch.nn.Module):
     """
@@ -50,22 +58,77 @@ class ResNetPatcher(torch.nn.Module):
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-    def forward(self, image: Image, bboxes_xyxy: List[Union[List[List[float]], np.ndarray]]) -> List[List[torch.Tensor]]:
+        self.cache_dir = Path("cache")
+        self.cache_dir.mkdir(exist_ok=True)
+        self._ram_cache: dict[str, torch.Tensor] = {}
 
-        image=image[0]
-        all_features: List[torch.Tensor] = []
+    def _path(self, sample_id) -> Path:
+        return self.cache_dir / f"{sample_id}.pt"
+
+    def _load_if_present(self, sample_id):
+        if sample_id in self._ram_cache:
+            return self._ram_cache[sample_id]
+
+        p = self._path(sample_id)
+        if p.exists():
+            feat = torch.load(p, map_location="cpu")
+            self._ram_cache[sample_id] = feat
+            return feat
+        return None
+    
+    @torch.no_grad()
+    def forward(self,
+                sample_id,
+                image,  # PIL.Image | np.ndarray | tensor –– as before
+                bboxes_xyxy):
+        """
+        * If features for `sample_id` already exist → return them.
+        * Otherwise compute, store (RAM + disk) and return.
+        """
+        if isinstance(sample_id, list):
+            sample_id = sample_id[0]
+
+        cached = self._load_if_present(sample_id)
+        if cached is not None:
+            return cached  # <-- fast path
+
+        # --------- slow path: compute ---------------------------------------
+        if isinstance(image, list):  # your original code used image[0]
+            image = image[0]
+
+        feats = []
         for bbox in bboxes_xyxy:
-            x_min, y_min, x_max, y_max = map(int, bbox)  # Ensure integer coordinates for cropping
+            x_min, y_min, x_max, y_max = map(int, bbox)
 
-            # patches = image[y_min:y_max, x_min:x_max]
-            patches = image.crop((x_min, y_min, x_max, y_max))  # Crop the image using PIL
-            # Preprocess the patch
-            patch_tensor = self.preprocess(patches).unsqueeze(0).to(self.device)  # Add batch dimension
+            patch = image.crop((x_min, y_min, x_max, y_max))
+            patch_tensor = self.preprocess(patch).unsqueeze(0).to(self.device)
 
-            # Extract features
-            with torch.no_grad():  # No need to track gradients
-                features = self.features_extractor(patch_tensor)
+            features = self.features_extractor(patch_tensor)
+            feats.append(features.squeeze().cpu())
 
-            all_features.append(features.squeeze().cpu())  # Remove batch dim and move to CPU
+        stacked = torch.stack(feats)
 
-        return torch.stack(all_features)
+        # --------- store in cache -------------------------------------------
+        self._ram_cache[sample_id] = stacked
+        # write atomically: first to tmp, then rename – avoids half-written files
+        tmp_path = self._path(f"{sample_id}.tmp")
+        torch.save(stacked, tmp_path)
+        tmp_path.replace(self._path(sample_id))
+
+        return stacked
+
+
+
+class DummyLinearLearner(TorchLearner):
+    def __init__(self, *pre,current_attribute=None):
+        TorchLearner.__init__(self, *pre)
+        self.current_attribute = current_attribute
+
+    def forward(self, x,properties):
+        result = torch.zeros(len(x), 2)
+        for idx in range(len(x)):
+            if self.current_attribute[3:] in [v for k,v in properties[idx].items()]:
+                result[idx, 1] = 1000
+            else:
+                result[idx, 0] = 1000
+        return result

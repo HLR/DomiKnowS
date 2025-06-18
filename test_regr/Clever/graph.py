@@ -2,14 +2,6 @@ from dataset import g_attribute_concepts
 from pprint import pprint
 from execution import create_execution_existL
 import os
-from dotenv import load_dotenv
-import os
-from langchain.schema import SystemMessage, HumanMessage
-
-
-load_dotenv()
-# pprint(g_attribute_concepts)
-from langchain_openai import ChatOpenAI
 
 # {'color': ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
 #  'material': ['rubber', 'metal'],
@@ -17,7 +9,6 @@ from langchain_openai import ChatOpenAI
 #  'size': ['small', 'large']}
 
 def create_graph(dataset):
-    llm_model = ChatOpenAI(model="gpt-4o", temperature=0.1, api_key=os.environ["OPENAI_API_KEY"], )
     graph_text = """from domiknows.graph import Graph, Concept\nfrom domiknows.graph.logicalConstrain import ifL, andL, existsL\n\nwith Graph('image_graph') as graph:\n
 \timage = Concept(name='image')
 \tobj = Concept(name='obj')
