@@ -245,7 +245,7 @@ class LossProgram(LearningBasedProgram):
             # do backwards pass update
             if self.opt is not None and do_update:
                 self.opt.step()
-                iter += 1
+            iter += 1
 
             if (
                 self.copt is not None and
