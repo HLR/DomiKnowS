@@ -4,13 +4,10 @@ sys.path.append('../../')
 sys.path.append('../')
 sys.path.append('./')
 #export GRB_LICENSE_FILE=$HOME/gurobi.lic
-from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner, TorchLearner
+from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor
-from domiknows.program.lossprogram import InferenceProgram, PrimalDualProgram
+from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from domiknows.program import SolverPOIProgram
-from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 from preprocess import preprocess_dataset
 from graph import create_graph
 from pathlib import Path
@@ -40,7 +37,7 @@ questions_executions, graph,image,object,image_object_contains,attribute_names_d
 
 for i in range(len(dataset)):
     dataset[i]["logic_str"] = questions_executions[i]
-    dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])])
+    dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])]).to(device)
 
 image["pil_image"] = FunctionalReaderSensor(keyword="pil_image",forward=lambda data: [data])
 image["image_id"] = FunctionalReaderSensor(keyword='image_index',forward=lambda data: [data])
@@ -49,7 +46,7 @@ object["bounding_boxes"]= ReaderSensor(keyword="objects_raw")
 object["properties"]= ReaderSensor(keyword="all_objects")
 
 if not args.dummy:
-    model = ResNetPatcher(resnet_model_name='dummy', pretrained=True, device=device)
+    model = ResNetPatcher(resnet_model_name='resnet50', pretrained=True, device=device)
     object["emb"] = FunctionalSensor(image["image_id"],image["pil_image"],"bounding_boxes", forward=model)
 
 object[image_object_contains] = EdgeSensor(object["bounding_boxes"], image["pil_image"], relation=image_object_contains, forward=lambda b, _: torch.ones(len(b)).unsqueeze(-1))
@@ -65,12 +62,45 @@ dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_key
 program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint],device=device,tnorm=args.tnorm)
 save_file = Path(f"models/program{args.lr}_{args.epochs}_{args.batch_size}_{args.train_size}_{args.tnorm}.pth")
 if not args.eval_only:
-    program.train(dataset,Optim=torch.optim.Adam,train_epoch_num=args.epochs,lr=args.lr,c_warmup_iters=0,batch_size=args.batch_size,device=device)
-    program.save(save_file)
+    for i in range(args.epochs):
+        print(f"Training epoch {i+1}/{args.epochs}")
+        save_file = Path(f"models/program{args.lr}_{i+1}_{args.batch_size}_{args.train_size}_{args.tnorm}.pth")
+        program.train(dataset,Optim=torch.optim.Adam,train_epoch_num=1,lr=args.lr,c_warmup_iters=0,batch_size=args.batch_size,device=device)
+        program.save(save_file)
 else:
     print("Loading program from checkpoint...")
     program.load(save_file)
     acc = program.evaluate_condition(dataset, device=device)
-    print("Accuracy on train: {:.2f}".format(acc * 100))
+    print("Accuracy on Test: {:.2f}".format(acc * 100))
 
 # python main.py --train-size 10 --test-size 10 --epochs 1 --lr 1e-6 --batch-size 10 --tnorm G
+# nohup python main.py --train-size 5000 --test-size 10 --epochs 20 --lr 1e-6 --batch-size 20 --tnorm G > 5000_20_6_G.log 2>&1 &
+# nohup python main.py --train-size 5000 --test-size 10 --epochs 1 --lr 1e-5 --batch-size 20 --tnorm G > 5000_1_5_G.log 2>&1 &
+# nohup python main.py --train-size 5000 --test-size 10 --epochs 1 --lr 1e-6 --batch-size 20 --tnorm P > 5000_1_6_P.log 2>&1 &
+# nohup python main.py --train-size 5000 --test-size 10 --epochs 1 --lr 1e-5 --batch-size 20 --tnorm P > 5000_1_5_P.log 2>&1 &
+# nohup python main.py --train-size 5000 --test-size 10 --epochs 4 --lr 1e-6 --batch-size 20 --tnorm P > 5000_4_6_P.log 2>&1 &
+# nohup python main.py --train-size 5000 --test-size 10 --epochs 4 --lr 1e-6 --batch-size 20 --tnorm G > 5000_4_6_G.log 2>&1 &
+"""
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 10 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_10_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 10 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_10_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 9 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_9_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 9 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_9_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 8 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_8_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 8 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_8_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 7 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_7_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 7 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_7_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 6 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_6_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 6 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_6_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 5 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_5_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 5 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_5_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 4 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_4_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 4 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_4_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 3 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_3_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 3 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_3_6_G.log 2>&1 & \
+{ \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 2 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_2_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 2 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_2_6_G.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 1 --lr 1e-6 --batch-size 20 --tnorm P --eval-only > TEST_5000_1_6_P.log 2>&1 & \
+  nohup python main.py --train-size 5000 --test-size 1000 --epochs 1 --lr 1e-6 --batch-size 20 --tnorm G --eval-only > TEST_5000_1_6_G.log 2>&1 & \
+}
+"""

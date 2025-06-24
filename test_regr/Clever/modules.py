@@ -22,7 +22,7 @@ class ResNetPatcher(torch.nn.Module):
         super().__init__()
 
         self.device = device if device else ('cuda' if torch.cuda.is_available() else 'cpu')
-        
+        self.resnet_model_name = resnet_model_name
         # Load the specified ResNet model
         if resnet_model_name == 'resnet18':
             resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT if pretrained else None)
@@ -63,7 +63,7 @@ class ResNetPatcher(torch.nn.Module):
         self._ram_cache: dict[str, torch.Tensor] = {}
 
     def _path(self, sample_id) -> Path:
-        return self.cache_dir / f"{sample_id}.pt"
+        return self.cache_dir / f"{self.resnet_model_name}_{sample_id}.pt"
 
     def _load_if_present(self, sample_id):
         if sample_id in self._ram_cache:
@@ -71,7 +71,7 @@ class ResNetPatcher(torch.nn.Module):
 
         p = self._path(sample_id)
         if p.exists():
-            feat = torch.load(p, map_location="cpu")
+            feat = torch.load(p, map_location=self.device)
             self._ram_cache[sample_id] = feat
             return feat
         return None
@@ -104,15 +104,15 @@ class ResNetPatcher(torch.nn.Module):
             patch_tensor = self.preprocess(patch).unsqueeze(0).to(self.device)
 
             features = self.features_extractor(patch_tensor)
-            feats.append(features.squeeze().cpu())
+            feats.append(features.squeeze())
 
-        stacked = torch.stack(feats)
+        stacked = torch.stack(feats).to(self.device)
 
         # --------- store in cache -------------------------------------------
         self._ram_cache[sample_id] = stacked
         # write atomically: first to tmp, then rename – avoids half-written files
-        tmp_path = self._path(f"{sample_id}.tmp")
-        torch.save(stacked, tmp_path)
+        tmp_path = self._path(f"{self.resnet_model_name}_{sample_id}.tmp")
+        torch.save(stacked.cpu(), tmp_path)
         tmp_path.replace(self._path(sample_id))
 
         return stacked

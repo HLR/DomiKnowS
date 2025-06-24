@@ -54,7 +54,8 @@ def preprocess_dataset(args,NUM_INSTANCES,CACHE_DIR):
 
     print("Dataset length:", len(dataset))
     if args.eval_only:
-        dataset = [dataset[i] for i in range(args.test_size)]
+        dataset = [dataset[i] for i in range(len(dataset) - args.test_size, len(dataset))]
+        #dataset = [dataset[i] for i in range(args.test_size)]
     else:
         dataset = [dataset[i] for i in range(args.train_size)]
     return dataset
