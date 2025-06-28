@@ -517,6 +517,20 @@ class CLEVRDatasetFilterableView:
             return True        
         return self.filter(filt, f'filter-program-type-concept-only') 
     
+    def filter_one_relation(self, *args) -> 'CLEVRDatasetFilterableView':
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same_" in program_str or "than" in program_str or "count" in program_str:
+                return False
+            if program_str.count("relate") == 1:
+                return True
+            else:
+                return False        
+        return self.filter(filt, f'filter-one-left-or-right') 
+
     def make_dataloader(self, batch_size: int, shuffle: bool, drop_last: bool, nr_workers: int) -> Any:
         logger.warning("`make_dataloader` (JacDataLoader) is removed. Use a standard DataLoader (e.g., torch.utils.data.DataLoader) and define a custom collate_fn if needed.")
         raise NotImplementedError("JacDataLoader and VarLengthCollateV2 are removed.")
