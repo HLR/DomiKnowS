@@ -7,7 +7,7 @@ from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from preprocess import preprocess_dataset
+from preprocess import preprocess_dataset, preprocess_folders_and_files
 from graph import create_graph
 from pathlib import Path
 from modules import ResNetPatcher, DummyLinearLearner
@@ -26,10 +26,7 @@ parser.add_argument("--dummy", action="store_true",help="Use the lightweight dum
 parser.add_argument("--tnorm", choices=["G", "P", "L"], default="G",help="T-norm used inside InferenceProgram")
 args=parser.parse_args()
 
-CACHE_DIR      = Path("dataset_cache")
-for directory in [CACHE_DIR,Path("models"),Path("cache")]:
-    directory.mkdir(exist_ok=True)
-CACHE_DIR.mkdir(exist_ok=True)
+CACHE_DIR = preprocess_folders_and_files(args.dummy)
 NUM_INSTANCES  = 10
 device = "cpu"
 
@@ -68,6 +65,8 @@ if not args.eval_only:
         save_file = Path(f"models/program{args.lr}_{i+1}_{args.batch_size}_{args.train_size}_{args.tnorm}.pth")
         program.train(dataset,Optim=torch.optim.Adam,train_epoch_num=1,lr=args.lr,c_warmup_iters=0,batch_size=args.batch_size,device=device)
         program.save(save_file)
+    acc = program.evaluate_condition(dataset, device=device)
+    print("Accuracy on Test: {:.2f}".format(acc * 100))
 else:
     print("Loading program from checkpoint...")
     program.load(save_file)

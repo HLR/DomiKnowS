@@ -4,9 +4,10 @@ sys.path.append('../../')
 sys.path.append('./')
 sys.path.append('../')
 
-import pickle
+import pickle, py7zr
 from dataset import make_dataset, default_image_transform
 import os.path as osp
+from pathlib import Path
 
 def preprocess_dataset(args,NUM_INSTANCES,CACHE_DIR):
     def build_dataset():
@@ -59,3 +60,16 @@ def preprocess_dataset(args,NUM_INSTANCES,CACHE_DIR):
     else:
         dataset = [dataset[i] for i in range(args.train_size)]
     return dataset
+
+def preprocess_folders_and_files(dummy):
+    if not dummy and not Path("train/vocab.json").exists():
+        print(f"Extracting json files...")
+        with py7zr.SevenZipFile(Path("train/output-vocab.7z"), mode="r") as z:
+            z.extractall(path="train/")
+        print(f"Extraction complete")
+
+    CACHE_DIR = Path("dataset_cache")
+    for directory in [CACHE_DIR, Path("models"), Path("cache")]:
+        directory.mkdir(exist_ok=True)
+    CACHE_DIR.mkdir(exist_ok=True)
+    return CACHE_DIR
