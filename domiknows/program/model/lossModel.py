@@ -196,7 +196,7 @@ class InferenceModel(LossModel):
         read_labels = constraint_datanode.getAttributes()
 
         # Get active constraints based on given constraint labels
-        print('read_labels', read_labels)
+
         active_lc_names = set(
             x.split('/')[0] # TODO: parse this better?
             for x in read_labels
@@ -215,7 +215,6 @@ class InferenceModel(LossModel):
         # Has the format {'LC{n}': {'lossTensor': tensor, ...}
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
-        print('calculated loss:', constr_loss)
         # print('retrieved labels:', read_labels)
 
         # Compile losses
