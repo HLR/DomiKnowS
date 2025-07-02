@@ -119,7 +119,7 @@ class ResNetPatcher(torch.nn.Module):
 
 
 
-class DummyLinearLearner(TorchLearner):
+class DummyLinearLearnerold(TorchLearner):
     def __init__(self, *pre,current_attribute=None):
         TorchLearner.__init__(self, *pre)
         self.current_attribute = current_attribute
@@ -128,7 +128,32 @@ class DummyLinearLearner(TorchLearner):
         result = torch.zeros(len(x), 2)
         for idx in range(len(x)):
             if self.current_attribute[3:] in [v for k,v in properties[idx].items()]:
-                result[idx, 1] = 1000
+                result[idx, 1] = 10
             else:
-                result[idx, 0] = 1000
+                result[idx, 0] = 10
         return result
+
+
+class DummyLinearLearner(TorchLearner):
+    def __init__(self, *pre, current_attribute=None):
+        TorchLearner.__init__(self, *pre)
+        self.current_attribute = current_attribute
+        self.head = torch.nn.Linear(1, 2)
+
+    @torch.no_grad()
+    def _attr_mask(self, properties):
+        attr = self.current_attribute[3:]
+        return torch.tensor(
+            [attr in p.values() for p in properties],
+            dtype=torch.bool
+        )
+
+    def forward(self, x, properties):
+        logits = self.head(x)
+
+        mask = self._attr_mask(properties)
+        if mask is not None:
+            logits[mask, 1] += 3.0
+            logits[~mask, 0] += 3.0
+
+        return logits
