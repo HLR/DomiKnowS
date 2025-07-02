@@ -1765,6 +1765,7 @@ class DataNode:
         Returns:
         - None: This function operates in-place and does not return a value.
         """
+
         if not _conceptsRelations:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference.')
         else:
@@ -2585,18 +2586,20 @@ class DataNodeBuilder(dict):
                     incomingLinks[dn] = 1
 
         # Find the root dataNodes which have no incoming links
-        newDnsRoots = [dn for dn in allDns if incomingLinks[dn] == 0 or not dn.impactLinks]
+        newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
         newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # if newDnsRoots is empty
         if not newDnsRoots:
             newDnsRoots = allDns
-            #newDnsRoots = sorted(newDnsRoots, key=lambda dn: incomingLinks[dn], reverse=True)
             newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # Set the updated root list
         if not getProductionModeStatus():
             _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
+        if newDnsRoots:
+            if newDnsRoots[0].ontologyNode._is_constraint_concept(): newDnsRoots = newDnsRoots[1:]+[newDnsRoots[0]]
+
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
         return
@@ -2928,6 +2931,7 @@ class DataNodeBuilder(dict):
             keyDataName (str): The name of the key for which the data node is being updated.
 
         """
+        # print(keyDataName)
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 

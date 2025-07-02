@@ -1,0 +1,4 @@
+nltk
+pillow
+pycocotools
+py7zr
