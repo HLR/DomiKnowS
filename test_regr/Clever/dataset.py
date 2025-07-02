@@ -3,6 +3,8 @@ import os.path as osp
 from typing import Optional, Union, Callable, Sequence, List, Dict, Any, Tuple, Type
 
 import nltk # For word_tokenize
+nltk.download('punkt')
+nltk.download('punkt_tab')
 import numpy as np
 from PIL import Image
 
