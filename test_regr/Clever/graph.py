@@ -8,7 +8,7 @@ import os
 #  'shape': ['cube', 'sphere', 'cylinder'],
 #  'size': ['small', 'large']}
 
-def create_graph(dataset):
+def create_graph(dataset,return_graph_text=False):
     graph_text = """from domiknows.graph import Graph, Concept\nfrom domiknows.graph.logicalConstrain import ifL, andL, existsL\n\nwith Graph('image_graph') as graph:\n
 \timage = Concept(name='image')
 \tobj = Concept(name='obj')
@@ -37,4 +37,6 @@ def create_graph(dataset):
     #print("variables:")
     #for name, value in local_vars.items():
     #    print(f"{name} = {value!r}")
+    if return_graph_text:
+        return executions, local_vars["graph"], local_vars["image"], local_vars["obj"], local_vars["image_object_contains"], {attr_name: local_vars[attr_name] for attr_name in local_vars.keys() if "is_" in attr_name},graph_text
     return executions,local_vars["graph"],local_vars["image"],local_vars["obj"],local_vars["image_object_contains"],{attr_name:local_vars[attr_name] for attr_name in local_vars.keys() if "is_" in attr_name}
