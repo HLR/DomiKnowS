@@ -7,10 +7,14 @@ from domiknows.sensor.pytorch import TorchLearner
 import torch
 import torchvision.transforms as T
 import torchvision.models as models
+from torchvision.ops import roi_align
 from typing import List, Union, Optional, Tuple
 from PIL import Image
 import numpy as np
+import jactorch.models.vision.resnet as resnet
+import jactorch
 from pathlib import Path
+from functional_2d import generate_intersection_map, generate_union_box
 
 
 
@@ -116,6 +120,164 @@ class ResNetPatcher(torch.nn.Module):
         tmp_path.replace(self._path(sample_id))
 
         return stacked
+
+
+class PrRoIPoolApprox(torch.nn.Module):
+    def __init__(self, output_size=(32, 32), spatial_scale=1.0/16):
+        super().__init__()
+        self.output_size = output_size
+        self.spatial_scale = spatial_scale
+
+    def forward(self, features, rois):
+        """
+        Args:
+            features: Tensor of shape (B, C, H, W)
+            rois: Tensor of shape (N, 5) with (batch_idx, x1, y1, x2, y2)
+
+        Returns:
+            Tensor of shape (N, C, output_size[0], output_size[1])
+        """
+        return roi_align(
+            input=features,
+            boxes=rois,
+            output_size=self.output_size,
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=-1,  # let PyTorch choose automatically
+            aligned=True        # more accurate bilinear interpolation
+        )
+    
+class ResnetLEFT(torch.nn.Module):
+    def __init__(self, device):
+        super().__init__()
+        
+        self.resnet = resnet.resnet34(pretrained=True, incl_gap=False, num_classes=None)
+        self.resnet.layer4 = jactorch.nn.Identity()
+
+        self.preprocessor = T.Compose([
+            T.Resize((224, 224)),  # Resize to ResNet input size
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+        self.device = device
+
+
+    def forward(self, sample_id, image):
+        # Peform Cache here
+        x = self.preprocessor(image).unsqueeze(0).to(self.device)
+        feature_emb = self.resnet(x)
+        return feature_emb
+
+
+class LEFTObjectEMB(torch.nn.Module):
+    def __init__(self, resnet_model_name: str = 'resnet50', pretrained: bool = True, device: Optional[str] = None):
+        super().__init__()
+
+        self.pool_size = 32
+        downsample_rate = 16
+
+        self.context_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate)
+        self.object_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate)
+
+        self.object_feature_extract = torch.nn.Conv2d(256, 256, 1)
+        self.object_feature_fuse = torch.nn.Conv2d(256 * 2, 128, 1)
+        self.object_fc = torch.nn.Sequential(torch.nn.ReLU(True), torch.nn.Linear(128 * 32 * 32, 2048))
+
+        self.cache_dir = Path("cache")
+        self.cache_dir.mkdir(exist_ok=True)
+        self._ram_cache: dict[str, torch.Tensor] = {}
+
+        
+    def forward(self, scene, box):
+        
+        this_object_features = self.object_feature_extract(scene)
+
+        with torch.no_grad():
+            image_h, image_w = scene.size(2) * 16, scene.size(3) * 16
+            image_box = torch.cat((
+                torch.zeros(box.size(0), 1, dtype=box.dtype, device=box.device),
+                torch.zeros(box.size(0), 1, dtype=box.dtype, device=box.device),
+                image_w + torch.zeros(box.size(0), 1, dtype=box.dtype, device=box.device),
+                image_h + torch.zeros(box.size(0), 1, dtype=box.dtype, device=box.device)
+            ), dim=-1)
+
+            box_context_imap = generate_intersection_map(box, image_box, 32)
+
+            batch_ind = 0 + torch.zeros(box.size(0), 1, dtype=box.dtype, device=box.device)
+
+        this_context_features = self.context_roi_pool(this_object_features, torch.cat([batch_ind, image_box], dim=-1))
+        x, y = this_context_features.chunk(2, dim=1)
+
+        this_context_features = torch.cat((self.object_roi_pool(scene, torch.cat([batch_ind, box], dim=-1)), x, y * box_context_imap), dim=1)
+        this_context_features = self.object_feature_fuse(this_context_features)
+        def _norm(x):
+            # if self.norm:
+            return x / x.norm(2, dim=-1, keepdim=True)
+            # return x
+
+        object_features_emb = _norm(self.object_fc(this_context_features.view(box.size(0), -1)))
+        
+        # TODO: Store in-cache
+
+        return this_context_features, object_features_emb
+
+
+class LEFTRelationEMB(torch.nn.Module):
+    def __init__(self, resnet_model_name: str = 'resnet50', pretrained: bool = True, device: Optional[str] = None):
+        super().__init__()
+        
+        self.pool_size = 32
+        downsample_rate = 16
+
+        self.relation_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate)
+
+        feature_dim = 256
+        output_dims = [None, 128, 128, 128]
+        self.relation_feature_extract = torch.nn.Conv2d(feature_dim, feature_dim // 2 * 3, 1)
+        self.relation_feature_fuse = torch.nn.Conv2d(feature_dim // 2 * 3 + output_dims[1] * 2, output_dims[2], 1)
+        self.relation_feature_fc = torch.nn.Sequential(torch.nn.ReLU(True), 
+                                                       torch.nn.Linear(output_dims[2] * self.pool_size ** 2, 2048))
+
+        self.cache_dir = Path("cache")
+        self.cache_dir.mkdir(exist_ok=True)
+        self._ram_cache: dict[str, torch.Tensor] = {}
+
+        
+    def forward(self, scene, box, object_features):
+
+        relation_features = self.relation_feature_extract(scene)
+
+        with torch.no_grad():
+            sub_id, obj_id = jactorch.meshgrid(torch.arange(box.size(0), dtype=torch.int64, device=box.device), dim=0)
+            sub_id, obj_id = sub_id.contiguous().view(-1), obj_id.contiguous().view(-1)
+            sub_box, obj_box = jactorch.meshgrid(box, dim=0)
+            sub_box = sub_box.contiguous().view(box.size(0) ** 2, 4)
+            obj_box = obj_box.contiguous().view(box.size(0) ** 2, 4)
+
+            # union box
+            union_box = generate_union_box(sub_box, obj_box)
+            rel_batch_ind = 0 + torch.zeros(union_box.size(0), 1, dtype=box.dtype, device=box.device)
+
+            # intersection maps
+            sub_union_imap = generate_intersection_map(sub_box, union_box, self.pool_size)
+            obj_union_imap = generate_intersection_map(obj_box, union_box, self.pool_size)
+
+        def _norm(x):
+            # if self.norm:
+            return x / x.norm(2, dim=-1, keepdim=True)
+            # return x
+
+        this_relation_features = self.relation_roi_pool(relation_features, torch.cat((rel_batch_ind, union_box), dim=-1))
+        x, y, z = this_relation_features.chunk(3, dim=1)
+        this_relation_features = self.relation_feature_fuse(torch.cat((object_features[sub_id], object_features[obj_id], x, y * sub_union_imap, z * obj_union_imap), dim=1))
+
+        relation_features_emb = _norm(self.relation_feature_fc(this_relation_features.view(box.size(0), box.size(0), -1)))
+        
+        # TODO: Store in-cache
+
+        return relation_features_emb
+        
+
 
 
 
