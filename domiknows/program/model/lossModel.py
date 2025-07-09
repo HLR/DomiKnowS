@@ -236,6 +236,7 @@ class InferenceModel(LossModel):
                 lbl = lbl.unsqueeze(0)
 
             # Calcluate loss
+            constr_out = constr_out.to(self.device)
             losses.append(self.loss_func(constr_out.float(), lbl)) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)

@@ -21,7 +21,8 @@ def preprocess_dataset(args,NUM_INSTANCES,CACHE_DIR):
             incl_scene       = True,
             incl_raw_scene   = True,
         )
-        ds.filter_relational_type()
+        # ds.filter_relational_type()
+        ds.filter_one_relation()
         return ds
 
     dataset = []
@@ -58,6 +59,7 @@ def preprocess_dataset(args,NUM_INSTANCES,CACHE_DIR):
         dataset = [dataset[i] for i in range(len(dataset) - args.test_size, len(dataset))]
         #dataset = [dataset[i] for i in range(args.test_size)]
     else:
+        print(len(dataset))
         dataset = [dataset[i] for i in range(args.train_size)]
     return dataset
 
@@ -68,7 +70,7 @@ def preprocess_folders_and_files(dummy):
             z.extractall(path="train/")
         print(f"Extraction complete")
 
-    CACHE_DIR = Path("dataset_cache")
+    CACHE_DIR = Path("dataset_cache2")
     for directory in [CACHE_DIR, Path("models"), Path("cache")]:
         directory.mkdir(exist_ok=True)
     CACHE_DIR.mkdir(exist_ok=True)

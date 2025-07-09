@@ -143,7 +143,7 @@ class PrRoIPoolApprox(torch.nn.Module):
             output_size=self.output_size,
             spatial_scale=self.spatial_scale,
             sampling_ratio=-1,  # let PyTorch choose automatically
-            aligned=True        # more accurate bilinear interpolation
+            aligned=True        # bilinear interpolation
         )
     
 class ResnetLEFT(torch.nn.Module):
@@ -163,7 +163,9 @@ class ResnetLEFT(torch.nn.Module):
 
 
     def forward(self, sample_id, image):
-        # Peform Cache here
+        # Cache here
+        if isinstance(image, list):
+            image = image[0]
         x = self.preprocessor(image).unsqueeze(0).to(self.device)
         feature_emb = self.resnet(x)
         return feature_emb
@@ -176,12 +178,12 @@ class LEFTObjectEMB(torch.nn.Module):
         self.pool_size = 32
         downsample_rate = 16
 
-        self.context_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate)
-        self.object_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate)
+        self.context_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate).to(device)
+        self.object_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate).to(device)
 
-        self.object_feature_extract = torch.nn.Conv2d(256, 256, 1)
-        self.object_feature_fuse = torch.nn.Conv2d(256 * 2, 128, 1)
-        self.object_fc = torch.nn.Sequential(torch.nn.ReLU(True), torch.nn.Linear(128 * 32 * 32, 2048))
+        self.object_feature_extract = torch.nn.Conv2d(256, 256, 1).to(device)
+        self.object_feature_fuse = torch.nn.Conv2d(256 * 2, 128, 1).to(device)
+        # 
 
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(exist_ok=True)
@@ -210,16 +212,32 @@ class LEFTObjectEMB(torch.nn.Module):
 
         this_context_features = torch.cat((self.object_roi_pool(scene, torch.cat([batch_ind, box], dim=-1)), x, y * box_context_imap), dim=1)
         this_context_features = self.object_feature_fuse(this_context_features)
-        def _norm(x):
-            # if self.norm:
-            return x / x.norm(2, dim=-1, keepdim=True)
-            # return x
+        # def _norm(x):
+        #     # if self.norm:
+        #     return x / x.norm(2, dim=-1, keepdim=True)
+        #     # return x
 
-        object_features_emb = _norm(self.object_fc(this_context_features.view(box.size(0), -1)))
-        
-        # TODO: Store in-cache
+        # object_features_emb = _norm(self.object_fc(this_context_features.view(box.size(0), -1)))
 
-        return this_context_features, object_features_emb
+        return this_context_features
+    
+class LinearLayer(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, device="cpu"):
+        super().__init__()
+        self.device = device
+        # 128 * 32 * 32, 2048
+        self.object_fc = torch.nn.Sequential(torch.nn.ReLU(True), torch.nn.Linear(input_dim, output_dim))
+        self.object_fc.to(self.device)
+
+    
+    def _norm(self, x):
+        # if self.norm:
+        # return x
+        return x / x.norm(2, dim=-1, keepdim=True)
+            
+    def forward(self, feature, box):
+        emb = self._norm(self.object_fc(feature.view(box.size(0), -1)))
+        return emb
 
 
 class LEFTRelationEMB(torch.nn.Module):
@@ -229,14 +247,14 @@ class LEFTRelationEMB(torch.nn.Module):
         self.pool_size = 32
         downsample_rate = 16
 
-        self.relation_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate)
+        self.relation_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate).to(device)
 
         feature_dim = 256
         output_dims = [None, 128, 128, 128]
-        self.relation_feature_extract = torch.nn.Conv2d(feature_dim, feature_dim // 2 * 3, 1)
-        self.relation_feature_fuse = torch.nn.Conv2d(feature_dim // 2 * 3 + output_dims[1] * 2, output_dims[2], 1)
+        self.relation_feature_extract = torch.nn.Conv2d(feature_dim, feature_dim // 2 * 3, 1).to(device)
+        self.relation_feature_fuse = torch.nn.Conv2d(feature_dim // 2 * 3 + output_dims[1] * 2, output_dims[2], 1).to(device)
         self.relation_feature_fc = torch.nn.Sequential(torch.nn.ReLU(True), 
-                                                       torch.nn.Linear(output_dims[2] * self.pool_size ** 2, 2048))
+                                                       torch.nn.Linear(output_dims[2] * self.pool_size ** 2, 128)).to(device)
 
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(exist_ok=True)
@@ -269,18 +287,14 @@ class LEFTRelationEMB(torch.nn.Module):
 
         this_relation_features = self.relation_roi_pool(relation_features, torch.cat((rel_batch_ind, union_box), dim=-1))
         x, y, z = this_relation_features.chunk(3, dim=1)
+        # print()
         this_relation_features = self.relation_feature_fuse(torch.cat((object_features[sub_id], object_features[obj_id], x, y * sub_union_imap, z * obj_union_imap), dim=1))
 
-        relation_features_emb = _norm(self.relation_feature_fc(this_relation_features.view(box.size(0), box.size(0), -1)))
-        
-        # TODO: Store in-cache
+        relation_features_emb = _norm(self.relation_feature_fc(this_relation_features.view(box.size(0) * box.size(0), -1)))
+        # print(relation_features_emb.shape)
 
         return relation_features_emb
         
-
-
-
-
 class DummyLinearLearnerold(TorchLearner):
     def __init__(self, *pre,current_attribute=None):
         TorchLearner.__init__(self, *pre)
