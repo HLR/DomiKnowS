@@ -1,7 +1,7 @@
 import os
 import os.path as osp
 from typing import Optional, Union, Callable, Sequence, List, Dict, Any, Tuple, Type
-
+import pickle
 import nltk # For word_tokenize
 nltk.download('punkt')
 nltk.download('punkt_tab')
@@ -269,6 +269,10 @@ class CLEVRDatasetUnwrapped:
         self.question_transform = question_transform
         self.incl_scene = incl_scene
         self.incl_raw_scene = incl_raw_scene
+        self.convert_counting = False
+
+        with open("counting_to_yesno_questions_gpt4o.pkl", "rb") as f:
+            self.counting_convert_dict = pickle.load(f)
 
         logger.info(f'Loading scenes from: "{self.scenes_json_path}".')
         try:
@@ -322,7 +326,7 @@ class CLEVRDatasetUnwrapped:
             logger.info('Building the output vocab from dataset answers.')
             self.output_vocab = Vocab.from_dataset(self, keys=['answer'], single_word=True)
 
-    def get_metainfo(self, index: int) -> Dict[str, Any]:
+    def get_metainfo(self, index: int,conver_counting=False) -> Dict[str, Any]:
         if not (0 <= index < len(self.questions)):
             raise IndexError(f"Index {index} out of bounds for questions (len: {len(self.questions)})")
         
@@ -341,8 +345,16 @@ class CLEVRDatasetUnwrapped:
         metainfo_dict.program = metainfo_dict.pop('program', None)
 
         metainfo_dict.image_filename = self._get_image_filename(scene_data) 
-        metainfo_dict.question_index = index 
-        
+        metainfo_dict.question_index = index
+
+        try:
+            key = (str(metainfo_dict["question"]), int(metainfo_dict["answer"]))
+            if conver_counting and key in self.counting_convert_dict:
+                metainfo_dict["question"] = self.counting_convert_dict[key]["question"]
+                metainfo_dict["answer"] = self.counting_convert_dict[key]["answer"]
+        except:
+            pass
+
         question_text = str(metainfo_dict.get('question', ''))
         try:
             metainfo_dict.question_tokenized = nltk.word_tokenize(question_text) 
@@ -362,7 +374,7 @@ class CLEVRDatasetUnwrapped:
         return scene.get('image_filename', "unknown_image.png") 
 
     def __getitem__(self, index: int) -> Dict[str, Any]:
-        metainfo = self.get_metainfo(index) 
+        metainfo = self.get_metainfo(index,self.convert_counting)
         feed_dict = AttrDict()
 
         # Get initial bounding boxes (objects_raw)
@@ -531,7 +543,40 @@ class CLEVRDatasetFilterableView:
                 return True
             else:
                 return False        
-        return self.filter(filt, f'filter-one-left-or-right') 
+        return self.filter(filt, f'filter-one-left-or-right')
+
+    def filter_atmostlatleastlequal(self, relation_number=1) -> 'CLEVRDatasetFilterableView':
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same" in program_str or "than" in program_str:
+                return False
+            try:
+                int(q_metainfo["answer"])
+            except:
+                return False
+            if program_str.count("relate") <= relation_number and "count" in program_str and str(q_metainfo["answer"]) not in ["yes","no"] and (q_metainfo["question"],int(q_metainfo["answer"])) in self.dataset.counting_convert_dict:
+                return True
+            else:
+                return False
+        self.dataset.convert_counting = True
+        return self.filter(filt, f'filter-one-left-or-right')
+
+    def filter_more_than_one_relation(self, *args) -> 'CLEVRDatasetFilterableView':
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same_" in program_str or "than" in program_str or "count" in program_str:
+                return False
+            if program_str.count("relate") > 1:
+                return True
+            else:
+                return False
+        return self.filter(filt, f'filter-one-left-or-right')
 
     def make_dataloader(self, batch_size: int, shuffle: bool, drop_last: bool, nr_workers: int) -> Any:
         logger.warning("`make_dataloader` (JacDataLoader) is removed. Use a standard DataLoader (e.g., torch.utils.data.DataLoader) and define a custom collate_fn if needed.")
