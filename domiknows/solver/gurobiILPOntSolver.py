@@ -1858,7 +1858,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         seperateTensorsUsed = True
                         
                     if seperateTensorsUsed:
-                        lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
+                        lossTensor = torch.zeros(len(lossList), device=self.current_device)#, requires_grad=True) # Entry lcs
                         for i, l in enumerate(lossList):
                             lossTensor[i] = float("nan")
                             for entry in l:
