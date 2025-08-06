@@ -157,7 +157,7 @@ class LogicalConstrain(LcElement):
         
         for _, eItem in enumerate(self.e):
             if isinstance(eItem, V):
-                if eItem[1] and eItem[1][1]:
+                if eItem[1] and isinstance(eItem[1], (list, tuple)) and len(eItem[1]) > 1:
                     if isinstance(eItem[1][1], eqL):
                         if eItem[1][1].e[0]:
                             lcConcepts.add(eItem[1][1].e[0][0].name)
@@ -354,8 +354,20 @@ class LogicalConstrain(LcElement):
         for z in sVar:
             tVars = [] # Collect ILP constraints results
             for t in z:
-                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
-                
+                # Check if 'onlyConstrains' is already in t (as a dict or by position)
+                if isinstance(t, dict) and 'onlyConstrains' in t:
+                    tVars.append(lcFun(model, *t))
+                elif isinstance(t, (list, tuple)):
+                    # Try to detect if onlyConstrains is already present by argument name
+                    import inspect
+                    sig = inspect.signature(lcFun)
+                    param_names = list(sig.parameters.keys())
+                    if 'onlyConstrains' in param_names and len(t) >= param_names.index('onlyConstrains') + 1:
+                        tVars.append(lcFun(model, *t))
+                    else:
+                        tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
+                else:
+                    tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
             rVars.append(tVars)
         
         # Return results from created ILP constraints - 
@@ -372,35 +384,25 @@ class LogicalConstrain(LcElement):
         lcVariableName0 = lcVariableNames[0]  # First variable
         lcVariableSet0 = v[lcVariableName0]
 
-
-        zVars = [] # Output ILP variables
-        # for i, _ in enumerate(lcVariableSet0):
-        #     varsSetup = []
-        #
-        #     var = []
-        #     for currentV in iter(v):
-        #         var.extend(v[currentV][i])
-        #
-        #     if len(var) == 0:
-        #         if not (headConstrain or integrate):
-        #             zVars.append([None])
-        #
-        #         continue
-        #
-        #     if headConstrain or integrate:
-        #         varsSetup.extend(var)
-        #     else:
-        #         varsSetup.append(var)
         varsSetup = []
+        for i, _ in enumerate(lcVariableSet0):
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
 
-        var = [currentV[0] for currentV in iter(lcVariableSet0)]
+            if len(var) == 0:
+                if not (headConstrain or integrate):
+                    zVars.append([None])
 
-        if headConstrain or integrate:
-            varsSetup.extend(var)
-        else:
-            varsSetup.append(var)
+                continue
+
+            if headConstrain or integrate:
+                varsSetup.extend(var)
+            else:
+                varsSetup.append(var)
 
         # -- Use ILP variable setup to create constrains
+        zVars = [] # Output ILP variables
         if headConstrain or integrate:
             zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
                                                          logicMethodName = logicMethodName)])
@@ -602,7 +604,7 @@ class norL(LogicalConstrain):
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+            return self.createILPConstrains('Nor', myIlpBooleanProcessor.norVar, model, v, headConstrain)
 
 class xorL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
@@ -610,16 +612,16 @@ class xorL(LogicalConstrain):
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
-    
-class epqL(LogicalConstrain):
+            return self.createILPConstrains('Xor', myIlpBooleanProcessor.xorVar, model, v, headConstrain)
+
+class equivalenceL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
-            return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
-     
+            return self.createILPConstrains('Equivalence', myIlpBooleanProcessor.equivalenceVar, model, v, headConstrain)
+
 # ----------------- Auxiliary
      
 class eqL(LogicalConstrain):

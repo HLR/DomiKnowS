@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import ifL, andL, nandL, atMostL, existsL
+from domiknows.graph.logicalConstrain import ifL, andL, nandL, exactL
 from domiknows.graph.relation import disjoint
 
 
@@ -28,7 +28,7 @@ with Graph('global') as graph:
         other = word(name='other')
         o = word(name='O')
 
-        disjoint(people, organization, location, other, o)
+        #disjoint(people, organization, location, other, o)
 
         # LC0
         nandL(people, organization, active = True)
@@ -39,10 +39,25 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
         
+        # LC1
+        ifL(word('x'), exactL(people(path=('x')), organization(path=('x')), location(path=('x')), other(path=('x')), o(path=('x'))), active = True)
+        
         # LC2
-        ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
-        #ifL(existsL(work_for('x', 'y')), andL(people('x'), organization('y')), active = True)
-
+        ifL(pair('x'), exactL(work_for(path=('x')), located_in(path=('x')), live_in(path=('x')), orgbase_on(path=('x')), kill(path=('x'))), active = True)
+        
         # LC3
-        ifL(word, atMostL(people, organization, location, other, o), active = True)
+        #ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
+        ifL(work_for('x', 'y'), andL(people('x'), organization('y')), active = True)
+        
+        # LC4
+        ifL(located_in('x', 'y'), andL(location('x'), organization('y')), active = True)
+        
+        # LC5
+        ifL(live_in('x', 'y'), andL(people('x'), location('y')), active = True)
+        
+        # LC6
+        ifL(orgbase_on('x', 'y'), andL(organization('x'), location('y')), active = True)
+        
+        # LC7
+        ifL(kill('x', 'y'), andL(people('x'), people('y')), active = True)
         

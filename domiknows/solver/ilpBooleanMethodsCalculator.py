@@ -121,28 +121,80 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
             
         return norSuccess
            
-    def xorVar(self, _, var1, var2, onlyConstrains = False):
-        xorSuccess = 0
-        if var1 + var2 == 1:
-            xorSuccess = 1
-            
-        return xorSuccess
-    
-    def epqVar(self, _, var1, var2, onlyConstrains = False):
+    def xorVar(self, _, *var, onlyConstrains = False):
         # -- Consider None
-        if var1 is None:
-            var1 = 0
-            
-        if var2 is None:
-            var2 = 0
+        varFixed = []  
+        for v in var:
+            if v is None:
+                varFixed.append(0) # when None - XOR treats None as False
+            else:
+                varFixed.append(v)
+        var = varFixed
         # --
         
-        epqSuccess = 0
-        if var1 - var2 == 0:
-            epqSuccess = 1
+        if len(var) == 0:
+            return 0  # XOR of no variables is False
+        elif len(var) == 1:
+            return int(var[0])  # XOR of single variable is the variable itself
+        else:
+            # Multi-variable XOR: true when odd number of variables are true
+            true_count = 0
+            for v in var:
+                if torch.is_tensor(v):
+                    true_count += int(v.item())
+                else:
+                    true_count += int(v)
             
-        return epqSuccess     
-    
+            # XOR is true when odd number of inputs are true
+            xorSuccess = 1 if (true_count % 2 == 1) else 0
+            return xorSuccess
+
+    def equivalenceVar(self, _, *var, onlyConstrains = False):
+        # -- Consider None
+        varFixed = []  
+        for v in var:
+            if v is None:
+                varFixed.append(0) # when None - treat as False
+            else:
+                varFixed.append(v)
+        var = varFixed
+        # --
+        
+        if len(var) == 0:
+            return 1  # Equivalence of no variables is True (vacuous truth)
+        elif len(var) == 1:
+            return 1  # Equivalence of single variable is True (always equivalent to itself)
+        else:
+            # Multi-variable equivalence: true when all variables have same truth value
+            
+            # Convert all to integer values for comparison
+            values = []
+            for v in var:
+                if torch.is_tensor(v):
+                    values.append(int(v.item()))
+                else:
+                    values.append(int(v))
+            
+            # Check if all values are the same (all 0 or all 1)
+            first_value = values[0]
+            all_same = all(val == first_value for val in values)
+            
+            equivSuccess = 1 if all_same else 0
+            return equivSuccess
+            # -- Consider None
+            if var1 is None:
+                var1 = 0
+                
+            if var2 is None:
+                var2 = 0
+            # --
+            
+            epqSuccess = 0
+            if var1 - var2 == 0:
+                epqSuccess = 1
+                
+            return epqSuccess     
+        
     def countVar(
         self,
         _,
@@ -197,9 +249,6 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         else:
             return 0
     
-    # --------------------------------------------------------------------- #
-    #  New: compareCountsVar – lightweight counterpart of the ILP version   #
-    # --------------------------------------------------------------------- #
     def compareCountsVar(
         self,
         _,  

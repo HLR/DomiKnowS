@@ -99,13 +99,13 @@ class ilpBooleanProcessor(object, metaclass=abc.ABCMeta):
     # XOR / XNOR
     # ------------------------------------------------------------------
     @abc.abstractmethod
-    def xorVar(self, m, _var1, _var2, *, onlyConstrains: bool = False):
+    def xorVar(self, m, *var, onlyConstrains: bool = False):
         """Two‑input **exclusive‑or**.
 
         Reified form (returns *varXOR*): standard 4‑constraint encoding
         ensuring *varXOR* = 1 exactly when the inputs differ.
 
-        Constraint‑only: enforce ``var1 + var2 == 1`` (one True, one False).
+        Constraint‑only: enforce ``Σ v_i == 1`` (one True, others False).
         """
 
     # ------------------------------------------------------------------
@@ -128,13 +128,28 @@ class ilpBooleanProcessor(object, metaclass=abc.ABCMeta):
     # Equivalence (XNOR)
     # ------------------------------------------------------------------
     @abc.abstractmethod
-    def epqVar(self, m, _var1, _var2, *, onlyConstrains: bool = False):
-        """Logical **equivalence** (XNOR).
+    def equivalenceVar(self, m, *var, onlyConstrains: bool = False):
+        """Logical **equivalence** (biconditional/if-and-only-if).
 
-        Reified form (returns *varEQ*): four linear constraints ensure
-        *varEQ* = 1 exactly when the two inputs are equal.
+        Returns true when all input variables have the same truth value 
+        (all true or all false).
 
-        Constraint‑only: enforce ``var1 == var2``.
+        For binary case: equiv(a, b) = (a ↔ b) = (a → b) ∧ (b → a)
+        For n-ary case: equiv(a, b, c, ...) = (all true) ∨ (all false)
+
+        Reified form (returns *varEQ*): constraints ensure *varEQ* = 1 
+        exactly when all inputs are equivalent.
+
+        Constraint‑only: enforce that all variables have the same truth value.
+        
+        Args:
+            m: Model context
+            *var: Variable number of boolean variables to compare
+            onlyConstrains: If True, return loss (constraint violation);
+                            if False, return success (truth degree)
+        
+        Returns:
+            Truth degree of equivalence or constraint violation measure
         """
 
     # ------------------------------------------------------------------

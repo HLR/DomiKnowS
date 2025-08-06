@@ -319,9 +319,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def norVar(self, m, *var, onlyConstrains = False):
         return self.notVar(m, self.orVar(m, var), onlyConstrains=onlyConstrains) # Negation of the disjunction
     
-    def xorVar(self, m, var1, var2, onlyConstrains = False):
-        var = (var1, var2)
-        
+    def xorVar(self, m, *var, onlyConstrains = False):        
         # Conjunction of the disjunction and the negation of the conjunction
         return self.andVar(m, self.orVar(m, var), self.notVar(m, self.andVar(m, var)), onlyConstrains=onlyConstrains) 
     
@@ -451,48 +449,42 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if self.ifLog: self.myLogger.debug("IF returns : %s"%(varsInfo["varName"]))
             return varIF
            
-    def epqVar(self, m, var1, var2, onlyConstrains = False):
-        #if self.ifLog: self.myLogger.debug("EQ called with : %s"%(var1,var2))
-
+    def equivalenceVar(self, m, *var, onlyConstrains = False):
+        logicMethodName = "EQUIVALENCE"
+        
         # -- Consider None
-        if var1 is None:
-            var1 = 0
-            
-        if var2 is None:
-            var2 = 0
+        varFixed = []  
+        for v in var:
+            if v is None:
+                varFixed.append(0) # when None
+            else:
+                varFixed.append(v)
         # --
-    
-        # Get names of ILP variables
-        var1Name = var1
-        var2Name = var2
-        if not self.__varIsNumber(var1):
-            var1Name = var1.VarName
-        if not self.__varIsNumber(var2):
-            var2Name = var2.VarName
-            
-        if onlyConstrains:
-            m.addConstr(var1 >= var2)
-            if self.ifLog: self.myLogger.debug("EQ created constraint only: %s => %s"%(var1Name, var2Name))
-            
-            m.addConstr(var1 <= var2)
-            if self.ifLog: self.myLogger.debug("EQ created constraint only: %s <= %s"%(var1Name, var2Name))
-
-            return
         
-        varEQName = "epq_%s_%s"%(var1, var2)
-        varEQName = varEQName[:254]
-        varEQ = m.addVar(vtype=GRB.BINARY, name=varEQName)
+        if len(varFixed) == 0:
+            # Equivalence of no variables is True (vacuous truth)
+            if self.ifLog: self.myLogger.debug("%s returns: %i (no variables)"%(logicMethodName, 1))
+            return 1
+        elif len(varFixed) == 1:
+            # Equivalence of single variable is True (always equivalent to itself)
+            if self.ifLog: self.myLogger.debug("%s returns: %i (single variable)"%(logicMethodName, 1))
+            return 1
+        else:
+            # Multi-variable equivalence using existing methods:
+            # equiv(a, b, c, ...) = AND(a, b, c, ...) OR AND(NOT(a), NOT(b), NOT(c), ...)
             
-        m.addConstr(var1 + var2 - varEQ <= 1)
-        m.addConstr(var1 + var2 + varEQ >= 1)
-        m.addConstr(-var1 + var2 + varEQ <= 1)
-        m.addConstr(var1 - var2 + varEQ <= 1)
+            if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, [v if self.__varIsNumber(v) else v.VarName for v in varFixed]))
+            
+            # All true case: AND of all variables
+            all_true = self.andVar(m, *varFixed)
+            
+            # All false case: AND of all negated variables
+            negated_vars = [self.notVar(m, v) for v in varFixed]
+            all_false = self.andVar(m, *negated_vars)
+            
+            # Equivalence = (all true) OR (all false)
+            return self.orVar(m, all_true, all_false, onlyConstrains=onlyConstrains)
         
-        m.update()
-             
-        if self.ifLog: self.myLogger.debug("EQ returns : %s"%(varEQ.VarName))
-        return varEQ
-    
     def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1, logicMethodName = "COUNT"):
         BigM = 1000         # set limit on number of variables possible to be used in the counting constraint
         LittleM = 0.0001    # set the precision of equality constraint

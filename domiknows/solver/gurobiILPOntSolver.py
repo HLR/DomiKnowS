@@ -1308,7 +1308,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # ----------- Select model run with the max/min objective value 
             maxP = None
             for p in lcRun:
-                if lcRun[p]['objValue']:
+                if lcRun[p]['solved']:
                     if maxP:
                         if minimizeObjective and lcRun[maxP]['objValue'] >= lcRun[p]['objValue']:
                             maxP = p
@@ -1327,123 +1327,136 @@ class gurobiILPOntSolver(ilpOntSolver):
                 xVarsIndex = 0
                 solutions_to_log = set()
 
-            # Initialize at the beginning of your method
-            solutions_to_log = set()
+                # Initialize at the beginning of your method
+                solutions_to_log = set()
 
-            for c in conceptsRelations:
-                if c[2] is None:
-                    index = 0
-                else:
-                    index = c[2] # multiclass
-                    
-                c_root = dn.findRootConceptOrRelation(c[0])
-                c_root_dns = dn.findDatanodes(select = c_root)
-                
-                ILPkey = '<' + c[0].name + '>/ILP'
-                
-                xkey = ILPkey + '/x'
-                xPkey = ILPkey + '/xP'
-                xNotPkey = ILPkey + '/notxP'
-                
-                ilpTensor = None
-                if getDnSkeletonMode() and "variableSet" in dn.attributes:
-                    ilpKeyInVariableSet = c_root.name + "/<" + c[0].name +">" + "/ILP"
-                    
-                    if ilpKeyInVariableSet in dn.attributes["variableSet"]:
-                        ilpTensor = dn.attributes["variableSet"][ilpKeyInVariableSet]
-                    else:
-                        ilpTensor = torch.zeros([len(c_root_dns), c[3]], dtype=torch.float, device=self.current_device)
-            
-                for i, cDn in enumerate(c_root_dns):
-                    dnAtt = cDn.getAttributes()
-                    
-                    if xkey not in dnAtt and xPkey not in dnAtt:
-                        if xVars[xVarsIndex] == None or not reusingModel:
-                            
-                            if ilpTensor is not None:
-                                ilpTensor[i][index] = float("nan")
-                            else:
-                                if ILPkey not in dnAtt:
-                                    dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
-                                
-                                dnAtt[ILPkey][index] = float("nan")
-                            
-                            expected_pointer = len(xVars) - remaining_vars_estimate
-                            assert xVarsIndex == expected_pointer, (
-                                f"xVarsIndex drift: expected {expected_pointer}, got {xVarsIndex}"
-                            )
-
-                            # Update index for x variables 
-                            if c[2] is None:
-                                xVarsIndex +=2 # skip Not variable
-                            else:
-                                xVarsIndex +=1
-                                
-                            continue 
-                        else:
-                            if pUsed: 
-                                dnAtt[xPkey] = {}
-                                dnAtt[xPkey][maxP] = [None] * c[3]
-                                dnAtt[xPkey][maxP][index] = xVars[xVarsIndex]
-                            else:
-                                dnAtt[xkey] = [None] * c[3]
-                                dnAtt[xkey][index] = xVars[xVarsIndex]
-                    
-                    if pUsed: 
-                        if dnAtt[xPkey][maxP][index] == None:
-                            dnAtt[xPkey][maxP][index] = xVars[xVarsIndex]
-                    else:
-                        if dnAtt[xkey][index] == None:
-                            dnAtt[xkey][index] = xVars[xVarsIndex]
-                                
-                    # Update index for x variables           
+                for c in conceptsRelations:
                     if c[2] is None:
-                        xVarsIndex +=2 # skip Not variable
+                        index = 0
                     else:
-                        xVarsIndex +=1
+                        index = c[2] # multiclass
                         
-                    #  Get solution    
-                    if pUsed:
-                        solution = dnAtt[xPkey][maxP][index].X
-                    else:
-                        solution = dnAtt[xkey][index].X
-                        
-                    if solution == 0:
-                        solution = 0
-                    elif solution == 1: 
-                        solution = 1
-
-                    if ilpTensor is None and ILPkey not in dnAtt:
-                        dnAtt[ILPkey] = torch.full((c[3],), float("nan"))
+                    c_root = dn.findRootConceptOrRelation(c[0])
+                    c_root_dns = dn.findDatanodes(select = c_root)
                     
-                    if xkey not in dnAtt:
-                        dnAtt[xkey] = torch.full((c[3],), float("nan"))
+                    ILPkey = '<' + c[0].name + '>/ILP'
+                    
+                    xkey = ILPkey + '/x'
+                    xPkey = ILPkey + '/xP'
+                    xNotPkey = ILPkey + '/notxP'
+                    
+                    ilpTensor = None
+                    if getDnSkeletonMode() and "variableSet" in dn.attributes:
+                        ilpKeyInVariableSet = c_root.name + "/<" + c[0].name +">" + "/ILP"
+                        
+                        if ilpKeyInVariableSet in dn.attributes["variableSet"]:
+                            ilpTensor = dn.attributes["variableSet"][ilpKeyInVariableSet]
+                        else:
+                            ilpTensor = torch.zeros([len(c_root_dns), c[3]], dtype=torch.float, device=self.current_device)
                 
+                    for i, cDn in enumerate(c_root_dns):
+                        dnAtt = cDn.getAttributes()
+                        
+                        if xkey not in dnAtt and xPkey not in dnAtt:
+                            if xVars[xVarsIndex] == None or not reusingModel:
+                                
+                                if ilpTensor is not None:
+                                    ilpTensor[i][index] = float("nan")
+                                else:
+                                    if ILPkey not in dnAtt:
+                                        dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
+                                    
+                                    dnAtt[ILPkey][index] = float("nan")
+                                
+                                expected_pointer = len(xVars) - remaining_vars_estimate
+                                assert xVarsIndex == expected_pointer, (
+                                    f"xVarsIndex drift: expected {expected_pointer}, got {xVarsIndex}"
+                                )
+
+                                # Update index for x variables 
+                                if c[2] is None:
+                                    xVarsIndex +=2 # skip Not variable
+                                else:
+                                    xVarsIndex +=1
+                                    
+                                continue 
+                            else:
+                                if pUsed: 
+                                    dnAtt[xPkey] = {}
+                                    dnAtt[xPkey][maxP] = [None] * c[3]
+                                    dnAtt[xPkey][maxP][index] = xVars[xVarsIndex]
+                                else:
+                                    dnAtt[xkey] = [None] * c[3]
+                                    dnAtt[xkey][index] = xVars[xVarsIndex]
+                        
+                        if pUsed: 
+                            if dnAtt[xPkey][maxP][index] == None:
+                                dnAtt[xPkey][maxP][index] = xVars[xVarsIndex]
+                        else:
+                            if dnAtt[xkey][index] == None:
+                                dnAtt[xkey][index] = xVars[xVarsIndex]
+                                    
+                        # Update index for x variables           
+                        if c[2] is None:
+                            xVarsIndex +=2 # skip Not variable
+                        else:
+                            xVarsIndex +=1
+                            
+                        #  Get solution    
+                        if pUsed:
+                            solution = dnAtt[xPkey][maxP][index].X
+                        else:
+                            solution = dnAtt[xkey][index].X
+                            
+                        if solution == 0:
+                            solution = 0
+                        elif solution == 1: 
+                            solution = 1
+
+                        if ilpTensor is None and ILPkey not in dnAtt:
+                            dnAtt[ILPkey] = torch.full((c[3],), float("nan"))
+                        
+                        if xkey not in dnAtt:
+                            dnAtt[xkey] = torch.full((c[3],), float("nan"))
+                    
+                        if ilpTensor is not None:
+                            ilpTensor[i][index] = solution
+                        else:
+                            dnAtt[ILPkey][index] = solution
+                            
+                        if pUsed: # Set main ILP variable x based on max P ILP variable x
+                            dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
+                            if xNotPkey in dnAtt: # do this for not x as well
+                                dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
+
+                        # Only log positive concepts when solution == 1
+                        # Skip negative concepts (those with "not_" in the name)
+                        if solution == 1 and not c[1].startswith("not_"):
+                            solutions_to_log.add((cDn, c[1]))
+                    
                     if ilpTensor is not None:
-                        ilpTensor[i][index] = solution
-                    else:
-                        dnAtt[ILPkey][index] = solution
+                        dn.attributes["variableSet"][ilpKeyInVariableSet] = ilpTensor
                         
-                    if pUsed: # Set main ILP variable x based on max P ILP variable x
-                        dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
-                        if xNotPkey in dnAtt: # do this for not x as well
-                            dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
-
-                    # Only log positive concepts when solution == 1
-                    # Skip negative concepts (those with "not_" in the name)
-                    if solution == 1 and not c[1].startswith("not_"):
-                        solutions_to_log.add((cDn, c[1]))
-                
-                if ilpTensor is not None:
-                    dn.attributes["variableSet"][ilpKeyInVariableSet] = ilpTensor
+                # Log all solutions in sorted order (only positive concepts)
+                if solutions_to_log:
+                    self.log_sorted_solutions(solutions_to_log)
+                    solutions_to_log.clear()
                     
-            # Log all solutions in sorted order (only positive concepts)
-            if solutions_to_log:
-                self.log_sorted_solutions(solutions_to_log)
-                solutions_to_log.clear()
-                
             else:
-                pass
+                end = perf_counter()
+                elapsedInS = end - start
+                if elapsedInS > 1:
+                    self.myLogger.info('ILP Model Infeasible no solution found - internal total time: %fs'%(elapsedInS))
+                    self.myLoggerTime.info('ILP Model Infeasible no solution found - internal total time: %fs'%(elapsedInS))
+                else:
+                    elapsedInMs = elapsedInS *1000
+                    self.myLogger.info('ILP Model Infeasible no solution found - internal total time: %ims'%(elapsedInMs))
+                    self.myLoggerTime.info('ILP Model Infeasible no solution found - internal total time: %ims'%(elapsedInMs))
+
+                self.myLogger.info('')
+
+                # Raise exception if no solution found
+                raise Exception('ILP Model Infeasible - no solution found')
                                        
         except Exception as inst:
             self.myLogger.error('Error returning solutions -  %s'%(inst))
@@ -1472,19 +1485,31 @@ class gurobiILPOntSolver(ilpOntSolver):
         # ----------- Return
         return
 
-   
+
     def log_sorted_solutions(self, solutions_to_log):
         """
         Remove duplicates, sort solutions by datanode name and concept, then log them
-        in alphabetical order with red colour (console only).
+        in alphabetical order with red colour (console only) for items with multiple solutions.
         """
         if not solutions_to_log:
             return
-
+        
+        # Group solutions by datanode to count how many solutions each has
+        datanode_counts = {}
+        for dn, concept in solutions_to_log:
+            dn_str = str(dn)
+            if dn_str not in datanode_counts:
+                datanode_counts[dn_str] = 0
+            datanode_counts[dn_str] += 1
+        
         for dn, concept in sorted(solutions_to_log, key=lambda x: (str(x[0]), x[1])):
-            # Use logger’s %-style formatting so colour codes appear only once
-            self.myLogger.info('%s"%s" is "%s"%s', Fore.RED, dn, concept, Style.RESET_ALL)
-                      
+            dn_str = str(dn)
+            # Only use red color if this datanode has more than one solution
+            if datanode_counts[dn_str] > 1:
+                self.myLogger.info('%s"%s" is "%s"%s', Fore.RED, dn_str, concept, Style.RESET_ALL)
+            else:
+                self.myLogger.info('"%s" is "%s"', dn_str, concept)
+            
     def processILPModelForP(self, p, lcP, m, x, dn, pUsed, reusingModel, ilpVarCount, minimizeObjective, lcRun):
         ps = []
         ps.append(p)

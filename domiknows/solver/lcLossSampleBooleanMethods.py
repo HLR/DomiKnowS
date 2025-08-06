@@ -110,32 +110,66 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             norSuccess = torch.logical_not(norSuccess)
             return norSuccess     
            
-    def xorVar(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
+    def xorVar(self, _, *var, onlyConstrains = False):
+        if self.ifNone(var):
             return None
         
-        xorSuccess = torch.logical_or(torch.logical_and(torch.logical_not(var1), var2), torch.logical_and(var1, torch.logical_not((var2))))
+        if len(var) == 0:
+            # XOR of no variables is False
+            return torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.bool)
+        elif len(var) == 1:
+            # XOR of single variable is the variable itself
+            return var[0]
+        else:
+            # Multi-variable XOR: iteratively apply binary XOR
+            xorSuccess = var[0]
             
-        if onlyConstrains:
-            xorLoss = torch.logical_not(xorSuccess)
+            for v in var[1:]:
+                # XOR(a, b) = (a AND NOT b) OR (NOT a AND b)
+                xorSuccess = torch.logical_or(
+                    torch.logical_and(xorSuccess, torch.logical_not(v)),
+                    torch.logical_and(torch.logical_not(xorSuccess), v)
+                )
             
-            return xorLoss
-        else:            
-            return xorSuccess
-    
-    def epqVar(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
-            return None
-        
-        epqSuccess = torch.eq(var1,var2)
-            
-        if onlyConstrains:
-            epqLoss = torch.logical_not(epqSuccess)
-            
-            return epqLoss
-        else:       
-            return epqSuccess
+            if onlyConstrains:
+                xorLoss = torch.logical_not(xorSuccess)
+                return xorLoss
+            else:            
+                return xorSuccess
 
+    def equivalenceVar(self, _, *var, onlyConstrains = False):
+        if self.ifNone(var):
+            return None
+        
+        if len(var) == 0:
+            # Equivalence of no variables is True (vacuous truth)
+            return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+        elif len(var) == 1:
+            # Equivalence of single variable is True (always equivalent to itself)
+            return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+        else:
+            # Multi-variable equivalence: all variables have same truth value
+            # equiv(a, b, c, ...) = (all true) OR (all false)
+            
+            # All true case: AND of all variables
+            all_true = var[0]
+            for v in var[1:]:
+                all_true = torch.logical_and(all_true, v)
+            
+            # All false case: AND of all negated variables
+            all_false = torch.logical_not(var[0])
+            for v in var[1:]:
+                all_false = torch.logical_and(all_false, torch.logical_not(v))
+            
+            # Equivalence = (all true) OR (all false)
+            equivSuccess = torch.logical_or(all_true, all_false)
+            
+            if onlyConstrains:
+                equivLoss = torch.logical_not(equivSuccess)
+                return equivLoss
+            else:       
+                return equivSuccess
+            
     def countVar(self, _, *var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName="COUNT"):
         # -- Consider None
         fixedVar = []
