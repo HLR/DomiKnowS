@@ -1,6 +1,6 @@
 def get_graph(args):
     from domiknows.graph import Graph, Concept, Relation
-    from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL, exactL
+    from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL, exactAL
     from domiknows.graph import EnumConcept
     Graph.clear()
     Concept.clear()
@@ -19,13 +19,13 @@ def get_graph(args):
         expected_value = expected_zero if args.expected_value == 0 else expected_one
 
         if args.atLeastL and args.atMostL:
-            atLeastL(expected_value, args.expected_atLeastL)
-            atMostL(expected_value, args.expected_atMostL)
+            atLeastAL(expected_value, args.expected_atLeastL)
+            atMostAL(expected_value, args.expected_atMostL)
         elif args.atMostL:
-            atMostL(expected_value, args.expected_atMostL)
+            atMostAL(expected_value, args.expected_atMostL)
         elif args.atLeastL:
-            atLeastL(expected_value, args.expected_atLeastL)
+            atLeastAL(expected_value, args.expected_atLeastL)
         else:
-            exactL(expected_value, args.expected_atLeastL)
+            exactAL(expected_value, args.expected_atLeastL)
 
     return graph, a, b, a_contain_b, b_answer
