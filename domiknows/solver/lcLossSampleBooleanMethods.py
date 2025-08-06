@@ -33,19 +33,6 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             notSuccess = torch.logical_not(var)
             return notSuccess
     
-    def and2Var(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
-            return None
-        
-        and2Success = torch.logical_and(var1,var2)
-       
-        if onlyConstrains:
-            and2Loss = torch.logical_not(and2Success)
-            
-            return and2Loss
-        else:            
-            return and2Success    
-            
     def andVar(self, _, *var, onlyConstrains = False): 
         if self.ifNone(var):
             return None
@@ -61,19 +48,6 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         else:            
             return andSuccess    
     
-    def or2Var(self, _, var1, var2, onlyConstrains = False):
-        if self.ifNone([var1, var2]):
-            return None
-        
-        or2Success = torch.logical_or(var1,var2)
-            
-        if onlyConstrains:
-            or2Loss = torch.logical_not(or2Success)
-            
-            return or2Loss
-        else:            
-            return or2Success   
-    
     def orVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
@@ -87,21 +61,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             
             return orLoss
         else:            
-            return orSuccess    
-            
-    def nand2Var(self, _, var1, var2, onlyConstrains = False):
-        #results = self.notVar(_, self.and2Var(_, var1, var2,))
-        if self.ifNone([var1, var2]):
-            return None
-        
-        nand2Success = torch.logical_not(torch.logical_and(var1, var2))
-
-        if onlyConstrains:
-            nand2Loss =  torch.logical_not(nand2Success)
-            
-            return nand2Loss
-        else:            
-            return nand2Success         
+            return orSuccess             
          
     def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
@@ -219,6 +179,72 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return countLoss
         else:
             return countSuccess
+
+    def compareCountsVar(
+        self,
+        _,                    # no ILP model object in the PyTorch version
+        varsA,                # iterable of literals forming the “left” count
+        varsB,                # iterable of literals forming the “right” count
+        *,                    # force keyword-only for clarity
+        compareOp='>',        # one of '>', '>=', '<', '<=', '==', '!='
+        diff: int = 0,        # optional offset:  count(A) − count(B) ∘ diff
+        onlyConstrains=False,
+        logicMethodName="COUNT_CMP",
+    ):
+        """
+        Compare two literal-sets by their per-sample counts.
+
+        Returns
+        -------
+        torch.BoolTensor  (shape = [sampleSize])
+            • if onlyConstrains is False “success” mask  
+            • if onlyConstrains is True  “loss”  mask  (¬success)
+        """
+
+        if compareOp not in ('>', '>=', '<', '<=', '==', '!='):
+            raise ValueError(f"{logicMethodName}: unsupported operator {compareOp}")
+
+        # ---------- helper to normalise missing literals ----------------------
+        def _to_tensor_list(iterable):
+            tensors = []
+            for v in iterable:
+                if torch.is_tensor(v):
+                    tensors.append(v)
+                else:                       # treat None / scalars as 0-tensor
+                    tensors.append(torch.zeros(
+                        [self.sampleSize], device=self.current_device))
+            return tensors
+
+        tensorsA = _to_tensor_list(varsA)
+        tensorsB = _to_tensor_list(varsB)
+
+        # ---------- count “True” literals per sample --------------------------
+        countA = torch.zeros([self.sampleSize], device=self.current_device)
+        for t in tensorsA:
+            countA.add_(t)
+
+        countB = torch.zeros_like(countA)
+        for t in tensorsB:
+            countB.add_(t)
+
+        diffTensor = torch.full([self.sampleSize], diff, device=self.current_device)
+        delta = countA - countB
+
+        # ---------- evaluate relation ----------------------------------------
+        if   compareOp == '>':
+            success = torch.gt(delta,  diffTensor)
+        elif compareOp == '>=':
+            success = torch.ge(delta,  diffTensor)
+        elif compareOp == '<':
+            success = torch.lt(delta,  diffTensor)
+        elif compareOp == '<=':
+            success = torch.le(delta,  diffTensor)
+        elif compareOp == '==':
+            success = torch.eq(delta,  diffTensor)
+        elif compareOp == '!=':
+            success = torch.ne(delta,  diffTensor)
+
+        return torch.logical_not(success) if onlyConstrains else success
 
     def fixedVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):

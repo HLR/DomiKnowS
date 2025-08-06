@@ -1,150 +1,196 @@
 import abc
 
-if __package__ is None or __package__ == '':
-    from domiknows.solver.ilpConfig import ilpConfig 
+# Resolve relative / absolute import so the interface can be reused from
+# within domiknows *or* as a standalone module during testing.
+if __package__ in (None, ""):
+    from domiknows.solver.ilpConfig import ilpConfig
 else:
-    from .ilpConfig import ilpConfig 
-    
-class ilpBooleanProcessor(object):
-    __metaclass__ = abc.ABCMeta
-    
-    def __init__(self, _ildConfig = ilpConfig) -> None:
-        super().__init__()
+    from .ilpConfig import ilpConfig
 
-    # NOT Negation
-    # Create new variable varNOT, create constraint 1 - var == varNOT, return varNOT
-    # 1 - var == varNOT
-    # if onlyConstrains then only construct constraint 1 - var >= 0
-    @abc.abstractmethod
-    def notVar(self, m, _var, onlyConstrains = False): pass
-    
-    # AND Conjunction with 2 variable
-    # Create new variable varAND, create constrains:
-    # varAND <= var1
-    # varAND <= var2 
-    # var1 + var2 <= varAND + 2 - 1
-    # return varAND
-    # if onlyConstrains then only construct constraint var1 + var2 >= 2
-    @abc.abstractmethod
-    def and2Var(self, m, _var1, _var2,  onlyConstrains = False): pass
-        
-    # AND Conjunction
-    # Create new variable varAND, create constrains:
-    # varAND <= var1
-    # varAND <= var2
-    # ....
-    # varAND <= varN
-    # var1 + var2 + .. + varN <= varAND + N - 1
-    # return varAND
-    # if onlyConstrains then only construct constraint var1 + var2 + .. + varN >= N
-    @abc.abstractmethod
-    def andVar(self, m, *_var, onlyConstrains = False): pass
-       
-    # OR Disjunction with 2 variables
-    # Create new variable varOR, create constrains:
-    # var1 <= varOR
-    # var2 <= varOR 
-    # var1 + var2 >= varOR 
-    # return varOR
-    # if onlyConstrains then only construct constraint var1 + var2 >= 1
-    #
-    # if limit > 1
-    # var1 + var2 - (limit - 1) >= varOR 
-    # if onlyConstrains then only construct constraint var1 + var2 >= limit
-    @abc.abstractmethod
-    def or2Var(self, m, _var1, _var2,  onlyConstrains = False): pass
-        
-    # OR Disjunction
-    # Create new variable varOR, create constrains:
-    # var1 <= varOR
-    # var2 <= varOR 
-    # ...
-    # varN <= varOR
-    # var1 + var2 + ... + varN >= varOR
-    # return varOR
-    # if onlyConstrains then only construct constraint var1 + var2 + ... + varN >= 1
-    # if limit > 1
-    # var1 + var2 + ... + varN - (limit - 1) >= varOR 
-    # if onlyConstrains then only construct constraint var1 + var2 + ... + varN >= limit
-    @abc.abstractmethod
-    def orVar(self, m, *_var, onlyConstrains = False): pass
 
-    # NAND (Alternative denial) with 2 variables
-    # Create new variable varNAND, create constrains:
-    # not(varNAND) <= var1
-    # not(varNAND) <= var2 
-    # var1 + var2 <= not(varNAND) + 2 - 1
-    # return varNAND
-    # if onlyConstrains then only construct constraint var1 + var2 <= 1
-    @abc.abstractmethod
-    def nand2Var(self, m, _var1, _var2): pass
+class ilpBooleanProcessor(object, metaclass=abc.ABCMeta):
+    """Abstract base class that specifies *logical* building blocks for
+    Integer‑Linear‑Programming encodings.
 
-    # NAND (Alternative denial)
-    # Create new variable varNAND, create constrains:
-    # not(varNAND) <= var1
-    # not(varNAND) <= var2 
-    # ...
-    # not(varNAND <= varN 
-    # var1 + var2 + ... + varN <= not(varNAND) + N - 1
-    # return varNAND
-    # if onlyConstrains then only construct constraint var1 + var2 + ... + varN <= N -1
-    @abc.abstractmethod
-    def nandVar(self, m, *_var, onlyConstrains = False): pass
-  
-    # NOR (Joint Denial) 2 variables
-    # Create new variable varNOR, create constrains:
-    # var1 <= not(varNOR)
-    # var2 <= not(varNOR) 
-    # var1 + var2 >= not(varNOR)
-    # return varNOR
-    # if onlyConstrains then only construct constraint var1 + var2 <= 0
-    @abc.abstractmethod
-    def nor2Var(self, m, _var1, _var2): pass
+    Every concrete subclass must implement each Boolean operator as *either*
+    a *reified* form (returning a fresh binary that represents the truth
+    value of the expression) *or* a *hard* form ("onlyConstrains=True") that
+    merely adds the appropriate constraints and returns nothing.
 
-    # NOR (Joint Denial)
-    # Create new variable varNOR, create constrains:
-    # var1 <= not(varNOR)
-    # var2 <= not(varNOR) 
-    # ...
-    # varN <= not(varNOR)
-    # var1 + var2 + ... + varN >= not(varNOR)
-    # return varNOR
-    # if onlyConstrains then only construct constraint var1 + var2 + ... + varN <= 0
-    @abc.abstractmethod
-    def norVar(self, m, *_var, onlyConstrains = False): pass
+    All operators assume their inputs are **binary literals**:
+        • a Gurobi Var of type *BINARY*  (0/1)
+        • the Python integers 0 or 1
+        • or ``None`` (treated as an unknown literal: 1 for positive context,
+          0 for negative, exactly as in the original implementation).
+    """
 
-    # XOR Exclusive Disjunction 
-    # Create new variable varXOR, create constrains:
-    # var1 + var2 + varXOR <= 2
-    # -var1 - var2 + varXOR <= 0
-    # var1 - var2 + varXOR >= 0
-    # -var1 + var2 + varXOR >= 0
-    # return varXOR
-    # if onlyConstrains then only construct constraint var1 + var2 <= 1 and var1 + var2 >= 1 
+    # ---------------------------------------------------------------------
+    # Unary operator
+    # ---------------------------------------------------------------------
     @abc.abstractmethod
-    def xorVar(self, m, _var1, _var2,  onlyConstrains = False): pass
+    def notVar(self, m, _var, *, onlyConstrains: bool = False):
+        """Logical **negation**.
 
-    # IF Implication
-    # Create new variable varIF, create constrains:
-    # 1 - var1 <= varIF
-    # var2 <= varIF
-    # 1 - var1 + var2 >= varIF
-    # return varIF
-    # if onlyConstrains then only construct constraint var1 <= var2
-    @abc.abstractmethod
-    def ifVar(self, m, _var1, _var2,  onlyConstrains = False): pass
+        Reified form:   create binary *varNOT* and add
+            1 − _var  ==  varNOT             (two‑way equivalence)
+        so *varNOT* equals the logical *NOT(_var)*.
 
-    # XNOR Equivalence (EQ)
-    # Create new variable varEQ, create constrains:
-    # var1 + var2 - varEQ <= 1
-    # var1 + var2 + varEQ >= 1
-    # -var1 + var2 + varEQ <= 1
-    # var1 - var2 + varEQ <= 1
-    # return varEQ
-    # if onlyConstrains then only construct constraint var1 >= var2 and var1 <= var2
+        Constraint‑only form: simply force ``_var == 0`` so that NOT(_var)
+        would be *True* without introducing *varNOT*.
+        """
+
+    # ------------------------------------------------------------------
+    # N‑ary conjunction (AND)
+    # ------------------------------------------------------------------
     @abc.abstractmethod
-    def epqVar(self, m, _var1, _var2,  onlyConstrains = False): pass
-    
-    # Create constraint var == label, return 1
+    def andVar(self, m, *_var, onlyConstrains: bool = False):
+        """General **N‑ary conjunction**.
+
+        Reified form:
+            varAND ≤ v_i               for every i
+            Σ v_i ≤ varAND + N − 1
+
+        Constraint‑only: enforce ``Σ v_i ≥ N`` (all inputs are 1).
+        """
+
+    # ------------------------------------------------------------------
+    # N‑ary disjunction (OR)
+    # ------------------------------------------------------------------
     @abc.abstractmethod
-    def fixedVar(self, m, _var, onlyConstrains = False): pass
+    def orVar(self, m, *_var, onlyConstrains: bool = False):
+        """General **N‑ary disjunction**.
+
+        Reified form:
+            v_i ≤ varOR                for every i
+            Σ v_i ≥ varOR
+
+        Constraint‑only: enforce ``Σ v_i ≥ 1``.
+        """
+
+    # ------------------------------------------------------------------
+    # NAND (NOT‑AND)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def nandVar(self, m, *_var, onlyConstrains: bool = False):
+        """General **N‑ary NAND**.
+
+        Reified form:
+            NOT(varNAND) ≤ v_i          for every i
+            Σ v_i ≤ NOT(varNAND) + N − 1
+
+        Constraint‑only: enforce ``Σ v_i ≤ N − 1`` (not all can be True).
+        """
+
+    # ------------------------------------------------------------------
+    # NOR (NOT‑OR)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def norVar(self, m, *_var, onlyConstrains: bool = False):
+        """General **N‑ary NOR**.
+
+        Reified form:
+            v_i ≤ NOT(varNOR)           for every i
+            Σ v_i ≥ NOT(varNOR)
+
+        Constraint‑only: enforce ``Σ v_i ≤ 0`` (all inputs 0).
+        """
+
+    # ------------------------------------------------------------------
+    # XOR / XNOR
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def xorVar(self, m, _var1, _var2, *, onlyConstrains: bool = False):
+        """Two‑input **exclusive‑or**.
+
+        Reified form (returns *varXOR*): standard 4‑constraint encoding
+        ensuring *varXOR* = 1 exactly when the inputs differ.
+
+        Constraint‑only: enforce ``var1 + var2 == 1`` (one True, one False).
+        """
+
+    # ------------------------------------------------------------------
+    # Implication
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def ifVar(self, m, _var1, _var2, *, onlyConstrains: bool = False):
+        """Logical **implication**  (var1 ⇒ var2).
+
+        Reified form (returns *varIF*):
+            1 − var1 ≤ varIF
+            var2     ≤ varIF
+            1 − var1 + var2 ≥ varIF
+        so *varIF* = 1 unless var1 = 1 and var2 = 0.
+
+        Constraint‑only: enforce ``var1 ≤ var2``.
+        """
+
+    # ------------------------------------------------------------------
+    # Equivalence (XNOR)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def epqVar(self, m, _var1, _var2, *, onlyConstrains: bool = False):
+        """Logical **equivalence** (XNOR).
+
+        Reified form (returns *varEQ*): four linear constraints ensure
+        *varEQ* = 1 exactly when the two inputs are equal.
+
+        Constraint‑only: enforce ``var1 == var2``.
+        """
+
+    # ------------------------------------------------------------------
+    # Counting primitives
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def countVar(
+        self, m, *_var,
+        onlyConstrains: bool = False,
+        limitOp: str = "None",
+        limit: int = 1,
+        logicMethodName: str = "COUNT",
+    ):
+        """Compare the **number of True literals** in *var* against a constant.
+
+        Supports three relations via *limitOp*:
+            • '>='  (at least *limit* Trues)
+            • '<='  (at most  *limit* Trues)
+            • '=='  (exactly *limit* Trues)
+
+        Reified form returns a binary *varCOUNT* that is 1 when the chosen
+        relation is satisfied. Constraint‑only mode merely imposes the count
+        without introducing *varCOUNT*.
+        """
+
+    @abc.abstractmethod
+    def compareCountsVar(
+        self,
+        m,
+        varsA,
+        varsB,
+        *,
+        compareOp: str = ">",
+        diff: int = 0,
+        onlyConstrains: bool = False,
+        logicMethodName: str = "COUNT_CMP",
+    ):
+        """Compare the counts of **two sets** of literals.
+
+        Encodes the relation:
+            Σ(varsA)   compareOp   Σ(varsB) + diff
+
+        where ``compareOp ∈ {'>', '>=', '<', '<=', '==', '!='}``.
+        With *onlyConstrains=False* the method returns a fresh binary that is
+        1 when the relation holds. Otherwise it just adds the constraints.
+        """
+
+    # ------------------------------------------------------------------
+    # Fixed label helper
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def fixedVar(self, m, _var, *, onlyConstrains: bool = False):
+        """Fix an ILP literal to its ground‑truth label.
+
+        • If the data node says the variable is *true*, constrain ``_var == 1``.
+        • If labelled *false*, constrain ``_var == 0``.
+        • If the label is missing (e.g. VTag = "-100"), simply return 1 so
+          the downstream logic treats it as satisfied.
+        """

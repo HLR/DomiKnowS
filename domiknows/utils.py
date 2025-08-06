@@ -1,4 +1,8 @@
 import sys
+import os
+import re
+import time
+import pathlib
 import inspect
 import keyword
 from functools import reduce
@@ -6,9 +10,12 @@ import operator
 from collections import OrderedDict, Counter
 from typing import Iterable
 from contextlib import contextmanager
-import warnings
 import logging
 from logging.handlers import RotatingFileHandler
+
+from colorama import init
+
+init(autoreset=True, convert=True)        # enable Windows console colours
 
 from domiknows.config import config
 
@@ -40,65 +47,221 @@ def log(*args, **kwargs):
             print('{}:\n{}'.format(k, v))
         else:
             print('{}: {}'.format(k, v))
+     
+def close_file_handlers(filename):
+    """
+    Close all file handlers that are using the specified file.
+    This prevents permission errors when trying to move/rename log files.
+    """
+    # Normalize the path for comparison
+    target_path = os.path.abspath(filename)
     
-noUseTimeLog = False
-myLoggerTime = None
-def getRegrTimer_logger(_config = config):
-    global noUseTimeLog
-    global myLoggerTime
-    if myLoggerTime:
-        if noUseTimeLog:
-            myLoggerTime.addFilter(lambda record: False)
+    # Get all existing loggers
+    loggers = [logging.getLogger()] + [logging.getLogger(name) 
+                                      for name in logging.root.manager.loggerDict]
+    
+    handlers_to_close = []
+    
+    for logger in loggers:
+        if hasattr(logger, 'handlers'):
+            for handler in logger.handlers[:]:  # Create a copy of the list
+                if hasattr(handler, 'baseFilename'):
+                    # Check if this handler uses the target file
+                    handler_path = os.path.abspath(handler.baseFilename)
+                    if handler_path == target_path:
+                        handlers_to_close.append((logger, handler))
+    
+    # Close and remove the handlers
+    for logger, handler in handlers_to_close:
+        try:
+            handler.close()
+            logger.removeHandler(handler)
+        except Exception:
+            # Continue even if we can't close a handler
+            pass
+        
+def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
+    if os.path.exists(logFilename):
+        # Check if file is empty - don't move empty files
+        if os.path.getsize(logFilename) == 0:
+            try:
+                os.remove(logFilename)
+                print(f"Removed empty log file: {logFilename}")
+            except OSError as e:
+                print(f"Warning: Could not remove empty log file {logFilename}: {e}")
+            return
+        # Close any existing handlers for this file first
+        close_file_handlers(logFilename)
+        
+        # Add retry mechanism for file operations
+        max_retries = 3
+        retry_delay = 0.1
+        
+        for attempt in range(max_retries):
+            try:
+                # Read first line for timestamp
+                try:
+                    with open(logFilename, "r", encoding="utf-8", errors="ignore") as f:
+                        first_line = f.readline().strip()
+                except (IOError, OSError):
+                    # If can't read file, use current timestamp
+                    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+                else:
+                    # Try to extract timestamp from first line
+                    match = re.match(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d+)", first_line)
+                    if match:
+                        date_time = match.group(1).replace(":", "-").replace(" ", "_")
+                        milliseconds = match.group(2)
+                        timestamp = f"{date_time}-{milliseconds}"
+                    else:
+                        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+                
+                # Compose new filename in the same directory
+                log_dir = os.path.dirname(logFilename) or "."
+                base = os.path.splitext(os.path.basename(logFilename))[0]
+                ext = os.path.splitext(logFilename)[1]
+                new_name = os.path.join(log_dir, f"{base}_{timestamp}{ext}")
+                
+                # Handle case where target file already exists
+                counter = 1
+                original_new_name = new_name
+                while os.path.exists(new_name):
+                    name_without_ext = os.path.splitext(original_new_name)[0]
+                    new_name = f"{name_without_ext}_{counter}{ext}"
+                    counter += 1
+                
+                # Try to rename the file
+                os.rename(logFilename, new_name)
+                break  # Success, exit retry loop
+                
+            except (OSError, PermissionError) as e:
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                else:
+                    # If all retries failed, log the error but don't crash
+                    print(f"Warning: Could not move log file {logFilename}: {e}")
+                    return
+
+        # Remove oldest files if exceeding backup count
+        try:
+            all_files = os.listdir(log_dir)
+            rotated = []
+            for f in all_files:
+                if f.startswith(base + "_") and f.endswith(ext):
+                    full_path = os.path.join(log_dir, f)
+                    if os.path.isfile(full_path):  # Ensure it's a file, not directory
+                        rotated.append(f)
             
-        return myLoggerTime
+            # Sort by modification time (oldest first)
+            rotated.sort(key=lambda x: os.path.getmtime(os.path.join(log_dir, x)))
+            
+            # Remove oldest files if exceeding backup count
+            while len(rotated) > logBackupCount:
+                oldest_file = os.path.join(log_dir, rotated.pop(0))
+                try:
+                    os.remove(oldest_file)
+                except OSError:
+                    # Continue if file can't be removed
+                    pass
+                    
+        except OSError:
+            # If directory listing fails, skip cleanup
+            pass        
+                
+def setup_logger(config=None, default_filename='app.log'):
+    """
+    Setup a logger with file rotation and timestamp-based backup.
     
+    Args:
+        config (dict): Configuration dictionary with logging parameters
+        default_filename (str): Default log filename if not specified in config
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    # Default values
     logName = __name__
     logLevel = logging.CRITICAL
-    logFilename='regrTimer.log'
-    logFilesize=5*1024*1024*1024
-    logBackupCount=4
-    logFileMode='a'
-
-    if _config and (isinstance(_config, dict)):
-        if 'log_name' in _config:
-            logName = _config['log_name']
-        if 'log_level' in _config:
-            logLevel = _config['log_level']
-        if 'log_filename' in _config:
-            logFilename = _config['log_filename']
-        if 'log_filesize' in _config:
-            logFilesize = _config['log_filesize']
-        if 'log_backupCount' in _config:
-            logBackupCount = _config['log_backupCount']
-        if 'log_fileMode' in _config:
-            logFileMode = _config['log_fileMode']
-        
-    loggerTime = logging.getLogger(logName)
-
-    # Create file handler and set level to info
-    import pathlib
-    pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
-    chTime = RotatingFileHandler(logFilename + ".log", mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
-
-    loggerTime.setLevel(logLevel)
+    logFilename = default_filename
+    logFilesize = 5*1024*1024*1024  # 5GB
+    logBackupCount = 4
+    logFileMode = 'a'
+    logDir = 'logs'
+    timestampBackupCount = 10
+    
+    # Override with config values if provided
+    if config and isinstance(config, dict):
+        logName = config.get('log_name', logName)
+        logLevel = config.get('log_level', logLevel)
+        logFilename = config.get('log_filename', logFilename)
+        logFilesize = config.get('log_filesize', logFilesize)
+        logBackupCount = config.get('log_backupCount', logBackupCount)
+        logFileMode = config.get('log_fileMode', logFileMode)
+        logDir = config.get('log_dir', logDir)
+        timestampBackupCount = config.get('timestamp_backup_count', timestampBackupCount)
+    
+    # Handle case where logFilename already contains a path
+    if os.path.dirname(logFilename):
+        # logFilename already contains path information
+        log_path = logFilename
+        log_dir = os.path.dirname(logFilename)
+    else:
+        # logFilename is just a filename, add to logDir
+        log_path = os.path.join(logDir, logFilename)
+        log_dir = logDir
+    
+    # Create directory
+    pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Move existing log file with timestamp before creating new handler
+    move_existing_logfile_with_timestamp(log_path, timestampBackupCount)
+    
+    # Create logger
+    logger = logging.getLogger(logName)
+    logger.handlers.clear()  # Clear existing handlers
+    logger.setLevel(logLevel)
+    
+    # Create file handler
+    handler = RotatingFileHandler(
+        log_path, 
+        mode=logFileMode, 
+        maxBytes=logFilesize, 
+        backupCount=logBackupCount, 
+        encoding='utf-8', 
+        delay=False
+    )
     
     # Create formatter
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-
-    # Add formatter to ch
-    chTime.setFormatter(formatter)
-
-    # Add ch to logger
-    loggerTime.addHandler(chTime)
+    handler.setFormatter(formatter)
     
-    # Don't propagate
-    loggerTime.propagate = False
+    # Add handler to logger
+    logger.addHandler(handler)
+    logger.propagate = False
     
-    myLoggerTime = loggerTime
-    myLoggerTime.info('--- Starting new run ---')
+    print("Log file for %s is in: %s" % (logName, handler.baseFilename))
+    
+    return logger
+
+noUseTimeLog = False
+myLoggerTime = None
+def getRegrTimer_logger(_config=None):
+    global noUseTimeLog
+    global myLoggerTime
+    
+    if myLoggerTime:
+        if noUseTimeLog:
+            myLoggerTime.addFilter(lambda record: False)
+        return myLoggerTime
+    
+    myLoggerTime = setup_logger(_config, 'regrTimer.log')
     
     if noUseTimeLog:
         myLoggerTime.addFilter(lambda record: False)
+    else:
+        myLoggerTime.info('--- Starting new run ---')
     
     return myLoggerTime
 

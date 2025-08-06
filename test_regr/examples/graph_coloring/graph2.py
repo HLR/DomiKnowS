@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, ifL, notL, existsL, eqL, atMostL, atMostAL, atLeastAL, exactAL
+from domiknows.graph.logicalConstrain import lessEqL, orL, ifL, notL, existsL, eqL, atMostL, atMostAL, atLeastAL, exactAL
 
 
 Graph.clear()
@@ -31,3 +31,13 @@ with Graph('global') as graph2:
 
         # Exactly 2 firestationCity in the world 
         exactAL(firestationCity, 2, p=55)
+        
+        # (A) **Global**: the number of fire-station cities may never exceed
+        #     the number of cities in total.
+        lessEqL(firestationCity, city, p=85)        # count(F) ≤ count(C)
+
+        # (B) **Nested** inside an implication:  *if* the (single) world node
+        #     exists, then the global relation in (A) must hold (it already
+        #     does, but this demonstrates nesting compare-counts under another
+        #     higher-level LC).
+        ifL(world('w'), lessEqL(firestationCity, city), p=80)
