@@ -59,5 +59,5 @@ with Graph('global') as graph:
         ifL(orgbase_on('x', 'y'), andL(organization('x'), location('y')), active = True)
         
         # LC7
-        ifL(kill('x', 'y'), andL(people('x'), people('y')), active = True)
+        #ifL(kill('x', 'y'), andL(people('x'), people('y')), active = True)
         

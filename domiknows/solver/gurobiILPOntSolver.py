@@ -687,9 +687,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             startNumConstrs = m.NumConstrs
             
             if lc.active:
-                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
+                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
             else:
-                self.myLogger.debug('Skipping not active Logical Constraint %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                self.myLogger.debug('Skipping not active Logical Constraint %r - %s'%(lc,  [str(e) for e in lc.e]))
                 continue
 
             result = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
@@ -703,14 +703,14 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             if result != None and isinstance(result, list):
                 if newNumConstrs:
-                    self.myLogger.info('Successfully added Logical Constraint %s - created %i new ILP constraint\n'%(lc.lcName,newNumConstrs))
-                    self.myLoggerTime.info('Processing time for %s(%s) is: %ims - created %i new ILP constraint'%(lc.lcName, lc, elapsedInMsLC,newNumConstrs))
+                    self.myLogger.info('Successfully added Logical Constraint %r - created %i new ILP constraint\n'%(lc, newNumConstrs))
+                    self.myLoggerTime.info('Processing time for %r is: %ims - created %i new ILP constraint'%(lc, elapsedInMsLC, newNumConstrs))
                 else:
-                    self.myLogger.info('Finished processing Logical Constraint %s - no new ILP constraint was created for it\n'%(lc.lcName))
-                    self.myLoggerTime.info('Processing time for %s(%s) is: %ims - no new ILP constraint was created'%(lc.lcName, lc, elapsedInMsLC))
+                    self.myLogger.info('Finished processing Logical Constraint %r - no new ILP constraint was created for it\n'%(lc))
+                    self.myLoggerTime.info('Processing time for %r is: %ims - no new ILP constraint was created'%(lc, elapsedInMsLC))
             else:
-                self.myLogger.error('Failed to add Logical Constraint %s\n'%(lc.lcName))
-                self.myLoggerTime.error('Failed to add Logical Constraint %s'%(lc.lcName))
+                self.myLogger.error('Failed to add Logical Constraint %r\n'%(lc))
+                self.myLoggerTime.error('Failed to add Logical Constraint %r'%(lc))
 
     def isConceptFixed(self, conceptName):
         for graph in self.myGraph: # Loop through graphs
@@ -1123,7 +1123,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 vDns = [[1] for _ in range(length_of_list)]
                                    
                     if isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
-                        self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
+                        self.myLogger.info('Processing Nested %r - %s'%(e, e.strEs()))
 
                         if sample:
                             vDns, sampleInfoLC, lcVariablesLC = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
@@ -1873,8 +1873,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 lcCounter +=  1
                 self.myLogger.info('\n')
-                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
-                
+                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
+
                 lcName = lc.lcName
                     
                 lcLosses[lcName] = {}
@@ -2159,8 +2159,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 lcCounter +=  1
                 self.myLogger.info('\n')
-                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
-                
+                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
+
                 lcName = lc.lcName
                     
                 lcVerifyResult[lcName] = {}

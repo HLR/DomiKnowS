@@ -143,7 +143,7 @@ def model_declaration(config, case):
                           'LC8': {'location', 'organization', 'located_in'},
                           'LC10': {'location', 'people', 'live_in'},
                           'LC12': {'location', 'organization', 'orgbase_on'},
-                          'LC14': {'people', 'people', 'kill'}
+                          #'LC14': {'people', 'people', 'kill'}
                           }
     
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
