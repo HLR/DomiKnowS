@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from domiknows.program.model.pytorch import SolverModel
+#from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple

@@ -8,7 +8,7 @@ from .dataNodeConfig import dnConfig
 
 from ordered_set import OrderedSet
 
-from domiknows import getRegrTimer_logger, getProductionModeStatus
+from domiknows import getRegrTimer_logger, getProductionModeStatus, setup_logger
 from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
 from domiknows.graph.relation import Contains
@@ -23,53 +23,13 @@ import graphviz
 
 from sklearn import metrics
 
-logName = __name__
-logLevel = logging.CRITICAL
-logFilename='datanode.log'
-logFilesize=5*1024*1024*1024
-logBackupCount=4
-logFileMode='a'
+# For your DataNode logging setup:
+_DataNode__Logger = setup_logger(dnConfig, 'datanode.log')
 
-if dnConfig and (isinstance(dnConfig, dict)):
-    if 'log_name' in dnConfig:
-        logName = dnConfig['log_name']
-    if 'log_level' in dnConfig:
-        logLevel = dnConfig['log_level']
-    if 'log_filename' in dnConfig:
-        logFilename = dnConfig['log_filename']
-    if 'log_filesize' in dnConfig:
-        logFilesize = dnConfig['log_filesize']
-    if 'log_backupCount' in dnConfig:
-        logBackupCount = dnConfig['log_backupCount']
-    if 'log_fileMode' in dnConfig:
-        logFileMode = dnConfig['log_fileMode']
-
-# Create file handler and set level to info
-import pathlib
-pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
-ch = RotatingFileHandler(logFilename, mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
-ch.doRollover()
-# Create formatter
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-# Add formatter to ch
-ch.setFormatter(formatter)
-print("Log file for %s is in: %s"%(logName,ch.baseFilename))
-
-# --- Create loggers
-_DataNode__Logger  = logging.getLogger(logName)
-_DataNode__Logger.setLevel(logLevel)
-# Add ch to logger
-_DataNode__Logger.addHandler(ch)
-# Don't propagate
-_DataNode__Logger.propagate = False
-
-# --- Create loggers
-_DataNodeBuilder__Logger  = logging.getLogger("dataNodeBuilder")
-_DataNodeBuilder__Logger.setLevel(logLevel)
-# Add ch to logger
-_DataNodeBuilder__Logger.addHandler(ch)
-# Don't propagate
-_DataNodeBuilder__Logger.propagate = False
+# For DataNodeBuilder - create separate config or use same handler
+datanode_builder_config = dnConfig.copy() if dnConfig else {}
+datanode_builder_config['log_name'] = 'dataNodeBuilder'
+_DataNodeBuilder__Logger = setup_logger(datanode_builder_config, 'datanode.log')
 
 _DataNodeBuilder__Logger.info('--- Starting new run ---')
 
@@ -151,6 +111,14 @@ class DataNode:
 
         self.myLoggerTime = getRegrTimer_logger()
 
+    def __eq__(self, other):
+        """Two DataNodes are equal if they carry the same numerical id."""
+        return isinstance(other, DataNode) and self.id == other.id
+
+    def __hash__(self):
+        """Hash on the immutable id so the object is usable in sets / dicts."""
+        return hash(self.id)
+    
     class DataNodeError(Exception):
         """Exception raised for DataNode-related errors."""
         pass

@@ -77,11 +77,16 @@ class Graph(BaseGraphTree):
         parent_obj = super().__enter__()
 
         if self.constraint is None:
-            from . import Concept
-            constraint = Concept(name="constraint")
-            self.constraint = constraint
+            # Check if a constraint concept already exists in the graph
+            existing_constraint = self.findConcept("constraint")
+            if existing_constraint is not None:
+                self.constraint = existing_constraint
+            else:
+                from . import Concept
+                constraint = Concept(name="constraint")
+                self.constraint = constraint
 
-        return parent_obj
+                return parent_obj
 
     def get_constraint_concept(self):
         if self.constraint is None:

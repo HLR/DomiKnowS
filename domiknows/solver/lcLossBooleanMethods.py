@@ -86,30 +86,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return notLoss
         else:            
             return notSuccess
-    
-    def and2Var(self, _, var1, var2, onlyConstrains = False):
-        logicMethodName = "AND"
-            
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-               
-        var1, var2 = self._fixVar((var1,var2))
-
-        if self.tnorm =='L':
-            tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-            tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-            and2Success = torch.maximum(tZero, torch.sub(torch.add(var1, var2), tOne)) # max(0, var1 + var2 - 1)
-        elif self.tnorm =='G':
-            and2Success = torch.minimum(var1, var2) # min(var1, var2)
-        elif self.tnorm =='P':
-            and2Success = torch.mul(var1, var2) # var1*var2
-         
-        if onlyConstrains:
-            tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-            and2Loss = torch.sub(tOne, and2Success)
-            
-            return and2Loss
-        else:
-            return and2Success
         
     def andVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "AND"
@@ -145,28 +121,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return andSuccess
     
-    def or2Var(self, _, var1, var2, onlyConstrains = False):
-        logicMethodName = "OR"
-       
-        if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-
-        var1, var2 = self._fixVar((var1,var2))
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-
-        if self.tnorm =='L':
-            or2Success = torch.minimum(torch.add(var1, var2), tOne) # min(var1 + var2, 1)
-        elif self.tnorm =='G':
-            or2Success = torch.maximum(var1, var2) # max(var1, var2)
-        elif self.tnorm =='P':
-            or2Success = torch.sub(torch.add(var1, var2), torch.mul(var1, var2)) # var1+var2 - var1*var2
-
-        if onlyConstrains:
-            or2Loss = torch.sub(tOne, or2Success) # 1 - or2Success
-           
-            return or2Loss
-        else:
-            return or2Success
-    
     def orVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "OR"
         
@@ -198,22 +152,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:            
             return orSuccess
             
-    def nand2Var(self, _, var1, var2, onlyConstrains = False):
-        logicMethodName = "NAND"
-        
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-            
-        # nand(var1, var2) = not(and(var1, var2))
-        nand2Success = self.notVar(_, self.and2Var(_, var1, var2))
-
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        if onlyConstrains:
-            nand2Loss = torch.sub(tOne, nand2Success)
-                        
-            return nand2Loss
-        else:
-            return nand2Success
-    
     def nandVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "NAND"
        
@@ -231,41 +169,31 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return nandSuccess
             
     # Singleton tensors 
-    def ifVarS(self, _, var1, var2, onlyConstrains = False):
+    def ifVarS(self, _, var1, var2, *, onlyConstrains=False):
         logicMethodName = "IF"
+        if self.ifLog:
+            self.myLogger.debug("%s called with: var1=%s, var2=%s",
+                                logicMethodName, var1, var2)
 
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-                
-        var1Item = self._isTensor(var1)
-        var2Item = self._isTensor(var2)
+        # convert None / plain numbers → 0-tensors
+        var1, var2 = self._fixVar((var1, var2))
 
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        #tOneSqueezed = torch.squeeze(tOne)
-        if self.tnorm =='L':
-            ifSuccess = torch.minimum(tOne, torch.add(torch.sub(1, var1), var2)) # min(1, 1 - var1 + var2) #torch.sub
-        elif self.tnorm =='G':
-            if var2Item > var1Item: 
-                ifSuccess = tOne
-            else: 
-                ifSuccess = var2
-            
-        elif self.tnorm =='P':
-            if var1Item != 0:
-                ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
-            else:
-                ifSuccess = tOne
+        # ── element-wise implementation (works for scalars **and** vectors) ──
+        if self.tnorm == 'L':                        # Łukasiewicz
+            ifSuccess = torch.minimum(torch.ones_like(var1),
+                                    1 - var1 + var2)
 
-        # if(var1, var2) = or(not(var1), var2)
-        #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
+        elif self.tnorm == 'G':                      # Gödel
+            ifSuccess = torch.where(var2 >= var1,        # ¬a ∨ b
+                                    torch.ones_like(var1),
+                                    var2)
 
-        #ifSuccessUnsqueezed = torch.unsqueeze(ifSuccess, 0)
-        if onlyConstrains:
-            ifLoss = torch.sub(tOne, ifSuccess) # 1 - ifSuccess
-            
-            return ifLoss
-        else:            
-            return ifSuccess
-        
+        else:                                        # Product (‘P’)
+            safe_ratio = torch.where(var1 != 0, var2 / var1, 1)
+            ifSuccess  = torch.minimum(torch.ones_like(var1), safe_ratio)
+
+        return 1 - ifSuccess if onlyConstrains else ifSuccess
+
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "IF"
 
@@ -352,13 +280,42 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return norSucess
         
-    def xorVar(self, _, var1, var2, onlyConstrains = False):
+    def xorVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "XOR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
 
-        # xor(var1, var2) = or(and(var1, not(var2)), and(not(var1), var2))
-        xorSuccess = self.or2Var(_, self.and2Var(_, var1, self.notVar(_, var2)), self.and2Var(_, self.notVar(_, var1), var2))
+        if len(var) == 0:
+            # XOR of no variables is False
+            xorSuccess = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        elif len(var) == 1:
+            # XOR of single variable is the variable itself
+            var = self._fixVar(var)
+            xorSuccess = var[0]
+        else:
+            # Multi-variable XOR: iteratively apply binary XOR using t-norms
+            var = self._fixVar(var)
+            xorSuccess = torch.clone(var[0])
+            
+            for v in var[1:]:
+                if self.tnorm == 'L':  # Łukasiewicz
+                    # XOR(a, b) = min(1, a + b) - max(0, a + b - 1)
+                    tOne = torch.ones_like(xorSuccess)
+                    tZero = torch.zeros_like(xorSuccess)
+                    sum_ab = torch.add(xorSuccess, v)
+                    xorSuccess = torch.minimum(tOne, sum_ab) - torch.maximum(tZero, sum_ab - tOne)
+                    
+                elif self.tnorm == 'G':  # Gödel
+                    # XOR(a, b) = max(min(a, 1-b), min(1-a, b))
+                    tOne = torch.ones_like(xorSuccess)
+                    not_a = torch.sub(tOne, xorSuccess)
+                    not_b = torch.sub(tOne, v)
+                    xorSuccess = torch.maximum(torch.minimum(xorSuccess, not_b), 
+                                            torch.minimum(not_a, v))
+                    
+                elif self.tnorm == 'P':  # Product
+                    # XOR(a, b) = a*(1-b) + b*(1-a) = a + b - 2*a*b
+                    xorSuccess = torch.add(xorSuccess, v) - 2 * torch.mul(xorSuccess, v)
         
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         if onlyConstrains:
@@ -368,21 +325,80 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return xorSuccess
     
-    def epqVar(self, _, var1, var2, onlyConstrains = False):
-        logicMethodName = "EPQ"
+    def equivalenceVar(self, _, *var, onlyConstrains = False):
+        logicMethodName = "EQUIVALENCE"
         
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+
+        if len(var) == 0:
+            # Equivalence of no variables is True (vacuous truth)
+            equivSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        elif len(var) == 1:
+            # Equivalence of single variable is True (always equivalent to itself)
+            equivSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        else:
+            # Multi-variable equivalence using t-norms: all variables have same truth value
+            var = self._fixVar(var)
             
-        # epq(var1, var2) = and(or(var1, not(var2)), or(not(var1), var2)))
-        epqSuccess = self.and2Var(_, self.or2Var(_, var1, self.notVar(_, var2)), self.or2Var(_, self.notVar(_, var1), var2))
+            if self.tnorm == 'L':  # Łukasiewicz
+                # AND(a,b,c,...) = max(0, sum(vars) - (n-1))
+                # AND(¬a,¬b,¬c,...) = max(0, sum(1-vars) - (n-1)) = max(0, n - sum(vars) - (n-1)) = max(0, 1 - sum(vars))
+                n = len(var)
+                tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                
+                var_sum = torch.clone(var[0])
+                for v in var[1:]:
+                    var_sum.add_(v)
+                
+                # All true case: max(0, sum - (n-1))
+                all_true = torch.maximum(tZero, var_sum - (n-1))
+                
+                # All false case: max(0, 1 - sum)  
+                all_false = torch.maximum(tZero, tOne - var_sum)
+                
+                # OR: min(1, all_true + all_false)
+                equivSuccess = torch.minimum(tOne, all_true + all_false)
+                
+            elif self.tnorm == 'G':  # Gödel
+                # AND = min, OR = max
+                # All true case: min(all vars)
+                all_true = torch.clone(var[0])
+                for v in var[1:]:
+                    all_true = torch.minimum(all_true, v)
+                
+                # All false case: min(all 1-vars)
+                tOne = torch.ones_like(var[0])
+                all_false = torch.sub(tOne, var[0])  # 1 - var[0]
+                for v in var[1:]:
+                    all_false = torch.minimum(all_false, torch.sub(tOne, v))
+                
+                # OR: max(all_true, all_false)
+                equivSuccess = torch.maximum(all_true, all_false)
+                
+            elif self.tnorm == 'P':  # Product
+                # AND = product, OR = sum - product
+                # All true case: product(all vars)
+                all_true = torch.clone(var[0])
+                for v in var[1:]:
+                    all_true.mul_(v)
+                
+                # All false case: product(all 1-vars)
+                tOne = torch.ones_like(var[0])
+                all_false = torch.sub(tOne, var[0])  # 1 - var[0]
+                for v in var[1:]:
+                    all_false.mul_(torch.sub(tOne, v))
+                
+                # OR: all_true + all_false - all_true * all_false
+                equivSuccess = all_true + all_false - torch.mul(all_true, all_false)
         
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         if onlyConstrains:
-            epqLoss = torch.sub(tOne, epqSuccess)
+            equivLoss = torch.sub(tOne, equivSuccess)
             
-            return epqLoss
+            return equivLoss
         else:
-            return epqSuccess
+            return equivSuccess
 
     def calc_probabilities(self, t, s):
 
@@ -475,7 +491,102 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 return countLoss
             else:
                 return countSuccess
-        
+            
+    def compareCountsVar(
+        self,
+        _,
+        varsA, varsB,
+        *,                         # kwargs only
+        compareOp: str = '>',
+        diff: int | float = 0,
+        onlyConstrains: bool = False,
+        logicMethodName: str = "COUNT_CMP",
+    ):
+        """
+        Truth / loss for  count(varsA)  compareOp  count(varsB) + diff
+
+        compareOp ∈ {'>', '>=', '<', '<=', '==', '!='}
+        diff       constant offset (can be negative)
+        onlyConstrains
+            • True  → return loss  (1-truth degree)
+            • False → return success (truth degree)
+        """
+        method = self.counting_tnorm if self.counting_tnorm else self.tnorm
+
+        # ── build the two counts ─────────────────────────────────────────────
+        varsA = self._fixVar(tuple(varsA))
+        varsB = self._fixVar(tuple(varsB))
+
+        sumA = torch.clone(varsA[0])
+        for v in varsA[1:]:
+            sumA.add_(v)
+
+        sumB = torch.clone(varsB[0])
+        for v in varsB[1:]:
+            sumB.add_(v)
+
+        expr = sumA - sumB - diff          # Δ = count(A) − count(B) − diff
+        tZero = torch.zeros_like(expr)
+        tOne  = torch.ones_like(expr)
+
+        # ── Gödel logic ─────────────────────────────────────────────────────
+        if method == "G":
+            if   compareOp == '>' : success = torch.where(expr >  0, tOne, tZero)
+            elif compareOp == '>=': success = torch.where(expr >= 0, tOne, tZero)
+            elif compareOp == '<' : success = torch.where(expr <  0, tOne, tZero)
+            elif compareOp == '<=': success = torch.where(expr <= 0, tOne, tZero)
+            elif compareOp == '==': success = torch.where(expr == 0, tOne, tZero)
+            else:                   success = torch.where(expr != 0, tOne, tZero)
+
+        # ── Product logic (smooth) ──────────────────────────────────────────
+        elif method == "P":
+            β = 10.0  # steepness factor
+            if   compareOp in ('>', '>='):
+                k = (0.0 if compareOp == '>=' else 1e-6)
+                success = torch.sigmoid(β * (expr - k))
+            elif compareOp in ('<', '<='):
+                k = (0.0 if compareOp == '<=' else -1e-6)
+                success = torch.sigmoid(β * (-expr + k))
+            elif compareOp == '==':
+                success = 1.0 - torch.tanh(β * torch.abs(expr))
+            else:  # '!='
+                success = torch.tanh(β * torch.abs(expr))
+
+        # ── Łukasiewicz logic (piece-wise linear) ───────────────────────────
+        elif method == "L":
+            if   compareOp == '>':
+                success = torch.clamp(expr, min=0.0, max=1.0)
+            elif compareOp == '>=':
+                success = torch.clamp(expr + 1.0, min=0.0, max=1.0)
+            elif compareOp == '<':
+                success = torch.clamp(-expr, min=0.0, max=1.0)
+            elif compareOp == '<=':
+                success = torch.clamp(1.0 - expr, min=0.0, max=1.0)
+            elif compareOp == '==':
+                success = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+            else:  # '!='
+                success_eq = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+                success = 1.0 - success_eq
+
+        # ── Simplified-product logic (fallback / default) ───────────────────
+        else:  # "SP"
+            if   compareOp == '>':
+                success = torch.clamp(expr, min=0.0, max=1.0)
+            elif compareOp == '>=':
+                success = torch.clamp(expr + 1.0, min=0.0, max=1.0)
+            elif compareOp == '<':
+                success = torch.clamp(-expr, min=0.0, max=1.0)
+            elif compareOp == '<=':
+                success = torch.clamp(1.0 - expr, min=0.0, max=1.0)
+            elif compareOp == '==':
+                success = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+            else:  # '!='
+                success_eq = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+                success = 1.0 - success_eq
+
+        # ── return loss or success ──────────────────────────────────────────
+        return 1.0 - success if onlyConstrains else success
+
     def fixedVar(self, _, _var, onlyConstrains = False):
         logicMethodName = "FIXED"
         

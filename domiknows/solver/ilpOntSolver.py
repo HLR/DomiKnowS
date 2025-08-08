@@ -14,7 +14,7 @@ graphMetaOntologyPathname = resource_filename('domiknows', 'ontology/ML')
 from pathlib import Path
 from domiknows.solver.ilpConfig import ilpConfig 
 
-from domiknows.utils import getRegrTimer_logger
+from domiknows import getRegrTimer_logger, setup_logger
 
 class ilpOntSolver(object):
     __metaclass__ = abc.ABCMeta
@@ -22,6 +22,8 @@ class ilpOntSolver(object):
     __negVarTrashhold = 1.0
 
     def __init__(self, graph, ontologiesTuple, _ilpConfig):
+        self.myLogger = None
+        self.myLoggerTime = None
         self.update_config(graph, ontologiesTuple, _ilpConfig)
 
     def update_config(self, graph=None, ontologiesTuple=None, _ilpConfig=None):
@@ -32,57 +34,14 @@ class ilpOntSolver(object):
         if ontologiesTuple:
             self.loadOntology(ontologiesTuple)
 
-    def setup_solver_logger(self, _ilpConfig = ilpConfig):
-        
-        logName = __name__
-        logLevel = logging.CRITICAL
-        logFilename='ilpOntSolver.log'
-        logFilesize=5*1024*1024*1024
-        logBackupCount=4
-        logFileMode='a'
-
-        if _ilpConfig and (isinstance(_ilpConfig, dict)):
-            if 'log_name' in _ilpConfig:
-                logName = _ilpConfig['log_name']
-            if 'log_level' in _ilpConfig:
-                logLevel = _ilpConfig['log_level']
-            if 'log_filename' in _ilpConfig:
-                logFilename = _ilpConfig['log_filename']
-            if 'log_filesize' in _ilpConfig:
-                logFilesize = _ilpConfig['log_filesize']
-            if 'log_backupCount' in _ilpConfig:
-                logBackupCount = _ilpConfig['log_backupCount']
-            if 'log_fileMode' in _ilpConfig:
-                logFileMode = _ilpConfig['log_fileMode']
-            
-        logger = logging.getLogger(logName)
-
-        # Create file handler and set level to info
-        import pathlib
-        pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
-        chAll = RotatingFileHandler(logFilename + ".log", mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
-
-        logger.setLevel(logLevel)
-        
-        # Create formatter
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-    
-        # Add formatter to ch
-        chAll.setFormatter(formatter)
-
-        # Add ch to logger
-        logger.addHandler(chAll)
-        
-        # Don't propagate
-        logger.propagate = False
-        print("Log file for %s is in: %s"%(logName,chAll.baseFilename))
-        print("Log file for %s is in: %s"%(logName + "Time",chAll.baseFilename))
-
-        self.myLogger = logger
+    def setup_solver_logger(self, _ilpConfig=None):
+        # Use the encapsulated setup_logger method
+        self.myLogger = setup_logger(_ilpConfig, 'ilpOntSolver.log')
         self.myLogger.info('--- Starting new run ---')
 
-        self.myLoggerTime = getRegrTimer_logger()
-
+        # Get the timer logger
+        self.myLoggerTime = getRegrTimer_logger(_ilpConfig)
+        
     def loadOntology(self, ontologies):
         start = datetime.datetime.now()
         
