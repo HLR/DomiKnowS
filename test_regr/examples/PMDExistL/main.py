@@ -139,7 +139,8 @@ def main(args: argparse.Namespace):
             print(f"[data {di}] preds={preds}")
             print(f"[data {di}] indices predicting {expected}: {idx_expected}")
             print(f"[data {di}] indices predicting {1-expected}: {idx_other}")
-            
+          
+    pass_test_case = True  
     if args.atLeastL:
         pass_test_case &= (actual_count >= args.expected_atLeastL)
     if args.atMostL:
