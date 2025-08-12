@@ -87,29 +87,47 @@ def main(args: argparse.Namespace):
     graph, a, b, a_contain_b, b_answer = get_graph(args)
     dataset = create_dataset(args.N, args.M)
 
+    print(f"labels: {dataset[0]['label']} (sum={sum(dataset[0]['label'])}/{len(dataset[0]['label'])} are 1)")
+
     answer_module = setup_graph(args, a, b, a_contain_b, b_answer, device=device)
+    
+    train_infer = ['local/softmax']   # differentiable
+    eval_infer  = ['local/argmax']    # discrete for evaluation
+    beta = 20
 
     if args.model == "sampling":
         program = SampleLossProgram(
             graph, SolverModel, poi=[a, b, b_answer],
-            inferTypes=['local/argmax'],
+            inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             sample=True, sampleSize=args.sample_size, sampleGlobalLoss=False,
-            beta=1, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+            beta=beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
     else:
         program = PrimalDualProgram(
             graph, SolverModel, poi=[a, b, b_answer],
-            inferTypes=['local/argmax'],
+            inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            beta=10, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+            beta=beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
 
     expected_value = args.expected_value
+
+    # ---------------- Warmup train (soft) ----------------
     train_model(program, dataset, num_epochs=2)
 
+    # ---- Switch to eval for baseline count ----
+    _prev = program.inferTypes
+    program.inferTypes = eval_infer
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
+
+    # ---- Restore training infer for constraint phase ----
+    program.inferTypes = _prev
     train_model(program, dataset, args.epoch, constr_loss_only=True)
+
+    # ---- Final eval (discrete) ----
+    program.inferTypes = eval_infer
+    actual_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
 
     with torch.no_grad():
         expected = args.expected_value
@@ -123,9 +141,6 @@ def main(args: argparse.Namespace):
             print(f"[data {di}] indices predicting {expected}: {idx_expected}")
             print(f"[data {di}] indices predicting {1-expected}: {idx_other}")
             
-    pass_test_case = True
-    actual_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
-
     if args.atLeastL:
         pass_test_case &= (actual_count >= args.expected_atLeastL)
     if args.atMostL:
