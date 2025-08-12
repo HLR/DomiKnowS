@@ -30,9 +30,9 @@ from graph import get_graph
 
 Sensor.clear()
 
-
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Machine Learning Experiment")
+    parser.add_argument("--device", default="auto",choices=["auto", "cpu", "cuda", "cuda:0", "cuda:1"], help="Device to use")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="SP", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--atLeastL", default=False, type=bool, help="Use at least L constraint")
     parser.add_argument("--atMostL", default=False, type=bool, help="Use at most L constraint")
@@ -47,39 +47,50 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def setup_graph(args: argparse.Namespace, a: Any, b: Any, a_contain_b: Any, b_answer: Any) -> None:
-    a["index"] = ReaderSensor(keyword="a")
+def setup_graph(args, a, b, a_contain_b, b_answer, device: str = "cpu") -> None:
+    a["index"] = ReaderSensor(keyword="a")  # if these accept device=..., pass device=device
     b["index"] = ReaderSensor(keyword="b")
     b["temp_answer"] = ReaderSensor(keyword="label")
     b[a_contain_b] = EdgeSensor(b["index"], a["index"], relation=a_contain_b, forward=return_contain)
-    b[b_answer] = ModuleLearner(a_contain_b, "index", module=TestTrainLearner(args.N), device="cpu")
-    b[b_answer] = FunctionalSensor(a_contain_b, "temp_answer", forward=lambda _, label: label, label=True)
 
+    model = TestTrainLearner(args.N)
+    if hasattr(model, "to"):
+        model = model.to(device)
+
+    b[b_answer] = ModuleLearner(a_contain_b, "index", module=model, device=device)
+    b[b_answer] = FunctionalSensor(a_contain_b, "temp_answer", forward=lambda _, label: label, label=True)
 
 def main(args: argparse.Namespace):
     np.random.seed(0)
     torch.manual_seed(0)
 
+    if args.device == "auto":
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    elif args.device == "cuda":
+        device = "cuda:0"
+    else:
+        device = args.device
+
     graph, a, b, a_contain_b, b_answer = get_graph(args)
     dataset = create_dataset(args.N, args.M)
-    setup_graph(args, a, b, a_contain_b, b_answer)
+
+    setup_graph(args, a, b, a_contain_b, b_answer, device=device)
+
     if args.model == "sampling":
-        # print("sampling")
         program = SampleLossProgram(
             graph, SolverModel, poi=[a, b, b_answer],
             inferTypes=['local/argmax'],
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            sample=True,
-            sampleSize=args.sample_size,
-            sampleGlobalLoss=False,
-            beta=1, device='cpu', tnorm="L", counting_tnorm=args.counting_tnorm
+            sample=True, sampleSize=args.sample_size, sampleGlobalLoss=False,
+            beta=1, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
     else:
         program = PrimalDualProgram(
             graph, SolverModel, poi=[a, b, b_answer],
             inferTypes=['local/argmax'],
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            beta=10, device='cpu', tnorm="L", counting_tnorm=args.counting_tnorm)
+            beta=10, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+        )
 
     expected_value = args.expected_value
     train_model(program, dataset, num_epochs=2)
