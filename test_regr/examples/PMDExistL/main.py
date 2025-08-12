@@ -12,7 +12,7 @@ from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
 
-from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model, evaluate_model_with_indices
+from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model
 
 import traceback
 torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
