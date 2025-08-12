@@ -62,6 +62,17 @@ def setup_graph(args, a, b, a_contain_b, b_answer, device: str = "cpu") -> None:
     
     return model
 
+def _run_answer_module(mod, x):
+    # x: [M, N] float tensor on the right device
+    with torch.no_grad():
+        try:
+            out = mod(x)                 # works if forward(self, x)
+        except TypeError:
+            out = mod(None, x)           # works if forward(self, _, x)
+    if isinstance(out, tuple):            # some modules return (logits, extra)
+        out = out[0]
+    return out
+
 def main(args: argparse.Namespace):
     np.random.seed(0)
     torch.manual_seed(0)
@@ -104,8 +115,8 @@ def main(args: argparse.Namespace):
         expected = args.expected_value
         for di, item in enumerate(dataset):
             x = torch.as_tensor(item["b"], device=device)           # shape [M, N]
-            logits = answer_module(x)                                # shape [M, C]
-            preds = logits.argmax(dim=-1).tolist()                   # [M]
+            logits = _run_answer_module(answer_module, x)           # shape [M, C]
+            preds = logits.argmax(dim=-1).tolist()                  # [M]
             idx_expected = [i for i, p in enumerate(preds) if p == expected]
             idx_other    = [i for i, p in enumerate(preds) if p != expected]
             print(f"[data {di}] preds={preds}")
