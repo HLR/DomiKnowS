@@ -202,6 +202,10 @@ def setup_logger(config=None, default_filename='app.log'):
         logDir = config.get('log_dir', logDir)
         timestampBackupCount = config.get('timestamp_backup_count', timestampBackupCount)
     
+    # if logFilename is missing extension .log add it
+    if not logFilename.endswith('.log'):
+        logFilename += '.log'
+
     # Handle case where logFilename already contains a path
     if os.path.dirname(logFilename):
         # logFilename already contains path information

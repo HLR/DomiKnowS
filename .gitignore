@@ -1,5 +1,3 @@
-*.log
-
 # Created by https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
 # Edit at https://www.gitignore.io/?templates=code,python,pycharm,jupyternotebooks
 
@@ -253,3 +251,7 @@ domiknows/program/model/gbi copy.py
 venv
 .externalToolBuilders/org.eclipse.jdt.core.javabuilder.launch
 .settings/org.eclipse.ltk.core.refactoring.prefs
+
+# logs
+/*/logs/*
+*.log

@@ -14,6 +14,17 @@ from domiknows.program.model.pytorch import SolverModel
 
 from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model
 
+import traceback
+torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
+
+def excepthook(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+sys.excepthook = excepthook
+
 sys.path.append('../../../../domiknows/')
 from graph import get_graph
 
