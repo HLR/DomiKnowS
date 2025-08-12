@@ -32,6 +32,7 @@ Sensor.clear()
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Machine Learning Experiment")
+    parser.add_argument("--beta", default="10", type=float, help="Beta parameter")
     parser.add_argument("--device", default="auto",choices=["auto", "cpu", "cuda", "cuda:0", "cuda:1"], help="Device to use")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="SP", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--atLeastL", default=False, type=bool, help="Use at least L constraint")
@@ -93,7 +94,11 @@ def main(args: argparse.Namespace):
     
     train_infer = ['local/softmax']   # differentiable
     eval_infer  = ['local/argmax']    # discrete for evaluation
-    beta = 20
+
+    if args.beta:
+        beta = args.beta
+    else:
+        beta = 20
 
     if args.model == "sampling":
         program = SampleLossProgram(
