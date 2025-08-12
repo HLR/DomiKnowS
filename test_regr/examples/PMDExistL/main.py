@@ -95,27 +95,23 @@ def main(args: argparse.Namespace):
     train_infer = ['local/softmax']   # differentiable
     eval_infer  = ['local/argmax']    # discrete for evaluation
 
-    if args.beta:
-        beta = args.beta
-    else:
-        beta = 20
-
     if args.model == "sampling":
         program = SampleLossProgram(
             graph, SolverModel, poi=[a, b, b_answer],
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            sample=True, sampleSize=args.sample_size, sampleGlobalLoss=False,
-            beta=beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+            sample=True, 
+            sampleSize=args.sample_size, 
+            sampleGlobalLoss=True, # original was False
+            beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
     else:
         program = PrimalDualProgram(
             graph, SolverModel, poi=[a, b, b_answer],
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            beta=beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+            beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
-
 
     # --- Decide warm-up epochs based on labels vs target ---
     labels = dataset[0]['label']
@@ -131,15 +127,27 @@ def main(args: argparse.Namespace):
     # ---------------- Warmup train (soft) ----------------
     if warmup_epochs > 0:
         train_model(program, dataset, num_epochs=warmup_epochs)
-
+    
     # ---- Eval baseline (discrete) ----
     program.inferTypes = eval_infer
     expected_value = args.expected_value
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
     
+    def flat_params(m): 
+        return torch.cat([p.detach().float().flatten().cpu() for p in m.parameters() if p.requires_grad]) if any(p.requires_grad for p in m.parameters()) else torch.tensor([])
+
+    w_before = flat_params(answer_module)
+    
     # ---- Constraint-only phase (soft) ----
     program.inferTypes = train_infer
     train_model(program, dataset, args.epoch, constr_loss_only=True)
+    
+    w_after = flat_params(answer_module)
+    print("[DEBUG] Δ‖weights‖:", torch.norm(w_after - w_before).item())
+    
+    for n,p in answer_module.named_parameters():
+        if p.grad is not None:
+            print(f"[GRAD] {n} norm={p.grad.data.norm().item():.4e}")
 
     # ---- Final eval (discrete) ----
     program.inferTypes = eval_infer
