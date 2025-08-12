@@ -133,13 +133,12 @@ def main(args: argparse.Namespace):
         train_model(program, dataset, num_epochs=warmup_epochs)
 
     # ---- Eval baseline (discrete) ----
-    _prev = program.inferTypes
     program.inferTypes = eval_infer
     expected_value = args.expected_value
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
-
+    
     # ---- Constraint-only phase (soft) ----
-    program.inferTypes = _prev         # back to local/softmax for gradients
+    program.inferTypes = train_infer
     train_model(program, dataset, args.epoch, constr_loss_only=True)
 
     # ---- Final eval (discrete) ----
