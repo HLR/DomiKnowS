@@ -84,41 +84,28 @@ def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_
     return final_result_count
 
 from collections import defaultdict
-import torch
 
 def evaluate_model_with_indices(program, dataset, answer_prop):
     """
-    Returns:
-      counts: {0: cnt0, 1: cnt1}
-      idx_by_val: {0: [i, ...], 1: [i, ...]}
+    Uses the existing evaluate_model(...) on singletons to infer each sample's
+    predicted class, then returns (counts, idx_by_val).
     """
-    program.model.eval()
     counts = defaultdict(int)
     idx_by_val = defaultdict(list)
 
-    with torch.no_grad():
-        for i, data in enumerate(dataset):
-            # forward – match what you do in train/evaluate
-            mloss, _, *outs = program.model(data)
+    # ensure eval mode if your evaluate_model doesn't already
+    try:
+        program.model.eval()
+    except Exception:
+        pass
 
-            # --- extract logits for answer_prop ---
-            logits = None
-            for o in reversed(outs):
-                if isinstance(o, dict) and answer_prop in o:
-                    logits = o[answer_prop]
-                    break
-                if isinstance(o, torch.Tensor):
-                    logits = o  # fallback if you return the tensor directly
-                    break
-            if logits is None:
-                raise RuntimeError("Could not locate logits for answer_prop in model outputs.")
-
-            # shape normalization: (C,) or (1,C) -> (1,C)
-            if logits.dim() == 1:
-                logits = logits.unsqueeze(0)
-
-            pred = int(logits.argmax(dim=-1).item())
-            counts[pred] += 1
-            idx_by_val[pred].append(i)
+    for i, data in enumerate(dataset):
+        # Call your existing evaluator on just this one item
+        res = evaluate_model(program, [data], answer_prop)  # works because it iterates
+        # Decide the predicted class: whichever count is > 0 for this singleton
+        # Default to 0 if ambiguous/missing.
+        pred = 1 if res.get(1, 0) > 0 else 0
+        counts[pred] += 1
+        idx_by_val[pred].append(i)
 
     return dict(counts), {k: v for k, v in idx_by_val.items()}
