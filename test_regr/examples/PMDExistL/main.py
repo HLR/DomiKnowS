@@ -111,17 +111,30 @@ def main(args: argparse.Namespace):
             beta=beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
 
+
+    # --- Decide warm-up epochs based on labels vs target ---
+    labels = dataset[0]['label']
+    num_ones = sum(labels)
+    M = len(labels)
+    # If labels are all 1 but we’re targeting 0 (or vice versa), skip warmup
+    warmup_epochs = 0
+    if not ((args.expected_value == 0 and num_ones == M) or (args.expected_value == 1 and num_ones == 0)):
+        warmup_epochs = 2  # only warm up when labels don’t fully contradict the target
+
     expected_value = args.expected_value
 
     # ---------------- Warmup train (soft) ----------------
-    train_model(program, dataset, num_epochs=2)
+    if warmup_epochs > 0:
+        train_model(program, dataset, num_epochs=warmup_epochs)
 
-    # ---- Switch to eval for baseline count ----
+    # ---- Eval baseline (discrete) ----
+    _prev = program.inferTypes
     program.inferTypes = eval_infer
+    expected_value = args.expected_value
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
 
-    # ---- Restore training infer for constraint phase ----
-    program.inferTypes = train_infer
+    # ---- Constraint-only phase (soft) ----
+    program.inferTypes = _prev         # back to local/softmax for gradients
     train_model(program, dataset, args.epoch, constr_loss_only=True)
 
     # ---- Final eval (discrete) ----
