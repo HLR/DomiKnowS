@@ -59,6 +59,8 @@ def setup_graph(args, a, b, a_contain_b, b_answer, device: str = "cpu") -> None:
 
     b[b_answer] = ModuleLearner(a_contain_b, "index", module=model, device=device)
     b[b_answer] = FunctionalSensor(a_contain_b, "temp_answer", forward=lambda _, label: label, label=True)
+    
+    return model
 
 def main(args: argparse.Namespace):
     np.random.seed(0)
@@ -74,7 +76,7 @@ def main(args: argparse.Namespace):
     graph, a, b, a_contain_b, b_answer = get_graph(args)
     dataset = create_dataset(args.N, args.M)
 
-    setup_graph(args, a, b, a_contain_b, b_answer, device=device)
+    answer_module = setup_graph(args, a, b, a_contain_b, b_answer, device=device)
 
     if args.model == "sampling":
         program = SampleLossProgram(
@@ -98,6 +100,18 @@ def main(args: argparse.Namespace):
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
     train_model(program, dataset, args.epoch, constr_loss_only=True)
 
+    with torch.no_grad():
+        expected = args.expected_value
+        for di, item in enumerate(dataset):
+            x = torch.as_tensor(item["b"], device=device)           # shape [M, N]
+            logits = answer_module(x)                                # shape [M, C]
+            preds = logits.argmax(dim=-1).tolist()                   # [M]
+            idx_expected = [i for i, p in enumerate(preds) if p == expected]
+            idx_other    = [i for i, p in enumerate(preds) if p != expected]
+            print(f"[data {di}] preds={preds}")
+            print(f"[data {di}] indices predicting {expected}: {idx_expected}")
+            print(f"[data {di}] indices predicting {1-expected}: {idx_other}")
+            
     pass_test_case = True
     actual_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
 
@@ -107,12 +121,6 @@ def main(args: argparse.Namespace):
         pass_test_case &= (actual_count <= args.expected_atMostL)
     if not args.atLeastL and not args.atMostL:
         pass_test_case &= (actual_count == args.expected_atLeastL)
-        
-    counts, idx_by_val = evaluate_model_with_indices(program, dataset, b_answer)
-    print(f"Predicted counts: {counts}")
-    print(f"indices predicting expected_value={expected_value}: {idx_by_val.get(expected_value, [])}")
-    other = 1 - expected_value
-    print(f"indices predicting {other}: {idx_by_val.get(other, [])}")
 
     print(f"Test case {'PASSED' if pass_test_case else 'FAILED'}")
     print(
