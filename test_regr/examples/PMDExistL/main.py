@@ -12,7 +12,7 @@ from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
 
-from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model
+from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model, evaluate_model_with_indices
 
 import traceback
 torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
@@ -107,6 +107,12 @@ def main(args: argparse.Namespace):
         pass_test_case &= (actual_count <= args.expected_atMostL)
     if not args.atLeastL and not args.atMostL:
         pass_test_case &= (actual_count == args.expected_atLeastL)
+        
+    counts, idx_by_val = evaluate_model_with_indices(program, dataset, b_answer)
+    print(f"Predicted counts: {counts}")
+    print(f"indices predicting expected_value={expected_value}: {idx_by_val.get(expected_value, [])}")
+    other = 1 - expected_value
+    print(f"indices predicting {other}: {idx_by_val.get(other, [])}")
 
     print(f"Test case {'PASSED' if pass_test_case else 'FAILED'}")
     print(

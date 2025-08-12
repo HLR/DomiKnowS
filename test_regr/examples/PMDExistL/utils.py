@@ -82,3 +82,43 @@ def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_
             pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
             final_result_count[pred] = final_result_count.get(pred, 0) + 1
     return final_result_count
+
+from collections import defaultdict
+import torch
+
+def evaluate_model_with_indices(program, dataset, answer_prop):
+    """
+    Returns:
+      counts: {0: cnt0, 1: cnt1}
+      idx_by_val: {0: [i, ...], 1: [i, ...]}
+    """
+    program.model.eval()
+    counts = defaultdict(int)
+    idx_by_val = defaultdict(list)
+
+    with torch.no_grad():
+        for i, data in enumerate(dataset):
+            # forward – match what you do in train/evaluate
+            mloss, _, *outs = program.model(data)
+
+            # --- extract logits for answer_prop ---
+            logits = None
+            for o in reversed(outs):
+                if isinstance(o, dict) and answer_prop in o:
+                    logits = o[answer_prop]
+                    break
+                if isinstance(o, torch.Tensor):
+                    logits = o  # fallback if you return the tensor directly
+                    break
+            if logits is None:
+                raise RuntimeError("Could not locate logits for answer_prop in model outputs.")
+
+            # shape normalization: (C,) or (1,C) -> (1,C)
+            if logits.dim() == 1:
+                logits = logits.unsqueeze(0)
+
+            pred = int(logits.argmax(dim=-1).item())
+            counts[pred] += 1
+            idx_by_val[pred].append(i)
+
+    return dict(counts), {k: v for k, v in idx_by_val.items()}
