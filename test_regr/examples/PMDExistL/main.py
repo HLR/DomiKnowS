@@ -148,6 +148,21 @@ def main(args: argparse.Namespace):
     for n,p in answer_module.named_parameters():
         if p.grad is not None:
             print(f"[GRAD] {n} norm={p.grad.data.norm().item():.4e}")
+            
+    def soft_count_zero(module, dataset, device):
+        import torch
+        s = 0.0
+        for item in dataset:
+            x = torch.as_tensor(item["b"], dtype=torch.float32, device=device)  # [M,N]
+            logits = _run_answer_module(module, x)                               # your wrapper
+            p = torch.softmax(logits, dim=-1)[:, 0]                              # prob of "zero"
+            s += p.sum().item()
+        return s
+
+    print("soft sum zero (before):", soft_count_zero(answer_module, dataset, device))
+    # constraint-only training...
+    print("soft sum zero (after):", soft_count_zero(answer_module, dataset, device))
+
 
     # ---- Final eval (discrete) ----
     program.inferTypes = eval_infer
