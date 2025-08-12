@@ -117,12 +117,11 @@ def main(args: argparse.Namespace):
     train_model(program, dataset, num_epochs=2)
 
     # ---- Switch to eval for baseline count ----
-    _prev = program.inferTypes
     program.inferTypes = eval_infer
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
 
     # ---- Restore training infer for constraint phase ----
-    program.inferTypes = _prev
+    program.inferTypes = train_infer
     train_model(program, dataset, args.epoch, constr_loss_only=True)
 
     # ---- Final eval (discrete) ----
