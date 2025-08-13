@@ -323,131 +323,137 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # Conjunction of the disjunction and the negation of the conjunction
         return self.andVar(m, self.orVar(m, var), self.notVar(m, self.andVar(m, var)), onlyConstrains=onlyConstrains) 
     
-    def ifVar(self, m, var1, var2, onlyConstrains = False):
+    def ifVar(self, m, var1, var2, onlyConstrains=False):
+        """
+        Logical implication: (var1 => var2).
+        - If either side is None (missing), we do NOT force anything.
+            * onlyConstrains=True: no constraint added (skip).
+            * onlyConstrains=False: vacuously return 1.
+        - If both are numeric/bool, evaluate and return {0,1} (no constraints).
+        - If one side is numeric and the other is an ILP var:
+            * antecedent == 1  and consequent is ILP  -> add: consequent >= 1
+            * antecedent == 0  and consequent is ILP  -> no constraint (vacuous truth)
+            * antecedent is ILP and consequent == 1   -> no constraint (vacuous truth)
+            * antecedent is ILP and consequent == 0   -> add: antecedent <= 0
+        - If both are ILP vars:
+            * onlyConstrains=True: add A - B <= 0   (A <= B)
+            * onlyConstrains=False: create z = (¬A ∨ B) with standard linearization.
+        """
         logicMethodName = "IF"
 
-        # -- Consider None
-        hasNone = False
-        if var1 is None: # antecedent 
-            antecedent = 1 # when None
-            #self.myLogger.info("%s called with antecedent equals None"%(logicMethodName))
-            #self.myLogger.info("%s called with consequent equals %s"%(logicMethodName,var2))
+        # --- 1) Short-circuit on missing inputs (do NOT coerce None to 1/0) ---
+        if var1 is None or var2 is None:
+            if self.ifLog:
+                self.myLogger.debug("%s: skipping (one side is None); %s"
+                                    % (logicMethodName,
+                                    "no constraints" if onlyConstrains else "return 1"))
+            if onlyConstrains:
+                return
+            return 1  # vacuous truth when building an expression
 
-            hasNone = True
-        else:
-            antecedent = var1
+        antecedent = var1
+        consequent = var2
 
-        if var2 is None: # consequent
-            consequent = 0 # when None
-            if not hasNone: # not yet
-                #self.myLogger.info("%s called with antecedent equals %s"%(logicMethodName,var1))
-                #self.myLogger.info("%s called with consequent equals None"%(logicMethodName))
-                hasNone = True
-        else:
-            consequent = var2
-        # --
-    
-        varsInfo = self.preprocessLogicalMethodVar((antecedent,consequent), logicMethodName, "if",  minN=2)
-        
-        if varsInfo['N'] > 2: # More than 2 variable
-            raise Exception("%s has %i variables, accepts only 2"%(logicMethodName,varsInfo['N']))
-            
+        # Helpers
+        is_num_ante = self.__varIsNumber(antecedent)
+        is_num_cons = self.__varIsNumber(consequent)
+
+        # For logging / naming (safe even for mixed types)
+        varsInfo = self.preprocessLogicalMethodVar((antecedent, consequent),
+                                                logicMethodName, "if", minN=2)
+        if varsInfo['N'] > 2:
+            raise Exception("%s has %i variables, accepts only 2" % (logicMethodName, varsInfo['N']))
+
+        # Normalize numeric to {0,1} for clean reasoning
+        def as01(x): return 1 if bool(x) else 0
+
+        # --- 2) Constraint-only mode: enforce A => B without creating a return var ---
         if onlyConstrains:
-            if varsInfo['No_of_ilp'] == 0: # No ILP variables
-                if (not antecedent): 
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False"%(logicMethodName))
-                    return 
-                elif consequent: # antecedent is True
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent and consequent are True"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - antecedent and consequent are True"%(logicMethodName))
-                    return 
-                else: # antecedent and not consequent
-                    self.myLogger.warn("%s is called with the antecedent True and the consequent False - the result of applying %s would be False making ILP model is infeasible - ignoring it"%(logicMethodName,logicMethodName))
-                    return
-                
-                    #raise Exception("ILP model is infeasible - %s is called with the antecedent True and the consequent False - the result of applying %s is False"
-                    #                %(logicMethodName,logicMethodName))
-            elif self.__varIsNumber(antecedent): # antecedent is boolean and consequent is the ILP variable
-                if not antecedent:
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False"%(logicMethodName))
-                    return 
-                else: # antecedent is True
-                    # Adding ILP constraint
-                    m.addConstr(consequent >= 1, name='If:') # var2 >= 0 - consequent has to be True
-                    if self.ifLog: self.myLogger.debug("%s antecedent is True - created constraint: %s >= %i"%(logicMethodName,consequent,1))
-                    if hasNone: self.myLogger.info("%s antecedent is True - created constraint: %s >= %i"%(logicMethodName,consequent,1))
-                    return
-            elif  self.__varIsNumber(consequent): # consequent is boolean and the antecedent is the ILP variable
-                if consequent:
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - consequent is True"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - consequent is True"%(logicMethodName))
-                    return 
-                else: # consequent is False
-                    # Adding ILP constraint - antecedent ILP variable has to be False too
-                    m.addConstr(antecedent <= 0, name='If:')
-                    if self.ifLog: self.myLogger.debug("%s consequent is False - created constraint: %s <= %i"%(logicMethodName,antecedent,0))
-                    if hasNone:  self.myLogger.info("%s consequent is False - created constraint: %s <= %i"%(logicMethodName,antecedent,0))
-                    return
-                        
-            # Create constraint as there are two ILP variables         
+            if is_num_ante and is_num_cons:
+                A = as01(antecedent)
+                B = as01(consequent)
+                # Purely numeric; implication holds unless A=1 and B=0.
+                if A == 1 and B == 0:
+                    # Warn and skip — do NOT force infeasibility here.
+                    self.myLogger.warn("%s: antecedent=True and consequent=False (numeric); "
+                                    "implication would be False; ignoring in constraint-only mode"
+                                    % logicMethodName)
+                else:
+                    if self.ifLog: self.myLogger.debug("%s: numeric implication is True" % logicMethodName)
+                return
 
-            # Only constructing constrains forcing IF to be true 
-            m.addConstr(antecedent - consequent <= 0, name='If:') # var1 <= var2
-            if self.ifLog: self.myLogger.debug("%s created constraint only: %s <= %s"%(logicMethodName,varsInfo['varsNames'][0],varsInfo['varsNames'][1]))
-            
+            if is_num_ante and not is_num_cons:
+                A = as01(antecedent)
+                if A == 1:
+                    # A => B  with A=1  -> force B=1
+                    m.addConstr(consequent >= 1, name='If:')  # B >= 1
+                    if self.ifLog:
+                        self.myLogger.debug("%s: added constraint (A=1): %s >= 1"
+                                            % (logicMethodName, varsInfo['varsNames'][1]))
+                # A = 0 => vacuously true; no constraint
+                return
+
+            if not is_num_ante and is_num_cons:
+                B = as01(consequent)
+                if B == 0:
+                    # A => 0  -> force A = 0
+                    m.addConstr(antecedent <= 0, name='If:')  # A <= 0
+                    if self.ifLog:
+                        self.myLogger.debug("%s: added constraint (B=0): %s <= 0"
+                                            % (logicMethodName, varsInfo['varsNames'][0]))
+                # B = 1 => vacuously true; no constraint
+                return
+
+            # Both ILP vars: A <= B
+            m.addConstr(antecedent - consequent <= 0, name='If:')  # A <= B
+            if self.ifLog:
+                self.myLogger.debug("%s: added constraint: %s <= %s"
+                                    % (logicMethodName, varsInfo['varsNames'][0], varsInfo['varsNames'][1]))
             return
-        else:
-            if varsInfo['No_of_ilp'] == 0: # No ILP variable
-                if not antecedent:
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    return 1
-                elif consequent: # antecedent is True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent and consequent are True - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - antecedent and consequent are True - returning %i"%(logicMethodName,1))
-                    return 1
-                else: # antecedent and not consequent
-                    if self.ifLog: self.myLogger.debug("%s is False - is called with the antecedent True and the consequent False - returning %i"%(logicMethodName,0))
-                    if hasNone: self.myLogger.info("%s is False - is called with the antecedent True and the consequent False - returning %i"%(logicMethodName,0))
-                    return 0
-            elif self.__varIsNumber(antecedent):
-                if not antecedent:
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    return 1
-                else: #antecedent
-                    if self.ifLog: self.myLogger.debug("%s returns: %s - antecedent is True"%(logicMethodName,consequent))
-                    if hasNone: self.myLogger.info("%s returns: %s - antecedent is True"%(logicMethodName,consequent))
-                    return consequent
-            elif  self.__varIsNumber(consequent):
-                if consequent:
-                    if self.ifLog: self.myLogger.debug("%s is True - consequent is True - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - consequent is True - returning %i"%(logicMethodName,1))
-                    return 1
-                else: #not consequent
-                    notAntecedent = self.notVar(m, antecedent)
-                    if self.ifLog: self.myLogger.debug("%s returns: %s - consequent is False"%(logicMethodName,notAntecedent.VarName))
-                    if hasNone: self.myLogger.info("%s returns: %s - consequent is False"%(logicMethodName,notAntecedent.VarName))
-                    return notAntecedent
-       
-            # Create new variable
-            varIF = m.addVar(vtype=GRB.BINARY, name=varsInfo["varName"])
-                
-            # Build constrains
-            m.addConstr(1 - antecedent <= varIF, name='If:')                # 1 - var1 <= varIF
-            m.addConstr(consequent <= varIF, name='If:')                    # var2 <= varIF
-            m.addConstr(1 - antecedent + consequent >= varIF, name='If:')   # 1- var1 + var2 >= varIF
-                
-            m.update()
-            
-            if self.ifLog: self.myLogger.debug("IF returns : %s"%(varsInfo["varName"]))
-            return varIF
+
+        # --- 3) Expression mode: return a {0,1}/var representing (¬A ∨ B) ---
+        if is_num_ante and is_num_cons:
+            A = as01(antecedent)
+            B = as01(consequent)
+            return 1 if (A == 0 or B == 1) else 0
+
+        if is_num_ante and not is_num_cons:
+            A = as01(antecedent)
+            if A == 0:
+                return 1  # vacuous truth
+            else:
+                # A==1 -> returns B (since (¬1 ∨ B) == B)
+                if self.ifLog:
+                    self.myLogger.debug("%s returns consequent (A=1): %s"
+                                        % (logicMethodName, varsInfo['varsNames'][1]))
+                return consequent
+
+        if not is_num_ante and is_num_cons:
+            B = as01(consequent)
+            if B == 1:
+                return 1  # (¬A ∨ 1) == 1
+            else:
+                # B==0 -> returns ¬A
+                notAntecedent = self.notVar(m, antecedent)
+                if self.ifLog:
+                    self.myLogger.debug("%s returns NOT antecedent (B=0): %s"
+                                        % (logicMethodName, notAntecedent.VarName))
+                return notAntecedent
+
+        # Both ILP vars: build z = (¬A ∨ B) with standard linearization
+        varIF = m.addVar(vtype=GRB.BINARY, name=varsInfo["varName"])
+        # z >= 1 - A
+        m.addConstr(1 - antecedent <= varIF, name='If:')
+        # z >= B
+        m.addConstr(consequent <= varIF, name='If:')
+        # z <= 1 - A + B
+        m.addConstr(1 - antecedent + consequent >= varIF, name='If:')
+
+        m.update()
+        if self.ifLog:
+            self.myLogger.debug("%s returns : %s" % (logicMethodName, varsInfo["varName"]))
+        return varIF
+
            
     def equivalenceVar(self, m, *var, onlyConstrains = False):
         logicMethodName = "EQUIVALENCE"

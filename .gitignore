@@ -253,5 +253,8 @@ venv
 .settings/org.eclipse.ltk.core.refactoring.prefs
 
 # logs
-/*/logs/*
+**/logs/
 *.log
+
+# VSCode
+.vscode/
