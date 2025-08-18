@@ -40,6 +40,7 @@ if __name__ == '__main__':
     M = 6
     K = 6
     train, test, all_label_test = create_dataset_relation(N=N, M=M, K=K)
+    print(all_label_test)
     count_all_labels = Counter(all_label_test)
     majority_vote = max([val for val in count_all_labels.values()])
 

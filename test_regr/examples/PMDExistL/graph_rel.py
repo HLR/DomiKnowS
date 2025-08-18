@@ -11,7 +11,7 @@ def get_graph(args):
         obj = Concept(name="obj")
         scene_contain_obj,  = scene.contains(obj)
 
-        # obj = list of 6 numbers
+        # obj = list of M numbers
         is_cond1 = obj(name="is_cond1") # Sum of number [-0.5, 0.1, 0.5] > 0
         is_cond2 = obj(name="is_cond2") # Absolute of (sum of number) > 0.2
 

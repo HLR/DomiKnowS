@@ -6,6 +6,7 @@ from tqdm import tqdm
 from domiknows.sensor.pytorch.learners import TorchLearner
 from domiknows.program.model.base import Mode
 from domiknows.program.lossprogram import PrimalDualProgram
+from sklearn.model_selection import train_test_split
 
 
 class DummyLearner(TorchLearner):
@@ -35,6 +36,33 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
         "b": [((np.random.rand(N) - np.random.rand(N))).tolist() for _ in range(M)],
         "label": [1] * M
     }]
+
+
+def create_dataset_relation(N: int, M: int, K: int) -> List[Dict[str, Any]]:
+    def create_scene(num_all_objs, total_numbers_each_obj):
+        generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
+
+        condition_label = False
+        for i in range(num_all_objs):
+            for j in range(i + 1, num_all_objs):
+                obj1 = generate_objects[i]
+                obj2 = generate_objects[j]
+                cond1 = bool(np.sum(obj1) > 0)
+                cond2 = bool(np.sum(np.abs(obj2)) > 0.2)
+                rel = bool(obj1[0] * obj2[0] >= 0)
+
+                condition_label |= (cond1 & cond2 & rel)
+
+        return {
+            "all_obj": [0],
+            "obj_index": generate_objects,
+            "obj_emb": generate_objects,
+            "condition_label": [condition_label]
+        }
+
+    dataset = [create_scene(M, K) for _ in range(N)]
+    train, test = train_test_split(dataset, test_size=0.2)
+    return train, test, [data["condition_label"][0] for data in test]
 
 
 def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
