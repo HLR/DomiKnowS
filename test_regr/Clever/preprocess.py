@@ -73,7 +73,7 @@ def preprocess_dataset(args,NUM_INSTANCES,CACHE_DIR):
             subset_size = args.train_size // 6
             dataset = [dataset[i] for i in range(subset_size * (args.subset - 1), subset_size * args.subset)]
         else:
-            dataset = [dataset[i] for i in range(args.test_size)]
+            dataset = [dataset[i] for i in range(args.train_size)]
     return dataset
 
 def preprocess_folders_and_files(dummy):
