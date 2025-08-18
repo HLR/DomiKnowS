@@ -11,8 +11,15 @@ Then cd into the Clever folder.
    ```
    pip install -r requirements.txt
    ```
+3. **Install Jacinle and PreciseRolPooling**
 
-3. **Run the program**
+   ```
+   git clone https://github.com/vacancy/Jacinle --recursive
+   cd Jacinle
+   pip install -e .
+   ```
+   Note: please also check https://github.com/vacancy/PreciseRoIPooling for installing PreciseRoIPooling if need
+4. **Run the program**
 
 The initial run may take longer as necessary files are extracted.
 
@@ -30,3 +37,7 @@ or
    ```
 
 To perform evaluation using a trained checkpoint, add the '--eval-only' flag to the commands above.
+
+5 **Change Dataset Filter**
+
+In preprocess_dataset function in preprocessor.py, there is comment for each filter type of function. Considering uncomment/comment filter that you want to test data with. Currently, we test with 1 relations.

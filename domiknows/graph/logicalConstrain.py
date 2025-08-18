@@ -320,6 +320,52 @@ class LogicalConstrain(LcElement):
         else:
             # Return collected setups
             return newLcVars
+        
+    def remove_duplicate_prefix_rows(self, array):
+        """
+        Remove rows from array containing Gurobi variables where the same word prefix 
+        appears with multiple different labels within the same row.
+        Handles nested structure where each row contains a list of variables.
+        Ignores non-Gurobi variable elements in the row.
+        
+        Args:
+            array: List of lists containing lists of Gurobi variables and other elements
+            
+        Returns:
+            List of lists with conflicting prefix rows removed
+        """
+        filtered_array = []
+        
+        for row in array:
+            if not row:  # Skip empty rows
+                continue
+                
+            # Track prefixes seen in this row
+            prefixes_in_row = set()
+            has_conflict = False
+            
+            # Handle nested structure - flatten the inner list
+            inner_list = row[0] if isinstance(row[0], list) else row
+            
+            for element in inner_list:
+                # Check if element is a Gurobi variable
+                if hasattr(element, 'VarName'):
+                    var_name = element.VarName
+                    # Extract prefix (everything before the last underscore)
+                    prefix = '_'.join(var_name.split('_')[:-1])
+                    
+                    # If we've seen this prefix before in this row, it's a conflict
+                    if prefix in prefixes_in_row:
+                        has_conflict = True
+                        break
+                    
+                    prefixes_in_row.add(prefix)
+            
+            # Only add row if there are no conflicts
+            if not has_conflict:
+                filtered_array.append(row)
+        
+        return filtered_array
     
     def createILPConstrains(self, lcName, lcFun, model, v, headConstrain):
         if len(v) < 2:
@@ -348,7 +394,8 @@ class LogicalConstrain(LcElement):
                 return rVars
             
         # Collect variables setups for ILP constraints
-        sVar = self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
+        sVarUnFilltered = self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
+        sVar = sVarUnFilltered # self.remove_duplicate_prefix_rows(sVarUnFilltered)  # Remove conflicting prefix rows
         
         # Apply collected setups and create ILP constraint
         for z in sVar:

@@ -241,7 +241,7 @@ class LinearLayer(torch.nn.Module):
 
 
 class LEFTRelationEMB(torch.nn.Module):
-    def __init__(self, resnet_model_name: str = 'resnet50', pretrained: bool = True, device: Optional[str] = None):
+    def __init__(self, input_size: int, output_size:int, pretrained: bool = True, device: Optional[str] = None):
         super().__init__()
         
         self.pool_size = 32
@@ -249,12 +249,12 @@ class LEFTRelationEMB(torch.nn.Module):
 
         self.relation_roi_pool = PrRoIPoolApprox((self.pool_size, self.pool_size), 1.0 / downsample_rate).to(device)
 
-        feature_dim = 256
+        feature_dim = input_size
         output_dims = [None, 128, 128, 128]
         self.relation_feature_extract = torch.nn.Conv2d(feature_dim, feature_dim // 2 * 3, 1).to(device)
         self.relation_feature_fuse = torch.nn.Conv2d(feature_dim // 2 * 3 + output_dims[1] * 2, output_dims[2], 1).to(device)
         self.relation_feature_fc = torch.nn.Sequential(torch.nn.ReLU(True), 
-                                                       torch.nn.Linear(output_dims[2] * self.pool_size ** 2, 128)).to(device)
+                                                       torch.nn.Linear(output_dims[2] * self.pool_size ** 2, output_size)).to(device)
 
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(exist_ok=True)

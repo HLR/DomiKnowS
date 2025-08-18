@@ -269,6 +269,7 @@ class CLEVRDatasetUnwrapped:
         self.question_transform = question_transform
         self.incl_scene = incl_scene
         self.incl_raw_scene = incl_raw_scene
+        self.cache = {}
         self.convert_counting = False
 
         with open("counting_to_yesno_questions_gpt4o.pkl", "rb") as f:
