@@ -41,7 +41,7 @@ def create_graph(dataset,return_graph_text=False):
             print("Found or")
         executions.append(execution)
 
-    #print(graph_text)
+    # print(graph_text)
     local_vars = {}
     exec(graph_text, {}, local_vars)
 
