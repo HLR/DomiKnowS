@@ -277,19 +277,6 @@ class InferenceModel(LossModel):
             
             # Log loss_dict structure for context
             self.logger.info(f"loss_dict keys: {list(loss_dict.keys())}")
-            
-            # Check if this will cause BCE error
-            values_out_of_range = torch.logical_or(constr_out < 0, constr_out > 1).any()
-            if values_out_of_range:
-                self.logger.error(f"*** WILL CAUSE BCE ERROR: constr_out has values outside [0,1] range! ***")
-                
-                # Show exactly which values are problematic
-                invalid_mask = torch.logical_or(constr_out < 0, constr_out > 1)
-                invalid_values = constr_out[invalid_mask]
-                self.logger.error(f"Invalid values count: {len(invalid_values)}")
-                self.logger.error(f"All invalid values: {invalid_values.tolist()}")
-            
-            self.logger.info(f"=" * 80)
 
             # Calcluate loss 
             losses.append(self.loss_func(constr_out.float(), lbl)) # TODO: match dtypes too?
