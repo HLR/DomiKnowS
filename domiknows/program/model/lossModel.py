@@ -235,14 +235,69 @@ class InferenceModel(LossModel):
             if len(constr_out.shape) == 2:
                 lbl = lbl.unsqueeze(0)
 
-            # Calcluate loss
+            # logging before the problematic line
+            self.logger.info(f"=" * 80)
+            self.logger.info(f"Processing constraint: {lcName}")
+            self.logger.info(f"Constraint index: {i}")
+            
+            # Log constr_out details
+            self.logger.info(f"constr_out tensor details:")
+            self.logger.info(f"  - Shape: {constr_out.shape}")
+            self.logger.info(f"  - Data type: {constr_out.dtype}")
+            self.logger.info(f"  - Device: {constr_out.device}")
+            self.logger.info(f"  - Min value: {constr_out.min().item()}")
+            self.logger.info(f"  - Max value: {constr_out.max().item()}")
+            self.logger.info(f"  - Mean value: {constr_out.mean().item()}")
+            self.logger.info(f"  - Contains NaN: {torch.isnan(constr_out).any().item()}")
+            self.logger.info(f"  - Contains Inf: {torch.isinf(constr_out).any().item()}")
+            self.logger.info(f"  - Number of elements: {constr_out.numel()}")
+            
+            # Log values outside [0,1] range - THE PROBLEM VALUES
+            values_below_0 = constr_out[constr_out < 0]
+            values_above_1 = constr_out[constr_out > 1]
+            
+            if len(values_below_0) > 0:
+                self.logger.error(f"  - PROBLEM: {len(values_below_0)} values below 0!")
+                self.logger.error(f"  - Values below 0: {values_below_0.tolist()}")
+                self.logger.error(f"  - Min negative value: {values_below_0.min().item()}")
+            
+            if len(values_above_1) > 0:
+                self.logger.error(f"  - PROBLEM: {len(values_above_1)} values above 1!")
+                self.logger.error(f"  - Values above 1: {values_above_1.tolist()}")
+                self.logger.error(f"  - Max value above 1: {values_above_1.max().item()}")
+            
+            # Log first few actual values
+            self.logger.info(f"  - First 10 values: {constr_out.flatten()[:10].tolist()}")
+            
+            # Log label details
+            self.logger.info(f"Label tensor details:")
+            self.logger.info(f"  - Shape: {lbl.shape}")
+            self.logger.info(f"  - Data type: {lbl.dtype}")
+            self.logger.info(f"  - Values: {lbl.tolist()}")
+            
+            # Log loss_dict structure for context
+            self.logger.info(f"loss_dict keys: {list(loss_dict.keys())}")
+            
+            # Check if this will cause BCE error
+            values_out_of_range = torch.logical_or(constr_out < 0, constr_out > 1).any()
+            if values_out_of_range:
+                self.logger.error(f"*** WILL CAUSE BCE ERROR: constr_out has values outside [0,1] range! ***")
+                
+                # Show exactly which values are problematic
+                invalid_mask = torch.logical_or(constr_out < 0, constr_out > 1)
+                invalid_values = constr_out[invalid_mask]
+                self.logger.error(f"Invalid values count: {len(invalid_values)}")
+                self.logger.error(f"All invalid values: {invalid_values.tolist()}")
+            
+            self.logger.info(f"=" * 80)
+
+            # Calcluate loss 
             losses.append(self.loss_func(constr_out.float(), lbl)) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)
 
         # (*out, datanode, builder)
         return loss_scalar, datanode, builder
-
 
 class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
