@@ -257,14 +257,14 @@ class InferenceModel(LossModel):
             values_above_1 = constr_out[constr_out > 1]
             
             if len(values_below_0) > 0:
-                self.logger.error(f"  - PROBLEM: {len(values_below_0)} values below 0!")
-                self.logger.error(f"  - Values below 0: {values_below_0.tolist()}")
-                self.logger.error(f"  - Min negative value: {values_below_0.min().item()}")
+                #self.logger.error(f"  - PROBLEM: {len(values_below_0)} values below 0!")
+                self.logger.info(f"  - Values below 0: {values_below_0.tolist()}")
+                self.logger.info(f"  - Min negative value: {values_below_0.min().item()}")
             
             if len(values_above_1) > 0:
-                self.logger.error(f"  - PROBLEM: {len(values_above_1)} values above 1!")
-                self.logger.error(f"  - Values above 1: {values_above_1.tolist()}")
-                self.logger.error(f"  - Max value above 1: {values_above_1.max().item()}")
+                #self.logger.error(f"  - PROBLEM: {len(values_above_1)} values above 1!")
+                self.logger.info(f"  - Values above 1: {values_above_1.tolist()}")
+                self.logger.info(f"  - Max value above 1: {values_above_1.max().item()}")
             
             # Log first few actual values
             self.logger.info(f"  - First 10 values: {constr_out.flatten()[:10].tolist()}")
