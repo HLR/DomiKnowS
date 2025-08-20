@@ -5,8 +5,16 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ...graph import DataNodeBuilder, DataNode
+from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
+
+try:
+    from constraint_monitor import ( # type: ignore
+        enable_monitoring, start_new_epoch, next_step, log_single_lc, log_memory
+    )
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
 
 class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
@@ -171,8 +179,15 @@ class InferenceModel(LossModel):
 
         # Initialize loss function (needs to be after module initialization)
         self.loss_func = loss()
+        
+         # Initialize monitoring
+        if MONITORING_AVAILABLE:
+            enable_monitoring(port=8080)
 
     def forward(self, builder, build=None):
+        if MONITORING_AVAILABLE:
+            next_step()
+            
         if build is None:
             build = self.build
             
@@ -235,53 +250,21 @@ class InferenceModel(LossModel):
             if len(constr_out.shape) == 2:
                 lbl = lbl.unsqueeze(0)
 
-            # logging before the problematic line
-            self.logger.info(f"=" * 80)
-            self.logger.info(f"Processing constraint: {lcName}")
-            self.logger.info(f"Constraint index: {i}")
-            
-            # Log constr_out details
-            self.logger.info(f"constr_out tensor details:")
-            self.logger.info(f"  - Shape: {constr_out.shape}")
-            self.logger.info(f"  - Data type: {constr_out.dtype}")
-            self.logger.info(f"  - Device: {constr_out.device}")
-            self.logger.info(f"  - Min value: {constr_out.min().item()}")
-            self.logger.info(f"  - Max value: {constr_out.max().item()}")
-            self.logger.info(f"  - Mean value: {constr_out.mean().item()}")
-            self.logger.info(f"  - Contains NaN: {torch.isnan(constr_out).any().item()}")
-            self.logger.info(f"  - Contains Inf: {torch.isinf(constr_out).any().item()}")
-            self.logger.info(f"  - Number of elements: {constr_out.numel()}")
-            
-            # Log values outside [0,1] range - THE PROBLEM VALUES
-            values_below_0 = constr_out[constr_out < 0]
-            values_above_1 = constr_out[constr_out > 1]
-            
-            if len(values_below_0) > 0:
-                #self.logger.error(f"  - PROBLEM: {len(values_below_0)} values below 0!")
-                self.logger.info(f"  - Values below 0: {values_below_0.tolist()}")
-                self.logger.info(f"  - Min negative value: {values_below_0.min().item()}")
-            
-            if len(values_above_1) > 0:
-                #self.logger.error(f"  - PROBLEM: {len(values_above_1)} values above 1!")
-                self.logger.info(f"  - Values above 1: {values_above_1.tolist()}")
-                self.logger.info(f"  - Max value above 1: {values_above_1.max().item()}")
-            
-            # Log first few actual values
-            self.logger.info(f"  - First 10 values: {constr_out.flatten()[:10].tolist()}")
-            
-            # Log label details
-            self.logger.info(f"Label tensor details:")
-            self.logger.info(f"  - Shape: {lbl.shape}")
-            self.logger.info(f"  - Data type: {lbl.dtype}")
-            self.logger.info(f"  - Values: {lbl.tolist()}")
-            
-            # Log loss_dict structure for context
-            self.logger.info(f"loss_dict keys: {list(loss_dict.keys())}")
+            if MONITORING_AVAILABLE:
+                log_single_lc(
+                    constraint_name=lcName,
+                    loss_dict=loss_dict,  # Your DomiKnowS loss dict
+                    label_tensor=lbl,
+                    lc_formulation=str(self.graph.logicalConstrains[lcName])  # Extract from your graph
+                )
 
             # Calcluate loss 
             losses.append(self.loss_func(constr_out.float(), lbl)) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)
+        
+        if MONITORING_AVAILABLE:
+            log_memory() 
 
         # (*out, datanode, builder)
         return loss_scalar, datanode, builder
