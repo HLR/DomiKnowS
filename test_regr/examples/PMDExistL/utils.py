@@ -1,3 +1,4 @@
+import random
 from typing import List, Dict, Any
 import numpy as np
 import torch
@@ -38,26 +39,55 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
     }]
 
 
-def create_dataset_relation(N: int, M: int, K: int) -> List[Dict[str, Any]]:
+def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]]:
     def create_scene(num_all_objs, total_numbers_each_obj):
         generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
 
+        def select_number_condition():
+            select_condition = random.randint(0, 4)
+            if select_condition == 0:
+                return lambda a: np.sum(a) > 0, "is_cond1"
+            if select_condition == 1:
+                return lambda a: np.sum(np.abs(a)) > 0.2, "is_cond2"
+            if select_condition == 2:
+                return lambda a: np.sum(a) < 0, "is_cond3"
+            return lambda a: np.sum(np.abs(a)) < 0.5, "is_cond4"
+
+        def select_relation_condition():
+            select_condition = random.randint(0, 4)
+            if select_condition == 0:
+                return lambda a, b: a[0] * b[0] >= 0, "is_relation1"
+            if select_condition == 1:
+                return lambda a, b: a[0] * b[0] < 0, "is_relation2"
+            if select_condition == 2:
+                return lambda a, b: a[-1] * b[-1] >= 0, "is_relation3"
+            return lambda a, b: a[-1] * b[-1] < 0, "is_relation4"
+
         condition_label = False
+        cond1_condition, cond_x = select_number_condition()
+        cond2_condition, cond_y = select_number_condition()
+        relation_condition, rel_text = select_relation_condition()
         for i in range(num_all_objs):
+            # TODO: Adding execution here
             for j in range(i + 1, num_all_objs):
                 obj1 = generate_objects[i]
                 obj2 = generate_objects[j]
-                cond1 = bool(np.sum(obj1) > 0)
-                cond2 = bool(np.sum(np.abs(obj2)) > 0.2)
-                rel = bool(obj1[0] * obj2[0] >= 0)
-
+                cond1 = bool(cond1_condition(obj1))
+                cond2 = bool(cond2_condition(obj2))
+                rel = bool(relation_condition(obj1, obj2))
                 condition_label |= (cond1 & cond2 & rel)
+
+        if not args.constraint_2_existL:
+            logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), {cond_y}('y', path=('rel1', obj2)))"
+        else:
+            logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
 
         return {
             "all_obj": [0],
             "obj_index": generate_objects,
             "obj_emb": generate_objects,
-            "condition_label": [condition_label]
+            "condition_label": [condition_label],
+            "logic_str": logic_str
         }
 
     dataset = [create_scene(M, K) for _ in range(N)]

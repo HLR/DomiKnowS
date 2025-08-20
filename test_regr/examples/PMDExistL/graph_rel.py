@@ -12,23 +12,23 @@ def get_graph(args):
         scene_contain_obj,  = scene.contains(obj)
 
         # obj = list of M numbers
+
+        # Making this to 4 conditions
         is_cond1 = obj(name="is_cond1") # Sum of number [-0.5, 0.1, 0.5] > 0
         is_cond2 = obj(name="is_cond2") # Absolute of (sum of number) > 0.2
+        is_cond3 = obj(name="is_cond3") # Sum of number [-0.5, 0.1, 0.5] > 0
+        is_cond4 = obj(name="is_cond4") # Absolute of (sum of number) > 0.2
 
         relation = Concept('relation_obj1_obj2')
         (obj1, obj2) = relation.has_a(arg1=obj, arg2=obj)
 
-        is_relation = relation(name="is_relation") # sum of x more than sum of y
+        # Making this to 4 relations
+        is_relation1 = relation(name="is_relation1") # sum of x more than sum of y
+        is_relation2 = relation(name="is_relation2")  # sum of x more than sum of y
+        is_relation3 = relation(name="is_relation3")  # sum of x more than sum of y
+        is_relation4 = relation(name="is_relation4")  # sum of x more than sum of y
 
-        if args.constraint_2_existL:
-            learning_condition = existsL(is_cond1('x'),
-                                         is_relation('rel1', path=('x', obj1.reversed)),
-                                         existsL(is_cond2('y', path=('rel1', obj2)))
-                                         )
-        else:
-            learning_condition = existsL(is_cond1('x'),
-                                         is_relation('rel1', path=('x', obj1.reversed)),
-                                         is_cond2('y', path=('rel1', obj2)))
-
-    return graph, scene, obj, scene_contain_obj, is_cond1, is_cond2, relation, obj1, obj2, is_relation, learning_condition
+    return (graph, scene, obj, scene_contain_obj, relation, obj1, obj2,
+            is_cond1, is_cond2, is_cond3, is_cond4,
+            is_relation1, is_relation2, is_relation3, is_relation4)
 

@@ -6,9 +6,9 @@ def run_all_process(contrains_two_existl=False):
     idx = 1
     procs = []
     param_combinations = {
-        "N": [50, 100, 500, 1000],
-        "lr": [1e-3, 1e-4, 1e-5],
-        "epoch":  [50, 100]
+        "N": [1000, 10000],
+        "lr": [1e-4, 1e-5],
+        "epoch":  [5, 10]
     }
     keys, values = zip(*param_combinations.items())
     print(keys, values)

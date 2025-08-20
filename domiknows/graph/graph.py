@@ -1120,7 +1120,6 @@ class Graph(BaseGraphTree):
                     lc_string_fmt,
                     target_namespace
                 )
-
                 self.constraint[c] = ReaderSensor(
                     keyword=constr_reader_key,
                     is_constraint=True,
