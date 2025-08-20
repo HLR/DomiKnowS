@@ -25,8 +25,9 @@ try:
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
-    
- # Initialize monitoring
+    logging.getLogger(__name__).warning('Monitor package not found. Monitoring disabled.')
+
+# Initialize monitoring
 if MONITORING_AVAILABLE:
     enable_monitoring(port=8080)
 

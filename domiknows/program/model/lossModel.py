@@ -15,6 +15,7 @@ try:
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
+    logging.getLogger(__name__).warning('Monitor package not found. Monitoring disabled.')
 
 class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
