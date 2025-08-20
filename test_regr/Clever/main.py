@@ -20,11 +20,15 @@ import gc
 
 try:
     from constraint_monitor import ( # type: ignore
-        start_new_epoch
+         enable_monitoring, start_new_epoch
     )
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
+    
+ # Initialize monitoring
+if MONITORING_AVAILABLE:
+    enable_monitoring(port=8080)
 
 logging.basicConfig(level=logging.INFO)
 

@@ -10,7 +10,7 @@ from ..metric import MetricTracker, MacroAverageTracker
 
 try:
     from constraint_monitor import ( # type: ignore
-        enable_monitoring, start_new_epoch, next_step, log_single_lc, log_memory
+       next_step, log_single_lc, log_memory
     )
     MONITORING_AVAILABLE = True
 except ImportError:
@@ -179,10 +179,6 @@ class InferenceModel(LossModel):
 
         # Initialize loss function (needs to be after module initialization)
         self.loss_func = loss()
-        
-         # Initialize monitoring
-        if MONITORING_AVAILABLE:
-            enable_monitoring(port=8080)
 
     def forward(self, builder, build=None):
         if MONITORING_AVAILABLE:
