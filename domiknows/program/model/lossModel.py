@@ -253,9 +253,9 @@ class InferenceModel(LossModel):
             if MONITORING_AVAILABLE:
                 log_single_lc(
                     constraint_name=lcName,
-                    loss_dict=loss_dict,  # Your DomiKnowS loss dict
+                    loss_dict=loss_dict,
                     label_tensor=lbl,
-                    lc_formulation=str(self.graph.logicalConstrains[lcName])  # Extract from your graph
+                    lc_formulation=self.graph.logicalConstrains[lcName].strEs() 
                 )
 
             # Calcluate loss 
