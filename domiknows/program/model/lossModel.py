@@ -9,7 +9,7 @@ from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
 
 try:
-    from constraint_monitor import ( # type: ignore
+    from monitor.constraint_monitor import ( # type: ignore
        next_step, log_single_lc, log_memory
     )
     MONITORING_AVAILABLE = True
@@ -247,11 +247,13 @@ class InferenceModel(LossModel):
                 lbl = lbl.unsqueeze(0)
 
             if MONITORING_AVAILABLE:
+                lc = self.graph.logicalConstrains[lcName]
+                lcRepr = '%s'%(lc, lc.strEs())
                 log_single_lc(
                     constraint_name=lcName,
                     loss_dict=loss_dict,
                     label_tensor=lbl,
-                    lc_formulation=self.graph.logicalConstrains[lcName].strEs() 
+                    lc_formulation=lcRepr
                 )
 
             # Calcluate loss 

@@ -19,7 +19,7 @@ import argparse, torch, logging
 import gc
 
 try:
-    from constraint_monitor import ( # type: ignore
+    from monitor.constraint_monitor import ( # type: ignore
          enable_monitoring, start_new_epoch
     )
     MONITORING_AVAILABLE = True
