@@ -13,10 +13,10 @@ LOG_DIR.mkdir(exist_ok=True)
 
 # Bootstrap: enable debugging + memory profiling, then run main inside a memory meter
 BOOTSTRAP = (
-    "import debug_utils as DU\n"
+    "import debug.debug_utils as DU\n"
     "DU.enable_full_debug()\n"
     "DU.enable_memory_profiling()\n"
-    "from debug_utils import memory_meter\n"
+    "from debug.debug_utils import memory_meter\n"
     "import main\n"
     "args = main.parse_arguments()\n"
     "with memory_meter('subprocess-main'):\n"
