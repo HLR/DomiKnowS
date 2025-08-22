@@ -249,7 +249,7 @@ class InferenceModel(LossModel):
 
             if MONITORING_AVAILABLE:
                 lc = self.graph.logicalConstrains[lcName]
-                lcRepr = '%s'%(lc, lc.strEs())
+                lcRepr = f'{lc} {lc.strEs()}'
                 log_single_lc(
                     constraint_name=lcName,
                     loss_dict=loss_dict,
