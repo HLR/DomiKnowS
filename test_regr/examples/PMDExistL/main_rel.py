@@ -1,10 +1,10 @@
 import sys
 import os
+from click import Path
 import numpy as np
 from utils import create_dataset_relation
 from collections import Counter
 import argparse
-
 from graph_rel import get_graph
 
 from domiknows.graph import Graph, Concept, Relation, andL, orL
@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     set_seed_everything()
 
-    np.random.seed(seed=args.N)
+    np.random.seed(0)
     # N scene, each has M objects, each object has length of K emb
     # Condition if
     N = args.N
@@ -168,4 +168,8 @@ if __name__ == '__main__':
     print("Acc Majority Vote: {:.2f}".format(majority_vote * 100 / len(dataset)), file=results_files)
     print("#" * 50, file=results_files)
 
+    out_dir = Path(__file__).resolve().parent / "models"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
+    out_path = out_dir / f"1_existL_diverse_relation_{args.N}_lr_{args.lr}.pth"
+    program.save(out_path)

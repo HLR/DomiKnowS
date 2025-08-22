@@ -18,6 +18,19 @@ from dataset import g_relational_concepts
 import argparse, torch, logging
 import gc
 
+try:
+    from monitor.constraint_monitor import ( # type: ignore
+         enable_monitoring, start_new_epoch
+    )
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    logging.getLogger(__name__).warning('Monitor package not found. Monitoring disabled.')
+
+# Initialize monitoring
+if MONITORING_AVAILABLE:
+    enable_monitoring(port=8080)
+
 logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser(description="Logic-guided VQA training / evaluation")
@@ -101,6 +114,9 @@ if not args.eval_only:
         program.load(previous_save)
 
     for i in range(args.epochs):
+        if MONITORING_AVAILABLE:
+            start_new_epoch()
+            
         print(f"Training epoch {i+1}/{args.epochs}")
         save_file = Path(f"models/program{args.lr}_{i+1}_{args.load_epoch}__{args.batch_size}_6000_{args.tnorm}_{args.subset}.pth")
         program.train(dataset,Optim=torch.optim.Adam,train_epoch_num=1,c_lr=args.lr,c_warmup_iters=0,batch_size=args.batch_size,device=device,print_loss=False)

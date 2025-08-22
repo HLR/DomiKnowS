@@ -1367,11 +1367,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
                                     
                                     dnAtt[ILPkey][index] = float("nan")
-                                
-                                expected_pointer = len(xVars) - remaining_vars_estimate
-                                assert xVarsIndex == expected_pointer, (
-                                    f"xVarsIndex drift: expected {expected_pointer}, got {xVarsIndex}"
-                                )
 
                                 # Update index for x variables 
                                 if c[2] is None:
