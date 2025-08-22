@@ -1,3 +1,4 @@
+from click import Path
 import numpy as np
 from utils import create_dataset_relation
 from collections import Counter
@@ -153,4 +154,8 @@ if __name__ == '__main__':
     print("Acc Majority Vote: {:.2f}".format(majority_vote * 100 / len(test)), file=results_files)
     print("#" * 50, file=results_files)
 
-    program.save(f"models/1_existL_diverse_relation_{args.N}_lr_{args.lr}.pth")
+    out_dir = Path(__file__).resolve().parent / "models"  
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = out_dir / f"1_existL_diverse_relation_{args.N}_lr_{args.lr}.pth"
+    program.save(out_path)
