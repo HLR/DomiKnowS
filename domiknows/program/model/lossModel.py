@@ -167,7 +167,7 @@ class InferenceModel(LossModel):
 
     def __init__(self, graph, 
                  tnorm='P',
-                 loss=torch.nn.BCEWithLogitsLoss,
+                 loss=torch.nn.BCEWithLoss(),
                  counting_tnorm=None,
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
 

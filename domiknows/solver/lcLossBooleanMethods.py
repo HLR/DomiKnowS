@@ -400,97 +400,141 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return equivSuccess
 
-    def calc_probabilities(self, t, s):
+    def calc_probabilities(self, t: torch.Tensor, n: int | None = None) -> torch.Tensor:
+        """
+        Poisson–binomial PMF over counts 0..n for independent Bernoulli probs in t.
+        Returns a length-(n+1) vector where pmf[k] = P(K==k).
+        Differentiable w.r.t. t. t is 1-D with entries in [0,1].
+        """
+        if t.ndim != 1:
+            t = t.view(-1)
+        if n is None:
+            n = t.numel()
+        # Use only the first n probs if more are given
+        p = t[:n]
 
-        n = len(t)
-        dp = torch.zeros(s + 1, device=self.current_device, dtype=torch.float64)
-        dp[0] = 1.0
-        dp.requires_grad_()
-        for i in range(n):
-            dp_new = dp.clone()
-            dp_new[1:min(s, i + 1) + 1] = dp[1:min(s, i + 1) + 1] * (1 - t[i]) + dp[:min(s, i + 1)] * t[i]
-            dp_new[0] = dp[0] * (1 - t[i])
-            dp = dp_new
-        return dp
+        # PMF DP: start with P(K=0)=1
+        pmf = torch.zeros(n + 1, dtype=p.dtype, device=p.device)
+        pmf[0] = 1.0
 
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
+        # For each probability p_i, convolve with [1-p_i, p_i]
+        # Reverse k loop to avoid overwriting dependencies.
+        for pi in p:
+            # pmf_new[k] = pmf[k]*(1-pi) + pmf[k-1]*pi
+            # Do it in-place with careful ordering (descending k)
+            prev = pmf.clone()
+            pmf[1:] = prev[1:] * (1 - pi) + prev[:-1] * pi
+            pmf[0]  = prev[0]  * (1 - pi)
+
+        # Numerical guard
+        pmf = torch.clamp(pmf, 0.0, 1.0)
+        # renormalize small drift
+        s = pmf.sum()
+        if torch.isfinite(s) and s > 0:
+            pmf = pmf / s
+        return pmf
+
+    def countVar(
+        self,
+        _,
+        *var,
+        onlyConstrains: bool = False,
+        limitOp: str = "==",
+        limit: int = 1,
+        logicMethodName: str = "COUNT",
+    ):
         logicMethodName = "COUNT"
 
-        method=self.counting_tnorm if self.counting_tnorm else self.tnorm
-        #if method=="LSE": # log sum exp
-        #    exists_at_least_one = lambda t, beta=100.0: torch.clamp(-torch.log((1 / beta) * torch.log(torch.sum(torch.exp(beta * t)))), min=0,max=1)
-        #    exists_at_least_s = lambda t, s, beta=10.0: torch.clamp(torch.relu(s - torch.sum(torch.sigmoid(beta * (t - 0.5)))),max=1)
-        #    exists_at_most_s = lambda t, s, beta=10.0: torch.clamp(torch.relu(torch.sum(torch.sigmoid(beta * (t - 0.5))) - s),max=1)
-        #    exists_exactly_s = lambda t, s, beta=10.0: torch.clamp(torch.abs(s - torch.sum(torch.sigmoid(beta * (t - 0.5)))),max=1)
-        if method=="G": # Godel logic
-            exists_at_least_one = lambda t: 1 - torch.max(t)
-            exists_at_least_s = lambda t, s: 1- torch.min(torch.sort(t, descending=True)[0][:s])
-            exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][:len(t)-s])
-            exists_exactly_s = lambda t, s: 1 - torch.min(torch.min(torch.sort(t, descending=True)[0][:s]) , torch.min(torch.sort(1 - t, descending=True)[0][:len(t)-s]))
-        elif method == "L": # Łukasiewicz logic
-            exists_at_least_one = lambda t: 1 - torch.min(torch.sum(t), torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64))
-            exists_at_least_s = lambda t, s: 1 - torch.max(torch.sum(torch.sort(t, descending=True)[0][:s])-(s-1), torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64))
-            exists_at_most_s = lambda t, s: 1 - torch.max(torch.sum(torch.sort(1 - t, descending=True)[0][:len(t)-s])-(len(t)-s-1), torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64))
-            exists_exactly_s = lambda t, s: 1 - torch.max(torch.sum(torch.sort(t, descending=True)[0][:s])-(s-1)+torch.sum(torch.sort(1 - t, descending=True)[0][:len(t)-s])-(len(t)-s-1), torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64))
+        # ---- Normalize inputs: skip None, move to correct device/dtype, clamp to [0,1]
+        vals = []
+        for v in var:
+            if v is None:
+                continue
+            tv = self._fixVar((v,))[0] if not isinstance(v, torch.Tensor) else v
+            tv = tv.to(device=self.current_device, dtype=torch.float64)
+            # If tv might be >1 or <0 due to upstream math, clamp for fuzzy semantics.
+            tv = torch.clamp(tv, 0.0, 1.0)
+            vals.append(tv)
 
-        elif method == "P":  #  Product logic
-
-            exists_at_least_one = lambda t: torch.prod(1 - t)
-            exists_at_least_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, len(t))[s:])
-            exists_at_most_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, s))
-            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, s)[s]
-
-        else: # "SP" # Simplified product logic
-            exists_at_least_one = lambda t: torch.prod(1 - t)
-            exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][:s])
-            exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][:len(t) - s])
-            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, s)[s]
-
-
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
-
-        var = self._fixVar(var)
-                
-        varSum = torch.clone(var[0])
-        for v in var[1:]:
-            varSum.add_(v)
-                        
-        tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        
-        if  limitOp == '==': # == limit
-            #countLoss = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
-            countLoss=exists_exactly_s(varSum, limit)
-            if onlyConstrains:
-                return countLoss
-            else:
-                countSuccess = torch.sub(tOne, countLoss)
-                return countSuccess
+        # Edge case: no literals -> treat as empty set
+        if len(vals) == 0:
+            # count = 0 always; define loss/success from that.
+            # Build a tiny zero vector so helpers don't crash.
+            t = torch.zeros(1, device=self.current_device, dtype=torch.float64)
         else:
-            if limitOp == '>=': # > limit
-                #Existsl
-                if onlyConstrains:
-                    if limit ==1:return exists_at_least_one(varSum)
-                    else: return exists_at_least_s(varSum, limit)
-                else:
-                    if limit == 1:
-                        countSuccess = 1 - exists_at_least_one(varSum)
-                    else:
-                        countSuccess = 1 - exists_at_least_s(varSum, limit)
+            # Make a 1D tensor of literals; if individual tensors are scalar, stack them.
+            t = torch.stack([v.reshape(()) for v in vals]).to(self.current_device, dtype=torch.float64)
 
-            elif limitOp == '<=': # < limit
-                #atmostL
+        n = t.numel()
+        s = int(limit)  # ensure Python int
 
-                if onlyConstrains:
-                    return exists_at_most_s(varSum, limit)
-                else:
-                    countSuccess = 1 - exists_at_most_s(varSum, limit)
+        # ---- Choose t-norm family for counting
+        method = self.counting_tnorm if getattr(self, "counting_tnorm", None) else self.tnorm
 
-            if onlyConstrains:
-                countLoss = torch.sub(tOne, countSuccess)
-                return countLoss
+        # Helpers return a **loss in [0,1]** (0 = satisfied, 1 = maximally violated).
+        if method == "G":  # Gödel
+            exists_at_least_one = lambda t: 1 - torch.max(t)  # loss is 0 when any literal is 1
+            exists_at_least_s = lambda t, s: 1 - torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)])
+            exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)])
+            exists_exactly_s = lambda t, s: 1 - torch.min(
+                torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]),
+                torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]),
+            )
+
+        elif method == "L":  # Łukasiewicz
+            one = torch.tensor(1.0, device=self.current_device, dtype=torch.float64)
+            zero = torch.tensor(0.0, device=self.current_device, dtype=torch.float64)
+            exists_at_least_one = lambda t: 1 - torch.minimum(torch.sum(t), one)
+            exists_at_least_s = lambda t, s: 1 - torch.maximum(
+                torch.sum(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) - (max(min(s, n), 0) - 1),
+                zero,
+            )
+            exists_at_most_s = lambda t, s: 1 - torch.maximum(
+                torch.sum(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) - (max(n - max(min(s, n), 0), 0) - 1),
+                zero,
+            )
+            exists_exactly_s = lambda t, s: 1 - torch.maximum(
+                torch.sum(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) - (max(min(s, n), 0) - 1)
+                + torch.sum(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) - (max(n - max(min(s, n), 0), 0) - 1),
+                zero,
+            )
+
+        elif method == "P":  # Product
+            exists_at_least_one = lambda t: torch.prod(1 - t)  # loss small if there exists a high literal
+            exists_at_least_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, len(t))[max(min(s, n), 0) :])
+            exists_at_most_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, len(t))[: max(min(s, n), 0) + 1])
+            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, len(t))[max(min(s, n), 0)]
+
+        else:  # "SP" Simplified Product
+            exists_at_least_one = lambda t: torch.prod(1 - t)
+            exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) if max(min(s, n), 0) > 0 else 1.0
+            exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) if max(n - max(min(s, n), 0), 0) > 0 else 1.0
+            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, len(t))[max(min(s, n), 0)]
+
+        # ---- Compute loss or success
+        if limitOp == "==":
+            loss = exists_exactly_s(t, s)
+        elif limitOp == ">=":
+            if s <= 1:
+                loss = exists_at_least_one(t)
             else:
-                return countSuccess
+                loss = exists_at_least_s(t, s)
+        elif limitOp == "<=":
+            loss = exists_at_most_s(t, s)
+        else:
+            raise ValueError(f"Unsupported limitOp: {limitOp}")
+
+        # log i not in [0,1] range
+        if not (0 <= loss <= 1):
+            self.logger.warning(f"Loss out of bounds [0,1]: {loss.item()}")
+            # clamp
+            loss = torch.clamp(loss, 0.0, 1.0)
+
+        if onlyConstrains:
+            return loss  # loss in [0,1]
+        else:
+            success = 1.0 - loss
+            return torch.clamp(success, 0.0, 1.0)
             
     def compareCountsVar(
         self,
