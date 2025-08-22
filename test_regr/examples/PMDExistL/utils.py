@@ -41,7 +41,7 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
 
 def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]]:
     def create_scene(num_all_objs, total_numbers_each_obj):
-        generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
+        generate_objects = [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
 
         def select_number_condition():
             select_condition = random.randint(0, 4)
@@ -68,13 +68,13 @@ def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]
         cond2_condition, cond_y = select_number_condition()
         relation_condition, rel_text = select_relation_condition()
         for i in range(num_all_objs):
-            # TODO: Adding execution here
             for j in range(i + 1, num_all_objs):
                 obj1 = generate_objects[i]
                 obj2 = generate_objects[j]
                 cond1 = bool(cond1_condition(obj1))
                 cond2 = bool(cond2_condition(obj2))
                 rel = bool(relation_condition(obj1, obj2))
+                # print(cond1, cond2, rel, j)
                 condition_label |= (cond1 & cond2 & rel)
 
         if not args.constraint_2_existL:
@@ -82,17 +82,20 @@ def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]
         else:
             logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
 
+        logic_order = [cond_x, rel_text, cond_y]
+
         return {
             "all_obj": [0],
             "obj_index": generate_objects,
             "obj_emb": generate_objects,
             "condition_label": [condition_label],
-            "logic_str": logic_str
+            "logic_str": logic_str,
+            "logic_order": logic_order
         }
 
     dataset = [create_scene(M, K) for _ in range(N)]
     train, test = train_test_split(dataset, test_size=0.2)
-    return train, test, [data["condition_label"][0] for data in test]
+    return train, test, [data["condition_label"][0] for data in train], [data["condition_label"][0] for data in test]
 
 
 def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
