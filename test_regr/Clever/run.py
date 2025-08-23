@@ -1,8 +1,13 @@
-import os
-import gc
-
 import subprocess
 
+try:
+    from monitor.constraint_monitor import ( # type: ignore
+        start_new_epoch
+    )
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    
 # Basic usage
 
 if __name__ == "__main__":
@@ -11,6 +16,9 @@ if __name__ == "__main__":
     for lr in [1e-4, 1e-5, 1e-6]:
         # Number of epoch to run with
         for epoch in range(20):
+            # New epoch
+            if MONITORING_AVAILABLE:
+                start_new_epoch(epoch)
             # Subset from 1 to 6 to reduce memory used
             for sub_round in range(6):
                 # Training

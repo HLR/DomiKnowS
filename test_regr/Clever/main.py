@@ -1,5 +1,4 @@
 import sys
-import os
 sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('../')
@@ -13,10 +12,9 @@ from domiknows.program.model.pytorch import SolverModel
 from preprocess import preprocess_dataset, preprocess_folders_and_files
 from graph import create_graph
 from pathlib import Path
-from modules import ResNetPatcher, DummyLinearLearner, LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+from modules import  LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
 from dataset import g_relational_concepts
 import argparse, torch, logging
-import gc
 
 from pathlib import Path
 
@@ -34,7 +32,6 @@ try:
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
-    logging.getLogger(__name__).warning('Monitor package not found. Monitoring disabled.')
 
 # Initialize monitoring
 if MONITORING_AVAILABLE:
