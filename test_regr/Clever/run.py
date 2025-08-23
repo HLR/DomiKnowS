@@ -18,7 +18,7 @@ if __name__ == "__main__":
         for epoch in range(20):
             # New epoch
             if MONITORING_AVAILABLE:
-                start_new_epoch(epoch)
+                start_new_epoch()
             # Subset from 1 to 6 to reduce memory used
             for sub_round in range(6):
                 # Training
