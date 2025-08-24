@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import sys
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
@@ -22,10 +23,19 @@ if __name__ == "__main__":
         for epoch in range(20):
             # New epoch
             if MONITORING_AVAILABLE:
-                start_new_epoch()
-                logging.getLogger(__name__).info(f"Starting new epoch {epoch} with lr {lr}")
+                try:
+                    logging.getLogger(__name__).info(f"About to call start_new_epoch() for epoch {epoch} with lr {lr}")
+                    start_new_epoch()
+                    logging.getLogger(__name__).info(f"Successfully called start_new_epoch() for epoch {epoch} with lr {lr}")
+                    sys.stdout.flush()
+                except Exception as e:
+                    logging.getLogger(__name__).error(f"Error calling start_new_epoch(): {e}")
+                    import traceback
+                    traceback.print_exc()
+                    sys.stdout.flush()
             else:
-                logging.getLogger(__name__).info(f"Starting new epoch {epoch} with lr {lr} (monitoring disabled)")
+                logging.getLogger(__name__).info(f"Monitoring not available, starting epoch {epoch} with lr {lr}")
+                sys.stdout.flush()  
             # Subset from 1 to 6 to reduce memory used
             for sub_round in range(6):
                 # Training
