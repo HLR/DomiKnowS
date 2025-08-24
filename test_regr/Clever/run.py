@@ -1,12 +1,17 @@
+import logging
 import subprocess
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
-        start_new_epoch
+         enable_monitoring, start_new_epoch
     )
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
+
+# Initialize monitoring
+if MONITORING_AVAILABLE:
+    enable_monitoring(port=8080)
     
 # Basic usage
 
@@ -19,6 +24,7 @@ if __name__ == "__main__":
             # New epoch
             if MONITORING_AVAILABLE:
                 start_new_epoch()
+                logging.getLogger(__name__).info(f"Starting new epoch {epoch} with lr {lr}")
             # Subset from 1 to 6 to reduce memory used
             for sub_round in range(6):
                 # Training

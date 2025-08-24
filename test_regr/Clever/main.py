@@ -25,18 +25,6 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 def ckpt_path(lr, epoch_idx, load_epoch_tag, batch, tnorm, subset):
     return MODEL_DIR / f"program{lr}_{epoch_idx}_{load_epoch_tag}__{batch}_6000_{tnorm}_{subset}.pth"
 
-try:
-    from monitor.constraint_monitor import ( # type: ignore
-         enable_monitoring, start_new_epoch
-    )
-    MONITORING_AVAILABLE = True
-except ImportError:
-    MONITORING_AVAILABLE = False
-
-# Initialize monitoring
-if MONITORING_AVAILABLE:
-    enable_monitoring(port=8080)
-
 logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser(description="Logic-guided VQA training / evaluation")
