@@ -3,6 +3,16 @@ sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('../')
 sys.path.append('./')
+
+try:
+    from monitor.constraint_monitor import enable_monitoring # type: ignore
+    MONITORING_AVAILABLE = True
+    # Enable in slave mode - will post data to master at localhost:8080
+    enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
+except ImportError:
+    MONITORING_AVAILABLE = False
+
+
 # export GRB_LICENSE_FILE=/full/path/to/gurobi.lic
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, ModuleSensor

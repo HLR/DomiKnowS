@@ -11,10 +11,9 @@ except ImportError:
 
 # Initialize monitoring
 if MONITORING_AVAILABLE:
-    enable_monitoring(port=8080)
+    enable_monitoring(port=8080, slave_mode=False)  # Master mode with web server
     
 # Basic usage
-
 if __name__ == "__main__":
     
     # All learning rate to use
