@@ -24,6 +24,8 @@ if __name__ == "__main__":
             if MONITORING_AVAILABLE:
                 start_new_epoch()
                 logging.getLogger(__name__).info(f"Starting new epoch {epoch} with lr {lr}")
+            else:
+                logging.getLogger(__name__).info(f"Starting new epoch {epoch} with lr {lr} (monitoring disabled)")
             # Subset from 1 to 6 to reduce memory used
             for sub_round in range(6):
                 # Training
