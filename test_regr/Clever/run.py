@@ -2,6 +2,11 @@ import logging
 import subprocess
 import sys
 
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format='[RUN-MASTER] %(asctime)s - %(levelname)s - %(message)s'
+)
+
 try:
     from monitor.constraint_monitor import ( # type: ignore
          enable_monitoring, start_new_epoch
