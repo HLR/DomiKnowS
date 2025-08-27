@@ -5,8 +5,7 @@ from domiknows.graph import DataNode
 
 from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
-from domiknows import setup_logger, getProductionModeStatus  
-
+from domiknows import setup_logger, getProductionModeStatus
 class lcLossBooleanMethods(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
@@ -139,9 +138,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
               
         var = self._fixVar(var)
         
-        # Log variables after fixing
+        # Log variables after fixing with additional debug info
+        self.countLogger.debug(f"Total variables after fixing: {len(var)}")
         for i, v in enumerate(var):
-            self.countLogger.debug(f"Fixed variable {i}: {v.item() if v.numel() == 1 else v}")
+            self.countLogger.debug(f"Fixed variable {i}: {v.item() if v.numel() == 1 else v} (shape: {v.shape})")
+            
+        self.countLogger.debug(f"Variable indices range: 0 to {len(var)-1}")
                     
         if self.tnorm =='L':
             self.countLogger.debug("Using Łukasiewicz t-norm for AND")
@@ -169,7 +171,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         elif self.tnorm =='G':
             self.countLogger.debug("Using Gödel t-norm for AND")
             andSuccess = torch.clone(var[0])
-            self.countLogger.debug(f"Initial value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            self.countLogger.debug(f"Initial value (var[0]): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
             
             for i, v in enumerate(var[1:], 1):
                 prev_value = andSuccess.clone()
@@ -179,7 +181,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         elif self.tnorm =='P':
             self.countLogger.debug("Using Product t-norm for AND")
             andSuccess = torch.clone(var[0])
-            self.countLogger.debug(f"Initial value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            self.countLogger.debug(f"Initial value (var[0]): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
             
             for i, v in enumerate(var[1:], 1):
                 prev_value = andSuccess.clone()
