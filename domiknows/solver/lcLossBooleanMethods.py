@@ -5,7 +5,7 @@ from domiknows.graph import DataNode
 
 from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
-from utils import setup_logger, getProductionModeStatus  # Import the logging utility and production mode checker
+from domiknows import setup_logger, getProductionModeStatus  
 
 class lcLossBooleanMethods(ilpBooleanProcessor):
     
