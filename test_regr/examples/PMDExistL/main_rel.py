@@ -1,5 +1,7 @@
 from click import Path
 import numpy as np
+import os
+os.environ["GRB_LICENSE_FILE"] = "/Users/tanawanpremsri/Downloads/gurobi-5.lic"
 from utils import create_dataset_relation
 from collections import Counter
 import argparse
@@ -27,11 +29,14 @@ def set_seed_everything(seed=380):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--N', type=int, default=1000)
-    parser.add_argument('--lr', type=float, default=1e-6)
+    parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument("--constraint_2_existL", action="store_true")
     parser.add_argument("--evaluate", action="store_true")
+    parser.add_argument("--use_andL", action="store_true")
     args = parser.parse_args()
+
+    args.use_andL = True
 
     set_seed_everything()
 
@@ -39,9 +44,9 @@ if __name__ == '__main__':
     # N scene, each has M objects, each object has length of K emb
     # Condition if
     N = args.N
-    M = 6
-    K = 6
-    train, test, all_label_test = create_dataset_relation(args, N=N, M=M, K=K)
+    M = 2
+    K = 8
+    train, test, all_label_test = create_dataset_relation(args, N=N, M=M, K=K, read_data=True)
 
     dataset = test if args.evaluate else train
 
@@ -49,8 +54,8 @@ if __name__ == '__main__':
     majority_vote = max([val for val in count_all_labels.values()])
 
     (graph, scene, objects, scene_contain_obj, relation, obj1, obj2,
-     is_cond1, is_cond2, is_cond3, is_cond4,
-     is_relation1, is_relation2, is_relation3, is_relation4) = get_graph(args)
+     is_cond1, is_cond2,
+     is_relation1, is_relation2) = get_graph(args)
     #
     #
     # Read Constraint Label
@@ -70,19 +75,18 @@ if __name__ == '__main__':
             super().__init__()
             self.size = size
             self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 256),
-                                             torch.nn.Sigmoid(),
+                                             torch.nn.ReLU(),
                                              torch.nn.Linear(256, 2))
+            self.softmax = torch.nn.Softmax(dim=1)
 
         def forward(self, p):
             # print(self.layer.weight)
             output = self.layer(p)
-            return output
+            return self.softmax(output)
 
 
     objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
     objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-    objects[is_cond3] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-    objects[is_cond4] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
 
 
     # Relation Layer
@@ -90,9 +94,13 @@ if __name__ == '__main__':
         def __init__(self, size):
             super().__init__()
             self.size = size
-            self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 256),
-                                             torch.nn.Sigmoid(),
-                                             torch.nn.Linear(256, 2))
+            self.layer = torch.nn.Sequential(
+                torch.nn.Linear(self.size * 2, 512),
+                torch.nn.Sigmoid(),
+                torch.nn.Linear(512, 512),
+                torch.nn.ReLU(),
+                torch.nn.Linear(512, 2))
+            self.softmax = torch.nn.Softmax(dim=1)
 
         def forward(self, p):
             # print(self.layer.weight)
@@ -110,7 +118,7 @@ if __name__ == '__main__':
 
             pairs = torch.cat((left, right), dim=-1)
             output = self.layer(pairs)
-            return output
+            return self.softmax(output)
 
 
     def filter_relation(_, arg1, arg2):
@@ -123,20 +131,15 @@ if __name__ == '__main__':
         forward=filter_relation)
     #
 
-    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
-    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
-    relation[is_relation3] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
-    relation[is_relation4] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
+    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
+    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
 
-    # TODO: Adding logic_str and logic_label
-
-    # TODO: Fix this Following this
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])])
 
     dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
     program = InferenceProgram(graph, SolverModel,
-                               poi=[scene, objects, is_cond1, is_cond2, is_cond3, is_cond4, relation, is_relation1, is_relation2, is_relation3, is_relation4, graph.constraint],
+                               poi=[scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint],
                                tnorm="G")
 
     acc_train_before = program.evaluate_condition(dataset)

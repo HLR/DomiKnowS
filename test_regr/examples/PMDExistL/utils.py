@@ -8,8 +8,7 @@ from domiknows.sensor.pytorch.learners import TorchLearner
 from domiknows.program.model.base import Mode
 from domiknows.program.lossprogram import PrimalDualProgram
 from sklearn.model_selection import train_test_split
-
-
+import json
 class DummyLearner(TorchLearner):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.stack((torch.ones(len(x)) * 4, torch.ones(len(x)) * 6), dim=-1)
@@ -39,7 +38,7 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
     }]
 
 
-def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]]:
+def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> List[Dict[str, Any]]:
     def create_scene(num_all_objs, total_numbers_each_obj):
         generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
 
@@ -78,9 +77,9 @@ def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]
                 condition_label |= (cond1 & cond2 & rel)
 
         if not args.constraint_2_existL:
-            logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), {cond_y}('y', path=('rel1', obj2)))"
+            logic_str = f"andL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), {cond_y}('y', path=('rel1', obj2)))"
         else:
-            logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
+            logic_str = f"andL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
 
         return {
             "all_obj": [0],
@@ -90,8 +89,20 @@ def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]
             "logic_str": logic_str
         }
 
-    dataset = [create_scene(M, K) for _ in range(N)]
-    train, test = train_test_split(dataset, test_size=0.2)
+    if read_data:
+        with open("dataset/train.json", "r") as f:
+            train = json.load(f)
+        with open("dataset/test.json", "r") as f:
+            test = json.load(f)
+
+        if args.use_andL:
+            for i in range(len(train)):
+                train[i]["logic_str"] = train[i]["logic_str"].replace("existsL", "andL")
+            for i in range(len(test)):
+                test[i]["logic_str"] = test[i]["logic_str"].replace("existsL", "andL")
+    else:
+        dataset = [create_scene(M, K) for _ in range(N)]
+        train, test = train_test_split(dataset, test_size=0.2)
     return train, test, [data["condition_label"][0] for data in test]
 
 
