@@ -1,6 +1,8 @@
+import sys
+sys.path.append('../../..')
+import os
 from click import Path
 import numpy as np
-import os
 from utils import create_dataset_relation
 from collections import Counter
 import argparse
