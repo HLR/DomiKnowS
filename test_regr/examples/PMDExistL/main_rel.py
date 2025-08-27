@@ -28,7 +28,7 @@ def set_seed_everything(seed=380):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--N', type=int, default=100)
+    parser.add_argument('--N', type=int, default=4000)
     parser.add_argument('--lr', type=float, default=1e-6)
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument("--constraint_2_existL", action="store_true")
@@ -41,22 +41,19 @@ if __name__ == '__main__':
     # N scene, each has M objects, each object has length of K emb
     # Condition if
     N = args.N
-    M = 4
+    M = 2
     K = 8
-    train, test, all_label_train, all_label_test = create_dataset_relation(args, N=N, M=M, K=K)
+    train, test, all_label_train, all_label_test = create_dataset_relation(args, N=N, M=M, K=K, load_data=False)
 
     dataset = test if args.evaluate else train
     all_label = all_label_test if args.evaluate else all_label_train
 
     count_all_labels = Counter(all_label)
-    print(count_all_labels)
     majority_vote = max([val for val in count_all_labels.values()])
 
     (graph, scene, objects, scene_contain_obj, relation, obj1, obj2,
-     is_cond1, is_cond2, is_cond3, is_cond4,
-     is_relation1, is_relation2, is_relation3, is_relation4) = get_graph(args)
-    #
-    #
+     is_cond1, is_cond2, is_relation1, is_relation2) = get_graph(args)
+
     # Read Constraint Label
     scene["all_obj"] = ReaderSensor(keyword="all_obj")
     objects["obj_index"] = ReaderSensor(keyword="obj_index")
@@ -73,20 +70,19 @@ if __name__ == '__main__':
         def __init__(self, size):
             super().__init__()
             self.size = size
-            self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 512),
+            self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 256),
                                              torch.nn.Sigmoid(),
-                                             torch.nn.Linear(512, 2))
+                                             torch.nn.Linear(256, 2))
+            self.softmax = torch.nn.Softmax(dim=1)
 
         def forward(self, p):
             # print(self.layer.weight)
             output = self.layer(p)
-            return output
+            return self.softmax(output)
 
 
     objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
     objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-    objects[is_cond3] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-    objects[is_cond4] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
 
 
     # Relation Layer
@@ -95,9 +91,12 @@ if __name__ == '__main__':
             super().__init__()
             self.size = size
             self.layer = torch.nn.Sequential(
-                                            torch.nn.Linear(self.size, 512),
-                                            torch.nn.Sigmoid(),
-                                            torch.nn.Linear(512, 2))
+                torch.nn.Linear(self.size * 2, 512),
+                torch.nn.Sigmoid(),
+                torch.nn.Linear(512, 512),
+                torch.nn.ReLU(),
+                torch.nn.Linear(512, 512))
+            self.softmax = torch.nn.Softmax(dim=1)
 
         def forward(self, p):
             # print(self.layer.weight)
@@ -115,7 +114,7 @@ if __name__ == '__main__':
 
             pairs = torch.cat((left, right), dim=-1)
             output = self.layer(pairs)
-            return output
+            return self.softmax(output)
 
 
     def filter_relation(_, arg1, arg2):
@@ -128,33 +127,32 @@ if __name__ == '__main__':
         forward=filter_relation)
     #
 
-    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
-    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
-    relation[is_relation3] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
-    relation[is_relation4] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=2 * K))
+    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
+    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
 
-    # TODO: Adding logic_str and logic_label
-
-    # TODO: Fix this Following this
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])])
 
     dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
     program = InferenceProgram(graph, SolverModel,
-                               poi=[scene, objects, is_cond1, is_cond2, is_cond3, is_cond4, relation, is_relation1, is_relation2, is_relation3, is_relation4, graph.constraint],
+                               poi=[scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2,
+                                    graph.constraint],
                                tnorm="G")
 
-    acc_train_before = program.evaluate_condition(dataset)
+    # acc_train_before = program.evaluate_condition(dataset)
 
     if args.evaluate:
-        program.load(f"models/1_existL_diverse_relation_epoch_{args.epoch}_{args.N}_lr_{args.lr}_2existL_{args.constraint_2_existL}.pth")
+        program.load(
+            f"models/1_existL_diverse_relation_epoch_{args.epoch}_{args.N}_lr_{args.lr}_2existL_{args.constraint_2_existL}.pth")
     else:
         program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epoch, c_lr=args.lr, c_warmup_iters=-1,
                       batch_size=1, print_loss=False)
 
-        program.save(f"models/1_existL_diverse_relation_epoch_{args.epoch}_{args.N}_lr_{args.lr}_2existL_{args.constraint_2_existL}.pth")
+        program.save(
+            f"models/1_existL_diverse_relation_epoch_{args.epoch}_{args.N}_lr_{args.lr}_2existL_{args.constraint_2_existL}.pth")
 
     acc_train_after = program.evaluate_condition(dataset)
+    # acc_test_after  = program.evaluate_condition(t)
 
     results_files = open(f"results_N_{args.N}.text", "a")
 
@@ -168,8 +166,8 @@ if __name__ == '__main__':
     print("Acc Majority Vote: {:.2f}".format(majority_vote * 100 / len(dataset)), file=results_files)
     print("#" * 50, file=results_files)
 
-    out_dir = Path(__file__).resolve().parent / "models"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    out_path = out_dir / f"1_existL_diverse_relation_{args.N}_lr_{args.lr}.pth"
-    program.save(out_path)
+    # out_dir = Path(__file__).resolve().parent / "models"
+    # out_dir.mkdir(parents=True, exist_ok=True)
+    #
+    # out_path = out_dir / f"1_existL_diverse_relation_{args.N}_lr_{args.lr}.pth"
+    # program.save(out_path)

@@ -1,3 +1,4 @@
+import json
 import random
 from typing import List, Dict, Any
 import numpy as np
@@ -39,29 +40,23 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
     }]
 
 
-def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]]:
+def create_dataset_relation(args, N: int, M: int, K: int, load_data=False) -> List[Dict[str, Any]]:
     def create_scene(num_all_objs, total_numbers_each_obj):
         generate_objects = [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
 
         def select_number_condition():
-            select_condition = random.randint(0, 4)
+            select_condition = random.randint(0, 1)
             if select_condition == 0:
                 return lambda a: np.sum(a) > 0, "is_cond1"
             if select_condition == 1:
                 return lambda a: np.sum(np.abs(a)) > 0.2, "is_cond2"
-            if select_condition == 2:
-                return lambda a: np.sum(a) < 0, "is_cond3"
-            return lambda a: np.sum(np.abs(a)) < 0.5, "is_cond4"
 
         def select_relation_condition():
-            select_condition = random.randint(0, 4)
+            select_condition = random.randint(0, 1)
             if select_condition == 0:
                 return lambda a, b: a[0] * b[0] >= 0, "is_relation1"
             if select_condition == 1:
                 return lambda a, b: a[0] * b[0] < 0, "is_relation2"
-            if select_condition == 2:
-                return lambda a, b: a[-1] * b[-1] >= 0, "is_relation3"
-            return lambda a, b: a[-1] * b[-1] < 0, "is_relation4"
 
         condition_label = False
         cond1_condition, cond_x = select_number_condition()
@@ -93,8 +88,15 @@ def create_dataset_relation(args, N: int, M: int, K: int) -> List[Dict[str, Any]
             "logic_order": logic_order
         }
 
-    dataset = [create_scene(M, K) for _ in range(N)]
-    train, test = train_test_split(dataset, test_size=0.2)
+    if load_data:
+        with open("dataset/train.json", 'rb') as f:
+            train = json.load(f)
+        with open("dataset/test.json", 'rb') as f:
+            test = json.load(f)
+    else:
+        dataset = [create_scene(M, K) for _ in range(N)]
+        train, test = train_test_split(dataset, test_size=0.2)
+
     return train, test, [data["condition_label"][0] for data in train], [data["condition_label"][0] for data in test]
 
 
