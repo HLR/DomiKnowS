@@ -126,35 +126,78 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "AND"
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        
+        # logging for AND operations
+        self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
+        self.countLogger.info(f"Input parameters: onlyConstrains={onlyConstrains}")
+        self.countLogger.info(f"Number of input variables: {len(var)}")
+        self.countLogger.info(f"T-norm method: {self.tnorm}")
+        
+        # Log input variables before fixing
+        for i, v in enumerate(var):
+            self.countLogger.debug(f"Input variable {i}: {v} (type: {type(v)})")
               
         var = self._fixVar(var)
+        
+        # Log variables after fixing
+        for i, v in enumerate(var):
+            self.countLogger.debug(f"Fixed variable {i}: {v.item() if v.numel() == 1 else v}")
                     
         if self.tnorm =='L':
+            self.countLogger.debug("Using Łukasiewicz t-norm for AND")
             N = len(var)
+            self.countLogger.debug(f"Number of variables N: {N}")
+            
             nTorch = torch.tensor([N], device=self.current_device, requires_grad=True, dtype=torch.float64)
             varSum = torch.clone(var[0])
-            for v in var[1:]:
+            for i, v in enumerate(var[1:], 1):
                 varSum.add_(v)
+                self.countLogger.debug(f"After adding var[{i}], sum: {varSum.item() if varSum.numel() == 1 else varSum}")
+            
+            self.countLogger.debug(f"Final sum of variables: {varSum.item() if varSum.numel() == 1 else varSum}")
             
             tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
             tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
 
-            andSuccess = torch.maximum(torch.add(torch.sub(varSum, nTorch), tOne), tZero) # max(varSum - N + 1, 0)
+            # max(varSum - N + 1, 0)
+            intermediate = torch.add(torch.sub(varSum, nTorch), tOne)  # varSum - N + 1
+            self.countLogger.debug(f"Intermediate calculation (sum - N + 1): {intermediate.item() if intermediate.numel() == 1 else intermediate}")
+            
+            andSuccess = torch.maximum(intermediate, tZero)
+            self.countLogger.debug(f"AND success (max(intermediate, 0)): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            
         elif self.tnorm =='G':
+            self.countLogger.debug("Using Gödel t-norm for AND")
             andSuccess = torch.clone(var[0])
-            for v in var[1:]:
+            self.countLogger.debug(f"Initial value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            
+            for i, v in enumerate(var[1:], 1):
+                prev_value = andSuccess.clone()
                 andSuccess = torch.minimum(andSuccess, v)
+                self.countLogger.debug(f"After min with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+                
         elif self.tnorm =='P':
+            self.countLogger.debug("Using Product t-norm for AND")
             andSuccess = torch.clone(var[0])
-            for v in var[1:]:
+            self.countLogger.debug(f"Initial value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            
+            for i, v in enumerate(var[1:], 1):
+                prev_value = andSuccess.clone()
                 andSuccess.mul_(v)
+                self.countLogger.debug(f"After multiply with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+
+        self.countLogger.info(f"Final AND success value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
 
         if onlyConstrains:
             andLoss = 1 - andSuccess
-        
-            return andLoss       
+            self.countLogger.info(f"Returning loss (onlyConstrains=True): {andLoss.item() if andLoss.numel() == 1 else andLoss}")
+            result = andLoss
         else:
-            return andSuccess
+            self.countLogger.info(f"Returning success (onlyConstrains=False): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            result = andSuccess
+        
+        self.countLogger.info(f"=== {logicMethodName} Operation Completed ===\n")
+        return result
     
     def orVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "OR"
