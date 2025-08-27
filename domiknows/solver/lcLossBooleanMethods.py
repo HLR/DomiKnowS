@@ -6,6 +6,7 @@ from domiknows.graph import DataNode
 from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
 from domiknows import setup_logger, getProductionModeStatus
+
 class lcLossBooleanMethods(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
@@ -126,7 +127,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
         
-        # logging for AND operations
+        # Enhanced logging for AND operations
         self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
         self.countLogger.info(f"Input parameters: onlyConstrains={onlyConstrains}")
         self.countLogger.info(f"Number of input variables: {len(var)}")
@@ -142,6 +143,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         self.countLogger.debug(f"Total variables after fixing: {len(var)}")
         for i, v in enumerate(var):
             self.countLogger.debug(f"Fixed variable {i}: {v.item() if v.numel() == 1 else v} (shape: {v.shape})")
+            # Force log flush for each variable to ensure visibility
+            for handler in self.countLogger.handlers:
+                handler.flush()
             
         self.countLogger.debug(f"Variable indices range: 0 to {len(var)-1}")
                     
