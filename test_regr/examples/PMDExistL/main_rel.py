@@ -1,6 +1,7 @@
 import sys
 sys.path.append('../../..')
 import os
+os.environ["GRB_LICENSE_FILE"] = "/Users/tanawanpremsri/Downloads/gurobi-5.lic"
 from click import Path
 import numpy as np
 from utils import create_dataset_relation
@@ -143,7 +144,7 @@ if __name__ == '__main__':
                                poi=[scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint],
                                tnorm="G")
 
-    acc_train_before = program.evaluate_condition(dataset)
+    # acc_train_before = program.evaluate_condition(dataset)
     program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epoch, c_lr=args.lr, c_warmup_iters=-1,
                   batch_size=1, print_loss=False)
     acc_train_after = program.evaluate_condition(dataset)
@@ -152,7 +153,7 @@ if __name__ == '__main__':
 
     print(f"N = {args.N}\nLearning Rate = {args.lr}\nNum Epoch = {args.epoch}", file=results_files)
     print("Constraint Two ExistL:", args.constraint_2_existL, file=results_files)
-    print("Acc on training set before training: ", acc_train_before, file=results_files)
+    # print("Acc on training set before training: ", acc_train_before, file=results_files)
     print("Acc on training set after training: ", acc_train_after, file=results_files)
     # print("Acc on testing set after training: ", acc_test_after, file=results_files)
     print("Acc Majority Vote: {:.2f}".format(majority_vote * 100 / len(test)), file=results_files)
