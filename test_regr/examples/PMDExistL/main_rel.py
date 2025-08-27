@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../../..')
 import os
-os.environ["GRB_LICENSE_FILE"] = "/Users/tanawanpremsri/Downloads/gurobi-5.lic"
+#os.environ["GRB_LICENSE_FILE"] = "/Users/tanawanpremsri/Downloads/gurobi-5.lic"
 from click import Path
 import numpy as np
 from utils import create_dataset_relation
