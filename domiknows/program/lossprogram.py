@@ -352,7 +352,7 @@ class InferenceProgram(LossProgram):
         acc = 0
         total = 0
 
-        for datanode in self.populate(evaluate_data, device=device):
+        for datanode in tqdm(self.populate(evaluate_data, device=device), total=len(evaluate_data), desc="Evaluating"):
 
             # Finding the label of constraints/condition
             find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
