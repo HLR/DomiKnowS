@@ -5,6 +5,7 @@ from domiknows.graph import DataNode
 
 from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
+from utils import setup_logger, getProductionModeStatus  # Import the logging utility and production mode checker
 
 class lcLossBooleanMethods(ilpBooleanProcessor):
     
@@ -16,6 +17,40 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
+        
+        # Set up dedicated logger for count operations
+        self._setup_count_logger(_ildConfig)
+
+    def _setup_count_logger(self, config):
+        """Set up dedicated logger for count operations."""
+        count_log_config = {
+            'log_name': 'lcLossCountOperations',
+            'log_level': logging.DEBUG,
+            'log_filename': 'lc_loss_count_operations.log',
+            'log_filesize': 50*1024*1024,  # 50MB
+            'log_backupCount': 5,
+            'log_fileMode': 'a',
+            'log_dir': 'logs',
+            'timestamp_backup_count': 10
+        }
+        
+        # Override with provided config if available
+        if config and isinstance(config, dict):
+            if 'count_log_level' in config:
+                count_log_config['log_level'] = config['count_log_level']
+            if 'count_log_filename' in config:
+                count_log_config['log_filename'] = config['count_log_filename']
+            if 'count_log_dir' in config:
+                count_log_config['log_dir'] = config['count_log_dir']
+        
+        self.countLogger = setup_logger(count_log_config)
+        
+        # Disable logger if in production mode
+        if getProductionModeStatus():
+            self.countLogger.addFilter(lambda record: False)
+            self.countLogger.info("Count operations logger disabled due to production mode")
+        else:
+            self.countLogger.info("=== lcLossBooleanMethods Count Operations Logger Initialized ===")
 
     def setTNorm(self, tnorm='L'):
         if tnorm =='L':
@@ -188,7 +223,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                                     torch.ones_like(var1),
                                     var2)
 
-        else:                                        # Product (‘P’)
+        else:                                        # Product ('P')
             safe_ratio = torch.where(var1 != 0, var2 / var1, 1)
             ifSuccess  = torch.minimum(torch.ones_like(var1), safe_ratio)
 
@@ -445,21 +480,31 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     ):
         logicMethodName = "COUNT"
 
+        # Enhanced logging for count operations
+        self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
+        self.countLogger.info(f"Input parameters: limitOp='{limitOp}', limit={limit}, onlyConstrains={onlyConstrains}")
+        self.countLogger.info(f"Number of input variables: {len(var)}")
+        self.countLogger.info(f"T-norm method: {self.counting_tnorm if getattr(self, 'counting_tnorm', None) else self.tnorm}")
+
         # ---- Normalize inputs: skip None, move to correct device/dtype, clamp to [0,1]
         vals = []
-        for v in var:
+        for i, v in enumerate(var):
+            self.countLogger.debug(f"Processing variable {i}: {v} (type: {type(v)})")
             if v is None:
+                self.countLogger.debug(f"Variable {i} is None, skipping")
                 continue
             tv = self._fixVar((v,))[0] if not isinstance(v, torch.Tensor) else v
             tv = tv.to(device=self.current_device, dtype=torch.float64)
             tv = torch.clamp(tv, 0.0, 1.0)
+            self.countLogger.debug(f"Variable {i} after processing: {tv.item() if tv.numel() == 1 else tv}")
             vals.append(tv)
             
-        for v in vals:
+        for i, v in enumerate(vals):
             if v.numel() != 1:
-               self.myLogger.warning(f"countVar expects scalar literals; got shape {tuple(v.shape)}: {v}")
+               self.countLogger.warning(f"Variable {i}: countVar expects scalar literals; got shape {tuple(v.shape)}: {v}")
 
         if len(vals) == 0:
+            self.countLogger.info("No valid variables found, using zero tensor")
             t = torch.zeros(1, device=self.current_device, dtype=torch.float64)
         else:
             # If scalar -> keep as scalar; if vector/tensor -> flatten.
@@ -468,12 +513,17 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         n = t.numel()
         s = int(limit)  # ensure Python int
+        
+        self.countLogger.info(f"Final tensor t: {t}")
+        self.countLogger.info(f"Tensor length n: {n}, target count s: {s}")
 
         # ---- Choose t-norm family for counting
         method = self.counting_tnorm if getattr(self, "counting_tnorm", None) else self.tnorm
+        self.countLogger.info(f"Using method: {method}")
 
         # Helpers return a **loss in [0,1]** (0 = satisfied, 1 = maximally violated).
         if method == "G":  # Gödel
+            self.countLogger.debug("Defining Gödel t-norm helper functions")
             exists_at_least_one = lambda t: 1 - torch.max(t)  # loss is 0 when any literal is 1
             exists_at_least_s = lambda t, s: 1 - torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)])
             exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)])
@@ -483,6 +533,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             )
 
         elif method == "L":  # Łukasiewicz
+            self.countLogger.debug("Defining Łukasiewicz t-norm helper functions")
             one = torch.tensor(1.0, device=self.current_device, dtype=torch.float64)
             zero = torch.tensor(0.0, device=self.current_device, dtype=torch.float64)
             exists_at_least_one = lambda t: 1 - torch.minimum(torch.sum(t), one)
@@ -501,41 +552,59 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             )
 
         elif method == "P":  # Product
+            self.countLogger.debug("Defining Product t-norm helper functions")
             exists_at_least_one = lambda t: torch.prod(1 - t)  # loss small if there exists a high literal
             exists_at_least_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, t.numel())[max(min(s, n), 0) :])
             exists_at_most_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, t.numel())[: max(min(s, n), 0) + 1])
             exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, t.numel())[max(min(s, n), 0)]
 
         else:  # "SP" Simplified Product
+            self.countLogger.debug("Defining Simplified Product t-norm helper functions")
             exists_at_least_one = lambda t: torch.prod(1 - t)
             exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) if max(min(s, n), 0) > 0 else 1.0
             exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) if max(n - max(min(s, n), 0), 0) > 0 else 1.0
             exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, t.numel())[max(min(s, n), 0)]
 
         # ---- Compute loss or success
+        self.countLogger.info(f"Computing result for operation '{limitOp}' with limit {s}")
+        
         if limitOp == "==":
+            self.countLogger.debug("Using exists_exactly_s function")
             loss = exists_exactly_s(t, s)
         elif limitOp == ">=":
             if s <= 1:
+                self.countLogger.debug("Using exists_at_least_one function (s <= 1)")
                 loss = exists_at_least_one(t)
             else:
+                self.countLogger.debug(f"Using exists_at_least_s function with s={s}")
                 loss = exists_at_least_s(t, s)
         elif limitOp == "<=":
+            self.countLogger.debug("Using exists_at_most_s function")
             loss = exists_at_most_s(t, s)
         else:
+            self.countLogger.error(f"Unsupported limitOp: {limitOp}")
             raise ValueError(f"Unsupported limitOp: {limitOp}")
 
-        # log i not in [0,1] range
-        if not (0 <= loss <= 1):
-            self.logger.warning(f"Loss out of bounds [0,1]: {loss.item()}")
+        self.countLogger.info(f"Computed loss: {loss.item() if hasattr(loss, 'item') else loss}")
+
+        # Check if loss is in valid range [0,1]
+        loss_val = loss.item() if hasattr(loss, 'item') else float(loss)
+        if not (0 <= loss_val <= 1):
+            self.countLogger.warning(f"Loss out of bounds [0,1]: {loss_val}")
             # clamp
             loss = torch.clamp(loss, 0.0, 1.0)
+            self.countLogger.info(f"Loss clamped to: {loss.item() if hasattr(loss, 'item') else loss}")
 
         if onlyConstrains:
-            return loss  # loss in [0,1]
+            result = loss  # loss in [0,1]
+            self.countLogger.info(f"Returning loss (onlyConstrains=True): {result.item() if hasattr(result, 'item') else result}")
         else:
             success = 1.0 - loss
-            return torch.clamp(success, 0.0, 1.0)
+            result = torch.clamp(success, 0.0, 1.0)
+            self.countLogger.info(f"Returning success (onlyConstrains=False): {result.item() if hasattr(result, 'item') else result}")
+            
+        self.countLogger.info(f"=== {logicMethodName} Operation Completed ===\n")
+        return result
             
     def compareCountsVar(
         self,
@@ -556,81 +625,155 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             • True  → return loss  (1-truth degree)
             • False → return success (truth degree)
         """
+        
+        # Enhanced logging for compareCountsVar operations
+        self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
+        self.countLogger.info(f"Input parameters: compareOp='{compareOp}', diff={diff}, onlyConstrains={onlyConstrains}")
+        self.countLogger.info(f"Number of varsA: {len(varsA)}, Number of varsB: {len(varsB)}")
+        
         method = self.counting_tnorm if self.counting_tnorm else self.tnorm
+        self.countLogger.info(f"Using method: {method}")
 
         # ── build the two counts ─────────────────────────────────────────────
+        self.countLogger.debug("Processing varsA...")
         varsA = self._fixVar(tuple(varsA))
+        for i, v in enumerate(varsA):
+            self.countLogger.debug(f"varsA[{i}]: {v.item() if v.numel() == 1 else v}")
+
+        self.countLogger.debug("Processing varsB...")
         varsB = self._fixVar(tuple(varsB))
+        for i, v in enumerate(varsB):
+            self.countLogger.debug(f"varsB[{i}]: {v.item() if v.numel() == 1 else v}")
 
         sumA = torch.clone(varsA[0])
         for v in varsA[1:]:
             sumA.add_(v)
+        self.countLogger.info(f"Sum of varsA: {sumA.item() if sumA.numel() == 1 else sumA}")
 
         sumB = torch.clone(varsB[0])
         for v in varsB[1:]:
             sumB.add_(v)
+        self.countLogger.info(f"Sum of varsB: {sumB.item() if sumB.numel() == 1 else sumB}")
 
         expr = sumA - sumB - diff          # Δ = count(A) − count(B) − diff
+        self.countLogger.info(f"Expression (countA - countB - diff): {expr.item() if expr.numel() == 1 else expr}")
+        
         tZero = torch.zeros_like(expr)
         tOne  = torch.ones_like(expr)
 
         # ── Gödel logic ─────────────────────────────────────────────────────
         if method == "G":
-            if   compareOp == '>' : success = torch.where(expr >  0, tOne, tZero)
-            elif compareOp == '>=': success = torch.where(expr >= 0, tOne, tZero)
-            elif compareOp == '<' : success = torch.where(expr <  0, tOne, tZero)
-            elif compareOp == '<=': success = torch.where(expr <= 0, tOne, tZero)
-            elif compareOp == '==': success = torch.where(expr == 0, tOne, tZero)
-            else:                   success = torch.where(expr != 0, tOne, tZero)
+            self.countLogger.debug("Using Gödel logic")
+            if   compareOp == '>' : 
+                success = torch.where(expr >  0, tOne, tZero)
+                self.countLogger.debug(f"Gödel '>' condition: expr > 0 → {success.item() if success.numel() == 1 else success}")
+            elif compareOp == '>=': 
+                success = torch.where(expr >= 0, tOne, tZero)
+                self.countLogger.debug(f"Gödel '>=' condition: expr >= 0 → {success.item() if success.numel() == 1 else success}")
+            elif compareOp == '<' : 
+                success = torch.where(expr <  0, tOne, tZero)
+                self.countLogger.debug(f"Gödel '<' condition: expr < 0 → {success.item() if success.numel() == 1 else success}")
+            elif compareOp == '<=': 
+                success = torch.where(expr <= 0, tOne, tZero)
+                self.countLogger.debug(f"Gödel '<=' condition: expr <= 0 → {success.item() if success.numel() == 1 else success}")
+            elif compareOp == '==': 
+                success = torch.where(expr == 0, tOne, tZero)
+                self.countLogger.debug(f"Gödel '==' condition: expr == 0 → {success.item() if success.numel() == 1 else success}")
+            else:                   
+                success = torch.where(expr != 0, tOne, tZero)
+                self.countLogger.debug(f"Gödel '!=' condition: expr != 0 → {success.item() if success.numel() == 1 else success}")
 
         # ── Product logic (smooth) ──────────────────────────────────────────
         elif method == "P":
             β = 10.0  # steepness factor
+            self.countLogger.debug(f"Using Product logic with steepness β={β}")
             if   compareOp in ('>', '>='):
                 k = (0.0 if compareOp == '>=' else 1e-6)
-                success = torch.sigmoid(β * (expr - k))
+                sigmoid_input = β * (expr - k)
+                success = torch.sigmoid(sigmoid_input)
+                self.countLogger.debug(f"Product '{compareOp}' sigmoid input: {sigmoid_input.item() if sigmoid_input.numel() == 1 else sigmoid_input}")
+                self.countLogger.debug(f"Product '{compareOp}' result: {success.item() if success.numel() == 1 else success}")
             elif compareOp in ('<', '<='):
                 k = (0.0 if compareOp == '<=' else -1e-6)
-                success = torch.sigmoid(β * (-expr + k))
+                sigmoid_input = β * (-expr + k)
+                success = torch.sigmoid(sigmoid_input)
+                self.countLogger.debug(f"Product '{compareOp}' sigmoid input: {sigmoid_input.item() if sigmoid_input.numel() == 1 else sigmoid_input}")
+                self.countLogger.debug(f"Product '{compareOp}' result: {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==':
-                success = 1.0 - torch.tanh(β * torch.abs(expr))
+                tanh_input = β * torch.abs(expr)
+                success = 1.0 - torch.tanh(tanh_input)
+                self.countLogger.debug(f"Product '==' tanh input: {tanh_input.item() if tanh_input.numel() == 1 else tanh_input}")
+                self.countLogger.debug(f"Product '==' result: {success.item() if success.numel() == 1 else success}")
             else:  # '!='
-                success = torch.tanh(β * torch.abs(expr))
+                tanh_input = β * torch.abs(expr)
+                success = torch.tanh(tanh_input)
+                self.countLogger.debug(f"Product '!=' tanh input: {tanh_input.item() if tanh_input.numel() == 1 else tanh_input}")
+                self.countLogger.debug(f"Product '!=' result: {success.item() if success.numel() == 1 else success}")
 
         # ── Łukasiewicz logic (piece-wise linear) ───────────────────────────
         elif method == "L":
+            self.countLogger.debug("Using Łukasiewicz logic")
             if   compareOp == '>':
                 success = torch.clamp(expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"Łukasiewicz '>' clamp(expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '>=':
                 success = torch.clamp(expr + 1.0, min=0.0, max=1.0)
+                self.countLogger.debug(f"Łukasiewicz '>=' clamp(expr + 1, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<':
                 success = torch.clamp(-expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"Łukasiewicz '<' clamp(-expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<=':
                 success = torch.clamp(1.0 - expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"Łukasiewicz '<=' clamp(1 - expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==':
-                success = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+                abs_expr = torch.abs(expr)
+                success = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"Łukasiewicz '==' abs(expr): {abs_expr.item() if abs_expr.numel() == 1 else abs_expr}")
+                self.countLogger.debug(f"Łukasiewicz '==' clamp(1 - |expr|, 0, 1): {success.item() if success.numel() == 1 else success}")
             else:  # '!='
-                success_eq = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+                abs_expr = torch.abs(expr)
+                success_eq = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
                 success = 1.0 - success_eq
+                self.countLogger.debug(f"Łukasiewicz '!=' success_eq: {success_eq.item() if success_eq.numel() == 1 else success_eq}")
+                self.countLogger.debug(f"Łukasiewicz '!=' final: {success.item() if success.numel() == 1 else success}")
 
         # ── Simplified-product logic (fallback / default) ───────────────────
         else:  # "SP"
+            self.countLogger.debug("Using Simplified Product logic")
             if   compareOp == '>':
                 success = torch.clamp(expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"SP '>' clamp(expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '>=':
                 success = torch.clamp(expr + 1.0, min=0.0, max=1.0)
+                self.countLogger.debug(f"SP '>=' clamp(expr + 1, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<':
                 success = torch.clamp(-expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"SP '<' clamp(-expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<=':
                 success = torch.clamp(1.0 - expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"SP '<=' clamp(1 - expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==':
-                success = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+                abs_expr = torch.abs(expr)
+                success = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
+                self.countLogger.debug(f"SP '==' abs(expr): {abs_expr.item() if abs_expr.numel() == 1 else abs_expr}")
+                self.countLogger.debug(f"SP '==' clamp(1 - |expr|, 0, 1): {success.item() if success.numel() == 1 else success}")
             else:  # '!='
-                success_eq = torch.clamp(1.0 - torch.abs(expr), min=0.0, max=1.0)
+                abs_expr = torch.abs(expr)
+                success_eq = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
                 success = 1.0 - success_eq
+                self.countLogger.debug(f"SP '!=' success_eq: {success_eq.item() if success_eq.numel() == 1 else success_eq}")
+                self.countLogger.debug(f"SP '!=' final: {success.item() if success.numel() == 1 else success}")
 
         # ── return loss or success ──────────────────────────────────────────
-        return 1.0 - success if onlyConstrains else success
+        if onlyConstrains:
+            result = 1.0 - success
+            self.countLogger.info(f"Returning loss (onlyConstrains=True): {result.item() if result.numel() == 1 else result}")
+        else:
+            result = success
+            self.countLogger.info(f"Returning success (onlyConstrains=False): {result.item() if result.numel() == 1 else result}")
+            
+        self.countLogger.info(f"=== {logicMethodName} Operation Completed ===\n")
+        return result
 
     def fixedVar(self, _, _var, onlyConstrains = False):
         logicMethodName = "FIXED"
