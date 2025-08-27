@@ -1,9 +1,18 @@
 import sys
-import os
 sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('../')
 sys.path.append('./')
+
+try:
+    from monitor.constraint_monitor import enable_monitoring # type: ignore
+    MONITORING_AVAILABLE = True
+    # Enable in slave mode - will post data to master at localhost:8080
+    enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
+except ImportError:
+    MONITORING_AVAILABLE = False
+
+
 # export GRB_LICENSE_FILE=/full/path/to/gurobi.lic
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, ModuleSensor
@@ -13,23 +22,18 @@ from domiknows.program.model.pytorch import SolverModel
 from preprocess import preprocess_dataset, preprocess_folders_and_files
 from graph import create_graph
 from pathlib import Path
-from modules import ResNetPatcher, DummyLinearLearner, LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+from modules import  LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
 from dataset import g_relational_concepts
 import argparse, torch, logging
-import gc
 
-try:
-    from monitor.constraint_monitor import ( # type: ignore
-         enable_monitoring, start_new_epoch
-    )
-    MONITORING_AVAILABLE = True
-except ImportError:
-    MONITORING_AVAILABLE = False
-    logging.getLogger(__name__).warning('Monitor package not found. Monitoring disabled.')
+from pathlib import Path
 
-# Initialize monitoring
-if MONITORING_AVAILABLE:
-    enable_monitoring(port=8080)
+RUN_DIR = Path(__file__).parent.resolve()
+MODEL_DIR = RUN_DIR / "models"
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+def ckpt_path(lr, epoch_idx, load_epoch_tag, batch, tnorm, subset):
+    return MODEL_DIR / f"program{lr}_{epoch_idx}_{load_epoch_tag}__{batch}_6000_{tnorm}_{subset}.pth"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -101,36 +105,39 @@ for attr_name,attr_variable in attribute_names_dict.items():
 
 dataset = graph.compile_logic(dataset, logic_keyword='logic_str',logic_label_keyword='logic_label')
 program = InferenceProgram(graph,SolverModel,poi=[image,object,*attribute_names_dict.values(), graph.constraint, relaton_2_obj],device=device,tnorm=args.tnorm)
-save_file = Path(f"models/program{args.lr}_1_{args.load_epoch}__{args.batch_size}_6000_{args.tnorm}_{args.subset}.pth")
+
+save_file = ckpt_path(args.lr, 1, args.load_epoch, args.batch_size, args.tnorm, args.subset)
+
 if not args.eval_only:
-    # acc = program.evaluate_condition(dataset, device=device)
-    # print("Accuracy before training: {:.2f}".format(acc * 100))
     if args.load_previous_save and args.subset > 1:
-        previous_save = Path(f"models/program{args.lr}_1_{args.load_epoch}__{args.batch_size}_6000_{args.tnorm}_{max(1, args.subset - 1)}.pth")
-                        # Path(f"models/program{args.lr}_{i+1}_{args.load_epoch}__{args.batch_size}_6000_{args.tnorm}_{args.subset}.pth")
+        previous_save = ckpt_path(args.lr, 1, args.load_epoch, args.batch_size, args.tnorm, args.subset - 1)
+        assert previous_save.exists(), f"Missing checkpoint: {previous_save}"
         program.load(previous_save)
     elif args.load_previous_save and args.load_epoch > 0:
-        previous_save = Path(f"models/program{args.lr}_1_{args.load_epoch - 1}__{args.batch_size}_6000_{args.tnorm}_{6}.pth")
+        previous_save = ckpt_path(args.lr, 1, args.load_epoch - 1, args.batch_size, args.tnorm, args.subset)
+        assert previous_save.exists(), f"Missing checkpoint: {previous_save}"
         program.load(previous_save)
 
     for i in range(args.epochs):
-        if MONITORING_AVAILABLE:
-            start_new_epoch()
-            
         print(f"Training epoch {i+1}/{args.epochs}")
-        save_file = Path(f"models/program{args.lr}_{i+1}_{args.load_epoch}__{args.batch_size}_6000_{args.tnorm}_{args.subset}.pth")
-        program.train(dataset,Optim=torch.optim.Adam,train_epoch_num=1,c_lr=args.lr,c_warmup_iters=0,batch_size=args.batch_size,device=device,print_loss=False)
+        save_file = ckpt_path(args.lr, i+1, args.load_epoch, args.batch_size, args.tnorm, args.subset)
+        program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=1, c_lr=args.lr,
+                      c_warmup_iters=0, batch_size=args.batch_size, device=device, print_loss=False)
         program.save(save_file)
         if args.load_previous_save:
-            os.remove(previous_save)
+            # Optionally clean the *older* file
+            try:
+                previous_save.unlink()
+            except FileNotFoundError:
+                pass
+            previous_save = save_file  # keep pointer fresh if you want to delete next time
         print("Saving result at", save_file)
-        # gc.collect()
-        # with torch.cuda.device(device):
-        #     torch.cuda.empty_cache()
-    # acc = program.evaluate_condition(dataset, device=device)
-    # print("Accuracy on Test: {:.2f}".format(acc * 100))
 else:
-    print("Loading program from checkpoint...")
+    # Choose which epoch index to evaluate; often the last one:
+    epoch_to_eval = args.epochs if args.epochs > 0 else 1
+    save_file = ckpt_path(args.lr, epoch_to_eval, args.load_epoch, args.batch_size, args.tnorm, args.subset)
+    assert save_file.exists(), f"Missing checkpoint: {save_file} (cwd={Path.cwd()})"
+    print("Loading program from checkpoint...", save_file)
     program.load(save_file)
     acc = program.evaluate_condition(dataset, device=device)
     save_results_f= open('results.txt', 'a')

@@ -669,25 +669,6 @@ class equivalenceL(LogicalConstrain):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
             return self.createILPConstrains('Equivalence', myIlpBooleanProcessor.equivalenceVar, model, v, headConstrain)
 
-# ----------------- Auxiliary
-     
-class eqL(LogicalConstrain):
-    def __init__(self, *e, active = True, sampleEntries = False, name = None):
-        #if e is len 2 and element index 1 is of type String
-        if len(e) == 2 and isinstance(e[1], str):
-            e = (e[0],  "instanceID", e[1])  
-        LogicalConstrain.__init__(self, *e, p=100)
-        self.headLC = False
-    
-class fixedL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
-            return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
-        logicalOp = "NOR"  # NOT OR
-     
 # ----------------- Counting
 
 class _CountBaseL(LogicalConstrain):

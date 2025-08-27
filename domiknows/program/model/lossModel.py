@@ -15,7 +15,6 @@ try:
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
-    logging.getLogger(__name__).warning('Monitor package not found. Monitoring disabled.')
 
 class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
@@ -249,7 +248,7 @@ class InferenceModel(LossModel):
 
             if MONITORING_AVAILABLE:
                 lc = self.graph.logicalConstrains[lcName]
-                lcRepr = f'{lc} {lc.strEs()}'
+                lcRepr = f'{lc.__repr__()} {lc.strEs()}'
                 log_single_lc(
                     constraint_name=lcName,
                     loss_dict=loss_dict,

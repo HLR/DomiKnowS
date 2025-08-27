@@ -452,18 +452,19 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 continue
             tv = self._fixVar((v,))[0] if not isinstance(v, torch.Tensor) else v
             tv = tv.to(device=self.current_device, dtype=torch.float64)
-            # If tv might be >1 or <0 due to upstream math, clamp for fuzzy semantics.
             tv = torch.clamp(tv, 0.0, 1.0)
             vals.append(tv)
+            
+        for v in vals:
+            if v.numel() != 1:
+               self.myLogger.warning(f"countVar expects scalar literals; got shape {tuple(v.shape)}: {v}")
 
-        # Edge case: no literals -> treat as empty set
         if len(vals) == 0:
-            # count = 0 always; define loss/success from that.
-            # Build a tiny zero vector so helpers don't crash.
             t = torch.zeros(1, device=self.current_device, dtype=torch.float64)
         else:
-            # Make a 1D tensor of literals; if individual tensors are scalar, stack them.
-            t = torch.stack([v.reshape(()) for v in vals]).to(self.current_device, dtype=torch.float64)
+            # If scalar -> keep as scalar; if vector/tensor -> flatten.
+            parts = [x.reshape(()) if x.numel() == 1 else x.flatten() for x in vals]
+            t = torch.cat([p.view(-1) for p in parts])  # t is 1-D, length n = total literals
 
         n = t.numel()
         s = int(limit)  # ensure Python int
@@ -501,15 +502,15 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         elif method == "P":  # Product
             exists_at_least_one = lambda t: torch.prod(1 - t)  # loss small if there exists a high literal
-            exists_at_least_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, len(t))[max(min(s, n), 0) :])
-            exists_at_most_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, len(t))[: max(min(s, n), 0) + 1])
-            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, len(t))[max(min(s, n), 0)]
+            exists_at_least_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, t.numel())[max(min(s, n), 0) :])
+            exists_at_most_s = lambda t, s: 1 - torch.sum(self.calc_probabilities(t, t.numel())[: max(min(s, n), 0) + 1])
+            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, t.numel())[max(min(s, n), 0)]
 
         else:  # "SP" Simplified Product
             exists_at_least_one = lambda t: torch.prod(1 - t)
             exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) if max(min(s, n), 0) > 0 else 1.0
             exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) if max(n - max(min(s, n), 0), 0) > 0 else 1.0
-            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, len(t))[max(min(s, n), 0)]
+            exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, t.numel())[max(min(s, n), 0)]
 
         # ---- Compute loss or success
         if limitOp == "==":
