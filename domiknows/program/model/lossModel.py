@@ -322,16 +322,18 @@ class InferenceModel(LossModel):
         self.inferenceLogger.info(f"Active constraint names: {active_lc_names}")
 
         # Set active/inactive constraints
+        lc_no = 0
         for lc_name, lc in self.graph.logicalConstrains.items():
             assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
-            
+            lc_no += 1
             if lc_name in active_lc_names:
                 lc.active = True
                 self.inferenceLogger.debug(f"Constraint '{lc_name}' set to active")
             else:
                 lc.active = False
-                self.inferenceLogger.debug(f"Constraint '{lc_name}' set to inactive")
-        
+
+        self.inferenceLogger.info(f"Total constraints processed: {lc_no}")
+                
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         # Has the format {'LC{n}': {'lossTensor': tensor, ...}
         self.inferenceLogger.info("Calculating LC loss...")
@@ -346,14 +348,16 @@ class InferenceModel(LossModel):
             if lcName not in self.constr:
                 self.inferenceLogger.debug(f"Skipping constraint '{lcName}' (not in self.constr)")
                 continue
+          
+            self.inferenceLogger.info(f"Processing constraint '{lcName}' ({i+1}/{len(constr_loss)})")
             
             # Get the t-norm translated output of the constraint
             constr_out = loss_dict['conversionTensor']
-            self.inferenceLogger.debug(f"Constraint '{lcName}' output shape: {constr_out.shape}")
+            self.inferenceLogger.debug(f"Constraint '{lcName}' output shape: {constr_out.shape}: {constr_out}")
 
             # Target for for constraint lcName
             lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
-            self.inferenceLogger.debug(f"Constraint '{lcName}' label shape: {lbl.shape}")
+            self.inferenceLogger.debug(f"Constraint '{lcName}' label shape: {lbl.shape}: {lbl}")
 
             # Match shapes
             # TODO: what's the expected shape for constr_out and lbl?
