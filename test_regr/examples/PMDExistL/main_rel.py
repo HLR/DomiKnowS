@@ -19,8 +19,6 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, FunctionalSensor, CompositionCandidateSensor
 import torch
 import random
-import numpy
-
 
 def set_seed_everything(seed=380):
     random.seed(seed)
@@ -37,8 +35,19 @@ if __name__ == '__main__':
     parser.add_argument("--evaluate", action="store_true")
     parser.add_argument("--use_andL", action="store_true")
     args = parser.parse_args()
-
-    args.use_andL = True
+    
+    # Print setup parameters to console
+    print("\n=== Setup Parameters ===")
+    print(f"Number of samples (N): {args.N}")
+    print(f"Learning rate: {args.lr}")
+    print(f"Number of epochs: {args.epoch}")
+    if args.constraint_2_existL:
+        print(f"Using Constraint 2 ExistL")
+    if args.use_andL:
+        print(f"Using andL")
+    if args.evaluate:
+        print(f"Evaluate mode: {args.evaluate}")
+    print("=====================\n")
 
     set_seed_everything()
 
