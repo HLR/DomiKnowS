@@ -361,13 +361,6 @@ class InferenceModel(LossModel):
             lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
             self.inferenceLogger.debug(f"Constraint '{lcName}' label shape: {lbl.shape}: {lbl}")
 
-            # Match shapes
-            # TODO: what's the expected shape for constr_out and lbl?
-            assert len(constr_out.shape) <= 2
-            if len(constr_out.shape) == 2:
-                lbl = lbl.unsqueeze(0)
-                self.inferenceLogger.debug(f"Constraint '{lcName}' label shape after unsqueeze: {lbl.shape}")
-
             if MONITORING_AVAILABLE:
                 log_single_lc(
                     constraint_name=lcName,
