@@ -359,6 +359,7 @@ class InferenceModel(LossModel):
 
             # Target for for constraint lcName
             lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
+            lbl = lbl.squeeze() # remove singleton dimension if present
             self.inferenceLogger.debug(f"Constraint '{lcName}' label shape: {lbl.shape}: {lbl}")
 
             if MONITORING_AVAILABLE:
