@@ -372,7 +372,7 @@ class InferenceModel(LossModel):
 
             # Calcluate loss 
             constraint_loss = self.loss_func(constr_out.float(), lbl)
-            self.inferenceLogger.debug(f"Constraint '{lcName}' calculated loss with function {self.loss_func.__name__}: {constraint_loss.item()}")
+            self.inferenceLogger.debug(f"Constraint '{lcName}' calculated loss with function {self.loss_func.__class__.__name__}: {constraint_loss.item()}")
             losses.append(constraint_loss) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)
