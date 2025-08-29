@@ -1938,8 +1938,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_lcLosses['conversionTensor'] = 1 - lossTensor
                 if lossTensor != None and torch.is_tensor(lossTensor):
                     current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                    current_lcLosses['conversion'] = 1 - current_lcLosses['loss']
                 else:
                     current_lcLosses['loss'] = None
+                    current_lcLosses['conversion'] = None
 
                 endLC = perf_counter_ns()
                 elapsedInNsLC = endLC - startLC
@@ -2051,6 +2053,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_lcLosses['lcSuccesses'] = []
                 current_lcLosses['lcVariables'] = []
                 current_lcLosses['loss'] = []
+                current_lcLosses['conversion'] = []
                 
                 # Per each lc entry separately
                 if lc.sampleEntries:
@@ -2076,14 +2079,16 @@ class gurobiILPOntSolver(ilpOntSolver):
     
                         currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
                         current_lcLosses['loss'].append(currentLoss)
-    
+                        current_lcLosses['conversion'].append(1 - currentLoss)
+
                 else: # Regular calculation for all lc entries at once
                     usedLcSuccesses = lcSuccesses
                     if sampleGlobalLoss:
                         usedLcSuccesses = globalSuccesses
                     lossTensor, lcSampleSize = self.calulateSampleLossForVariable(currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
                     current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
-    
+                    current_lcLosses['conversion'].append(1 - current_lcLosses['loss'])
+
                     current_lcLosses['lossTensor'].append(lossTensor)
                     current_lcLosses['conversionTensor'].append(1 - lossTensor)
                     current_lcLosses['lcSuccesses'].append(lcSuccesses)

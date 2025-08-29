@@ -348,12 +348,14 @@ class InferenceModel(LossModel):
             if lcName not in self.constr:
                 self.inferenceLogger.debug(f"Skipping constraint '{lcName}' (not in self.constr)")
                 continue
-          
-            self.inferenceLogger.info(f"Processing constraint '{lcName}' ({i+1}/{len(constr_loss)})")
             
+            lc = self.graph.logicalConstrains[lcName]
+            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
+            self.inferenceLogger.debug(f"Processing constraint '{lcName}' ({i+1}/{len(constr_loss)}) with representation: {lcRepr}")
+                      
             # Get the t-norm translated output of the constraint
-            constr_out = loss_dict['conversionTensor']
-            self.inferenceLogger.debug(f"Constraint '{lcName}' output shape: {constr_out.shape}: {constr_out}")
+            constr_out = loss_dict['conversion']
+            self.inferenceLogger.debug(f"Constraint '{lcName}' conversion (succes) output shape: {constr_out.shape}: {constr_out}")
 
             # Target for for constraint lcName
             lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
@@ -367,9 +369,6 @@ class InferenceModel(LossModel):
                 self.inferenceLogger.debug(f"Constraint '{lcName}' label shape after unsqueeze: {lbl.shape}")
 
             if MONITORING_AVAILABLE:
-                lc = self.graph.logicalConstrains[lcName]
-                lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-                self.inferenceLogger.debug(f"Logging constraint '{lcName}' with representation: {lcRepr}")
                 log_single_lc(
                     constraint_name=lcName,
                     loss_dict=loss_dict,
@@ -379,7 +378,7 @@ class InferenceModel(LossModel):
 
             # Calcluate loss 
             constraint_loss = self.loss_func(constr_out.float(), lbl)
-            self.inferenceLogger.debug(f"Constraint '{lcName}' loss: {constraint_loss.item()}")
+            self.inferenceLogger.debug(f"Constraint '{lcName}' calculated loss with function {self.loss_func.__name__}: {constraint_loss.item()}")
             losses.append(constraint_loss) # TODO: match dtypes too?
 
         loss_scalar = sum(losses)
@@ -387,7 +386,6 @@ class InferenceModel(LossModel):
         
         if MONITORING_AVAILABLE:
             log_memory() 
-            self.inferenceLogger.debug("Memory logging completed")
 
         self.inferenceLogger.info("=== InferenceModel Forward Operation Completed ===\n")
         # (*out, datanode, builder)
