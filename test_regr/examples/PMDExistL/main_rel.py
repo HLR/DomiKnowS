@@ -36,33 +36,12 @@ def get_device():
         print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
         if torch.cuda.device_count() > 1:
             print(f"Multiple GPUs detected: {torch.cuda.device_count()} GPUs available")
+        else:
+            print("Single GPU detected")
     else:
         device = torch.device('cpu')
         print("Using CPU")
     return device
-
-def debug_graph_setup(graph, scene, objects, relation, is_cond1, is_cond2, is_relation1, is_relation2):
-    """Debug the graph setup"""
-    print("\n=== Graph Debug Info ===")
-    print(f"Graph type: {type(graph)}")
-    print(f"Graph has constraint: {hasattr(graph, 'constraint')}")
-    
-    if hasattr(graph, 'constraint'):
-        print(f"Constraint type: {type(graph.constraint)}")
-        print(f"Constraint exists: {graph.constraint is not None}")
-    
-    print(f"Scene type: {type(scene)}")
-    print(f"Objects type: {type(objects)}")
-    print(f"Relation type: {type(relation)}")
-    
-    # Check if all POI elements exist
-    poi_elements = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2]
-    poi_names = ['scene', 'objects', 'is_cond1', 'is_cond2', 'relation', 'is_relation1', 'is_relation2']
-    
-    for name, element in zip(poi_names, poi_elements):
-        print(f"POI[{name}] type: {type(element)}, exists: {element is not None}")
-    
-    print("========================\n")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -106,13 +85,11 @@ if __name__ == '__main__':
     count_all_labels = Counter(all_label_test)
     majority_vote = max([val for val in count_all_labels.values()])
 
-    print("Getting graph configuration...")
     (graph, scene, objects, scene_contain_obj, relation, obj1, obj2,
      is_cond1, is_cond2,
      is_relation1, is_relation2) = get_graph(args)
-    
-    print("Graph setup complete. Setting up sensors...")
-    
+    #
+    #
     # Read Constraint Label
     scene["all_obj"] = ReaderSensor(keyword="all_obj")
     objects["obj_index"] = ReaderSensor(keyword="obj_index")
@@ -180,7 +157,7 @@ if __name__ == '__main__':
             pairs = torch.cat((left, right), dim=-1)
             output = self.layer(pairs)
             return self.softmax(output)
-    
+
     def filter_relation(_, arg1, arg2):
         return arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
 
@@ -192,8 +169,7 @@ if __name__ == '__main__':
     relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayersMultiGPU(size=K, device=device))
     relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayersMultiGPU(size=K, device=device))
 
-    print("Moving dataset tensors to device...")
-    # Move dataset tensors to device
+    print("Moving dataset tensors to device...")    # Move dataset tensors to device
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])]).to(device)
         # Move other tensors in dataset to device as needed
@@ -201,70 +177,15 @@ if __name__ == '__main__':
             if isinstance(value, torch.Tensor):
                 dataset[i][key] = value.to(device)
 
-    print("Compiling logic...")
     dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
-    
-    # Check dataset compilation
-    print(f"Dataset compiled successfully: {dataset is not None}")
-    print(f"Dataset length: {len(dataset) if dataset else 0}")
-    if dataset and len(dataset) > 0:
-        print(f"Sample dataset item keys: {list(dataset[0].keys())}")
-        if 'logic_str' in dataset[0]:
-            print(f"Sample logic_str: {dataset[0]['logic_str']}")
-        if 'logic_label' in dataset[0]:
-            print(f"Sample logic_label: {dataset[0]['logic_label']}")
-
-    # Debug graph setup before creating program
-    debug_graph_setup(graph, scene, objects, relation, is_cond1, is_cond2, is_relation1, is_relation2)
-
-    print("Creating InferenceProgram...")
-    program = None
-    
-    try:
-        # Try with full POI list including constraint
-        if hasattr(graph, 'constraint') and graph.constraint is not None:
-            poi_list = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint]
-            print("Attempting to create program with constraint...")
-        else:
-            print("Warning: graph.constraint not found, creating program without it")
-            poi_list = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2]
-        
-        program = InferenceProgram(graph, SolverModel, poi=poi_list, tnorm="G")
-        print(f"Program created successfully: {type(program)}")
-        
-    except Exception as e:
-        print(f"Failed with full POI list: {e}")
-        
-        # Try minimal POI list
-        try:
-            print("Trying with minimal POI list...")
-            minimal_poi = [scene, objects, relation]
-            program = InferenceProgram(graph, SolverModel, poi=minimal_poi, tnorm="G")
-            print("Created program with minimal POI list")
-        except Exception as e2:
-            print(f"Failed with minimal POI: {e2}")
-            
-            # Try without POI
-            try:
-                print("Trying without explicit POI...")
-                program = InferenceProgram(graph, SolverModel, tnorm="G")
-                print("Created program without explicit POI")
-            except Exception as e3:
-                print(f"Failed without POI: {e3}")
-                raise e3
-
-    if program is None:
-        raise ValueError("InferenceProgram initialization returned None")
+    program = InferenceProgram(graph, SolverModel,
+                               poi=[scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint],
+                               tnorm="G")
 
     # Move program to device if possible
-    if hasattr(program, 'to'):
-        try:
-            program = program.to(device)
-            print("Program moved to device successfully")
-        except Exception as e:
-            print(f"Warning: Could not move program to device: {e}")
-
-    print("Starting training...")
+    program.to(device)
+    print(f"Moved program to device: {device}")
+    
     program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epoch, c_lr=args.lr, c_warmup_iters=-1,
                   batch_size=1, print_loss=False)
     acc_train_after = program.evaluate_condition(dataset)
