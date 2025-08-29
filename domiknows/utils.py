@@ -174,8 +174,10 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
             # If directory listing fails, skip cleanup
             pass
                 
-# Global variable to track if error/warning logger has been initialized
+# Global variables for error/warning logger
 _error_warning_logger_initialized = False
+_error_warning_logger = None
+_error_warning_handler_class = None
 
 def setup_error_warning_logger(log_dir='logs'):
     """
@@ -188,10 +190,10 @@ def setup_error_warning_logger(log_dir='logs'):
     Returns:
         logging.Logger: The error/warning logger instance
     """
-    global _error_warning_logger_initialized
+    global _error_warning_logger_initialized, _error_warning_logger, _error_warning_handler_class
     
     if _error_warning_logger_initialized:
-        return logging.getLogger('errorWarning')
+        return _error_warning_logger
     
     # Create directory
     pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -202,9 +204,9 @@ def setup_error_warning_logger(log_dir='logs'):
     move_existing_logfile_with_timestamp(log_path, 10)  # Keep 10 backup files
     
     # Create error/warning logger
-    error_logger = logging.getLogger('errorWarning')
-    error_logger.handlers.clear()
-    error_logger.setLevel(logging.WARNING)  # Capture WARNING and above (ERROR, CRITICAL)
+    _error_warning_logger = logging.getLogger('errorWarning')
+    _error_warning_logger.handlers.clear()
+    _error_warning_logger.setLevel(logging.WARNING)  # Capture WARNING and above (ERROR, CRITICAL)
     
     # Create file handler
     handler = RotatingFileHandler(
@@ -221,31 +223,47 @@ def setup_error_warning_logger(log_dir='logs'):
     handler.setFormatter(formatter)
     
     # Add handler to logger
-    error_logger.addHandler(handler)
-    error_logger.propagate = False
+    _error_warning_logger.addHandler(handler)
+    _error_warning_logger.propagate = False
     
-    # Create a custom handler that will be added to the root logger
-    # to capture all WARNING and ERROR messages from any logger
+    # Create a custom handler class that will be added to individual loggers
     class ErrorWarningHandler(logging.Handler):
-        def __init__(self, target_logger):
+        def __init__(self):
             super().__init__()
-            self.target_logger = target_logger
             self.setLevel(logging.WARNING)
             
         def emit(self, record):
             # Forward the record to the error/warning logger
-            self.target_logger.handle(record)
+            if record.levelno >= logging.WARNING:
+                _error_warning_logger.handle(record)
     
-    # Add the custom handler to the root logger to capture all warnings/errors
-    root_logger = logging.getLogger()
-    error_warning_handler = ErrorWarningHandler(error_logger)
-    root_logger.addHandler(error_warning_handler)
-    
+    _error_warning_handler_class = ErrorWarningHandler
     _error_warning_logger_initialized = True
     
     print("Error/Warning log file is in: %s" % handler.baseFilename)
     
-    return error_logger
+    return _error_warning_logger
+
+def add_error_warning_handler_to_logger(logger):
+    """
+    Add error/warning handler to an existing logger to capture its WARNING and ERROR messages.
+    
+    Args:
+        logger: The logger instance to add the handler to
+    """
+    global _error_warning_handler_class, _error_warning_logger_initialized
+    
+    if not _error_warning_logger_initialized or not _error_warning_handler_class:
+        return
+    
+    # Check if this logger already has an ErrorWarningHandler
+    for handler in logger.handlers:
+        if isinstance(handler, _error_warning_handler_class):
+            return  # Already has the handler
+    
+    # Add the error/warning handler
+    error_warning_handler = _error_warning_handler_class()
+    logger.addHandler(error_warning_handler)
 
 def setup_logger(config=None, default_filename='app.log'):
     """
@@ -328,6 +346,9 @@ def setup_logger(config=None, default_filename='app.log'):
     # Add handler to logger
     logger.addHandler(handler)
     logger.propagate = False
+    
+    # Add error/warning handler to capture WARNING and ERROR messages
+    add_error_warning_handler_to_logger(logger)
     
     print("Log file for %s is in: %s" % (logName, handler.baseFilename))
     

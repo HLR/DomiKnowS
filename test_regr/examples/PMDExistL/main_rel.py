@@ -24,7 +24,22 @@ def set_seed_everything(seed=380):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
+def get_device():
+    """Get the best available device"""
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Using GPU: {torch.cuda.get_device_name()}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+        if torch.cuda.device_count() > 1:
+            print(f"Multiple GPUs detected: {torch.cuda.device_count()} GPUs available")
+    else:
+        device = torch.device('cpu')
+        print("Using CPU")
+    return device
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -36,8 +51,12 @@ if __name__ == '__main__':
     parser.add_argument("--use_andL", action="store_true")
     args = parser.parse_args()
     
+    # Get device
+    device = get_device()
+    
     # Print setup parameters to console
     print("\n=== Setup Parameters ===")
+    print(f"Device: {device}")
     print(f"Number of samples (N): {args.N}")
     print(f"Learning rate: {args.lr}")
     print(f"Number of epochs: {args.epoch}")
@@ -75,95 +94,101 @@ if __name__ == '__main__':
     objects["obj_emb"] = ReaderSensor(keyword="obj_emb")
     objects[scene_contain_obj] = EdgeSensor(objects["obj_index"], scene["all_obj"],
                                             relation=scene_contain_obj,
-                                            forward=lambda b, _: torch.ones(len(b)).unsqueeze(-1))
+                                            forward=lambda b, _: torch.ones(len(b)).unsqueeze(-1).to(device))
 
-
-    # Set label of inference condition
-    # graph.constraint[learning_condition] = ReaderSensor(keyword="condition_label", label=True)
-
-    class Regular2Layer(torch.nn.Module):
-        def __init__(self, size):
+    class Regular2LayerMultiGPU(torch.nn.Module):
+        def __init__(self, size, device):
             super().__init__()
             self.size = size
-            self.layer = torch.nn.Sequential(torch.nn.Linear(self.size, 256),
-                                             torch.nn.ReLU(),
-                                             torch.nn.Linear(256, 2))
+            self.device = device
+            self.layer = torch.nn.Sequential(
+                torch.nn.Linear(self.size, 256),
+                torch.nn.ReLU(),
+                torch.nn.Linear(256, 2)
+            ).to(device)
             self.softmax = torch.nn.Softmax(dim=1)
+            
+            # Enable multi-GPU if available
+            if torch.cuda.device_count() > 1:
+                self.layer = torch.nn.DataParallel(self.layer)
 
         def forward(self, p):
-            # print(self.layer.weight)
+            p = p.to(self.device)
             output = self.layer(p)
             return self.softmax(output)
 
-
-    objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-    objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-
+    objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2LayerMultiGPU(size=K, device=device))
+    objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2LayerMultiGPU(size=K, device=device))
 
     # Relation Layer
-    class RelationLayers(torch.nn.Module):
-        def __init__(self, size):
+    class RelationLayersMultiGPU(torch.nn.Module):
+        def __init__(self, size, device):
             super().__init__()
             self.size = size
+            self.device = device
             self.layer = torch.nn.Sequential(
                 torch.nn.Linear(self.size * 2, 512),
                 torch.nn.Sigmoid(),
                 torch.nn.Linear(512, 512),
                 torch.nn.ReLU(),
-                torch.nn.Linear(512, 2))
+                torch.nn.Linear(512, 2)
+            ).to(device)
             self.softmax = torch.nn.Softmax(dim=1)
+            
+            # Enable multi-GPU if available
+            if torch.cuda.device_count() > 1:
+                self.layer = torch.nn.DataParallel(self.layer)
 
         def forward(self, p):
-            # print(self.layer.weight)
-            # Prepare NxN matrix from object emb
-            emb = p
+            emb = p.to(self.device)
             N, K = emb.shape
 
-            # 1. Broadcast each row against every other row
             left = emb.unsqueeze(1).expand(N, N, K)
             right = emb.unsqueeze(0).expand(N, N, K)
 
-            mask = ~torch.eye(N, dtype=torch.bool)  # False on the diagonal
-            left = left[mask]  # shape (N*(N-1), K)
-            right = right[mask]  # shape (N*(N-1), K)
+            mask = ~torch.eye(N, dtype=torch.bool, device=self.device)
+            left = left[mask]
+            right = right[mask]
 
             pairs = torch.cat((left, right), dim=-1)
             output = self.layer(pairs)
             return self.softmax(output)
-
-
+    
     def filter_relation(_, arg1, arg2):
         return arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
-
 
     relation[obj1.reversed, obj2.reversed] = CompositionCandidateSensor(
         objects['obj_index'],
         relations=(obj1.reversed, obj2.reversed),
         forward=filter_relation)
-    #
 
-    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
-    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
+    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayersMultiGPU(size=K, device=device))
+    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayersMultiGPU(size=K, device=device))
 
+    # Move dataset tensors to device
     for i in range(len(dataset)):
-        dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])])
+        dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])]).to(device)
+        # Move other tensors in dataset to device as needed
+        for key, value in dataset[i].items():
+            if isinstance(value, torch.Tensor):
+                dataset[i][key] = value.to(device)
 
     dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
     program = InferenceProgram(graph, SolverModel,
                                poi=[scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint],
                                tnorm="G")
 
-    # acc_train_before = program.evaluate_condition(dataset)
+    # Move program to device if possible
+    if hasattr(program, 'to'):
+        program = program.to(device)
+
     program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epoch, c_lr=args.lr, c_warmup_iters=-1,
                   batch_size=1, print_loss=False)
     acc_train_after = program.evaluate_condition(dataset)
 
-    
     results_files = open(f"results_N_{args.N}.text", "a")
 
     from datetime import datetime
-
-    results_files = open(f"results_N_{args.N}.text", "a")
 
     # Function for dual printing
     def dual_print(message):
@@ -174,13 +199,14 @@ if __name__ == '__main__':
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     dual_print(f"=== Run at: {current_time} ===")
+    dual_print(f"Device: {device}")
     dual_print(f"N = {args.N}\nLearning Rate = {args.lr}\nNum Epoch = {args.epoch}")
     dual_print(f"Logic Used: {'ExistL' if args.constraint_2_existL else 'AndL' if args.use_andL else 'None'}")
     dual_print(f"Acc on training set after training: {acc_train_after}")
     dual_print(f"Acc Majority Vote: {majority_vote * 100 / len(test):.2f}")
     dual_print("#" * 50)
 
-    results_files.close()  # Don't forget to close the file
+    results_files.close()
 
     out_dir = Path(__file__).resolve().parent / "models"  
     out_dir.mkdir(parents=True, exist_ok=True)
