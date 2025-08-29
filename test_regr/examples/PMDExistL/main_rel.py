@@ -175,7 +175,7 @@ if __name__ == '__main__':
     
     dual_print(f"=== Run at: {current_time} ===")
     dual_print(f"N = {args.N}\nLearning Rate = {args.lr}\nNum Epoch = {args.epoch}")
-    dual_print(f"Constraint Two ExistL: {args.constraint_2_existL}")
+    dual_print(f"Logic Used: {'ExistL' if args.constraint_2_existL else 'AndL' if args.use_andL else 'None'}")
     dual_print(f"Acc on training set after training: {acc_train_after}")
     dual_print(f"Acc Majority Vote: {majority_vote * 100 / len(test):.2f}")
     dual_print("#" * 50)
