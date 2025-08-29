@@ -335,12 +335,8 @@ if __name__ == '__main__':
         raise ValueError("InferenceProgram initialization returned None")
 
     # Move program to device if possible
-    if hasattr(program, 'to'):
-        try:
-            program = program.to(device)
-            print(f"Program moved to device: {device}")
-        except Exception as e:
-            print(f"Warning: Could not move program to device: {e}")
+    program.to(device)
+    print(f"Program moved to device: {device}")
 
     print(f"Starting training with batch size: {optimal_batch_size}")
     
