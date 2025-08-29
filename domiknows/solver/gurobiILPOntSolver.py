@@ -1933,16 +1933,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     lossTensor = entry
                                 else:
                                     lossTensor += entry
-                    
+                                    
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['conversionTensor'] = 1 - lossTensor
                 if lossTensor != None and torch.is_tensor(lossTensor):
-                    current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                    # Calculate differentiable normalized loss using sigmoid
+                    current_lcLosses['loss'] = torch.nansum(lossTensor)
+                    current_lcLosses['conversionSigmoid'] = 100 * torch.sigmoid(-current_lcLosses['loss'])
+                    # Calculate differentiable normalized loss using clamp 
+                    current_lcLosses['conversionClamp'] = 100 * torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0)
+                    # Keep original conversion for backwards compatibility
                     current_lcLosses['conversion'] = 1 - current_lcLosses['loss']
                 else:
-                    current_lcLosses['loss'] = None
+                    current_lcLosses['loss'] = None 
                     current_lcLosses['conversion'] = None
-
+                    current_lcLosses['conversionSigmoid'] = None
+                    current_lcLosses['conversionClamp'] = None
+                    
                 endLC = perf_counter_ns()
                 elapsedInNsLC = endLC - startLC
                 elapsedInMsLC = elapsedInNsLC/1000000
@@ -2054,7 +2061,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_lcLosses['lcVariables'] = []
                 current_lcLosses['loss'] = []
                 current_lcLosses['conversion'] = []
-                
+                current_lcLosses['conversionSigmoid'] = []
+                current_lcLosses['conversionClamp'] = []
+
                 # Per each lc entry separately
                 if lc.sampleEntries:
                     current_lcLosses['lcSuccesses'] = successesList
@@ -2080,6 +2089,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
                         current_lcLosses['loss'].append(currentLoss)
                         current_lcLosses['conversion'].append(1 - currentLoss)
+                        current_lcLosses['conversionSigmoid'].append(100 * torch.sigmoid(-currentLoss))
+                        current_lcLosses['conversionClamp'].append(100 * torch.clamp(1 - currentLoss, min=0.0, max=1.0))
 
                 else: # Regular calculation for all lc entries at once
                     usedLcSuccesses = lcSuccesses
@@ -2088,6 +2099,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossTensor, lcSampleSize = self.calulateSampleLossForVariable(currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
                     current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
                     current_lcLosses['conversion'].append(1 - current_lcLosses['loss'])
+                    current_lcLosses['conversionSigmoid'].append(100 * torch.sigmoid(-current_lcLosses['loss']))
+                    current_lcLosses['conversionClamp'].append(100 * torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0))
 
                     current_lcLosses['lossTensor'].append(lossTensor)
                     current_lcLosses['conversionTensor'].append(1 - lossTensor)

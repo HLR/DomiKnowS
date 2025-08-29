@@ -354,7 +354,7 @@ class InferenceModel(LossModel):
             self.inferenceLogger.debug(f"Processing constraint '{lcName}' ({i+1}/{len(constr_loss)}) with representation: {lcRepr}")
                       
             # Get the t-norm translated output of the constraint
-            constr_out = loss_dict['conversion']
+            constr_out = loss_dict['conversionSigmoid']
             self.inferenceLogger.debug(f"Constraint '{lcName}' conversion (succes) output shape: {constr_out.shape}: {constr_out}")
 
             # Target for for constraint lcName
