@@ -38,7 +38,6 @@ def extract_args(*args, **kwargs):
                         .format(frame.f_lineno, frame.f_code.co_filename))
     return OrderedDict((name, frame.f_locals[name]) for name in names)
 
-
 def log(*args, **kwargs):
     args = extract_args(_stack_back_level_=1)
     for k, v in args.items():
@@ -170,6 +169,79 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
             # If directory listing fails, skip cleanup
             pass        
                 
+# Global variable to track if error/warning logger has been initialized
+_error_warning_logger_initialized = False
+
+def setup_error_warning_logger(log_dir='logs'):
+    """
+    Setup a global error/warning logger that captures WARNING and ERROR level logs
+    from all loggers in the application.
+    
+    Args:
+        log_dir (str): Directory where the error/warning log file will be created
+        
+    Returns:
+        logging.Logger: The error/warning logger instance
+    """
+    global _error_warning_logger_initialized
+    
+    if _error_warning_logger_initialized:
+        return logging.getLogger('errorWarning')
+    
+    # Create directory
+    pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
+    
+    log_path = os.path.join(log_dir, 'errorWarning.log')
+    
+    # Move existing log file with timestamp before creating new handler
+    move_existing_logfile_with_timestamp(log_path, 10)  # Keep 10 backup files
+    
+    # Create error/warning logger
+    error_logger = logging.getLogger('errorWarning')
+    error_logger.handlers.clear()
+    error_logger.setLevel(logging.WARNING)  # Capture WARNING and above (ERROR, CRITICAL)
+    
+    # Create file handler
+    handler = RotatingFileHandler(
+        log_path,
+        mode='a',
+        maxBytes=5*1024*1024*1024,  # 5GB
+        backupCount=4,
+        encoding='utf-8',
+        delay=False
+    )
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
+    handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    error_logger.addHandler(handler)
+    error_logger.propagate = False
+    
+    # Create a custom handler that will be added to the root logger
+    # to capture all WARNING and ERROR messages from any logger
+    class ErrorWarningHandler(logging.Handler):
+        def __init__(self, target_logger):
+            super().__init__()
+            self.target_logger = target_logger
+            self.setLevel(logging.WARNING)
+            
+        def emit(self, record):
+            # Forward the record to the error/warning logger
+            self.target_logger.handle(record)
+    
+    # Add the custom handler to the root logger to capture all warnings/errors
+    root_logger = logging.getLogger()
+    error_warning_handler = ErrorWarningHandler(error_logger)
+    root_logger.addHandler(error_warning_handler)
+    
+    _error_warning_logger_initialized = True
+    
+    print("Error/Warning log file is in: %s" % handler.baseFilename)
+    
+    return error_logger
+
 def setup_logger(config=None, default_filename='app.log'):
     """
     Setup a logger with file rotation and timestamp-based backup.
@@ -181,6 +253,13 @@ def setup_logger(config=None, default_filename='app.log'):
     Returns:
         logging.Logger: Configured logger instance
     """
+    # Initialize error/warning logger on first call
+    if not _error_warning_logger_initialized:
+        log_dir = 'logs'
+        if config and isinstance(config, dict):
+            log_dir = config.get('log_dir', log_dir)
+        setup_error_warning_logger(log_dir)
+    
     # Default values
     logName = __name__
     logLevel = logging.CRITICAL

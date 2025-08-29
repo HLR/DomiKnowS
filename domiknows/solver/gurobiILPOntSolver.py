@@ -1939,9 +1939,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if lossTensor != None and torch.is_tensor(lossTensor):
                     # Calculate differentiable normalized loss using sigmoid
                     current_lcLosses['loss'] = torch.nansum(lossTensor)
-                    current_lcLosses['conversionSigmoid'] = 100 * torch.sigmoid(-current_lcLosses['loss'])
+                    current_lcLosses['conversionSigmoid'] = torch.sigmoid(-current_lcLosses['loss'])
                     # Calculate differentiable normalized loss using clamp 
-                    current_lcLosses['conversionClamp'] = 100 * torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0)
+                    current_lcLosses['conversionClamp'] = torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0)
                     # Keep original conversion for backwards compatibility
                     current_lcLosses['conversion'] = 1 - current_lcLosses['loss']
                 else:
@@ -2089,8 +2089,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
                         current_lcLosses['loss'].append(currentLoss)
                         current_lcLosses['conversion'].append(1 - currentLoss)
-                        current_lcLosses['conversionSigmoid'].append(100 * torch.sigmoid(-currentLoss))
-                        current_lcLosses['conversionClamp'].append(100 * torch.clamp(1 - currentLoss, min=0.0, max=1.0))
+                        current_lcLosses['conversionSigmoid'].append(torch.sigmoid(-currentLoss))
+                        current_lcLosses['conversionClamp'].append(torch.clamp(1 - currentLoss, min=0.0, max=1.0))
 
                 else: # Regular calculation for all lc entries at once
                     usedLcSuccesses = lcSuccesses
@@ -2099,8 +2099,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossTensor, lcSampleSize = self.calulateSampleLossForVariable(currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
                     current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
                     current_lcLosses['conversion'].append(1 - current_lcLosses['loss'])
-                    current_lcLosses['conversionSigmoid'].append(100 * torch.sigmoid(-current_lcLosses['loss']))
-                    current_lcLosses['conversionClamp'].append(100 * torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0))
+                    current_lcLosses['conversionSigmoid'].append(torch.sigmoid(-current_lcLosses['loss']))
+                    current_lcLosses['conversionClamp'].append(torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0))
 
                     current_lcLosses['lossTensor'].append(lossTensor)
                     current_lcLosses['conversionTensor'].append(1 - lossTensor)
