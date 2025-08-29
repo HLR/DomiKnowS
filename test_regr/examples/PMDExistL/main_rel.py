@@ -158,15 +158,29 @@ if __name__ == '__main__':
                   batch_size=1, print_loss=False)
     acc_train_after = program.evaluate_condition(dataset)
 
+    
     results_files = open(f"results_N_{args.N}.text", "a")
 
-    print(f"N = {args.N}\nLearning Rate = {args.lr}\nNum Epoch = {args.epoch}", file=results_files)
-    print("Constraint Two ExistL:", args.constraint_2_existL, file=results_files)
-    # print("Acc on training set before training: ", acc_train_before, file=results_files)
-    print("Acc on training set after training: ", acc_train_after, file=results_files)
-    # print("Acc on testing set after training: ", acc_test_after, file=results_files)
-    print("Acc Majority Vote: {:.2f}".format(majority_vote * 100 / len(test)), file=results_files)
-    print("#" * 50, file=results_files)
+    from datetime import datetime
+
+    results_files = open(f"results_N_{args.N}.text", "a")
+
+    # Function for dual printing
+    def dual_print(message):
+        print(message)  # Print to console
+        print(message, file=results_files)  # Print to file
+
+    # Get current date and time
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    dual_print(f"=== Run at: {current_time} ===")
+    dual_print(f"N = {args.N}\nLearning Rate = {args.lr}\nNum Epoch = {args.epoch}")
+    dual_print(f"Constraint Two ExistL: {args.constraint_2_existL}")
+    dual_print(f"Acc on training set after training: {acc_train_after}")
+    dual_print(f"Acc Majority Vote: {majority_vote * 100 / len(test):.2f}")
+    dual_print("#" * 50)
+
+    results_files.close()  # Don't forget to close the file
 
     out_dir = Path(__file__).resolve().parent / "models"  
     out_dir.mkdir(parents=True, exist_ok=True)
