@@ -115,11 +115,16 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
                     else:
                         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
                 
-                # Compose new filename in the same directory
+                # Compose new filename in the "previous" subdirectory
                 log_dir = os.path.dirname(logFilename) or "."
+                previous_dir = os.path.join(log_dir, "previous")
+                
+                # Create "previous" subdirectory if it doesn't exist
+                pathlib.Path(previous_dir).mkdir(parents=True, exist_ok=True)
+                
                 base = os.path.splitext(os.path.basename(logFilename))[0]
                 ext = os.path.splitext(logFilename)[1]
-                new_name = os.path.join(log_dir, f"{base}_{timestamp}{ext}")
+                new_name = os.path.join(previous_dir, f"{base}_{timestamp}{ext}")
                 
                 # Handle case where target file already exists
                 counter = 1
@@ -143,22 +148,22 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
                     print(f"Warning: Could not move log file {logFilename}: {e}")
                     return
 
-        # Remove oldest files if exceeding backup count
+        # Remove oldest files if exceeding backup count (now in previous subdirectory)
         try:
-            all_files = os.listdir(log_dir)
+            all_files = os.listdir(previous_dir)
             rotated = []
             for f in all_files:
                 if f.startswith(base + "_") and f.endswith(ext):
-                    full_path = os.path.join(log_dir, f)
+                    full_path = os.path.join(previous_dir, f)
                     if os.path.isfile(full_path):  # Ensure it's a file, not directory
                         rotated.append(f)
             
             # Sort by modification time (oldest first)
-            rotated.sort(key=lambda x: os.path.getmtime(os.path.join(log_dir, x)))
+            rotated.sort(key=lambda x: os.path.getmtime(os.path.join(previous_dir, x)))
             
             # Remove oldest files if exceeding backup count
             while len(rotated) > logBackupCount:
-                oldest_file = os.path.join(log_dir, rotated.pop(0))
+                oldest_file = os.path.join(previous_dir, rotated.pop(0))
                 try:
                     os.remove(oldest_file)
                 except OSError:
@@ -167,7 +172,7 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
                     
         except OSError:
             # If directory listing fails, skip cleanup
-            pass        
+            pass
                 
 # Global variable to track if error/warning logger has been initialized
 _error_warning_logger_initialized = False
