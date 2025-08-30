@@ -29,7 +29,6 @@ def set_seed_everything(seed=380):
         torch.cuda.manual_seed_all(seed)
 
 def get_device():
-    """Get the best available device and detect multi-GPU setup"""
     if torch.cuda.is_available():
         device = torch.device('cuda')
         gpu_count = torch.cuda.device_count()
@@ -44,7 +43,6 @@ def get_device():
         
         if gpu_count > 1:
             print(f"Multi-GPU setup detected: {gpu_count} GPUs available")
-            print("Will use DataParallel for multi-GPU training")
         else:
             print("Single GPU detected")
             
@@ -63,29 +61,6 @@ def get_device():
     
     return device
 
-def debug_graph_setup(graph, scene, objects, relation, is_cond1, is_cond2, is_relation1, is_relation2):
-    """Debug the graph setup"""
-    print("\n=== Graph Debug Info ===")
-    print(f"Graph type: {type(graph)}")
-    print(f"Graph has constraint: {hasattr(graph, 'constraint')}")
-    
-    if hasattr(graph, 'constraint'):
-        print(f"Constraint type: {type(graph.constraint)}")
-        print(f"Constraint exists: {graph.constraint is not None}")
-    
-    print(f"Scene type: {type(scene)}")
-    print(f"Objects type: {type(objects)}")
-    print(f"Relation type: {type(relation)}")
-    
-    # Check if all POI elements exist
-    poi_elements = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2]
-    poi_names = ['scene', 'objects', 'is_cond1', 'is_cond2', 'relation', 'is_relation1', 'is_relation2']
-    
-    for name, element in zip(poi_names, poi_elements):
-        print(f"POI[{name}] type: {type(element)}, exists: {element is not None}")
-    
-    print("========================\n")
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--N', type=int, default=1000)
@@ -96,10 +71,15 @@ if __name__ == '__main__':
     parser.add_argument("--evaluate", action="store_true")
     parser.add_argument("--use_andL", action="store_true")
     parser.add_argument("--disable_multi_gpu", action="store_true", help="Disable multi-GPU even if available")
+    parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
     args = parser.parse_args()
     
     # Get device
-    device = get_device()
+    if args.cpu:
+        device = torch.device('cpu')
+        print("Forced CPU usage via --cpu flag")
+    else:
+        device = get_device()
     
     # Determine optimal batch size
     if args.batch_size is None:
@@ -148,8 +128,6 @@ if __name__ == '__main__':
      is_cond1, is_cond2,
      is_relation1, is_relation2) = get_graph(args)
     
-    print("Graph setup complete. Setting up sensors...")
-    
     # Read Constraint Label
     scene["all_obj"] = ReaderSensor(keyword="all_obj")
     objects["obj_index"] = ReaderSensor(keyword="obj_index")
@@ -189,7 +167,7 @@ if __name__ == '__main__':
                 p = p.to(self.device, non_blocking=True)
             
             # Use mixed precision for speed
-            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+            with torch.amp.autocast("cuda"):
                 output = self.layer(p)
             
             return self.softmax(output)
@@ -232,7 +210,7 @@ if __name__ == '__main__':
             N, K = emb.shape
 
             # Use mixed precision for speed
-            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+            with torch.amp.autocast("cuda"):
                 # More efficient tensor operations
                 left = emb.unsqueeze(1).expand(-1, N, -1)
                 right = emb.unsqueeze(0).expand(N, -1, -1)
@@ -248,6 +226,9 @@ if __name__ == '__main__':
             
             return self.softmax(output)
 
+    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
+    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
+    
     def filter_relation(_, arg1, arg2):
         return arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
 
@@ -255,9 +236,6 @@ if __name__ == '__main__':
         objects['obj_index'],
         relations=(obj1.reversed, obj2.reversed),
         forward=filter_relation)
-
-    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
-    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
 
     print("Moving dataset tensors to device...")
     # Pre-load all data to GPU for better performance
@@ -271,9 +249,6 @@ if __name__ == '__main__':
         for key, value in dataset[i].items():
             if isinstance(value, torch.Tensor):
                 dataset[i][key] = value.to(device, non_blocking=True)
-        
-        if i % 100 == 0:
-            print(f"Processed {i}/{len(dataset)} items")
     
     if torch.cuda.is_available():
         torch.cuda.synchronize()  # Wait for all transfers to complete
@@ -282,58 +257,12 @@ if __name__ == '__main__':
     print("Compiling logic...")
     dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
     
-    # Check dataset compilation
-    print(f"Dataset compiled successfully: {dataset is not None}")
-    print(f"Dataset length: {len(dataset) if dataset else 0}")
-    if dataset and len(dataset) > 0:
-        print(f"Sample dataset item keys: {list(dataset[0].keys())}")
-        if 'logic_str' in dataset[0]:
-            print(f"Sample logic_str: {dataset[0]['logic_str']}")
-        if 'logic_label' in dataset[0]:
-            print(f"Sample logic_label: {dataset[0]['logic_label']}")
-
-    # Debug graph setup before creating program
-    debug_graph_setup(graph, scene, objects, relation, is_cond1, is_cond2, is_relation1, is_relation2)
-
-    print("Creating InferenceProgram...")
-    program = None
+    print("Creating ...")
     
-    try:
-        # Try with full POI list including constraint
-        if hasattr(graph, 'constraint') and graph.constraint is not None:
-            poi_list = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint]
-            print("Attempting to create program with constraint...")
-        else:
-            print("Warning: graph.constraint not found, creating program without it")
-            poi_list = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2]
+    poi_list = [scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint]
+    program = InferenceProgram(graph, SolverModel, poi=poi_list, tnorm="G")
+    print(f"Program created successfully: {type(program)}")
         
-        program = InferenceProgram(graph, SolverModel, poi=poi_list, tnorm="G")
-        print(f"Program created successfully: {type(program)}")
-        
-    except Exception as e:
-        print(f"Failed with full POI list: {e}")
-        
-        # Try minimal POI list
-        try:
-            print("Trying with minimal POI list...")
-            minimal_poi = [scene, objects, relation]
-            program = InferenceProgram(graph, SolverModel, poi=minimal_poi, tnorm="G")
-            print("Created program with minimal POI list")
-        except Exception as e2:
-            print(f"Failed with minimal POI: {e2}")
-            
-            # Try without POI
-            try:
-                print("Trying without explicit POI...")
-                program = InferenceProgram(graph, SolverModel, tnorm="G")
-                print("Created program without explicit POI")
-            except Exception as e3:
-                print(f"Failed without POI: {e3}")
-                raise e3
-
-    if program is None:
-        raise ValueError("InferenceProgram initialization returned None")
-
     # Move program to device if possible
     program.to(device)
     print(f"Program moved to device: {device}")
