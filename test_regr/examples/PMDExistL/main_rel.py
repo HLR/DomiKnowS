@@ -226,9 +226,6 @@ if __name__ == '__main__':
             
             return self.softmax(output)
 
-    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
-    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
-    
     def filter_relation(_, arg1, arg2):
         return arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
 
@@ -236,6 +233,9 @@ if __name__ == '__main__':
         objects['obj_index'],
         relations=(obj1.reversed, obj2.reversed),
         forward=filter_relation)
+    
+    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
+    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=OptimizedRelationLayers(size=K, device=device))
 
     print("Moving dataset tensors to device...")
     # Pre-load all data to GPU for better performance
