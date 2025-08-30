@@ -63,7 +63,7 @@ if __name__ == '__main__':
     count_all_labels = Counter(all_label_test)
     majority_vote = max([val for val in count_all_labels.values()])
 
-    (graph, scene, objects, scene_contain_obj, relation, obj1, obj2,
+    (graph, scene, objects, scene_contain_obj, relation_obj1_obj2, obj1, obj2,
      is_cond1, is_cond2,
      is_relation1, is_relation2) = get_graph(args)
     #
@@ -94,10 +94,8 @@ if __name__ == '__main__':
             output = self.layer(p)
             return self.softmax(output)
 
-
     objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
     objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-
 
     # Relation Layer
     class RelationLayers(torch.nn.Module):
@@ -130,26 +128,26 @@ if __name__ == '__main__':
             output = self.layer(pairs)
             return self.softmax(output)
 
-
     def filter_relation(_, arg1, arg2):
-        return arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
+        print(f"filter_relation called with {arg1.getAttribute('obj_index')} and {arg2.getAttribute('obj_index')}")
+        result = arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
+        print(f"filter_relation result: {result}")
+        return result
 
-
-    relation[obj1.reversed, obj2.reversed] = CompositionCandidateSensor(
+    relation_obj1_obj2[obj1.reversed, obj2.reversed] = CompositionCandidateSensor(
         objects['obj_index'],
         relations=(obj1.reversed, obj2.reversed),
         forward=filter_relation)
-    #
 
-    relation[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
-    relation[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
+    relation_obj1_obj2[is_relation1] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
+    relation_obj1_obj2[is_relation2] = ModuleLearner(objects["obj_emb"], module=RelationLayers(size=K))
 
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])])
 
     dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
     program = InferenceProgram(graph, SolverModel,
-                               poi=[scene, objects, is_cond1, is_cond2, relation, is_relation1, is_relation2, graph.constraint],
+                               poi=[scene, objects, is_cond1, is_cond2, relation_obj1_obj2, is_relation1, is_relation2, graph.constraint],
                                tnorm="G")
 
     # acc_train_before = program.evaluate_condition(dataset)
@@ -157,7 +155,6 @@ if __name__ == '__main__':
                   batch_size=1, print_loss=False)
     acc_train_after = program.evaluate_condition(dataset)
 
-    
     results_files = open(f"results_N_{args.N}.text", "a")
 
     from datetime import datetime
@@ -179,7 +176,7 @@ if __name__ == '__main__':
     dual_print(f"Acc Majority Vote: {majority_vote * 100 / len(test):.2f}")
     dual_print("#" * 50)
 
-    results_files.close()  # Don't forget to close the file
+    results_files.close()
 
     out_dir = Path(__file__).resolve().parent / "models"  
     out_dir.mkdir(parents=True, exist_ok=True)
