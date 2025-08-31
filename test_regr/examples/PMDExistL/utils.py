@@ -66,8 +66,8 @@ def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> Li
         cond1_condition, cond_x = select_number_condition()
         cond2_condition, cond_y = select_number_condition()
         relation_condition, rel_text = select_relation_condition()
+
         for i in range(num_all_objs):
-            # TODO: Adding execution here
             for j in range(i + 1, num_all_objs):
                 obj1 = generate_objects[i]
                 obj2 = generate_objects[j]
@@ -81,19 +81,43 @@ def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> Li
         else:
             logic_str = f"andL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
 
+        # give each object a proper integer index
         return {
             "all_obj": [0],
-            "obj_index": generate_objects,
-            "obj_emb": generate_objects,
+            "obj_index": list(range(num_all_objs)),  # [0, 1, 2, ...]
+            "obj_emb": generate_objects,             # embeddings
             "condition_label": [condition_label],
             "logic_str": logic_str
         }
+
+    def _normalize_item(item: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ensure obj_index is a list of ints [0..len(obj_emb)-1].
+        This also repairs legacy datasets where obj_index mistakenly stored embeddings.
+        """
+        emb = item.get("obj_emb", None)
+        idx = item.get("obj_index", None)
+        if isinstance(emb, list):
+            num = len(emb)
+            # If idx is missing or looks like a list of vectors (list-of-lists) or wrong length -> fix it
+            needs_fix = (
+                not isinstance(idx, list)
+                or len(idx) != num
+                or (len(idx) > 0 and isinstance(idx[0], (list, dict)))  # suspicious: not ints
+            )
+            if needs_fix:
+                item["obj_index"] = list(range(num))
+        return item
 
     if read_data:
         with open("dataset/train.json", "r") as f:
             train = json.load(f)
         with open("dataset/test.json", "r") as f:
             test = json.load(f)
+
+        # Normalize loaded data to guarantee obj_index correctness
+        train = [_normalize_item(d) for d in train]
+        test  = [_normalize_item(d) for d in test]
 
         if args.use_andL:
             for i in range(len(train)):
@@ -103,6 +127,7 @@ def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> Li
     else:
         dataset = [create_scene(M, K) for _ in range(N)]
         train, test = train_test_split(dataset, test_size=0.2)
+
     return train, test, [data["condition_label"][0] for data in test]
 
 
