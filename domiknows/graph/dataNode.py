@@ -2218,17 +2218,56 @@ class DataNodeBuilder(dict):
         if args:
             dict.__setitem__(self, "data_item", args[0])
 
+    def __contains__(self, key):
+        """
+        Overloaded __contains__ method for the DataNodeBuilder class.
+        This method checks if the key is present in the dictionary-like object,
+        filtering out DataNodes with ontology node name "constraint".
+
+        Parameters:
+        -----------
+        key : any hashable type
+            The key to be checked for existence in the dictionary.
+
+        Returns:
+        --------
+        bool
+            True if the key exists and is not filtered out, False otherwise.
+        """
+        if not dict.__contains__(self, key):
+            return False
+        
+        # If key is 'dataNode', check if any non-constraint DataNodes exist
+        if key == 'dataNode':
+            existing_dns = dict.__getitem__(self, key)
+            if existing_dns:
+                # Filter out constraint DataNodes
+                filtered_dns = [dn for dn in existing_dns 
+                            if dn.getOntologyNode().name != "constraint"]
+                return len(filtered_dns) > 0
+        
+        return True
+
     def __getitem__(self, key):
         """
-        Override dictionary's __getitem__ to fetch item for a given key.
+        Override dictionary's __getitem__ to fetch item for a given key,
+        filtering out DataNodes with ontology node name "constraint".
 
         Parameters:
         - key: The key to look for in the dictionary.
 
         Returns:
-        The value associated with the provided key.
+        The value associated with the provided key, with constraint DataNodes filtered out.
         """
-        return dict.__getitem__(self, key)
+        value = dict.__getitem__(self, key)
+        
+        # If key is 'dataNode', filter out constraint DataNodes
+        if key == 'dataNode' and value:
+            filtered_dns = [dn for dn in value 
+                        if dn.getOntologyNode().name != "constraint"]
+            return filtered_dns
+        
+        return value
 
     def __changToTuple(self, v):
         """
