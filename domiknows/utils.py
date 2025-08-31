@@ -1,3 +1,4 @@
+import shutil
 import sys
 import os
 import re
@@ -89,89 +90,80 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
             except OSError as e:
                 print(f"Warning: Could not remove empty log file {logFilename}: {e}")
             return
+        
         # Close any existing handlers for this file first
         close_file_handlers(logFilename)
+        
+        # Create run timestamp for subfolder
+        run_timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+        
+        # Get log directory and create previous/run structure
+        log_dir = os.path.dirname(logFilename) or "."
+        previous_dir = os.path.join(log_dir, "previous")
+        run_dir = os.path.join(previous_dir, f"run_{run_timestamp}")
+        
+        # Create run subdirectory
+        pathlib.Path(run_dir).mkdir(parents=True, exist_ok=True)
         
         # Add retry mechanism for file operations
         max_retries = 3
         retry_delay = 0.1
         
-        for attempt in range(max_retries):
-            try:
-                # Read first line for timestamp
-                try:
-                    with open(logFilename, "r", encoding="utf-8", errors="ignore") as f:
-                        first_line = f.readline().strip()
-                except (IOError, OSError):
-                    # If can't read file, use current timestamp
-                    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-                else:
-                    # Try to extract timestamp from first line
-                    match = re.match(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d+)", first_line)
-                    if match:
-                        date_time = match.group(1).replace(":", "-").replace(" ", "_")
-                        milliseconds = match.group(2)
-                        timestamp = f"{date_time}-{milliseconds}"
-                    else:
-                        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-                
-                # Compose new filename in the "previous" subdirectory
-                log_dir = os.path.dirname(logFilename) or "."
-                previous_dir = os.path.join(log_dir, "previous")
-                
-                # Create "previous" subdirectory if it doesn't exist
-                pathlib.Path(previous_dir).mkdir(parents=True, exist_ok=True)
-                
-                base = os.path.splitext(os.path.basename(logFilename))[0]
-                ext = os.path.splitext(logFilename)[1]
-                new_name = os.path.join(previous_dir, f"{base}_{timestamp}{ext}")
-                
-                # Handle case where target file already exists
-                counter = 1
-                original_new_name = new_name
-                while os.path.exists(new_name):
-                    name_without_ext = os.path.splitext(original_new_name)[0]
-                    new_name = f"{name_without_ext}_{counter}{ext}"
-                    counter += 1
-                
-                # Try to rename the file
-                os.rename(logFilename, new_name)
-                break  # Success, exit retry loop
-                
-            except (OSError, PermissionError) as e:
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                    continue
-                else:
-                    # If all retries failed, log the error but don't crash
-                    print(f"Warning: Could not move log file {logFilename}: {e}")
-                    return
-
-        # Remove oldest files if exceeding backup count (now in previous subdirectory)
+        # Move all files from log directory to run subfolder
         try:
-            all_files = os.listdir(previous_dir)
-            rotated = []
-            for f in all_files:
-                if f.startswith(base + "_") and f.endswith(ext):
-                    full_path = os.path.join(previous_dir, f)
-                    if os.path.isfile(full_path):  # Ensure it's a file, not directory
-                        rotated.append(f)
-            
-            # Sort by modification time (oldest first)
-            rotated.sort(key=lambda x: os.path.getmtime(os.path.join(previous_dir, x)))
-            
-            # Remove oldest files if exceeding backup count
-            while len(rotated) > logBackupCount:
-                oldest_file = os.path.join(previous_dir, rotated.pop(0))
-                try:
-                    os.remove(oldest_file)
-                except OSError:
-                    # Continue if file can't be removed
-                    pass
-                    
+            all_files = os.listdir(log_dir)
+            for file_item in all_files:
+                source_path = os.path.join(log_dir, file_item)
+                
+                # Skip directories and the previous directory itself
+                if os.path.isdir(source_path):
+                    continue
+                
+                # Move each file to the run directory
+                for attempt in range(max_retries):
+                    try:
+                        target_path = os.path.join(run_dir, file_item)
+                        os.rename(source_path, target_path)
+                        break
+                        
+                    except (OSError, PermissionError) as e:
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
+                            continue
+                        else:
+                            print(f"Warning: Could not move file {source_path}: {e}")
+                            break
+                            
+        except OSError as e:
+            print(f"Warning: Could not list directory {log_dir}: {e}")
+            return
+        
+        # Clean up old run directories - keep only 10
+        try:
+            if os.path.exists(previous_dir):
+                all_items = os.listdir(previous_dir)
+                run_dirs = []
+                
+                for item in all_items:
+                    item_path = os.path.join(previous_dir, item)
+                    if os.path.isdir(item_path) and item.startswith("run_"):
+                        run_dirs.append(item)
+                
+                # Sort by modification time (oldest first)
+                run_dirs.sort(key=lambda x: os.path.getmtime(os.path.join(previous_dir, x)))
+                
+                # Remove oldest run directories if exceeding backup count
+                while len(run_dirs) > logBackupCount:
+                    oldest_dir = os.path.join(previous_dir, run_dirs.pop(0))
+                    try:
+                        shutil.rmtree(oldest_dir)
+                        print(f"Removed old run directory: {oldest_dir}")
+                    except OSError as e:
+                        print(f"Warning: Could not remove old run directory {oldest_dir}: {e}")
+                        
         except OSError:
-            # If directory listing fails, skip cleanup
+            # If directory operations fail, skip cleanup
             pass
                 
 # Global variables for error/warning logger
