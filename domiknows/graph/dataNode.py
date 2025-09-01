@@ -2587,7 +2587,7 @@ class DataNodeBuilder(dict):
         newDnsRoots = []
         for dn in noIncomingDNs:
             # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
-            if not any(relLink for relLink in dn.relationLinks if relLink.key == "contains"):
+            if not any(relLink for relLink in dn.relationLinks if relLink == "contains"):
                 newDnsRoots.append(dn)
 
         # Remove any dataNodes from dnsRoots that are not in newDnsRoots
