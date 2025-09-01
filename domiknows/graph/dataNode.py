@@ -2562,20 +2562,8 @@ class DataNodeBuilder(dict):
 
         # -- Update list of existing root dataNotes
 
-        # Will be used to store new root dataNodes
-        newDnsRoots = []
-
-        # Loop over all known unique dataNodes
-        #for dnE in allDns:
-        # Check if the dataNode is a root dataNode because it has no impact link
-        # if not dnE.impactLinks: # Has no impact link
-        #     if dnE not in newDnsRoots: # Not yet in the new Root list
-        #         # Add it to the new Root list
-        #         newDnsRoots.append(dnE)
-        # else:
-        #     # Check if the current dataNode is still a root dataNode
-        #     if self.__isRootDn(dnE, dnsRoots, visitedDns = None):
-        #         newDnsRoots.append(dnE)
+        # Will be used to store datanotes with no incoming links
+        noIncomingDNs = []
 
         # Count the number of incoming links for each dataNode
         incomingLinks = {dn: 0 for dn in allDns}
@@ -2593,8 +2581,17 @@ class DataNodeBuilder(dict):
                     incomingLinks[dn] = 1
 
         # Find the root dataNodes which have no incoming links
-        newDnsRoots = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
-        newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
+        noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
+        noIncomingDNs = sorted(noIncomingDNs, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
+
+        newDnsRoots = []
+        for dn in noIncomingDNs:
+            # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
+            if not any(relLink for relLink in dn.relationLinks if relLink.key == "contains"):
+                newDnsRoots.append(dn)
+
+        # Remove any dataNodes from dnsRoots that are not in newDnsRoots
+        dnsRoots = [dn for dn in dnsRoots if dn in newDnsRoots]
 
         # if newDnsRoots is empty
         if not newDnsRoots:

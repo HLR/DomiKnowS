@@ -129,9 +129,9 @@ if __name__ == '__main__':
             return self.softmax(output)
 
     def filter_relation(_, arg1, arg2):
-        print(f"filter_relation called with {arg1.getAttribute('obj_index')} and {arg2.getAttribute('obj_index')}")
+        #print(f"filter_relation called with {arg1.getAttribute('obj_index')} and {arg2.getAttribute('obj_index')}")
         result = arg1.getAttribute("obj_index") != arg2.getAttribute("obj_index")
-        print(f"filter_relation result: {result}")
+        #print(f"filter_relation result: {result}")
         return result
 
     relation_obj1_obj2[obj1.reversed, obj2.reversed] = CompositionCandidateSensor(
