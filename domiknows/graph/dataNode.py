@@ -2591,7 +2591,7 @@ class DataNodeBuilder(dict):
                 newDnsRoots.append(dn)
 
 
-        newDnsRoots = noIncomingDNs
+        #newDnsRoots = noIncomingDNs
         
         # Remove any dataNodes from dnsRoots that are not in newDnsRoots
         dnsRoots = [dn for dn in dnsRoots if dn in newDnsRoots]
