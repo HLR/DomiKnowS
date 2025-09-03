@@ -427,7 +427,7 @@ class CLEVRDatasetUnwrapped:
         else: # No valid image, ensure 'objects' field matches 'objects_raw' (i.e., no transform applied)
             feed_dict.objects = feed_dict.objects_raw
 
-        feed_dict.pil_image = pil_image if 'pil_image' not in feed_dict else None
+        feed_dict.pil_image = None
         feed_dict.question_index = metainfo.question_index
         feed_dict.question_raw = metainfo.question
         feed_dict.question_raw_tokenized = metainfo.question_tokenized
@@ -546,7 +546,7 @@ class CLEVRDatasetFilterableView:
                 return False        
         return self.filter(filt, f'filter-one-left-or-right')
 
-    def filter_atmostlatleastlequal(self, relation_number=1) -> 'CLEVRDatasetFilterableView':
+    def filter_atmostlatleastlequal(self, relation_number=1, make_outputs_true_false = True) -> 'CLEVRDatasetFilterableView':
         def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
             """Converts a program to a string representation."""
             return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
@@ -562,7 +562,7 @@ class CLEVRDatasetFilterableView:
                 return True
             else:
                 return False
-        self.dataset.convert_counting = True
+        self.dataset.convert_counting = make_outputs_true_false
         return self.filter(filt, f'filter-one-left-or-right')
 
     def filter_more_than_one_relation(self, *args) -> 'CLEVRDatasetFilterableView':
