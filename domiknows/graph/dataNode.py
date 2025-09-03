@@ -2590,6 +2590,9 @@ class DataNodeBuilder(dict):
             if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
                 newDnsRoots.append(dn)
 
+
+        newDnsRoots = noIncomingDNs
+        
         # Remove any dataNodes from dnsRoots that are not in newDnsRoots
         dnsRoots = [dn for dn in dnsRoots if dn in newDnsRoots]
 
