@@ -170,52 +170,32 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
 _error_warning_logger_initialized = False
 _error_warning_logger = None
 _error_warning_handler_class = None
+_error_warning_log_dir = None
+
 
 def setup_error_warning_logger(log_dir='logs'):
     """
-    Setup a global error/warning logger that captures WARNING and ERROR level logs
-    from all loggers in the application.
+    Setup a global error/warning logger configuration that will create the actual
+    log file only when the first warning/error is detected.
     
     Args:
         log_dir (str): Directory where the error/warning log file will be created
         
     Returns:
-        logging.Logger: The error/warning logger instance
+        logging.Logger: The error/warning logger instance (initially without file handler)
     """
-    global _error_warning_logger_initialized, _error_warning_logger, _error_warning_handler_class
+    global _error_warning_logger_initialized, _error_warning_logger, _error_warning_handler_class, _error_warning_log_dir
     
     if _error_warning_logger_initialized:
         return _error_warning_logger
     
-    # Create directory
-    pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
+    # Store log directory for later use
+    _error_warning_log_dir = log_dir
     
-    log_path = os.path.join(log_dir, 'errorWarning.log')
-    
-    # Move existing log file with timestamp before creating new handler
-    move_existing_logfile_with_timestamp(log_path, 10)  # Keep 10 backup files
-    
-    # Create error/warning logger
+    # Create error/warning logger without file handler initially
     _error_warning_logger = logging.getLogger('errorWarning')
     _error_warning_logger.handlers.clear()
     _error_warning_logger.setLevel(logging.WARNING)  # Capture WARNING and above (ERROR, CRITICAL)
-    
-    # Create file handler
-    handler = RotatingFileHandler(
-        log_path,
-        mode='a',
-        maxBytes=5*1024*1024*1024,  # 5GB
-        backupCount=4,
-        encoding='utf-8',
-        delay=False
-    )
-    
-    # Create formatter
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-    handler.setFormatter(formatter)
-    
-    # Add handler to logger
-    _error_warning_logger.addHandler(handler)
     _error_warning_logger.propagate = False
     
     # Create a custom handler class that will be added to individual loggers
@@ -223,16 +203,51 @@ def setup_error_warning_logger(log_dir='logs'):
         def __init__(self):
             super().__init__()
             self.setLevel(logging.WARNING)
+            self._file_handler_created = False
             
         def emit(self, record):
             # Forward the record to the error/warning logger
             if record.levelno >= logging.WARNING:
+                # Create file handler on first warning/error
+                if not self._file_handler_created:
+                    self._create_file_handler()
+                    self._file_handler_created = True
+                
                 _error_warning_logger.handle(record)
+        
+        def _create_file_handler(self):
+            """Create the actual log file and handler when first warning/error occurs"""
+            global _error_warning_log_dir, _error_warning_logger
+            
+            # Create directory
+            pathlib.Path(_error_warning_log_dir).mkdir(parents=True, exist_ok=True)
+            
+            log_path = os.path.join(_error_warning_log_dir, 'errorWarning.log')
+            
+            # Move existing log file with timestamp before creating new handler
+            move_existing_logfile_with_timestamp(log_path, 10)  # Keep 10 backup files
+            
+            # Create file handler
+            handler = RotatingFileHandler(
+                log_path,
+                mode='a',
+                maxBytes=5*1024*1024*1024,  # 5GB
+                backupCount=4,
+                encoding='utf-8',
+                delay=False
+            )
+            
+            # Create formatter
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
+            handler.setFormatter(formatter)
+            
+            # Add handler to logger
+            _error_warning_logger.addHandler(handler)
+            
+            print("Error/Warning log file created: %s" % handler.baseFilename)
     
     _error_warning_handler_class = ErrorWarningHandler
     _error_warning_logger_initialized = True
-    
-    print("Error/Warning log file is in: %s" % handler.baseFilename)
     
     return _error_warning_logger
 
