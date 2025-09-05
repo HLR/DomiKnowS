@@ -39,36 +39,6 @@ class dbUpdate():
         else:
             self.programName = ''
 
-        try:
-            import os
-            from pathlib import Path
-
-            _dir_path = Path(os.path.realpath(__file__))
-            dir_path = _dir_path.parent.parent.parent
-
-            mongoDBPermFile = 'MongoDB-DK.pem'
-            mongoDBPermPath = None
-
-            for root, dir, files in os.walk(dir_path):
-                if mongoDBPermFile in files:
-                    mongoDBPermPath= os.path.join(root, mongoDBPermFile)
-
-            if mongoDBPermPath is None:
-                self.dbClient = None
-                return
-
-            from pymongo import MongoClient
-            uri = "mongodb+srv://cluster0.us5bm.mongodb.net/Cluster0?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority"
-            self.dbClient = MongoClient(uri,
-                                        tls=True,
-                                        tlsCertificateKeyFile=mongoDBPermPath)
-        except Exception as ex:
-            self.dbClient = None
-            return
-
-        self.db = self.dbClient.mlResults
-        self.results = self.db.results
-
         self.activeLCs = []
         for _, lc in graph.logicalConstrains.items():
             if lc.headLC:
@@ -156,7 +126,7 @@ class dbUpdate():
 
 
 class LearningBasedProgram():
-    def __init__(self, graph, Model, logger=None, db=False, **kwargs):
+    def __init__(self, graph, Model, logger=None, **kwargs):
         """
         This function initializes an object with a graph, a model, a logger, and other optional
         parameters.
@@ -169,14 +139,10 @@ class LearningBasedProgram():
         the
         :param logger: The `logger` parameter is an optional logger object that can be used for logging
         messages and debugging information. If no logger is provided, a default logger will be used
-        :param db: The `db` parameter is a boolean flag that indicates whether or not to perform
-        database updates. If `db` is `True`, database updates will be performed. If `db` is `False`, no
-        database updates will be performed, defaults to False (optional)
         """
         self.graph = graph
 
         self.logger = logger or logging.getLogger(__name__)
-        self.dbUpdate = None if db else dbUpdate(graph)
 
         from inspect import signature
         self.modelSignature = signature(Model.__init__)
