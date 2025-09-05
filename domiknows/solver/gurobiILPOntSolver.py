@@ -1277,7 +1277,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             pUsed = False
             for graph in self.myGraph:
                 for _, lc in graph.logicalConstrains.items():
-                    if lc.headLC:     
+                    if lc.headLC and lc.active: # Process only active and head lcs
                         if not ignorePinLCs:
                             lcP = lc.p
                         else:
@@ -1292,9 +1292,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Sort constraints according to their p
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
             for p in lcP:
-                self.myLogger.info('Found %i logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
-                self.myLoggerTime.info('Starting ILP interference - Found %i logical constraints'%(len(lcP[p])))
-            
+                self.myLogger.info('Found %i active logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
+                self.myLoggerTime.info('Starting ILP interference - Found %i active logical constraints'%(len(lcP[p])))
+
             # Search through set of logical constraints for subset satisfying and the max/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
             ps = [] # List with processed p 
