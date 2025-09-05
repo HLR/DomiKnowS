@@ -79,6 +79,15 @@ if __name__ == '__main__':
 
     # Set label of inference condition
     # graph.constraint[learning_condition] = ReaderSensor(keyword="condition_label", label=True)
+    
+    class ProbabilityExtractor(torch.nn.Module):
+        def __init__(self, module_learner):
+            super().__init__()
+            self.module_learner = module_learner
+        
+        def forward(self, *args, **kwargs):
+            output = self.module_learner(*args, **kwargs)  # Shape: (batch_size, 2)
+            return output[:, 1]  # Return only index 1 probabilities
 
     class Regular2Layer(torch.nn.Module):
         def __init__(self, size):
@@ -94,8 +103,8 @@ if __name__ == '__main__':
             output = self.layer(p)
             return self.softmax(output)
 
-    objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))[1]
-    objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))[1]
+    objects[is_cond1] = ProbabilityExtractor(ModuleLearner("obj_emb", module=Regular2Layer(size=K)))
+    objects[is_cond2] = ProbabilityExtractor(ModuleLearner("obj_emb", module=Regular2Layer(size=K)))
 
     # Relation Layer
     class RelationLayers(torch.nn.Module):
