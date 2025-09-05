@@ -94,8 +94,8 @@ if __name__ == '__main__':
             output = self.layer(p)
             return self.softmax(output)
 
-    objects[is_cond1][1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
-    objects[is_cond2][1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))
+    objects[is_cond1] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))[1]
+    objects[is_cond2] = ModuleLearner("obj_emb", module=Regular2Layer(size=K))[1]
 
     # Relation Layer
     class RelationLayers(torch.nn.Module):
