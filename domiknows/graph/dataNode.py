@@ -2480,46 +2480,6 @@ class DataNodeBuilder(dict):
             if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
                 conceptInfo['relationAttrData'] = True
 
-    def __isRootDn(self, testedDn, checkedDns, visitedDns):
-        """
-        Determine if a given DataNode (testedDn) is a root node in the graph based on its impactLinks.
-
-        Args:
-            testedDn (DataNode): The DataNode object that is being tested for its 'root' status.
-            checkedDns (set): A set of DataNodes that have already been examined or should be considered for this check.
-            visitedDns (set, optional): A set of DataNodes that have already been visited during recursion to avoid infinite loops.
-
-        Returns:
-            bool: Returns True if the testedDn is a root node, False otherwise.
-
-        Note:
-            - The method is recursive and visits each node only once to avoid infinite loops.
-            - 'impactLinks' is an attribute of DataNode that shows which DataNodes impact the current DataNode.
-        """
-        if visitedDns == None:
-            visitedDns = set()
-
-        visitedDns.add(testedDn)
-
-        if not testedDn.impactLinks and testedDn in checkedDns:
-            return False
-
-        isRoot = True
-        for _, iDnList in testedDn.impactLinks.items(): # Check if its impacts are connected to Dn in the new Root list
-            if iDnList:
-                for iDn in iDnList:
-                    if iDn in visitedDns:
-                        continue
-
-                    if self.__isRootDn(iDn, checkedDns, visitedDns):
-                        isRoot = False
-                        break
-
-            if not isRoot:
-                break
-
-        return isRoot
-
     def __updateRootDataNodeList(self, *dns):
         """
         Update the list of root dataNodes in the dictionary based on newly added dataNodes and existing ones.
@@ -2584,14 +2544,7 @@ class DataNodeBuilder(dict):
         noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
         noIncomingDNs = sorted(noIncomingDNs, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
-        newDnsRoots = []
-        for dn in noIncomingDNs:
-            # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
-            if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
-                newDnsRoots.append(dn)
-
-
-        #newDnsRoots = noIncomingDNs
+        newDnsRoots = noIncomingDNs
         
         # Remove any dataNodes from dnsRoots that are not in newDnsRoots
         dnsRoots = [dn for dn in dnsRoots if dn in newDnsRoots]
@@ -3565,15 +3518,22 @@ class DataNodeBuilder(dict):
         """
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
-            if len(existingDns) == 1:
-                rootDn = existingDns[0]
+
+            noRelationRoots = []
+            for dn in existingDns:
+                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes
+                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                    noRelationRoots.append(dn)
+
+            if len(noRelationRoots) == 1:
+                rootDn = noRelationRoots[0]
                 if not getProductionModeStatus():
                     _DataNodeBuilder__Logger.info(f'No new Batch Root DataNode created - DataNode Builder already has single Root DataNode with id {rootDn.instanceID} of type {rootDn.getOntologyNode().name}')
                 return
 
             # Check if there are more than one type of DataNodes in the builder
             typesInDNs = set()
-            for i, d in enumerate(existingDns):
+            for i, d in enumerate(noRelationRoots):
                 typesInDNs.add(d.getOntologyNode().name)
 
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
@@ -3582,7 +3542,7 @@ class DataNodeBuilder(dict):
                 return
 
             # Create the Batch Root DataNode
-            supGraph = existingDns[1].getOntologyNode().sup
+            supGraph = noRelationRoots[1].getOntologyNode().sup
             if supGraph is None:
                 raise ValueError('Not able to create Batch Root DataNode - existing DataNodes in the Builder have concept type %s not connected to any graph: %s'%(typesInDNs))
 
@@ -3597,7 +3557,7 @@ class DataNodeBuilder(dict):
 
             batchRootDN = DataNode(myBuilder = self, instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
 
-            for i, d in enumerate(existingDns):
+            for i, d in enumerate(noRelationRoots):
                 batchRootDN.addChildDataNode(d)
 
             # The new Root DataNode it the batch Root DataNode
@@ -3658,9 +3618,15 @@ class DataNodeBuilder(dict):
         # If DataNode it created then return it
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
+            
+            noRelationRoots = []
+            for dn in existingDns:
+                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
+                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                    noRelationRoots.append(dn)
 
-            if len(existingDns) != 0:
-                returnDn = existingDns[0]
+            if len(noRelationRoots) != 0:
+                returnDn = noRelationRoots[0]
 
                 # Set the torch device
                 returnDn.current_device = device
@@ -3669,10 +3635,10 @@ class DataNodeBuilder(dict):
                     if torch.cuda.is_available():
                         returnDn.current_device = 'cuda'
 
-                if len(existingDns) != 1:
-                    typesInDNs = {d.getOntologyNode().name for d in existingDns[1:]}
-                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
-                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                if len(noRelationRoots) != 1:
+                    typesInDNs = {d.getOntologyNode().name for d in noRelationRoots[1:]}
+                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
+                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
                 else:
                     if not getProductionModeStatus():
                         _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
@@ -3743,13 +3709,19 @@ class DataNodeBuilder(dict):
 
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
+            
+            noRelationRoots = []
+            for dn in existingDns:
+                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
+                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                    noRelationRoots.append(dn)
 
-            if len(existingDns) > 0:
+            if len(noRelationRoots) > 0:
 
                 if not getProductionModeStatus():
-                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(existingDns),existingDns))
+                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(noRelationRoots),noRelationRoots))
 
-                return existingDns
+                return noRelationRoots
 
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNodes')
         return None
