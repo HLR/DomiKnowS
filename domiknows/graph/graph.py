@@ -1,8 +1,6 @@
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 from itertools import chain
 import inspect
-from distutils.dep_util import newer
-
 
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree

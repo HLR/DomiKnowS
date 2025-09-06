@@ -7,7 +7,6 @@ transformers==4.6
 ordered-set
 setuptools
 graphviz
-pymongo[tls]
 dnspython
 sklearn
 spacy
