@@ -20,6 +20,10 @@ from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, FunctionalSens
 import torch
 import random
 
+from domiknows import setProductionLogMode
+
+setProductionLogMode(True)
+
 def set_seed_everything(seed=380):
     random.seed(seed)
     np.random.seed(seed)

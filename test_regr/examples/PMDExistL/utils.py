@@ -139,28 +139,59 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
     program.cmodel.reset()
     program.model.mode(Mode.TRAIN)
 
-    opt = torch.optim.Adam(program.model.parameters(), lr=1e-2)
-    copt = torch.optim.Adam(program.cmodel.parameters(), lr=1e-3)
+    # Safer optimizers
+    opt  = torch.optim.AdamW(program.model.parameters(), lr=1e-4, weight_decay=1e-4)
+    copt = torch.optim.AdamW(program.cmodel.parameters(), lr=1e-4, weight_decay=1e-4)
+
+    # Cosine decay over epochs (simple, epoch-level step)
+    msched = torch.optim.lr_scheduler.CosineAnnealingLR(opt,  T_max=num_epochs)
+    csched = torch.optim.lr_scheduler.CosineAnnealingLR(copt, T_max=num_epochs)
+
+    # Small, optional gradient accumulation (helps when batch_size=1)
+    ACCUM_STEPS = 8  # set to 1 to disable
 
     for _ in tqdm(range(num_epochs), desc="Training with PMD"):
-        for data in dataset:
-            opt.zero_grad()
-            copt.zero_grad()
+        opt.zero_grad(set_to_none=True)
+        copt.zero_grad(set_to_none=True)
+
+        for step, data in enumerate(dataset, start=1):
             mloss, _, *output = program.model(data)
             closs, *_ = program.cmodel(output[1])
 
+            # Match your previous semantics:
+            # - constr_loss_only=True  -> use ONLY constraint loss
+            # - constr_loss_only=False -> use ONLY model loss
             if constr_loss_only:
-                loss = mloss * 0 + (closs if torch.is_tensor(closs) else 0)
+                loss = (closs if torch.is_tensor(closs) else 0.0)
+                if not torch.is_tensor(loss):
+                    # nothing to backprop; skip step
+                    continue
             else:
                 loss = mloss
 
-            if loss.item() < 0:
-                print("Negative loss", loss.item())
-                break
-            if loss:
-                loss.backward()
+            # Robustness: skip bad/NaN/inf losses
+            if not torch.isfinite(loss):
+                print("[WARN] non-finite loss encountered; skipping step.")
+                opt.zero_grad(set_to_none=True)
+                copt.zero_grad(set_to_none=True)
+                continue
+
+            # Backprop (accumulated)
+            (loss / ACCUM_STEPS).backward()
+
+            if step % ACCUM_STEPS == 0:
+                # Clip to stabilize
+                torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=1.0)
+
                 opt.step()
                 copt.step()
+                opt.zero_grad(set_to_none=True)
+                copt.zero_grad(set_to_none=True)
+
+        # End of epoch: step schedulers
+        msched.step()
+        csched.step()
 
 
 def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_answer: Any) -> Dict[int, int]:
@@ -170,9 +201,10 @@ def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_
     program.cmodel.reset()
     program.model.mode(Mode.TEST)
 
-    final_result_count = {}
-    for datanode in program.populate(dataset=dataset):
-        for child in datanode.getChildDataNodes():
-            pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
-            final_result_count[pred] = final_result_count.get(pred, 0) + 1
+    final_result_count: Dict[int, int] = {}
+    with torch.no_grad():
+        for datanode in program.populate(dataset=dataset):
+            for child in datanode.getChildDataNodes():
+                pred = child.getAttribute(b_answer, 'local/argmax').argmax().item()
+                final_result_count[pred] = final_result_count.get(pred, 0) + 1
     return final_result_count
