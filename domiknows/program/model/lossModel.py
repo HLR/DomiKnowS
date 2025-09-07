@@ -277,8 +277,6 @@ class InferenceModel(LossModel):
 
     def forward(self, builder, build=None):
         self.inferenceLogger.info("=== InferenceModel Forward Operation Started ===")
-        self.inferenceLogger.info(f"Parameters: build={build}")
-        self.inferenceLogger.info(f"Constraint concept: {self.constraint_concept.name if self.constraint_concept else 'None'}")
         
         if MONITORING_AVAILABLE:
             next_step()
@@ -297,7 +295,6 @@ class InferenceModel(LossModel):
         datanode = builder.getDataNode(device=self.device)
 
         # Try to get the datanode for the constraints concept
-        self.inferenceLogger.debug(f"Searching for constraint datanode with concept name: {self.constraint_concept.name}")
         constraint_dn_search = builder.findDataNodesInBuilder(select=self.constraint_concept.name)
         if len(constraint_dn_search) == 0:
             self.inferenceLogger.error(f"Constraint datanode (for concept {self.constraint_concept.name}) not found")

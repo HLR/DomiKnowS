@@ -8,7 +8,7 @@ from .dataNodeConfig import dnConfig
 
 from ordered_set import OrderedSet
 
-from domiknows import getRegrTimer_logger, getProductionModeStatus, setup_logger
+from domiknows import getRegrTimer_logger, getProductionModeStatus, graph, setup_logger
 from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
 from domiknows.graph.relation import Contains
@@ -1260,12 +1260,13 @@ class DataNode:
 
     def setActiveLCs(self):
         # Try to get the datanode for the constraints concept
-        
-        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=self.constraint_concept.name)
+
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
         if len(constraint_dn_search) == 0:
            return 
         elif len(constraint_dn_search) > 1:
-            raise ValueError(f'Multiple constraint datanodes (for concept {self.constraint_concept.name}) found: found {len(constraint_dn_search)}, expected one.')
+            raise ValueError(f'Multiple constraint datanodes (for concept {constraint_concept.name}) found: found {len(constraint_dn_search)}, expected one.')
 
         constraint_datanode = constraint_dn_search[0]
 
