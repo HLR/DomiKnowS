@@ -13,9 +13,6 @@ from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
 from domiknows.graph.relation import Contains
 
-
-import logging
-from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept, EnumConcept
 
@@ -1261,6 +1258,39 @@ class DataNode:
 
         return myilpOntSolver, _conceptsRelations
 
+    def setActiveLCs(self):
+        # Try to get the datanode for the constraints concept
+        
+        constraint_dn_search = self.mybuilder.findDataNodesInBuilder(select=self.constraint_concept.name)
+        if len(constraint_dn_search) == 0:
+           return 
+        elif len(constraint_dn_search) > 1:
+            raise ValueError(f'Multiple constraint datanodes (for concept {self.constraint_concept.name}) found: found {len(constraint_dn_search)}, expected one.')
+
+        constraint_datanode = constraint_dn_search[0]
+
+        # Get the constraint labels
+        # read_labels will be of format: {'LC{n}/label': label_value}
+        read_labels = constraint_datanode.getAttributes()
+
+        # Get active constraints based on given constraint labels
+        active_lc_names = set(
+            x.split('/')[0] # TODO: parse this better?
+            for x in read_labels
+        )
+
+        # Set active/inactive constraints
+        lc_no = 0
+        for lc_name, lc in self.graph.logicalConstrains.items():
+            assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
+            lc_no += 1
+            if lc_name in active_lc_names:
+                lc.active = True
+            else:
+                lc.active = False
+                
+        return read_labels
+                
     #----------------- Solver methods
 
     def collectInferredResults(self, concept, inferKey):
@@ -1897,7 +1927,6 @@ class DataNode:
                                                   conceptsRelations=conceptsRelations)
 
         return lcResult
-
 
     def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
         """
