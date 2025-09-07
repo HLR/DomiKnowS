@@ -35,7 +35,6 @@ setup(
        'torch>=1.8.1',
        'ordered-set',
        'graphviz',
-       'pymongo[tls]',
        'dnspython',
        'scikit-learn',
        'tqdm'

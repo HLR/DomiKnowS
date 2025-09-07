@@ -312,27 +312,8 @@ class InferenceModel(LossModel):
         # Get the constraint labels
         # read_labels will be of format: {'LC{n}/label': label_value}
         read_labels = constraint_datanode.getAttributes()
-        self.inferenceLogger.info(f"Read labels: {list(read_labels.keys())}")
-
-        # Get active constraints based on given constraint labels
-        active_lc_names = set(
-            x.split('/')[0] # TODO: parse this better?
-            for x in read_labels
-        )
-        self.inferenceLogger.info(f"Active constraint names: {active_lc_names}")
-
-        # Set active/inactive constraints
-        lc_no = 0
-        for lc_name, lc in self.graph.logicalConstrains.items():
-            assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
-            lc_no += 1
-            if lc_name in active_lc_names:
-                lc.active = True
-                self.inferenceLogger.debug(f"Constraint '{lc_name}' set to active")
-            else:
-                lc.active = False
-
-        self.inferenceLogger.info(f"Total constraints processed: {lc_no}")
+        
+        datanode.setActiveLCs()
                 
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         # Has the format {'LC{n}': {'lossTensor': tensor, ...}

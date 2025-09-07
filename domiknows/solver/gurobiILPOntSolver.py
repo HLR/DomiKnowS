@@ -1272,6 +1272,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
+            dn.setActiveLCs() # Set active logical constraints in the data node if constraints datanote set
             _lcP = {}
             _lcP[100] = []
             pUsed = False
@@ -1479,7 +1480,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # ----------- Return
         return
-
 
     def log_sorted_solutions(self, solutions_to_log):
         """
