@@ -41,28 +41,22 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
 def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> List[Dict[str, Any]]:
     def create_scene(num_all_objs, total_numbers_each_obj, truth_value):
         def select_number_condition():
-            select_condition = random.randint(0, 4)
+            select_condition = random.randint(0, 1)
             if select_condition == 0:
                 return lambda a: np.sum(a) > 0, "is_cond1"
-            if select_condition == 1:
-                return lambda a: np.sum(np.abs(a)) > 0.2, "is_cond2"
-            if select_condition == 2:
-                return lambda a: np.sum(a) < 0, "is_cond3"
-            return lambda a: np.sum(np.abs(a)) < 0.5, "is_cond4"
+            return lambda a: np.sum(np.abs(a)) > 0.2, "is_cond2"
 
         def select_relation_condition():
-            select_condition = random.randint(0, 4)
+            select_condition = random.randint(0, 1)
             if select_condition == 0:
                 return lambda a, b: a[0] * b[0] >= 0, "is_relation1"
-            if select_condition == 1:
-                return lambda a, b: a[0] * b[0] < 0, "is_relation2"
-            if select_condition == 2:
-                return lambda a, b: a[-1] * b[-1] >= 0, "is_relation3"
-            return lambda a, b: a[-1] * b[-1] < 0, "is_relation4"
+            return lambda a, b: a[-1] * b[-1] < 0, "is_relation2"
 
         current_label = None
+        generate_objects = []
+        logic_str = ""
         while current_label != truth_value:
-            generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
+            generate_objects = [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
             current_label = False
             cond1_condition, cond_x = select_number_condition()
             cond2_condition, cond_y = select_number_condition()
