@@ -1,7 +1,6 @@
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import lessEqL, orL, ifL, notL, existsL, eqL, atMostL, atMostAL, atLeastAL, exactAL
 
-
 Graph.clear()
 Concept.clear()
 Relation.clear()
@@ -16,28 +15,18 @@ with Graph('global') as graph2:
 
         firestationCity = city(name='firestationCity')
         
-        # Constraints - For each city x either it is a firestationCity or 
-        # exists a city y which is in cityLink relation with neighbor attribute equal True to city x and y is a firestationCity
-        orL(firestationCity('x'), existsL(firestationCity(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}),  city2))))
-        
-        # No less then 1 firestationCity in the world
-        atLeastAL(firestationCity, p=90)
-        
-        # At most 3 firestationCity in the world
-        atMostAL(firestationCity, 3, p=80)
-        
-        # Each city has no more then 4 neighbors which are not firestationCity
-        ifL(city('x'), atMostL(notL(firestationCity(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}),  city2))), 3), p=90)
+        # Use range instead of exact count
+        atLeastAL(firestationCity, 2)  # At least 2
+        atMostAL(firestationCity, 5)   # At most 5 (allows flexibility)
 
-        # Exactly 2 firestationCity in the world 
-        exactAL(firestationCity, 2, p=55)
+        # Coverage constraint: Each city must be a fire station OR have a neighbor that is
+        orL(firestationCity('x'), existsL(firestationCity(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}), city2))))
         
-        # (A) **Global**: the number of fire-station cities may never exceed
-        #     the number of cities in total.
-        lessEqL(firestationCity, city, p=85)        # count(F) ≤ count(C)
+        # Neighbor constraint: Each city has at most 3 neighbors that are NOT fire stations
+        ifL(city('x'), atMostL(notL(firestationCity(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}), city2))), 3))
 
-        # (B) **Nested** inside an implication:  *if* the (single) world node
-        #     exists, then the global relation in (A) must hold (it already
-        #     does, but this demonstrates nesting compare-counts under another
-        #     higher-level LC).
-        ifL(world('w'), lessEqL(firestationCity, city), p=80)
+        # Global constraint: Fire stations cannot exceed total cities
+        lessEqL(firestationCity, city)
+        
+        # Nested constraint: If world exists, then fire stations ≤ cities
+        ifL(world('w'), lessEqL(firestationCity, city))

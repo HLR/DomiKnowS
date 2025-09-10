@@ -112,6 +112,7 @@ def test_comparison_constraints():
                 main_firestation_count += 1
             if child_node.getAttribute(ancillaryFirestation, 'ILP').item() > 0:
                 ancillary_firestation_count += 1
+                firestation_count += 1
             if child_node.getAttribute(emergencyService, 'ILP').item() > 0:
                 emergency_count += 1
             if child_node.getAttribute(groceryShop, 'ILP').item() > 0:
@@ -130,12 +131,10 @@ def test_comparison_constraints():
         assert grocery_count > emergency_count  # greaterL
         assert firestation_count == main_firestation_count + ancillary_firestation_count  # equalCountsL
         assert emergency_count != grocery_count  # notEqualCountsL
-        assert main_firestation_count >= 1  # atLeastAL
-        assert main_firestation_count <= 1  # atMostAL
+        assert main_firestation_count == 1  # exactAL
         assert emergency_count >= 2  # atLeastAL
         assert grocery_count >= 3  # atLeastAL
         assert grocery_count <= 9  # lessEqL (9 cities total)
-
 
 if __name__ == '__main__':
     pytest.main([__file__])

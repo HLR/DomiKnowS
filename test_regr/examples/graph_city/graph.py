@@ -25,48 +25,30 @@ with Graph('global') as graph:
     emergencyService = city(name='emergencyService')
     groceryShop = city(name='groceryShop')
     
-    # Original Constraints
-    orL(firestationCity('x'), existsL(firestationCity(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}),  city2))))
-    atLeastAL(firestationCity, p=90)
-    atMostAL(firestationCity, 3, p=80)
-    ifL(city('x'), atMostL(notL(firestationCity(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}),  city2))), 3), p=90)
-    exactAL(firestationCity, 2, p=55)
-    lessEqL(firestationCity, city, p=85)
-    ifL(world('w'), lessEqL(firestationCity, city), p=80)
+    # Fire station composition constraints
+    exactAL(mainFirestation, 1)                    # Exactly 1 main firestation
+    atLeastAL(ancillaryFirestation, 2)             # At least 2 ancillary firestations
+    atMostAL(ancillaryFirestation, 5)              # At most 5 ancillary firestations
+    lessL(mainFirestation, ancillaryFirestation)   # Main < ancillary (1 < 2+)
+    equalCountsL(firestationCity, mainFirestation, ancillaryFirestation)  # Total = main + ancillary
     
-    # New Comparison Constraints
+    # This gives us: firestationCity = 1 + [2,5] = [3,6] total firestations
     
-    # 1. Main firestations should be less than ancillary firestations
-    lessL(mainFirestation, ancillaryFirestation, p=75)
+    # Service hierarchy constraints
+    atLeastAL(emergencyService, 6)                 # At least 6 emergency services
+    atMostAL(emergencyService, 7)                  # At most 7 emergency services  
+    greaterEqL(emergencyService, firestationCity)  # Emergency ≥ firestation (6-7 ≥ 3-6 ✓)
     
-    # 2. Emergency services should be greater than or equal to fire stations
-    greaterEqL(emergencyService, firestationCity, p=85)
+    atLeastAL(groceryShop, 8)                      # At least 8 grocery shops
+    atMostAL(groceryShop, 9)                       # At most 9 grocery shops
+    greaterL(groceryShop, emergencyService)        # Grocery > emergency (8-9 > 6-7 ✓)
     
-    # 3. Grocery shops should be greater than emergency services
-    greaterL(groceryShop, emergencyService, p=80)
+    # Other constraints
+    notEqualCountsL(emergencyService, groceryShop) # Emergency ≠ grocery (different counts ✓)
+    lessEqL(firestationCity, city)                 # Firestations ⊆ cities
+    lessEqL(groceryShop, city)                     # Grocery shops ≤ total cities
     
-    # 4. Total of main and ancillary should equal firestationCity count
-    equalCountsL(firestationCity, mainFirestation, ancillaryFirestation, p=95)
-    
-    # 5. Emergency services should not equal grocery shops (they should be different counts)
-    notEqualCountsL(emergencyService, groceryShop, p=70)
-    
-    # 6. At least 1 main firestation in the world
-    atLeastAL(mainFirestation, 1, p=90)
-    
-    # 7. At most 1 main firestation
-    atMostAL(mainFirestation, 1, p=85)
-    
-    # 8. At least 2 emergency services
-    atLeastAL(emergencyService, 2, p=80)
-    
-    # 9. At least 3 grocery shops
-    atLeastAL(groceryShop, 3, p=75)
-    
-    # 10. Grocery shops should be less than or equal to total cities
-    lessEqL(groceryShop, city, p=90)
-    
-    # 11. Each city with grocery shop should have at least one neighbor with emergency service
+    # Each city with grocery shop should have at least one neighbor with emergency service
     ifL(groceryShop('x'), 
         existsL(emergencyService(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}), city2))), 
         p=70)
