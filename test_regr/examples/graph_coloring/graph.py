@@ -17,7 +17,6 @@ def get_graph(constraint,atmost,atleast,test_number):
         
         firestationCity = city(name='firestationCity_'+str(test_number))
 
-
         atMostAL(firestationCity,atmost)
         atLeastAL(firestationCity,atleast)
 

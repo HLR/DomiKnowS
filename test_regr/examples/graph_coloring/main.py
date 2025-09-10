@@ -1,6 +1,7 @@
 # test_cases.py
 import sys
-sys.path.append('../../../../domiknows/')
+sys.path.append('.')
+sys.path.append('../..')
 
 import torch, argparse
 from domiknows.sensor.pytorch.sensors import ReaderSensor
