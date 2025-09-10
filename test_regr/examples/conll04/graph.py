@@ -43,7 +43,7 @@ with Graph('global') as graph:
         ifL(word('x'), exactL(people(path=('x')), organization(path=('x')), location(path=('x')), other(path=('x')), o(path=('x'))), active = True)
         
         # LC2
-        ifL(pair('x'), exactL(work_for(path=('x')), located_in(path=('x')), live_in(path=('x')), orgbase_on(path=('x')), kill(path=('x'))), active = True)
+        #ifL(pair('x'), exactL(work_for(path=('x')), located_in(path=('x')), live_in(path=('x')), orgbase_on(path=('x')), kill(path=('x'))), active = True)
         
         # LC3
         #ifL(existsL(work_for('x')), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
