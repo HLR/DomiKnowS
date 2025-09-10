@@ -38,8 +38,8 @@ def ckpt_path(lr, epoch_idx, load_epoch_tag, batch, tnorm, subset):
 logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser(description="Logic-guided VQA training / evaluation")
-parser.add_argument("--train-size", type=int, default=None,help="Number of training examples to sample (default: use full set)")
-parser.add_argument("--test-size", type=int, default=None,help="Number of test examples to sample (default: use full set)")
+parser.add_argument("--train-size", type=int, default=10,help="Number of training examples to sample (default: use full set)")
+parser.add_argument("--test-size", type=int, default=10,help="Number of test examples to sample (default: use full set)")
 parser.add_argument("--epochs", type=int, default=4,help="Number of training epochs")
 parser.add_argument("--lr", "--learning-rate", type=float, default=1e-6,help="Learning rate")
 parser.add_argument("--batch-size", type=int, default=1,help="Mini-batch size")

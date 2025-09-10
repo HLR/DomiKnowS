@@ -39,9 +39,7 @@ def create_dataset(N: int, M: int) -> List[Dict[str, Any]]:
 
 
 def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> List[Dict[str, Any]]:
-    def create_scene(num_all_objs, total_numbers_each_obj):
-        generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
-
+    def create_scene(num_all_objs, total_numbers_each_obj, truth_value):
         def select_number_condition():
             select_condition = random.randint(0, 4)
             if select_condition == 0:
@@ -62,31 +60,34 @@ def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> Li
                 return lambda a, b: a[-1] * b[-1] >= 0, "is_relation3"
             return lambda a, b: a[-1] * b[-1] < 0, "is_relation4"
 
-        condition_label = False
-        cond1_condition, cond_x = select_number_condition()
-        cond2_condition, cond_y = select_number_condition()
-        relation_condition, rel_text = select_relation_condition()
+        current_label = None
+        while current_label != truth_value:
+            generate_objects =  [(np.random.rand(total_numbers_each_obj) - np.random.rand(total_numbers_each_obj)).tolist() for _ in range(num_all_objs)]
+            current_label = False
+            cond1_condition, cond_x = select_number_condition()
+            cond2_condition, cond_y = select_number_condition()
+            relation_condition, rel_text = select_relation_condition()
 
-        for i in range(num_all_objs):
-            for j in range(i + 1, num_all_objs):
-                obj1 = generate_objects[i]
-                obj2 = generate_objects[j]
-                cond1 = bool(cond1_condition(obj1))
-                cond2 = bool(cond2_condition(obj2))
-                rel = bool(relation_condition(obj1, obj2))
-                condition_label |= (cond1 & cond2 & rel)
+            for i in range(num_all_objs):
+                for j in range(i + 1, num_all_objs):
+                    obj1 = generate_objects[i]
+                    obj2 = generate_objects[j]
+                    cond1 = bool(cond1_condition(obj1))
+                    cond2 = bool(cond2_condition(obj2))
+                    rel = bool(relation_condition(obj1, obj2))
+                    current_label |= (cond1 & cond2 & rel)
 
-        if not args.constraint_2_existL:
-            logic_str = f"andL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), {cond_y}('y', path=('rel1', obj2)))"
-        else:
-            logic_str = f"andL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
+            if not args.constraint_2_existL:
+                logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), {cond_y}('y', path=('rel1', obj2)))"
+            else:
+                logic_str = f"existsL({cond_x}('x'), {rel_text}('rel1', path=('x', obj1.reversed)), existsL({cond_y}('y', path=('rel1', obj2))))"
 
         # give each object a proper integer index
         return {
             "all_obj": [0],
             "obj_index": list(range(num_all_objs)),  # [0, 1, 2, ...]
             "obj_emb": generate_objects,             # embeddings
-            "condition_label": [condition_label],
+            "condition_label": [current_label],
             "logic_str": logic_str
         }
 
@@ -125,7 +126,7 @@ def create_dataset_relation(args, N: int, M: int, K: int, read_data=False) -> Li
             for i in range(len(test)):
                 test[i]["logic_str"] = test[i]["logic_str"].replace("existsL", "andL")
     else:
-        dataset = [create_scene(M, K) for _ in range(N)]
+        dataset = [create_scene(M, K, truth_value=bool(i%2)) for i in range(N)]
         train, test = train_test_split(dataset, test_size=0.2)
 
     return train, test, [data["condition_label"][0] for data in test]
