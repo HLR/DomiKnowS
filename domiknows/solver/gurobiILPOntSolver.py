@@ -692,7 +692,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.debug('Skipping not active Logical Constraint %r - %s'%(lc,  [str(e) for e in lc.e]))
                 continue
 
-            result = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
+            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
+            result, _ = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -937,15 +938,78 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             return vDns
     
-    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
+    from collections import OrderedDict
+
+    def eliminate_duplicate_columns(self, data_dict, rows_to_consider, data_dict_target):
+        """
+        Eliminates columns that have identical elements across specified rows.
+        
+        Args:
+            data_dict: OrderedDict with row names as keys and lists as values
+            rows_to_consider: List of row names to check for duplicates
+            data_dict_target: OrderedDict with same structure to apply same column elimination
+        
+        Returns:
+            OrderedDict (data_dict_target) with same columns removed
+        """
+        if not rows_to_consider or not data_dict or not data_dict_target:
+            return data_dict_target
+        
+        # Get the length of columns (all rows have same length)
+        first_row = list(data_dict.values())[0]
+        num_columns = len(first_row)
+        
+        # Track which columns to keep
+        columns_to_keep = []
+        
+        for col_idx in range(num_columns):
+            # Get column values for specified rows
+            column_values = []
+            for row_name in rows_to_consider:
+                if row_name in data_dict:
+                    if col_idx >= len(data_dict[row_name]):
+                        continue
+                    column_values.append(data_dict[row_name][col_idx])
+            
+            # Check if there are any duplicate values in this column
+            unique_values = set(str(val) for val in column_values)
+            if len(unique_values) < len(column_values):
+                pass
+            else:
+                columns_to_keep.append(col_idx)
+        
+        # Create new OrderedDict with only non-duplicate columns from target
+        result = OrderedDict()
+        for row_name, row_data in data_dict_target.items():
+            if len(row_data) == 1:
+                try:
+                    # Try tensor indexing first
+                    original_tensor = row_data[0][0]
+                    filtered_tensor = original_tensor[columns_to_keep]
+                    result[row_name] = [[filtered_tensor]]
+                except (TypeError, IndexError):
+                    # Fall back to regular list indexing
+                    result[row_name] = [row_data[i] for i in columns_to_keep]
+            else:
+                # Handle regular list case
+                result[row_name] = [row_data[i] for i in columns_to_keep]
+        
+        return result
+
+    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, lcVariables = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
         if key == None:
             key = ""
             
+        lcRepr = f'{lc.__class__.__name__} {lc.strEs()}' # for debugging
+
         if lcVariablesDns == None:
             lcVariablesDns = OrderedDict()
+
+        if lcVariables == None:
+            lcVariables = OrderedDict()
             
-        lcVariables = OrderedDict()
-        
+        usedVariablesNames = set()
+
         if sample:
             sampleInfo = OrderedDict()
             lcVariablesSet = OrderedDict()
@@ -955,8 +1019,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         firstV = None
         integrate = False
-        
-        for eIndex, e in enumerate(lc.e): 
+        newVariables = {}
+        for eIndex, e in enumerate(lc.e):
             if  isinstance(e, V):
                 continue # Already processed in the previous Concept 
             
@@ -991,23 +1055,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                     vNo[0] += 1
                     
                 if variableName in lcVariables:
-                    newvVariableName = "_x" + str(vNo[0])
+                    newVariableName = "_x" + str(vNo[0])
                     vNo[0] += 1
-                    
-                    lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
+
+                    lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
                     if None in lcVariablesDns:
                         pass
-  
-                    lcVariables[newvVariableName] = lcVariables[variableName]
+
+                    lcVariables[newVariableName] = lcVariables[variableName]
+                    usedVariablesNames.add(variableName)
 
                 elif isinstance(e, (Concept, tuple)): # -- Concept 
                     # -- Get dataNodes candidates 
-                    dnsList = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
+                    dnsList, referedVariables = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
                     lcVariablesDns[variableName] = dnsList
                                 
                     if isinstance(lc, CandidateSelection):
                         continue
                     
+                    if len(referedVariables) == 1:
+                        referedVariable = referedVariables.pop()
+                        
+                        # if referedVariable starts with letter p - meaning it it variable of relation
+                        if referedVariable.startswith('p'):
+                            if referedVariable not in newVariables:
+                                newVariables[referedVariable] = set()
+                            newVariables[referedVariable].add(variableName)
+
                     # -- Get ILP variables from collected DataNodes for the given element of logical constraint
                     
                     conceptName = e[0].name
@@ -1102,12 +1176,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     if sample:
                         sampleInfo[variableName] = sampleInfoForVariable
+                        
+                    usedVariablesNames.add(variableName)
                 
                 if isinstance(e, LcElement):
 
                     if isinstance(e, CandidateSelection): # -- nested LogicalConstrain - process recursively 
-                        lcVariablesDnsNew = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
-                                                                     lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                        lcVariablesDnsNew = self.constructLogicalConstrains(
+                                                                        e, booleanProcessor, m, dn, p, key = key, 
+                                                                        lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
+                                                                        headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                          
                         lcVariablesDns = lcVariablesDnsNew
                         vDns = None
@@ -1126,18 +1204,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.info('Processing Nested %r - %s'%(e, e.strEs()))
 
                         if sample:
-                            vDns, sampleInfoLC, lcVariablesLC = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
-                                                                                   lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                            vDns, sampleInfoLC, lcVariablesLC, lcVariableUpdated = self.constructLogicalConstrains(
+                                                                                e, booleanProcessor, m, dn, p, key = key, 
+                                                                                lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
+                                                                                headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                             sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                             
                             lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
+                            lcVariables = lcVariableUpdated 
                         else:
-                            vDns = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
-                                                                     lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                            vDns, lcVariableUpdated = self.constructLogicalConstrains(
+                                                                    e, booleanProcessor, m, dn, p, key = key, 
+                                                                    lcVariablesDns = lcVariablesDns, lcVariables = lcVariables,
+                                                                    headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                             
                             vDns = self.__addLossTovDns(loss, vDns)
-                        
-                                                    
+                            lcVariables = lcVariableUpdated
+
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
                         return None
@@ -1145,6 +1228,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     countValid = sum(1 for sublist in vDns if sublist and any(elem is not None for elem in sublist))
                     self.myLogger.info('Size of candidate list returned by %s(%s) nested Logical Constraint is %i of which %i is not None'%(e.lcName,e,len(vDns),countValid))
                     lcVariables[variableName] = vDns   
+                    usedVariablesNames.add(variableName)    
             # Int - limit 
             elif isinstance(e, int): 
                 if eIndex == 0:
@@ -1159,34 +1243,42 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
                 return None
-            
+
+        for referedVariable in newVariables: # assume relations are irreflexive
+            refVarSet = newVariables[referedVariable]
+            refVarSet.add(referedVariable)  
+            lcVariables = self.eliminate_duplicate_columns(lcVariablesDns, refVarSet, lcVariables)
+
+        # from lcVariables select used Variables in this lc
+        useLcVariables = {k: v for k, v in lcVariables.items() if k in usedVariablesNames}
+
         if isinstance(lc, CandidateSelection):
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
         elif sample:
-            lcVariablesSet[lc] = lcVariables
-            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet
+            lcVariablesSet[lc] = useLcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet, lcVariables
         elif verify and headLC:
-            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
         else:
             if loss:
                 slpitT = False
-                for v in lcVariables:
-                    if lcVariables[v] and len(lcVariables[v]) > 1:
+                for v in useLcVariables:
+                    if useLcVariables[v] and len(useLcVariables[v]) > 1:
                         slpitT = True
                         break
                     
                 if slpitT:
-                    for v in lcVariables:
-                        if lcVariables[v] and len(lcVariables[v]) > 1:
+                    for v in useLcVariables:
+                        if useLcVariables[v] and len(useLcVariables[v]) > 1:
                             continue
                          
-                        lcVSplitted = torch.split(lcVariables[v][0][0], 1)
-                        lcVariables[v] = []
+                        lcVSplitted = torch.split(useLcVariables[v][0][0], 1)
+                        useLcVariables[v] = []
                         
                         for s in lcVSplitted:
-                            lcVariables[v].append([s]) 
+                            useLcVariables[v].append([s]) 
                     
-            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate)
+            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
     
     # ---------------
                 
@@ -1879,7 +1971,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo, inputLc = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
+                    lossList, sampleInfo, inputLc, _ = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     current_lcLosses['sampleInfo'] = sampleInfo
                     current_lcLosses['input'] = inputLc
@@ -1930,9 +2022,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         for entry in lossList[0]:
                             if entry is not None:
                                 if lossTensor == None:
-                                    lossTensor = entry
+                                    lossTensor = entry[0]
                                 else:
-                                    lossTensor += entry
+                                    lossTensor += entry[0]
                                     
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['conversionTensor'] = 1 - lossTensor
@@ -2096,14 +2188,30 @@ class gurobiILPOntSolver(ilpOntSolver):
                     usedLcSuccesses = lcSuccesses
                     if sampleGlobalLoss:
                         usedLcSuccesses = globalSuccesses
-                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
-                    current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
-                    current_lcLosses['conversion'].append(1 - current_lcLosses['loss'])
-                    current_lcLosses['conversionSigmoid'].append(torch.sigmoid(-current_lcLosses['loss']))
-                    current_lcLosses['conversionClamp'].append(torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0))
 
+                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(
+                        currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples
+                    )
+
+                    # scalar loss for this iteration
+                    loss_val = torch.nansum(lossTensor).item()
+
+                    # keep scalars in the 'loss' list
+                    current_lcLosses['loss'].append(loss_val)
+
+                    # append per-iteration conversions (not extend)
+                    current_lcLosses['conversion'].append(1.0 - loss_val)
+
+                    # sigmoid/clamp 
+                    current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val)))
+                    current_lcLosses['conversionClamp'].append(
+                        torch.clamp(torch.tensor(1.0 - loss_val), min=0.0, max=1.0)
+                    )
+
+                    # per-sample tensors
                     current_lcLosses['lossTensor'].append(lossTensor)
-                    current_lcLosses['conversionTensor'].append(1 - lossTensor)
+                    current_lcLosses['conversionTensor'].append(1.0 - lossTensor)
+
                     current_lcLosses['lcSuccesses'].append(lcSuccesses)
                     current_lcLosses['lcVariables'].append(lcVariables)
             
