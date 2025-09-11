@@ -132,11 +132,6 @@ class SumLayerExplicit(torch.nn.Module):
 
         return out
 
-def print_and_output(x, f=lambda x: x.shape, do_print=False):
-    if do_print:
-        print(prefix + str(f(x)))
-    return x
-
 def build_program(sum_setting=None, digit_labels=False, device='cpu', use_fixedL=True, test=False):
     image['pixels'] = ReaderSensor(keyword='pixels')
 
