@@ -1,5 +1,5 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL,atMostAL,atLeastAL, atMostAL
+from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL,atMostAL,atLeastAL, atMostAL, exactL
 
 Graph.clear()
 Concept.clear()
