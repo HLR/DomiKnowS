@@ -12,7 +12,7 @@ def main():
 
     parser.add_argument('--constraint',
                         dest='constraint',
-                        default="exactL",
+                        default="foreach_bag_existsL",
                         choices=["None",
                                  "simple_constraint",
                                  "foreach_bag_existsL",
@@ -86,8 +86,11 @@ def main():
         for csp_range_datanode in datanode.getChildDataNodes():
             print(*[int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()],end=" | ")
 
-            if not sum([int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()])==2:
+            if args.constraint=="exactL" and not sum([int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()])==2:
                 print("ERROR: number of predicted orbs is not 2 and exactL is not working")
+
+            if args.constraint=="foreach_bag_existsL" and sum([int(orb_node.getAttribute('<colored_orbs>',"ILP").item()) for orb_node in csp_range_datanode.getChildDataNodes()])==0:
+                print("ERROR: number of predicted orbs is not more than 1 and existL is not working")
     print()
 
 if __name__ == '__main__':
