@@ -273,8 +273,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                                     var2)
 
         else:                                        # Product ('P')
-            safe_ratio = torch.where(var1 != 0, var2 / var1, 1)
-            ifSuccess  = torch.minimum(torch.ones_like(var1), safe_ratio)
+            # use torch.where in the denom rather than after the divide
+            # see: https://github.com/pytorch/pytorch/issues/36923
+            safe_ratio = var2 / torch.where(var1 != 0, var1, 1e-4)
+            ifSuccess  = torch.minimum(
+                torch.ones_like(safe_ratio),
+                safe_ratio
+            )
 
         return 1 - ifSuccess if onlyConstrains else ifSuccess
 

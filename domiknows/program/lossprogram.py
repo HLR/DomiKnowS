@@ -251,8 +251,8 @@ class LossProgram(LearningBasedProgram):
             if (
                 self.copt is not None and
                 iter > c_warmup_iters and
-                do_update
-                # iter - c_update_iter > c_update_freq
+                do_update and
+                iter - c_update_iter > c_update_freq
             ):
                 # NOTE: Based on the face the gradient of lambda in dual
                 #       is reversing signs of their gradient in primal,
