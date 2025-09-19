@@ -1,6 +1,8 @@
 import abc
 
-from pkg_resources import resource_filename
+from importlib.resources import files
+def resource_filename(package, resource):
+    return str(files(package) / resource)
 import logging
 from logging.handlers import RotatingFileHandler
 
