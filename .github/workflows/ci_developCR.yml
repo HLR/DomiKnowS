@@ -7,7 +7,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Checks-out the repository branch develop-CLEVER-relations under $GITHUB_WORKSPACE, so the workflow job can access it
       - uses: actions/checkout@v4
+        with:
+          ref: "develop-CLEVER-relations"
 
       - name: Set up Python
         uses: actions/setup-python@v5
