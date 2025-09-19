@@ -31,10 +31,10 @@ jobs:
           # Add subfolder names to this array as needed
           TEST_LIST=(
             'examples/conll04'
-            'examples/graph_coloring'
             'examples/edges'
             'examples/equality'
             'examples/orbs'
+            'examples/graph_coloring'
           )
           
           if [ ${#TEST_LIST[@]} -eq 0 ]; then
