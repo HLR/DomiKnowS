@@ -25,6 +25,17 @@ jobs:
         run: |
          uv sync --extra cpu --extra dev 
 
+      - name: Debug repository structure
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Repository contents:"
+          ls -la
+          echo "Looking for test directories:"
+          find . -name "*test*" -type d | head -20
+          find . -name "*regr*" -type d | head -20
+          find . -name "conll04" -type d | head -10
+          find . -name "example" -type d | head -10
+
       - name: Run regression tests
         run: |
           # List of specific test subfolders to run from test_regr folder
