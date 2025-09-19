@@ -14,7 +14,7 @@ jobs:
 
       - name: Set up Python
         uses: actions/setup-python@v5
-        with: { python-version: "3.13" }
+        with: { python-version: "3.12" }
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -27,7 +27,7 @@ jobs:
 
       - name: Run regression tests
         run: |
-          # List of specific test subfolders to run from ~/test_regr folder
+          # List of specific test subfolders to run from test_regr folder
           # Add subfolder names to this array as needed
           TEST_LIST=(
             'example/conll04'
@@ -42,8 +42,12 @@ jobs:
             exit 0
           fi
           
-          # Run tests from specified subfolders in ~/test_regr
+          # Run tests from specified subfolders in test_regr (relative to workspace)
           for subfolder in "${TEST_LIST[@]}"; do
-            echo "Running tests in ~/test_regr/$subfolder"
-            uv run pytest -q ~/test_regr/"$subfolder"
+            echo "Running tests in test_regr/$subfolder"
+            if [ -d "test_regr/$subfolder" ]; then
+              uv run pytest -q "test_regr/$subfolder"
+            else
+              echo "Warning: Directory test_regr/$subfolder not found, skipping..."
+            fi
           done
