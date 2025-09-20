@@ -4,7 +4,12 @@ DomiKnowS is a Python library that facilitates the integration of domain knowled
 
 While several approaches for integrating symbolic and sub-symbolic models have been introduced, no generic library facilitates programming for such integration with various underlying algorithms. DomiKnowS aims to simplify the programming for knowledge integration in training and inference phases while separating the knowledge representation from learning algorithms.
 
+## Branch Status
 
+| Branch | CI Status |
+|--------|-----------|
+| main | [![CI](https://github.com/HLR/DomiKnowS/actions/workflows/ci_main.yml/badge.svg?branch=main)](https://github.com/HLR/DomiKnowS/actions) |
+| develop-CLEVER-relations | [![CI](https://github.com/HLR/DomiKnowS/actions/workflows/ci_developCR.yml/badge.svg?branch=develop-CLEVER-relations)](https://github.com/HLR/DomiKnowS/actions) |
 
 ## Contents
 
