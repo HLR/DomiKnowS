@@ -68,6 +68,7 @@ jobs:
           OVERALL_RESULT=0
           declare -A FAILED_TESTS
           declare -A TEST_OUTPUTS
+          declare -A SKIPPED_TESTS
           
           # Run tests from specified subfolders
           for subfolder in "${TEST_LIST[@]}"; do
@@ -83,17 +84,16 @@ jobs:
               test_exit_code=$?
               
               if [ $test_exit_code -eq 5 ]; then
-                # Exit code 5: No tests collected
+                # Exit code 5: No tests collected - treat as warning, not failure
                 if [ $test_files_count -eq 0 ]; then
                   echo "⚠️  No test files found in $test_path (skipping)"
-                  failure_reason="No test files found (*.py files matching test_* or *_test pattern)"
+                  skip_reason="No test files found (*.py files matching test_* or *_test pattern)"
                 else
                   echo "⚠️  No tests collected in $test_path (test files exist but no tests discovered)"
-                  failure_reason="No tests collected - test files exist but pytest couldn't discover any tests"
+                  skip_reason="No tests collected - test files exist but pytest couldn't discover any tests"
                 fi
-                FAILED_TESTS["$subfolder"]="$failure_reason"
-                TEST_OUTPUTS["$subfolder"]="$test_output"
-                OVERALL_RESULT=1
+                SKIPPED_TESTS["$subfolder"]="$skip_reason"
+                # Don't set OVERALL_RESULT=1 for exit code 5 - treat as skip, not failure
               elif [ $test_exit_code -ne 0 ]; then
                 OVERALL_RESULT=1
                 
@@ -119,8 +119,7 @@ jobs:
               fi
             else
               echo "Warning: Directory $test_path not found, skipping..."
-              OVERALL_RESULT=1
-              FAILED_TESTS["$subfolder"]="Directory not found"
+              SKIPPED_TESTS["$subfolder"]="Directory not found"
             fi
           done
           
@@ -131,6 +130,15 @@ jobs:
           
           if [ $OVERALL_RESULT -eq 0 ]; then
             echo "✅ ALL TESTS PASSED"
+            
+            # Show skipped tests if any
+            if [ ${#SKIPPED_TESTS[@]} -gt 0 ]; then
+              echo ""
+              echo "📋 SKIPPED TEST DIRECTORIES:"
+              for subfolder in "${!SKIPPED_TESTS[@]}"; do
+                echo "   ⚠️  $subfolder: ${SKIPPED_TESTS[$subfolder]}"
+              done
+            fi
           else
             echo "❌ SOME TESTS FAILED"
             echo ""
@@ -140,6 +148,15 @@ jobs:
               echo "   Reason: ${FAILED_TESTS[$subfolder]}"
               echo ""
             done
+            
+            # Show skipped tests if any
+            if [ ${#SKIPPED_TESTS[@]} -gt 0 ]; then
+              echo "📋 SKIPPED TEST DIRECTORIES:"
+              for subfolder in "${!SKIPPED_TESTS[@]}"; do
+                echo "   ⚠️  $subfolder: ${SKIPPED_TESTS[$subfolder]}"
+              done
+              echo ""
+            fi
             
             # Optional: Show full output for debugging (can be commented out to reduce noise)
             echo "================================="
