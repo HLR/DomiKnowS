@@ -104,71 +104,50 @@ jobs:
               if [ $test_files_count -gt 0 ]; then
                 echo "   📝 Found $test_files_count test file(s):"
                 echo "$test_files"
-              else
-                echo "   ⚠️  No test files found matching patterns test_*.py or *_test.py"
                 
-                # Check for any Python files
-                py_files=$(find "$test_path" -name "*.py" 2>/dev/null)
-                if [ -n "$py_files" ]; then
-                  py_files_count=$(echo "$py_files" | wc -l)
-                  echo "   📝 Found $py_files_count Python file(s) (but not matching test patterns):"
-                  echo "$py_files"
+                # Run each test file individually for detailed reporting
+                subfolder_passed=0
+                subfolder_failed=0
+                subfolder_details=""
+                
+                while IFS= read -r test_file; do
+                  if [ -n "$test_file" ]; then
+                    test_filename=$(basename "$test_file")
+                    echo "   🧪 Running individual test: $test_filename"
+                    
+                    # Run pytest on individual file
+                    individual_output=$(uv run pytest -v --tb=short --no-header "$test_file" 2>&1)
+                    individual_exit_code=$?
+                    
+                    if [ $individual_exit_code -eq 0 ]; then
+                      echo "   ✅ $test_filename: PASSED"
+                      subfolder_details="${subfolder_details}✅ $test_filename: PASSED\n"
+                      ((subfolder_passed++))
+                    elif [ $individual_exit_code -eq 5 ]; then
+                      echo "   ⚠️  $test_filename: NO TESTS COLLECTED"
+                      subfolder_details="${subfolder_details}⚠️  $test_filename: NO TESTS COLLECTED\n"
+                    else
+                      echo "   ❌ $test_filename: FAILED (exit code: $individual_exit_code)"
+                      # Extract failure info for this specific file
+                      file_failure=$(echo "$individual_output" | grep "FAILED\|ERROR\|Exception:" | head -3)
+                      if [ -z "$file_failure" ]; then
+                        file_failure=$(echo "$individual_output" | tail -3)
+                      fi
+                      subfolder_details="${subfolder_details}❌ $test_filename: FAILED - $file_failure\n"
+                      ((subfolder_failed++))
+                      OVERALL_RESULT=1
+                    fi
+                  fi
+                done <<< "$test_files"
+                
+                # Summary for this subfolder
+                if [ $subfolder_failed -eq 0 ]; then
+                  echo "   ✅ All tests in $subfolder PASSED ($subfolder_passed files)"
+                  echo "PASS:$subfolder:$subfolder_details" >> "$RESULTS_FILE"
                 else
-                  py_files_count=0
-                  echo "   📝 No Python files found at all"
+                  echo "   ❌ Some tests in $subfolder FAILED ($subfolder_failed failed, $subfolder_passed passed)"
+                  echo "FAIL:$subfolder:$subfolder_details" >> "$RESULTS_FILE"
                 fi
-              fi
-              
-              echo "   🧪 Running pytest..."
-              echo "   Command: uv run pytest -v --tb=short --no-header \"$test_path\""
-              
-              # Capture both stdout and stderr, with detailed pytest output
-              test_output=$(uv run pytest -v --tb=short --no-header "$test_path" 2>&1)
-              test_exit_code=$?
-              
-              echo "   📊 Pytest exit code: $test_exit_code"
-              echo "   📄 Pytest output length: $(echo "$test_output" | wc -l) lines"
-              echo "   📄 First few lines of pytest output:"
-              echo "$test_output" | head -5
-              
-              if [ $test_exit_code -eq 5 ]; then
-                # Exit code 5: No tests collected - treat as warning, not failure
-                echo "   ⚠️  Exit code 5: No tests collected"
-                if [ $test_files_count -eq 0 ]; then
-                  echo "   📝 Reason: No test files found in directory"
-                  skip_reason="No test files found (*.py files matching test_* or *_test pattern)"
-                else
-                  echo "   📝 Reason: Test files exist but no tests discovered by pytest"
-                  skip_reason="No tests collected - test files exist but pytest couldn't discover any tests"
-                fi
-                SKIPPED_TESTS["$subfolder"]="$skip_reason"
-                echo "SKIP:$subfolder:$skip_reason" >> "$RESULTS_FILE"
-                echo "   ✅ Treating as SKIP (not failure)"
-                # Don't set OVERALL_RESULT=1 for exit code 5 - treat as skip, not failure
-              elif [ $test_exit_code -ne 0 ]; then
-                echo "   ❌ Exit code $test_exit_code: Test failure"
-                OVERALL_RESULT=1
-                
-                # Extract failure summary from pytest output
-                failure_summary=$(echo "$test_output" | grep -A 10 "short test summary info" | tail -n +2 | head -20)
-                if [ -z "$failure_summary" ]; then
-                  # Fallback: look for FAILED lines
-                  failure_summary=$(echo "$test_output" | grep "FAILED\|ERROR\|Exception:" | head -10)
-                fi
-                if [ -z "$failure_summary" ]; then
-                  # Last resort: get last few lines of output
-                  failure_summary=$(echo "$test_output" | tail -10)
-                fi
-                
-                FAILED_TESTS["$subfolder"]="$failure_summary"
-                TEST_OUTPUTS["$subfolder"]="$test_output"
-                echo "FAIL:$subfolder:$failure_summary" >> "$RESULTS_FILE"
-                echo "   📝 Failure details preview:"
-                echo "$failure_summary" | head -3
-              else
-                echo "   ✅ Exit code 0: Tests PASSED"
-                echo "PASS:$subfolder:" >> "$RESULTS_FILE"
-              fi
             else
               echo "   ❌ Directory does not exist: $test_path"
               SKIPPED_TESTS["$subfolder"]="Directory not found"
