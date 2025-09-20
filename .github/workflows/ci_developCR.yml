@@ -27,6 +27,8 @@ jobs:
 
       - name: Run regression tests
         run: |
+          set +e  # Don't exit on first error - we want to handle exit codes manually
+          
           # List of specific test subfolders to run from test_regr
           # Add subfolder names to this array as needed
           TEST_LIST=(
@@ -121,6 +123,8 @@ jobs:
               
               echo "   📊 Pytest exit code: $test_exit_code"
               echo "   📄 Pytest output length: $(echo "$test_output" | wc -l) lines"
+              echo "   📄 First few lines of pytest output:"
+              echo "$test_output" | head -5
               
               if [ $test_exit_code -eq 5 ]; then
                 # Exit code 5: No tests collected - treat as warning, not failure
