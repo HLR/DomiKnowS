@@ -88,7 +88,11 @@ jobs:
               # Check if there are any test files in the directory
               echo "   🔍 Looking for test files..."
               test_files=$(find "$test_path" -name "test_*.py" -o -name "*_test.py" 2>/dev/null)
-              test_files_count=$(echo "$test_files" | grep -c . || echo "0")
+              if [ -n "$test_files" ]; then
+                test_files_count=$(echo "$test_files" | wc -l)
+              else
+                test_files_count=0
+              fi
               
               if [ $test_files_count -gt 0 ]; then
                 echo "   📝 Found $test_files_count test file(s):"
@@ -98,10 +102,13 @@ jobs:
                 
                 # Check for any Python files
                 py_files=$(find "$test_path" -name "*.py" 2>/dev/null)
-                py_files_count=$(echo "$py_files" | grep -c . || echo "0")
-                if [ $py_files_count -gt 0 ]; then
+                if [ -n "$py_files" ]; then
+                  py_files_count=$(echo "$py_files" | wc -l)
                   echo "   📝 Found $py_files_count Python file(s) (but not matching test patterns):"
                   echo "$py_files"
+                else
+                  py_files_count=0
+                  echo "   📝 No Python files found at all"
                 fi
               fi
               
