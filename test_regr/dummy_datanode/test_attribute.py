@@ -1,7 +1,6 @@
-from domiknows.graph.dataNodeDummy import createDummyDataNode, satisfactionReportOfConstraints
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import nandL, orL, andL, existsL, notL, atLeastL, atMostL, ifL
-from domiknows.graph.relation import disjoint
+from domiknows.graph.logicalConstrain import nandL, notL, ifL
+from domiknows.graph.dataNodeDummy import createDummyDataNode, satisfactionReportOfConstraints
 
 Graph.clear()
 Concept.clear()

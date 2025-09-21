@@ -319,7 +319,7 @@ def satisfactionReportOfConstraints(dn):
             lcSatisfaction[lcName] = {}
             lcSatisfactionTest = lcSatisfaction[lcName]
             
-            lcResult, lcVariables, inputLc = \
+            lcResult, lcVariables, inputLc, *extra = \
                 mySolver.constructLogicalConstrains(lc, mySolver.myLcLossSampleBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = True)
             lcSatisfactionTest['lcResult'] = lcResult
             lcSatisfactionTest['lcVariables'] = lcVariables

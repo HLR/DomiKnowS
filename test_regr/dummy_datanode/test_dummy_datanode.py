@@ -1,4 +1,11 @@
 import pytest
+
+import sys
+import os
+
+# Add the current directory to Python path to find graph_multi module
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from domiknows.graph import createDummyDataNode, satisfactionReportOfConstraints
 from graph import graph
 
