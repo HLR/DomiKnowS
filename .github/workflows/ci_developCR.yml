@@ -1,4 +1,4 @@
-name: CI - Continuous Integration for develop-CLEVER-relations  Branch
+name: CI - Continuous Integration for develop-CLEVER-relations Branch
 on:
   push: { branches: [develop-CLEVER-relations] }
   pull_request: { branches: [develop-CLEVER-relations] }
