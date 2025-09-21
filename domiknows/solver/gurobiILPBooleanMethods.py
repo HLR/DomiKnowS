@@ -516,7 +516,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         var = varFixed
         # --
         
-        varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, logicMethodName,  minN=1)
+        varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, logicMethodName,  minN=0)
         S = varsInfo['varSumLinExpr']
         updatedLimit = limit - varsInfo['numberSum']
         

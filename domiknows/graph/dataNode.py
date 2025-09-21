@@ -1037,6 +1037,33 @@ class DataNode:
         else:
             return self
 
+    def _searchConceptsInGraph(self, conceptName, graph, conceptsMap):
+        """Helper method to search for concepts in a given graph.
+        
+        Args:
+            conceptName (str): The name of the concept to find.
+            graph (object): The graph to search in.
+            conceptsMap (dict): The concepts map to store results.
+            
+        Returns:
+            tuple or None: Found concept details or None.
+        """
+        for conceptNameItem in graph.concepts:
+            if conceptName == conceptNameItem:
+                concept = graph.concepts[conceptNameItem]
+                conceptsMap[conceptName] = (concept, concept.name, None, 1)
+                return conceptsMap[conceptName]
+
+            elif isinstance(graph.concepts[conceptNameItem], EnumConcept):
+                vlen = len(graph.concepts[conceptNameItem].enum)
+
+                if conceptName in graph.concepts[conceptNameItem].enum:
+                    concept = graph.concepts[conceptNameItem]
+                    conceptsMap[conceptName] = (concept, conceptName, graph.concepts[conceptNameItem].get_index(conceptName), vlen)
+                    return conceptsMap[conceptName]
+        
+        return None
+    
     # Keeps hashMap of concept name queries in findConcept to results
     conceptsMap = {}
 
@@ -1045,7 +1072,7 @@ class DataNode:
 
         Args:
             conceptName (str or Concept): The name of the concept to find.
-            usedGraph (object): The ontology graph to search within.
+            usedGraph (object): The ontology graph to search within if not provided, defaults to the ontology graph associated with self master graph
 
         Returns:
             tuple or None: A tuple containing details about the found concept or None if not found.
@@ -1055,41 +1082,38 @@ class DataNode:
 
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
+            if usedGraph.sup:
+                usedGraph = usedGraph.sup
 
+        if isinstance(conceptName, Concept):
+            conceptName = conceptName.name()
+
+        # Initialize concepts map for usedGraph if not exists
         if usedGraph not in self.conceptsMap:
             self.conceptsMap[usedGraph] = {}
 
         usedGraphConceptsMap = self.conceptsMap[usedGraph]
 
-        if isinstance(conceptName, Concept):
-            conceptName = conceptName.name()
-
+        # Check cache first
         if conceptName in usedGraphConceptsMap:
             return usedGraphConceptsMap[conceptName]
 
-        subGraph_keys = [key for key in usedGraph._objs]
+        # Search in main graph
+        result = self._searchConceptsInGraph(conceptName, usedGraph, usedGraphConceptsMap)
+        if result:
+            return result
+
+        # Search in subgraphs
+        subGraph_keys = [key for key in usedGraph.subgraphs]
         for subGraphKey in subGraph_keys:
-            subGraph = usedGraph._objs[subGraphKey]
+            subGraph = usedGraph.subgraphs[subGraphKey]
+            result = self._searchConceptsInGraph(conceptName, subGraph, usedGraphConceptsMap)
+            if result:
+                return result
 
-            for conceptNameItem in subGraph.concepts:
-                if conceptName == conceptNameItem:
-                    concept = subGraph.concepts[conceptNameItem]
-
-                    usedGraphConceptsMap[conceptName] =  (concept, concept.name, None, 1)
-                    return usedGraphConceptsMap[conceptName]
-
-                elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
-                    vlen = len(subGraph.concepts[conceptNameItem].enum)
-
-                    if conceptName in subGraph.concepts[conceptNameItem].enum:
-                        concept = subGraph.concepts[conceptNameItem]
-
-                        usedGraphConceptsMap[conceptName] = (concept, conceptName, subGraph.concepts[conceptNameItem].get_index(conceptName), vlen)
-                        return usedGraphConceptsMap[conceptName]
-
+        # Not found
         usedGraphConceptsMap[conceptName] = None
-
-        return usedGraphConceptsMap[conceptName]
+        return None
 
     def isRelation(self, conceptRelation, usedGraph = None):
         """Check if a concept is a relation.
@@ -1186,6 +1210,9 @@ class DataNode:
 
         # Process founded concepts - translate them to tuple form with more information needed for logical constraints and metrics
         for c in candR:
+            if not self.findConcept(c):
+                continue
+            
             _concept = self.findConcept(c)[0]
 
             if _concept is None:

@@ -84,7 +84,7 @@ class Graph(BaseGraphTree):
                 constraint = Concept(name="constraint")
                 self.constraint = constraint
 
-                return parent_obj
+        return self  # Return self (the current graph), not parent_obj
 
     def get_constraint_concept(self):
         if self.constraint is None:

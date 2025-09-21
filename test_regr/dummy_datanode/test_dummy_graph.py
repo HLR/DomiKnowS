@@ -6,12 +6,6 @@ from domiknows.graph.dataNodeDummy import createDummyDataNode, satisfactionRepor
 
 class TestDummyGraph:
     
-    def setup_method(self):
-        """Setup method called before each test method"""
-        Graph.clear()
-        Concept.clear()
-        Relation.clear()
-    
     def test_graph_creation_and_constraints(self):
         """Test graph creation with logical constraints"""
         with Graph('test_graph') as graph:
