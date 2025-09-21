@@ -1261,6 +1261,10 @@ class DataNode:
     def setActiveLCs(self):
         # Try to get the datanode for the constraints concept
 
+        # If no builder or no constraint datanode then return 
+        if not self.myBuilder:
+            return
+
         constraint_concept = self.graph.get_constraint_concept()
         constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
         if len(constraint_dn_search) == 0:
