@@ -2,7 +2,6 @@ import sys
 import pytest
 from transformers import BertTokenizer
 
-import torch.tensor
 import torch
 
 sys.path.append('.')

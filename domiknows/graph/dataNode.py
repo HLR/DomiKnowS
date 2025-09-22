@@ -107,6 +107,17 @@ class DataNode:
         self.gurobiModel = None
 
         self.myLoggerTime = getRegrTimer_logger()
+        
+    @classmethod
+    def clear(cls):
+        """Clear DataNode class state.
+        
+        This method resets the class-level ID counter and clears any cached
+        state to ensure clean state for testing and other scenarios where 
+        DataNode instances need to be reset.
+        """
+        cls._ids = count(1)
+        cls.conceptsMap = {}
 
     def __eq__(self, other):
         """Two DataNodes are equal if they carry the same numerical id."""
@@ -1063,9 +1074,6 @@ class DataNode:
                     return conceptsMap[conceptName]
         
         return None
-    
-    # Keeps hashMap of concept name queries in findConcept to results
-    conceptsMap = {}
 
     def findConcept(self, conceptName, usedGraph = None):
         """Find concept based on the name in the ontology graph.

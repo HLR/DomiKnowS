@@ -1,16 +1,12 @@
 import sys
 from typing import Any
 import pytest
-from transformers import BertTokenizer
 
-import torch.tensor
 import torch
-
 
 sys.path.append('.')
 sys.path.append('../../..')
 sys.path.append('../../../examples/ACE05')
-
 
 def test_edge_main():
     from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
