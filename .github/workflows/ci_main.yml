@@ -37,9 +37,12 @@ jobs:
             echo "No test subfolders specified in TEST_LIST. Skipping test execution."
             exit 0
           fi
+
+          TEST_BASE_DIR="test_regr"
+          echo "Using test base directory: $TEST_BASE_DIR"
           
           # Run tests from specified subfolders in ~/test_regr
           for subfolder in "${TEST_LIST[@]}"; do
-            echo "Running tests in ~/test_regr/$subfolder"
-            uv run pytest -q ~/test_regr/"$subfolder"
+            echo "Running tests in $TEST_BASE_DIR/$subfolder"
+            uv run pytest -q "$TEST_BASE_DIR/$subfolder"
           done

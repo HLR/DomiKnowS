@@ -61,14 +61,20 @@ def intersection_of_lists(lists):
     return ordered_common_elements
 
 def findDatanodesForRootConcept(dn, rootConcept):
+    if isinstance(rootConcept, str):
+        print(f"Warning: rootConcept {rootConcept} is a string, expected a Concept or Relation object.")
+    
+    # Check if rootConcept is a string
+    concept_name = rootConcept if isinstance(rootConcept, str) else rootConcept.name
+    
     if dn.myBuilder != None and "DataNodesConcepts" in dn.myBuilder:
-        if rootConcept.name in dn.myBuilder["DataNodesConcepts"]:
-            return dn.myBuilder["DataNodesConcepts"][rootConcept.name]
+        if concept_name in dn.myBuilder["DataNodesConcepts"]:
+            return dn.myBuilder["DataNodesConcepts"][concept_name]
 
     dns = dn.findDatanodes(select = rootConcept)
     
     if dn.myBuilder != None:
-        dn.myBuilder["DataNodesConcepts"][rootConcept.name] = dns
+        dn.myBuilder["DataNodesConcepts"][concept_name] = dns
         
     return dns
     
