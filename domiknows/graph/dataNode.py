@@ -8,14 +8,11 @@ from .dataNodeConfig import dnConfig
 
 from ordered_set import OrderedSet
 
-from domiknows import getRegrTimer_logger, getProductionModeStatus
+from domiknows import getRegrTimer_logger, getProductionModeStatus, graph, setup_logger
 from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
 from domiknows.graph.relation import Contains
 
-
-import logging
-from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept, EnumConcept
 
@@ -23,53 +20,13 @@ import graphviz
 
 from sklearn import metrics
 
-logName = __name__
-logLevel = logging.CRITICAL
-logFilename='datanode.log'
-logFilesize=5*1024*1024*1024
-logBackupCount=4
-logFileMode='a'
+# For your DataNode logging setup:
+_DataNode__Logger = setup_logger(dnConfig, 'datanode.log')
 
-if dnConfig and (isinstance(dnConfig, dict)):
-    if 'log_name' in dnConfig:
-        logName = dnConfig['log_name']
-    if 'log_level' in dnConfig:
-        logLevel = dnConfig['log_level']
-    if 'log_filename' in dnConfig:
-        logFilename = dnConfig['log_filename']
-    if 'log_filesize' in dnConfig:
-        logFilesize = dnConfig['log_filesize']
-    if 'log_backupCount' in dnConfig:
-        logBackupCount = dnConfig['log_backupCount']
-    if 'log_fileMode' in dnConfig:
-        logFileMode = dnConfig['log_fileMode']
-
-# Create file handler and set level to info
-import pathlib
-pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
-ch = RotatingFileHandler(logFilename, mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
-ch.doRollover()
-# Create formatter
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-# Add formatter to ch
-ch.setFormatter(formatter)
-print("Log file for %s is in: %s"%(logName,ch.baseFilename))
-
-# --- Create loggers
-_DataNode__Logger  = logging.getLogger(logName)
-_DataNode__Logger.setLevel(logLevel)
-# Add ch to logger
-_DataNode__Logger.addHandler(ch)
-# Don't propagate
-_DataNode__Logger.propagate = False
-
-# --- Create loggers
-_DataNodeBuilder__Logger  = logging.getLogger("dataNodeBuilder")
-_DataNodeBuilder__Logger.setLevel(logLevel)
-# Add ch to logger
-_DataNodeBuilder__Logger.addHandler(ch)
-# Don't propagate
-_DataNodeBuilder__Logger.propagate = False
+# For DataNodeBuilder - create separate config or use same handler
+datanode_builder_config = dnConfig.copy() if dnConfig else {}
+datanode_builder_config['log_name'] = 'dataNodeBuilder'
+_DataNodeBuilder__Logger = setup_logger(datanode_builder_config, 'datanode.log')
 
 _DataNodeBuilder__Logger.info('--- Starting new run ---')
 
@@ -151,6 +108,14 @@ class DataNode:
 
         self.myLoggerTime = getRegrTimer_logger()
 
+    def __eq__(self, other):
+        """Two DataNodes are equal if they carry the same numerical id."""
+        return isinstance(other, DataNode) and self.id == other.id
+
+    def __hash__(self):
+        """Hash on the immutable id so the object is usable in sets / dicts."""
+        return hash(self.id)
+    
     class DataNodeError(Exception):
         """Exception raised for DataNode-related errors."""
         pass
@@ -1072,6 +1037,33 @@ class DataNode:
         else:
             return self
 
+    def _searchConceptsInGraph(self, conceptName, graph, conceptsMap):
+        """Helper method to search for concepts in a given graph.
+        
+        Args:
+            conceptName (str): The name of the concept to find.
+            graph (object): The graph to search in.
+            conceptsMap (dict): The concepts map to store results.
+            
+        Returns:
+            tuple or None: Found concept details or None.
+        """
+        for conceptNameItem in graph.concepts:
+            if conceptName == conceptNameItem:
+                concept = graph.concepts[conceptNameItem]
+                conceptsMap[conceptName] = (concept, concept.name, None, 1)
+                return conceptsMap[conceptName]
+
+            elif isinstance(graph.concepts[conceptNameItem], EnumConcept):
+                vlen = len(graph.concepts[conceptNameItem].enum)
+
+                if conceptName in graph.concepts[conceptNameItem].enum:
+                    concept = graph.concepts[conceptNameItem]
+                    conceptsMap[conceptName] = (concept, conceptName, graph.concepts[conceptNameItem].get_index(conceptName), vlen)
+                    return conceptsMap[conceptName]
+        
+        return None
+    
     # Keeps hashMap of concept name queries in findConcept to results
     conceptsMap = {}
 
@@ -1080,7 +1072,7 @@ class DataNode:
 
         Args:
             conceptName (str or Concept): The name of the concept to find.
-            usedGraph (object): The ontology graph to search within.
+            usedGraph (object): The ontology graph to search within if not provided, defaults to the ontology graph associated with self master graph
 
         Returns:
             tuple or None: A tuple containing details about the found concept or None if not found.
@@ -1090,41 +1082,38 @@ class DataNode:
 
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
+            if usedGraph.sup:
+                usedGraph = usedGraph.sup
 
+        if isinstance(conceptName, Concept):
+            conceptName = conceptName.name()
+
+        # Initialize concepts map for usedGraph if not exists
         if usedGraph not in self.conceptsMap:
             self.conceptsMap[usedGraph] = {}
 
         usedGraphConceptsMap = self.conceptsMap[usedGraph]
 
-        if isinstance(conceptName, Concept):
-            conceptName = conceptName.name()
-
+        # Check cache first
         if conceptName in usedGraphConceptsMap:
             return usedGraphConceptsMap[conceptName]
 
-        subGraph_keys = [key for key in usedGraph._objs]
+        # Search in main graph
+        result = self._searchConceptsInGraph(conceptName, usedGraph, usedGraphConceptsMap)
+        if result:
+            return result
+
+        # Search in subgraphs
+        subGraph_keys = [key for key in usedGraph.subgraphs]
         for subGraphKey in subGraph_keys:
-            subGraph = usedGraph._objs[subGraphKey]
+            subGraph = usedGraph.subgraphs[subGraphKey]
+            result = self._searchConceptsInGraph(conceptName, subGraph, usedGraphConceptsMap)
+            if result:
+                return result
 
-            for conceptNameItem in subGraph.concepts:
-                if conceptName == conceptNameItem:
-                    concept = subGraph.concepts[conceptNameItem]
-
-                    usedGraphConceptsMap[conceptName] =  (concept, concept.name, None, 1)
-                    return usedGraphConceptsMap[conceptName]
-
-                elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
-                    vlen = len(subGraph.concepts[conceptNameItem].enum)
-
-                    if conceptName in subGraph.concepts[conceptNameItem].enum:
-                        concept = subGraph.concepts[conceptNameItem]
-
-                        usedGraphConceptsMap[conceptName] = (concept, conceptName, subGraph.concepts[conceptNameItem].get_index(conceptName), vlen)
-                        return usedGraphConceptsMap[conceptName]
-
+        # Not found
         usedGraphConceptsMap[conceptName] = None
-
-        return usedGraphConceptsMap[conceptName]
+        return None
 
     def isRelation(self, conceptRelation, usedGraph = None):
         """Check if a concept is a relation.
@@ -1221,6 +1210,9 @@ class DataNode:
 
         # Process founded concepts - translate them to tuple form with more information needed for logical constraints and metrics
         for c in candR:
+            if not self.findConcept(c):
+                continue
+            
             _concept = self.findConcept(c)[0]
 
             if _concept is None:
@@ -1293,6 +1285,44 @@ class DataNode:
 
         return myilpOntSolver, _conceptsRelations
 
+    def setActiveLCs(self):
+        # Try to get the datanode for the constraints concept
+
+        # If no builder or no constraint datanode then return 
+        if not self.myBuilder:
+            return
+
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
+        if len(constraint_dn_search) == 0:
+           return 
+        elif len(constraint_dn_search) > 1:
+            raise ValueError(f'Multiple constraint datanodes (for concept {constraint_concept.name}) found: found {len(constraint_dn_search)}, expected one.')
+
+        constraint_datanode = constraint_dn_search[0]
+
+        # Get the constraint labels
+        # read_labels will be of format: {'LC{n}/label': label_value}
+        read_labels = constraint_datanode.getAttributes()
+
+        # Get active constraints based on given constraint labels
+        active_lc_names = set(
+            x.split('/')[0] # TODO: parse this better?
+            for x in read_labels
+        )
+
+        # Set active/inactive constraints
+        lc_no = 0
+        for lc_name, lc in self.graph.logicalConstrains.items():
+            assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
+            lc_no += 1
+            if lc_name in active_lc_names:
+                lc.active = True
+            else:
+                lc.active = False
+                
+        return read_labels
+                
     #----------------- Solver methods
 
     def collectInferredResults(self, concept, inferKey):
@@ -1765,6 +1795,7 @@ class DataNode:
         Returns:
         - None: This function operates in-place and does not return a value.
         """
+
         if not _conceptsRelations:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference.')
         else:
@@ -1928,7 +1959,6 @@ class DataNode:
                                                   conceptsRelations=conceptsRelations)
 
         return lcResult
-
 
     def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
         """
@@ -2249,17 +2279,56 @@ class DataNodeBuilder(dict):
         if args:
             dict.__setitem__(self, "data_item", args[0])
 
+    def __contains__(self, key):
+        """
+        Overloaded __contains__ method for the DataNodeBuilder class.
+        This method checks if the key is present in the dictionary-like object,
+        filtering out DataNodes with ontology node name "constraint".
+
+        Parameters:
+        -----------
+        key : any hashable type
+            The key to be checked for existence in the dictionary.
+
+        Returns:
+        --------
+        bool
+            True if the key exists and is not filtered out, False otherwise.
+        """
+        if not dict.__contains__(self, key):
+            return False
+        
+        # If key is 'dataNode', check if any non-constraint DataNodes exist
+        if key == 'dataNode':
+            existing_dns = dict.__getitem__(self, key)
+            if existing_dns:
+                # Filter out constraint DataNodes
+                filtered_dns = [dn for dn in existing_dns 
+                            if dn.getOntologyNode().name != "constraint"]
+                return len(filtered_dns) > 0
+        
+        return True
+
     def __getitem__(self, key):
         """
-        Override dictionary's __getitem__ to fetch item for a given key.
+        Override dictionary's __getitem__ to fetch item for a given key,
+        filtering out DataNodes with ontology node name "constraint".
 
         Parameters:
         - key: The key to look for in the dictionary.
 
         Returns:
-        The value associated with the provided key.
+        The value associated with the provided key, with constraint DataNodes filtered out.
         """
-        return dict.__getitem__(self, key)
+        value = dict.__getitem__(self, key)
+        
+        # If key is 'dataNode', filter out constraint DataNodes
+        if key == 'dataNode' and value:
+            filtered_dns = [dn for dn in value 
+                        if dn.getOntologyNode().name != "constraint"]
+            return filtered_dns
+        
+        return value
 
     def __changToTuple(self, v):
         """
@@ -2472,46 +2541,6 @@ class DataNodeBuilder(dict):
             if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
                 conceptInfo['relationAttrData'] = True
 
-    def __isRootDn(self, testedDn, checkedDns, visitedDns):
-        """
-        Determine if a given DataNode (testedDn) is a root node in the graph based on its impactLinks.
-
-        Args:
-            testedDn (DataNode): The DataNode object that is being tested for its 'root' status.
-            checkedDns (set): A set of DataNodes that have already been examined or should be considered for this check.
-            visitedDns (set, optional): A set of DataNodes that have already been visited during recursion to avoid infinite loops.
-
-        Returns:
-            bool: Returns True if the testedDn is a root node, False otherwise.
-
-        Note:
-            - The method is recursive and visits each node only once to avoid infinite loops.
-            - 'impactLinks' is an attribute of DataNode that shows which DataNodes impact the current DataNode.
-        """
-        if visitedDns == None:
-            visitedDns = set()
-
-        visitedDns.add(testedDn)
-
-        if not testedDn.impactLinks and testedDn in checkedDns:
-            return False
-
-        isRoot = True
-        for _, iDnList in testedDn.impactLinks.items(): # Check if its impacts are connected to Dn in the new Root list
-            if iDnList:
-                for iDn in iDnList:
-                    if iDn in visitedDns:
-                        continue
-
-                    if self.__isRootDn(iDn, checkedDns, visitedDns):
-                        isRoot = False
-                        break
-
-            if not isRoot:
-                break
-
-        return isRoot
-
     def __updateRootDataNodeList(self, *dns):
         """
         Update the list of root dataNodes in the dictionary based on newly added dataNodes and existing ones.
@@ -2554,20 +2583,8 @@ class DataNodeBuilder(dict):
 
         # -- Update list of existing root dataNotes
 
-        # Will be used to store new root dataNodes
-        newDnsRoots = []
-
-        # Loop over all known unique dataNodes
-        #for dnE in allDns:
-        # Check if the dataNode is a root dataNode because it has no impact link
-        # if not dnE.impactLinks: # Has no impact link
-        #     if dnE not in newDnsRoots: # Not yet in the new Root list
-        #         # Add it to the new Root list
-        #         newDnsRoots.append(dnE)
-        # else:
-        #     # Check if the current dataNode is still a root dataNode
-        #     if self.__isRootDn(dnE, dnsRoots, visitedDns = None):
-        #         newDnsRoots.append(dnE)
+        # Will be used to store datanotes with no incoming links
+        noIncomingDNs = []
 
         # Count the number of incoming links for each dataNode
         incomingLinks = {dn: 0 for dn in allDns}
@@ -2585,18 +2602,25 @@ class DataNodeBuilder(dict):
                     incomingLinks[dn] = 1
 
         # Find the root dataNodes which have no incoming links
-        newDnsRoots = [dn for dn in allDns if incomingLinks[dn] == 0 or not dn.impactLinks]
-        newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
+        noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
+        noIncomingDNs = sorted(noIncomingDNs, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
+
+        newDnsRoots = noIncomingDNs
+        
+        # Remove any dataNodes from dnsRoots that are not in newDnsRoots
+        dnsRoots = [dn for dn in dnsRoots if dn in newDnsRoots]
 
         # if newDnsRoots is empty
         if not newDnsRoots:
             newDnsRoots = allDns
-            #newDnsRoots = sorted(newDnsRoots, key=lambda dn: incomingLinks[dn], reverse=True)
             newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # Set the updated root list
         if not getProductionModeStatus():
             _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
+        if newDnsRoots:
+            if newDnsRoots[0].ontologyNode._is_constraint_concept(): newDnsRoots = newDnsRoots[1:]+[newDnsRoots[0]]
+
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
         return
@@ -2928,6 +2952,7 @@ class DataNodeBuilder(dict):
             keyDataName (str): The name of the key for which the data node is being updated.
 
         """
+        # print(keyDataName)
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
@@ -3554,15 +3579,22 @@ class DataNodeBuilder(dict):
         """
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
-            if len(existingDns) == 1:
-                rootDn = existingDns[0]
+
+            noRelationRoots = []
+            for dn in existingDns:
+                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes
+                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                    noRelationRoots.append(dn)
+
+            if len(noRelationRoots) == 1:
+                rootDn = noRelationRoots[0]
                 if not getProductionModeStatus():
                     _DataNodeBuilder__Logger.info(f'No new Batch Root DataNode created - DataNode Builder already has single Root DataNode with id {rootDn.instanceID} of type {rootDn.getOntologyNode().name}')
                 return
 
             # Check if there are more than one type of DataNodes in the builder
             typesInDNs = set()
-            for i, d in enumerate(existingDns):
+            for i, d in enumerate(noRelationRoots):
                 typesInDNs.add(d.getOntologyNode().name)
 
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
@@ -3571,7 +3603,7 @@ class DataNodeBuilder(dict):
                 return
 
             # Create the Batch Root DataNode
-            supGraph = existingDns[1].getOntologyNode().sup
+            supGraph = noRelationRoots[1].getOntologyNode().sup
             if supGraph is None:
                 raise ValueError('Not able to create Batch Root DataNode - existing DataNodes in the Builder have concept type %s not connected to any graph: %s'%(typesInDNs))
 
@@ -3586,7 +3618,7 @@ class DataNodeBuilder(dict):
 
             batchRootDN = DataNode(myBuilder = self, instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
 
-            for i, d in enumerate(existingDns):
+            for i, d in enumerate(noRelationRoots):
                 batchRootDN.addChildDataNode(d)
 
             # The new Root DataNode it the batch Root DataNode
@@ -3647,9 +3679,15 @@ class DataNodeBuilder(dict):
         # If DataNode it created then return it
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
+            
+            noRelationRoots = []
+            for dn in existingDns:
+                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
+                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                    noRelationRoots.append(dn)
 
-            if len(existingDns) != 0:
-                returnDn = existingDns[0]
+            if len(noRelationRoots) != 0:
+                returnDn = noRelationRoots[0]
 
                 # Set the torch device
                 returnDn.current_device = device
@@ -3658,10 +3696,10 @@ class DataNodeBuilder(dict):
                     if torch.cuda.is_available():
                         returnDn.current_device = 'cuda'
 
-                if len(existingDns) != 1:
-                    typesInDNs = {d.getOntologyNode().name for d in existingDns[1:]}
-                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
-                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                if len(noRelationRoots) != 1:
+                    typesInDNs = {d.getOntologyNode().name for d in noRelationRoots[1:]}
+                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
+                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
                 else:
                     if not getProductionModeStatus():
                         _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
@@ -3732,13 +3770,19 @@ class DataNodeBuilder(dict):
 
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
+            
+            noRelationRoots = []
+            for dn in existingDns:
+                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
+                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                    noRelationRoots.append(dn)
 
-            if len(existingDns) > 0:
+            if len(noRelationRoots) > 0:
 
                 if not getProductionModeStatus():
-                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(existingDns),existingDns))
+                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(noRelationRoots),noRelationRoots))
 
-                return existingDns
+                return noRelationRoots
 
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNodes')
         return None

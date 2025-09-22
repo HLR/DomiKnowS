@@ -1,0 +1,45 @@
+name: CI - Continuous Integration for Main Branch
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Resolve & install
+        run: |
+         uv sync --extra cpu --extra dev 
+
+      - name: Run regression tests
+        run: |
+          # List of specific test subfolders to run from ~/test_regr folder
+          # Add subfolder names to this array as needed
+          TEST_LIST=(
+            'solver'
+            'dummy_datanode'
+            'example/conll04'
+            'example/orbs'
+          )
+          
+          if [ ${#TEST_LIST[@]} -eq 0 ]; then
+            echo "No test subfolders specified in TEST_LIST. Skipping test execution."
+            exit 0
+          fi
+          
+          # Run tests from specified subfolders in ~/test_regr
+          for subfolder in "${TEST_LIST[@]}"; do
+            echo "Running tests in ~/test_regr/$subfolder"
+            uv run pytest -q ~/test_regr/"$subfolder"
+          done

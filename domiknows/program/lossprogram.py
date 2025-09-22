@@ -4,11 +4,11 @@ import numpy as np
 from tqdm import tqdm
 
 from domiknows.program.model.pytorch import SolverModel
-
+#from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
-from .model.lossModel import PrimalDualModel, SampleLossModel
+from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
 from .model.base import Mode
 
 from .model.gbi import GBIModel
@@ -77,6 +77,9 @@ class LossProgram(LearningBasedProgram):
         c_freq_increase_freq=1,
         c_lr_decay=4,  # strategy
         c_lr_decay_param=1,  # param in the strategy
+        batch_size = 1,
+        dataset_size = None, # provide dataset_size if dataset does not have len implemented
+        print_loss = True, # print loss on each grad update
         **kwargs):
         
         # if COptim is None:
@@ -102,6 +105,9 @@ class LossProgram(LearningBasedProgram):
             c_lr_decay=c_lr_decay,
             c_lr_decay_param=c_lr_decay_param,
             c_session=c_session,
+            batch_size=batch_size,
+            dataset_size=dataset_size,
+            print_loss=print_loss,
             **kwargs)
     
     def call_epoch(self, name, dataset, epoch_fn, **kwargs):
@@ -170,7 +176,14 @@ class LossProgram(LearningBasedProgram):
         c_lr_decay=0,  # strategy
         c_lr_decay_param=1,
         c_session={},
+        batch_size = 1,
+        dataset_size = None, # provide dataset_size if dataset does not have len implemented
+        print_loss = True, # print loss on each grad update
         **kwargs):
+
+        if batch_size < 1:
+            raise ValueError(f'batch_size must be at least 1, but got batch_size={batch_size}')
+
         assert c_session
         from torch import autograd
         torch.autograd.set_detect_anomaly(False)
@@ -184,11 +197,18 @@ class LossProgram(LearningBasedProgram):
         self.model.reset()
         self.cmodel.train()
         self.cmodel.reset()
-        for data in dataset:
-            if self.opt is not None:
-                self.opt.zero_grad()
-            if self.copt is not None:
-                self.copt.zero_grad()
+
+        # try to get the number of iterations
+        num_data_iters = dataset_size
+        if num_data_iters is None:
+            if not hasattr(dataset, '__len__'):
+                raise ValueError(f'dataset must have attribute __len__ if dataset_size is not provided')
+
+            num_data_iters = len(dataset)
+
+        batch_loss = 0.0 # track accumulated loss across batch for logging
+        for data_idx, data in enumerate(dataset):
+            # forward pass
             mloss, metric, *output = self.model(data)  # output = (datanode, builder)
             if iter < c_warmup_iters:
                 loss = mloss
@@ -196,17 +216,42 @@ class LossProgram(LearningBasedProgram):
                 closs, *_ = self.cmodel(output[1])
                 if torch.is_nonzero(closs):
                     loss = mloss + self.beta * closs
-                    self.logger.info('closs is not zero')
+                    # self.logger.info('closs is not zero')
                 else:
                     loss = mloss
-            if self.opt is not None and loss:
-                loss.backward()
+
+            if not loss:
+                continue
+
+            # get hypothetical position in the batch
+            batch_pos = data_idx % batch_size
+
+            # calculate gradients for item
+            loss /= batch_size
+            batch_loss += loss.item()
+            loss.backward()
+
+            # only update if we're the last item in the batch
+            # or if we're the last item in the dataset
+            do_update = (
+                (batch_pos == (batch_size - 1)) or
+                (data_idx == (num_data_iters - 1))
+            )
+
+            # log loss on each update
+            if do_update:
+                # self.logger.info(f'loss (i={data_idx}) = {batch_loss:.3f}')
+                pass
+
+            # do backwards pass update
+            if self.opt is not None and do_update:
                 self.opt.step()
-                iter += 1
+            iter += 1
+
             if (
                 self.copt is not None and
-                loss and
                 iter > c_warmup_iters and
+                do_update and
                 iter - c_update_iter > c_update_freq
             ):
                 # NOTE: Based on the face the gradient of lambda in dual
@@ -252,7 +297,16 @@ class LossProgram(LearningBasedProgram):
                     raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
                 for param_group in self.copt.param_groups:
                     param_group['lr'] = update_lr(param_group['lr'])
+            
             yield (loss, metric, *output[:1])
+
+            # only zero out grads & loss tracker if we've done an update
+            if do_update:
+                batch_loss = 0.0
+                if self.opt is not None:
+                    self.opt.zero_grad()
+                if self.copt is not None:
+                    self.copt.zero_grad()
 
         c_session['iter'] = iter
         c_session['c_update_iter'] = c_update_iter
@@ -287,7 +341,56 @@ class PrimalDualProgram(LossProgram):
 
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
-        
+
+class InferenceProgram(LossProgram):
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
+
+    def evaluate_condition(self, evaluate_data, device="cpu"):
+        acc = 0
+        total = 0
+
+        for datanode in tqdm(self.populate(evaluate_data, device=device), total=len(evaluate_data), desc="Evaluating"):
+
+            # Finding the label of constraints/condition
+            find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
+            if len(find_constraints_label) < 1:
+                self.logger.error("No Constraint Labels found")
+                continue
+            find_constraints_label = find_constraints_label[0]
+            constraint_labels_dict = find_constraints_label.getAttributes()
+            active_lc_name = set(x.split('/')[0] for x in constraint_labels_dict)
+
+            # Follow code for set active/non-active before querying
+            for lc_name, lc in self.graph.logicalConstrains.items():
+                assert lc_name == str(lc)
+
+                if lc_name in active_lc_name:
+                    lc.active = True
+                else:
+                    lc.active = False
+
+            total += 1
+            # Inference the final output
+            verify_constrains = datanode.verifyResultsLC()
+            if not verify_constrains:
+                continue
+            # Getting label of constraints and convert to 0-1
+            verify_constrains = {k: v for k, v in verify_constrains.items() if k in active_lc_name}
+
+            condition_list = [1 if verify_constrains[lc]["satisfied"] == 100.0 else 0 for lc in verify_constrains]
+            constraint_labels = [int(constraint_labels_dict[lc + "/label"].item()) for lc in active_lc_name]
+            acc += int(constraint_labels == condition_list)
+
+        if total == 0:
+            self.logger.error("No Valid Constraint found for this dataset.")
+            return None
+
+        return acc / total
+
+
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
 

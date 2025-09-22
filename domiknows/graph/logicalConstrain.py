@@ -111,7 +111,7 @@ class LcElement:
         pass
     
     def __str__(self):
-        return self.__class__.__name__
+        return self.lcName
     
     def __repr__(self):
         return  self.lcName + '(' + self.__class__.__name__ + ')'
@@ -157,7 +157,7 @@ class LogicalConstrain(LcElement):
         
         for _, eItem in enumerate(self.e):
             if isinstance(eItem, V):
-                if eItem[1] and eItem[1][1]:
+                if eItem[1] and isinstance(eItem[1], (list, tuple)) and len(eItem[1]) > 1:
                     if isinstance(eItem[1][1], eqL):
                         if eItem[1][1].e[0]:
                             lcConcepts.add(eItem[1][1].e[0][0].name)
@@ -221,7 +221,7 @@ class LogicalConstrain(LcElement):
             
         return newStrsE
     
-    #------------
+    # ------------Method building ILP constraints
     
     def createSingleVarILPConstrains(self, lcName, lcFun, model, v, headConstrain):  
         singleV = []
@@ -320,8 +320,7 @@ class LogicalConstrain(LcElement):
         else:
             # Return collected setups
             return newLcVars
-
-    # Method building ILP constraints
+    
     def createILPConstrains(self, lcName, lcFun, model, v, headConstrain):
         if len(v) < 2:
             myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
@@ -355,8 +354,20 @@ class LogicalConstrain(LcElement):
         for z in sVar:
             tVars = [] # Collect ILP constraints results
             for t in z:
-                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
-                
+                # Check if 'onlyConstrains' is already in t (as a dict or by position)
+                if isinstance(t, dict) and 'onlyConstrains' in t:
+                    tVars.append(lcFun(model, *t))
+                elif isinstance(t, (list, tuple)):
+                    # Try to detect if onlyConstrains is already present by argument name
+                    import inspect
+                    sig = inspect.signature(lcFun)
+                    param_names = list(sig.parameters.keys())
+                    if 'onlyConstrains' in param_names and len(t) >= param_names.index('onlyConstrains') + 1:
+                        tVars.append(lcFun(model, *t))
+                    else:
+                        tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
+                else:
+                    tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
             rVars.append(tVars)
         
         # Return results from created ILP constraints - 
@@ -373,46 +384,38 @@ class LogicalConstrain(LcElement):
         lcVariableName0 = lcVariableNames[0]  # First variable
         lcVariableSet0 = v[lcVariableName0]
 
-        if type(myIlpBooleanProcessor)==lcLossSampleBooleanMethods:
+        varsSetup = []
+        for i, _ in enumerate(lcVariableSet0):
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
 
-            zVars,varsSetup = [],[]
-            var = [currentV[0] for currentV in iter(lcVariableSet0)]
+            if len(var) == 0:
+                if not (headConstrain or integrate):
+                    zVars.append([None])
+
+                continue
+
             if headConstrain or integrate:
                 varsSetup.extend(var)
             else:
                 varsSetup.append(var)
-            if headConstrain or integrate:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-            else:
-                for current_var in varsSetup:
-                    zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-            if model is not None:
-                model.update()
-            return zVars
+
+        # -- Use ILP variable setup to create constrains
+        zVars = [] # Output ILP variables
+        if headConstrain or integrate:
+            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
+                                                         logicMethodName = logicMethodName)])
         else:
-            zVars = []  # Output ILP variables
-            for i, _ in enumerate(lcVariableSet0):
-                varsSetup = []
-                var = []
-                for currentV in iter(v):
-                    var.extend(v[currentV][i])
-                if len(var) == 0:
-                    if not (headConstrain or integrate):
-                        zVars.append([None])
-                    continue
-                if headConstrain or integrate:
-                    varsSetup.extend(var)
-                else:
-                    varsSetup.append(var)
-                if headConstrain or integrate:
-                    zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-                else:
-                    for current_var in varsSetup:
-                        zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains=headConstrain,limitOp=cOperation, limit=cLimit,logicMethodName=logicMethodName)])
-            if model is not None:
-                model.update()
-            return zVars
-    
+            for current_var in varsSetup:
+                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
+                                                         logicMethodName = logicMethodName)])
+           
+        if model is not None:
+            model.update()
+            
+        return zVars
+
     def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
         
         # Ignore value of integrate
@@ -465,8 +468,77 @@ class LogicalConstrain(LcElement):
             model.update()
             
         return zVars
-        
 
+    def createILPCompareCounts(self, model, myIlpBooleanProcessor,v, headConstrain, compareOp, diff, integrate, *, logicMethodName="COUNT_CMP"):
+        """
+        Build ILP constraints (and optionally return indicator vars) enforcing
+        compareOp between the **counts** of two variable sets.
+
+        compareOp : one of '>', '>=', '<', '<=', '==', '!='
+        diff      : constant offset  (we enforce  count(A) - count(B) ∘ diff)
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if len(lcVariableNames) < 2:
+            myLogger.error(
+                "%s Comparative Logical Constraint created with %i sets of "
+                "variables – need at least two",
+                logicMethodName, len(lcVariableNames)
+            )
+            return []
+
+        nameA, nameB = lcVariableNames[:2]
+        setA, setB   = v[nameA], v[nameB]
+
+        if len(setA) != len(setB):
+            myLogger.error(
+                "%s has mismatching numbers of variable-tuples: %s=%i, %s=%i",
+                logicMethodName, nameA, len(setA), nameB, len(setB)
+            )
+            return []
+
+        zVars = []
+
+        # ---------------------------------------------------------------
+        # integrate / headConstrain ➜ single global constraint
+        # ---------------------------------------------------------------
+        if headConstrain or integrate:
+            varsA_acc = [lit for tupleA in setA for lit in tupleA]
+            varsB_acc = [lit for tupleB in setB for lit in tupleB]
+
+            r = myIlpBooleanProcessor.compareCountsVar(
+                model,
+                varsA_acc,
+                varsB_acc,
+                compareOp=compareOp,
+                diff=diff,
+                onlyConstrains=headConstrain,
+                logicMethodName=logicMethodName,
+            )
+            zVars = [[r] for _ in setA]        # replicate to keep shape
+        # ---------------------------------------------------------------
+        # element-wise constraints
+        # ---------------------------------------------------------------
+        else:
+            for tupleA, tupleB in zip(setA, setB):
+                r = myIlpBooleanProcessor.compareCountsVar(
+                    model,
+                    tupleA,
+                    tupleB,
+                    compareOp=compareOp,
+                    diff=diff,
+                    onlyConstrains=headConstrain,
+                    logicMethodName=logicMethodName,
+                )
+                zVars.append([r])
+
+        if model is not None:
+            model.update()
+        return zVars
+    
 def use_grad(grad):
     if not grad:
         torch.no_grad()
@@ -521,7 +593,7 @@ class norL(LogicalConstrain):
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+            return self.createILPConstrains('Nor', myIlpBooleanProcessor.norVar, model, v, headConstrain)
 
 class xorL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
@@ -529,16 +601,160 @@ class xorL(LogicalConstrain):
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
-    
-class epqL(LogicalConstrain):
+            return self.createILPConstrains('Xor', myIlpBooleanProcessor.xorVar, model, v, headConstrain)
+
+class equivalenceL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
-            return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
-     
+            return self.createILPConstrains('Equivalence', myIlpBooleanProcessor.equivalenceVar, model, v, headConstrain)
+
+# ----------------- Counting
+
+class _CountBaseL(LogicalConstrain):
+    """
+    Element-wise counting constraint.
+    Sub-classes set `limitOp` ('<=', '>=', '==').
+    Optionally set `fixedLimit` (int) to hard-code a limit that
+    *cannot* be overridden by a trailing integer.
+    """
+    limitOp: str = None            # must be provided by subclass
+    fixedLimit: int | None = None  # override in subclass for 'exists'-style LCs
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+
+    def __call__(self,
+                 model,
+                 myIlpBooleanProcessor,
+                 v,
+                 headConstrain=False,
+                 integrate=False):
+
+        # ── decide the numeric limit ───────────────────────────────────────
+        if self.fixedLimit is not None:
+            limit = self.fixedLimit
+        else:
+            limit = (
+                self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 1
+            )
+
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPCount(
+                model,
+                myIlpBooleanProcessor,
+                v,
+                headConstrain,
+                self.limitOp,
+                limit,
+                integrate,
+                logicMethodName=str(self),
+            )
+      
+class atMostL(_CountBaseL):      limitOp = "<="
+class atLeastL(_CountBaseL):     limitOp = ">="
+class exactL(_CountBaseL):       limitOp = "=="
+class existsL(_CountBaseL):
+    limitOp = ">="
+    fixedLimit = 1
+
+# ----------------- Accumulated Counting
+
+class _AccumulatedCountBaseL(LogicalConstrain):
+    """
+    Global (accumulated) counting constraint.
+    Same parameters as _CountBaseL.
+    """
+    limitOp: str = None
+    fixedLimit: int | None = None
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+
+    def __call__(self,
+                 model,
+                 myIlpBooleanProcessor,
+                 v,
+                 headConstrain=False,
+                 integrate=False):
+
+        if self.fixedLimit is not None:
+            limit = self.fixedLimit
+        else:
+            limit = (
+                self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 1
+            )
+
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPAccumulatedCount(
+                model,
+                myIlpBooleanProcessor,
+                v,
+                headConstrain,
+                self.limitOp,
+                limit,
+                integrate,
+                logicMethodName=str(self),
+            )
+       
+class atMostAL(_AccumulatedCountBaseL):   limitOp = "<="
+class atLeastAL(_AccumulatedCountBaseL):  limitOp = ">="
+class exactAL(_AccumulatedCountBaseL):    limitOp = "=="
+class existsAL(_AccumulatedCountBaseL):   
+    limitOp = ">="
+    fixedLimit = 1 
+
+# -----------------  Comparative counting constraints (count(A) ∘ count(B)+diff)
+
+class _CompareCountsBaseL(LogicalConstrain):
+    """Base class – subclasses only need to set `compareOp`."""
+    compareOp = None  # MUST be overridden: '>', '>=', '<', '<=', '==', '!='
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+
+    def __call__(self,
+                 model,
+                 myIlpBooleanProcessor,
+                 v,
+                 headConstrain=False,
+                 integrate=False):
+        # optional trailing int is the diff
+        diff = self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 0
+
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPCompareCounts(
+                model,
+                myIlpBooleanProcessor,
+                v,
+                headConstrain,
+                self.compareOp,
+                diff,
+                integrate,
+                logicMethodName=str(self),
+            )
+
+class greaterL(_CompareCountsBaseL):       compareOp = '>'
+class greaterEqL(_CompareCountsBaseL):     compareOp = '>='
+class lessL(_CompareCountsBaseL):          compareOp = '<'
+class lessEqL(_CompareCountsBaseL):        compareOp = '<='
+class equalCountsL(_CompareCountsBaseL):   compareOp = '=='     # not to confuse with eqL (path-equality)
+class notEqualCountsL(_CompareCountsBaseL): compareOp = '!='
+
+# ----------------- forall
+class forAllL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)     
+        
 # ----------------- Auxiliary
      
 class eqL(LogicalConstrain):
@@ -555,134 +771,4 @@ class fixedL(LogicalConstrain):
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
-            return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
-    
-# ----------------- Counting
-
-class exactL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-
-        cOperation = '=='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class existsL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        cLimit = 1
-
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class atLeastL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-    
-class atMostL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '<='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-        
-        
-# ----------------- Accumulated Counting
-
-class exactAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-
-        cOperation = '=='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class existsAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        cLimit = 1
-
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-
-class atLeastAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '>='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-    
-class atMostAL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        if isinstance(self.e[-1], int):
-            cLimit = self.e[-1]
-        else:
-            cLimit = 1
-            
-        cOperation = '<='
-        
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
-        
-# ----------------- forall
-class forAllL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
-        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
-        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
-            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)        
-    
-        
+            return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)        

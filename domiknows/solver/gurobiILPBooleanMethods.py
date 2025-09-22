@@ -135,12 +135,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,varsInfo['varName']))
                 return varNOT
             
-    def and2Var(self, m, var1, var2, onlyConstrains = False):
-        return self.andVar(m, (var1, var2), onlyConstrains=onlyConstrains)
-    
     def andVar(self, m, *var, onlyConstrains = False):
         logicMethodName = "AND"
-        
+                
         # -- Consider None
         varFixed = []  
         for v in var:
@@ -151,6 +148,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # --
         
         varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, "and")
+        S = varsInfo['varSumLinExpr']
        
         # -- Only constructing constrains forcing AND to be True 
         if onlyConstrains:    
@@ -167,7 +165,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 return
             else:
                 # -- Create constraint as there are at least two ILP variables and all numbers, if present are 1
-                m.addConstr(varsInfo['No_of_ilp'] - varsInfo['varSumLinExpr'] <= 0, name='And:') #  varSumLinExpr >= N
+                m.addConstr(varsInfo['No_of_ilp'] - S <= 0, name='And:') #  varSumLinExpr >= N
                 if self.ifLog: self.myLogger.debug("%s created constraint only: and %s > %i"%(logicMethodName,varsInfo['varSumLinExprStr'],varsInfo['No_of_ilp']))
                 return
         else:  
@@ -197,14 +195,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     m.addConstr(varAND - currentVar <= 0, name='And:') # varAND <= currentVar
                 
                 # Adding ILP constraint
-                m.addConstr(varsInfo['varSumLinExpr'] - varAND <= varsInfo['No_of_ilp'] - 1, name='And:') #  varSumLinExpr <= varAND + N - 1
+                m.addConstr(S - varAND <= varsInfo['No_of_ilp'] - 1, name='And:') #  varSumLinExpr <= varAND + N - 1
     
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,varsInfo['varName']))
                 return varAND
-    
-    def or2Var(self, m, var1, var2, onlyConstrains = False):
-        return self.orVar(m, (var1, var2), onlyConstrains = onlyConstrains)
-    
+
     def orVar(self, m, *var, onlyConstrains = False):
         if USE_De_Morgan:
             notVar = []
@@ -225,6 +220,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # --
         
         varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, "or")
+        S = varsInfo['varSumLinExpr']
         
         # If only constructing constrains forcing OR to be True 
         if onlyConstrains:
@@ -242,7 +238,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 return
             else:
                 # -- Create constraint as there are at least two ILP variables and all numbers, if present, are 0         
-                m.addConstr(varsInfo['varSumLinExpr'] >= 1, name='Or:') # varSumLinExpr >= 1
+                m.addConstr(S >= 1, name='Or:') # varSumLinExpr >= 1
                 if self.ifLog: self.myLogger.debug("%s created constraint only: %s >= %i"%(logicMethodName,varsInfo['varSumLinExprStr'],1))
                 return
         else:
@@ -270,15 +266,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     m.addConstr(currentVar - varOR <= 0, name='Or:') # currentVar <= varOR
                     if self.ifLog: self.myLogger.debug("%s created constraint: %s - %s <= %i"%(logicMethodName,currentVar.VarName,varsInfo['varName'],0))
         
-                m.addConstr(varsInfo['varSumLinExpr'] - varOR >= 0, name='Or:') # varSumLinExpr >= varOR
+                m.addConstr(S - varOR >= 0, name='Or:') # varSumLinExpr >= varOR
                 if self.ifLog: self.myLogger.debug("%s created constraint: %s - %s >= %i"%(logicMethodName,varsInfo['varSumLinExprStr'],varsInfo['varName'],1-1))
         
                 if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varsInfo['varName']))
                 return varOR
-            
-    def nand2Var(self, m, var1, var2, onlyConstrains = False):
-        return self.nandVar(m, (var1, var2), onlyConstrains = onlyConstrains)
-    
+             
     def nandVar(self, m, *var, onlyConstrains = False):
         logicMethodName = "NAND"
        
@@ -315,276 +308,193 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         # ------- If creating variables representing value of NAND build of provided variables
         varNAND = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'])
+        notVat = self.notVar(m, varNAND)
         for currentVar in var:
-            m.addConstr(self.notVar(m, varNAND) <= currentVar, name='Nand:')
+            m.addConstr(notVat <= currentVar, name='Nand:')
 
-        m.addConstr(varsInfo["varSumLinExpr"]<= self.notVar(m, varNAND) + varsInfo["N"] - 1, name='Nand:')
+        m.addConstr(varsInfo["varSumLinExpr"]<= notVat + varsInfo["N"] - 1, name='Nand:')
     
         return varNAND
     
-    def nor2Var(self, m, var1, var2, onlyConstrains = False):
-        return self.norVar(m, (var1, var2), onlyConstrains = onlyConstrains)
-    
     def norVar(self, m, *var, onlyConstrains = False):
-        
         return self.notVar(m, self.orVar(m, var), onlyConstrains=onlyConstrains) # Negation of the disjunction
     
-        #---------------------- No used anymore
+    def xorVar(self, m, *var, onlyConstrains = False):        
+        # Conjunction of the disjunction and the negation of the conjunction
+        return self.andVar(m, self.orVar(m, var), self.notVar(m, self.andVar(m, var)), onlyConstrains=onlyConstrains) 
+    
+    def ifVar(self, m, var1, var2, onlyConstrains=False):
+        """
+        Logical implication: (var1 => var2).
+        - If either side is None (missing), we do NOT force anything.
+            * onlyConstrains=True: no constraint added (skip).
+            * onlyConstrains=False: vacuously return 1.
+        - If both are numeric/bool, evaluate and return {0,1} (no constraints).
+        - If one side is numeric and the other is an ILP var:
+            * antecedent == 1  and consequent is ILP  -> add: consequent >= 1
+            * antecedent == 0  and consequent is ILP  -> no constraint (vacuous truth)
+            * antecedent is ILP and consequent == 1   -> no constraint (vacuous truth)
+            * antecedent is ILP and consequent == 0   -> add: antecedent <= 0
+        - If both are ILP vars:
+            * onlyConstrains=True: add A - B <= 0   (A <= B)
+            * onlyConstrains=False: create z = (¬A ∨ B) with standard linearization.
+        """
+        logicMethodName = "IF"
+
+        # --- 1) Short-circuit on missing inputs (do NOT coerce None to 1/0) ---
+        if var1 is None or var2 is None:
+            if self.ifLog:
+                self.myLogger.debug("%s: skipping (one side is None); %s"
+                                    % (logicMethodName,
+                                    "no constraints" if onlyConstrains else "return 1"))
+            if onlyConstrains:
+                return
+            return 1  # vacuous truth when building an expression
+
+        antecedent = var1
+        consequent = var2
+
+        # Helpers
+        is_num_ante = self.__varIsNumber(antecedent)
+        is_num_cons = self.__varIsNumber(consequent)
+
+        # For logging / naming (safe even for mixed types)
+        varsInfo = self.preprocessLogicalMethodVar((antecedent, consequent),
+                                                logicMethodName, "if", minN=2)
+        if varsInfo['N'] > 2:
+            raise Exception("%s has %i variables, accepts only 2" % (logicMethodName, varsInfo['N']))
+
+        # Normalize numeric to {0,1} for clean reasoning
+        def as01(x): return 1 if bool(x) else 0
+
+        # --- 2) Constraint-only mode: enforce A => B without creating a return var ---
+        if onlyConstrains:
+            if is_num_ante and is_num_cons:
+                A = as01(antecedent)
+                B = as01(consequent)
+                # Purely numeric; implication holds unless A=1 and B=0.
+                if A == 1 and B == 0:
+                    # Warn and skip — do NOT force infeasibility here.
+                    self.myLogger.warn("%s: antecedent=True and consequent=False (numeric); "
+                                    "implication would be False; ignoring in constraint-only mode"
+                                    % logicMethodName)
+                else:
+                    if self.ifLog: self.myLogger.debug("%s: numeric implication is True" % logicMethodName)
+                return
+
+            if is_num_ante and not is_num_cons:
+                A = as01(antecedent)
+                if A == 1:
+                    # A => B  with A=1  -> force B=1
+                    m.addConstr(consequent >= 1, name='If:')  # B >= 1
+                    if self.ifLog:
+                        self.myLogger.debug("%s: added constraint (A=1): %s >= 1"
+                                            % (logicMethodName, varsInfo['varsNames'][1]))
+                # A = 0 => vacuously true; no constraint
+                return
+
+            if not is_num_ante and is_num_cons:
+                B = as01(consequent)
+                if B == 0:
+                    # A => 0  -> force A = 0
+                    m.addConstr(antecedent <= 0, name='If:')  # A <= 0
+                    if self.ifLog:
+                        self.myLogger.debug("%s: added constraint (B=0): %s <= 0"
+                                            % (logicMethodName, varsInfo['varsNames'][0]))
+                # B = 1 => vacuously true; no constraint
+                return
+
+            # Both ILP vars: A <= B
+            m.addConstr(antecedent - consequent <= 0, name='If:')  # A <= B
+            if self.ifLog:
+                self.myLogger.debug("%s: added constraint: %s <= %s"
+                                    % (logicMethodName, varsInfo['varsNames'][0], varsInfo['varsNames'][1]))
+            return
+
+        # --- 3) Expression mode: return a {0,1}/var representing (¬A ∨ B) ---
+        if is_num_ante and is_num_cons:
+            A = as01(antecedent)
+            B = as01(consequent)
+            return 1 if (A == 0 or B == 1) else 0
+
+        if is_num_ante and not is_num_cons:
+            A = as01(antecedent)
+            if A == 0:
+                return 1  # vacuous truth
+            else:
+                # A==1 -> returns B (since (¬1 ∨ B) == B)
+                if self.ifLog:
+                    self.myLogger.debug("%s returns consequent (A=1): %s"
+                                        % (logicMethodName, varsInfo['varsNames'][1]))
+                return consequent
+
+        if not is_num_ante and is_num_cons:
+            B = as01(consequent)
+            if B == 1:
+                return 1  # (¬A ∨ 1) == 1
+            else:
+                # B==0 -> returns ¬A
+                notAntecedent = self.notVar(m, antecedent)
+                if self.ifLog:
+                    self.myLogger.debug("%s returns NOT antecedent (B=0): %s"
+                                        % (logicMethodName, notAntecedent.VarName))
+                return notAntecedent
+
+        # Both ILP vars: build z = (¬A ∨ B) with standard linearization
+        varIF = m.addVar(vtype=GRB.BINARY, name=varsInfo["varName"])
+        # z >= 1 - A
+        m.addConstr(1 - antecedent <= varIF, name='If:')
+        # z >= B
+        m.addConstr(consequent <= varIF, name='If:')
+        # z <= 1 - A + B
+        m.addConstr(1 - antecedent + consequent >= varIF, name='If:')
+
+        m.update()
+        if self.ifLog:
+            self.myLogger.debug("%s returns : %s" % (logicMethodName, varsInfo["varName"]))
+        return varIF
+
+           
+    def equivalenceVar(self, m, *var, onlyConstrains = False):
+        logicMethodName = "EQUIVALENCE"
         
         # -- Consider None
         varFixed = []  
         for v in var:
             if v is None:
-                varFixed.append(1)
+                varFixed.append(0) # when None
             else:
                 varFixed.append(v)
-        
-        var = varFixed
         # --
         
-        N = len(var)
-        
-        if N <= 1:
-            return None
-        
-        if onlyConstrains:
-            varSumLinExpr = LinExpr()
-            for currentVar in var:
-                varSumLinExpr.addTerms(1.0, currentVar)
-        
-            m.addConstr(varSumLinExpr <= 0)
-            return
-        
-        _norVarName = "nor"
-        for currentVar in var:
-            _norVarName += "_%s"%(currentVar)
-           
-        _norVarName = _norVarName [:254]
-        varNOR = m.addVar(vtype=GRB.BINARY, name=_norVarName)
-        for currentVar in var:
-            m.addConstr(currentVar <= self.notVar(m, varNOR))
-        
-        varSumLinExpr = LinExpr()
-        for currentVar in var:
-            varSumLinExpr.addTerms(1.0, currentVar)
-            
-            m.addConstr(varSumLinExpr >= self.notVar(m, varNOR))
-    
-        return varNOR
-    
-    def xorVar(self, m, var1, var2, onlyConstrains = False):
-        var = (var1, var2)
-        
-        # Conjunction of the disjunction and the negation of the conjunction
-        return self.andVar(m, self.orVar(m, var), self.notVar(m, self.andVar(m, var)), onlyConstrains=onlyConstrains) 
-                
-        #---------------------- No used anymore
-
-        # -- Consider None
-        if var1 is None:
-            var1 = 1
-            
-        if var2 is None:
-            var2 = 1
-        # --
-
-        # Get names of ILP variables
-        var1Name = var1
-        var2Name = var2
-        if not self.__varIsNumber(var1):
-            var1Name = var1.VarName
-        if not self.__varIsNumber(var2):
-            var2Name = var2.VarName
-            
-        if onlyConstrains:
-            m.addConstr(var1 + var2 <= 1)
-            m.addConstr(var1 + var2 >= 1)
-            if self.ifLog: self.myLogger.debug("IF created constraint only: %s <= %s"%(var1Name, var2Name))
-
-            return
-        
-        varXORName = "xor_%s_%s"%(var1, var2)
-        varXORName = varXORName[:254]
-        varXOR = m.addVar(vtype=GRB.BINARY, name=varXORName)
-            
-        m.addConstr(var1 + var2 + varXOR <= 2)
-        m.addConstr(-var1 - var2 + varXOR <= 0)
-        m.addConstr(var1 - var2 + varXOR >= 0)
-        m.addConstr(-var1 + var2 + varXOR >= 0)
-            
-        return varXOR
-    
-    def ifVar(self, m, var1, var2, onlyConstrains = False):
-        logicMethodName = "IF"
-
-        # -- Consider None
-        hasNone = False
-        if var1 is None: # antecedent 
-            antecedent = 1 # when None
-            #self.myLogger.info("%s called with antecedent equals None"%(logicMethodName))
-            #self.myLogger.info("%s called with consequent equals %s"%(logicMethodName,var2))
-
-            hasNone = True
+        if len(varFixed) == 0:
+            # Equivalence of no variables is True (vacuous truth)
+            if self.ifLog: self.myLogger.debug("%s returns: %i (no variables)"%(logicMethodName, 1))
+            return 1
+        elif len(varFixed) == 1:
+            # Equivalence of single variable is True (always equivalent to itself)
+            if self.ifLog: self.myLogger.debug("%s returns: %i (single variable)"%(logicMethodName, 1))
+            return 1
         else:
-            antecedent = var1
-
-        if var2 is None: # consequent
-            consequent = 0 # when None
-            if not hasNone: # not yet
-                #self.myLogger.info("%s called with antecedent equals %s"%(logicMethodName,var1))
-                #self.myLogger.info("%s called with consequent equals None"%(logicMethodName))
-                hasNone = True
-        else:
-            consequent = var2
-        # --
-    
-        varsInfo = self.preprocessLogicalMethodVar((antecedent,consequent), logicMethodName, "if",  minN=2)
+            # Multi-variable equivalence using existing methods:
+            # equiv(a, b, c, ...) = AND(a, b, c, ...) OR AND(NOT(a), NOT(b), NOT(c), ...)
+            
+            if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, [v if self.__varIsNumber(v) else v.VarName for v in varFixed]))
+            
+            # All true case: AND of all variables
+            all_true = self.andVar(m, *varFixed)
+            
+            # All false case: AND of all negated variables
+            negated_vars = [self.notVar(m, v) for v in varFixed]
+            all_false = self.andVar(m, *negated_vars)
+            
+            # Equivalence = (all true) OR (all false)
+            return self.orVar(m, all_true, all_false, onlyConstrains=onlyConstrains)
         
-        if varsInfo['N'] > 2: # More than 2 variable
-            raise Exception("%s has %i variables, accepts only 2"%(logicMethodName,varsInfo['N']))
-            
-        if onlyConstrains:
-            if varsInfo['No_of_ilp'] == 0: # No ILP variables
-                if (not antecedent): 
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False"%(logicMethodName))
-                    return 
-                elif consequent: # antecedent is True
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent and consequent are True"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - antecedent and consequent are True"%(logicMethodName))
-                    return 
-                else: # antecedent and not consequent
-                    self.myLogger.warn("%s is called with the antecedent True and the consequent False - the result of applying %s would be False making ILP model is infeasible - ignoring it"%(logicMethodName,logicMethodName))
-                    return
-                
-                    #raise Exception("ILP model is infeasible - %s is called with the antecedent True and the consequent False - the result of applying %s is False"
-                    #                %(logicMethodName,logicMethodName))
-            elif self.__varIsNumber(antecedent): # antecedent is boolean and consequent is the ILP variable
-                if not antecedent:
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False"%(logicMethodName))
-                    return 
-                else: # antecedent is True
-                    # Adding ILP constraint
-                    m.addConstr(consequent >= 1, name='If:') # var2 >= 0 - consequent has to be True
-                    if self.ifLog: self.myLogger.debug("%s antecedent is True - created constraint: %s >= %i"%(logicMethodName,consequent,1))
-                    if hasNone: self.myLogger.info("%s antecedent is True - created constraint: %s >= %i"%(logicMethodName,consequent,1))
-                    return
-            elif  self.__varIsNumber(consequent): # consequent is boolean and the antecedent is the ILP variable
-                if consequent:
-                    # Applying if results in True
-                    if self.ifLog: self.myLogger.debug("%s is True - consequent is True"%(logicMethodName))
-                    if hasNone: self.myLogger.info("%s is True - consequent is True"%(logicMethodName))
-                    return 
-                else: # consequent is False
-                    # Adding ILP constraint - antecedent ILP variable has to be False too
-                    m.addConstr(antecedent <= 0, name='If:')
-                    if self.ifLog: self.myLogger.debug("%s consequent is False - created constraint: %s <= %i"%(logicMethodName,antecedent,0))
-                    if hasNone:  self.myLogger.info("%s consequent is False - created constraint: %s <= %i"%(logicMethodName,antecedent,0))
-                    return
-                        
-            # Create constraint as there are two ILP variables         
-
-            # Only constructing constrains forcing IF to be true 
-            m.addConstr(antecedent - consequent <= 0, name='If:') # var1 <= var2
-            if self.ifLog: self.myLogger.debug("%s created constraint only: %s <= %s"%(logicMethodName,varsInfo['varsNames'][0],varsInfo['varsNames'][1]))
-            
-            return
-        else:
-            if varsInfo['No_of_ilp'] == 0: # No ILP variable
-                if not antecedent:
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    return 1
-                elif consequent: # antecedent is True
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent and consequent are True - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - antecedent and consequent are True - returning %i"%(logicMethodName,1))
-                    return 1
-                else: # antecedent and not consequent
-                    if self.ifLog: self.myLogger.debug("%s is False - is called with the antecedent True and the consequent False - returning %i"%(logicMethodName,0))
-                    if hasNone: self.myLogger.info("%s is False - is called with the antecedent True and the consequent False - returning %i"%(logicMethodName,0))
-                    return 0
-            elif self.__varIsNumber(antecedent):
-                if not antecedent:
-                    if self.ifLog: self.myLogger.debug("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - antecedent is False - returning %i"%(logicMethodName,1))
-                    return 1
-                else: #antecedent
-                    if self.ifLog: self.myLogger.debug("%s returns: %s - antecedent is True"%(logicMethodName,consequent))
-                    if hasNone: self.myLogger.info("%s returns: %s - antecedent is True"%(logicMethodName,consequent))
-                    return consequent
-            elif  self.__varIsNumber(consequent):
-                if consequent:
-                    if self.ifLog: self.myLogger.debug("%s is True - consequent is True - returning %i"%(logicMethodName,1))
-                    if hasNone: self.myLogger.info("%s is True - consequent is True - returning %i"%(logicMethodName,1))
-                    return 1
-                else: #not consequent
-                    notAntecedent = self.notVar(m, antecedent)
-                    if self.ifLog: self.myLogger.debug("%s returns: %s - consequent is False"%(logicMethodName,notAntecedent.VarName))
-                    if hasNone: self.myLogger.info("%s returns: %s - consequent is False"%(logicMethodName,notAntecedent.VarName))
-                    return notAntecedent
-       
-            # Create new variable
-            varIF = m.addVar(vtype=GRB.BINARY, name=varsInfo["varName"])
-                
-            # Build constrains
-            m.addConstr(1 - antecedent <= varIF, name='If:')                # 1 - var1 <= varIF
-            m.addConstr(consequent <= varIF, name='If:')                    # var2 <= varIF
-            m.addConstr(1 - antecedent + consequent >= varIF, name='If:')   # 1- var1 + var2 >= varIF
-                
-            m.update()
-            
-            if self.ifLog: self.myLogger.debug("IF returns : %s"%(varsInfo["varName"]))
-            return varIF
-           
-    def epqVar(self, m, var1, var2, onlyConstrains = False):
-        #if self.ifLog: self.myLogger.debug("EQ called with : %s"%(var1,var2))
-
-        # -- Consider None
-        if var1 is None:
-            var1 = 0
-            
-        if var2 is None:
-            var2 = 0
-        # --
-    
-        # Get names of ILP variables
-        var1Name = var1
-        var2Name = var2
-        if not self.__varIsNumber(var1):
-            var1Name = var1.VarName
-        if not self.__varIsNumber(var2):
-            var2Name = var2.VarName
-            
-        if onlyConstrains:
-            m.addConstr(var1 >= var2)
-            if self.ifLog: self.myLogger.debug("EQ created constraint only: %s => %s"%(var1Name, var2Name))
-            
-            m.addConstr(var1 <= var2)
-            if self.ifLog: self.myLogger.debug("EQ created constraint only: %s <= %s"%(var1Name, var2Name))
-
-            return
-        
-        varEQName = "epq_%s_%s"%(var1, var2)
-        varEQName = varEQName[:254]
-        varEQ = m.addVar(vtype=GRB.BINARY, name=varEQName)
-            
-        m.addConstr(var1 + var2 - varEQ <= 1)
-        m.addConstr(var1 + var2 + varEQ >= 1)
-        m.addConstr(-var1 + var2 + varEQ <= 1)
-        m.addConstr(var1 - var2 + varEQ <= 1)
-        
-        m.update()
-             
-        if self.ifLog: self.myLogger.debug("EQ returns : %s"%(varEQ.VarName))
-        return varEQ
-    
     def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1, logicMethodName = "COUNT"):
-        BigM = 100
-        
+        BigM = 1000         # set limit on number of variables possible to be used in the counting constraint
+        LittleM = 0.0001    # set the precision of equality constraint
+                
         if not limitOp:
             if self.ifLog: self.myLogger.error("%s called with no operation specified for comparing limit"%(logicMethodName))
             return None
@@ -606,14 +516,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         var = varFixed
         # --
         
-        varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, logicMethodName,  minN=1)
-            
+        varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, logicMethodName,  minN=0)
+        S = varsInfo['varSumLinExpr']
         updatedLimit = limit - varsInfo['numberSum']
         
         # If only constructing constrains forcing OR to be true 
         if onlyConstrains:
             # Adding ILP constraint
-            if limitOp == '>=': # ilp >= L
+            if limitOp == '>=': # ilp >= L atLeast
                 if updatedLimit <= 0: # The constraint is satisfied - the limit is negative or zero
                     if self.ifLog: self.myLogger.debug("%s constraint is satisfied - the limit %i is negative or zero"%(logicMethodName,updatedLimit))
                     return
@@ -622,23 +532,23 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                                     %(logicMethodName,updatedLimit,varsInfo['No_of_ilp'],logicMethodName))
                 else:
                     # Create Constraint
-                    m.addConstr(varsInfo['varSumLinExpr'] >= updatedLimit, name='Count %s:'%(logicMethodName)) # varSumLinExpr >= updatedLimit
+                    m.addConstr(S >= updatedLimit, name='Count %s:'%(logicMethodName)) # varSumLinExpr >= updatedLimit
                     if self.ifLog: self.myLogger.debug("%s created ILP constraint: %s >= %i"%(logicMethodName,varsInfo['varSumLinExprStr'],updatedLimit))
                     
-            # This check is common for '<=' and '=='
+            # This check is common for '<=' and '==' atNost and Equal
             elif updatedLimit < 0: # The constraint not is satisfied - the limit is negative or zero so ilp sum cannot be less than it - ilp sum is zero or more
                 raise Exception("ILP model is infeasible - %s limit %i is negative or zero, ilp sum cannot be less than it - the constraint %s cannot be satisfied"
                                     %(logicMethodName,updatedLimit,logicMethodName))
                 
-            elif limitOp == '<=': # ilp <= L
+            elif limitOp == '<=': # ilp <= L atMost
                 if varsInfo['No_of_ilp'] == 0: # sum Ilp =0 and L >= 0
                     if self.ifLog: self.myLogger.debug("%s constraint is satisfied - no ILP variable"%(logicMethodName))
                     return
                 else:
-                    m.addConstr(varsInfo['varSumLinExpr'] <= updatedLimit, name='Count %s:'%(logicMethodName)) # varSumLinExpr <= updatedLimit
+                    m.addConstr(S <= updatedLimit, name='Count %s:'%(logicMethodName)) # varSumLinExpr <= updatedLimit
                     if self.ifLog: self.myLogger.debug("%s created ILP constraint: %s <= %i"%(logicMethodName,varsInfo['varSumLinExprStr'],updatedLimit))
 
-            elif limitOp == '==': # ilp == L
+            elif limitOp == '==': # ilp == L Equal
                 if varsInfo['No_of_ilp'] == 0:
                     if updatedLimit == 0:
                         if self.ifLog: self.myLogger.debug("%s constraint is satisfied - no ILP variable"%(logicMethodName))
@@ -647,15 +557,15 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                         raise Exception("ILP model is infeasible - %s limit %i is not zero as number of ILP variable is zero - the constraint %s cannot be satisfied"
                                     %(logicMethodName,updatedLimit,logicMethodName))
                 else:  
-                    m.addConstr(varsInfo['varSumLinExpr'] == updatedLimit, name='Count %s:'%(logicMethodName)) # varSumLinExpr == updatedLimit
+                    m.addConstr(S == updatedLimit, name='Count %s:'%(logicMethodName)) # varSumLinExpr == updatedLimit
                     if self.ifLog: self.myLogger.debug("%s created ILP constraint: %s == %i"%(logicMethodName,varsInfo['varSumLinExprStr'],updatedLimit))
 
             return
         
-        # ------- If creating variables representing value of OR build of provided variables
+        # ------- If creating variables representing value of result of comparison of the sum of ILP variables and limit
         else:
         # Build constrains
-            if limitOp == '>=': # ilp >= L
+            if limitOp == '>=': # atLeast S >= L 
                 if updatedLimit <= 0: # The constraint is satisfied - the limit is negative or zero - return 1
                     if self.ifLog: self.myLogger.debug("%s constraint is satisfied - the limit %i is negative or zero - return 1"%(logicMethodName,updatedLimit))
                     return 1
@@ -668,8 +578,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     varCOUNT = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'])
                     if m: m.update()
                     
-                    m.addConstr(varsInfo['varSumLinExpr'] - BigM *varCOUNT >= updatedLimit - BigM, name='Count %s:'%(logicMethodName))
-                    m.addConstr(varsInfo['varSumLinExpr'] - BigM *varCOUNT <= updatedLimit - (1 - varCOUNT), name='Count %s:'%(logicMethodName))  
+                    m.addConstr(S  >= updatedLimit - BigM * (1 - varCOUNT), name='Count %s:'%(logicMethodName))
+                    m.addConstr(S <= updatedLimit - 1 + BigM * varCOUNT, name='Count %s:'%(logicMethodName))  
                                  
             # This check is common for '<=' and '=='
             elif updatedLimit < 0: # The constraint not is satisfied - the limit is negative or zero so ilp sum cannot be less than it - ilp sum is zero or more
@@ -677,8 +587,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                                     %(logicMethodName,updatedLimit,logicMethodName))
                 return False
                 
-            elif limitOp == '<=': # ilp <= L
-                if varsInfo['No_of_ilp'] == 0: # No ILP variable - sum Ilp =0 and L >= 0
+            elif limitOp == '<=': # atMost S <= L 
+                if varsInfo['No_of_ilp'] == 0: # No ILP variable - sum Ilp = 0 and L >= 0
                     if self.ifLog: self.myLogger.debug("%s constraint is satisfied - no ILP variable"%(logicMethodName))
                     return True
                 else:  
@@ -686,10 +596,10 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     varCOUNT = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'])
                     if m: m.update()
                     
-                    m.addConstr(varsInfo['varSumLinExpr'] + BigM *varCOUNT <= updatedLimit + BigM, name='Count %s:'%(logicMethodName))
-                    m.addConstr(varsInfo['varSumLinExpr'] + BigM *varCOUNT >= updatedLimit, name='Count %s:'%(logicMethodName))
+                    m.addConstr(S <= updatedLimit + BigM * (1 - varCOUNT), name='Count %s:'%(logicMethodName))
+                    m.addConstr(S >= updatedLimit + 1 - BigM * varCOUNT, name='Count %s:'%(logicMethodName))
                     
-            elif limitOp == '==': # ilp == L
+            elif limitOp == '==': # Exact S == L 
                 if varsInfo['No_of_ilp'] == 0:
                     if updatedLimit == 0:
                         if self.ifLog: self.myLogger.debug("%s constraint is satisfied - no ILP variable - return True"%(logicMethodName))
@@ -701,14 +611,146 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 else:
                     # Create new variable
                     varCOUNT = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'])
+                    z_le = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'] + '_le')
+                    z_ge = m.addVar(vtype=GRB.BINARY, name=varsInfo['varName'] + '_ge')
                     if m: m.update()
-            
-                    m.addConstr(varsInfo['varSumLinExpr'] - updatedLimit <= BigM * (1 - varCOUNT), name='Count %s:'%(logicMethodName))
-                    m.addConstr(varsInfo['varSumLinExpr'] - updatedLimit >= BigM * (varCOUNT - 1), name='Count %s:'%(logicMethodName))
-    
+
+                    # z_le : S ≤ L
+                    m.addConstr(S <= updatedLimit + BigM*(1 - z_le))
+                    m.addConstr(S >= updatedLimit + 1 - BigM*z_le)
+
+                    # z_ge : S ≥ L
+                    m.addConstr(S >= updatedLimit - BigM*(1 - z_ge))
+                    m.addConstr(S <= updatedLimit - 1 + BigM*z_ge)
+
+                    # varCOUNT = z_le ∧ z_ge
+                    m.addConstr(varCOUNT <= z_le)
+                    m.addConstr(varCOUNT <= z_ge)
+                    m.addConstr(varCOUNT >= z_le + z_ge - 1)
+
             if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varsInfo['varName']))
             return varCOUNT
     
+    def compareCountsVar(
+        self,
+        m,
+        varsA,               # iterable of literals forming “left” count
+        varsB,               # iterable of literals forming “right” count
+        *,                    # force kwargs for clarity
+        compareOp='>',        # one of '>', '>=', '<', '<=', '==', '!='
+        diff = 0,             # optional constant offset: count(A) - count(B) ∘ diff
+        onlyConstrains=False,
+        logicMethodName="COUNT_CMP",
+    ):
+   
+        if compareOp not in ('>', '>=', '<', '<=', '==', '!='):
+            raise ValueError(f"{logicMethodName}: unsupported operator {compareOp}")
+
+        # --- preprocess each side (re‑use your helper) ---------------------------
+        infoA = self.preprocessLogicalMethodVar(
+                    list(varsA), f"{logicMethodName}_A", "cntA", minN=1)
+        infoB = self.preprocessLogicalMethodVar(
+                    list(varsB), f"{logicMethodName}_B", "cntB", minN=1)
+
+        # Constant parts (0/1 literals encountered)
+        constA = infoA['numberSum']
+        constB = infoB['numberSum']
+
+        # Symbolic sums over (binary) ILP vars
+        sumA   = infoA['varSumLinExpr']
+        sumB   = infoB['varSumLinExpr']
+
+        # Upper bound for |ΣA − ΣB|  → use total number of ILP vars + |diff|
+        BigM = infoA['No_of_ilp'] + infoB['No_of_ilp'] + abs(diff)
+
+        # ------------------------------------------------------------------------
+        #            ONLY CONSTRAINTS  (no indicator variable returned)
+        # ------------------------------------------------------------------------
+        if onlyConstrains:
+
+            expr = sumA - sumB + (constA - constB)    # linear expr  ΣA - ΣB
+            rhs  = diff                               # compare to diff
+
+            if   compareOp == '>':  m.addConstr(expr >= rhs + 1, name=logicMethodName)
+            elif compareOp == '>=': m.addConstr(expr >= rhs,     name=logicMethodName)
+            elif compareOp == '<':  m.addConstr(expr <= rhs - 1, name=logicMethodName)
+            elif compareOp == '<=': m.addConstr(expr <= rhs,     name=logicMethodName)
+            elif compareOp == '==': m.addConstr(expr == rhs,     name=logicMethodName)
+            elif compareOp == '!=':
+                # (expr <= rhs-1) OR (expr >= rhs+1)   → two constraints & one aux‑binary
+                z = m.addVar(vtype=GRB.BINARY, name=f"{logicMethodName}_neq")
+                m.addConstr(expr <= rhs - 1 + BigM * z)
+                m.addConstr(expr >= rhs + 1 - BigM * (1 - z))
+            return
+
+        # ------------------------------------------------------------------------
+        #            WITH INDICATOR VARIABLE  (returned)
+        # ------------------------------------------------------------------------
+        # quick‑return if the relation is already decided by constants
+        exprConst = constA - constB
+        if   compareOp in ('>', '>=') and exprConst - diff >= (1 if compareOp == '>' else 0) \
+            and infoA['No_of_ilp'] == 0 and infoB['No_of_ilp'] == 0:
+            return 1
+        if   compareOp in ('<', '<=') and exprConst - diff <= (-1 if compareOp == '<' else 0) \
+            and infoA['No_of_ilp'] == 0 and infoB['No_of_ilp'] == 0:
+            return 1
+        if   compareOp == '==' and exprConst - diff == 0 \
+            and infoA['No_of_ilp'] == 0 and infoB['No_of_ilp'] == 0:
+            return 1
+        if   compareOp == '!=' and exprConst - diff != 0 \
+            and infoA['No_of_ilp'] == 0 and infoB['No_of_ilp'] == 0:
+            return 1
+        # (symmetrically, you could return 0 for impossible cases)
+
+        # Build indicator
+        varCMP = m.addVar(vtype=GRB.BINARY,
+                        name=f"{logicMethodName}_{compareOp}_{infoA['varName']}_{infoB['varName']}")
+
+        expr = sumA - sumB + (constA - constB)        # ΣA - ΣB + c
+        rhs  = diff
+
+        if compareOp in ('>', '>='):
+
+            strict = (compareOp == '>')
+
+            # expr >= rhs + (strict ? 1 : 0)
+            m.addConstr(expr >= rhs + (1 if strict else 0) - BigM * (1 - varCMP),
+                        name=f"{logicMethodName}_lb")
+            # expr <= rhs + (strict ? 0 : -1) + BigM
+            m.addConstr(expr <= rhs - (1 if strict else 0) + BigM * varCMP,
+                        name=f"{logicMethodName}_ub")
+
+        elif compareOp in ('<', '<='):
+
+            strict = (compareOp == '<')
+
+            # expr <= rhs - (strict ? 1 : 0)
+            m.addConstr(expr <= rhs - (1 if strict else 0) + BigM * (1 - varCMP),
+                        name=f"{logicMethodName}_ub")
+            # expr >= rhs - (strict ? 0 : -1) - BigM
+            m.addConstr(expr >= rhs + (1 if strict else 0) - BigM * varCMP,
+                        name=f"{logicMethodName}_lb")
+
+        elif compareOp == '==':
+
+            # Two sided
+            m.addConstr(expr - rhs <=  BigM * (1 - varCMP))
+            m.addConstr(expr - rhs >= -BigM * (1 - varCMP))
+            # If varCMP = 0, push expr at least 1 away from rhs
+            m.addConstr(expr - rhs >= 1 - BigM * varCMP)
+            m.addConstr(expr - rhs <= -1 + BigM * varCMP)
+
+        elif compareOp == '!=':
+
+            # expr differs from rhs by ≥1
+            m.addConstr(expr - rhs >= 1 - BigM * (1 - varCMP))
+            m.addConstr(expr - rhs <= -1 + BigM * (1 - varCMP))
+            # varCMP = 0  ⇒  expr == rhs
+            m.addConstr(expr - rhs <=  BigM * varCMP)
+            m.addConstr(expr - rhs >= -BigM * varCMP)
+
+        return varCMP
+  
     def fixedVar(self, m, var, onlyConstrains = False): 
         logicMethodName = "FIXED"
         

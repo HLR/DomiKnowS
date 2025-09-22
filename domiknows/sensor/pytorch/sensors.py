@@ -542,11 +542,22 @@ def cache(SensorClass, CacheSensorClass=CacheSensor):
 
 
 class ReaderSensor(ConstantSensor):
-    def __init__(self, *args, keyword, **kwargs):
+    def __init__(self, *args, keyword, is_constraint = False, **kwargs):
         super().__init__(*args, data=None, **kwargs)
         self.keyword = keyword
+        self.is_constraint = is_constraint
 
     def fill_data(self, data_item):
+        # If we're reading in a constraint, then allow for missing keywords in data items
+        # in those cases, we just set the value to None
+        if self.is_constraint:
+            if self.keyword in data_item:
+                self.data = data_item[self.keyword]
+            else:
+                self.data = None
+            
+            return
+
         try:
             if isinstance(self.keyword, tuple):
                 self.data = (data_item[keyword] for keyword in self.keyword)

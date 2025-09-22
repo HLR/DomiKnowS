@@ -26,8 +26,15 @@ class BaseTestSensor(JointSensor, ConstantSensor):
             if (isinstance(input, (torch.Tensor,np.ndarray, np.generic)) or
                 isinstance(expected_input, (torch.Tensor,np.ndarray, np.generic))):
                 try:
-                    input = torch.tensor(input, device=self.device)
-                    expected_input = torch.tensor(expected_input, device=self.device)
+                    if isinstance(input, torch.Tensor):
+                        input = input.detach().clone().to(self.device)
+                    else:
+                        input = torch.tensor(input, device=self.device)
+
+                    if isinstance(expected_input, torch.Tensor):
+                        expected_input = expected_input.detach().clone().to(self.device)
+                    else:
+                        expected_input = torch.tensor(expected_input, device=self.device)
                 except:
                     pass
                 assert (input == expected_input).all()

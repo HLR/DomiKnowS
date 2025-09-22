@@ -394,6 +394,10 @@ class Concept(BaseGraphTree):
             node = node.sup
         return node
 
+    def _is_constraint_concept(self):
+        if self.getOntologyGraph().get_constraint_concept() == self:
+            return True
+        return False
 
 class EnumConcept(Concept):
     def __init__(self, name=None, values=[]):
@@ -426,4 +430,4 @@ class EnumConcept(Concept):
     def get_concept(self, value):
         valueIndex = self.get_index(value)
         return (self, value, valueIndex, len(self.enum))
-        
+

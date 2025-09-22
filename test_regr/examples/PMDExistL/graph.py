@@ -1,6 +1,7 @@
 def get_graph(args):
     from domiknows.graph import Graph, Concept, Relation
-    from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostL, atLeastL, exactL
+    from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL, exactAL
+    from domiknows.graph.logicalConstrain import atLeastL, atMostL, exactL
     from domiknows.graph import EnumConcept
     Graph.clear()
     Concept.clear()

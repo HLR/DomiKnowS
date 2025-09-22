@@ -76,6 +76,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
     conceptName = e[0].name
                         
     # -- Collect dataNode for the logical constraint (path)
+    referredVariableNames = []
     
     dnsList = [] # Stores lists of dataNodes for each corresponding dataNode 
     pathsCount = 0
@@ -146,7 +147,8 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
             else: # Already defined in the logical constraint from the v part 
                 new_iterate = False
                 referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
-                
+                referredVariableNames.append(referredVariableName)
+
             # Get variables from dataNodes selected  based on referredVariableName
             for indexDn, listOfDataNodes in enumerate(referredDns):
                 eDns = [] 
@@ -233,7 +235,7 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
     else:
         logger.info('collected %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
   
-    return dnsList
+    return dnsList, referredVariableNames
 
 # Find DataNodes starting from the given DataNode following provided path
 #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path

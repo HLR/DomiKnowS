@@ -1,0 +1,58 @@
+name: Build Dist and upload to PyPi from the develop branch
+
+# Controls when the action will run.
+# When tagged push with tag started with t
+on:
+  push:
+    tags:
+      - t*
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  # This workflow contains a single job called "dist_develop"
+  dist_develop:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out the repository branch develop under $GITHUB_WORKSPACE, so the workflow job can access it
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+          ref: "develop"
+
+      # Create Release
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          body: |
+            Changes in this Development Release
+            - To be provided manually later
+          
+      # Sets up python3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Install uv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      # Build distribution
+      - name: Build distribution
+        run: uv build
+        env:
+          DomiKnowS_VERSION: ${{github.ref_name}}
+          DomiKnowS_VERSION_Postfix: dev
+          
+      # Upload to TestPyPI
+      - name: Upload to TestPyPI
+        run: uv publish --repository https://test.pypi.org/legacy/
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}

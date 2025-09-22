@@ -1,5 +1,3 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Build Dist and upload to PyPi from the main branch
 
 # Controls when the action will run.
@@ -9,7 +7,7 @@ on:
     tags:
       - v*
 
-  # Allows you to run this workflow manually from the Actions tab
+  # Allows to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -21,7 +19,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out the repository branch main under $GITHUB_WORKSPACE, so the workflow job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'true'
           ref: "main"
@@ -36,30 +34,22 @@ jobs:
             - To be provided manually later
           
       # Sets up python3
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: 3.8 
+          python-version: "3.13"
 
-      # Installs and upgrades pip, installs other dependencies and installs the package from setup.py
-      - name: "Installs and upgrades pip, install build modules"
-        run: |
-          # Upgrade pip
-          python3 -m pip install --upgrade pip
-          # Install build deps
-          python3 -m pip install setuptools wheel twine
+      # Install uv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
 
-      # Create Distribution
-      - name: Creation of Distribution 
-        run: |
-          python3 setup.py sdist bdist_wheel
-        env:
-          DomiKnowS_VERSION: ${{github.ref_name}}
+      # Build distribution
+      - name: Build distribution
+        run: uv build
           
       # Upload to PyPI
       - name: Upload to PyPI
-        run: |
-          python3 -m twine upload dist/*
+        run: uv publish
         env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-          
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

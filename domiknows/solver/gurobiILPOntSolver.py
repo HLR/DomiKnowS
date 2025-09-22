@@ -2,6 +2,9 @@ import math
 from time import perf_counter, perf_counter_ns
 from collections import OrderedDict
 import logging
+import os
+
+from colorama import Fore, Style
 
 # pytorch
 import torch
@@ -465,9 +468,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                
             if isConstrainCreated:             
                 self.myLogger.info("Created - doman/range constraints for concepts %s"%(concept[1]))
-                    
-        m.update()
-        
+    
     def addOntologyConstrains(self, m, rootDn, *_conceptsRelations):
         
         if not hasattr(self, 'myOnto'): 
@@ -686,12 +687,13 @@ class gurobiILPOntSolver(ilpOntSolver):
             startNumConstrs = m.NumConstrs
             
             if lc.active:
-                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
+                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
             else:
-                self.myLogger.debug('Skipping not active Logical Constraint %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                self.myLogger.debug('Skipping not active Logical Constraint %r - %s'%(lc,  [str(e) for e in lc.e]))
                 continue
 
-            result = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
+            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
+            result, _ = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -702,14 +704,14 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             if result != None and isinstance(result, list):
                 if newNumConstrs:
-                    self.myLogger.info('Successfully added Logical Constraint %s - created %i new ILP constraint\n'%(lc.lcName,newNumConstrs))
-                    self.myLoggerTime.info('Processing time for %s(%s) is: %ims - created %i new ILP constraint'%(lc.lcName, lc, elapsedInMsLC,newNumConstrs))
+                    self.myLogger.info('Successfully added Logical Constraint %r - created %i new ILP constraint\n'%(lc, newNumConstrs))
+                    self.myLoggerTime.info('Processing time for %r is: %ims - created %i new ILP constraint'%(lc, elapsedInMsLC, newNumConstrs))
                 else:
-                    self.myLogger.info('Finished processing Logical Constraint %s - no new ILP constraint was created for it\n'%(lc.lcName))
-                    self.myLoggerTime.info('Processing time for %s(%s) is: %ims - no new ILP constraint was created'%(lc.lcName, lc, elapsedInMsLC))
+                    self.myLogger.info('Finished processing Logical Constraint %r - no new ILP constraint was created for it\n'%(lc))
+                    self.myLoggerTime.info('Processing time for %r is: %ims - no new ILP constraint was created'%(lc, elapsedInMsLC))
             else:
-                self.myLogger.error('Failed to add Logical Constraint %s\n'%(lc.lcName))
-                self.myLoggerTime.error('Failed to add Logical Constraint %s'%(lc.lcName))
+                self.myLogger.error('Failed to add Logical Constraint %r\n'%(lc))
+                self.myLoggerTime.error('Failed to add Logical Constraint %r'%(lc))
 
     def isConceptFixed(self, conceptName):
         for graph in self.myGraph: # Loop through graphs
@@ -909,7 +911,6 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 return 0
         
-        
     def __addLossTovDns(self, loss, vDns):
         if loss and vDns:
             vDnsOriginal = vDns
@@ -937,15 +938,78 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             return vDns
     
-    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
+    from collections import OrderedDict
+
+    def eliminate_duplicate_columns(self, data_dict, rows_to_consider, data_dict_target):
+        """
+        Eliminates columns that have identical elements across specified rows.
+        
+        Args:
+            data_dict: OrderedDict with row names as keys and lists as values
+            rows_to_consider: List of row names to check for duplicates
+            data_dict_target: OrderedDict with same structure to apply same column elimination
+        
+        Returns:
+            OrderedDict (data_dict_target) with same columns removed
+        """
+        if not rows_to_consider or not data_dict or not data_dict_target:
+            return data_dict_target
+        
+        # Get the length of columns (all rows have same length)
+        first_row = list(data_dict.values())[0]
+        num_columns = len(first_row)
+        
+        # Track which columns to keep
+        columns_to_keep = []
+        
+        for col_idx in range(num_columns):
+            # Get column values for specified rows
+            column_values = []
+            for row_name in rows_to_consider:
+                if row_name in data_dict:
+                    if col_idx >= len(data_dict[row_name]):
+                        continue
+                    column_values.append(data_dict[row_name][col_idx])
+            
+            # Check if there are any duplicate values in this column
+            unique_values = set(str(val) for val in column_values)
+            if len(unique_values) < len(column_values):
+                pass
+            else:
+                columns_to_keep.append(col_idx)
+        
+        # Create new OrderedDict with only non-duplicate columns from target
+        result = OrderedDict()
+        for row_name, row_data in data_dict_target.items():
+            if len(row_data) == 1:
+                try:
+                    # Try tensor indexing first
+                    original_tensor = row_data[0][0]
+                    filtered_tensor = original_tensor[columns_to_keep]
+                    result[row_name] = [[filtered_tensor]]
+                except (TypeError, IndexError):
+                    # Fall back to regular list indexing
+                    result[row_name] = [row_data[i] for i in columns_to_keep]
+            else:
+                # Handle regular list case
+                result[row_name] = [row_data[i] for i in columns_to_keep]
+        
+        return result
+
+    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, lcVariables = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
         if key == None:
             key = ""
             
+        lcRepr = f'{lc.__class__.__name__} {lc.strEs()}' # for debugging
+
         if lcVariablesDns == None:
             lcVariablesDns = OrderedDict()
+
+        if lcVariables == None:
+            lcVariables = OrderedDict()
             
-        lcVariables = OrderedDict()
-        
+        usedVariablesNames = set()
+
         if sample:
             sampleInfo = OrderedDict()
             lcVariablesSet = OrderedDict()
@@ -955,8 +1019,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         firstV = None
         integrate = False
-        
-        for eIndex, e in enumerate(lc.e): 
+        newVariables = {}
+        for eIndex, e in enumerate(lc.e):
             if  isinstance(e, V):
                 continue # Already processed in the previous Concept 
             
@@ -991,23 +1055,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                     vNo[0] += 1
                     
                 if variableName in lcVariables:
-                    newvVariableName = "_x" + str(vNo[0])
+                    newVariableName = "_x" + str(vNo[0])
                     vNo[0] += 1
-                    
-                    lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
+
+                    lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
                     if None in lcVariablesDns:
                         pass
-  
-                    lcVariables[newvVariableName] = lcVariables[variableName]
+
+                    lcVariables[newVariableName] = lcVariables[variableName]
+                    usedVariablesNames.add(variableName)
 
                 elif isinstance(e, (Concept, tuple)): # -- Concept 
                     # -- Get dataNodes candidates 
-                    dnsList = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
+                    dnsList, referedVariables = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
                     lcVariablesDns[variableName] = dnsList
                                 
                     if isinstance(lc, CandidateSelection):
                         continue
                     
+                    if len(referedVariables) == 1:
+                        referedVariable = referedVariables.pop()
+                        
+                        # if referedVariable starts with letter p - meaning it it variable of relation
+                        if referedVariable.startswith('p'):
+                            if referedVariable not in newVariables:
+                                newVariables[referedVariable] = set()
+                            newVariables[referedVariable].add(variableName)
+
                     # -- Get ILP variables from collected DataNodes for the given element of logical constraint
                     
                     conceptName = e[0].name
@@ -1102,12 +1176,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     if sample:
                         sampleInfo[variableName] = sampleInfoForVariable
+                        
+                    usedVariablesNames.add(variableName)
                 
                 if isinstance(e, LcElement):
 
                     if isinstance(e, CandidateSelection): # -- nested LogicalConstrain - process recursively 
-                        lcVariablesDnsNew = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
-                                                                     lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                        lcVariablesDnsNew = self.constructLogicalConstrains(
+                                                                        e, booleanProcessor, m, dn, p, key = key, 
+                                                                        lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
+                                                                        headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                          
                         lcVariablesDns = lcVariablesDnsNew
                         vDns = None
@@ -1123,21 +1201,26 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 vDns = [[1] for _ in range(length_of_list)]
                                    
                     if isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
-                        self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
+                        self.myLogger.info('Processing Nested %r - %s'%(e, e.strEs()))
 
                         if sample:
-                            vDns, sampleInfoLC, lcVariablesLC = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
-                                                                                   lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                            vDns, sampleInfoLC, lcVariablesLC, lcVariableUpdated = self.constructLogicalConstrains(
+                                                                                e, booleanProcessor, m, dn, p, key = key, 
+                                                                                lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
+                                                                                headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                             sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                             
                             lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
+                            lcVariables = lcVariableUpdated 
                         else:
-                            vDns = self.constructLogicalConstrains(e, booleanProcessor, m, dn, p, key = key, 
-                                                                     lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
+                            vDns, lcVariableUpdated = self.constructLogicalConstrains(
+                                                                    e, booleanProcessor, m, dn, p, key = key, 
+                                                                    lcVariablesDns = lcVariablesDns, lcVariables = lcVariables,
+                                                                    headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                             
                             vDns = self.__addLossTovDns(loss, vDns)
-                        
-                                                    
+                            lcVariables = lcVariableUpdated
+
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
                         return None
@@ -1145,6 +1228,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     countValid = sum(1 for sublist in vDns if sublist and any(elem is not None for elem in sublist))
                     self.myLogger.info('Size of candidate list returned by %s(%s) nested Logical Constraint is %i of which %i is not None'%(e.lcName,e,len(vDns),countValid))
                     lcVariables[variableName] = vDns   
+                    usedVariablesNames.add(variableName)    
             # Int - limit 
             elif isinstance(e, int): 
                 if eIndex == 0:
@@ -1159,34 +1243,42 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
                 return None
-            
+
+        for referedVariable in newVariables: # assume relations are irreflexive
+            refVarSet = newVariables[referedVariable]
+            refVarSet.add(referedVariable)  
+            lcVariables = self.eliminate_duplicate_columns(lcVariablesDns, refVarSet, lcVariables)
+
+        # from lcVariables select used Variables in this lc
+        useLcVariables = {k: v for k, v in lcVariables.items() if k in usedVariablesNames}
+
         if isinstance(lc, CandidateSelection):
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
         elif sample:
-            lcVariablesSet[lc] = lcVariables
-            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet
+            lcVariablesSet[lc] = useLcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet, lcVariables
         elif verify and headLC:
-            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
         else:
             if loss:
                 slpitT = False
-                for v in lcVariables:
-                    if lcVariables[v] and len(lcVariables[v]) > 1:
+                for v in useLcVariables:
+                    if useLcVariables[v] and len(useLcVariables[v]) > 1:
                         slpitT = True
                         break
                     
                 if slpitT:
-                    for v in lcVariables:
-                        if lcVariables[v] and len(lcVariables[v]) > 1:
+                    for v in useLcVariables:
+                        if useLcVariables[v] and len(useLcVariables[v]) > 1:
                             continue
                          
-                        lcVSplitted = torch.split(lcVariables[v][0][0], 1)
-                        lcVariables[v] = []
+                        lcVSplitted = torch.split(useLcVariables[v][0][0], 1)
+                        useLcVariables[v] = []
                         
                         for s in lcVSplitted:
-                            lcVariables[v].append([s]) 
+                            useLcVariables[v].append([s]) 
                     
-            return lc(m, booleanProcessor, lcVariables, headConstrain = headLC, integrate = integrate)
+            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
     
     # ---------------
                 
@@ -1272,12 +1364,13 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
+            dn.setActiveLCs() # Set active logical constraints in the data node if constraints datanote set
             _lcP = {}
             _lcP[100] = []
             pUsed = False
             for graph in self.myGraph:
                 for _, lc in graph.logicalConstrains.items():
-                    if lc.headLC:     
+                    if lc.headLC and lc.active: # Process only active and head lcs
                         if not ignorePinLCs:
                             lcP = lc.p
                         else:
@@ -1292,157 +1385,23 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Sort constraints according to their p
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
             for p in lcP:
-                self.myLogger.info('Found %i logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
-                self.myLoggerTime.info('Starting ILP interference - Found %i logical constraints'%(len(lcP[p])))
-            
+                self.myLogger.info('Found %i active logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
+                self.myLoggerTime.info('Starting ILP interference - Found %i active logical constraints'%(len(lcP[p])))
+
             # Search through set of logical constraints for subset satisfying and the max/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
             ps = [] # List with processed p 
             
-            #  -----------  Run ILP solver for each set of lcs based on their p
+            #  -----------  Run ILP solver for each p
             for p in lcP:
-                ps.append(p)
-                
-                if pUsed:
-                    mP = m.copy() # Copy model for this run                    
-                    xP = {}
-                    lckey = "/ILP/xP"
-                   
-                    pStart= perf_counter()
-                    
-                    for _x in x:
-                        # Map variables to the new copy model
-                        xP[_x] = mP.getVarByName(x[_x].VarName)
-                        
-                        rootConcept = dn.findRootConceptOrRelation(_x[0])
-                        
-                        dns = dn.findDatanodes(select = ((rootConcept,), ("instanceID", _x[2])))  
-                        
-                        if dns:
-                            if _x[1].startswith('Not'):
-                                xPkey = '<' + _x[0].name + '>/ILP/notxP'
-                            else:
-                                xPkey = '<' + _x[0].name + '>/ILP/xP'
-    
-                            if xPkey not in dns[0].attributes:
-                                dns[0].attributes[xPkey] = {}
-                                
-                            if p not in dns[0].attributes[xPkey]:
-                                xkey = '<' + _x[0].name + '>/ILP/x'
-                                if xkey not in dns[0].attributes:
-                                    continue
-                                
-                                xLen = len(dns[0].attributes[xkey])
-                                dns[0].attributes[xPkey][p] = [None] * xLen
-                                
-                            dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
-                            
-                            pEnd = perf_counter()
-                            self.myLoggerTime.info('ILP Model init for p %i - time: %ims'%(p, (pEnd - pStart)*1000))
-                else:
-                    mP = m
-                    xP = x
-                    
-                    lckey = "/ILP/x"
-            
-                # Prepare set with logical constraints for this run
-                lcs = []
-                for _p in lcP:
-                    lcs.extend(lcP[_p])
+                self.processILPModelForP(p, lcP, m, x, dn, pUsed, reusingModel, ilpVarCount, minimizeObjective, lcRun)
 
-                    if _p == p:
-                        break     
-    
-                # ----------- Add LC constraints to the ILP model
-                
-                endLogicalConstraintsPrep = perf_counter()
-                elapsedLogicalConstraintsPrepInMs = (endLogicalConstraintsPrep - endGraphAndOntologyConstraints)*1000
-                self.myLoggerTime.info('ILP Logical Constraints Preprocessing - time: %ims'%(elapsedLogicalConstraintsPrepInMs))
-                
-                if pUsed or not reusingModel:
-                    self.addLogicalConstrains(mP, dn, lcs, p, key = lckey) # <--- LC constraints
-                    
-                    # Save model
-                    if self.reuse_model:
-                        self.model.append((ilpVarCount, mP, xP))
-                        import sys
-                        memoryUsage = sys.getsizeof(mP)
-                        # Convert bytes to kilobytes
-                        memoryUsage_kB = memoryUsage / 1024
-                        self.myLoggerTime.info(f'ILP Logical Constraints Preprocessing - memory use by saved Gurobi models: {memoryUsage_kB:.2f} kB')
-
-
-                self.myLogger.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
-                self.myLoggerTime.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
-
-                endLogicalConstraints = perf_counter()
-                elapsedLogicalConstraintsInMs = (endLogicalConstraints - endLogicalConstraintsPrep) *1000
-                self.myLoggerTime.info('ILP Logical Constraints - time: %ims'%(elapsedLogicalConstraintsInMs))
-            
-                #mP.update()
-                #mP.display() 
-                startOptimize = perf_counter()
-
-                # ----------- Run ILP model - Find solution 
-                mP.optimize()
-                mP.update()
-                                
-                endOptimize = perf_counter()
-                elapsedOptimizeInMs = (endOptimize - startOptimize) * 1000
-    
-                # ----------- Check model run result
-                solved = False
-                objValue = None
-                if mP.status == GRB.Status.OPTIMAL:
-                    self.myLogger.info('%s solution was found in %ims for p - %i with optimal value: %.2f'
-                                       %('Min' if minimizeObjective else 'Max', elapsedOptimizeInMs, p, mP.ObjVal))
-                    
-                    self.myLoggerTime.info('%s solution was found in %ims for p - %i with optimal value: %.2f'
-                                       %('Min' if minimizeObjective else 'Max', elapsedOptimizeInMs, p, mP.ObjVal))
-                    solved = True
-                    objValue = mP.ObjVal
-                elif mP.status == GRB.Status.INFEASIBLE:
-                    self.myLogger.error('Model was proven to be infeasible for p - %i.'%(p))
-                    self.myLoggerTime.error('Model was proven to be infeasible for p - %i.'%(p))
-                elif mP.status == GRB.Status.INF_OR_UNBD:
-                    self.myLogger.error('Model was proven to be infeasible or unbound for p - %i.'%(p))
-                    self.myLoggerTime.error('Model was proven to be infeasible or unbound for p - %i.'%(p))
-                elif mP.status == GRB.Status.UNBOUNDED:
-                    self.myLogger.error('Model was proven to be unbound.')
-                    self.myLoggerTime.error('Model was proven to be unbound.')
-                else:
-                    self.myLogger.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
-                    self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
-                 
-                # Print ILP model to log file if model is not solved or logger level is DEBUG 
-                # -  check if Gurobi is version 9.1.1 or less; newer versions hang on mP.display() 
-                gurobiVersion = gurobipy.gurobi.version()
-                if (gurobiVersion[0] < 9) or \
-                   ((gurobiVersion[0] < 10) and (gurobiVersion[1] < 1)) or \
-                   ((gurobiVersion[0] < 10) and (gurobiVersion[1] < 2) and (gurobiVersion[2] < 2)):
-                    if (not solved or self.myLogger.level <= logging.INFO) and self.myLogger.filter(""):
-                        import sys
-                        so = sys.stdout 
-                        logFileName = self.myLogger.handlers[0].baseFilename
-                        log = open(logFileName, "a")
-                        sys.stdout = log
-                        mP.display() 
-                        sys.stdout = so
-                    
-                if (not solved):
-                    mP.computeIIS()
-                    mP.write("logs/gurabiInfeasible.ilp")
-
-                #if (self.myLogger.level <= logging.INFO):# and self.myLogger.filter(""):
-                #    mP.write("logs/gurabiInfeasible.lp")
-
-                # Keep result of the model run    
-                lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimizeInMs}
+            endOptimize = perf_counter()
 
             # ----------- Select model run with the max/min objective value 
             maxP = None
             for p in lcRun:
-                if lcRun[p]['objValue']:
+                if lcRun[p]['solved']:
                     if maxP:
                         if minimizeObjective and lcRun[maxP]['objValue'] >= lcRun[p]['objValue']:
                             maxP = p
@@ -1459,13 +1418,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 lcRun[maxP]['mP'].update()
                 xVars = list(lcRun[maxP]['xP'].values())
                 xVarsIndex = 0
-                
+                solutions_to_log = set()
+
+                # Initialize at the beginning of your method
+                solutions_to_log = set()
+
                 for c in conceptsRelations:
                     if c[2] is None:
                         index = 0
                     else:
                         index = c[2] # multiclass
-                         
+                        
                     c_root = dn.findRootConceptOrRelation(c[0])
                     c_root_dns = dn.findDatanodes(select = c_root)
                     
@@ -1483,7 +1446,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             ilpTensor = dn.attributes["variableSet"][ilpKeyInVariableSet]
                         else:
                             ilpTensor = torch.zeros([len(c_root_dns), c[3]], dtype=torch.float, device=self.current_device)
-                   
+                
                     for i, cDn in enumerate(c_root_dns):
                         dnAtt = cDn.getAttributes()
                         
@@ -1491,13 +1454,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if xVars[xVarsIndex] == None or not reusingModel:
                                 
                                 if ilpTensor is not None:
-                                   ilpTensor[i][index] = float("nan")
+                                    ilpTensor[i][index] = float("nan")
                                 else:
                                     if ILPkey not in dnAtt:
                                         dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
                                     
                                     dnAtt[ILPkey][index] = float("nan")
-                                
+
                                 # Update index for x variables 
                                 if c[2] is None:
                                     xVarsIndex +=2 # skip Not variable
@@ -1539,13 +1502,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                             solution = 1
 
                         if ilpTensor is None and ILPkey not in dnAtt:
-                            dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
+                            dnAtt[ILPkey] = torch.full((c[3],), float("nan"))
                         
                         if xkey not in dnAtt:
-                            dnAtt[xkey] = torch.empty(c[3], dtype=torch.float)
-                       
+                            dnAtt[xkey] = torch.full((c[3],), float("nan"))
+                    
                         if ilpTensor is not None:
-                           ilpTensor[i][index] = solution
+                            ilpTensor[i][index] = solution
                         else:
                             dnAtt[ILPkey][index] = solution
                             
@@ -1554,16 +1517,34 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if xNotPkey in dnAtt: # do this for not x as well
                                 dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
 
-                        
-                        if solution == 1:
-                            self.myLogger.info('\"%s\" is \"%s\"'%(cDn, c[1]))
-                            #self.myLoggerTime.info('\"%s\" is \"%s\"'%(cDn,c[1]))
+                        # Only log positive concepts when solution == 1
+                        # Skip negative concepts (those with "not_" in the name)
+                        if solution == 1 and not c[1].startswith("not_"):
+                            solutions_to_log.add((cDn, c[1]))
                     
                     if ilpTensor is not None:
                         dn.attributes["variableSet"][ilpKeyInVariableSet] = ilpTensor
-
+                        
+                # Log all solutions in sorted order (only positive concepts)
+                if solutions_to_log:
+                    self.log_sorted_solutions(solutions_to_log)
+                    solutions_to_log.clear()
+                    
             else:
-                pass
+                end = perf_counter()
+                elapsedInS = end - start
+                if elapsedInS > 1:
+                    self.myLogger.info('ILP Model Infeasible no solution found - internal total time: %fs'%(elapsedInS))
+                    self.myLoggerTime.info('ILP Model Infeasible no solution found - internal total time: %fs'%(elapsedInS))
+                else:
+                    elapsedInMs = elapsedInS *1000
+                    self.myLogger.info('ILP Model Infeasible no solution found - internal total time: %ims'%(elapsedInMs))
+                    self.myLoggerTime.info('ILP Model Infeasible no solution found - internal total time: %ims'%(elapsedInMs))
+
+                self.myLogger.info('')
+
+                # Raise exception if no solution found
+                raise Exception('ILP Model Infeasible - no solution found')
                                        
         except Exception as inst:
             self.myLogger.error('Error returning solutions -  %s'%(inst))
@@ -1592,6 +1573,176 @@ class gurobiILPOntSolver(ilpOntSolver):
         # ----------- Return
         return
 
+    def log_sorted_solutions(self, solutions_to_log):
+        """
+        Remove duplicates, sort solutions by datanode name and concept, then log them
+        in alphabetical order with red colour (console only) for items with multiple solutions.
+        """
+        if not solutions_to_log:
+            return
+        
+        # Group solutions by datanode to count how many solutions each has
+        datanode_counts = {}
+        for dn, concept in solutions_to_log:
+            dn_str = str(dn)
+            if dn_str not in datanode_counts:
+                datanode_counts[dn_str] = 0
+            datanode_counts[dn_str] += 1
+        
+        for dn, concept in sorted(solutions_to_log, key=lambda x: (str(x[0]), x[1])):
+            dn_str = str(dn)
+            # Only use red color if this datanode has more than one solution
+            if datanode_counts[dn_str] > 1:
+                self.myLogger.info('%s"%s" is "%s"%s', Fore.RED, dn_str, concept, Style.RESET_ALL)
+            else:
+                self.myLogger.info('"%s" is "%s"', dn_str, concept)
+            
+    def processILPModelForP(self, p, lcP, m, x, dn, pUsed, reusingModel, ilpVarCount, minimizeObjective, lcRun):
+        ps = []
+        ps.append(p)
+        
+        startLogicalConstraintsPrep = perf_counter()
+
+        if pUsed:
+            mP = m.copy()  # Copy model for this run
+            xP = {}
+            lckey = "/ILP/xP"
+            
+            pStart = perf_counter()
+            
+            for _x in x:
+                # Map variables to the new copy model
+                xP[_x] = mP.getVarByName(x[_x].VarName)
+                
+                rootConcept = dn.findRootConceptOrRelation(_x[0])
+                
+                dns = dn.findDatanodes(select=((rootConcept,), ("instanceID", _x[2])))
+                
+                if dns:
+                    if _x[1].startswith('Not'):
+                        xPkey = '<' + _x[0].name + '>/ILP/notxP'
+                    else:
+                        xPkey = '<' + _x[0].name + '>/ILP/xP'
+                    
+                    if xPkey not in dns[0].attributes:
+                        dns[0].attributes[xPkey] = {}
+                    
+                    if p not in dns[0].attributes[xPkey]:
+                        xkey = '<' + _x[0].name + '>/ILP/x'
+                        if xkey not in dns[0].attributes:
+                            continue
+                        
+                        xLen = len(dns[0].attributes[xkey])
+                        dns[0].attributes[xPkey][p] = [None] * xLen
+                    
+                    dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
+                    
+                    pEnd = perf_counter()
+                    self.myLoggerTime.info('ILP Model init for p %i - time: %ims' % (p, (pEnd - pStart) * 1000))
+        else:
+            mP = m
+            xP = x
+            lckey = "/ILP/x"
+        
+        # Prepare set with logical constraints for this run
+        lcs = []
+        for _p in lcP:
+            lcs.extend(lcP[_p])
+            
+            if _p == p:
+                break
+        
+        # ----------- Add LC constraints to the ILP model
+        endLogicalConstraintsPrep = perf_counter()
+        elapsedLogicalConstraintsPrepInMs = (endLogicalConstraintsPrep - startLogicalConstraintsPrep) * 1000
+        self.myLoggerTime.info('ILP Logical Constraints Preprocessing - time: %ims' % (elapsedLogicalConstraintsPrepInMs))
+        
+        if pUsed or not reusingModel:
+            self.addLogicalConstrains(mP, dn, lcs, p, key=lckey)  # <--- LC constraints
+            
+            # Save model
+            if self.reuse_model:
+                self.model.append((ilpVarCount, mP, xP))
+                import sys
+                memoryUsage = sys.getsizeof(mP)
+                # Convert bytes to kilobytes
+                memoryUsage_kB = memoryUsage / 1024
+                self.myLoggerTime.info(f'ILP Logical Constraints Preprocessing - memory use by saved Gurobi models: {memoryUsage_kB:.2f} kB')
+        
+        self.myLogger.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints' % (p, mP.NumVars, mP.NumConstrs))
+        self.myLoggerTime.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints' % (p, mP.NumVars, mP.NumConstrs))
+        
+        endLogicalConstraints = perf_counter()
+        elapsedLogicalConstraintsInMs = (endLogicalConstraints - endLogicalConstraintsPrep) * 1000
+        self.myLoggerTime.info('ILP Logical Constraints - time: %ims' % (elapsedLogicalConstraintsInMs))
+        
+        startOptimize = perf_counter()
+        
+        # ----------- Run ILP model - Find solution
+        mP.optimize()
+        mP.update()
+        
+        endOptimize = perf_counter()
+        elapsedOptimizeInMs = (endOptimize - startOptimize) * 1000
+        
+        # ----------- Check model run result
+        solved = False
+        objValue = None
+        if mP.status == GRB.Status.OPTIMAL:
+            self.myLogger.info('%s solution was found in %ims for p - %i with optimal value: %.2f' % ('Min' if minimizeObjective else 'Max', elapsedOptimizeInMs, p, mP.ObjVal))
+            self.myLoggerTime.info('%s solution was found in %ims for p - %i with optimal value: %.2f' % ('Min' if minimizeObjective else 'Max', elapsedOptimizeInMs, p, mP.ObjVal))
+            solved = True
+            objValue = mP.ObjVal
+        elif mP.status == GRB.Status.INFEASIBLE:
+            self.myLogger.error('Model was proven to be infeasible for p - %i.' % (p))
+            self.myLoggerTime.error('Model was proven to be infeasible for p - %i.' % (p))
+        elif mP.status == GRB.Status.INF_OR_UNBD:
+            self.myLogger.error('Model was proven to be infeasible or unbound for p - %i.' % (p))
+            self.myLoggerTime.error('Model was proven to be infeasible or unbound for p - %i.' % (p))
+        elif mP.status == GRB.Status.UNBOUNDED:
+            self.myLogger.error('Model was proven to be unbound.')
+            self.myLoggerTime.error('Model was proven to be unbound.')
+        else:
+            self.myLogger.error('Optimal solution not was found for p - %i - error code %i' % (p, mP.status))
+            self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i' % (p, mP.status))
+        
+         # ----------- Write model to file if logging level is INFO
+        if self.myLogger.level <= logging.INFO:
+            model_path = "logs/GurobiModel.lp"
+            if os.path.exists(model_path):
+                os.remove(model_path)
+            mP.write(model_path) # Write model to file
+           
+        # ----------- Write infeasible model to file if model was proven to be infeasible or solution when found
+        infeasible_path = "logs/GurobiInfeasible.ilp"
+        sol_path = "logs/GurobiSolution.sol"
+        json_path = "logs/GurobiSolution.json"
+
+        if not solved:
+            # Remove solution files if they exist from previous runs
+            if os.path.exists(sol_path):
+                os.remove(sol_path)
+            if os.path.exists(json_path):
+                os.remove(json_path)
+            mP.computeIIS()
+            if os.path.exists(infeasible_path):
+                os.remove(infeasible_path)
+            mP.write(infeasible_path)
+        elif self.myLogger.level <= logging.INFO:
+            # Remove infeasible file and solution files if they exist from previous runs
+            if os.path.exists(infeasible_path):
+                os.remove(infeasible_path)
+            if os.path.exists(sol_path):
+                os.remove(sol_path)
+            if os.path.exists(json_path):
+                os.remove(json_path)
+            mP.write(sol_path) # Write solution to file
+            mP.write(json_path) # Write solution to file in json format extended
+        
+        # Keep result of the model run
+        lcRun[p] = {'p': p, 'solved': solved, 'objValue': objValue, 'lcs': lcs, 'mP': mP, 'xP': xP, 'elapsedOptimize': elapsedOptimizeInMs}
+  
+    # --------------- Sample Loss Calculation
     def eliminateDuplicateSamples(self, lcVariables, sampleSize):
         variablesSamples = [lcVariables[v][1] for v in lcVariables]
                     
@@ -1809,8 +1960,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 lcCounter +=  1
                 self.myLogger.info('\n')
-                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
-                
+                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
+
                 lcName = lc.lcName
                     
                 lcLosses[lcName] = {}
@@ -1820,7 +1971,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo, inputLc = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
+                    lossList, sampleInfo, inputLc, _ = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     current_lcLosses['sampleInfo'] = sampleInfo
                     current_lcLosses['input'] = inputLc
@@ -1858,7 +2009,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         seperateTensorsUsed = True
                         
                     if seperateTensorsUsed:
-                        lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
+                        lossTensor = torch.zeros(len(lossList), device=self.current_device)#, requires_grad=True) # Entry lcs
                         for i, l in enumerate(lossList):
                             lossTensor[i] = float("nan")
                             for entry in l:
@@ -1871,16 +2022,26 @@ class gurobiILPOntSolver(ilpOntSolver):
                         for entry in lossList[0]:
                             if entry is not None:
                                 if lossTensor == None:
-                                    lossTensor = entry
+                                    lossTensor = entry[0]
                                 else:
-                                    lossTensor += entry
-                    
+                                    lossTensor += entry[0]
+                                    
                 current_lcLosses['lossTensor'] = lossTensor
+                current_lcLosses['conversionTensor'] = 1 - lossTensor
                 if lossTensor != None and torch.is_tensor(lossTensor):
-                    current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                    # Calculate differentiable normalized loss using sigmoid
+                    current_lcLosses['loss'] = torch.nansum(lossTensor)
+                    current_lcLosses['conversionSigmoid'] = torch.sigmoid(-current_lcLosses['loss'])
+                    # Calculate differentiable normalized loss using clamp 
+                    current_lcLosses['conversionClamp'] = torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0)
+                    # Keep original conversion for backwards compatibility
+                    current_lcLosses['conversion'] = 1 - current_lcLosses['loss']
                 else:
-                    current_lcLosses['loss'] = None
-
+                    current_lcLosses['loss'] = None 
+                    current_lcLosses['conversion'] = None
+                    current_lcLosses['conversionSigmoid'] = None
+                    current_lcLosses['conversionClamp'] = None
+                    
                 endLC = perf_counter_ns()
                 elapsedInNsLC = endLC - startLC
                 elapsedInMsLC = elapsedInNsLC/1000000
@@ -1987,10 +2148,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 # --- Calculate sample loss for lc variables
                 current_lcLosses['lossTensor'] = []
+                current_lcLosses['conversionTensor'] = []
                 current_lcLosses['lcSuccesses'] = []
                 current_lcLosses['lcVariables'] = []
                 current_lcLosses['loss'] = []
-                
+                current_lcLosses['conversion'] = []
+                current_lcLosses['conversionSigmoid'] = []
+                current_lcLosses['conversionClamp'] = []
+
                 # Per each lc entry separately
                 if lc.sampleEntries:
                     current_lcLosses['lcSuccesses'] = successesList
@@ -2010,19 +2175,43 @@ class gurobiILPOntSolver(ilpOntSolver):
                         currentLossTensor, _ = self.calulateSampleLossForVariable(currentLcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
                         
                         current_lcLosses['lossTensor'].append(currentLossTensor)
+                        current_lcLosses['conversionTensor'].append(1-currentLossTensor)
                         current_lcLosses['lcVariables'].append(currentLcVariables)
     
                         currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
                         current_lcLosses['loss'].append(currentLoss)
-    
+                        current_lcLosses['conversion'].append(1 - currentLoss)
+                        current_lcLosses['conversionSigmoid'].append(torch.sigmoid(-currentLoss))
+                        current_lcLosses['conversionClamp'].append(torch.clamp(1 - currentLoss, min=0.0, max=1.0))
+
                 else: # Regular calculation for all lc entries at once
                     usedLcSuccesses = lcSuccesses
                     if sampleGlobalLoss:
                         usedLcSuccesses = globalSuccesses
-                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
-                    current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
-    
+
+                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(
+                        currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples
+                    )
+
+                    # scalar loss for this iteration
+                    loss_val = torch.nansum(lossTensor).item()
+
+                    # keep scalars in the 'loss' list
+                    current_lcLosses['loss'].append(loss_val)
+
+                    # append per-iteration conversions (not extend)
+                    current_lcLosses['conversion'].append(1.0 - loss_val)
+
+                    # sigmoid/clamp 
+                    current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val)))
+                    current_lcLosses['conversionClamp'].append(
+                        torch.clamp(torch.tensor(1.0 - loss_val), min=0.0, max=1.0)
+                    )
+
+                    # per-sample tensors
                     current_lcLosses['lossTensor'].append(lossTensor)
+                    current_lcLosses['conversionTensor'].append(1.0 - lossTensor)
+
                     current_lcLosses['lcSuccesses'].append(lcSuccesses)
                     current_lcLosses['lcVariables'].append(lcVariables)
             
@@ -2091,8 +2280,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 lcCounter +=  1
                 self.myLogger.info('\n')
-                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
-                
+                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
+
                 lcName = lc.lcName
                     
                 lcVerifyResult[lcName] = {}
