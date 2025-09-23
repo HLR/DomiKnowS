@@ -29,8 +29,7 @@ jobs:
           TEST_LIST=(
             'solver'
             'dummy_datanode'
-            'example/conll04'
-            'example/orbs'
+            'examples/orbs'
           )
           
           if [ ${#TEST_LIST[@]} -eq 0 ]; then
