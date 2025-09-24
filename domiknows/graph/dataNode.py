@@ -2495,15 +2495,15 @@ class DataNodeBuilder(dict):
         Returns:
             Concept object: The concept object if found, otherwise None.
         """
-        subGraph_keys = [key for key in usedGraph.subgraphs]
-        for subGraphKey in subGraph_keys:
-            subGraph = usedGraph.subgraphs[subGraphKey]
-
-            for conceptNameItem in subGraph.concepts:
-                if conceptName == conceptNameItem:
-                    concept = subGraph.concepts[conceptNameItem]
-
-                    return concept
+        # Search in main graph concepts
+        if conceptName in usedGraph.concepts:
+            return usedGraph.concepts[conceptName]
+        
+        # Search in subgraph concepts
+        for subGraph in usedGraph.subgraphs.values():
+            if conceptName in subGraph.concepts:
+                return subGraph.concepts[conceptName]
+        
         return None
 
     def __findConceptInfo(self, usedGraph, concept):
