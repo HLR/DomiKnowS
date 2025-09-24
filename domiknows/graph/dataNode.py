@@ -319,6 +319,27 @@ class DataNode:
         # ...
         return False
 
+    def _get_matching_keys(self, data_map, word):
+        """
+        Returns all map keys where the last element of the path matches the given word.
+        
+        Args:
+            data_map (dict): Dictionary with path-like keys
+            word (str): Word to match against the last path element
+            
+        Returns:
+            list: List of matching keys
+        """
+        matching_keys = []
+        
+        for key in data_map.keys():
+            # Split the key by '/' and get the last element
+            path_parts = key.split('/')
+            if path_parts and path_parts[-1] == word:
+                matching_keys.append(key)
+        
+        return matching_keys
+
     def getAttribute(self, *keys):
         """Retrieve a specific attribute using a key or a sequence of keys.
 
@@ -395,6 +416,11 @@ class DataNode:
                 elif "propertySet" in self.attributes and key in self.attributes["propertySet"]:
                     return self.attributes["propertySet"][key]
 
+        keys = self._get_matching_keys(self.attributes, key)
+        if keys:
+            key = keys[0]
+            return self.attributes[key]
+            
         return None
 
     # --- Relation Link methods
@@ -714,6 +740,10 @@ class DataNode:
 
             # Find concepts in dataNode - concept are in attributes from learning sensors
             for att in dn.attributes:
+                path_parts = att.split('/')
+                if path_parts and path_parts[-1]:
+                   att = path_parts[-1]
+                
                 if att[0] == '<' and att[-1] == '>':
                     if att[1:-1] not in conceptsAndRelations:
                         conceptsAndRelations.add(att[1:-1])
@@ -2465,9 +2495,9 @@ class DataNodeBuilder(dict):
         Returns:
             Concept object: The concept object if found, otherwise None.
         """
-        subGraph_keys = [key for key in usedGraph._objs]
+        subGraph_keys = [key for key in usedGraph.subgraphs]
         for subGraphKey in subGraph_keys:
-            subGraph = usedGraph._objs[subGraphKey]
+            subGraph = usedGraph.subgraphs[subGraphKey]
 
             for conceptNameItem in subGraph.concepts:
                 if conceptName == conceptNameItem:
@@ -2489,6 +2519,7 @@ class DataNodeBuilder(dict):
                   - 'concept': The concept itself.
                   - 'relation': A boolean indicating whether the concept has any relations.
                   - 'relationAttrs': A dictionary mapping relation names to their corresponding concept objects.
+                  - 'relationAttrsFullName': A dictionary mapping full relation names to their corresponding concept objects.
                   - 'root': A boolean indicating if the concept is a root concept.
                   - 'contains': A list of concepts that this concept contains.
                   - 'containedIn': A list of concepts in which this concept is contained.
@@ -2497,6 +2528,7 @@ class DataNodeBuilder(dict):
             'concept': concept,
             'relation': bool(concept.has_a()),
             'relationAttrs': {rel.name: self.__findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
+            'relationAttrsFullName': {rel.fullname: self.__findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
             'root': not ('contains' in concept._in),
             'contains': [contain.dst for contain in concept._out.get('contains', [])],
             'containedIn': [contain.src for contain in concept._in.get('contains', [])]
@@ -2667,6 +2699,10 @@ class DataNodeBuilder(dict):
         if conceptInfo['relationAttrData']:
             index = keyDataName.index('.')
             attrName = keyDataName[0:index]
+            
+            path_parts = attrName.split('/')
+            if path_parts and path_parts[-1]:
+                attrName = path_parts[-1]
 
             relationAttrsCacheName = conceptInfo['concept'].name + "RelationAttrsCache"
 

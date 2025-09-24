@@ -133,9 +133,9 @@ class Graph(BaseGraphTree):
         Raises:
         AttributeError, TypeError: If the attribute 'is_a' is not available or if the type is incorrect.
         '''
-        subGraph_keys = [key for key in self._objs]
+        subGraph_keys = [key for key in self.subgraphs]
         for subGraphKey in subGraph_keys:
-            subGraph = self._objs[subGraphKey]
+            subGraph = self.subgraphs[subGraphKey]
            
             for conceptNameItem in subGraph.concepts:
                 if conceptName == conceptNameItem:

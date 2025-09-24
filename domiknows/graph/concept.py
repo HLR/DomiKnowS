@@ -81,7 +81,7 @@ class Concept(BaseGraphTree):
         cls = type(self)
         if name is None:
             name = cls.suggest_name()            
-        assert cls._names[name] == 0, f"The name {name} has been already used in this graph for a concept before, please use a unique name."
+        #assert cls._names[name] == 0, f"The name {name} has been already used in this graph for a concept before, please use a unique name."
         cls._names[name] += 1
         self.name = name
         cls._objs[name] = self

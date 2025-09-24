@@ -6,9 +6,9 @@ from domiknows.graph import EnumConcept
 dataSizeInit = 5
 
 def findConcept(conceptName, usedGraph):
-    subGraph_keys = [key for key in usedGraph._objs]
+    subGraph_keys = [key for key in usedGraph.subgraphs]
     for subGraphKey in subGraph_keys:
-        subGraph = usedGraph._objs[subGraphKey]
+        subGraph = usedGraph.subgraphs[subGraphKey]
        
         for conceptNameItem in subGraph.concepts:
             if conceptName == conceptNameItem:
