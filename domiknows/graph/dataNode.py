@@ -2317,6 +2317,16 @@ class DataNodeBuilder(dict):
         if args:
             dict.__setitem__(self, "data_item", args[0])
 
+    @classmethod
+    def clear(cls):
+        """Clear DataNodeBuilder class state.
+        
+        This method resets any class-level state that might persist
+        between test runs or other scenarios where clean state is needed.
+        """
+        # Reset any class-level variables if they exist
+        cls.context = "build"
+    
     def __contains__(self, key):
         """
         Overloaded __contains__ method for the DataNodeBuilder class.
