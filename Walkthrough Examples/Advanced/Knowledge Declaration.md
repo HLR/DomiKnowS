@@ -78,7 +78,7 @@ The following figure illustrates the graph for this task:
 ![plot](WIQA.png)
 
 
-See [here](https://github.com/HLR/DomiKnowS/blob/Doc/Main%20Components/Knowledge%20Declaration%20(Graph).md) for more details about declaring graph and constraints.
+See [here](../../Main%20Components/Knowledge%20Declaration%20%28Graph%29.md) for more details about declaring graph and constraints.
 
 ____
 [Goto next section (Model Declaration)](Model%20Declaration.md)

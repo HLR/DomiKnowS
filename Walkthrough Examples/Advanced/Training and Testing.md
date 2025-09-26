@@ -30,7 +30,7 @@ print(program.model.loss)
 print(program.model.metric)  
 ```
 
-Checkout for more details about [workflows in the program](https://github.com/HLR/DomiKnowS/blob/Doc/Main%20Components/Workflow%20(Training).md)
+Checkout for more details about [workflows in the program](../../Main%20Components/Workflow%20%28Training%29.md)
 
 ____
 [Goto next section (Inference)](Inference.md)

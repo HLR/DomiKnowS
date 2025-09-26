@@ -44,7 +44,7 @@ with Graph('email_graph') as graph:
 
 Some constraints are inherent in the graph, such as the relations that are defined in them. But other constraints must be defined explicitly. The constraint here is the `disjoint` constraint between `Spam` and `Regular`. Disjoint means that at most one of these labels can be True simultaneously.
 
-See [here](https://github.com/HLR/DomiKnowS/blob/Doc/Main%20Components/Knowledge%20Declaration%20(Graph).md) for more details about declaring graph and constraints.
+See [here](../../Main%20Components/Knowledge%20Declaration%20%28Graph%29.md) for more details about declaring graph and constraints.
 
 ____
 [Goto next section (Model Declaration)](Model%20Declaration.md)

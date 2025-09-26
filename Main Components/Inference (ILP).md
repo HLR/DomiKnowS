@@ -38,7 +38,7 @@ The solver builds the ILP (Integer Linear Programming) model based on the constr
 The actual used ILP is Zero-One linear programming in which the variables are restricted to be either 0 or 1.
 It solves the ILP model and provides the most optimized assignment. The model objective is by default maximized. However it can be optionally minimized if appropriate parameter is provided to the method.
 
-The solver can be called on the [DataNode](QUERY.md) (usually the root DataNode of the Data Graph) with the method:
+The solver can be called on the [DataNode](Query%20and%20Access%20%28Datanode%29.md) (usually the root DataNode of the Data Graph) with the method:
 
 #### ILP Inference
 ```python
@@ -60,7 +60,7 @@ If this collection is empty then the methods will use all concepts and relations
 
 - `minimizeObjective` by default objective is maximized however if this variable is set to True then the ILP model will minimize the objective.
 
-The solver [implementation using Gurobi](/Technical%20API/Solver/) is called with classification probabilities obtained from learned model. 
+The solver [implementation using Gurobi](../Technical%20API/solver/) is called with classification probabilities obtained from learned model. 
 
 The method retrieves the probabilities from Data Graph nodes attributes. The key use to retrieve it has a pattern:
 

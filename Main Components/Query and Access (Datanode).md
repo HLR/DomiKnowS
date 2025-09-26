@@ -16,11 +16,11 @@ The following is the methods of query and access to datanodes.
 ## DataNode and Data Graph
 
 Example in the learning process has its Data Graph built based on sensors included in the model.
-The example is usually partitioned by sensors into a different types of elements corresponding to different concepts from the [knowledge graph](KNOWLEDGE.md).
+The example is usually partitioned by sensors into a different types of elements corresponding to different concepts from the [knowledge graph](Knowledge%20Declaration%20%28Graph%29.md).
 
 Each example element has its own DataNode build which is linked to other Data Nodes in the Data Graph corresponding to other elements from the example through relation links. The Data Node stores the following information about the token:
 
-- **ontology concepts**  - of the element from the associated [knowledge graph](KNOWLEDGE.md),
+- **ontology concepts**  - of the element from the associated [knowledge graph](Knowledge%20Declaration%20%28Graph%29.md),
 
 - **id** - of the element, unique in the scope of all elements of the given knowledge concept type,
 
