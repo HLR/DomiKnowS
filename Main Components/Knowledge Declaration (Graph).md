@@ -145,7 +145,7 @@ word.equal(word1)
 
 This edge enables us to transfer properties of concepts between instances that are marked as equal. 
 
-Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of [Sensors](MODEL.md#sensor). 
+Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of [Sensors](Model%20Declaration%20(Sensor).md#sensor). 
 
 ### Example
 
