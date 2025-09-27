@@ -181,5 +181,5 @@ Inference-Masked Loss for Deep Structured Output Learning, Proceedings of the Tw
 <a id="2">[2] https://papers.nips.cc/paper/2019/file/cf708fc1decf0337aded484f8f4519ae-Paper.pdf </a> 
 A Primal-Dual Formulation for Deep Learning with Constraints, 33rd Conference on Neural Information Processing Systems (NeurIPS 2019), Vancouver, Canada.
 
-<a id="2">[3] https://ojs.aaai.org/index.php/AAAI/article/view/4316 </a> 
+<a id="3">[3] https://ojs.aaai.org/index.php/AAAI/article/view/4316 </a> 
 "Gradient-Based Inference for Networks with Output Constraints" Jay Yoon Lee et. al
