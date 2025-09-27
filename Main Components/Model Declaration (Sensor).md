@@ -152,8 +152,6 @@ The `context` will be updated with a `sensor` key and `output` value pair as a c
 ```python
 assert context[sensor] == output
 ```
-The full name is constructed TODO.
-The output is interpreted TODO.
 
 ### `forward()`
 
@@ -263,7 +261,6 @@ assert context[concept] == output
 In model declaration, the user will need to assign sensors to properties.
 However, that should not nessesearily reflect the order of calculation that is needed.
 Sensors just look at `context` and try to fetch whatever they need as input.
-\TODO{this next sentecne is not readable:} Managing one should be call before another is a headache.
 
 Some base sensor extentions (e.g. `TorchSensor` and its subclasses) are able to trace what it need beforehand and invoke automatically. Such automation forms an invocation path.
 
