@@ -121,7 +121,7 @@ The output of such Reader will be a list of following items.
 
 `Sensor`s are procedures to access external resources and procedures. For example, reading from raw data, feature engineering staffs, and preprocessing procedures.
 "Sensors" are looked at as blackboxes in a program.
-Users use sensors as [callable objects](#callable).
+Users use sensors as callable objects.
 Underlying `forward()` function will be used to calculate an output. One can override `forward()` function to customize how the sensor get the output.
 Base classes of `Sensor` will handle details like caching calcuated results, managing invocation path, and converting input.
 
