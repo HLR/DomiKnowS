@@ -60,6 +60,6 @@ program.train(reader, train_epoch_num=10)
 
 ## Examples
 
-To help you get started quickly, we provide a [walkthrough example](ExampleTask.md). This example demonstrates how to use DomiKnowS step by step.
+To help you get started quickly, we provide a [walkthrough example](Walkthrough%20Examples). This example demonstrates how to use DomiKnowS step by step.
 
 Refer to documentation for detailed information!
