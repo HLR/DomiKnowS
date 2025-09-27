@@ -121,7 +121,7 @@ However, the dataNode builder will just store the value for properties and won't
 
 #### Values
 
-The values provided to the builder is interprete as a ordered collection of attributes values that are to be distributed to each dataNode of the associated concept.
+The values provided to the builder is interpreted as an ordered collection of attributes values that are to be distributed to each dataNode of the associated concept.
 Basically, it should be a python `list` or a`torch.Tensor`.
 If a list is assigned, the length of the list must match the number of dataNodes of this concept and each element in this list, whatever type it is, should be associated to the attribute of a dataNode in the same order as the dataNode index order.
 If a tensor is provided, the first dimension of the sensor must match the number of dataNodes of this concept and each "row" containing the rest of dimension should be associated to the attribute of a dataNode in the same order as the dataNode index order.
@@ -161,7 +161,7 @@ For instance, the second dataNode of word have `'text'` attribute as string `'wo
 
 #### DataNode(s) for concept
 
-If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder** analysis the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
+If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](Knowledge%20Declaration%20%28Graph%29.md) then the **DataNodeBuilder** analysis the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
 The *value* is assumed to provide **single element** (contribute to single DataNode) if the value is:
 - not Tensor or List, e.g. string,
 - Tensor but of the dimension equals 0,
