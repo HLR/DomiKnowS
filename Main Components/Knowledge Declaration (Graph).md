@@ -356,7 +356,7 @@ The graph can also specify constraints:
 
 ### Ontology Constraint
 
-The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using Python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
+The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using Python OWL library [owlready2](https://pypi.org/project/owlready2/).
 
 The OWL ontology language allows to specify constraints on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constraints.
 
