@@ -145,7 +145,7 @@ word.equal(word1)
 
 This edge enables us to transfer properties of concepts between instances that are marked as equal. 
 
-Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of [Sensors](MODEL.md#sensor). 
+Using each of these relation edges requires us to assign a sensor to them in the model execution. See the descriptions of [Sensors](Model%20Declaration%20(Sensor).md#sensor). 
 
 ### Example
 
@@ -356,7 +356,7 @@ The graph can also specify constraints:
 
 ### Ontology Constraint
 
-The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using Python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
+The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using Python OWL library [owlready2](https://pypi.org/project/owlready2/).
 
 The OWL ontology language allows to specify constraints on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constraints.
 
