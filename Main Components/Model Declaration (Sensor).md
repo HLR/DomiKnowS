@@ -25,10 +25,10 @@ The following is the tutorial on defining our model through sensors.
 
 ## Class Overview
 
-- package `domiknows.sensor`:
-- "Reader":
-- `Sensor`:
-- `Learner`:
+- package `domiknows.sensor`
+- `Reader`
+- `Sensor`
+- `Learner`
 
 ## Reader
 
