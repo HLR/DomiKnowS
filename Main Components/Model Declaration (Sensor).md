@@ -19,7 +19,7 @@ The following is the tutorial on defining our model through sensors.
       - [Example: `QuerySensor.forward(datanode)`](#example-querysensorforwarddatanode)
   - [Sensor Assignment to Property](#sensor-assignment-to-property)
   - [Learner](#learner)
-  - [Multiple Assigment Convention](#multiple-assigment-convention)
+  - [Multiple Assignment Convention](#multiple-assignment-convention)
   - [Detach](#detach)
     - [`detach` use cases](#detach-use-cases)
 
@@ -32,17 +32,17 @@ The following is the tutorial on defining our model through sensors.
 
 ## Reader
 
-User will have to write their own reader to read source data.
-To be flexible, the framework does not require user to implement a specific reader class.
-Instead, the user will need to provide an `Iterable` object for the input of the program and yield an sample, or a batch of samples, in a `dict`.
-The reader will be provided to the program for specific workflow like `train()`, `test()` or `eval()`.
+The user will have to write their own reader to read the source data.
+To be flexible, the framework does not require the user to implement a specific reader class.
+Instead, the user will need to provide an `Iterable` object for the input of the program and yield a sample, or a batch of samples, in a `dict`.
+The reader will be provided with the program for specific workflows, such as `train()`, `test()`, or `eval()`.
 Sensors will also be invoked with a `dict` retrieved from the reader each time (detailed later).
 
-For example, a `list` of `dict` is a simplest input reader.
+For example, a `list` of `dict` is the simplest input reader.
 Also, `torch.utils.data.DataLoader` instance is a good choice when working with PyTorch.
-The framework also has a simple reader for JSON format input file.
+The framework also has a simple reader for JSON-format input files.
 
-There is also a default Reader class implemented in the framework.
+The framework also includes a default Reader class.
 ```python
 class RegrReader:
     def __init__(self, file, type="json"):
@@ -75,17 +75,20 @@ class RegrReader:
         for item in self.objects:
             yield self.make_object(item)
 ```
-if you are loading a json file you do not have to rewrite the `parse_file` function for your customized reader. If you are using other data sources, you have to load a file and write the `parse_file` to parse it to a list of dictionary. 
-To generate the outputs of each example you have to write functions in the format of `get$name$val`. each time one of the items in the list of dictionary is provided to your function and you should return the value of `$name` inside this function. At the end the output for each example will contain all the keys from the output of function `get$name$val` as `$name`. For getting one example of the reader, you have to call `run()` and it will yield one example at a time.
-For an example, If you datasource is a json that has list of items looking like the following, you will just load it and set the keys.
+If you are loading a JSON file, you do not have to rewrite the `parse_file` function for your customized reader. If you are using other data sources, you have to load a file and write the `parse_file` to parse it into a list of dictionaries. 
+To generate the outputs of each example, you have to write functions in the format of `get$name$val`. Each time one of the items in the list of the dictionary is provided to your function, you should return the value of `$name` inside this function. At the end, the output for each example will contain all the keys from the output of the function `get$name$val` as `$name`. To obtain one instance of the reader, you must call `run()`, and it will yield one example at a time.
+For example, if your data source is a JSON that has a list of items looking like the following, you will load it and set the keys.
+
 ```json
 {
-	"Sentence": "This book is interestingly boring. I tried to read it 10 times and each time I just felt sleep immediately.",
+	"Sentence": "This book is interestingly boring. I tried to read it 10 times, and each time I just fell asleep immediately.",
 	"Label": 'negative',
 	 "Optimistic": False
 }
 ```
+
 As we want our output for each item to contain the following keywords, we will define these functions.
+
 ```python
 class SentimentReader(RegrReader):
 	def getSentenceval(self, item):
@@ -107,10 +110,11 @@ class SentimentReader(RegrReader):
 		return item['Optimistic']
 ``` 
 
-The output of such Reader will be a list of following items.
+The output of such a Reader will be a list of the following items.
+
 ```json
 {
-	"Sentence": "This book is interestingly boring. I tried to read it 10 times and each time I just felt sleep immediately.",
+	"Sentence": "This book is interestingly boring. I tried to read it 10 times, and each time I just fell asleep immediately.",
 	"PositiveLabel": False,
 	"NegativeLabel": True,
 	"Optimistic": False
@@ -119,34 +123,34 @@ The output of such Reader will be a list of following items.
 
 ## Sensor
 
-`Sensor`s are procedures to access external resources and procedures. For example, reading from raw data, feature engineering staffs, and preprocessing procedures.
-"Sensors" are looked at as blackboxes in a program.
+`Sensor`s are procedures to access external resources and procedures. For example, reading from raw data, feature engineering staff, and preprocessing procedures.
+"Sensors" are looked at as black boxes in a program.
 Users use sensors as callable objects.
-Underlying `forward()` function will be used to calculate an output. One can override `forward()` function to customize how the sensor get the output.
-Base classes of `Sensor` will handle details like caching calcuated results, managing invocation path, and converting input.
+The underlying `forward()` function will be used to calculate an output. One can override the `forward()` function to customize how the sensor gets the output.
+Base classes of `Sensor` will handle details like caching calculated results, managing the invocation path, and converting input.
 
 ### Initiate a Sensor
 
-Sensors should always be initiated by a implmented class, rather the abstract `Sensor` or any base sensor.
+Sensors should always be initiated by an implemented class, rather than the abstract `Sensor` or any base sensor.
 
 ```python
 sensor = ImplementedSensor(...)
 ```
 
-The framework contains some default sensors that users can use directly. Users can also customize their own by extending these sensors. The main body of the sensor should be written in a method called forward() inside Sensor class. 
+The framework contains some default sensors that users can use directly. Users can also customize their own by extending these sensors. The main body of the sensor should be written in a method called forward() inside the Sensor class. 
 
 ### Invoke a Sensor
 
 A `Sensor` is a callable object that can be invoked by passing a `dict` context variable or a `DataNodeBuilder`.
-When working in a program, the item yield by the reader will be used as the context.
+When working in a program, the item yielded by the reader will be used as the context.
 One can invoke it by
 
 ```python
-context = {...}  # input data organized in a python dictionary
+context = {...}  # input data organized in a Python dictionary
 output = sensor(context)
 ```
 
-Sensor will calcuate `output` based on its implementation of `forward()` function.
+The sensor will calculate `output` based on its implementation of the `forward()` function.
 The `context` will be updated with a `sensor` key and `output` value pair as a caching mechanism.
 
 ```python
@@ -156,13 +160,13 @@ assert context[sensor] == output
 ### `forward()`
 
 `forward()` defines the output calculation of the sensor.
-Defaultly, it takes the same `context` as the sensor being invoke with.
+By default, it takes the same `context` as the sensor being invoked.
 
-For example, following are some basic sensors.
+For example, the following are some basic sensors.
 
 #### Example: `ReaderSensor`
 
-`ReaderSensor` retieves the value with a key, defined when being initiated, from the `context`.
+`ReaderSensor` retrieves the value associated with a key, defined when it is initiated, from the `context`.
 
 ```python
 sensor = ReaderSensor(key='raw_input')
@@ -190,7 +194,7 @@ assert output.shape == (5, 4, 10)
 
 #### Overriding `forward()`
 
-One can override `forward()` function to customize sensor. For example, one can create a random number generator:
+One can override the `forward()` function to customize the sensor. For example, one can create a random number generator:
 
 ```python
 import torch
@@ -228,9 +232,9 @@ assert output1 != output3
 
 ### Caching output
 
-`context` is used as a source of input and a cache of outputs at the same time.
+`context` is used as both a source of input and a cache of outputs.
 All the `output` generated by `sensor` will be updated to the `context` using `sensor` as a key and `output` as the value automatically.
-If the key `sensor` exist, the associated value will be return without re-calculating, unless `force=True` is spesified when incoking.
+If the key `sensor` exists, the associated value will be returned without re-calculating, unless `force=True` is specified when invoking.
 
 ```python
 output = sensor(context)
@@ -242,8 +246,8 @@ output = sensor(context, force=True)
 
 ### Influence of the sensor call on the cache
 
-The cache effect will be propagate to upper level object if there isn't a value yet.
-For example, if the sensor is assigned to a property of a concept in a graph, the output of the sensor will be propagate to the property `sensor.sup`/`sensor.prop`, further to the concept `sensor.sup.sup`/`sensor.concept`, etc.
+The cache effect will be propagated to the upper-level object if no value is yet available.
+For example, suppose the sensor is assigned to a property of a concept in a graph. In that case, the output of the sensor will be propagated to the property `sensor.sup`/`sensor.prop`, further to the concept `sensor.sup.sup`/`sensor.concept`, etc.
 
 ```python
 concept = Concept()
@@ -258,13 +262,13 @@ assert context[concept] == output
 
 ### Managing invocation path
 
-In model declaration, the user will need to assign sensors to properties.
-However, that should not nessesearily reflect the order of calculation that is needed.
-Sensors just look at `context` and try to fetch whatever they need as input.
+In the model declaration, the user will need to assign sensors to properties.
+However, that should not necessarily reflect the order of calculation required.
+Sensors examine the `context` and attempt to fetch whatever they need as input.
 
-Some base sensor extentions (e.g. `TorchSensor` and its subclasses) are able to trace what it need beforehand and invoke automatically. Such automation forms an invocation path.
+Some base sensor extensions (e.g., `TorchSensor` and its subclasses) are able to trace what they need beforehand and invoke automatically. Such automation forms an invocation path.
 
-`TorchSensor` initiates with extra variables `*pres` to specify the properties that are required to be calculated before it and be used as input.
+`TorchSensor` initiates with extra variables `*pres` to specify the properties that are required to be calculated before it, and are used as input.
 Just pass the names of the properties that are required when constructing the new sensor.
 For example, the following sensor
 
@@ -280,7 +284,7 @@ concept['noisy'] = NoiseSensor('clean')
 
 ### Converting input (WIP)
 
-Some base sensor extensions are overrided to accept different input or accept inputs different ways.
+Some base sensor extensions are overridden to accept different input or accept inputs in various ways.
 
 #### Example: `TorchSensor.forward()`
 
@@ -304,7 +308,7 @@ As `DataNode` provides a flexible interface to retrieve data, it is desirable to
 
 ## Sensor Assignment to Property
 
-Sensors can be assigned to properties
+Sensors can be assigned to properties.
 
 ```python
 reader = Reader()
@@ -318,8 +322,8 @@ work_for['label'] = LabelReaderSensor(reader, 'work_for')
 ## Learner
 
 `Learner`s are essentially `Sensor`s, except they have the member function `parameters()` that returns a list of parameters used by this learner.
-In our `Program`, parameters of the whole model is collected by enumerating all the `Learner`s attached to the graph.
-There are a few leaners implemented by using corresponding torch module. User can also override `TorchLearner` to use any torch module. For example:
+In our `Program`, parameters of the whole model are collected by enumerating all the `Learners attached to the graph.
+There are a few learners implemented by using the corresponding torch module. The user can also override `TorchLearner` to use any torch module. For example:
 
 ```python
 class MultiheadAttentionLearner(TorchLearner):
@@ -345,11 +349,11 @@ organization['label'] = LogisticRegression('embed')
 work_for['label'] = LogisticRegression('embed')
 ```
 
-## Multiple Assigment Convention
+## Multiple Assignment Convention
 
-A non-trivial semantic we introduced for our language is we allow assigning multiple sensors and learners to one property, while rather than a mean of overriding the variable name, we introduce the multiple assignments as a *consistency constraint*.
+A non-trivial semantic feature we introduced for our language is that we allow assigning multiple sensors and learners to one property, rather than as a means of overriding the variable name, we introduce the multiple assignments as a *consistency constraint*.
 
-For example, the following code assigns a `Learner` and then a `Sensor` to the `"label"` property the `people`, which is a `Concept`.
+For example, the following code assigns a `Learner` and then a `Sensor` to the `"label"` property of the `people`, which is a `Concept`.
 
 ```python
 people['label'] = Learner()
@@ -358,13 +362,13 @@ people['label'] = Sensor()
 
 The implication is **NOT** that the property has been updated or overridden with the sensor. It means we can get the actual value of `"label"` property with either the `Learner` or the `Sensor`, which should be consistent. However, initially, the output of the `Learner` may not match the output of the `Sensor`. *Learning* of the model should take place here to resolve the inconsistency, i.e. a loss function should be constructed based on the error whenever there is multiple assignments to a property.
 
-To be more specific, a program will look for all properties that has multiple assigmnets and generate all pairs of sensors (including learners). When the pair of sensors is constituted by a sensor with option `label=True` and another with option `label=False` (which is default). They will be used to trigger calculation and apply any loss and metric on.
+To be more specific, a program will look for all properties that have multiple assignments and generate all pairs of sensors (including learners). When the pair of sensors is constituted by a sensor with option `label=True` and another with option `label=False` (which is the default). They will be used to trigger calculations and apply any losses and metrics.
 
-It should be noticed that even if the two (or more) assignments are not `Learner`, the loss can is still considered. A sensor may rely on the output of another learner. The inconsistency error here can help to update those learners indirectly. If there is no underlying learner is still would not hurt because it is just a constant regarding any parameter in the model.
+It should be noted that even if the two (or more) assignments are not `Learner`, the loss can still be considered. A sensor may rely on the output of another learner. The inconsistency error here can help to update those learners indirectly. If there is no underlying learner, it still would not hurt because it is just a constant regarding any parameter in the model.
 
 ## Detach
 
-In the graph - sub-graph - concept - property - sensor hierarchy, each component can trigger `detach` to remove its direct children components. For example,
+In the graph-subgraph-concept-property-sensor hierarchy, each component can trigger `detach` to remove its direct child components. For example,
 
 ```python
 with Graph() as graph:
@@ -373,15 +377,15 @@ with Graph() as graph:
 graph.detach(concept) # remove concept from graph
 ```
 
-It should be notice that `concept.sup` will also be unset.
+It should be noted that `concept.sup` will also be unset.
 
-If no spesific child passed, all leaf nodes are removed. For example, remove all sensors in a graph:
+If no specific child passed, all leaf nodes are removed. For example, remove all sensors in a graph:
 
 ```python
 graph.detach()
 ```
 
-If no spesific child passed and `all=True`, all direct children will be remove. For example, remove all properties of a concept:
+If no specific child passed and `all=True`, all direct children will be removed. For example, remove all properties of a concept:
 
 ```python
 concept.detach(all=True)
@@ -389,9 +393,9 @@ concept.detach(all=True)
 
 ### `detach` use cases
 
-Since multiple assignment would not override the existing sensor, if you want to remove a sensor, `.detach(sensor)` is what you need.
+Since multiple assignments would not override the existing sensor, if you want to remove a sensor, `.detach(sensor)` is what you need.
 
-Graph can be reuse by different part of program. In case it will be used multiple time in one python program and you have a different set of sensors and learners to assign to the properties. You need to reset the graph by removing all the sensors and learners by `detach()`.
+Different parts of the program can reuse a graph. If it will be used multiple times in a single Python program, and you have a different set of sensors and learners to assign to the properties. You need to reset the graph by removing all the sensors and learners by `detach()`.
 
 ```python
 graph.detach()
