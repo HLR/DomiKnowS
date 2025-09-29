@@ -108,6 +108,7 @@ class DataNode:
 
         self.myLoggerTime = getRegrTimer_logger()
         
+    conceptsMap = {}
     @classmethod
     def clear(cls):
         """Clear DataNode class state.
@@ -1621,8 +1622,18 @@ class DataNode:
                     if not self.hasAttribute(localArgmaxKeyInVariableSet):
                         v = self.attributes["variableSet"][vKeyInVariableSet]
 
-                        vArgmaxTInxexes = torch.argmax(v, dim=1)
-                        vArgmax = torch.zeros_like(v).scatter_(1, vArgmaxTInxexes.unsqueeze(1), 1.)
+                        # Check if tensor is valid
+                        if v is None or not torch.is_tensor(v):
+                            continue
+
+                        # Handle different tensor dimensions
+                        if v.dim() > 1:
+                            vArgmaxIndexes = torch.argmax(v, dim=1)
+                            vArgmax = torch.zeros_like(v).scatter_(1, vArgmaxIndexes.unsqueeze(1), 1.)
+                        else:
+                            vArgmaxIndex = torch.argmax(v).item()
+                            vArgmax = torch.zeros_like(v)
+                            vArgmax[vArgmaxIndex] = 1.
 
                         self.attributes["variableSet"][localArgmaxKeyInVariableSet] = vArgmax
 
@@ -1792,14 +1803,25 @@ class DataNode:
                         dn.attributes[keyNormalizedProb] = vNormalizedProbT
 
                 if "argmax" in keys:
-                    keyArgmax  = "<" + c[0].name + ">/local/argmax"
+                    keyArgmax = "<" + c[0].name + ">/local/argmax"
                     if not dn.hasAttribute(keyArgmax):
                         v = dn.getAttribute(c[0])
-                        vArgmax = torch.zeros(v.shape).squeeze(0)
-                        vArgmaxCalculated = torch.argmax(v, keepdim=True)
+                        
+                        # Check if v is None or not a tensor
+                        if v is None or not torch.is_tensor(v):
+                            continue
+                        
+                        # Create argmax tensor matching original shape
+                        vArgmax = torch.zeros_like(v)
                         vArgmaxIndex = torch.argmax(v).item()
-                        vArgmax[vArgmaxIndex] = 1
-
+                        
+                        # Use flat indexing to safely set value
+                        vArgmax.view(-1)[vArgmaxIndex] = 1.
+                        
+                        # Squeeze only if original had batch dimension of 1
+                        if v.shape[0] == 1 and v.dim() > 1:
+                            vArgmax = vArgmax.squeeze(0)
+                        
                         dn.attributes[keyArgmax] = vArgmax
 
         endInferLocal = perf_counter()
@@ -3636,8 +3658,8 @@ class DataNodeBuilder(dict):
 
             noRelationRoots = []
             for dn in existingDns:
-                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes
-                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                # Consider nodes that either have no relationLinks or only have "contains" relation
+                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
 
             if len(noRelationRoots) == 1:
@@ -3736,8 +3758,8 @@ class DataNodeBuilder(dict):
             
             noRelationRoots = []
             for dn in existingDns:
-                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
-                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                # Consider nodes that either have no relationLinks or only have "contains" relation
+                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
 
             if len(noRelationRoots) != 0:
@@ -3827,8 +3849,8 @@ class DataNodeBuilder(dict):
             
             noRelationRoots = []
             for dn in existingDns:
-                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
-                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                # Consider nodes that either have no relationLinks or only have "contains" relation
+                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
 
             if len(noRelationRoots) > 0:

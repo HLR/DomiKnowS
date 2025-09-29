@@ -1,6 +1,11 @@
 import torch
 from torch.nn import functional as F
 
+class NBMSELoss(torch.nn.MSELoss):
+    def forward(self, input, target, *args, **kwargs):
+        input = input.view(-1)
+        target = target.view(-1).to(dtype=input.dtype, device=input.device)
+        return super().forward(input, target, *args, **kwargs)
 
 class NBCrossEntropyLoss(torch.nn.CrossEntropyLoss):
     def forward(self, input, target, *args, **kwargs):
