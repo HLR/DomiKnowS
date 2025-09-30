@@ -190,6 +190,7 @@ jobs:
           set +e  # Don't exit on any command failures
           
           RESULTS_FILE="/tmp/test_results.txt"
+          ERRORS_FILE="/tmp/test_errors.txt"
           
           if [ ! -f "$RESULTS_FILE" ]; then
             echo "❌ No test results file found!"
@@ -201,10 +202,12 @@ jobs:
           passed_count=0
           failed_count=0
           skipped_count=0
+          collection_error_count=0
           
           declare -A FAILED_TESTS
           declare -A SKIPPED_TESTS
           declare -A PASSED_TESTS
+          declare -A COLLECTION_ERRORS
           
           while IFS=':' read -r status subfolder reason; do
             case "$status" in
@@ -220,6 +223,11 @@ jobs:
                 ((skipped_count++))
                 SKIPPED_TESTS["$subfolder"]="$reason"
                 ;;
+              "COLLECTION_ERROR")
+                ((collection_error_count++))
+                ((failed_count++))
+                COLLECTION_ERRORS["$subfolder"]="$reason"
+                ;;
               "OVERALL_RESULT"*)
                 OVERALL_RESULT=$(echo "$status" | cut -d'=' -f2)
                 ;;
@@ -234,7 +242,7 @@ jobs:
           
           echo "📊 SUMMARY: $total_tests total directories"
           echo "   ✅ $passed_count passed"
-          echo "   ❌ $failed_count failed" 
+          echo "   ❌ $failed_count failed (including $collection_error_count collection errors)" 
           echo "   ⚠️  $skipped_count skipped"
           echo ""
           
@@ -262,22 +270,47 @@ jobs:
             echo "💥 TEST FAILURES DETECTED"
             echo ""
             
-            for subfolder in "${!FAILED_TESTS[@]}"; do
-              echo "❌ FAILED: $subfolder"
-              # Clean up the failure reason - extract the key information
-              failure_reason="${FAILED_TESTS[$subfolder]}"
-              if [[ "$failure_reason" == *"Exception:"* ]]; then
-                # Extract just the exception part
-                exception_line=$(echo "$failure_reason" | grep "Exception:" | head -1)
-                echo "   💀 $exception_line"
-              elif [[ "$failure_reason" == *"FAILED"* ]]; then
-                # Extract just the FAILED line
-                failed_line=$(echo "$failure_reason" | grep "FAILED" | head -1)
-                echo "   💀 $failed_line"
-              else
-                echo "   💀 ${failure_reason}"
-              fi
+            # Show collection errors first (these are usually import/setup issues)
+            if [ ${#COLLECTION_ERRORS[@]} -gt 0 ]; then
+              echo "🔴 COLLECTION ERRORS (Import/Setup Issues):"
+              echo "These tests failed before execution due to import or configuration errors."
               echo ""
+              for subfolder in "${!COLLECTION_ERRORS[@]}"; do
+                echo "❌ COLLECTION ERROR: $subfolder"
+                echo "   💀 ${COLLECTION_ERRORS[$subfolder]}"
+                echo ""
+              done
+              
+              # Show detailed error output if file exists
+              if [ -f "$ERRORS_FILE" ]; then
+                echo "================================="
+                echo "📋 DETAILED COLLECTION ERROR OUTPUT"
+                echo "================================="
+                cat "$ERRORS_FILE"
+                echo ""
+              fi
+            fi
+            
+            # Show regular test failures
+            for subfolder in "${!FAILED_TESTS[@]}"; do
+              # Skip if this was already shown as collection error
+              if [[ -z "${COLLECTION_ERRORS[$subfolder]}" ]]; then
+                echo "❌ FAILED: $subfolder"
+                # Clean up the failure reason - extract the key information
+                failure_reason="${FAILED_TESTS[$subfolder]}"
+                if [[ "$failure_reason" == *"Exception:"* ]]; then
+                  # Extract just the exception part
+                  exception_line=$(echo "$failure_reason" | grep "Exception:" | head -1)
+                  echo "   💀 $exception_line"
+                elif [[ "$failure_reason" == *"FAILED"* ]]; then
+                  # Extract just the FAILED line
+                  failed_line=$(echo "$failure_reason" | grep "FAILED" | head -1)
+                  echo "   💀 $failed_line"
+                else
+                  echo "   💀 ${failure_reason}"
+                fi
+                echo ""
+              fi
             done
             
             # Show skipped tests if any
