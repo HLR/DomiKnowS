@@ -23,7 +23,11 @@ jobs:
 
       - name: Resolve & install
         run: |
-         uv sync --extra cpu --extra dev 
+         uv sync --extra cpu --extra dev
+         
+      - name: Install package in development mode
+        run: |
+         uv pip install -e . 
 
       - name: Run regression tests
         id: run_tests
