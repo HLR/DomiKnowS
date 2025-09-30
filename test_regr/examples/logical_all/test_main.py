@@ -1,17 +1,11 @@
 import pytest
-import math
 import torch
-# import sys
-# sys.path.append('.')
-# sys.path.append('../../..')
-
 
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import atMostL, forAllL, exactL, ifL, andL, notL
 from domiknows.graph import combinationC
 from domiknows.program.model.pytorch import PoiModel
 from domiknows.graph import EnumConcept
-
 
 @pytest.fixture(name='case')
 def test_case():

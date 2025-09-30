@@ -89,7 +89,10 @@ def sensor(case, graph):
         assert constant == case.constant
         index1 = arg1.getAttribute('raw')
         index2 = arg2.getAttribute('raw')
-        return data[index1][index2]
+        # Convert indices to strings to look up in the nested dict structure
+        str_index1 = concept_raw[index1.argmax().item()]
+        str_index2 = concept_raw[index2.argmax().item()]
+        return data[str_index1][str_index2]
     sensor = CompositionCandidateReaderSensor(
         case.constant,
         concept['raw'],
