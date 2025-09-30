@@ -23,8 +23,8 @@ jobs:
 
       - name: Resolve & install
         run: |
-         uv sync --extra cpu --extra dev
-         
+         uv sync --extra cpu --extra dev 
+
       - name: Install package in development mode
         run: |
          uv pip install -e . 
@@ -71,11 +71,6 @@ jobs:
           echo "Available test directories in $TEST_BASE_DIR:"
           find "$TEST_BASE_DIR" -type d -name "*" | sort
           
-          # Create logs directory for detailed test outputs
-          LOGS_DIR="test-logs"
-          mkdir -p "$LOGS_DIR"
-          echo "📁 Created logs directory: $LOGS_DIR"
-          
           # Track overall test result and detailed failure information
           OVERALL_RESULT=0
           declare -A FAILED_TESTS
@@ -92,10 +87,6 @@ jobs:
             echo "============================================"
             echo "🔍 DEBUGGING: Processing $subfolder"
             echo "   Full path: $test_path"
-            
-            # Create a safe filename for the log (replace / with _)
-            safe_subfolder=$(echo "$subfolder" | tr '/' '_')
-            log_file="$LOGS_DIR/${safe_subfolder}.log"
             
             # Check if directory exists
             if [ -d "$test_path" ]; then
@@ -118,7 +109,7 @@ jobs:
                 echo "   📝 Found $test_files_count test file(s):"
                 echo "$test_files"
               else
-                echo "   ⚠️ No test files found matching patterns test_*.py or *_test.py"
+                echo "   ⚠️  No test files found matching patterns test_*.py or *_test.py"
                 
                 # Check for any Python files
                 py_files=$(find "$test_path" -name "*.py" 2>/dev/null)
@@ -136,19 +127,17 @@ jobs:
               echo "   Command: uv run pytest -v --tb=short --no-header \"$test_path\""
               
               # Capture both stdout and stderr, with detailed pytest output
-              # Save to log file for persistence
-              test_output=$(uv run pytest -v --tb=short --no-header "$test_path" 2>&1 | tee "$log_file")
+              test_output=$(uv run pytest -v --tb=short --no-header "$test_path" 2>&1)
               test_exit_code=$?
               
               echo "   📊 Pytest exit code: $test_exit_code"
               echo "   📄 Pytest output length: $(echo "$test_output" | wc -l) lines"
-              echo "   📄 Full output saved to: $log_file"
               echo "   📄 First few lines of pytest output:"
               echo "$test_output" | head -5
               
               if [ $test_exit_code -eq 5 ]; then
                 # Exit code 5: No tests collected - treat as warning, not failure
-                echo "   ⚠️ Exit code 5: No tests collected"
+                echo "   ⚠️  Exit code 5: No tests collected"
                 if [ $test_files_count -eq 0 ]; then
                   echo "   📝 Reason: No test files found in directory"
                   skip_reason="No test files found (*.py files matching test_* or *_test pattern)"
@@ -157,12 +146,11 @@ jobs:
                   skip_reason="No tests collected - test files exist but pytest couldn't discover any tests"
                 fi
                 SKIPPED_TESTS["$subfolder"]="$skip_reason"
-                echo "SKIP:$subfolder:$skip_reason:$log_file" >> "$RESULTS_FILE"
+                echo "SKIP:$subfolder:$skip_reason" >> "$RESULTS_FILE"
                 echo "   ✅ Treating as SKIP (not failure)"
                 # Don't set OVERALL_RESULT=1 for exit code 5 - treat as skip, not failure
               elif [ $test_exit_code -ne 0 ]; then
                 echo "   ❌ Exit code $test_exit_code: Test failure"
-                echo "   📄 Complete output saved to log file: $log_file"
                 OVERALL_RESULT=1
                 
                 # Extract failure summary from pytest output
@@ -178,17 +166,17 @@ jobs:
                 
                 FAILED_TESTS["$subfolder"]="$failure_summary"
                 TEST_OUTPUTS["$subfolder"]="$test_output"
-                echo "FAIL:$subfolder:$failure_summary:$log_file" >> "$RESULTS_FILE"
+                echo "FAIL:$subfolder:$failure_summary" >> "$RESULTS_FILE"
                 echo "   📝 Failure details preview:"
                 echo "$failure_summary" | head -3
               else
                 echo "   ✅ Exit code 0: Tests PASSED"
-                echo "PASS:$subfolder::$log_file" >> "$RESULTS_FILE"
+                echo "PASS:$subfolder:" >> "$RESULTS_FILE"
               fi
             else
               echo "   ❌ Directory does not exist: $test_path"
               SKIPPED_TESTS["$subfolder"]="Directory not found"
-              echo "SKIP:$subfolder:Directory not found:" >> "$RESULTS_FILE"
+              echo "SKIP:$subfolder:Directory not found" >> "$RESULTS_FILE"
             fi
             echo "============================================"
           done
@@ -206,7 +194,6 @@ jobs:
           set +e  # Don't exit on any command failures
           
           RESULTS_FILE="/tmp/test_results.txt"
-          LOGS_DIR="test-logs"
           
           if [ ! -f "$RESULTS_FILE" ]; then
             echo "❌ No test results file found!"
@@ -220,22 +207,18 @@ jobs:
           skipped_count=0
           
           declare -A FAILED_TESTS
-          declare -A FAILED_LOGS
           declare -A SKIPPED_TESTS
           declare -A PASSED_TESTS
-          declare -A PASSED_LOGS
           
-          while IFS=':' read -r status subfolder reason log_path; do
+          while IFS=':' read -r status subfolder reason; do
             case "$status" in
               "PASS")
                 ((passed_count++))
                 PASSED_TESTS["$subfolder"]="passed"
-                PASSED_LOGS["$subfolder"]="$log_path"
                 ;;
               "FAIL")
                 ((failed_count++))
                 FAILED_TESTS["$subfolder"]="$reason"
-                FAILED_LOGS["$subfolder"]="$log_path"
                 ;;
               "SKIP")
                 ((skipped_count++))
@@ -256,19 +239,14 @@ jobs:
           echo "📊 SUMMARY: $total_tests total directories"
           echo "   ✅ $passed_count passed"
           echo "   ❌ $failed_count failed" 
-          echo "   ⚠️ $skipped_count skipped"
+          echo "   ⚠️  $skipped_count skipped"
           echo ""
           
           # Show passed tests
           if [ ${#PASSED_TESTS[@]} -gt 0 ]; then
             echo "✅ PASSED TEST DIRECTORIES:"
             for subfolder in "${!PASSED_TESTS[@]}"; do
-              log_file="${PASSED_LOGS[$subfolder]}"
-              if [ -n "$log_file" ]; then
-                echo "   ✅ $subfolder (log: $log_file)"
-              else
-                echo "   ✅ $subfolder"
-              fi
+              echo "   ✅ $subfolder"
             done
             echo ""
           fi
@@ -281,7 +259,7 @@ jobs:
               echo ""
               echo "📋 SKIPPED TEST DIRECTORIES:"
               for subfolder in "${!SKIPPED_TESTS[@]}"; do
-                echo "   ⚠️ $subfolder: ${SKIPPED_TESTS[$subfolder]}"
+                echo "   ⚠️  $subfolder: ${SKIPPED_TESTS[$subfolder]}"
               done
             fi
           else
@@ -290,12 +268,6 @@ jobs:
             
             for subfolder in "${!FAILED_TESTS[@]}"; do
               echo "❌ FAILED: $subfolder"
-              log_file="${FAILED_LOGS[$subfolder]}"
-              if [ -n "$log_file" ] && [ -f "$log_file" ]; then
-                echo "   📄 Full log available at: $log_file"
-                echo "   📄 Log file size: $(wc -l < "$log_file") lines"
-              fi
-              
               # Clean up the failure reason - extract the key information
               failure_reason="${FAILED_TESTS[$subfolder]}"
               if [[ "$failure_reason" == *"Exception:"* ]]; then
@@ -316,7 +288,7 @@ jobs:
             if [ ${#SKIPPED_TESTS[@]} -gt 0 ]; then
               echo "📋 SKIPPED TEST DIRECTORIES (not failures):"
               for subfolder in "${!SKIPPED_TESTS[@]}"; do
-                echo "   ⚠️ $subfolder: ${SKIPPED_TESTS[$subfolder]}"
+                echo "   ⚠️  $subfolder: ${SKIPPED_TESTS[$subfolder]}"
               done
               echo ""
             fi
@@ -331,13 +303,3 @@ jobs:
           echo ""
           echo "✅ Report completed (debug mode - always passing)"
           exit 0
-
-      # Upload test logs as artifacts
-      - name: Upload Test Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-logs
-          path: test-logs/
-          retention-days: 30
-          if-no-files-found: warn
