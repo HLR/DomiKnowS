@@ -200,8 +200,25 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                 torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=1.0)
                 torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=1.0)
 
-                opt.step()
-                copt.step()
+                if constr_loss_only:
+                    # Check if model params actually have gradients from constraint loss
+                    has_model_grads = any(
+                        p.grad is not None and p.grad.abs().sum() > 0 
+                        for p in program.model.parameters() if p.requires_grad
+                    )
+                    if has_model_grads:
+                        opt.step()
+                    copt.step()
+                else:
+                    opt.step()
+                    # Only step copt if we're doing dual updates
+                    has_cmodel_grads = any(
+                        p.grad is not None and p.grad.abs().sum() > 0 
+                        for p in program.cmodel.parameters() if p.requires_grad
+                    )
+                    if has_cmodel_grads:
+                        copt.step()
+                
                 opt.zero_grad(set_to_none=True)
                 copt.zero_grad(set_to_none=True)
 
