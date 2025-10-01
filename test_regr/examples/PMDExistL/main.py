@@ -143,7 +143,7 @@ def main(args: argparse.Namespace):
     train_model(program, dataset, args.epoch, constr_loss_only=True)
     
     w_after = flat_params(answer_module)
-    print("[DEBUG] Δ‖weights‖:", torch.norm(w_after - w_before).item())
+    print("[DEBUG] Delta-norm(weights):", torch.norm(w_after - w_before).item())
     
     for n,p in answer_module.named_parameters():
         if p.grad is not None:

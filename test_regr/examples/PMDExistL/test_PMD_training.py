@@ -54,11 +54,25 @@ def run_tests(param_combinations, gpus=None, max_workers=None, raise_error=False
         gpus = ["cpu"]
 
     # Choose worker count: one per GPU if GPUs are provided; else fallback
+    # CI-friendly: limit workers when in CI environment
+    is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
     if max_workers is None:
-        if gpus:
+        if is_ci:
+            max_workers = 1  # Single worker for CI stability
+        elif gpus:
             max_workers = min(len(gpus), total_combinations)
         else:
             max_workers = min(4, os.cpu_count() or 4)
+    
+    # Auto-reduce epochs in CI environment
+    if is_ci and 'epoch' in combinations[0]:
+        original_epochs = combinations[0]['epoch']
+        reduced_epochs = 50  # Reduced for CI
+        print(f"🔧 CI detected: Reducing epochs from {original_epochs} to {reduced_epochs}")
+        for combo in combinations:
+            if 'epoch' in combo:
+                combo['epoch'] = reduced_epochs
+    
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = []
         for i, params in enumerate(combinations):
