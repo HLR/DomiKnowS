@@ -13,7 +13,13 @@ def run_test(params, gpu_id=None):
             args.extend([f'--{key}', str(value)])
 
     python_executable = sys.executable
-    cmd = [python_executable, "main.py"] + args
+    
+    # Get the directory where this test file is located
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    main_py_path = os.path.join(test_dir, "main.py")
+    
+    cmd = [python_executable, main_py_path] + args
+    
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env.setdefault("CUDA_LAUNCH_BLOCKING", "1")
