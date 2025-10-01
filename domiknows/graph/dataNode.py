@@ -2729,8 +2729,11 @@ class DataNodeBuilder(dict):
 
         # This is an information about relation attributes
         if conceptInfo['relationAttrData']:
-            index = keyDataName.index('.')
-            attrName = keyDataName[0:index]
+            if '.' in keyDataName:
+                index = keyDataName.index('.')
+                attrName = keyDataName[0:index]
+            else:
+                attrName = keyDataName
             
             path_parts = attrName.split('/')
             if path_parts and path_parts[-1]:
