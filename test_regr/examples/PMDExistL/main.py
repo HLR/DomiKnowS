@@ -1,3 +1,4 @@
+import os
 import sys
 import argparse
 from typing import Any
@@ -11,11 +12,17 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
+from domiknows import setProductionLogMode
 
 from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model
 
 import traceback
 torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
+
+# CI-friendly: disable logging when running in CI environment
+is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
+if is_ci:
+    setProductionLogMode(True)
 
 def excepthook(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
