@@ -1072,63 +1072,84 @@ class Graph(BaseGraphTree):
         Takes a dataset containing keys `logic_keyword` and `logic_label_keyword` and
         converts it to a LogicDataset and adds the expressions to the graph.
         Using the LogicDataset during e.g., training lets you switch between these constraints.
-
         data: and iterable of dicts containing the keys specified by `logic_keyword` and `logic_label_keyword`
-
         extra_namespace_values: dict[str, Any], any values added to this dictionary get added to the namespace used when executing the logical expressions (the variable names are the keys).
         '''
-
         from .executable import LogicDataset, add_keyword, get_full_funcs
         from ..sensor.pytorch.sensors import ReaderSensor
         import importlib
-
         if self.varContext is None:
             print('Recorded variable context is None: make sure to initialize any Concepts you need in the graph first (by calling `with graph:`).')
-
-        # maps concept names to objects
-        # concept *names* are used in the read constraints *not* the variable names
-        lc_name_list = []
-        with self:
-            for i, data_item in enumerate(data):
-                if logic_keyword not in data_item:
-                    raise ValueError(f'Invalid data_item at index {i}: must contain keys {logic_keyword} and {logic_label_keyword} but instead just found: {data_item.keys()}')
-
-                lc_string = data_item[logic_keyword] # e.g., andL(x, y)
-
-                # set name of constraint in expression string
-                constr_reader_key = LogicDataset.KEYWORD_FMT.format(index=i)
-
-                # e.g., andL(x, y, name='_constraint_0')
-                lc_string_fmt = add_keyword(lc_string, 'name', constr_reader_key)
-                
-                # e.g., domiknows.graph.logicalConstrain.andL(x, y, name='_constraint_0')
-                lc_string_fmt = get_full_funcs(lc_string_fmt)
-
-                target_namespace = {
-                    'domiknows': importlib.import_module('domiknows'), # add domiknows into the namespace
-                    **self.varContext,
-                    **extra_namespace_values
-                }
-
-                if verbose:
-                    print(f'executing {lc_string_fmt} in namespace {target_namespace}')
-
-                # execute the constraint in the graph context
-                c = eval(
-                    lc_string_fmt,
-                    target_namespace
-                )
-                self.constraint[c] = ReaderSensor(
-                    keyword=constr_reader_key,
-                    is_constraint=True,
-                    label=True
-                )
-
-                lc_name_list.append(str(c))
         
+        lc_name_list = []
+        
+        # Check if context is already attached
+        cls = type(self)
+        needs_context = not cls._context or cls._context[-1] is not self
+                
+        if needs_context:
+            with self:
+                self._process_logic_data(
+                    data, logic_keyword, logic_label_keyword, 
+                    extra_namespace_values, verbose, lc_name_list
+                )
+        else:
+            self._process_logic_data(
+                data, logic_keyword, logic_label_keyword, 
+                extra_namespace_values, verbose, lc_name_list
+            )
+    
         return LogicDataset(
             data,
             lc_name_list,
             logic_keyword=logic_keyword,
             logic_label_keyword=logic_label_keyword
         )
+
+    def _process_logic_data(
+            self, data, logic_keyword, logic_label_keyword, 
+            extra_namespace_values, verbose, lc_name_list
+        ):
+        from .executable import LogicDataset, add_keyword, get_full_funcs
+        from ..sensor.pytorch.sensors import ReaderSensor
+        import importlib
+        
+        for i, data_item in enumerate(data):
+            if logic_keyword not in data_item:
+                raise ValueError(f'Invalid data_item at index {i}: must contain keys {logic_keyword} and {logic_label_keyword} but instead just found: {data_item.keys()}')
+            lc_string = data_item[logic_keyword]
+            constr_reader_key = LogicDataset.KEYWORD_FMT.format(index=i)
+            lc_string_fmt = add_keyword(lc_string, 'name', constr_reader_key)
+            lc_string_fmt = get_full_funcs(lc_string_fmt)
+            
+            target_namespace = {
+                'domiknows': importlib.import_module('domiknows'),
+                **(self.varContext or {}),
+                **(extra_namespace_values or {})
+            }
+            
+            if verbose:
+                print(f'executing {lc_string_fmt} in namespace {target_namespace}')
+            
+            try:
+                code = compile(lc_string_fmt, f'<constraint_{i}>', 'eval')
+                c = eval(code, target_namespace)
+            except NameError as e:
+                var_name = str(e).split("'")[1]
+                raise NameError(
+                    f"Variable '{var_name}' used in constraint '{lc_string_fmt}' is not defined. "
+                    f"Make sure all variables are defined in the graph context or passed via extra_namespace_values. "
+                    f"Available variables: {sorted(target_namespace.keys())}"
+                ) from None
+            except Exception as e:
+                raise Exception(
+                    f"Failed to evaluate constraint '{lc_string_fmt}'. "
+                    f"Error: {str(e)}"
+                ) from None
+            
+            self.constraint[c] = ReaderSensor(
+                keyword=constr_reader_key,
+                is_constraint=True,
+                label=True
+            )
+            lc_name_list.append(str(c))
