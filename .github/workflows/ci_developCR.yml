@@ -31,13 +31,19 @@ jobs:
 
       # --- Quality gate: formatting & types ---
       - name: Check formatting (black)
-        run: uv run black --check .
+        run: |
+          set +e  # Don't exit on first error - we want to handle exit codes manually
+          uv run black --check . 
 
       - name: Check imports (isort)
-        run: uv run isort --profile black --check-only .
+        run: |
+          set +e  # Don't exit on first error - we want to handle exit codes manually
+          uv run isort --profile black --check-only .
 
       - name: Type check (mypy)
-        run: uv run mypy --install-types --non-interactive .
+        run: |
+          set +e  # Don't exit on first error - we want to handle exit codes manually
+          uv run mypy --install-types --non-interactive .
 
       - name: Run regression tests
         id: run_tests
