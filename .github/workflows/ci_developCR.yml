@@ -29,6 +29,16 @@ jobs:
         run: |
          uv pip install -e . 
 
+      # --- Quality gate: formatting & types ---
+      - name: Check formatting (black)
+        run: uv run black --check .
+
+      - name: Check imports (isort)
+        run: uv run isort --profile black --check-only .
+
+      - name: Type check (mypy)
+        run: uv run mypy --install-types --non-interactive .
+
       - name: Run regression tests
         id: run_tests
         run: |
