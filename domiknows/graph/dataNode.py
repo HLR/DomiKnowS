@@ -334,8 +334,9 @@ class DataNode:
         matching_keys = []
         
         for key in data_map.keys():
-            # Split the key by '/' and get the last element
+            # Split the key by '/' and get the last element and remove < > if present in any part
             path_parts = key.split('/')
+            path_parts = [part[1:-1] if part.startswith('<') and part.endswith('>') else part for part in path_parts]   
             if path_parts and path_parts[-1] == word:
                 matching_keys.append(key)
         
@@ -351,11 +352,12 @@ class DataNode:
             *keys (str or tuple or Concept): The key(s) to identify the attribute.
 
         Returns:
-            object: The value of the attribute if it exists, or None otherwise.
+            object: The value of the attribut   e if it exists, or None otherwise.
         """
         key = ""
         keyBis  = ""
         index = None
+        last =  ""
 
         conceptFound = False
         for _, kConcept in enumerate(keys):
@@ -375,20 +377,25 @@ class DataNode:
                         key = key + '<' + conceptForK[0].name +'>'
                         index = conceptForK[2]
                         keyBis = keyBis + kConcept
+                        last = kConcept
                     else:
                         key = key + '<' + kConcept +'>'
                         keyBis = keyBis + kConcept
+                        last = kConcept
                 else:
                     key = key + kConcept
                     keyBis = keyBis + kConcept
+                    last = kConcept
             elif isinstance(kConcept, tuple): # Concept represented as tuple
                 conceptFound = True
                 key = key + '<' + kConcept[0].name +'>'
                 keyBis = keyBis + kConcept[0].name
+                last
             elif isinstance(kConcept, Concept): # Just concept
                 conceptFound = True
                 key = key + '<' + kConcept.name +'>'
                 keyBis = keyBis + kConcept.name
+                last = kConcept.name
 
         # Use key and keyBis to get the dn attribute
         if key in self.attributes:
@@ -417,7 +424,7 @@ class DataNode:
                 elif "propertySet" in self.attributes and key in self.attributes["propertySet"]:
                     return self.attributes["propertySet"][key]
 
-        keys = self._get_matching_keys(self.attributes, key)
+        keys = self._get_matching_keys(self.attributes, last)
         if keys:
             key = keys[0]
             return self.attributes[key]
@@ -2647,7 +2654,16 @@ class DataNodeBuilder(dict):
                     yield dn
 
         # Flatten the list of new dataNodes
-        flattenDns = list(flatten(dns))
+        _flattenDns = list(flatten(dns))
+        
+        # remove any dataNodes from flattenDns that do not have relationLinks to any of the existing root dataNodes
+        flattenDns = []
+        for dn in _flattenDns:
+            if dn.relationLinks:
+                if any(il in dnsRoots for il in dn.relationLinks):
+                    flattenDns.append(dn)
+            else:
+                flattenDns.append(dn)
 
         # Create a set of all unique dataNodes in dnsRoots and flattenDns
         allDns = set(dnsRoots)
@@ -2669,9 +2685,7 @@ class DataNodeBuilder(dict):
 
             for il in dn.impactLinks:
                 if il in incomingLinks:
-                    incomingLinks[dn] += 1
-                else:
-                    incomingLinks[dn] = 1
+                    incomingLinks[il] += 1
 
         # Find the root dataNodes which have no incoming links
         noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
@@ -2684,7 +2698,7 @@ class DataNodeBuilder(dict):
 
         # if newDnsRoots is empty
         if not newDnsRoots:
-            newDnsRoots = allDns
+            newDnsRoots = list(allDns)
             newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # Set the updated root list
@@ -2696,7 +2710,7 @@ class DataNodeBuilder(dict):
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
         return
-
+    
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
         """
         Build or update relation dataNode in the data graph for a given key.
@@ -3664,6 +3678,10 @@ class DataNodeBuilder(dict):
                 # Consider nodes that either have no relationLinks or only have "contains" relation
                 if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
+                    
+            if len(noRelationRoots) == 0:
+                _DataNodeBuilder__Logger.warn('No root DataNode candidates found - all DataNodes have non-contains relations')
+                return  # Exit without creating batch
 
             if len(noRelationRoots) == 1:
                 rootDn = noRelationRoots[0]

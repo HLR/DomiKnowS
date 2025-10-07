@@ -148,7 +148,7 @@ def model_declaration(config, case):
 
     graph.detach()
     
-    # process['id'] = TestSensor(expected_outputs=case.process)
+    process['id'] = TestSensor(expected_outputs=case.process)
     entities['list'] = TestSensor(expected_outputs=[case.entities])
     steps['list'] = TestSensor(expected_outputs=[case.steps])
     locations['list'] = TestSensor(expected_outputs=[case.locations])
@@ -314,9 +314,11 @@ def test_main_conll04(case):
     print(f"\nPrinting DataNode: {datanode}")
     for node in datanode.findDatanodes(select=decision):
         try:
-            assert node.getAttribute(final_decision, 'label').to('cpu').item() == node.getAttribute(final_decision, 'ILP').item()
+            fd_label = node.getAttribute(decision, final_decision, 'label')
+            fd_ilp = node.getAttribute(final_decision, 'ILP')
+            assert fd_label.to('cpu').item() == fd_ilp.item()
         except AssertionError:
-            print(f"AssertionError: {node.getAttribute(final_decision, 'label').to('cpu').item()} != {node.getAttribute(final_decision, 'ILP').item()}")
+            print(f"AssertionError: {fd_label.to('cpu').item()} != {fd_ilp.item()}")
             sind = node.getAttribute("arg1.reversed").argmax().item()
             print("the step of the node is: ", sind)
             eind = node.getAttribute("arg2.reversed").argmax().item()
@@ -344,4 +346,3 @@ if __name__ == '__main__':
     pytest.main([__file__])
 # case = test_case()
 # test_main_conll04(case)
-
