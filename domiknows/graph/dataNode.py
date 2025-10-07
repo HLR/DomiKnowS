@@ -377,7 +377,7 @@ class DataNode:
                         key = key + '<' + conceptForK[0].name +'>'
                         index = conceptForK[2]
                         keyBis = keyBis + kConcept
-                        last = kConcept
+                        last = conceptForK[0].name
                     else:
                         key = key + '<' + kConcept +'>'
                         keyBis = keyBis + kConcept

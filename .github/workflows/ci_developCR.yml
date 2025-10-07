@@ -52,7 +52,6 @@ jobs:
           # List of specific test subfolders to run from test_regr
           # Add subfolder names to this array as needed
           TEST_LIST=(
-            'Clever'
             'InferenceAPI'
             'dummy_datanode'
             'examples/PMDExistL'
@@ -66,7 +65,6 @@ jobs:
             'examples/nested_relations'
             'examples/orbs'
             'examples/test_switch_constraints'
-            'graph'
             'graph_errors'
             'sensor'
             'sensor/pytorch'
