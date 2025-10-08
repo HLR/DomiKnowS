@@ -40,4 +40,41 @@ To perform evaluation using a trained checkpoint, add the '--eval-only' flag to 
 
 5 **Change Dataset Filter**
 
-In preprocess_dataset function in preprocessor.py, there is comment for each filter type of function. Considering uncomment/comment filter that you want to test data with. Currently, we test with 1 relations.
+In preprocess_dataset function in preprocessor.py, there is comment for each filter type of function. Considering uncomment/comment filter that you want to test data with. Currently, we test with 1 relation.
+
+---
+
+## Currently working execution
+
+There are two simple type of query that current working with CLEVR
+
+1. Object property
+
+The current CLEVR with question asking the existence of properties of single objects are already working in DomiKnowS
+We provide the example of execution for this type of question below.
+
+**Example** "Does there blue big square in the image?"
+
+```python
+existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')))
+```
+
+2. One Relation
+
+We currently support question with using one relation between two objects. Each object can have multiple properties.
+We provide the example of execution for this type of question below.
+
+**Example** "Does there blue big square in front of red small thing in the image?"
+
+```python
+existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')),
+       is_left('rel1', path=("x", obj1.reversed)),
+       is_red('y', path=('rel1', obj2), is_small(path=('y')))
+       )
+```
+
+## Work in Progress
+
+- Counting
+- Automatic Conversion from natural langauge question into DomiKnowS execution
+- Multiple Relations
