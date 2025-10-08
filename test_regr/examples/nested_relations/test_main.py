@@ -353,7 +353,7 @@ def test_main_conll04(case):
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
     assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentance
-    assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
+    assert len(datanode.findDatanodes(select=phrase)) == 3 # There are 3 phrases build of the words in the sentance
 
     conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     conceptsRelationsConcepts = [people, organization, location, other, o, work_for]

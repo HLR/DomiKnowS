@@ -66,10 +66,10 @@ jobs:
             'examples/orbs'
             'examples/test_switch_constraints'
             'graph_errors'
-            'sensor'
             'sensor/pytorch'
             'simple_regression'
-            'solver'
+            'solver',
+            'namedTree'
           )
           
           if [ ${#TEST_LIST[@]} -eq 0 ]; then
