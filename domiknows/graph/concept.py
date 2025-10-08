@@ -3,7 +3,7 @@ from itertools import chain, product
 from typing import Type
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
-# from .relation import Contains, HasA, IsA
+#from .relation import Contains, HasA, IsA
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -398,6 +398,10 @@ class Concept(BaseGraphTree):
         if self.getOntologyGraph().get_constraint_concept() == self:
             return True
         return False
+    
+
+from .equality_mixin import apply_equality_mixin
+apply_equality_mixin(Concept)
 
 class EnumConcept(Concept):
     def __init__(self, name=None, values=[]):

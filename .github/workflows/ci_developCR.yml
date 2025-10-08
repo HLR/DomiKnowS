@@ -68,7 +68,7 @@ jobs:
             'graph_errors'
             'sensor/pytorch'
             'simple_regression'
-            'solver',
+            'solver'
             'namedTree'
           )
           

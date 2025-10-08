@@ -2557,6 +2557,7 @@ class DataNodeBuilder(dict):
             dict: A dictionary containing various pieces of information about the concept.
                   - 'concept': The concept itself.
                   - 'relation': A boolean indicating whether the concept has any relations.
+                  - 'equals': A list of concepts that are equal to the given concept.
                   - 'relationAttrs': A dictionary mapping relation names to their corresponding concept objects.
                   - 'relationAttrsFullName': A dictionary mapping full relation names to their corresponding concept objects.
                   - 'root': A boolean indicating if the concept is a root concept.
@@ -2566,6 +2567,7 @@ class DataNodeBuilder(dict):
         conceptInfo = {
             'concept': concept,
             'relation': bool(concept.has_a()),
+            'equals': concept.get_equal_concepts(),
             'relationAttrs': {rel.name: self.__findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
             'relationAttrsFullName': {rel.fullname: self.__findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
             'root': not ('contains' in concept._in),
