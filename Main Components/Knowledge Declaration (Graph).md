@@ -19,6 +19,7 @@ The following is the overview of Knowledge Declaration through Domiknows Graph n
     - [Logical Constraints](#logical-constraints-lc)
     - [Graph Constraints](#graph-constraints)
     - [Ontology Constraints](#ontology-constraint)
+  - [Program Execution](#program-execution)
 
 ## Introduction
 
@@ -477,3 +478,111 @@ This detail of mapping from OWL to logical representation is presented below for
 - **[inverse functional](https://www.w3.org/TR/owl2-syntax/#Inverse-Functional_Object_Properties "OWL example of inverse functional statement for properties")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
 
   *Syntactic shortcut for the following maxCardinality of inverse P(token2, token1) is 1*
+
+## Program Execution
+
+**Note**: These features are in active development.
+
+The same logical expressions described above for the purpose of specifying constraints can also be used to describe *programs* that are executed during training and inference. We can then train the underlying model based on the ground-truth outputs of the these *programs*.
+
+For example, in [Clever](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/Clever), we have questions (e.g., "*Does there blue big square in the image?*") represented with logical expressions (`existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')))`) along with the ground-truth answers to those questions (i.e., `True`/`False`). During training, we update model parameters so that the predicted program outputs (i.e., answers to the questions) match the ground-truth values.
+
+Specifically, during training, the program outputs are calculated by finding the (differentiable) soft-logic conversion of the underlying logical expressions. Model parameters are then updated based on the loss between these predicted program outputs and the ground-truth program outputs.
+
+To do this in DomiKnowS, we need to add the programs (i.e., the logical expressions) that we want to execute to the graph and also provide the ground-truth outputs to these programs. There are two ways to do this, depending on whether the programs are the same across training examples or if they are different.
+
+### Programs are the same across examples
+If the program(s) we'd like to execute are fixed across training examples, then the API is similar to performing regular supervised learning in DomiKnowS.
+
+We specify programs in the same way that we would specify logical constraints except, now, we also assign the expression to a variable as we need to be able to reference it later. For example, we could have the following question which can be specified as follows:
+
+```python
+with Graph('image_graph') as graph:
+  # [...]
+
+  # Does there blue big square in the image?
+  question_output = existL(
+    is_blue('x'),
+    is_big(path=('x')),
+    is_square(path=('x'))
+  )
+```
+
+During training, we want to update model parameters based on the ground-truth answer of this question (which can be either `True` or `False` whereas, with logical *constraints*, we would always update model parameters to make the expression `True`). Importantly, here, the question is the same across training examples even though the answers may be different. Like for regular supervised learning, we specify labels with a sensor (e.g., a ReaderSensor) except, now, we assign it to a property of the `constraint` Concept in the graph:
+
+```python
+graph.constraint[question_output] = ReaderSensor(keyword="question_label", label=True)
+```
+
+All the other sensors & module learners can be specified in exactly the same way as before.
+
+Finally, we use the `InferenceProgram` class:
+```python
+program = InferenceProgram(
+  graph,
+  SolverModel,
+  poi=[...],
+  tnorm='G' # This parameter specifies how we perform the soft-logic conversion during program execution
+)
+```
+
+Training is the same as with supervised learning as well:
+```python
+program.train(dataset, ...)
+```
+
+The dataset here must specify the program output label (here, in the `question_label` key) in each data item.
+
+A complete example of this API can be found [here](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/InferenceAPI).
+
+### Programs are different across examples
+On the other hand, if the programs to be executed are different across training examples, we need to specify *both* the program (in the form of logical expression strings) and the program output labels in each data item. The syntax for specifying the programs is the same as before, except now, instead of directly adding it to the graph, we specify it through the dataset first *then* add it to the graph.
+
+The previous example would be specified as:
+```python
+dataset = [
+  # [...]
+  {
+    # Does there blue big square in the image?
+    'logic_str': "existL(is_blue('x'), is_big(path=('x')), is_square(path=('x')))",
+
+    # False
+    'logic_label': [0] ,
+
+    #[...]
+  },
+  # [...]
+]
+```
+
+We would then add it to the graph; e.g.,:
+```python
+# Notice that compile_logic returns a new dataset instance here.
+# During training, this "transformed" dataset should be used as it
+#   contains metadata needed for program execution.
+transformed_dataset = graph.compile_logic(
+  dataset,
+
+  # The key used in the dataset corresponding to the executed
+  #   logical expressions
+  logic_keyword='logic_str',
+
+  # The key used in the dataset corresponding to the ground-truth
+  #   values of the expressions
+  logic_label_keyword='logic_label'
+)
+```
+
+Finally, we initialize the `InferenceProgram` and train just like before:
+```python
+program = InferenceProgram(
+  graph,
+  SolverModel,
+  poi=[...],
+  tnorm='G'
+)
+
+program.train(transformed_dataset, ...)
+```
+
+A complete example of this API can be found [here](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/Clever).
