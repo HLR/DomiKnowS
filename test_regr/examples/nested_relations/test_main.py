@@ -5,29 +5,18 @@ sys.path.append('../../..')
 
 import pytest
 
-
 @pytest.fixture(name='case')
 def test_case():
     import torch
     from domiknows.utils import Namespace
 
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(42)
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     word_emb = torch.randn(4, 2048, device=device)
-    # pcw = torch.tensor([[1, 0, 0, 0],
-    #                     [0, 1, 1, 0],
-    #                     [0, 0, 0, 1,]], device=device)
-    # pairs_link = torch.randn(4, 4, device=device)
-    # pairs_link *= 1 - torch.eye(4, 4, device=device)
-    # pairs_link[3, 0] = 1  # make sure John - IBM
-    # pairs_link = pairs_link > 0
-    # arg1, arg2 = pairs_link.nonzero(as_tuple=True)
-    # pa1 = torch.zeros(arg1.shape[0], 4, device=device)
-    # pa1.scatter_(1, arg1.unsqueeze(-1), 1)
-    # pa2 = torch.zeros(arg2.shape[0], 4, device=device)
-    # pa2.scatter_(1, arg2.unsqueeze(-1), 1)
-    # pa1_emb = pa1.matmul(word_emb)
-    # pa2_emb = pa2.matmul(word_emb)
-    # pair_emb = torch.cat((pa1_emb, pa2_emb), dim=-1)
 
     case = {
         'sentence': {
@@ -37,75 +26,101 @@ def test_case():
             'scw': torch.tensor([[1], [1], [1], [1]], device=device),
             'raw': ['John', 'works', 'for', 'IBM'],
             'emb': word_emb,
-            'Oword': torch.tensor([[0.6, 0.4],
-                                  [0.8, 0.2],
-                                  [0.55, 0.45],
-                                  [0.7, 0.3]],
-                                  device=device),
-            'Bword': torch.tensor([[0.3, 0.7],
-                                   [0.4, 0.6],
-                                   [0.45, 0.55],
-                                   [0.2, 0.8]],
-                                  device=device),
-            'Iword': torch.tensor([[0.1, 0.9],
-                                   [0.3, 0.7],
-                                   [0.2, 0.8],
-                                   [0.1, 0.9]],
-                                  device=device),
-            'Eword': torch.tensor([[0.6, 0.4],
-                                   [0.4, 0.6],
-                                   [0.1, 0.9],
-                                   [0.5, 0.5]],
-                                  device=device),
+            #                             John        works       for           IBM
+            'people':       torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.98, 0.02], [0.50, 0.5]], device=device),
+            'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.97, 0.03], [0.09, 0.91]], device=device),
+            'location':     torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.95, 0.05], [0.50, 0.50]], device=device),
+            'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
+            'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
+        },
+        'char': {
+            'wcc': torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], 
+                    [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0],
+                    [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0],
+                    [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1]], device=device),
+            'wcc_raw': [['J', 'o', 'h', 'n',], ['w', 'o', 'r', 'k', 's',], ['f', 'o', 'r',], ['I', 'B', 'M']],
+            'raw': ['J', 'o', 'h', 'n', 'w', 'o', 'r', 'k', 's', 'f', 'o', 'r', 'I', 'B', 'M']
         },
         'phrase': {
+            # ['John', 'works for', 'IBM'],
+            'pcw_backward': torch.tensor([[1, 0, 0, 0],
+                             [0, 1, 1, 0],
+                             [0, 0, 0, 1,]], device=device),
             'scp': torch.tensor([[1], [1], [1]], device=device),
-            'raw': ['John', 'works for', 'IBM'],
-            'pw1_backward': torch.tensor([[1, 0, 0, 0],
-                             [0, 1, 0, 0],
-                             [0, 0, 0, 1]], device=device),
-            'pw2_backward': torch.tensor([[1, 0, 0, 0],
-                                          [0, 0, 1, 0],
-                                          [0, 0, 0, 1]], device=device),
-            'emb': torch.stack([
-                torch.cat((word_emb[0], word_emb[0]), dim=0),
-                torch.cat((word_emb[1], word_emb[2]), dim=0),
-                torch.cat((word_emb[3], word_emb[3]), dim=0)], dim=0),
-            #                             John        "works for"           IBM
-            'people': torch.tensor([[0.3, 0.7], [0.98, 0.02], [0.40, 0.6]], device=device),
-            'organization': torch.tensor([[0.5, 0.5],  [0.97, 0.03], [0.09, 0.91]], device=device),
-            'location': torch.tensor([[0.7, 0.3], [0.95, 0.05], [0.50, 0.50]], device=device),
-            'other': torch.tensor([[0.7, 0.3], [0.90, 0.10], [0.70, 0.30]], device=device),
-            'O': torch.tensor([[0.9, 0.1], [0.10, 0.90], [0.90, 0.10]], device=device),
+            'emb': torch.stack([word_emb[0], word_emb[1]+word_emb[2], word_emb[3]], dim=0),
+            'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
         },
         'pair': {
-            #                             John-"works for"   John-IBM   IBM-John   IBM-"works for"
-            'pa1_backward': torch.tensor([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]], device=device),
-            'pa2_backward': torch.tensor([[0, 1, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]], device=device),
+            #                John-works    John-IBM      for-works     IBM-John      IBM-for
+            'pa1_backward': torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0],
+                                          [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0],
+                                          [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0],
+                                          [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1],], device=device),
+            'pa2_backward': torch.tensor([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1],
+                                          [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1],
+                                          [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1],
+                                          [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], device=device),
             'emb': torch.stack([
-                torch.cat((torch.cat((word_emb[0], word_emb[0]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
-                torch.cat((torch.cat((word_emb[0], word_emb[0]), dim=0), torch.cat((word_emb[3], word_emb[3]), dim=0)), dim=0),
-                torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[0], word_emb[0]), dim=0)), dim=0),
-                torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
+                torch.cat((word_emb[0], word_emb[0]), dim=0),
+                torch.cat((word_emb[0], word_emb[1]), dim=0),
+                torch.cat((word_emb[0], word_emb[2]), dim=0),
+                torch.cat((word_emb[0], word_emb[3]), dim=0),
+                
+                torch.cat((word_emb[1], word_emb[0]), dim=0),
+                torch.cat((word_emb[1], word_emb[1]), dim=0),
+                torch.cat((word_emb[1], word_emb[2]), dim=0),
+                torch.cat((word_emb[1], word_emb[3]), dim=0),
+                
+                torch.cat((word_emb[2], word_emb[0]), dim=0),
+                torch.cat((word_emb[2], word_emb[1]), dim=0),
+                torch.cat((word_emb[2], word_emb[2]), dim=0),
+                torch.cat((word_emb[2], word_emb[3]), dim=0),
+                
+                torch.cat((word_emb[3], word_emb[0]), dim=0),
+                torch.cat((word_emb[3], word_emb[1]), dim=0),
+                torch.cat((word_emb[3], word_emb[2]), dim=0),
+                torch.cat((word_emb[3], word_emb[3]), dim=0),
             ]),
-            'work_for': torch.tensor([[1.00, float("nan")], [0.70, 0.03], [0.37, 0.63], [0.50, 0.50]], device=device),
-            'live_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
-            'located_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
-            'orgbase_on': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
-            'kill': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
+            'work_for': torch.tensor([[0.60, 0.40],         [0.80, 0.20],         [0.80, 0.20], [float("nan"), float("nan")],  # John
+                                      #[0.5, 0.5], [0.5, 0.5], [0.60, 0.40], [0.70, 0.30],  # works
+                                      [float("nan"), float("nan")], [float("nan"), float("nan")], [0.60, 0.40], [0.70, 0.30],  # works
+                                      [0.98, 0.02],         [0.70, 0.03],         [0.95, 0.05], [0.90, 0.10],  # for
+                                      [0.5, 0.5],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30],  # IBM
+                                     ], device=device),
+            
+            'live_in': torch.mul(torch.rand(16, 2, device=device), 0.5),
+            'located_in': torch.mul(torch.rand(16, 2, device=device), 0.5),
+            'orgbase_on': torch.mul(torch.rand(16, 2, device=device), 0.5),
+            'kill': torch.mul(torch.rand(16, 2, device=device), 0.5),
         }, 
         
         # nandL(people,organization)
-        #                               John    "works for"     IBM
-        'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.5100], device=device),
+        #                                       John    works   for     IBM
+        'lc0LossTensor' : {"L" : torch.tensor([0.0987, 0.0000, 0.0000, 0.1942], device=device),
+                           "G" : torch.tensor([0.5000, 0.3100, 0.2769, 0.5000],  device=device),
+                           "P" : torch.tensor([0.2993, 0.1099, 0.0778, 0.3471],  device=device)
+                        },
+        #                 torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
-        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         #                                 John           works          for      IBM
-        'lc2LossTensor' : torch.tensor([[0.2000,         0.2000,        0.2000,  0.0200],  # John
-                                        [float("nan"),  float("nan"),  0.4000,  0.2900],  # works for
-                                        [0.5500,         0.2000,        0.1000,  0.0000]], # IBM
-                                        device=device)
-    
+        'lc2LossTensor' : {"L" : torch.tensor([0.3515, 0.3543, 0.3543, 0.2717, # John
+                                               0.5000, 0.5000,  0.4502, 0.3971, # works
+                                               0.2769,         0.3385, 0.2891, 0.3100, # for
+                                               float("nan") , 0.3543, 0.3100, 0.2071], # IBM
+                                               device=device),
+                           "G" : torch.tensor([0.0000, 0.6457, 0.7191, 0.0000, 
+                                               0.6900, 0.6900, 0.7191, 0.6900, 
+                                               0.7231, 0.7231, 0.7231, 0.7231, 
+                                               0.5000, 0.6457, 0.7191, 0.0000], 
+                                               device=device),
+                           
+                           "P" : torch.tensor([0.3350, 0.4013, 0.5254, 0.2639,       
+                                               0.6900, 0.7803, 0.8065, 0.4637, 
+                                               0.5000, 0.7102, 0.7309, 0.3800, 
+                                               float("nan"), 0.5000, 0.5470, 0.1350], 
+                                               device=device)
+                           }
     }
     case = Namespace(case)
     return case
