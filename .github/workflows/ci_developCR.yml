@@ -25,6 +25,11 @@ jobs:
         run: |
          uv sync --extra cpu --extra dev 
 
+      - name: Install spaCy model
+        run: |
+          uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
+          python -m spacy validate || true
+
       - name: Install package in development mode
         run: |
          uv pip install -e . 

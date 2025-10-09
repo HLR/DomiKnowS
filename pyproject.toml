@@ -36,8 +36,7 @@ dev = [
     "flaky>=3.8.0",
     "black[jupyter]>=24.10.0",
     "isort>=5.12.0",
-    "mypy>=1.3.0",
-    "en-core-web-sm>=3.8.0"
+    "mypy>=1.3.0"
 ]
 
 cpu = [

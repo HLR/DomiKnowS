@@ -22,15 +22,34 @@ jobs:
         run: |
          uv sync --extra cpu --extra dev 
 
+      - name: Install spaCy model
+        run: |
+          uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
+          python -m spacy validate || true
+
+      - name: Install package in development mode
+        run: |
+         uv pip install -e . 
+
       - name: Run regression tests
         run: |
           # List of specific test subfolders to run from ~/test_regr folder
           # Add subfolder names to this array as needed
           TEST_LIST=(
-            'solver'
+            'InferenceAPI'
             'dummy_datanode'
-            'examples/orbs'
             'examples/conll04'
+            'examples/edges'
+            'examples/graph_city'
+            'examples/graph_coloring'
+            'examples/mnist-arithmetic'
+            'examples/orbs'
+            'examples/logical_all'
+            'examples/test_switch_constraints'
+            'graph_errors'
+            'simple_regression'
+            'solver'
+            'namedTree'
           )
           
           if [ ${#TEST_LIST[@]} -eq 0 ]; then
