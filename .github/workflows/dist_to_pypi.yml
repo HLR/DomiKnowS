@@ -35,9 +35,9 @@ jobs:
       - name: Generate requirements.txt and requirements-dev.txt
         run: |
           # Runtime requirements (no dev groups)
-          uv export --format requirements-txt --no-dev --output requirements.txt
+          uv export --format requirements-txt --no-dev --output-file requirements.txt
           # Dev requirements = default + dev group(s)
-          uv export --format requirements-txt --group dev --output requirements-dev.txt
+          uv export --format requirements-txt --group dev --output-file requirements-dev.txt
 
       - name: Ensure MANIFEST.in includes requirements files
         run: |
