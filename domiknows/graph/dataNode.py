@@ -3052,9 +3052,6 @@ class DataNodeBuilder(dict):
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
         if not existingDnsForConcept:
-            existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName)
-
-        if not existingDnsForConcept:
             return
 
         if not getProductionModeStatus():
