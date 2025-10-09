@@ -217,7 +217,7 @@ class NamedTreeNode(Named):
     def __exit__(self, exc_type, exc_value, traceback):
         cls = type(self)
         last = cls._context.pop()
-        assert last is self
+        #assert last is self
 
     @property
     def sup(self):

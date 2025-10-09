@@ -1,3 +1,4 @@
+import os
 import sys
 import argparse
 from typing import Any
@@ -11,11 +12,17 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
+from domiknows import setProductionLogMode
 
 from utils import TestTrainLearner, return_contain, create_dataset, evaluate_model, train_model
 
 import traceback
 torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
+
+# CI-friendly: disable logging when running in CI environment
+is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
+if is_ci:
+    setProductionLogMode(True)
 
 def excepthook(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
@@ -143,7 +150,7 @@ def main(args: argparse.Namespace):
     train_model(program, dataset, args.epoch, constr_loss_only=True)
     
     w_after = flat_params(answer_module)
-    print("[DEBUG] Δ‖weights‖:", torch.norm(w_after - w_before).item())
+    print("[DEBUG] Delta-norm(weights):", torch.norm(w_after - w_before).item())
     
     for n,p in answer_module.named_parameters():
         if p.grad is not None:

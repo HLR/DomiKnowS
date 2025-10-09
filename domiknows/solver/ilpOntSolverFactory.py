@@ -101,3 +101,13 @@ class ilpOntSolverFactory:
                 instance.myLogger.debug("Returning existing generic ilpOntSolver using %s"%(_ilpConfig['ilpSolver']))
 
             return instance
+
+    @classmethod
+    def clear(cls):
+        """Clear ilpOntSolverFactory class state.
+        
+        This method clears the cached instances and classes to ensure clean state
+        for testing and other scenarios where solver instances need to be reset.
+        """
+        cls.__instances.clear()
+        cls.__classes.clear()

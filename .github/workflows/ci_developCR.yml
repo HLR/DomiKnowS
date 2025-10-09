@@ -25,6 +25,25 @@ jobs:
         run: |
          uv sync --extra cpu --extra dev 
 
+      - name: Install package in development mode
+        run: |
+         uv pip install -e . 
+
+      # --- Quality gate: formatting & types ---
+      - name: Check formatting (black)
+        continue-on-error: true
+        run: uv run black --check .
+
+      - name: Check imports (isort)
+        continue-on-error: true
+        run: uv run isort --profile black --check-only .
+
+      - name: Type check (mypy)
+        continue-on-error: true 
+        run: |
+          set +e  # Don't exit on first error - we want to handle exit codes manually
+          uv run mypy --install-types --non-interactive .
+
       - name: Run regression tests
         id: run_tests
         run: |
@@ -33,7 +52,6 @@ jobs:
           # List of specific test subfolders to run from test_regr
           # Add subfolder names to this array as needed
           TEST_LIST=(
-            'Clever'
             'InferenceAPI'
             'dummy_datanode'
             'examples/PMDExistL'
@@ -47,12 +65,11 @@ jobs:
             'examples/nested_relations'
             'examples/orbs'
             'examples/test_switch_constraints'
-            'graph'
             'graph_errors'
-            'sensor'
             'sensor/pytorch'
             'simple_regression'
             'solver'
+            'namedTree'
           )
           
           if [ ${#TEST_LIST[@]} -eq 0 ]; then

@@ -1,22 +1,36 @@
 # Training MNIST-Arithmetic
+
 ## Usage
 ```bash
-python train.py --model_name {Sampling, Semantic, PrimalDual, Explicit, DigitLabel, Baseline} --epochs 10 --num_train 500
+python train.py --model_name {Sampling, Semantic, PrimalDual, Explicit, DigitLabel, Baseline, GBI} --epochs 10 --num_train 500
 ```
 
-Enable CUDA with the `--cuda`.
+Enable CUDA with `--cuda`.
 
-## Test cases: Sampling loss, Semantic loss, Primal dual
+## Testing
+```bash
+# Run all tests
+pytest
+
+# Run fast tests only (skip slow integration tests)
+pytest -m "not slow"
+
+# Run with coverage
+pytest --cov=.
+
+# Run specific test file
+pytest test_data.py
+```
+
+## Training Examples
 ```bash
 python train.py --model_name Sampling --epochs 10 --num_train 500
 python train.py --model_name Semantic --epochs 10 --num_train 500
 python train.py --model_name PrimalDual --epochs 10 --num_train 500
 ```
 
-Training and validation accuracy is printed every epoch (with `post_epoch_metrics`).
-
-## Target accuracy (from AAAI results)
-| Method | Accuracy w/ 500 samples |
+## Target Accuracy (500 samples)
+| Method | Accuracy |
 | --- | --- |
 | SamplingLoss | 95.92% |
 | SemanticLoss | 95.12% |

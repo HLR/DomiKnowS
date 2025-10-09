@@ -44,8 +44,11 @@ class BaseCandidateSensor(QuerySensor):
     def define_inputs(self):
         super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
         args = {}
+        rootDn = self.builder.getDataNode(device=self.device)
+        if rootDn is None:
+            raise ValueError(f'No DataNode in the builder {self.builder}')
         for name, concept in self.args.items():
-            datanodes = self.builder.getDataNode(device=self.device).findDatanodes(select=concept)
+            datanodes = rootDn.findDatanodes(select=concept)
             args[name] = datanodes
         self.kwinputs['datanodes'] = args
 

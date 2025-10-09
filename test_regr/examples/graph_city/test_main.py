@@ -5,7 +5,8 @@ sys.path.append('.')
 sys.path.append('../..')
 
 
-def model_declaration():
+@pytest.fixture(scope="module")
+def program():
     import torch
 
     from domiknows.sensor.pytorch.sensors import ReaderSensor
@@ -68,23 +69,24 @@ def model_declaration():
     city[emergencyService] = EmergencyServiceLearner('index')
     city[groceryShop] = GroceryShopLearner('index')
     
-    program = LearningBasedProgram(graph, PoiModel, poi=[world, city, cityLink])
-    return program
+    return LearningBasedProgram(graph, PoiModel, poi=[world, city, cityLink])
+
+
+@pytest.fixture(scope="module")
+def dataset():
+    from reader import CityReader
+    return CityReader().run()
 
 
 @pytest.mark.gurobi
-def test_comparison_constraints():
-    from reader import CityReader
+def test_comparison_constraints(program, dataset):
     from graph import (
         city, firestationCity, mainFirestation, ancillaryFirestation,
         emergencyService, groceryShop, cityLink
     )
 
-    lbp = model_declaration()
-    dataset = CityReader().run()
-
-    for datanode in lbp.populate(dataset=dataset):
-        assert datanode != None
+    for datanode in program.populate(dataset=dataset):
+        assert datanode is not None
         assert len(datanode.getChildDataNodes()) == 9
 
         # Initialize attributes for all concepts
@@ -126,15 +128,19 @@ def test_comparison_constraints():
         print(f"Grocery Shops: {grocery_count}")
         
         # Test constraint validations
-        assert main_firestation_count < ancillary_firestation_count  # lessL
-        assert emergency_count >= firestation_count  # greaterEqL
-        assert grocery_count > emergency_count  # greaterL
-        assert firestation_count == main_firestation_count + ancillary_firestation_count  # equalCountsL
-        assert emergency_count != grocery_count  # notEqualCountsL
-        assert main_firestation_count == 1  # exactAL
-        assert emergency_count >= 2  # atLeastAL
-        assert grocery_count >= 3  # atLeastAL
-        assert grocery_count <= 9  # lessEqL (9 cities total)
-
-if __name__ == '__main__':
-    pytest.main([__file__])
+        assert main_firestation_count < ancillary_firestation_count, \
+            f"lessL constraint failed: {main_firestation_count} >= {ancillary_firestation_count}"
+        assert emergency_count >= firestation_count, \
+            f"greaterEqL constraint failed: {emergency_count} < {firestation_count}"
+        assert grocery_count > emergency_count, \
+            f"greaterL constraint failed: {grocery_count} <= {emergency_count}"
+        assert emergency_count != grocery_count, \
+            f"notEqualCountsL constraint failed: {emergency_count} == {grocery_count}"
+        assert main_firestation_count == 1, \
+            f"exactAL constraint failed: {main_firestation_count} != 1"
+        assert emergency_count >= 2, \
+            f"atLeastAL constraint failed: {emergency_count} < 2"
+        assert grocery_count >= 3, \
+            f"atLeastAL constraint failed: {grocery_count} < 3"
+        assert grocery_count <= 9, \
+            f"lessEqL constraint failed: {grocery_count} > 9"

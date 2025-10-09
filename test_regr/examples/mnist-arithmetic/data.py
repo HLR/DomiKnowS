@@ -4,6 +4,9 @@ random.seed(10)
 import torch
 torch.manual_seed(10)
 
+import numpy as np
+np.random.seed(10)
+
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from torch.nn import Flatten
@@ -11,6 +14,14 @@ from torch.nn import Flatten
 import config
 
 DATA_PATH = 'data'
+
+
+def _seed_worker(worker_id):
+    """Seed each worker deterministically when num_workers > 0"""
+    worker_seed = 0 + worker_id
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
 
 
 def distr_string(lst):
@@ -112,7 +123,11 @@ def make_sum(samples, do_eval=False):
     }
 
 
-def get_readers(num_train):
+def get_readers(num_train, num_workers=0):
+    # Create generator for deterministic shuffling
+    g = torch.Generator()
+    g.manual_seed(0)
+    
     transform = transforms.Compose([transforms.ToTensor(),
                               transforms.Normalize((0.5,), (0.5,)),
                               Flatten(0)
@@ -139,28 +154,38 @@ def get_readers(num_train):
         sampler=train_ids[:config.num_valid * 2],
         shuffle=False,
         batch_size=2,
-        collate_fn=make_sum
+        collate_fn=make_sum,
+        num_workers=num_workers,
+        persistent_workers=False,
+        pin_memory=False,
+        generator=g,
+        worker_init_fn=_seed_worker if num_workers > 0 else None,
         )
-    '''trainloader = DataLoader(
-        trainset,
-        sampler=train_ids,
-        shuffle=False,
-        batch_size=2,
-        collate_fn=make_sum
-    )'''
+    
     validloader = DataLoader(
         trainset,
         sampler=valid_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=lambda x: make_sum(x, do_eval=True)
+        collate_fn=lambda x: make_sum(x, do_eval=True),
+        num_workers=num_workers,
+        persistent_workers=False,
+        pin_memory=False,
+        generator=g,
+        worker_init_fn=_seed_worker if num_workers > 0 else None,
         )
+    
     testloader = DataLoader(
         testset,
         sampler=test_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=lambda x: make_sum(x, do_eval=True)
+        collate_fn=lambda x: make_sum(x, do_eval=True),
+        num_workers=num_workers,
+        persistent_workers=False,
+        pin_memory=False,
+        generator=g,
+        worker_init_fn=_seed_worker if num_workers > 0 else None,
         )
 
     return trainloader, trainloader_mini, validloader, testloader

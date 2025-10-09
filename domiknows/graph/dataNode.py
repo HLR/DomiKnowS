@@ -108,6 +108,7 @@ class DataNode:
 
         self.myLoggerTime = getRegrTimer_logger()
         
+    conceptsMap = {}
     @classmethod
     def clear(cls):
         """Clear DataNode class state.
@@ -319,6 +320,28 @@ class DataNode:
         # ...
         return False
 
+    def _get_matching_keys(self, data_map, word):
+        """
+        Returns all map keys where the last element of the path matches the given word.
+        
+        Args:
+            data_map (dict): Dictionary with path-like keys
+            word (str): Word to match against the last path element
+            
+        Returns:
+            list: List of matching keys
+        """
+        matching_keys = []
+        
+        for key in data_map.keys():
+            # Split the key by '/' and get the last element and remove < > if present in any part
+            path_parts = key.split('/')
+            path_parts = [part[1:-1] if part.startswith('<') and part.endswith('>') else part for part in path_parts]   
+            if path_parts and path_parts[-1] == word:
+                matching_keys.append(key)
+        
+        return matching_keys
+
     def getAttribute(self, *keys):
         """Retrieve a specific attribute using a key or a sequence of keys.
 
@@ -329,11 +352,12 @@ class DataNode:
             *keys (str or tuple or Concept): The key(s) to identify the attribute.
 
         Returns:
-            object: The value of the attribute if it exists, or None otherwise.
+            object: The value of the attribut   e if it exists, or None otherwise.
         """
         key = ""
         keyBis  = ""
         index = None
+        last =  ""
 
         conceptFound = False
         for _, kConcept in enumerate(keys):
@@ -353,20 +377,25 @@ class DataNode:
                         key = key + '<' + conceptForK[0].name +'>'
                         index = conceptForK[2]
                         keyBis = keyBis + kConcept
+                        last = conceptForK[0].name
                     else:
                         key = key + '<' + kConcept +'>'
                         keyBis = keyBis + kConcept
+                        last = kConcept
                 else:
                     key = key + kConcept
                     keyBis = keyBis + kConcept
+                    last = kConcept
             elif isinstance(kConcept, tuple): # Concept represented as tuple
                 conceptFound = True
                 key = key + '<' + kConcept[0].name +'>'
                 keyBis = keyBis + kConcept[0].name
+                last
             elif isinstance(kConcept, Concept): # Just concept
                 conceptFound = True
                 key = key + '<' + kConcept.name +'>'
                 keyBis = keyBis + kConcept.name
+                last = kConcept.name
 
         # Use key and keyBis to get the dn attribute
         if key in self.attributes:
@@ -395,6 +424,11 @@ class DataNode:
                 elif "propertySet" in self.attributes and key in self.attributes["propertySet"]:
                     return self.attributes["propertySet"][key]
 
+        keys = self._get_matching_keys(self.attributes, last)
+        if keys:
+            key = keys[0]
+            return self.attributes[key]
+            
         return None
 
     # --- Relation Link methods
@@ -714,6 +748,10 @@ class DataNode:
 
             # Find concepts in dataNode - concept are in attributes from learning sensors
             for att in dn.attributes:
+                path_parts = att.split('/')
+                if path_parts and path_parts[-1]:
+                   att = path_parts[-1]
+                
                 if att[0] == '<' and att[-1] == '>':
                     if att[1:-1] not in conceptsAndRelations:
                         conceptsAndRelations.add(att[1:-1])
@@ -1591,8 +1629,18 @@ class DataNode:
                     if not self.hasAttribute(localArgmaxKeyInVariableSet):
                         v = self.attributes["variableSet"][vKeyInVariableSet]
 
-                        vArgmaxTInxexes = torch.argmax(v, dim=1)
-                        vArgmax = torch.zeros_like(v).scatter_(1, vArgmaxTInxexes.unsqueeze(1), 1.)
+                        # Check if tensor is valid
+                        if v is None or not torch.is_tensor(v):
+                            continue
+
+                        # Handle different tensor dimensions
+                        if v.dim() > 1:
+                            vArgmaxIndexes = torch.argmax(v, dim=1)
+                            vArgmax = torch.zeros_like(v).scatter_(1, vArgmaxIndexes.unsqueeze(1), 1.)
+                        else:
+                            vArgmaxIndex = torch.argmax(v).item()
+                            vArgmax = torch.zeros_like(v)
+                            vArgmax[vArgmaxIndex] = 1.
 
                         self.attributes["variableSet"][localArgmaxKeyInVariableSet] = vArgmax
 
@@ -1762,14 +1810,25 @@ class DataNode:
                         dn.attributes[keyNormalizedProb] = vNormalizedProbT
 
                 if "argmax" in keys:
-                    keyArgmax  = "<" + c[0].name + ">/local/argmax"
+                    keyArgmax = "<" + c[0].name + ">/local/argmax"
                     if not dn.hasAttribute(keyArgmax):
                         v = dn.getAttribute(c[0])
-                        vArgmax = torch.zeros(v.shape).squeeze(0)
-                        vArgmaxCalculated = torch.argmax(v, keepdim=True)
+                        
+                        # Check if v is None or not a tensor
+                        if v is None or not torch.is_tensor(v):
+                            continue
+                        
+                        # Create argmax tensor matching original shape
+                        vArgmax = torch.zeros_like(v)
                         vArgmaxIndex = torch.argmax(v).item()
-                        vArgmax[vArgmaxIndex] = 1
-
+                        
+                        # Use flat indexing to safely set value
+                        vArgmax.view(-1)[vArgmaxIndex] = 1.
+                        
+                        # Squeeze only if original had batch dimension of 1
+                        if v.shape[0] == 1 and v.dim() > 1:
+                            vArgmax = vArgmax.squeeze(0)
+                        
                         dn.attributes[keyArgmax] = vArgmax
 
         endInferLocal = perf_counter()
@@ -2287,6 +2346,16 @@ class DataNodeBuilder(dict):
         if args:
             dict.__setitem__(self, "data_item", args[0])
 
+    @classmethod
+    def clear(cls):
+        """Clear DataNodeBuilder class state.
+        
+        This method resets any class-level state that might persist
+        between test runs or other scenarios where clean state is needed.
+        """
+        # Reset any class-level variables if they exist
+        cls.context = "build"
+    
     def __contains__(self, key):
         """
         Overloaded __contains__ method for the DataNodeBuilder class.
@@ -2465,15 +2534,15 @@ class DataNodeBuilder(dict):
         Returns:
             Concept object: The concept object if found, otherwise None.
         """
-        subGraph_keys = [key for key in usedGraph._objs]
-        for subGraphKey in subGraph_keys:
-            subGraph = usedGraph._objs[subGraphKey]
-
-            for conceptNameItem in subGraph.concepts:
-                if conceptName == conceptNameItem:
-                    concept = subGraph.concepts[conceptNameItem]
-
-                    return concept
+        # Search in main graph concepts
+        if conceptName in usedGraph.concepts:
+            return usedGraph.concepts[conceptName]
+        
+        # Search in subgraph concepts
+        for subGraph in usedGraph.subgraphs.values():
+            if conceptName in subGraph.concepts:
+                return subGraph.concepts[conceptName]
+        
         return None
 
     def __findConceptInfo(self, usedGraph, concept):
@@ -2488,7 +2557,9 @@ class DataNodeBuilder(dict):
             dict: A dictionary containing various pieces of information about the concept.
                   - 'concept': The concept itself.
                   - 'relation': A boolean indicating whether the concept has any relations.
+                  - 'equals': A list of concepts that are equal to the given concept.
                   - 'relationAttrs': A dictionary mapping relation names to their corresponding concept objects.
+                  - 'relationAttrsFullName': A dictionary mapping full relation names to their corresponding concept objects.
                   - 'root': A boolean indicating if the concept is a root concept.
                   - 'contains': A list of concepts that this concept contains.
                   - 'containedIn': A list of concepts in which this concept is contained.
@@ -2496,7 +2567,9 @@ class DataNodeBuilder(dict):
         conceptInfo = {
             'concept': concept,
             'relation': bool(concept.has_a()),
+            'equals': concept.get_equal_concepts(),
             'relationAttrs': {rel.name: self.__findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
+            'relationAttrsFullName': {rel.fullname: self.__findConcept(rel.dst.name, usedGraph) for _, rel in enumerate(concept.has_a())},
             'root': not ('contains' in concept._in),
             'contains': [contain.dst for contain in concept._out.get('contains', [])],
             'containedIn': [contain.src for contain in concept._in.get('contains', [])]
@@ -2583,7 +2656,16 @@ class DataNodeBuilder(dict):
                     yield dn
 
         # Flatten the list of new dataNodes
-        flattenDns = list(flatten(dns))
+        _flattenDns = list(flatten(dns))
+        
+        # remove any dataNodes from flattenDns that do not have relationLinks to any of the existing root dataNodes
+        flattenDns = []
+        for dn in _flattenDns:
+            if dn.relationLinks:
+                if any(il in dnsRoots for il in dn.relationLinks):
+                    flattenDns.append(dn)
+            else:
+                flattenDns.append(dn)
 
         # Create a set of all unique dataNodes in dnsRoots and flattenDns
         allDns = set(dnsRoots)
@@ -2605,9 +2687,7 @@ class DataNodeBuilder(dict):
 
             for il in dn.impactLinks:
                 if il in incomingLinks:
-                    incomingLinks[dn] += 1
-                else:
-                    incomingLinks[dn] = 1
+                    incomingLinks[il] += 1
 
         # Find the root dataNodes which have no incoming links
         noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
@@ -2620,7 +2700,7 @@ class DataNodeBuilder(dict):
 
         # if newDnsRoots is empty
         if not newDnsRoots:
-            newDnsRoots = allDns
+            newDnsRoots = list(allDns)
             newDnsRoots = sorted(newDnsRoots, key=lambda dn: len(dnTypes[dn.ontologyNode]), reverse=False)
 
         # Set the updated root list
@@ -2632,7 +2712,7 @@ class DataNodeBuilder(dict):
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
         return
-
+    
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
         """
         Build or update relation dataNode in the data graph for a given key.
@@ -2665,8 +2745,15 @@ class DataNodeBuilder(dict):
 
         # This is an information about relation attributes
         if conceptInfo['relationAttrData']:
-            index = keyDataName.index('.')
-            attrName = keyDataName[0:index]
+            if '.' in keyDataName:
+                index = keyDataName.index('.')
+                attrName = keyDataName[0:index]
+            else:
+                attrName = keyDataName
+            
+            path_parts = attrName.split('/')
+            if path_parts and path_parts[-1]:
+                attrName = path_parts[-1]
 
             relationAttrsCacheName = conceptInfo['concept'].name + "RelationAttrsCache"
 
@@ -2963,9 +3050,6 @@ class DataNodeBuilder(dict):
         # print(keyDataName)
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
-
-        if not existingDnsForConcept:
-            existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName)
 
         if not existingDnsForConcept:
             return
@@ -3590,9 +3674,13 @@ class DataNodeBuilder(dict):
 
             noRelationRoots = []
             for dn in existingDns:
-                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes
-                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                # Consider nodes that either have no relationLinks or only have "contains" relation
+                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
+                    
+            if len(noRelationRoots) == 0:
+                _DataNodeBuilder__Logger.warn('No root DataNode candidates found - all DataNodes have non-contains relations')
+                return  # Exit without creating batch
 
             if len(noRelationRoots) == 1:
                 rootDn = noRelationRoots[0]
@@ -3690,8 +3778,8 @@ class DataNodeBuilder(dict):
             
             noRelationRoots = []
             for dn in existingDns:
-                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
-                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                # Consider nodes that either have no relationLinks or only have "contains" relation
+                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
 
             if len(noRelationRoots) != 0:
@@ -3781,8 +3869,8 @@ class DataNodeBuilder(dict):
             
             noRelationRoots = []
             for dn in existingDns:
-                # if dn relationLinks has key different then "contains" then exclude it from root dataNodes  
-                if any(relLink for relLink in dn.relationLinks if relLink == "contains"):
+                # Consider nodes that either have no relationLinks or only have "contains" relation
+                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
                     noRelationRoots.append(dn)
 
             if len(noRelationRoots) > 0:

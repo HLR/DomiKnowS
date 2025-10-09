@@ -482,10 +482,10 @@ class LogicalConstrain(LcElement):
         except StopIteration:
             return []
 
-        if len(lcVariableNames) < 2:
+        if len(lcVariableNames) != 2:
             myLogger.error(
                 "%s Comparative Logical Constraint created with %i sets of "
-                "variables – need at least two",
+                "variables – need exactly two",
                 logicMethodName, len(lcVariableNames)
             )
             return []

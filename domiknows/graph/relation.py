@@ -1,7 +1,5 @@
 import abc
-from collections import OrderedDict
-from itertools import chain, permutations
-from domiknows.graph.logicalConstrain import nandL
+from itertools import permutations
 
 import torch
 
@@ -151,6 +149,7 @@ class IsA(OTORelation):
 @Concept.relation_type('not_a')
 class NotA(OTORelation):
     def __init__(self, src, dst, *args, **kwargs):
+        from domiknows.graph.logicalConstrain import nandL
         super().__init__(src, dst, *args, **kwargs)
         nandL(src, dst)
 

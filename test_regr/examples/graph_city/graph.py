@@ -30,7 +30,6 @@ with Graph('global') as graph:
     atLeastAL(ancillaryFirestation, 2)             # At least 2 ancillary firestations
     atMostAL(ancillaryFirestation, 5)              # At most 5 ancillary firestations
     lessL(mainFirestation, ancillaryFirestation)   # Main < ancillary (1 < 2+)
-    equalCountsL(firestationCity, mainFirestation, ancillaryFirestation)  # Total = main + ancillary
     
     # This gives us: firestationCity = 1 + [2,5] = [3,6] total firestations
     

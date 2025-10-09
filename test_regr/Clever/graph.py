@@ -34,7 +34,8 @@ def create_graph(dataset,return_graph_text=False):
     executions = []
     for i in range(len(dataset)):
         current_instance = dataset[i]
-        execution = create_execution_existL(current_instance['program'],i)
+        question_raw = current_instance['question_raw']
+        execution = create_execution_existL(current_instance['program'],i, question_raw)
         #graph_text+="\n\t"+execution
         #print(execution)
         if " or " in current_instance["question_raw"]:

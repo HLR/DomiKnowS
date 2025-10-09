@@ -8,7 +8,7 @@ def test_setup_graph_exception():
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
         sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', 
-                                   "Logical Constraint constraint_only_one_entity has incorrect cardinality definition in nested atMostL logical operator - "
+                                   "Logical Constraint constraint_only_one_entity has incorrect cardinality definition in nested LC0 logical operator - "
                                    "integer 1 has to be last element in the same Logical operator for counting or existing logical operators!").replace(" ", "")
         
         print(repr(sanitized_error_message))

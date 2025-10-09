@@ -8,8 +8,8 @@ def test_setup_graph_exception():
     except Exception as e:
         sanitized_error_message = re.sub(r'[^\x20-\x7E]', '', str(e)).replace(" ", "")
         sanitized_pattern = re.sub(r'[^\x20-\x7E]', '', 
-                                   "In logical constraint constraint_only_one_entity_fixed orL variable x associated with concept organization already defined "
-                                   "in orL and associated with concept person").replace(" ", "")
+                                   "In logical constraint constraint_only_one_entity_fixed LC0 variable x associated with concept organization already defined "
+                                   "in LC0 and associated with concept person").replace(" ", "")
         
         ### you have used the notion person(path=('x', entity)) which is incorrect.
         ### entity is a concept and cannot be used as part of the path. 

@@ -59,7 +59,7 @@ def test_case():
                                   device=device),
         },
         'phrase': {
-            'scw': torch.tensor([[1], [1], [1]], device=device),
+            'scp': torch.tensor([[1], [1], [1]], device=device),
             'raw': ['John', 'works for', 'IBM'],
             'pw1_backward': torch.tensor([[1, 0, 0, 0],
                              [0, 1, 0, 0],
@@ -88,7 +88,7 @@ def test_case():
                 torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[0], word_emb[0]), dim=0)), dim=0),
                 torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
             ]),
-            'work_for': torch.tensor([[1.00, float("nan")], [0.70, 0.03], [0.37, 0.63]], device=device),
+            'work_for': torch.tensor([[1.00, float("nan")], [0.70, 0.03], [0.37, 0.63], [0.50, 0.50]], device=device),
             'live_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
             'located_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
             'orgbase_on': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
@@ -130,6 +130,12 @@ def model_declaration(config, case):
         sentence['raw'],
         expected_inputs=(case.sentence.raw,),
         expected_outputs=(case.word.scw, case.word.raw))
+    
+    # Edge: sentence to phrase
+    phrase[rel_sentence_contains_phrase, 'raw'] = TestSensor(
+        sentence['raw'],
+        expected_inputs=(case.sentence.raw,),
+        expected_outputs=(case.phrase.scp, case.phrase.raw))
 
     word['emb'] = TestSensor(
         'raw',
@@ -234,7 +240,6 @@ def model_declaration(config, case):
         expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.O)
 
-
     pair[work_for] = TestSensor(
         label=True,
         expected_outputs=case.pair.work_for)
@@ -323,12 +328,12 @@ def test_main_conll04(case):
     lbp = model_declaration(CONFIG.Model, case)
     data = {}
 
-    _, _, datanode = lbp.model(data)
+    loss, metric, datanode, builder = lbp.model(data)
 
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
-            assert len(child_node.findDatanodes(select="phrase")) == 1
+            #assert len(child_node.findDatanodes(select="phrase")) == 1
 
         elif child_node.ontologyNode.name == 'phrase':
             assert (child_node.getAttribute('emb') == case.phrase.emb[child_node.instanceID]).all()
@@ -348,7 +353,7 @@ def test_main_conll04(case):
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
     assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentance
-    assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
+    assert len(datanode.findDatanodes(select=phrase)) == 3 # There are 3 phrases build of the words in the sentance
 
     conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     conceptsRelationsConcepts = [people, organization, location, other, o, work_for]

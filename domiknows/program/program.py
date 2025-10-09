@@ -153,9 +153,18 @@ class LearningBasedProgram():
             paramName = param.name
             if paramName in kwargs:
                 self.modelKwargs[paramName] = kwargs[paramName]
-            if paramName == "kwargs":
-                self.modelKwargs[paramName] = kwargs
-                
+        
+        # Only add kwargs if the Model signature has **kwargs parameter
+        has_var_keyword = any(
+            param.kind == param.VAR_KEYWORD 
+            for param in self.modelSignature.parameters.values()
+        )
+        
+        if has_var_keyword:
+            # Pass remaining kwargs that weren't explicitly matched
+            remaining_kwargs = {k: v for k, v in kwargs.items() if k not in self.modelKwargs}
+            self.modelKwargs.update(remaining_kwargs)
+        
         self.model = Model(graph, **self.modelKwargs)
         self.opt = None
         self.epoch = None
@@ -227,9 +236,6 @@ class LearningBasedProgram():
 
                 metricName = 'loss'
                 metricResult = self.model.loss
-
-                if self.dbUpdate is not None:
-                    self.dbUpdate(desc, metricName, metricResult)
 
             ilpMetric = None
             softmaxMetric = None

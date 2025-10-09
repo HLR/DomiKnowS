@@ -17,7 +17,7 @@ with Graph('global') as graph:
         (rel_sentence_contains_word,) = sentence.contains(word)
         
         phrase = Concept(name='phrase')
-        (rel_sentence_contains_phrase,) = sentence.contains(arg=phrase)
+        (rel_sentence_contains_phrase,) = sentence.contains(phrase)
         (rel_phrase_word1, rel_phrase_word2) = phrase.has_a(word, word)
 
         pair = Concept(name='pair')
@@ -64,7 +64,7 @@ with Graph('global') as graph:
         ifL(andL(people('x'), organization('y')), work_for('z', v=(('x', rel_pair_phrase1.reversed.name), ('y', rel_pair_phrase2.reversed.name))))
 
         #LC2 Each sentence should contain at least one person phrase        
-        atLeastL(andL(sentence('x'), people('y', v=('x', rel_sentence_contains_word.name))), 1, 'y')
+        atLeastL(andL(sentence('x'), people('y', v=('x', rel_sentence_contains_word.name))), 1)
         
         #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword
         lg = orL( andL( Iword(path=('x', rel_phrase_word1.name)), Iword(path=('x', rel_phrase_word2.name)) ), andL( Bword(path=('x', rel_phrase_word1.name)), Eword(path=('x', rel_phrase_word2.name)) ) )

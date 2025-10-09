@@ -30,9 +30,12 @@ class CandidateSelection(LcElement):
 
 # object creating Cartesian product of all candidates
 class combinationC(CandidateSelection):
-    def __init__(self, *e, name = None):
+    def __init__(self, *e, name = None):        
         super().__init__(*e, name = name)
         
+    def strEs(self):
+        return "combinationC(%s)"%(",".join([str(e) for e in self.e]))  
+            
     def __call__(self, candidates_list, keys=None):
         from  itertools import product
         
