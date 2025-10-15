@@ -28,6 +28,11 @@ class Transformed():
         mapping = mapping.to(dtype=torch.float, device=device)
         value = value.to(dtype=torch.float, device=device)
         if self.fn is None:
+            # Ensure shapes are compatible for matrix multiplication
+            # mapping should be (N, M) and value should be (M, ...) 
+            if mapping.shape[1] != value.shape[0]:
+                raise ValueError(f"Shape mismatch: mapping has shape {mapping.shape} but value has shape {value.shape}. "
+                                f"Expected mapping.shape[1] ({mapping.shape[1]}) == value.shape[0] ({value.shape[0]})")
             return mapping.matmul(value)
         # mapping (N,M)
         # value (M,...)
