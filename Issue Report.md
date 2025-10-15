@@ -4,7 +4,7 @@ If you're using DomiKnowS and encounter any issues or want to suggest enhancemen
 
 #### 1. **Ensure you have a GitHub account**
 
-To report issues or make suggestions, you first need a GitHub account. If you don't have one, [sign up](https://github.com/join) for free.
+To report issues or make suggestions, you first need a GitHub account. If you don't have one, sign up for free.
 
 #### 2. **Navigate to the DomiKnowS GitHub Repository**
 
