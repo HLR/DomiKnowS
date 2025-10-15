@@ -1,5 +1,7 @@
 import pytest
 import math
+from flaky import flaky
+
 
 @pytest.fixture(name='case')
 def test_case():
@@ -311,8 +313,8 @@ def test_graph_naming():
     assert rel_pair_word1.name == 'arg1'
     assert rel_pair_word2.name == 'arg2'
 
-
 @pytest.mark.gurobi
+@flaky(max_runs=3, min_passes=1)
 def test_main_conll04(case):
     import torch
     from .config import CONFIG

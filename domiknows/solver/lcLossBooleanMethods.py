@@ -189,7 +189,15 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
             for i, v in enumerate(var[1:], 1):
                 prev_value = andSuccess.clone()
-                andSuccess.mul_(v)
+                
+                # Check shapes before in-place multiplication
+                if andSuccess.shape != v.shape:
+                    self.countLogger.debug(f"Shape mismatch detected: andSuccess {andSuccess.shape} vs v {v.shape}")
+                    # Use broadcasting-compatible operation instead of in-place
+                    andSuccess = torch.mul(andSuccess, v)
+                else:
+                    andSuccess.mul_(v)
+                    
                 self.countLogger.debug(f"After multiply with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
 
         self.countLogger.info(f"Final AND success value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
@@ -506,7 +514,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         pmf = torch.zeros(n + 1, dtype=p.dtype, device=p.device)
         pmf[0] = 1.0
 
-        # For each probability p_i, convolve with [1-p_i, p_i]
+        # For each probability p_i, convolve with [1-pi, p_i]
         # Reverse k loop to avoid overwriting dependencies.
         for pi in p:
             # pmf_new[k] = pmf[k]*(1-pi) + pmf[k-1]*pi

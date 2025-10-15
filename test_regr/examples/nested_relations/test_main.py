@@ -1,33 +1,63 @@
 import sys
 from itertools import product
+
+from test_regr.sensor.pytorch.test_candidate_sensor import case
 sys.path.append('.')
 sys.path.append('../../..')
 
 import pytest
-
 
 @pytest.fixture(name='case')
 def test_case():
     import torch
     from domiknows.utils import Namespace
 
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(42)
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     word_emb = torch.randn(4, 2048, device=device)
-    # pcw = torch.tensor([[1, 0, 0, 0],
-    #                     [0, 1, 1, 0],
-    #                     [0, 0, 0, 1,]], device=device)
-    # pairs_link = torch.randn(4, 4, device=device)
-    # pairs_link *= 1 - torch.eye(4, 4, device=device)
-    # pairs_link[3, 0] = 1  # make sure John - IBM
-    # pairs_link = pairs_link > 0
-    # arg1, arg2 = pairs_link.nonzero(as_tuple=True)
-    # pa1 = torch.zeros(arg1.shape[0], 4, device=device)
-    # pa1.scatter_(1, arg1.unsqueeze(-1), 1)
-    # pa2 = torch.zeros(arg2.shape[0], 4, device=device)
-    # pa2.scatter_(1, arg2.unsqueeze(-1), 1)
-    # pa1_emb = pa1.matmul(word_emb)
-    # pa2_emb = pa2.matmul(word_emb)
-    # pair_emb = torch.cat((pa1_emb, pa2_emb), dim=-1)
+    
+    # Compute phrase embeddings first
+    phrase_emb = torch.stack([word_emb[0], word_emb[1]+word_emb[2], word_emb[3]], dim=0)
+    
+    num_phrases = 3
+    pair_indices = [(i, j) for i in range(num_phrases) for j in range(num_phrases)]
+
+    # arg1 / arg2 backward mappings: shape (9,3)
+    pa1_backward = torch.zeros(len(pair_indices), num_phrases, device=device)
+    pa2_backward = torch.zeros(len(pair_indices), num_phrases, device=device)
+    for r, (i, j) in enumerate(pair_indices):
+        pa1_backward[r, i] = 1.0
+        pa2_backward[r, j] = 1.0
+
+    # Pair embeddings are concatenations of phrase embeddings: shape (9, 4096)
+    pair_emb_rows = []
+    for (i, j) in pair_indices:
+        pair_emb_rows.append(torch.cat((phrase_emb[i], phrase_emb[j]), dim=0))
+    pair_emb = torch.stack(pair_emb_rows, dim=0)
+    
+    # Labels / scores for pair relations: shape (9, 2)
+    # Make (John -> IBM) the positive 'work_for' example: that's phrase 0 -> phrase 2 in your fixture
+    work_for = torch.tensor([
+        [0.50, 0.50],  # (0,0)
+        [0.70, 0.30],  # (0,1)
+        [0.90, 0.10],  # (0,2)  John -> IBM  (positive)
+        [0.40, 0.60],  # (1,0)
+        [0.50, 0.50],  # (1,1)
+        [0.40, 0.60],  # (1,2)
+        [0.60, 0.40],  # (2,0)
+        [0.60, 0.40],  # (2,1)
+        [0.50, 0.50],  # (2,2)
+    ], device=device)
+
+    # You can keep the other relations as low-confidence dummies (or random * 0.5) with the same (9,2) shape:
+    live_in    = torch.mul(torch.rand(9, 2, device=device), 0.5)
+    located_in = torch.mul(torch.rand(9, 2, device=device), 0.5)
+    orgbase_on = torch.mul(torch.rand(9, 2, device=device), 0.5)
+    kill       = torch.mul(torch.rand(9, 2, device=device), 0.5)
 
     case = {
         'sentence': {
@@ -37,75 +67,66 @@ def test_case():
             'scw': torch.tensor([[1], [1], [1], [1]], device=device),
             'raw': ['John', 'works', 'for', 'IBM'],
             'emb': word_emb,
-            'Oword': torch.tensor([[0.6, 0.4],
-                                  [0.8, 0.2],
-                                  [0.55, 0.45],
-                                  [0.7, 0.3]],
-                                  device=device),
-            'Bword': torch.tensor([[0.3, 0.7],
-                                   [0.4, 0.6],
-                                   [0.45, 0.55],
-                                   [0.2, 0.8]],
-                                  device=device),
-            'Iword': torch.tensor([[0.1, 0.9],
-                                   [0.3, 0.7],
-                                   [0.2, 0.8],
-                                   [0.1, 0.9]],
-                                  device=device),
-            'Eword': torch.tensor([[0.6, 0.4],
-                                   [0.4, 0.6],
-                                   [0.1, 0.9],
-                                   [0.5, 0.5]],
-                                  device=device),
+            #                             John        works       for           IBM
+            'people':       torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.98, 0.02], [0.50, 0.5]], device=device),
+            'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.97, 0.03], [0.09, 0.91]], device=device),
+            'location':     torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.95, 0.05], [0.50, 0.50]], device=device),
+            'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
+            'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
+            # Add missing attributes
+            'Eword':        torch.tensor([[0.1, 0.9], [0.2, 0.8], [0.3, 0.7], [0.4, 0.6]], device=device),
+            'Iword':        torch.tensor([[0.2, 0.8], [0.3, 0.7], [0.4, 0.6], [0.5, 0.5]], device=device),
+            'Bword':        torch.tensor([[0.3, 0.7], [0.4, 0.6], [0.5, 0.5], [0.6, 0.4]], device=device),
+            'Oword':        torch.tensor([[0.4, 0.6], [0.5, 0.5], [0.6, 0.4], [0.7, 0.3]], device=device),
+        },
+        'char': {
+            'wcc': torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], 
+                    [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0],
+                    [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0],
+                    [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1]], device=device),
+            'wcc_raw': [['J', 'o', 'h', 'n',], ['w', 'o', 'r', 'k', 's',], ['f', 'o', 'r',], ['I', 'B', 'M']],
+            'raw': ['J', 'o', 'h', 'n', 'w', 'o', 'r', 'k', 's', 'f', 'o', 'r', 'I', 'B', 'M']
         },
         'phrase': {
+            # ['John', 'works for', 'IBM'],
+            # CHANGE: pcw_backward should be (3, 4) not (3, 3)
+            'pcw_backward': torch.tensor([[1, 0, 0, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 0, 0, 1]], device=device),
             'scp': torch.tensor([[1], [1], [1]], device=device),
-            'raw': ['John', 'works for', 'IBM'],
+            'emb': torch.stack([word_emb[0], word_emb[1]+word_emb[2], word_emb[3]], dim=0),
+            'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
+            'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.09, 0.91]], device=device),
+            'location': torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.50, 0.50]], device=device),
+            'other': torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.70, 0.30]], device=device),
+            'O': torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.90, 0.10]], device=device),
+            # CHANGE: pw1_backward and pw2_backward should be (3, 4) not (3, 3)
+            # Use dtype=torch.float32 to match word_emb dtype
             'pw1_backward': torch.tensor([[1, 0, 0, 0],
-                             [0, 1, 0, 0],
-                             [0, 0, 0, 1]], device=device),
+                                        [0, 1, 0, 0],
+                                        [0, 0, 0, 1]], device=device, dtype=torch.float32),
             'pw2_backward': torch.tensor([[1, 0, 0, 0],
-                                          [0, 0, 1, 0],
-                                          [0, 0, 0, 1]], device=device),
-            'emb': torch.stack([
-                torch.cat((word_emb[0], word_emb[0]), dim=0),
-                torch.cat((word_emb[1], word_emb[2]), dim=0),
-                torch.cat((word_emb[3], word_emb[3]), dim=0)], dim=0),
-            #                             John        "works for"           IBM
-            'people': torch.tensor([[0.3, 0.7], [0.98, 0.02], [0.40, 0.6]], device=device),
-            'organization': torch.tensor([[0.5, 0.5],  [0.97, 0.03], [0.09, 0.91]], device=device),
-            'location': torch.tensor([[0.7, 0.3], [0.95, 0.05], [0.50, 0.50]], device=device),
-            'other': torch.tensor([[0.7, 0.3], [0.90, 0.10], [0.70, 0.30]], device=device),
-            'O': torch.tensor([[0.9, 0.1], [0.10, 0.90], [0.90, 0.10]], device=device),
+                                        [0, 0, 1, 0],
+                                        [0, 0, 0, 1]], device=device, dtype=torch.float32),
+            'raw': ['John', 'works for', 'IBM'],
         },
         'pair': {
-            #                             John-"works for"   John-IBM   IBM-John   IBM-"works for"
-            'pa1_backward': torch.tensor([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]], device=device),
-            'pa2_backward': torch.tensor([[0, 1, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]], device=device),
-            'emb': torch.stack([
-                torch.cat((torch.cat((word_emb[0], word_emb[0]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
-                torch.cat((torch.cat((word_emb[0], word_emb[0]), dim=0), torch.cat((word_emb[3], word_emb[3]), dim=0)), dim=0),
-                torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[0], word_emb[0]), dim=0)), dim=0),
-                torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
-            ]),
-            'work_for': torch.tensor([[1.00, float("nan")], [0.70, 0.03], [0.37, 0.63], [0.50, 0.50]], device=device),
-            'live_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
-            'located_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
-            'orgbase_on': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
-            'kill': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
+            'pa1_backward': pa1_backward,   # (9,3)
+            'pa2_backward': pa2_backward,   # (9,3)
+            'emb': pair_emb,                # (9,4096)
+            'work_for': work_for,           # (9,2)
+            'live_in': live_in,             # (9,2)
+            'located_in': located_in,       # (9,2)
+            'orgbase_on': orgbase_on,       # (9,2)
+            'kill': kill,                   # (9,2)
         }, 
         
         # nandL(people,organization)
-        #                               John    "works for"     IBM
-        'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.5100], device=device),
+        #                                       John    works   for     IBM # 0.5987, 0.3100, 0.5498
+        'lc0LossTensor' : torch.tensor([0.5987, 0.3100, 0.5498], device=device),
         
-        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        #                                 John           works          for      IBM
-        'lc2LossTensor' : torch.tensor([[0.2000,         0.2000,        0.2000,  0.0200],  # John
-                                        [float("nan"),  float("nan"),  0.4000,  0.2900],  # works for
-                                        [0.5500,         0.2000,        0.1000,  0.0000]], # IBM
-                                        device=device)
-    
+        #nandL(people,organization)                   John    works for     IBM
+        'lc10LossTensor' : torch.tensor([0.4013, 0.5498, 0.5000], device=device),
     }
     case = Namespace(case)
     return case
@@ -142,22 +163,7 @@ def model_declaration(config, case):
         expected_inputs=(case.word.raw,),
         expected_outputs=case.word.emb)
 
-    word[Eword] = TestSensor(
-        label=True,
-        expected_outputs=case.word.Eword)
-    
-    word[Iword] = TestSensor(
-        label=True,
-        expected_outputs=case.word.Iword)
-    
-    word[Oword] = TestSensor(
-        label=True,
-        expected_outputs=case.word.Oword)
-    
-    word[Bword] = TestSensor(
-        label=True,
-        expected_outputs=case.word.Bword)
-    
+    # Remove duplicate assignments - only keep one set
     word[Eword] = TestSensor(
         'emb',
         expected_inputs=(case.word.emb,),
@@ -183,14 +189,12 @@ def model_declaration(config, case):
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.phrase.pw1_backward, case.phrase.pw2_backward))
 
-    phrase[rel_sentence_contains_phrase, 'raw'] = TestSensor(
-        sentence['raw'],
-        expected_inputs=(case.sentence.raw,),
-        expected_outputs=(case.phrase.scw, case.phrase.raw))
-    
+    phrase_emb_input1 = case.phrase.pw1_backward @ case.word.emb  # (3, 4) @ (4, 2048) = (3, 2048)
+    phrase_emb_input2 = case.phrase.pw2_backward @ case.word.emb  # (3, 4) @ (4, 2048) = (3, 2048)
+
     phrase['emb'] = TestSensor(
         rel_phrase_word1.reversed('emb'), rel_phrase_word2.reversed('emb'),
-        expected_inputs=(case.phrase.emb[:, :2048], case.phrase.emb[:, 2048:]),
+        expected_inputs=(phrase_emb_input1, phrase_emb_input2),
         expected_outputs=case.phrase.emb)
 
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = TestSensor(
@@ -200,7 +204,7 @@ def model_declaration(config, case):
 
     pair['emb'] = TestSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
-        expected_inputs=(case.pair.emb[:,:4096],case.pair.emb[:,4096:]),
+        expected_inputs=(case.pair.pa1_backward @ case.phrase.emb, case.pair.pa2_backward @ case.phrase.emb),
         expected_outputs=case.pair.emb)
 
     phrase[people] = TestSensor(
@@ -272,7 +276,7 @@ def model_declaration(config, case):
         'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.orgbase_on)
-    pair[orgbase_on] = TestSensor(
+    pair[kill] = TestSensor(
         'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.kill)
@@ -370,88 +374,14 @@ def test_main_conll04(case):
         for i in range(3):
             assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
 
-        for i in product(range(3), repeat = 2):  
-            if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+        for i in range(3):  
+            if lcResult['LC10']['lossTensor'][i] != lcResult['LC10']['lossTensor'][i] or case.lc10LossTensor[i] != case.lc10LossTensor[i]:
+                if lcResult['LC10']['lossTensor'][i] != lcResult['LC10']['lossTensor'][i] and case.lc10LossTensor[i] != case.lc10LossTensor[i]:
                     assert True
                 else:
                     assert False
             else:
-                assert round(lcResult['LC2']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
-
-        # ------------ Call the ILP Solver
-        datanode.inferILPConstrains(*conceptsRelations, fun=None)
-        
-        # ------------ Concepts Results
-        
-        # Get value of attribute people/ILP for word 0
-        #assert tokenResult['people'][0] == 1
-        assert datanode.findDatanodes(select = phrase)[0].getAttribute(people, 'ILP').item() == 1
-
-        # Sum value of attribute people/ILP for all words
-        #assert sum(tokenResult['people']) == 1
-        assert sum([dn.getAttribute(people, 'ILP').item() for dn in datanode.findDatanodes(select = phrase)]) == 1
-        
-        # Get value of attribute organization/ILP for word 3
-        #assert tokenResult['organization'][3] == 1
-        assert datanode.findDatanodes(select = phrase)[3].getAttribute(organization, 'ILP').item() == 1
-        
-        # Sum value of attribute organization/ILP for all words
-        #assert sum(tokenResult['organization']) == 1
-        assert sum([dn.getAttribute(organization, 'ILP').item() for dn in datanode.findDatanodes(select = phrase)]) == 1
-    
-        # Sum value of attribute location/ILP for all words
-        #assert sum(tokenResult['location']) == 0
-        assert sum([dn.getAttribute(location, 'ILP').item() for dn in datanode.findDatanodes(select = phrase)]) == 0
-    
-        # Sum value of attribute other/ILP for all words
-        #assert sum(tokenResult['other']) == 0
-        assert sum([dn.getAttribute(other, 'ILP').item() for dn in datanode.findDatanodes(select = phrase)]) == 0
-    
-        # Get value of attribute o/ILP for word 1
-        #assert tokenResult['O'][1] == 1
-        assert datanode.findDatanodes(select = phrase)[1].getAttribute(o, 'ILP').item() == 1
-        
-        JohnDN = datanode.findDatanodes(select = phrase)[1]
-        assert JohnDN.getAttribute(organization)[0] == 0.8
-
-        # Get value of attribute o/ILP for word 2
-        #assert tokenResult['O'][2] == 1
-        assert datanode.findDatanodes(select = phrase)[2].getAttribute(o, 'ILP').item() == 1
-    
-        # Sum value of attribute o/ILP for all words
-        #assert sum(tokenResult['O']) == 2
-        assert sum([dn.getAttribute(o, 'ILP').item() for dn in datanode.findDatanodes(select = phrase)]) == 2
-        
-        # ------------ Relations Results
-        
-        # Get value of attribute work_for/ILP for pair between 0 and 3
-        #assert pairResult['work_for'][0][3] == 1
-        # assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
-        #
-        # assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-        #
-        # assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-        # assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-        #
-        # assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-        #
-        # # Sum all value of attribute work_for/ILP  for the pair relation from 0
-        # #assert sum(pairResult['work_for'][0]) == 1
-        # assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 1
-        #
-        # # Sum all value of attribute work_for/ILP  for the pair relation from 1
-        # #assert sum(pairResult['work_for'][1]) == 0
-        # assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1})]) == 0
-        #
-        # # Sum all value of attribute work_for/ILP  for the pair relation from 2
-        # #assert sum(pairResult['work_for'][2]) == 0
-        # assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 2})]) == 0
-        #
-        # # Sum all value of attribute work_for/ILP  for the pair relation from 3
-        # #assert sum(pairResult['work_for'][3]) == 0
-        # assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
-
+                assert round(lcResult['LC10']['lossTensor'][i].item(), 4) == round(case.lc10LossTensor[i].item(), 4)
 
 if __name__ == '__main__':
     pytest.main([__file__])

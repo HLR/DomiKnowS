@@ -498,7 +498,6 @@ cu128 = [
 ]
 dev = [
     { name = "black", extra = ["jupyter"] },
-    { name = "en-core-web-lg" },
     { name = "flaky" },
     { name = "isort" },
     { name = "mypy" },
@@ -520,7 +519,6 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "colorama" },
     { name = "dnspython", specifier = ">=2.8.0" },
-    { name = "en-core-web-lg", marker = "extra == 'dev'", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" },
     { name = "flaky", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "graphviz", specifier = ">=0.21" },
     { name = "gurobipy", specifier = ">=12.0.3" },
@@ -567,14 +565,6 @@ dependencies = [
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2f/f9/dbaaabd6b2d35a824531da534b1b20945006b9500ca696145f2987e14aec/dpcpp_cpp_rt-2025.1.1-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:670285c8aa5f242456d3d95b9fa7cec12ad2ac34d785470780af4cd58be054c0", size = 28824, upload-time = "2025-04-30T09:16:00.212Z" },
     { url = "https://files.pythonhosted.org/packages/72/6d/d10744b4ce0273b26d6c7e35cea8fe9a2b1639c2bbc81c724c64194b5ea2/dpcpp_cpp_rt-2025.1.1-py2.py3-none-win_amd64.whl", hash = "sha256:5470a3b81c90a4064b0495fd05257e26cacd8e4c9bed1ed15481798cd08f41ff", size = 58375, upload-time = "2025-04-30T09:15:25.547Z" },
-]
-
-[[package]]
-name = "en-core-web-lg"
-version = "3.8.0"
-source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
-wheels = [
-    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl", hash = "sha256:293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63" },
 ]
 
 [[package]]
