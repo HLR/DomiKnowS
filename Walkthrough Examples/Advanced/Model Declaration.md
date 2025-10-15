@@ -16,7 +16,7 @@ We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaratio
 
 To create a program, the user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
-There are different [pre-defined sensors](./Technical%20API/Sensor/Class%20Sensor.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./Technical%20API/Sensor/Class%20Sensor.md#TorchSensor) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
+There are different pre-defined sensors for basic data operation with PyTorch. Users can also extend [base `Sensor`](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#sensor) to customize for their task [by overriding `forward()` method](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#overriding-forward).
 
 ```python
 paragraph['paragraph_intext'] = ReaderSensor(keyword='paragraph_intext')
@@ -68,7 +68,7 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 `ModuleLearner` in the above code is used first to calculate an embedding for a question given its `token_ids` and `Mask` properties. being a Learner, this sensor's parameters will change and update itself during training later. in the following three lines, this `embedding` property is used to calculate the binary labels for `is_more`, `is_less`, and `no_effect`. these learners will also learn from predictions after calculating loss given the actual values of these properties.
 
 It should be noted that we have assigned `ReaderSensor`s to the same `Property`s of `is_more`, `is_less`, and `no_effect`.
-This is the ["Multiple Assignment" semantic](./developer/MODEL.md#multiple-assigment-convention) of the framework.
+This is the ["Multiple Assignment" semantic](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#multiple-assignment-convention) of the framework.
 Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`.
 
 we should also define the sensors for symmetric and transitive concepts. these concepts have arguments and their definition is a little different from previous sensors. for these concepts, we use Edge Sensors.
