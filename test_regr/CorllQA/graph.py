@@ -2,7 +2,6 @@ from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import ifL, andL, nandL
 from domiknows.graph import EnumConcept
 from itertools import combinations
-from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL, exactAL, atMostL, atLeastL, exactL
 
 
 Graph.clear()
@@ -10,6 +9,8 @@ Concept.clear()
 Relation.clear()
 
 with Graph('global') as graph:
+    from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL, exactAL, atMostL, \
+        atLeastL, exactL
 
     word = Concept(name='word')
     phrase = Concept(name='phrase')

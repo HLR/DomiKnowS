@@ -87,7 +87,7 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
 
 
-def program_declaration(device='auto'):
+def program_declaration(train, device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
@@ -206,17 +206,19 @@ def program_declaration(device='auto'):
     #                                           keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
+    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
-    program = SolverPOIProgram(graph, poi=[sentence, phrase, people, organization], inferTypes=["local/argmax"],
-                               loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                               metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-    return program
+    program = InferenceProgram(graph, SolverModel,
+                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
+                               tnorm="G", inferTypes=['local/argmax'])
+    return program, train_dataset
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
     parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
+    parser.add_argument("--evaluate", action='store_true')
     args = parser.parse_args()
 
     return args
@@ -225,18 +227,31 @@ def parse_arguments():
 def main(args):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
-    program = program_declaration()
 
     train, dev, test = conll4_reader(data_path="conllQA.json", dataset_portion="entities_only_with_1_things_YN")
 
-    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    program, dataset = program_declaration(train if not args.evaluate else test, device="auto")
+    output_f = open("result.txt", 'a')
 
-    program = InferenceProgram(graph, SolverModel,
-                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
-                               tnorm="G", inferTypes=['local/argmax'])
+    before_train = program.evaluate_condition(dataset)
+    portion = "Training" if not args.evaluate else "Testing"
+    print(f"training_{args.epochs}_lr_{args.lr}.pth", file=output_f)
+    print(f"{portion} Acc: {before_train}", file=output_f)
+    output_f.close()
+    return
 
-    program.train(train_dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
-                  batch_size=1, print_loss=False)
+    if not args.evaluate:
+        program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
+                      batch_size=1, print_loss=False)
+    else:
+        program.load(f"training_{args.epochs}_lr_{args.lr}.pth")
+
+    output_f = open("result.txt", 'a')
+    train_acc = program.evaluate_condition(dataset)
+    portion = "Training" if not args.evaluate else "Testing"
+    print(f"training_{args.epochs}_lr_{args.lr}.pth", file=output_f)
+    print(f"{portion} Acc: {train_acc}", file=output_f)
+    print("#" * 40, file=output_f)
 
 
 if __name__ == '__main__':
