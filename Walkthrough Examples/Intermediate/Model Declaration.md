@@ -116,7 +116,7 @@ pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[
 pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 ```
 
-`ModuleLearner` in the above code is used to calculate our predicted labels. Being a Learner, this sensor's parameters will change and update itself during training later. in the following. To assign the actaul labels we also use the `ReaderSensor`. Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`. See ["Multiple Assignment" semantic](./developer/MODEL.md#multiple-assigment-convention) for more information.
+`ModuleLearner` in the above code is used to calculate our predicted labels. Being a Learner, this sensor's parameters will change and update itself during training later. in the following. To assign the actaul labels we also use the `ReaderSensor`. Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`. See ["Multiple Assignment" semantic](./developer/MODEL.md#multiple-assignment-convention) for more information.
 
 ____
 [Goto next section (Training and Testing)](Training%20and%20Testing.md)
