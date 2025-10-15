@@ -47,7 +47,7 @@ email[Spam] = ReaderSensor(keyword='Spam', label=True)
 email[Regular] = ReaderSensor(keyword='Regular', label=True)
 ```
 
-`ModuleLearner` in the above code is used to calculate our predicted labels. Being a Learner, this sensor's parameters will change and update itself during training later. in the following. To assign the actaul labels we also use the `ReaderSensor`. Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`. See ["Multiple Assignment" semantic](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#multiple-assigment-convention) for more information.
+`ModuleLearner` in the above code is used to calculate our predicted labels. Being a Learner, this sensor's parameters will change and update itself during training later. in the following. To assign the actaul labels we also use the `ReaderSensor`. Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`. See ["Multiple Assignment" semantic](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#multiple-assignment-convention) for more information.
 
 ____
 [Goto next section (Training and Testing)](Training%20and%20Testing.md)
