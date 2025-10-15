@@ -81,13 +81,6 @@ transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandi
 `CompositionCandidateSensor` is an Edge sensor that takes two questions ( `quest_id` property of them is this case) and returns True or False determining whether or not they have symmetric relation. `CompositionCandidateSensor` is an Edge sensor that creates the relation Tensors for us but these tensors can be defined and output manually.
 the same process also goes for the transitive concept with the difference being the input that is three questions and their `quest_id`s.
 
-Now that the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s, We can create a `Program` from the `graph`.
-
-```python
-program = LearningBasedProgram(graph, model_helper(primal_dual_model,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
-```
-the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch.
 
 ____
 [Goto next section (Training and Testing)](Training%20and%20Testing.md)
