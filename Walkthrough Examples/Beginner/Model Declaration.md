@@ -16,7 +16,7 @@ We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaratio
 
 To create a program, the user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
-There are different [pre-defined sensors](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#sensor) for basic data operation with PyTorch. Users can also extend [base `Sensor`](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#sensor) to customize for their task [by overriding `forward()` method](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#overriding-forward).
+There are different pre-defined sensors for basic data operation with PyTorch. Users can also extend [base `Sensor`](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#sensor) to customize for their task [by overriding `forward()` method](../../Main%20Components/Model%20Declaration%20%28Sensor%29.md#overriding-forward).
 
 ```python
 email['subject'] = ReaderSensor(keyword='Subject')
