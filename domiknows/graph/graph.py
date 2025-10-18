@@ -1158,7 +1158,6 @@ class Graph(BaseGraphTree):
             constr_reader_key = LogicDataset.KEYWORD_FMT.format(lc_name=new_lc_name)
             c.name = constr_reader_key
 
-            print(constr_reader_key)
             self.constraint[c] = ReaderSensor(
                 keyword=constr_reader_key,
                 is_constraint=True,
