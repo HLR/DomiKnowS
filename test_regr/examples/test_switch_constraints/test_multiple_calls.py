@@ -42,8 +42,9 @@ def parameterized_dataset(seed: int, size: int):
     
     return data
 
-def test_graph_compilation_and_training(setup_graph, n_datasets: int = 3):
-    """Test compiling logic w/ variable number of datasets"""
+def test_compile_logic_variable_dsets(setup_graph, n_datasets: int = 3):
+    """Test compile_logic for multiple datasets incl. dataset transformation, model inference,
+    and training."""
     graph, root, x, y = setup_graph
 
     datasets = [
