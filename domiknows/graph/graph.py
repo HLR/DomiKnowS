@@ -1120,7 +1120,6 @@ class Graph(BaseGraphTree):
                 raise ValueError(f'Invalid data_item at index {i}: must contain keys {logic_keyword} and {logic_label_keyword} but instead just found: {data_item.keys()}')
             lc_string = data_item[logic_keyword]
             
-            # lc_string_fmt = add_keyword(lc_string, 'name', constr_reader_key)
             lc_string_fmt = get_full_funcs(lc_string)
             
             target_namespace = {
