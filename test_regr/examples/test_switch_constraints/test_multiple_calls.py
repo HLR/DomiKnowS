@@ -42,7 +42,7 @@ def parameterized_dataset(seed: int, size: int):
     
     return data
 
-def test_graph_compilation_and_training(setup_graph, n_datasets: int = 2):
+def test_graph_compilation_and_training(setup_graph, n_datasets: int = 3):
     """Test compiling logic w/ variable number of datasets"""
     graph, root, x, y = setup_graph
 
