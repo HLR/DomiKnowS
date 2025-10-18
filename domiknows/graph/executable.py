@@ -79,7 +79,7 @@ class LogicDataset(Sequence[data_type]):
     '''
     Wrapper around dataset containing executable logical expressions.
     '''
-    KEYWORD_FMT: str = '_constraint_{index}'
+    KEYWORD_FMT: str = '_constraint_{lc_name}'
 
     def __init__(
         self,
@@ -125,7 +125,7 @@ class LogicDataset(Sequence[data_type]):
         return {
             # store the label in the datanode with key self.KEYWORD_FMT
             # this indicates which constraint to use
-            self.KEYWORD_FMT.format(index=index): data_item[self.logic_label_keyword],
+            self.KEYWORD_FMT.format(lc_name=curr_lc_name): data_item[self.logic_label_keyword],
             self.curr_lc_key: curr_lc_name,
             self.do_switch_key: None, # the value has no meaning
             **data_item
