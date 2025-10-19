@@ -1,10 +1,12 @@
 from typing import Sequence, TypeVar, Any
 import ast
 import importlib
+import inspect
 
 from domiknows.graph import Graph
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 from .logicalConstrain import LogicalConstrain
+from . import logicalConstrain as logicalConstrainModule
 
 
 def add_keyword(expr_str: str, kwarg_name: str, kwarg_value: Any) -> str:
@@ -49,6 +51,14 @@ def _recurse_call(call: ast.Call, lc_classes: set[str]):
         
         _recurse_call(arg, lc_classes)
 
+def _get_module_classes(module) -> set[str]:
+    classes = set()
+
+    for _, obj in inspect.getmembers(module, inspect.isclass):
+        classes.add(obj.__name__)
+
+    return classes
+
 def get_full_funcs(expr_str: str) -> str:
     '''
     Converts logical expression to version with full important name.
@@ -57,7 +67,7 @@ def get_full_funcs(expr_str: str) -> str:
     e.g., andL(x, y) -> domiknows.graph.logicalConstrain.andL(x, y)
     '''
 
-    lc_classes = set([cls.__name__ for cls in LogicalConstrain.__subclasses__()])
+    lc_classes = _get_module_classes(logicalConstrainModule)
 
     tree = ast.parse(expr_str)
 
