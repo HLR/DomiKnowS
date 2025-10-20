@@ -587,12 +587,38 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if method == "G":  # Gödel
             self.countLogger.debug("Defining Gödel t-norm helper functions")
             exists_at_least_one = lambda t: 1 - torch.max(t)  # loss is 0 when any literal is 1
-            exists_at_least_s = lambda t, s: 1 - torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)])
-            exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)])
-            exists_exactly_s = lambda t, s: 1 - torch.min(
-                torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]),
-                torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]),
-            )
+            
+            def exists_at_least_s_godel(t, s):
+                slice_size = max(min(s, n), 0)
+                if slice_size == 0:
+                    return torch.tensor(1.0, device=t.device, dtype=t.dtype)
+                return 1 - torch.min(torch.sort(t, descending=True)[0][:slice_size])
+            
+            def exists_at_most_s_godel(t, s):
+                slice_size = max(n - max(min(s, n), 0), 0)
+                if slice_size == 0:
+                    return torch.tensor(1.0, device=t.device, dtype=t.dtype)
+                return 1 - torch.min(torch.sort(1 - t, descending=True)[0][:slice_size])
+            
+            def exists_exactly_s_godel(t, s):
+                slice_size_1 = max(min(s, n), 0)
+                slice_size_2 = max(n - max(min(s, n), 0), 0)
+                
+                if slice_size_1 == 0:
+                    min_val_1 = torch.tensor(1.0, device=t.device, dtype=t.dtype)
+                else:
+                    min_val_1 = torch.min(torch.sort(t, descending=True)[0][:slice_size_1])
+                
+                if slice_size_2 == 0:
+                    min_val_2 = torch.tensor(1.0, device=t.device, dtype=t.dtype)
+                else:
+                    min_val_2 = torch.min(torch.sort(1 - t, descending=True)[0][:slice_size_2])
+                
+                return 1 - torch.min(min_val_1, min_val_2)
+            
+            exists_at_least_s = exists_at_least_s_godel
+            exists_at_most_s = exists_at_most_s_godel
+            exists_exactly_s = exists_exactly_s_godel
 
         elif method == "L":  # Łukasiewicz
             self.countLogger.debug("Defining Łukasiewicz t-norm helper functions")

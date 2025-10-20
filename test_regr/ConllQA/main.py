@@ -111,7 +111,7 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
 
 
-def program_declaration(train, device='auto'):
+def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
@@ -215,7 +215,7 @@ def main(args):
     if args.train_size != -1:
         train = train[:args.train_size]
 
-    program, dataset = program_declaration(train if not args.evaluate else test, device="auto")
+    program, dataset = program_declaration(train if not args.evaluate else test, args, device="auto")
 
     if not args.evaluate:
         program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
