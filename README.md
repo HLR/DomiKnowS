@@ -14,9 +14,9 @@ While several approaches for integrating symbolic and sub-symbolic models have b
   - [Query and Access (Datanode)](Main%20Components/Query%20and%20Access%20%28Datanode%29.md)
   - [Workflow (Training)](Main%20Components/Workflow%20%28Training%29.md)
   - [Inference (ILP)](Main%20Components/Inference%20%28ILP%29.md)
-  - [The Source of Constrains](Main%20Components/The%20Source%20of%20Constraints.md)
 - [Walkthrough Example](Walkthrough%20Examples/): Contains examples that demonstrate the usage of DomiKnowS for various tasks, such as image classification, sequence modeling, and reinforcement learning. ( For more examples see [Examples Branch](https://github.com/HLR/DomiKnowS/tree/Tasks) )
 - [Tutorial Examples](Tutorial%20Examples/): Simple and diverse examples are outlined with detailed explanations in a Jupyter google colab file to run.
+- [DomiKnowS Coding UI](https://hlr-demo.egr.msu.edu/): An interactive, multi-agent UI that converts your task description into DomiKnowS code, then executes, self-debugs, and visualizes the graph.
 - [License](LICENSE.md): Contains information about the license of DomiKnowS and its terms of use.
 - [DomiKnowS Website](https://hlr.github.io/domiknows-nlp/): Contains documentation, example links, and an introductory video to DomiKnowS
 

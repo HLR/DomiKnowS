@@ -1,17 +1,17 @@
 # Inference
 
-There are two main inference tools in DomiKnows framework:
+There are two main inference tools in the DomiKnowS framework:
 
 - [ILP](#ILP)
 - [GBI](#gbi)
 
 ## ILP
-The following is the tutorial on the ILP solver for infernece.
+The following is the tutorial on the ILP solver for inference.
 
 - [Class Overview](#class-overview)
 - [ILP Solver](#ilp-solver)
 - [ILP Inference](#ilp-inference)
-- [ILP Loss for Logical Constrains](#ilp-loss-for-logical-constrains)
+- [ILP Loss for Logical Constraints](#ilp-loss-for-logical-constraints)
 - [Softmax and Argmax Inference](#softmax-and-argmax-inference)
 - [Inference Result Access](#inference-result-access)
 - [Inference Metrics](#inference-metrics)
@@ -34,9 +34,9 @@ The following is the tutorial on the ILP solver for infernece.
 
 ### ILP Solver
 
-The solver builds the ILP (Integer Linear Programming) model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to example tokens.
-The actual used ILP is Zero-One linear programming in which the variables are restricted to be either 0 or 1.
-It solves the ILP model and provides the most optimized assignment. The model objective is by default maximized. However it can be optionally minimized if appropriate parameter is provided to the method.
+The solver constructs the ILP (Integer Linear Programming) model based on the constraints defined in the learning model and the prediction data for assigning graph concepts and relations to example tokens.
+The actual used ILP is Zero-One linear programming, in which the variables are restricted to be either 0 or 1.
+It solves the ILP model and provides the most optimized assignment. The model objective is maximized by default. However, it can be optionally minimized if an appropriate parameter is provided to the method.
 
 The solver can be called on the [DataNode](Query%20and%20Access%20%28Datanode%29.md) (usually the root DataNode of the Data Graph) with the method:
 
@@ -48,39 +48,39 @@ inferILPResults(*_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObject
 It has arguments:
 
 - `_conceptsRelations` is a collection of concepts and relations for which the ILP model should be solved.
-They can be provide as Concepts (nodes in the knowledge graph) or strings representing concepts or relations names.
-If this collection is empty then the methods will use all concepts and relations in the Data Graph.
+They can be provided as Concepts (nodes in the knowledge graph) or strings representing concept or relation names.
+If this collection is empty, then the methods will use all concepts and relations in the Data Graph.
 
 
-- `fun` is a optional function modifying the original probability in the Data Graph before they are used in the ILP model.
+- `fun` is an optional function modifying the original probability in the Data Graph before they are used in the ILP model.
 
 
-- `epsilon` is a value by which  the original probability in the Data Graph are modify before they are used in the ILP model.
+- `epsilon` is a value by which the original probability in the Data Graph is modified before they are used in the ILP model.
 
 
-- `minimizeObjective` by default objective is maximized however if this variable is set to True then the ILP model will minimize the objective.
+- `minimizeObjective` by default, the objective is maximized; however, if this variable is set to True, then the ILP model will minimize the objective.
 
-The solver [implementation using Gurobi](../Technical%20API/solver/) is called with classification probabilities obtained from learned model. 
+The solver implementation, using Gurobi, is called with classification probabilities obtained from the learned model. 
 
-The method retrieves the probabilities from Data Graph nodes attributes. The key use to retrieve it has a pattern:
+The method retrieves the probabilities from the attributes of the Graph's Datanode. The key used to retrieve it has a pattern:
 
 ```python
 '<' + conceptRelation + '>'
 ```
-where `conceptRelation` is the name of the concept or relation for which the probability is being retrieved.
+Where `conceptRelation` is the name of the concept or relation for which the probability is being retrieved.
 
 Additionally, the method determines if some of the concepts or relations are **hard constrained**. 
-The concept or relation is hard constrained if there is a dedicated DataNode with ontology type equal to this concept or relation.
-Alternatively, if the DataNode for the parent concept or relation to the given concept or relation does has a attribute with the key:
+The concept or relation is hard constrained if there is a dedicated DataNode with an ontology type equal to this concept or relation.
+Alternatively, if the DataNode for the parent concept or relation to the given concept or relation has an attribute with the key:
 
 ```python
 conceptRelation
 ```
-where `conceptRelation` is the name of the concept or relation for which the hard constraint is being retrieved.
+Where `conceptRelation` is the name of the concept or relation for which the hard constraint is being retrieved.
 The value of this attribute can be 0 or 1.
 
-The method retrieves the constrains from the knowledge graph associated with the Data Graph.
-The solver translates constrains defined in the graph to the equivalent logical expressions.
+The method retrieves the constraints from the knowledge graph associated with the Data Graph.
+The solver translates constraints defined in the graph to the equivalent logical expressions.
 The `domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical expressions into the ILP equations. Supported logical operations are:
 
 - "NOT": `notVar()`,
@@ -93,16 +93,16 @@ The `domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logic
 - "NOR": `nor2Var()`, `norVar()`,
 - "COUNT": `countVar()`.
 
-The solver ILP model is solved by Gurobi and the found solutions for optimal classification of variables and relations is returned.
+Gurobi solves the ILP model and returns the found solutions for optimal classification of variables and relations.
 
-#### ILP Loss for Logical Constrains 
+#### ILP Loss for Logical Constraints 
 
 Solver can also calculate the loss for each logical constraint:
 
 ```python
 dn.calculateLcLoss()
 ```
-The method returns a dictionary with entry for each logical constraint and tensor with calculated losses.
+The method returns a dictionary with an entry for each logical constraint and a tensor with calculated losses.
 
 Example of loss calculation:
 
@@ -122,9 +122,9 @@ Example of loss calculation:
 
 #### Softmax and Argmax Inference
 
-In addition to ILP inference the standard softmax and agmax can be also calculated on learned predictions.
+In addition to ILP inference, the standard softmax and argmax can also be calculated on learned predictions.
 
-The method calculating this inference across all datanotes for each concepts is:
+The method for calculating this inference across all s for each concept is:
 
 ```python
 dn.infer()
@@ -132,7 +132,7 @@ dn.infer()
 
 It adds attributes: <concept>/softmax and <concept>/argmax to each datanote.
 
-The method calculating this inference locally for prediction in the given  datanotes for each concepts is:
+The method for calculating this inference locally for prediction in the given  DataNode for each concept is:
 
 ```python
 dn.inferLocal()
@@ -142,28 +142,28 @@ It adds attributes: <concept>/local/softmax and <concept>/local/argmax to each d
 
 #### Inference Result Access
 
-The results of the inference solution are added to nodes in the Data Graph with key appropriate for the inference (e.g.: ILP). 
+The results of the inference solution are added to nodes in the Data Graph with a key appropriate for the inference (e.g., ILP). 
 
-The value can be access using the `getAttribute` method of the DataNode:
+The value can be accessed using the `getAttribute` method of the DataNode:
 
 ```python
 dn.getAttribute(concept, inferKey).item()
 ```
 
-The inference results for collection of dataNodte can be collected using method:
+The inference results for the collection of DataNodes can be collected using the method:
 
 ```python
 dn.collectInferedResults(concept, inferKey),
 ```
 
-- `concept`  - is a name of the concept for which results are requested, e.g. `work_for`
+- `concept`  - is a name of the concept for which results are requested, e.g., `work_for`
 
-- `inferKey` - is a name of the key  for the inference type e.g. `ILP`, `argmax`, `softmax`, `local/argmax`, `local/softmax`
+- `inferKey` - is a name of the key  for the inference type e.g,. `ILP`, `argmax`, `softmax`, `local/argmax`, `local/softmax`
 
 
 #### Inference Metrics
 
-The inference results can be compared to ground truth (stored in the dataNote with key `label`) and metrics can be calculated using  dataNode method:
+The inference results can be compared to ground truth (stored in the dataNote with key `label`), and metrics can be calculated using the DataNode method:
 
 ```python
 dn.getInferMetric(*conceptsRelations, inferType='ILP', weight = None):
@@ -172,13 +172,13 @@ dn.getInferMetric(*conceptsRelations, inferType='ILP', weight = None):
 ```python
 '<' + conceptRelation + '>'
 ```
-where `conceptRelation` is the name of the concept or relation for which the probability is being retrieved.
+Where `conceptRelation` is the name of the concept or relation for which the probability is being retrieved.
 
-- `inferType` - is a name of the key  for the inference type e.g. `ILP`, `argmax`, `softmax`,
+- `inferType` - is a name of the key  for the inference type e.g., `ILP`, `argmax`, `softmax`,
 
 - `weight` - modifies the inference result used to calculate metrics.
 
-The method returns dictionary with entry for each concept and additional entry 'Total'. Each record in the dictionary has entry for:
+The method returns a dictionary with an entry for each concept and an additional entry 'Total'. Each record in the dictionary has an entry for:
 - `TP` -  true positive
 - `FP` - false positive
 - `TN` - true negative
@@ -197,6 +197,7 @@ ILP metrics people {'TP': tensor(1.), 'FP': tensor(1.), 'TN': tensor(0.), 'FN': 
 
 ## GBI
 ### Overview
+
 Gradient-based inference (GBI) [1] performs gradient steps to optimize over some black-box function. In DomiKnowS, the function being optimized is the number of constraint violations.
 
 For each example, GBI will optimize the following loss:
@@ -214,7 +215,7 @@ GBIModel is defined in `domiknows.model.gbi`. Several hyperparameters can be spe
 * **reset_params**: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN` or the constraints aren't satisfied after `gbi_iters` updates. **During inference, this should be set to `True`.** The default value for this parameter is `True`.
 
 ### Usage
-In DomiKnowS, GBI can be used in a similar way as ILP. For example, instead of calling `inferILPResults` the user can invoke `inferGBIResults`. The user can also add `GBI` to the `inferTypes` parameter. For example:
+In DomiKnowS, GBI can be used in a similar way to ILP. For example, instead of calling `inferILPResults`, the user can invoke `inferGBIResults`. The user can also add `GBI` to the `inferTypes` parameter. For example:
 
 ```python
 program = SolverPOIProgram(
@@ -224,7 +225,7 @@ program = SolverPOIProgram(
 )
 ```
 
-When populating the program, make sure to set `grad=True` as GBI requires gradients to perform updates. For example:
+When populating the program, ensure that `grad=True` is set, as GBI requires gradients to perform updates. For example:
 ```python
 node = program.populate_one(dataitem, grad=True)
 ```

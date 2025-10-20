@@ -19,7 +19,7 @@ The primary task for the CoNLL-2003 dataset is to identify and classify entities
 
 ### Refrence
 
-See [here](https://huggingface.co/datasets/conll2003) for more information
+See [here](https://huggingface.co/datasets/tomaarsen/conll2003) for more information
 ____
 [Goto next section (Knowledge Declaration)](Knowledge%20Declaration.md)
 
