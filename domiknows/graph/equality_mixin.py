@@ -29,6 +29,10 @@ class EqualityMixin:
         equal_concepts = list(set(equal_concepts))
         if transitive:
             return self._get_equal_transitive_closure(equal_concepts)
+        
+        if not equal_concepts:
+            return []
+        
         return equal_concepts
 
     def _get_equal_transitive_closure(self, direct_equals: List['Concept']) -> List['Concept']:

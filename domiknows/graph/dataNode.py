@@ -2565,6 +2565,7 @@ class DataNodeBuilder(dict):
                   - 'containedIn': A list of concepts in which this concept is contained.
         """
         conceptInfo = {
+            'name': concept.name,
             'concept': concept,
             'relation': bool(concept.has_a()),
             'equals': concept.get_equal_concepts(),
@@ -3093,6 +3094,11 @@ class DataNodeBuilder(dict):
             relatedDnsType = conceptInfo["relationAttrs"]['src']
 
             relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
+            
+            if len(relatedDns) == 0:
+                equalConcept = relatedDnsType.get_equal_concepts()
+                if equalConcept:
+                    relatedDns = self.findDataNodesInBuilder(select = equalConcept[0].name)
 
             if vInfo.dim:
                 requiredLenOFRelatedDns = len(vInfo.value[0])
