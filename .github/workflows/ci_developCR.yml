@@ -98,7 +98,8 @@ jobs:
 
       - name: Install spaCy model
         run: |
-          uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
+          uv run python -m spacy download en_core_web_sm
+          uv run python -m spacy download en_core_web_lg
           python -m spacy validate || true
 
       - name: Run GPU tests

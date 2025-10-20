@@ -6,6 +6,14 @@ A neural-symbolic learning system for entity recognition and counting constraint
 
 This project implements entity recognition (People, Organization, Location) with logical counting constraints on ConLL04 dataset variants.
 
+## Prerequisites
+
+Before running the code, download the required spaCy language model:
+
+```bash
+uv run python -m spacy download en_core_web_sm
+```
+
 ## Usage
 
 ### Training
