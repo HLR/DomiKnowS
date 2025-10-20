@@ -22,7 +22,7 @@ Bases: `Module`
 
 #### forward(input)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -34,15 +34,13 @@ registered hooks while the latter silently ignores them.
 
 #### init_hidden()
 
-#### training*: bool*
-
 ### *class* domiknows.sensor.pytorch.learnerModels.PyTorchFC(input_dim, output_dim)
 
 Bases: `Module`
 
 #### forward(x)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -51,8 +49,6 @@ Although the recipe for forward pass needs to be defined within
 this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
-
-#### training*: bool*
 
 ### *class* domiknows.sensor.pytorch.learnerModels.PyTorchFCRelu(input_dim, output_dim)
 
@@ -60,7 +56,7 @@ Bases: `Module`
 
 #### forward(x)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -70,15 +66,13 @@ this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
 
-#### training*: bool*
-
 ## domiknows.sensor.pytorch.learners module
 
 ### *class* domiknows.sensor.pytorch.learners.FullyConnectedLearner(\*pres, input_dim, output_dim, device='auto')
 
 Bases: [`TorchLearner`](#domiknows.sensor.pytorch.learners.TorchLearner)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -106,7 +100,7 @@ Returns:
 
 Bases: [`TorchLearner`](#domiknows.sensor.pytorch.learners.TorchLearner)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -134,7 +128,7 @@ Returns:
 
 Bases: [`TorchLearner`](#domiknows.sensor.pytorch.learners.TorchLearner)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -178,7 +172,7 @@ Bases: [`Learner`](domiknows.sensor.md#domiknows.sensor.learner.Learner), [`Func
 
 #### *property* model
 
-#### *abstract property* parameters*: Any*
+#### *abstract property* parameters *: Any*
 
 #### *property* sanitized_name
 
@@ -288,7 +282,7 @@ Wraps the forward method ensuring the results are on the appropriate device.
 Returns:
 - The result of the forward method, moved to the appropriate device if necessary.
 
-### *class* domiknows.sensor.pytorch.relation_sensors.EdgeReaderSensor(\*args, keyword, \*\*kwargs)
+### *class* domiknows.sensor.pytorch.relation_sensors.EdgeReaderSensor(\*args, keyword, is_constraint=False, \*\*kwargs)
 
 Bases: [`ReaderSensor`](#domiknows.sensor.pytorch.sensors.ReaderSensor), [`EdgeSensor`](#domiknows.sensor.pytorch.relation_sensors.EdgeSensor)
 
@@ -310,7 +304,7 @@ Returns:
 
 #### *property* relation
 
-#### update_pre_context(data_item: Dict[str, Any], concept=None)
+#### update_pre_context(data_item: Dict[str, Any], concept=None) → Any
 
 Updates the context for the predecessors of this sensor. Extends the behavior to handle more types.
 
@@ -393,7 +387,7 @@ Returns:
 
 Bases: [`AggregationSensor`](#domiknows.sensor.pytorch.sensors.AggregationSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -404,7 +398,7 @@ Raises:
 
 Bases: [`TorchSensor`](#domiknows.sensor.pytorch.sensors.TorchSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -415,7 +409,7 @@ Raises:
 
 Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.sensors.FunctionalSensor)
 
-#### forward(\*\_, \*\*\_\_)
+#### forward(\*\_, \*\*\_\_) → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -443,18 +437,18 @@ Returns:
 
 Bases: [`AggregationSensor`](#domiknows.sensor.pytorch.sensors.AggregationSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
 Raises:
 - NotImplementedError: Indicates that subclasses should provide their implementation.
 
-### *class* domiknows.sensor.pytorch.sensors.FunctionalReaderSensor(\*args, keyword, \*\*kwargs)
+### *class* domiknows.sensor.pytorch.sensors.FunctionalReaderSensor(\*args, keyword, is_constraint=False, \*\*kwargs)
 
 Bases: [`ReaderSensor`](#domiknows.sensor.pytorch.sensors.ReaderSensor)
 
-#### forward(\*args, \*\*kwargs)
+#### forward(\*args, \*\*kwargs) → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -591,7 +585,7 @@ Bases: [`ReaderSensor`](#domiknows.sensor.pytorch.sensors.ReaderSensor)
 
 Bases: [`AggregationSensor`](#domiknows.sensor.pytorch.sensors.AggregationSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -602,7 +596,7 @@ Raises:
 
 Bases: [`TorchSensor`](#domiknows.sensor.pytorch.sensors.TorchSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -613,7 +607,7 @@ Raises:
 
 Bases: [`AggregationSensor`](#domiknows.sensor.pytorch.sensors.AggregationSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -624,7 +618,7 @@ Raises:
 
 Bases: [`AggregationSensor`](#domiknows.sensor.pytorch.sensors.AggregationSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -635,7 +629,7 @@ Raises:
 
 Bases: [`AggregationSensor`](#domiknows.sensor.pytorch.sensors.AggregationSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -694,7 +688,7 @@ Args:
 
 Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.sensors.FunctionalSensor)
 
-#### forward(\*args, \*\*kwargs)
+#### forward(\*args, \*\*kwargs) → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -718,13 +712,13 @@ Returns:
 - The result of the forward computation.
 - Calls the superclass forward method if no forward function was provided during initialization.
 
-### *class* domiknows.sensor.pytorch.sensors.ReaderSensor(\*args, keyword, \*\*kwargs)
+### *class* domiknows.sensor.pytorch.sensors.ReaderSensor(\*args, keyword, is_constraint=False, \*\*kwargs)
 
 Bases: [`ConstantSensor`](#domiknows.sensor.pytorch.sensors.ConstantSensor)
 
 #### fill_data(data_item)
 
-#### forward(\*\_, \*\*\_\_)
+#### forward(\*\_, \*\*\_\_) → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -752,7 +746,7 @@ Returns:
 
 Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.sensors.FunctionalSensor)
 
-#### *class* English(vocab: Union[Vocab, bool] = True, \*, max_length: int = 1000000, meta: Dict[str, Any] = {}, create_tokenizer: Optional[Callable[[Language], Callable[[str], Doc]]] = None, create_vectors: Optional[Callable[[Vocab], BaseVectors]] = None, batch_size: int = 1000, \*\*kwargs)
+#### *class* English(vocab: Vocab | bool = True, , max_length: int = 1000000, meta: Dict[str, Any] = {}, create_tokenizer: Callable[[Language], Callable[[str], Doc]] | None = None, create_vectors: Callable[[Vocab], BaseVectors] | None = None, batch_size: int = 1000, \*\*kwargs)
 
 Bases: `Language`
 
@@ -762,9 +756,9 @@ alias of `EnglishDefaults`
 
 #### default_config *= {'components': {}, 'corpora': {'dev': {'@readers': 'spacy.Corpus.v1', 'augmenter': None, 'gold_preproc': False, 'limit': 0, 'max_length': 0, 'path': '${paths.dev}'}, 'train': {'@readers': 'spacy.Corpus.v1', 'augmenter': None, 'gold_preproc': False, 'limit': 0, 'max_length': 0, 'path': '${paths.train}'}}, 'initialize': {'after_init': None, 'before_init': None, 'components': {}, 'init_tok2vec': '${paths.init_tok2vec}', 'lookups': None, 'tokenizer': {}, 'vectors': '${paths.vectors}', 'vocab_data': None}, 'nlp': {'after_creation': None, 'after_pipeline_creation': None, 'batch_size': 1000, 'before_creation': None, 'disabled': [], 'lang': 'en', 'pipeline': [], 'tokenizer': {'@tokenizers': 'spacy.Tokenizer.v1'}, 'vectors': {'@vectors': 'spacy.Vectors.v1'}}, 'paths': {'dev': None, 'init_tok2vec': None, 'train': None, 'vectors': None}, 'system': {'gpu_allocator': None, 'seed': 0}, 'training': {'accumulate_gradient': 1, 'annotating_components': [], 'batcher': {'@batchers': 'spacy.batch_by_words.v1', 'discard_oversize': False, 'size': {'@schedules': 'compounding.v1', 'compound': 1.001, 'start': 100, 'stop': 1000}, 'tolerance': 0.2}, 'before_to_disk': None, 'before_update': None, 'dev_corpus': 'corpora.dev', 'dropout': 0.1, 'eval_frequency': 200, 'frozen_components': [], 'gpu_allocator': '${system.gpu_allocator}', 'logger': {'@loggers': 'spacy.ConsoleLogger.v1'}, 'max_epochs': 0, 'max_steps': 20000, 'optimizer': {'@optimizers': 'Adam.v1', 'L2': 0.01, 'L2_is_weight_decay': True, 'beta1': 0.9, 'beta2': 0.999, 'eps': 1e-08, 'grad_clip': 1.0, 'learn_rate': 0.001, 'use_averages': False}, 'patience': 1600, 'score_weights': {}, 'seed': '${system.seed}', 'train_corpus': 'corpora.train'}}*
 
-#### factories *= {'attribute_ruler': <function make_attribute_ruler>, 'beam_ner': <cyfunction make_beam_ner>, 'beam_parser': <cyfunction make_beam_parser>, 'doc_cleaner': <function make_doc_cleaner>, 'en.lemmatizer': <function make_lemmatizer>, 'entity_linker': <function make_entity_linker>, 'entity_ruler': <function make_entity_ruler>, 'future_entity_ruler': <function make_entity_ruler>, 'lemmatizer': <function make_lemmatizer>, 'merge_entities': <function Language.component.<locals>.add_component.<locals>.factory_func>, 'merge_noun_chunks': <function Language.component.<locals>.add_component.<locals>.factory_func>, 'merge_subtokens': <function Language.component.<locals>.add_component.<locals>.factory_func>, 'morphologizer': <cyfunction make_morphologizer>, 'ner': <cyfunction make_ner>, 'parser': <cyfunction make_parser>, 'sentencizer': <cyfunction make_sentencizer>, 'senter': <cyfunction make_senter>, 'span_finder': <function make_span_finder>, 'span_ruler': <function make_span_ruler>, 'spancat': <function make_spancat>, 'spancat_singlelabel': <function make_spancat_singlelabel>, 'tagger': <cyfunction make_tagger>, 'textcat': <function make_textcat>, 'textcat_multilabel': <function make_multilabel_textcat>, 'tok2vec': <function make_tok2vec>, 'token_splitter': <function make_token_splitter>, 'trainable_lemmatizer': <function make_edit_tree_lemmatizer>}*
+#### factories *= {'en.lemmatizer': <function make_lemmatizer>, 'merge_entities': <function Language.component.<locals>.add_component.<locals>.factory_func>, 'merge_noun_chunks': <function Language.component.<locals>.add_component.<locals>.factory_func>, 'merge_subtokens': <function Language.component.<locals>.add_component.<locals>.factory_func>}*
 
-#### lang*: Optional[str]* *= 'en'*
+#### lang *: str | None* *= 'en'*
 
 #### forward(sentences)
 
@@ -838,7 +832,7 @@ Args:
 - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
 - override (bool, optional): Flag to decide if overriding the parent node is allowed. Default is True.
 
-#### update_pre_context(data_item: Dict[str, Any], concept=None)
+#### update_pre_context(data_item: Dict[str, Any], concept=None) → Any
 
 Updates the context for the predecessors of this sensor. Extends the behavior to handle more types.
 
@@ -882,7 +876,7 @@ Returns:
 Raises:
 - Raises KeyError if the provided selector key doesn’t exist.
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this torch sensor.
 
@@ -914,7 +908,7 @@ Args:
 - data_item (Dict[str, Any]): The data dictionary to update.
 - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
 
-#### update_pre_context(data_item: Dict[str, Any], concept=None)
+#### update_pre_context(data_item: Dict[str, Any], concept=None) → Any
 
 Updates the context for the predecessors of this sensor.
 
@@ -926,7 +920,7 @@ Args:
 
 Bases: [`PrefilledSensor`](#domiknows.sensor.pytorch.sensors.PrefilledSensor)
 
-#### forward(\*args, \*\*kwargs)
+#### forward(\*args, \*\*kwargs) → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -964,7 +958,7 @@ Bases: `Module`
 
 #### forward(\*args, \*\*kwargs)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -973,8 +967,6 @@ Although the recipe for forward pass needs to be defined within
 this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
-
-#### training*: bool*
 
 #### unbatch(value)
 

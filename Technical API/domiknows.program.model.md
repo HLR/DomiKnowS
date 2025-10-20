@@ -4,11 +4,9 @@
 
 ## domiknows.program.model.base module
 
-### *class* domiknows.program.model.base.Mode(value)
+### *class* domiknows.program.model.base.Mode(\*values)
 
 Bases: `Enum`
-
-An enumeration.
 
 #### POPULATE *= 3*
 
@@ -18,17 +16,102 @@ An enumeration.
 
 ## domiknows.program.model.gbi module
 
-### *class* domiknows.program.model.gbi.GBIModel(graph, solver_model=None, gbi_iters=100, device='auto')
+### *class* domiknows.program.model.gbi.GBIModel(graph, solver_model=None, gbi_iters=50, lr=0.1, reg_weight=1, reset_params=True, device='auto')
 
 Bases: `Module`
 
 #### calculateGBISelection(datanode, conceptsRelations)
 
-#### find_last_layers_in_submodels(model, name='')
+#### forward(datanode, build=None, verbose=False)
 
-#### forward(datanode, build=None, print_grads=False)
+Performs a forward pass on the model and updates the parameters using gradient-based inference (GBI).
 
-Defines the computation performed at every call.
+* **Parameters:**
+  * **datanode** – The DataNode to perform GBI on.
+  * **build** – Defaults to None. (Optional)
+  * **verbose** – Print intermediate values during inference. Defaults to False. (Optional)
+
+#### get_argmax_from_node(node)
+
+#### get_constraints_satisfaction(node)
+
+Get constraint satisfaction from datanode. Returns number of satisfied constraints and total number of constraints.
+
+* **Params:**
+  node: The DataNode to get constraint satisfaction from.
+
+#### reg_loss(model_updated, model, exclude_names={})
+
+Calculates regularization loss for GBI. The loss is defined as the L2 distance between the original and updated model parameters.
+
+* **Parameters:**
+  * **model_updated** – The model being optimized.
+  * **model** – The original, unoptimized model. The parameters for this model should be frozen.
+  * **exclude_names** – A set of parameter names to exclude from the regularization loss calculation. Defaults to an empty set. (Optional)
+
+#### reset()
+
+#### set_pretrained(model, orig_params)
+
+Resets the parameters of a PyTorch model to the original, unoptimized parameters.
+
+* **Parameters:**
+  * **model** – The PyTorch model to reset the parameters of.
+  * **orig_params** – The original, unoptimized parameters of the model.
+
+## domiknows.program.model.ilpu module
+
+### *class* domiknows.program.model.ilpu.ILPUModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False, kwargs=None)
+
+Bases: [`SolverModel`](#domiknows.program.model.pytorch.SolverModel)
+
+#### poi_loss(data_item, prop, sensors)
+
+The function calculates the loss for a given data item using a set of sensors.
+
+* **Parameters:**
+  **data_item** – The data_item parameter represents a single data item that is being
+
+processed. It could be any type of data, depending on the context of your code
+:param \_: The underscore “_” is a convention in Python to indicate that a variable is not going
+to be used in the code. It is often used as a placeholder for a variable that needs to be
+present for the function signature but is not actually used within the function. In this case,
+it seems that the variable
+:param sensors: The sensors parameter is a list of sensor functions. These sensor functions
+take a data_item as input and return some output
+:return: the calculated local_loss.
+
+## domiknows.program.model.iml module
+
+### *class* domiknows.program.model.iml.IMLModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False, kwargs=None)
+
+Bases: [`SolverModel`](#domiknows.program.model.pytorch.SolverModel)
+
+#### poi_loss(data_item, prop, sensors)
+
+The function calculates the loss for a given data item using a set of sensors.
+
+* **Parameters:**
+  **data_item** – The data_item parameter represents a single data item that is being
+
+processed. It could be any type of data, depending on the context of your code
+:param \_: The underscore “_” is a convention in Python to indicate that a variable is not going
+to be used in the code. It is often used as a placeholder for a variable that needs to be
+present for the function signature but is not actually used within the function. In this case,
+it seems that the variable
+:param sensors: The sensors parameter is a list of sensor functions. These sensor functions
+take a data_item as input and return some output
+:return: the calculated local_loss.
+
+## domiknows.program.model.lossModel module
+
+### *class* domiknows.program.model.lossModel.InferenceModel(graph, tnorm='P', loss=<class 'torch.nn.modules.loss.BCELoss'>, counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto')
+
+Bases: [`LossModel`](#domiknows.program.model.lossModel.LossModel)
+
+#### forward(builder, build=None)
+
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -38,76 +121,15 @@ this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
 
-#### get_constraints_satisfaction(node)
+#### logger *= <Logger domiknows.program.model.lossModel (WARNING)>*
 
-Get constraint satisfaction from datanode
-Returns number of satisfied constraints and total number of constraints
-
-#### reg_loss(model_updated, model, exclude_names={})
-
-#### reset()
-
-#### reset_last_layers_in_submodels(model, last_layers)
-
-#### training*: bool*
-
-## domiknows.program.model.ilpu module
-
-### *class* domiknows.program.model.ilpu.ILPUModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False)
-
-Bases: [`SolverModel`](#domiknows.program.model.pytorch.SolverModel)
-
-#### poi_loss(data_item, prop, sensors)
-
-The function calculates the loss for a given data item using a set of sensors.
-
-* **Parameters:**
-  **data_item** – The data_item parameter represents a single data item that is being
-
-processed. It could be any type of data, depending on the context of your code
-:param \_: The underscore “_” is a convention in Python to indicate that a variable is not going
-to be used in the code. It is often used as a placeholder for a variable that needs to be
-present for the function signature but is not actually used within the function. In this case,
-it seems that the variable
-:param sensors: The sensors parameter is a list of sensor functions. These sensor functions
-take a data_item as input and return some output
-:return: the calculated local_loss.
-
-#### training*: bool*
-
-## domiknows.program.model.iml module
-
-### *class* domiknows.program.model.iml.IMLModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False)
-
-Bases: [`SolverModel`](#domiknows.program.model.pytorch.SolverModel)
-
-#### poi_loss(data_item, prop, sensors)
-
-The function calculates the loss for a given data item using a set of sensors.
-
-* **Parameters:**
-  **data_item** – The data_item parameter represents a single data item that is being
-
-processed. It could be any type of data, depending on the context of your code
-:param \_: The underscore “_” is a convention in Python to indicate that a variable is not going
-to be used in the code. It is often used as a placeholder for a variable that needs to be
-present for the function signature but is not actually used within the function. In this case,
-it seems that the variable
-:param sensors: The sensors parameter is a list of sensor functions. These sensor functions
-take a data_item as input and return some output
-:return: the calculated local_loss.
-
-#### training*: bool*
-
-## domiknows.program.model.lossModel module
-
-### *class* domiknows.program.model.lossModel.LossModel(graph, tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto')
+### *class* domiknows.program.model.lossModel.LossModel(graph, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto')
 
 Bases: `Module`
 
 #### forward(builder, build=None)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -136,7 +158,7 @@ self.lmbd_p[self.lmbd_index[key]].
 
 #### to(device)
 
-Moves and/or casts the parameters and buffers.
+Move and/or cast the parameters and buffers.
 
 This can be called as
 
@@ -221,15 +243,11 @@ tensor([[0.6122+0.j, 0.1150+0.j],
         [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)
 ```
 
-#### training*: bool*
-
-### *class* domiknows.program.model.lossModel.PrimalDualModel(graph, tnorm='P', device='auto')
+### *class* domiknows.program.model.lossModel.PrimalDualModel(graph, tnorm='P', counting_tnorm=None, device='auto')
 
 Bases: [`LossModel`](#domiknows.program.model.lossModel.LossModel)
 
 #### logger *= <Logger domiknows.program.model.lossModel (WARNING)>*
-
-#### training*: bool*
 
 ### *class* domiknows.program.model.lossModel.SampleLossModel(graph, tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto')
 
@@ -265,8 +283,6 @@ is used as an index to retrieve the corresponding value from the list
 #### reset()
 
 #### reset_parameters()
-
-#### training*: bool*
 
 ## domiknows.program.model.pytorch module
 
@@ -347,8 +363,6 @@ method. If run is False, the sensors will not be evaluated, defaults to True (op
 
 #### reset()
 
-#### training*: bool*
-
 ### *class* domiknows.program.model.pytorch.PoiModelDictLoss(graph, poi=None, loss=None, metric=None, dictloss=None, device='auto')
 
 Bases: [`PoiModel`](#domiknows.program.model.pytorch.PoiModel)
@@ -389,8 +403,6 @@ method. If run is False, the sensors will not be evaluated, defaults to True (op
 
 #### reset()
 
-#### training*: bool*
-
 ### *class* domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss(graph, poi=None, device='auto')
 
 Bases: [`TorchModel`](#domiknows.program.model.pytorch.TorchModel)
@@ -405,9 +417,7 @@ Bases: [`TorchModel`](#domiknows.program.model.pytorch.TorchModel)
 
 #### reset()
 
-#### training*: bool*
-
-### *class* domiknows.program.model.pytorch.SolverModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False)
+### *class* domiknows.program.model.pytorch.SolverModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False, kwargs=None)
 
 Bases: [`PoiModel`](#domiknows.program.model.pytorch.PoiModel)
 
@@ -440,8 +450,6 @@ be executed; if set to False, the population process will be skipped, defaults t
 (optional)
 :return: three values: datanode, lose, and metric.
 
-#### training*: bool*
-
 ### *class* domiknows.program.model.pytorch.SolverModelDictLoss(graph, poi=None, loss=None, metric=None, dictloss=None, inferTypes=['ILP'], device='auto')
 
 Bases: [`PoiModelDictLoss`](#domiknows.program.model.pytorch.PoiModelDictLoss)
@@ -465,8 +473,6 @@ datanode is not provided, a new batch root data node is created and assigned to 
 evaluated or not. If run is True, the sensors will be evaluated by calling their \_\_call_\_
 method. If run is False, the sensors will not be evaluated, defaults to True (optional)
 :return: two values: loss and metric.
-
-#### training*: bool*
 
 ### *class* domiknows.program.model.pytorch.TorchModel(graph, device='auto', ignore_modules=False)
 
@@ -508,8 +514,6 @@ take one of the following values:
 #### populate()
 
 #### reset()
-
-#### training*: bool*
 
 ### domiknows.program.model.pytorch.model_helper(Model, \*args, \*\*kwargs)
 

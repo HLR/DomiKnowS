@@ -16,7 +16,7 @@ Bases: [`BaseGraphTree`](#domiknows.graph.base.BaseGraphTree)
 
 Bases: [`AutoNamed`](domiknows.md#domiknows.base.AutoNamed), [`NamedTree`](domiknows.md#domiknows.base.NamedTree)
 
-#### *classmethod* clear()
+#### *classmethod* clear() → None.  Remove all items from od.
 
 ### *class* domiknows.graph.base.BaseGraphTreeNode(name=None)
 
@@ -33,6 +33,8 @@ Bases: [`LcElement`](#domiknows.graph.logicalConstrain.LcElement)
 ### *class* domiknows.graph.candidates.combinationC(\*e, name=None)
 
 Bases: [`CandidateSelection`](#domiknows.graph.candidates.CandidateSelection)
+
+#### strEs()
 
 ### domiknows.graph.candidates.findDatanodesForRootConcept(dn, rootConcept)
 
@@ -84,11 +86,25 @@ p, q - [(batch, vdim(s…)),…] \* nval
 
 #### get_batch()
 
+#### get_canonical_concept() → [Concept](#domiknows.graph.concept.Concept)
+
+#### get_equal_concepts(transitive: bool = False) → List[[Concept](#domiknows.graph.concept.Concept)]
+
+#### get_equal_relations() → List[[Equal](#domiknows.graph.relation.Equal)]
+
+#### get_equivalence_class() → List[[Concept](#domiknows.graph.concept.Concept)]
+
 #### get_multiassign()
 
 #### *classmethod* get_new_variable_index()
 
 #### get_var_name()
+
+#### is_equal_to(other_concept: [Concept](#domiknows.graph.concept.Concept)) → bool
+
+#### is_equal_to_transitive(other_concept: [Concept](#domiknows.graph.concept.Concept)) → bool
+
+#### merge_equal_concepts(property_merge_strategy: str = 'first') → Dict[str, Any]
 
 #### newVariableIndex *= 0*
 
@@ -181,14 +197,14 @@ Args:
 Returns:
 : None
 
-#### calculateLcLoss(tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False)
+#### calculateLcLoss(tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False)
 
 Calculate the loss for logical constraints (LC) based on various t-norms.
 
 Parameters:
 - tnorm: str, optional
 
-> Specifies the t-norm used for calculations. Supported t-norms are ‘L’ (Lukasiewicz), 
+> Specifies the t-norm used for calculations. Supported t-norms are ‘L’ (Lukasiewicz),
 > ‘G’ (Godel), and ‘P’ (Product). Default is ‘P’.
 - sample: bool, optional
   : Specifies whether sampling is to be used. Default is False.
@@ -205,6 +221,14 @@ Returns:
 
 Raises:
 - DataNodeError: When an unsupported tnorm is provided or other internal errors occur.
+
+#### *classmethod* clear()
+
+Clear DataNode class state.
+
+This method resets the class-level ID counter and clears any cached
+state to ensure clean state for testing and other scenarios where 
+DataNode instances need to be reset.
 
 #### collectConceptsAndRelations(conceptsAndRelations=None)
 
@@ -237,7 +261,7 @@ Find concept based on the name in the ontology graph.
 
 Args:
 : conceptName (str or Concept): The name of the concept to find.
-  usedGraph (object): The ontology graph to search within.
+  usedGraph (object): The ontology graph to search within if not provided, defaults to the ontology graph associated with self master graph
 
 Returns:
 : tuple or None: A tuple containing details about the found concept or None if not found.
@@ -246,7 +270,7 @@ Returns:
 
 Recursively search for concepts and relations in the data graph starting from a given dataNode (dn).
 
-This method will traverse through linked dataNodes to find concepts and relations. If ‘variableSet’ 
+This method will traverse through linked dataNodes to find concepts and relations. If ‘variableSet’
 is present in the attributes, it will return those concepts directly.
 
 Args:
@@ -298,7 +322,7 @@ Returns:
 
 Retrieve a specific attribute using a key or a sequence of keys.
 
-The method accepts multiple keys in the form of positional arguments, 
+The method accepts multiple keys in the form of positional arguments,
 combining them to identify the attribute to retrieve.
 
 Args:
@@ -309,7 +333,7 @@ Args:
   keys (str or tuple or Concept): The key(s) to identify the attribute.
 
 Returns:
-: object: The value of the attribute if it exists, or None otherwise.
+: object: The value of the attribut   e if it exists, or None otherwise.
 
 #### getAttributes()
 
@@ -356,6 +380,19 @@ Args:
 Returns:
 : list: A list of DataNodes that are considered equal to the current DataNode.
 
+#### getILPSolver(conceptsRelations=None)
+
+Get the ILP Solver instance based on the given concepts and relations.
+
+Args:
+: conceptsRelations (list, optional): A list of concepts and relations to be considered. Defaults to None.
+
+Returns:
+: tuple: An instance of ILP Solver and the list of processed concepts and relations.
+
+Raises:
+: DataNodeError: If the ILP Solver is not initialized.
+
 #### getInferMetrics(\*conceptsRelations, inferType='ILP', weight=None, average='binary')
 
 Calculate inference metrics for given concepts and relations.
@@ -398,19 +435,19 @@ Returns:
 Get links associated with the DataNode based on the relation and concept names.
 
 This method retrieves the DataNodes linked to the current DataNode through
-either relation links or impact links. You can filter these links based on 
+either relation links or impact links. You can filter these links based on
 the name of the relation or the name of the concept (ontology node).
 
 Args:
-: relationName (str, optional): The name of the relation to filter by. 
+: relationName (str, optional): The name of the relation to filter by.
   : Defaults to None.
   <br/>
   conceptName (str, optional): The name of the ontology node (concept) to filter by.
   : Defaults to None.
 
 Returns:
-: dict or list: A dictionary containing the DataNodes linked through relation or 
-  : impact links. If relationName or conceptName is provided, 
+: dict or list: A dictionary containing the DataNodes linked through relation or
+  : impact links. If relationName or conceptName is provided,
     returns a list of DataNodes that match the criteria.
 
 #### getOntologyNode()
@@ -468,7 +505,7 @@ Returns:
 
 Calculate argMax and softMax for the ontology-based data structure.
 
-#### inferGBIResults(\*\_conceptsRelations, model)
+#### inferGBIResults(\*\_conceptsRelations, model, kwargs)
 
 Infer Grounded Belief Inference (GBI) results based on given concepts and relations.
 
@@ -568,7 +605,7 @@ Args:
 
 Remove a relation link between the current DataNode and another DataNode.
 
-This method removes a relation link from the current DataNode to another 
+This method removes a relation link from the current DataNode to another
 DataNode (‘dn’) under a given relation name. It also updates the impactLinks
 for the target DataNode.
 
@@ -583,9 +620,11 @@ Returns:
 
 Reset all child DataNodes from the current DataNode.
 
+#### setActiveLCs()
+
 #### verifyResultsLC(key='/local/argmax')
 
-Verify the results of ILP (Integer Linear Programming) by checking the percentage of 
+Verify the results of ILP (Integer Linear Programming) by checking the percentage of
 results satisfying each logical constraint (LC).
 
 Parameters:
@@ -607,7 +646,7 @@ Returns:
 
 Visualize the current DataNode instance and its attributes.
 
-This method creates a graph visualization using the Graphviz library. The 
+This method creates a graph visualization using the Graphviz library. The
 visualization includes attributes and relationships.
 
 Args:
@@ -635,6 +674,13 @@ Methods:
 - \_\_init_\_: Initializes the DataNodeBuilder instance.
 - \_\_getitem_\_: Overrides dict’s \_\_getitem_\_ to fetch item for a given key.
 - \_\_changToTuple: Converts list elements to tuple form for use as dictionary keys.
+
+#### *classmethod* clear()
+
+Clear DataNodeBuilder class state.
+
+This method resets any class-level state that might persist
+between test runs or other scenarios where clean state is needed.
 
 #### collectTime(start)
 
@@ -778,11 +824,89 @@ None
 
 ### domiknows.graph.dataNodeDummy.addDatanodes(concept, conceptInfos, datanodes, allDns, level=1)
 
+### domiknows.graph.dataNodeDummy.construct_ls_path_string(value)
+
 ### domiknows.graph.dataNodeDummy.createDummyDataNode(graph)
 
 ### domiknows.graph.dataNodeDummy.findConcept(conceptName, usedGraph)
 
 ### domiknows.graph.dataNodeDummy.findConceptInfo(usedGraph, concept)
+
+### domiknows.graph.dataNodeDummy.ifConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, ifResult, lcTestIndex, lcSatisfactionMsg, headLc)
+
+### domiknows.graph.dataNodeDummy.lcConstrainSatisfactionMsg(lcSatisfactionTest, lcIterator, currentLc, lcResult, lcTestIndex, lcSatisfactionMsg, headLc)
+
+### domiknows.graph.dataNodeDummy.satisfactionReportOfConstraints(dn)
+
+## domiknows.graph.equality_mixin module
+
+Equality mixin and an opt-in applier for Concept-like classes.
+
+Usage (no auto-apply to avoid circular imports):
+: from domiknows.graph.equality_mixin import apply_equality_mixin
+  apply_equality_mixin(Concept)
+  apply_equality_mixin(EnumConcept)  # optional
+
+### *class* domiknows.graph.equality_mixin.EqualityMixin
+
+Bases: `object`
+
+#### get_canonical_concept() → [Concept](#domiknows.graph.concept.Concept)
+
+#### get_equal_concepts(transitive: bool = False) → List[[Concept](#domiknows.graph.concept.Concept)]
+
+#### get_equal_relations() → List[[Equal](#domiknows.graph.relation.Equal)]
+
+#### get_equivalence_class() → List[[Concept](#domiknows.graph.concept.Concept)]
+
+#### is_equal_to(other_concept: [Concept](#domiknows.graph.concept.Concept)) → bool
+
+#### is_equal_to_transitive(other_concept: [Concept](#domiknows.graph.concept.Concept)) → bool
+
+#### merge_equal_concepts(property_merge_strategy: str = 'first') → Dict[str, Any]
+
+### domiknows.graph.equality_mixin.apply_equality_mixin(cls: type) → None
+
+Apply EqualityMixin methods to the given class (e.g., Concept).
+
+## domiknows.graph.executable module
+
+### *class* domiknows.graph.executable.LogicDataset(data: Sequence[data_type], lc_name_list: list[str], logic_keyword: str = 'constraint', logic_label_keyword: str = 'label')
+
+Bases: `Sequence`[`data_type`]
+
+Wrapper around dataset containing executable logical expressions.
+
+#### KEYWORD_FMT *: str* *= '_constraint_{index}'*
+
+#### *property* curr_lc_key *: str*
+
+This key in each data item specifies which LC is currently active.
+The value is the LC name (e.g., LC2).
+
+#### *property* do_switch_key *: str*
+
+This key (when present in the data item) indicates that we’re switching between LCs.
+
+Only the presence of the key in the data item is used. The value has no meaning.
+
+This is used in SolverModel.inference: when present will speed up searching through properties
+by ignoring properties that are logical constraints but aren’t the current active LC
+(set by self.curr_lc_key).
+
+### domiknows.graph.executable.add_keyword(expr_str: str, kwarg_name: str, kwarg_value: Any) → str
+
+Takes string containing logical expression without name parameter and
+adds a name keyword argument to top-most expression.
+
+e.g., andL(x, y) -> andL(x, y, name=”xyz”)
+
+### domiknows.graph.executable.get_full_funcs(expr_str: str) → str
+
+Converts logical expression to version with full important name.
+Done recursively (not just to top-most expression); see: \_recurse_call(…)
+
+e.g., andL(x, y) -> domiknows.graph.logicalConstrain.andL(x, y)
 
 ## domiknows.graph.graph module
 
@@ -815,11 +939,11 @@ Attributes:
 : iri (str): The IRI of the ontology. Default is None.
   local (str): The local identification of the ontology. Default is None.
 
-#### *property* iri
+#### iri
 
 Alias for field number 0
 
-#### *property* local
+#### local
 
 Alias for field number 1
 
@@ -868,6 +992,7 @@ found_variables (dict): Dictionary containing all variables that have been defin
 
 > The key is the variable name and the value is a tuple containing information
 > about the variable.
+
 used_variables (dict, optional): Dictionary to store variables that are used. The key is the variable name,
 : and the value is a list of tuples, each containing the logical constraint,
   variable name, the type of the element that uses it, and the path to the variable.
@@ -920,6 +1045,14 @@ list: The updated list of variable mappings (VarMaps) after processing ‘lc’.
 Note:
 - The method assumes the existence of specific types and structures within ‘lc’, such as ‘VarMaps’ tuples.
 - The method is recursive and alters the structure of ‘lc’ by removing defining VarMaps.
+
+#### compile_logic(data, logic_keyword='constraint', logic_label_keyword='label', extra_namespace_values={}, verbose=False)
+
+Takes a dataset containing keys logic_keyword and logic_label_keyword and
+converts it to a LogicDataset and adds the expressions to the graph.
+Using the LogicDataset during e.g., training lets you switch between these constraints.
+data: and iterable of dicts containing the keys specified by logic_keyword and logic_label_keyword
+extra_namespace_values: dict[str, Any], any values added to this dictionary get added to the namespace used when executing the logical expressions (the variable names are the keys).
 
 #### *property* concepts
 
@@ -1016,6 +1149,8 @@ name (str): The name of the concept or relation to find.
 
 Returns:
 Object: The concept or relation with the specified name, or the result of BaseGraphTree.get_apply if not found.
+
+#### get_constraint_concept()
 
 #### get_properties(\*tests)
 
@@ -1137,6 +1272,7 @@ Args:
 filename (str|None): The name of the file where the graph will be saved.
 
 > If None, the graph object is returned instead.
+
 open_image (bool): Whether to open the image after rendering.
 : Defaults to False.
 
@@ -1168,6 +1304,14 @@ Bases: [`LcElement`](#domiknows.graph.logicalConstrain.LcElement)
 
 #### createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName='COUNT')
 
+#### createILPCompareCounts(model, myIlpBooleanProcessor, v, headConstrain, compareOp, diff, integrate, , logicMethodName='COUNT_CMP')
+
+Build ILP constraints (and optionally return indicator vars) enforcing
+compareOp between the **counts** of two variable sets.
+
+compareOp : one of ‘>’, ‘>=’, ‘<’, ‘<=’, ‘==’, ‘!=’
+diff      : constant offset  (we enforce  count(A) - count(B) ∘ diff)
+
 #### createILPConstrains(lcName, lcFun, model, v, headConstrain)
 
 #### createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName='COUNT')
@@ -1182,11 +1326,11 @@ Bases: [`LcElement`](#domiknows.graph.logicalConstrain.LcElement)
 
 Bases: `tuple`
 
-#### *property* name
+#### name
 
 Alias for field number 0
 
-#### *property* v
+#### v
 
 Alias for field number 1
 
@@ -1196,43 +1340,69 @@ Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 
 ### *class* domiknows.graph.logicalConstrain.atLeastAL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_AccumulatedCountBaseL`
+
+#### limitOp *: str* *= '>='*
 
 ### *class* domiknows.graph.logicalConstrain.atLeastL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_CountBaseL`
+
+#### limitOp *: str* *= '>='*
 
 ### *class* domiknows.graph.logicalConstrain.atMostAL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_AccumulatedCountBaseL`
+
+#### limitOp *: str* *= '<='*
 
 ### *class* domiknows.graph.logicalConstrain.atMostL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_CountBaseL`
 
-### *class* domiknows.graph.logicalConstrain.epqL(\*e, p=100, active=True, sampleEntries=False, name=None)
-
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+#### limitOp *: str* *= '<='*
 
 ### *class* domiknows.graph.logicalConstrain.eqL(\*e, active=True, sampleEntries=False, name=None)
 
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 
-### *class* domiknows.graph.logicalConstrain.exactAL(\*e, p=100, active=True, sampleEntries=False, name=None)
+### *class* domiknows.graph.logicalConstrain.equalCountsL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_CompareCountsBaseL`
+
+#### compareOp *= '=='*
+
+### *class* domiknows.graph.logicalConstrain.equivalenceL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+
+### *class* domiknows.graph.logicalConstrain.exactAL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_AccumulatedCountBaseL`
+
+#### limitOp *: str* *= '=='*
 
 ### *class* domiknows.graph.logicalConstrain.exactL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_CountBaseL`
+
+#### limitOp *: str* *= '=='*
 
 ### *class* domiknows.graph.logicalConstrain.existsAL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_AccumulatedCountBaseL`
+
+#### fixedLimit *: int | None* *= 1*
+
+#### limitOp *: str* *= '>='*
 
 ### *class* domiknows.graph.logicalConstrain.existsL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
-Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+Bases: `_CountBaseL`
+
+#### fixedLimit *: int | None* *= 1*
+
+#### limitOp *: str* *= '>='*
 
 ### *class* domiknows.graph.logicalConstrain.fixedL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
@@ -1242,9 +1412,33 @@ Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 
+### *class* domiknows.graph.logicalConstrain.greaterEqL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_CompareCountsBaseL`
+
+#### compareOp *= '>='*
+
+### *class* domiknows.graph.logicalConstrain.greaterL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_CompareCountsBaseL`
+
+#### compareOp *= '>'*
+
 ### *class* domiknows.graph.logicalConstrain.ifL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+
+### *class* domiknows.graph.logicalConstrain.lessEqL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_CompareCountsBaseL`
+
+#### compareOp *= '<='*
+
+### *class* domiknows.graph.logicalConstrain.lessL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_CompareCountsBaseL`
+
+#### compareOp *= '<'*
 
 ### *class* domiknows.graph.logicalConstrain.nandL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
@@ -1253,6 +1447,12 @@ Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 ### *class* domiknows.graph.logicalConstrain.norL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+
+### *class* domiknows.graph.logicalConstrain.notEqualCountsL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: `_CompareCountsBaseL`
+
+#### compareOp *= '!='*
 
 ### *class* domiknows.graph.logicalConstrain.notL(\*e, p=100, active=True, sampleEntries=False, name=None)
 

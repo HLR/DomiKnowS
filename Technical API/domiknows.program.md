@@ -12,22 +12,22 @@
   * [domiknows.program.model.gbi module](domiknows.program.model.md#module-domiknows.program.model.gbi)
     * [`GBIModel`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel)
       * [`GBIModel.calculateGBISelection()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.calculateGBISelection)
-      * [`GBIModel.find_last_layers_in_submodels()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.find_last_layers_in_submodels)
       * [`GBIModel.forward()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.forward)
+      * [`GBIModel.get_argmax_from_node()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.get_argmax_from_node)
       * [`GBIModel.get_constraints_satisfaction()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.get_constraints_satisfaction)
       * [`GBIModel.reg_loss()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.reg_loss)
       * [`GBIModel.reset()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.reset)
-      * [`GBIModel.reset_last_layers_in_submodels()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.reset_last_layers_in_submodels)
-      * [`GBIModel.training`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.training)
+      * [`GBIModel.set_pretrained()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.set_pretrained)
   * [domiknows.program.model.ilpu module](domiknows.program.model.md#module-domiknows.program.model.ilpu)
     * [`ILPUModel`](domiknows.program.model.md#domiknows.program.model.ilpu.ILPUModel)
       * [`ILPUModel.poi_loss()`](domiknows.program.model.md#domiknows.program.model.ilpu.ILPUModel.poi_loss)
-      * [`ILPUModel.training`](domiknows.program.model.md#domiknows.program.model.ilpu.ILPUModel.training)
   * [domiknows.program.model.iml module](domiknows.program.model.md#module-domiknows.program.model.iml)
     * [`IMLModel`](domiknows.program.model.md#domiknows.program.model.iml.IMLModel)
       * [`IMLModel.poi_loss()`](domiknows.program.model.md#domiknows.program.model.iml.IMLModel.poi_loss)
-      * [`IMLModel.training`](domiknows.program.model.md#domiknows.program.model.iml.IMLModel.training)
   * [domiknows.program.model.lossModel module](domiknows.program.model.md#module-domiknows.program.model.lossModel)
+    * [`InferenceModel`](domiknows.program.model.md#domiknows.program.model.lossModel.InferenceModel)
+      * [`InferenceModel.forward()`](domiknows.program.model.md#domiknows.program.model.lossModel.InferenceModel.forward)
+      * [`InferenceModel.logger`](domiknows.program.model.md#domiknows.program.model.lossModel.InferenceModel.logger)
     * [`LossModel`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel)
       * [`LossModel.forward()`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel.forward)
       * [`LossModel.get_lmbd()`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel.get_lmbd)
@@ -35,17 +35,14 @@
       * [`LossModel.reset()`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel.reset)
       * [`LossModel.reset_parameters()`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel.reset_parameters)
       * [`LossModel.to()`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel.to)
-      * [`LossModel.training`](domiknows.program.model.md#domiknows.program.model.lossModel.LossModel.training)
     * [`PrimalDualModel`](domiknows.program.model.md#domiknows.program.model.lossModel.PrimalDualModel)
       * [`PrimalDualModel.logger`](domiknows.program.model.md#domiknows.program.model.lossModel.PrimalDualModel.logger)
-      * [`PrimalDualModel.training`](domiknows.program.model.md#domiknows.program.model.lossModel.PrimalDualModel.training)
     * [`SampleLossModel`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel)
       * [`SampleLossModel.forward()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.forward)
       * [`SampleLossModel.get_lmbd()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.get_lmbd)
       * [`SampleLossModel.logger`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.logger)
       * [`SampleLossModel.reset()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.reset)
       * [`SampleLossModel.reset_parameters()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.reset_parameters)
-      * [`SampleLossModel.training`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.training)
   * [domiknows.program.model.pytorch module](domiknows.program.model.md#module-domiknows.program.model.pytorch)
     * [`PoiModel`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel)
       * [`PoiModel.default_poi()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.default_poi)
@@ -54,27 +51,22 @@
       * [`PoiModel.poi_metric()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.poi_metric)
       * [`PoiModel.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.populate)
       * [`PoiModel.reset()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.reset)
-      * [`PoiModel.training`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.training)
     * [`PoiModelDictLoss`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelDictLoss)
       * [`PoiModelDictLoss.poi_loss()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelDictLoss.poi_loss)
       * [`PoiModelDictLoss.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelDictLoss.populate)
       * [`PoiModelDictLoss.reset()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelDictLoss.reset)
-      * [`PoiModelDictLoss.training`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelDictLoss.training)
     * [`PoiModelToWorkWithLearnerWithLoss`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss)
       * [`PoiModelToWorkWithLearnerWithLoss.default_poi()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss.default_poi)
       * [`PoiModelToWorkWithLearnerWithLoss.loss`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss.loss)
       * [`PoiModelToWorkWithLearnerWithLoss.metric`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss.metric)
       * [`PoiModelToWorkWithLearnerWithLoss.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss.populate)
       * [`PoiModelToWorkWithLearnerWithLoss.reset()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss.reset)
-      * [`PoiModelToWorkWithLearnerWithLoss.training`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss.training)
     * [`SolverModel`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModel)
       * [`SolverModel.inference()`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModel.inference)
       * [`SolverModel.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModel.populate)
-      * [`SolverModel.training`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModel.training)
     * [`SolverModelDictLoss`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModelDictLoss)
       * [`SolverModelDictLoss.inference()`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModelDictLoss.inference)
       * [`SolverModelDictLoss.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModelDictLoss.populate)
-      * [`SolverModelDictLoss.training`](domiknows.program.model.md#domiknows.program.model.pytorch.SolverModelDictLoss.training)
     * [`TorchModel`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel)
       * [`TorchModel.data_hash()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.data_hash)
       * [`TorchModel.forward()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.forward)
@@ -82,7 +74,6 @@
       * [`TorchModel.move()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.move)
       * [`TorchModel.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.populate)
       * [`TorchModel.reset()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.reset)
-      * [`TorchModel.training`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.training)
     * [`model_helper()`](domiknows.program.model.md#domiknows.program.model.pytorch.model_helper)
   * [domiknows.program.model.torch module](domiknows.program.model.md#domiknows-program-model-torch-module)
   * [Module contents](domiknows.program.model.md#module-domiknows.program.model)
@@ -195,17 +186,7 @@ Bases: [`BCEWithLogitsLoss`](#domiknows.program.loss.BCEWithLogitsLoss)
 
 #### forward(input, target, weight=None)
 
-Defines the computation performed at every call.
-
-Should be overridden by all subclasses.
-
-#### NOTE
-Although the recipe for forward pass needs to be defined within
-this function, one should call the `Module` instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.
-
-#### reduction*: str*
+Runs the forward pass.
 
 ### *class* domiknows.program.loss.BCEWithLogitsFocalLoss(weight=None, reduction='mean', alpha=0.5, gamma=2)
 
@@ -213,7 +194,7 @@ Bases: `Module`
 
 #### forward(input, target, weight=None)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -222,8 +203,6 @@ Although the recipe for forward pass needs to be defined within
 this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
-
-#### training*: bool*
 
 ### *class* domiknows.program.loss.BCEWithLogitsIMLoss(lmbd, reduction='mean')
 
@@ -231,7 +210,7 @@ Bases: `Module`
 
 #### forward(input, inference, target, weight=None)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -241,45 +220,21 @@ this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
 
-#### training*: bool*
-
-### *class* domiknows.program.loss.BCEWithLogitsLoss(weight: Optional[Tensor] = None, size_average=None, reduce=None, reduction: str = 'mean', pos_weight: Optional[Tensor] = None)
+### *class* domiknows.program.loss.BCEWithLogitsLoss(weight: Tensor | None = None, size_average=None, reduce=None, reduction: str = 'mean', pos_weight: Tensor | None = None)
 
 Bases: `BCEWithLogitsLoss`
 
 #### forward(input, target, weight=None)
 
-Defines the computation performed at every call.
+Runs the forward pass.
 
-Should be overridden by all subclasses.
-
-#### NOTE
-Although the recipe for forward pass needs to be defined within
-this function, one should call the `Module` instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.
-
-#### reduction*: str*
-
-### *class* domiknows.program.loss.NBCrossEntropyDictLoss(weight: Optional[Tensor] = None, size_average=None, ignore_index: int = -100, reduce=None, reduction: str = 'mean', label_smoothing: float = 0.0)
+### *class* domiknows.program.loss.NBCrossEntropyDictLoss(weight: Tensor | None = None, size_average=None, ignore_index: int = -100, reduce=None, reduction: str = 'mean', label_smoothing: float = 0.0)
 
 Bases: `CrossEntropyLoss`
 
 #### forward(builder, prop, input, target, \*args, \*\*kwargs)
 
-Defines the computation performed at every call.
-
-Should be overridden by all subclasses.
-
-#### NOTE
-Although the recipe for forward pass needs to be defined within
-this function, one should call the `Module` instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.
-
-#### ignore_index*: int*
-
-#### label_smoothing*: float*
+Runs the forward pass.
 
 ### *class* domiknows.program.loss.NBCrossEntropyIMLoss(lmbd, reduction='mean')
 
@@ -287,7 +242,7 @@ Bases: [`BCEWithLogitsIMLoss`](#domiknows.program.loss.BCEWithLogitsIMLoss)
 
 #### forward(input, inference, target, weight=None)
 
-Defines the computation performed at every call.
+Define the computation performed at every call.
 
 Should be overridden by all subclasses.
 
@@ -297,33 +252,35 @@ this function, one should call the `Module` instance afterwards
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.
 
-#### training*: bool*
-
-### *class* domiknows.program.loss.NBCrossEntropyLoss(weight: Optional[Tensor] = None, size_average=None, ignore_index: int = -100, reduce=None, reduction: str = 'mean', label_smoothing: float = 0.0)
+### *class* domiknows.program.loss.NBCrossEntropyLoss(weight: Tensor | None = None, size_average=None, ignore_index: int = -100, reduce=None, reduction: str = 'mean', label_smoothing: float = 0.0)
 
 Bases: `CrossEntropyLoss`
 
 #### forward(input, target, \*args, \*\*kwargs)
 
-Defines the computation performed at every call.
+Runs the forward pass.
 
-Should be overridden by all subclasses.
+### *class* domiknows.program.loss.NBMSELoss(size_average=None, reduce=None, reduction: str = 'mean')
 
-#### NOTE
-Although the recipe for forward pass needs to be defined within
-this function, one should call the `Module` instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.
+Bases: `MSELoss`
 
-#### ignore_index*: int*
+#### forward(input, target, \*args, \*\*kwargs)
 
-#### label_smoothing*: float*
+Runs the forward pass.
 
 ## domiknows.program.lossprogram module
 
 ### *class* domiknows.program.lossprogram.GBIProgram(graph, Model, poi, beta=1, \*\*kwargs)
 
 Bases: [`LossProgram`](#domiknows.program.lossprogram.LossProgram)
+
+#### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
+
+### *class* domiknows.program.lossprogram.InferenceProgram(graph, Model, beta=1, \*\*kwargs)
+
+Bases: [`LossProgram`](#domiknows.program.lossprogram.LossProgram)
+
+#### evaluate_condition(evaluate_data, device='cpu')
 
 #### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
 
@@ -379,7 +336,7 @@ be tested. Each data item should be in a format that can be processed by your mo
 
 #### to(device)
 
-#### train(training_set, valid_set=None, test_set=None, c_lr=0.05, c_momentum=0.9, c_warmup_iters=10, c_freq=10, c_freq_increase=5, c_freq_increase_freq=1, c_lr_decay=4, c_lr_decay_param=1, \*\*kwargs)
+#### train(training_set, valid_set=None, test_set=None, c_lr=0.05, c_momentum=0.9, c_warmup_iters=10, c_freq=10, c_freq_increase=5, c_freq_increase_freq=1, c_lr_decay=4, c_lr_decay_param=1, batch_size=1, dataset_size=None, print_loss=True, \*\*kwargs)
 
 The train function is used to train a model on a given training set, with optional validation
 and testing sets, for a specified number of epochs.
@@ -407,7 +364,7 @@ model. It should be a class that implements the optimization algorithm, such as
 torch.optim.SGD or torch.optim.Adam. The optimizer is responsible for updating the model’s
 parameters based on the computed gradients
 
-#### train_epoch(dataset, c_lr=1, c_warmup_iters=10, c_freq_increase=1, c_freq_increase_freq=1, c_lr_decay=0, c_lr_decay_param=1, c_session={}, \*\*kwargs)
+#### train_epoch(dataset, c_lr=1, c_warmup_iters=10, c_freq_increase=1, c_freq_increase_freq=1, c_lr_decay=0, c_lr_decay_param=1, c_session={}, batch_size=1, dataset_size=None, print_loss=True, \*\*kwargs)
 
 The function train_epoch trains a model on a dataset for one epoch, updating the model’s
 parameters based on the calculated loss and performing gradient descent if an optimizer is
@@ -477,7 +434,7 @@ corresponding labels. It is used to iterate over the data items during training
 
 ## domiknows.program.metric module
 
-### *class* domiknows.program.metric.CMWithLogitsMetric
+### *class* domiknows.program.metric.CMWithLogitsMetric(\*args, \*\*kwargs)
 
 Bases: `Module`
 
@@ -500,8 +457,6 @@ Args:
 
 Returns:
 : dict: A dictionary containing TP, FP, TN, and FN values.
-
-#### training*: bool*
 
 ### *class* domiknows.program.metric.DatanodeCMMetric(inferType='ILP')
 
@@ -531,8 +486,6 @@ Returns:
   : information on class names, labels, and predictions; 
     returns None if the property name is not found in the results.
 
-#### training*: bool*
-
 ### *class* domiknows.program.metric.MacroAverageTracker(metric)
 
 Bases: [`MetricTracker`](#domiknows.program.metric.MetricTracker)
@@ -552,8 +505,6 @@ Args:
 Returns:
 : Any: The macro-averaged value. The structure (tensor, list, or dictionary) of the output
   : mirrors the structure of the input.
-
-#### training*: bool*
 
 ### *class* domiknows.program.metric.MetricTracker(metric)
 
@@ -579,8 +530,6 @@ Returns:
 #### reset()
 
 Resets the internal storage (both list and dict) to their initial empty state.
-
-#### training*: bool*
 
 #### value(reset=False)
 
@@ -629,8 +578,6 @@ Else:
 
 > Returns metrics: ‘P’ (Precision), ‘R’ (Recall), ‘F1’ (F1 Score), and ‘accuracy’ for the bincaryclass concept.
 
-#### training*: bool*
-
 ## domiknows.program.model_program module
 
 ### *class* domiknows.program.model_program.IMLProgram(graph, \*\*kwargs)
@@ -655,7 +602,7 @@ Bases: [`LearningBasedProgram`](#domiknows.program.program.LearningBasedProgram)
 
 ## domiknows.program.program module
 
-### *class* domiknows.program.program.LearningBasedProgram(graph, Model, logger=None, db=False, \*\*kwargs)
+### *class* domiknows.program.program.LearningBasedProgram(graph, Model, logger=None, \*\*kwargs)
 
 Bases: `object`
 
@@ -840,7 +787,7 @@ Bases: `dict`
 
 #### value(reset=False)
 
-### *class* domiknows.program.tracker.TrackerPrinter(indent=1, width=80, depth=None, stream=None, \*, compact=False)
+### *class* domiknows.program.tracker.TrackerPrinter(indent=1, width=80, depth=None, stream=None, , compact=False, sort_dicts=True, underscore_numbers=False)
 
 Bases: `PrettyPrinter`
 

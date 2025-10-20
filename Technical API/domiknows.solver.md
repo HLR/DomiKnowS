@@ -54,97 +54,215 @@ Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 
 #### calculateILPSelection(phrase, fun=None, epsilon=1e-05, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None)
 
-## domiknows.solver.gekkoILPBooleanMethods module
-
-### *class* domiknows.solver.gekkoILPBooleanMethods.gekkoILPBooleanProcessor(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
-
-Bases: `object`
-
-#### and2Var(\_var1, \_var2)
-
-#### andVar(\*\_var)
-
-#### epqVar(\_var1, \_var2)
-
-#### ifVar(\_var1, \_var2)
-
-#### ilpSolver *= 'Gurobi'*
-
-#### main()
-
-#### nand2Var(\_var1, \_var2)
-
-#### nandVar(\*\_var)
-
-#### nor2Var(\_var1, \_var2)
-
-#### norVar(\*\_var)
-
-#### notVar(\_var)
-
-#### or2Var(\_var1, \_var2)
-
-#### orVar(\*\_var)
-
-#### xorVar(\_var1, \_var2)
-
-## domiknows.solver.gekkoILPOntSolver module
-
-### *class* domiknows.solver.gekkoILPOntSolver.gekkoILPOntSolver(graph, ontologiesTuple, \_ilpConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
-
-Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
-
-#### addRelationsConstrains(m, tokens, conceptNames, x, y, graphResultsForPhraseRelation)
-
-#### addTokenConstrains(m, tokens, conceptNames, x, graphResultsForPhraseToken)
-
-#### addTripleRelationsConstrains(m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation)
-
-#### calculateILPSelection(phrase, fun=None, epsilon=1e-05, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None)
-
-#### ilpSolver *= 'GEKKO'*
-
 ## domiknows.solver.gurobiILPBooleanMethods module
 
 ### *class* domiknows.solver.gurobiILPBooleanMethods.gurobiILPBooleanProcessor(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
 
 Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
 
-#### and2Var(m, var1, var2, onlyConstrains=False)
-
 #### andVar(m, \*var, onlyConstrains=False)
+
+General **N‑ary conjunction**.
+
+Reified form:
+: varAND ≤ v_i               for every i
+  Σ v_i ≤ varAND + N − 1
+
+Constraint‑only: enforce `Σ v_i ≥ N` (all inputs are 1).
+
+#### compareCountsVar(m, varsA, varsB, , compareOp='>', diff=0, onlyConstrains=False, logicMethodName='COUNT_CMP')
+
+Compare the counts of **two sets** of literals.
+
+Encodes the relation:
+: Σ(varsA)   compareOp   Σ(varsB) + diff
+
+where `compareOp ∈ {'>', '>=', '<', '<=', '==', '!='}`.
+With *onlyConstrains=False* the method returns a fresh binary that is
+1 when the relation holds. Otherwise it just adds the constraints.
 
 #### countVar(m, \*var, onlyConstrains=False, limitOp='None', limit=1, logicMethodName='COUNT')
 
-#### epqVar(m, var1, var2, onlyConstrains=False)
+Compare the **number of True literals** in *var* against a constant.
+
+Supports three relations via *limitOp*:
+: • ‘>=’  (at least *limit* Trues)
+  • ‘<=’  (at most  *limit* Trues)
+  • ‘==’  (exactly *limit* Trues)
+
+Reified form returns a binary *varCOUNT* that is 1 when the chosen
+relation is satisfied. Constraint‑only mode merely imposes the count
+without introducing *varCOUNT*.
+
+#### equivalenceVar(m, \*var, onlyConstrains=False)
+
+Logical **equivalence** (biconditional/if-and-only-if).
+
+Returns true when all input variables have the same truth value 
+(all true or all false).
+
+For binary case: equiv(a, b) = (a ↔ b) = (a → b) ∧ (b → a)
+For n-ary case: equiv(a, b, c, …) = (all true) ∨ (all false)
+
+Reified form (returns *varEQ*): constraints ensure *varEQ* = 1 
+exactly when all inputs are equivalent.
+
+Constraint‑only: enforce that all variables have the same truth value.
+
+Args:
+: m: Model context
+  <br/>
+  ```
+  *
+  ```
+  <br/>
+  var: Variable number of boolean variables to compare
+  onlyConstrains: If True, return loss (constraint violation);
+  <br/>
+  > if False, return success (truth degree)
+
+Returns:
+: Truth degree of equivalence or constraint violation measure
 
 #### fixedVar(m, var, onlyConstrains=False)
 
+Fix an ILP literal to its ground‑truth label.
+
+• If the data node says the variable is *true*, constrain `_var == 1`.
+• If labelled *false*, constrain `_var == 0`.
+• If the label is missing (e.g. VTag = “-100”), simply return 1 so
+  the downstream logic treats it as satisfied.
+
 #### ifVar(m, var1, var2, onlyConstrains=False)
 
-#### nand2Var(m, var1, var2, onlyConstrains=False)
+Logical implication: (var1 => var2).
+- If either side is None (missing), we do NOT force anything.
+
+> * onlyConstrains=True: no constraint added (skip).
+> * onlyConstrains=False: vacuously return 1.
+- If both are numeric/bool, evaluate and return {0,1} (no constraints).
+- If one side is numeric and the other is an ILP var:
+  : * antecedent == 1  and consequent is ILP  -> add: consequent >= 1
+    * antecedent == 0  and consequent is ILP  -> no constraint (vacuous truth)
+    * antecedent is ILP and consequent == 1   -> no constraint (vacuous truth)
+    * antecedent is ILP and consequent == 0   -> add: antecedent <= 0
+- If both are ILP vars:
+  : * onlyConstrains=True: add A - B <= 0   (A <= B)
+    * onlyConstrains=False: create z = (¬A ∨ B) with standard linearization.
 
 #### nandVar(m, \*var, onlyConstrains=False)
 
-#### nor2Var(m, var1, var2, onlyConstrains=False)
+General **N‑ary NAND**.
+
+Reified form:
+: NOT(varNAND) ≤ v_i          for every i
+  Σ v_i ≤ NOT(varNAND) + N − 1
+
+Constraint‑only: enforce `Σ v_i ≤ N − 1` (not all can be True).
 
 #### norVar(m, \*var, onlyConstrains=False)
 
+General **N‑ary NOR**.
+
+Reified form:
+: v_i ≤ NOT(varNOR)           for every i
+  Σ v_i ≥ NOT(varNOR)
+
+Constraint‑only: enforce `Σ v_i ≤ 0` (all inputs 0).
+
 #### notVar(m, var, onlyConstrains=False)
 
-#### or2Var(m, var1, var2, onlyConstrains=False)
+Logical **negation**.
+
+Reified form:   create binary *varNOT* and add
+: 1 − \_var  ==  varNOT             (two‑way equivalence)
+
+so *varNOT* equals the logical *NOT(_var)*.
+
+Constraint‑only form: simply force `_var == 0` so that NOT(_var)
+would be *True* without introducing *varNOT*.
 
 #### orVar(m, \*var, onlyConstrains=False)
 
+General **N‑ary disjunction**.
+
+Reified form:
+: v_i ≤ varOR                for every i
+  Σ v_i ≥ varOR
+
+Constraint‑only: enforce `Σ v_i ≥ 1`.
+
 #### preprocessLogicalMethodVar(var, logicMethodName, varNameConnector, minN=2)
 
-#### xorVar(m, var1, var2, onlyConstrains=False)
+#### xorVar(m, \*var, onlyConstrains=False)
+
+Two‑input **exclusive‑or**.
+
+Reified form (returns *varXOR*): standard 4‑constraint encoding
+ensuring *varXOR* = 1 exactly when the inputs differ.
+
+Constraint‑only: enforce `Σ v_i == 1` (one True, others False).
 
 ## domiknows.solver.gurobiILPOntSolver module
 
 ### *class* domiknows.solver.gurobiILPOntSolver.gurobiILPOntSolver(graph, ontologiesTuple, \_ilpConfig, reuse_model=False)
 
 Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
+
+#### *class* OrderedDict
+
+Bases: `dict`
+
+Dictionary that remembers insertion order
+
+#### clear() → None.  Remove all items from od.
+
+#### copy() → a shallow copy of od
+
+#### *classmethod* fromkeys(iterable, value=None)
+
+Create a new ordered dictionary with keys from iterable and values set to value.
+
+#### items()
+
+Return a set-like object providing a view on the dict’s items.
+
+#### keys()
+
+Return a set-like object providing a view on the dict’s keys.
+
+#### move_to_end(key, last=True)
+
+Move an existing element to the end (or beginning if last is false).
+
+Raise KeyError if the element does not exist.
+
+#### pop(key) → v, remove specified key and return the corresponding value.
+
+If the key is not found, return the default if given; otherwise,
+raise a KeyError.
+
+#### popitem(last=True)
+
+Remove and return a (key, value) pair from the dictionary.
+
+Pairs are returned in LIFO order if last is true or FIFO order if false.
+
+#### setdefault(key, default=None)
+
+Insert key with a value of default if key is not in the dictionary.
+
+Return the value for key if key is in the dictionary, else default.
+
+#### update(\*\*F) → None.  Update D from mapping/iterable E and F.
+
+If E is present and has a .keys() method, then does:  for k in E.keys(): D[k] = E[k]
+If E is present and lacks a .keys() method, then does:  for k, v in E: D[k] = v
+In either case, this is followed by: for k in F:  D[k] = F[k]
+
+#### values()
+
+Return an object providing a view on the dict’s values.
 
 #### addGraphConstrains(m, rootDn, \*conceptsRelations)
 
@@ -156,13 +274,15 @@ Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 
 #### calculateILPSelection(dn, \*conceptsRelations, key=('local', 'softmax'), fun=None, epsilon=1e-05, minimizeObjective=False, ignorePinLCs=False)
 
-#### calculateLcLoss(dn, tnorm='L', sample=False, sampleSize=0, sampleGlobalLoss=False, conceptsRelations=None)
+#### calculateLcLoss(dn, tnorm='L', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False, conceptsRelations=None)
 
 #### calulateSampleLossForVariable(currentLcName, lcVariables, lcSuccesses, sampleSize, eliminateDuplicateSamples, replace_mul=False)
 
 #### conceptIsBinary(concept)
 
 #### conceptIsMultiClass(concept)
+
+#### constructLogicalConstrains(lc, booleanProcessor, m, dn, p, key=None, lcVariablesDns=None, lcVariables=None, headLC=False, loss=False, sample=False, vNo=None, verify=False)
 
 #### countLCVariables(rootDn, \*conceptsRelations)
 
@@ -171,6 +291,18 @@ Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 #### createILPVariables(m, x, rootDn, \*conceptsRelations, key=('local', 'softmax'), fun=None, epsilon=1e-05)
 
 #### eliminateDuplicateSamples(lcVariables, sampleSize)
+
+#### eliminate_duplicate_columns(data_dict, rows_to_consider, data_dict_target)
+
+Eliminates columns that have identical elements across specified rows.
+
+Args:
+: data_dict: OrderedDict with row names as keys and lists as values
+  rows_to_consider: List of row names to check for duplicates
+  data_dict_target: OrderedDict with same structure to apply same column elimination
+
+Returns:
+: OrderedDict (data_dict_target) with same columns removed
 
 #### fixedLSupport(\_dn, conceptName, vDn, i, m)
 
@@ -194,6 +326,13 @@ Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 
 #### isVariableFixed(dn, conceptName, e)
 
+#### log_sorted_solutions(solutions_to_log)
+
+Remove duplicates, sort solutions by datanode name and concept, then log them
+in alphabetical order with red colour (console only) for items with multiple solutions.
+
+#### processILPModelForP(p, lcP, m, x, dn, pUsed, reusingModel, ilpVarCount, minimizeObjective, lcRun)
+
 #### reset_logical_constraints()
 
 #### set_logical_constraints(new_logical_constraints)
@@ -204,35 +343,160 @@ Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 
 ## domiknows.solver.ilpBooleanMethods module
 
-### *class* domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor(\_ildConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
+### *class* domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor
 
 Bases: `object`
 
-#### *abstract* and2Var(m, \_var1, \_var2, onlyConstrains=False)
+Abstract base class that specifies *logical* building blocks for
+Integer‑Linear‑Programming encodings.
 
-#### *abstract* andVar(m, \*\_var, onlyConstrains=False)
+Every concrete subclass must implement each Boolean operator as *either*
+a *reified* form (returning a fresh binary that represents the truth
+value of the expression) *or* a *hard* form (“onlyConstrains=True”) that
+merely adds the appropriate constraints and returns nothing.
 
-#### *abstract* epqVar(m, \_var1, \_var2, onlyConstrains=False)
+All operators assume their inputs are **binary literals**:
+: • a Gurobi Var of type *BINARY*  (0/1)
+  • the Python integers 0 or 1
+  • or `None` (treated as an unknown literal: 1 for positive context,
+    0 for negative, exactly as in the original implementation).
 
-#### *abstract* fixedVar(m, \_var, onlyConstrains=False)
+#### *abstractmethod* andVar(m, \*\_var, onlyConstrains: bool = False)
 
-#### *abstract* ifVar(m, \_var1, \_var2, onlyConstrains=False)
+General **N‑ary conjunction**.
 
-#### *abstract* nand2Var(m, \_var1, \_var2)
+Reified form:
+: varAND ≤ v_i               for every i
+  Σ v_i ≤ varAND + N − 1
 
-#### *abstract* nandVar(m, \*\_var, onlyConstrains=False)
+Constraint‑only: enforce `Σ v_i ≥ N` (all inputs are 1).
 
-#### *abstract* nor2Var(m, \_var1, \_var2)
+#### *abstractmethod* compareCountsVar(m, varsA, varsB, , compareOp: str = '>', diff: int = 0, onlyConstrains: bool = False, logicMethodName: str = 'COUNT_CMP')
 
-#### *abstract* norVar(m, \*\_var, onlyConstrains=False)
+Compare the counts of **two sets** of literals.
 
-#### *abstract* notVar(m, \_var, onlyConstrains=False)
+Encodes the relation:
+: Σ(varsA)   compareOp   Σ(varsB) + diff
 
-#### *abstract* or2Var(m, \_var1, \_var2, onlyConstrains=False)
+where `compareOp ∈ {'>', '>=', '<', '<=', '==', '!='}`.
+With *onlyConstrains=False* the method returns a fresh binary that is
+1 when the relation holds. Otherwise it just adds the constraints.
 
-#### *abstract* orVar(m, \*\_var, onlyConstrains=False)
+#### *abstractmethod* countVar(m, \*\_var, onlyConstrains: bool = False, limitOp: str = 'None', limit: int = 1, logicMethodName: str = 'COUNT')
 
-#### *abstract* xorVar(m, \_var1, \_var2, onlyConstrains=False)
+Compare the **number of True literals** in *var* against a constant.
+
+Supports three relations via *limitOp*:
+: • ‘>=’  (at least *limit* Trues)
+  • ‘<=’  (at most  *limit* Trues)
+  • ‘==’  (exactly *limit* Trues)
+
+Reified form returns a binary *varCOUNT* that is 1 when the chosen
+relation is satisfied. Constraint‑only mode merely imposes the count
+without introducing *varCOUNT*.
+
+#### *abstractmethod* equivalenceVar(m, \*var, onlyConstrains: bool = False)
+
+Logical **equivalence** (biconditional/if-and-only-if).
+
+Returns true when all input variables have the same truth value 
+(all true or all false).
+
+For binary case: equiv(a, b) = (a ↔ b) = (a → b) ∧ (b → a)
+For n-ary case: equiv(a, b, c, …) = (all true) ∨ (all false)
+
+Reified form (returns *varEQ*): constraints ensure *varEQ* = 1 
+exactly when all inputs are equivalent.
+
+Constraint‑only: enforce that all variables have the same truth value.
+
+Args:
+: m: Model context
+  <br/>
+  ```
+  *
+  ```
+  <br/>
+  var: Variable number of boolean variables to compare
+  onlyConstrains: If True, return loss (constraint violation);
+  <br/>
+  > if False, return success (truth degree)
+
+Returns:
+: Truth degree of equivalence or constraint violation measure
+
+#### *abstractmethod* fixedVar(m, \_var, , onlyConstrains: bool = False)
+
+Fix an ILP literal to its ground‑truth label.
+
+• If the data node says the variable is *true*, constrain `_var == 1`.
+• If labelled *false*, constrain `_var == 0`.
+• If the label is missing (e.g. VTag = “-100”), simply return 1 so
+  the downstream logic treats it as satisfied.
+
+#### *abstractmethod* ifVar(m, \_var1, \_var2, , onlyConstrains: bool = False)
+
+Logical **implication**  (var1 ⇒ var2).
+
+Reified form (returns *varIF*):
+: 1 − var1 ≤ varIF
+  var2     ≤ varIF
+  1 − var1 + var2 ≥ varIF
+
+so *varIF* = 1 unless var1 = 1 and var2 = 0.
+
+Constraint‑only: enforce `var1 ≤ var2`.
+
+#### *abstractmethod* nandVar(m, \*\_var, onlyConstrains: bool = False)
+
+General **N‑ary NAND**.
+
+Reified form:
+: NOT(varNAND) ≤ v_i          for every i
+  Σ v_i ≤ NOT(varNAND) + N − 1
+
+Constraint‑only: enforce `Σ v_i ≤ N − 1` (not all can be True).
+
+#### *abstractmethod* norVar(m, \*\_var, onlyConstrains: bool = False)
+
+General **N‑ary NOR**.
+
+Reified form:
+: v_i ≤ NOT(varNOR)           for every i
+  Σ v_i ≥ NOT(varNOR)
+
+Constraint‑only: enforce `Σ v_i ≤ 0` (all inputs 0).
+
+#### *abstractmethod* notVar(m, \_var, , onlyConstrains: bool = False)
+
+Logical **negation**.
+
+Reified form:   create binary *varNOT* and add
+: 1 − \_var  ==  varNOT             (two‑way equivalence)
+
+so *varNOT* equals the logical *NOT(_var)*.
+
+Constraint‑only form: simply force `_var == 0` so that NOT(_var)
+would be *True* without introducing *varNOT*.
+
+#### *abstractmethod* orVar(m, \*\_var, onlyConstrains: bool = False)
+
+General **N‑ary disjunction**.
+
+Reified form:
+: v_i ≤ varOR                for every i
+  Σ v_i ≥ varOR
+
+Constraint‑only: enforce `Σ v_i ≥ 1`.
+
+#### *abstractmethod* xorVar(m, \*var, onlyConstrains: bool = False)
+
+Two‑input **exclusive‑or**.
+
+Reified form (returns *varXOR*): standard 4‑constraint encoding
+ensuring *varXOR* = 1 exactly when the inputs differ.
+
+Constraint‑only: enforce `Σ v_i == 1` (one True, others False).
 
 ## domiknows.solver.ilpBooleanMethodsCalculator module
 
@@ -240,31 +504,169 @@ Bases: `object`
 
 Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
 
-#### and2Var(\_, var1, var2, onlyConstrains=False)
-
 #### andVar(\_, \*var, onlyConstrains=False)
 
-#### countVar(\_, \*var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName='COUNT')
+General **N‑ary conjunction**.
 
-#### epqVar(\_, var1, var2, onlyConstrains=False)
+Reified form:
+: varAND ≤ v_i               for every i
+  Σ v_i ≤ varAND + N − 1
+
+Constraint‑only: enforce `Σ v_i ≥ N` (all inputs are 1).
+
+#### compareCountsVar(\_, varsA, varsB, , compareOp='>', diff=0, onlyConstrains=False, logicMethodName='COUNT_CMP')
+
+Compare sizes of two sets of binary literals.
+
+> result = 1  iff   count(varsA)  compareOp  ( count(varsB) + diff )
+
+Supported operators: ‘>’, ‘>=’, ‘<’, ‘<=’, ‘==’, ‘!=’
+Each literal may be 1/0, torch scalar tensor, or None (ignored).
+
+#### countVar(\_, \*var, onlyConstrains: bool = False, limitOp: str = '==', limit: int = 1, logicMethodName: str = 'COUNT') → int
+
+Return 1 when the number of truthy literals in 
+
+```
+*
+```
+
+var satisfies
+: sum(var)  limitOp  limit
+
+else return 0.
+
+### Parameters
+
+\_
+: Ignored (kept for signature compatibility with ILP-based subclasses).
+
+```
+*
+```
+
+var
+: Binary literals to count. None values are skipped.
+
+onlyConstrains
+: Unused here; present only for API compatibility.
+
+limitOp
+: Comparison operator: one of ‘>=’, ‘<=’, ‘==’.
+
+limit
+: Threshold on the count.
+
+logicMethodName
+: Label used in error messages (not used here).
+
+### Returns
+
+int
+: 1 if the comparison is satisfied, otherwise 0.
+
+#### equivalenceVar(\_, \*var, onlyConstrains=False)
+
+Logical **equivalence** (biconditional/if-and-only-if).
+
+Returns true when all input variables have the same truth value 
+(all true or all false).
+
+For binary case: equiv(a, b) = (a ↔ b) = (a → b) ∧ (b → a)
+For n-ary case: equiv(a, b, c, …) = (all true) ∨ (all false)
+
+Reified form (returns *varEQ*): constraints ensure *varEQ* = 1 
+exactly when all inputs are equivalent.
+
+Constraint‑only: enforce that all variables have the same truth value.
+
+Args:
+: m: Model context
+  <br/>
+  ```
+  *
+  ```
+  <br/>
+  var: Variable number of boolean variables to compare
+  onlyConstrains: If True, return loss (constraint violation);
+  <br/>
+  > if False, return success (truth degree)
+
+Returns:
+: Truth degree of equivalence or constraint violation measure
 
 #### fixedVar(\_, \_var, onlyConstrains=False)
 
+Fix an ILP literal to its ground‑truth label.
+
+• If the data node says the variable is *true*, constrain `_var == 1`.
+• If labelled *false*, constrain `_var == 0`.
+• If the label is missing (e.g. VTag = “-100”), simply return 1 so
+  the downstream logic treats it as satisfied.
+
 #### ifVar(\_, var1, var2, onlyConstrains=False)
 
-#### nand2Var(\_, var1, var2, onlyConstrains=False)
+Logical **implication**  (var1 ⇒ var2).
+
+Reified form (returns *varIF*):
+: 1 − var1 ≤ varIF
+  var2     ≤ varIF
+  1 − var1 + var2 ≥ varIF
+
+so *varIF* = 1 unless var1 = 1 and var2 = 0.
+
+Constraint‑only: enforce `var1 ≤ var2`.
 
 #### nandVar(\_, \*var, onlyConstrains=False)
 
+General **N‑ary NAND**.
+
+Reified form:
+: NOT(varNAND) ≤ v_i          for every i
+  Σ v_i ≤ NOT(varNAND) + N − 1
+
+Constraint‑only: enforce `Σ v_i ≤ N − 1` (not all can be True).
+
 #### norVar(\_, \*var, onlyConstrains=False)
+
+General **N‑ary NOR**.
+
+Reified form:
+: v_i ≤ NOT(varNOR)           for every i
+  Σ v_i ≥ NOT(varNOR)
+
+Constraint‑only: enforce `Σ v_i ≤ 0` (all inputs 0).
 
 #### notVar(\_, var, onlyConstrains=False)
 
-#### or2Var(\_, var1, var2, onlyConstrains=False)
+Logical **negation**.
+
+Reified form:   create binary *varNOT* and add
+: 1 − \_var  ==  varNOT             (two‑way equivalence)
+
+so *varNOT* equals the logical *NOT(_var)*.
+
+Constraint‑only form: simply force `_var == 0` so that NOT(_var)
+would be *True* without introducing *varNOT*.
 
 #### orVar(\_, \*var, onlyConstrains=False)
 
-#### xorVar(\_, var1, var2, onlyConstrains=False)
+General **N‑ary disjunction**.
+
+Reified form:
+: v_i ≤ varOR                for every i
+  Σ v_i ≥ varOR
+
+Constraint‑only: enforce `Σ v_i ≥ 1`.
+
+#### xorVar(\_, \*var, onlyConstrains=False)
+
+Two‑input **exclusive‑or**.
+
+Reified form (returns *varXOR*): standard 4‑constraint encoding
+ensuring *varXOR* = 1 exactly when the inputs differ.
+
+Constraint‑only: enforce `Σ v_i == 1` (one True, others False).
 
 ## domiknows.solver.ilpConfig module
 
@@ -274,13 +676,15 @@ Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanPro
 
 Bases: `object`
 
-#### *abstract* calculateILPSelection(phrase, fun=None, epsilon=1e-05, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective=False, hardConstrains=[])
+#### *abstractmethod* calculateILPSelection(phrase, fun=None, epsilon=1e-05, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective=False, hardConstrains=[])
 
 #### loadOntology(ontologies)
 
-#### setup_solver_logger(\_ilpConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'})
+#### setup_solver_logger(\_ilpConfig=None)
 
 #### update_config(graph=None, ontologiesTuple=None, \_ilpConfig=None)
+
+### domiknows.solver.ilpOntSolver.resource_filename(package, resource)
 
 ## domiknows.solver.ilpOntSolverFactory module
 
@@ -288,9 +692,16 @@ Bases: `object`
 
 Bases: `object`
 
+#### *classmethod* clear()
+
+Clear ilpOntSolverFactory class state.
+
+This method clears the cached instances and classes to ensure clean state
+for testing and other scenarios where solver instances need to be reset.
+
 #### *classmethod* getClass(\*SolverClasses)
 
-#### *classmethod* getOntSolverInstance(graph, \*SupplementalClasses, \_ilpConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'}, \*\*kwargs)
+#### *classmethod* getOntSolverInstance(graph, \*SupplementalClasses, \_ilpConfig={'ifLog': True, 'ilpSolver': 'Gurobi', 'log_backupCount': 5, 'log_fileMode': 'a', 'log_filename': 'logs/ilpOntSolver', 'log_filesize': 5368709120, 'log_level': 20, 'log_name': 'ilpOntSolver'}, \*\*kwargs) → [ilpOntSolver](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 
 ## domiknows.solver.lcLossBooleanMethods module
 
@@ -298,35 +709,154 @@ Bases: `object`
 
 Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
 
-#### and2Var(\_, var1, var2, onlyConstrains=False)
-
 #### andVar(\_, \*var, onlyConstrains=False)
 
-#### countVar(\_, \*var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName='COUNT')
+General **N‑ary conjunction**.
 
-#### epqVar(\_, var1, var2, onlyConstrains=False)
+Reified form:
+: varAND ≤ v_i               for every i
+  Σ v_i ≤ varAND + N − 1
+
+Constraint‑only: enforce `Σ v_i ≥ N` (all inputs are 1).
+
+#### calc_probabilities(t: Tensor, n: int | None = None) → Tensor
+
+Poisson–binomial PMF over counts 0..n for independent Bernoulli probs in t.
+Returns a length-(n+1) vector where pmf[k] = P(K==k).
+Differentiable w.r.t. t. t is 1-D with entries in [0,1].
+
+#### compareCountsVar(\_, varsA, varsB, , compareOp: str = '>', diff: int | float = 0, onlyConstrains: bool = False, logicMethodName: str = 'COUNT_CMP')
+
+Truth / loss for  count(varsA)  compareOp  count(varsB) + diff
+
+compareOp ∈ {‘>’, ‘>=’, ‘<’, ‘<=’, ‘==’, ‘!=’}
+diff       constant offset (can be negative)
+onlyConstrains
+
+> • True  → return loss  (1-truth degree)
+> • False → return success (truth degree)
+
+#### countVar(\_, \*var, onlyConstrains: bool = False, limitOp: str = '==', limit: int = 1, logicMethodName: str = 'COUNT')
+
+Compare the **number of True literals** in *var* against a constant.
+
+Supports three relations via *limitOp*:
+: • ‘>=’  (at least *limit* Trues)
+  • ‘<=’  (at most  *limit* Trues)
+  • ‘==’  (exactly *limit* Trues)
+
+Reified form returns a binary *varCOUNT* that is 1 when the chosen
+relation is satisfied. Constraint‑only mode merely imposes the count
+without introducing *varCOUNT*.
+
+#### equivalenceVar(\_, \*var, onlyConstrains=False)
+
+Logical **equivalence** (biconditional/if-and-only-if).
+
+Returns true when all input variables have the same truth value 
+(all true or all false).
+
+For binary case: equiv(a, b) = (a ↔ b) = (a → b) ∧ (b → a)
+For n-ary case: equiv(a, b, c, …) = (all true) ∨ (all false)
+
+Reified form (returns *varEQ*): constraints ensure *varEQ* = 1 
+exactly when all inputs are equivalent.
+
+Constraint‑only: enforce that all variables have the same truth value.
+
+Args:
+: m: Model context
+  <br/>
+  ```
+  *
+  ```
+  <br/>
+  var: Variable number of boolean variables to compare
+  onlyConstrains: If True, return loss (constraint violation);
+  <br/>
+  > if False, return success (truth degree)
+
+Returns:
+: Truth degree of equivalence or constraint violation measure
 
 #### fixedVar(\_, \_var, onlyConstrains=False)
 
+Fix an ILP literal to its ground‑truth label.
+
+• If the data node says the variable is *true*, constrain `_var == 1`.
+• If labelled *false*, constrain `_var == 0`.
+• If the label is missing (e.g. VTag = “-100”), simply return 1 so
+  the downstream logic treats it as satisfied.
+
 #### ifVar(\_, var1, var2, onlyConstrains=False)
 
-#### ifVarS(\_, var1, var2, onlyConstrains=False)
+Logical **implication**  (var1 ⇒ var2).
 
-#### nand2Var(\_, var1, var2, onlyConstrains=False)
+Reified form (returns *varIF*):
+: 1 − var1 ≤ varIF
+  var2     ≤ varIF
+  1 − var1 + var2 ≥ varIF
+
+so *varIF* = 1 unless var1 = 1 and var2 = 0.
+
+Constraint‑only: enforce `var1 ≤ var2`.
+
+#### ifVarS(\_, var1, var2, , onlyConstrains=False)
 
 #### nandVar(\_, \*var, onlyConstrains=False)
 
+General **N‑ary NAND**.
+
+Reified form:
+: NOT(varNAND) ≤ v_i          for every i
+  Σ v_i ≤ NOT(varNAND) + N − 1
+
+Constraint‑only: enforce `Σ v_i ≤ N − 1` (not all can be True).
+
 #### norVar(\_, \*var, onlyConstrains=False)
+
+General **N‑ary NOR**.
+
+Reified form:
+: v_i ≤ NOT(varNOR)           for every i
+  Σ v_i ≥ NOT(varNOR)
+
+Constraint‑only: enforce `Σ v_i ≤ 0` (all inputs 0).
 
 #### notVar(\_, var, onlyConstrains=False)
 
-#### or2Var(\_, var1, var2, onlyConstrains=False)
+Logical **negation**.
+
+Reified form:   create binary *varNOT* and add
+: 1 − \_var  ==  varNOT             (two‑way equivalence)
+
+so *varNOT* equals the logical *NOT(_var)*.
+
+Constraint‑only form: simply force `_var == 0` so that NOT(_var)
+would be *True* without introducing *varNOT*.
 
 #### orVar(\_, \*var, onlyConstrains=False)
 
+General **N‑ary disjunction**.
+
+Reified form:
+: v_i ≤ varOR                for every i
+  Σ v_i ≥ varOR
+
+Constraint‑only: enforce `Σ v_i ≥ 1`.
+
+#### setCountingTNorm(tnorm='L')
+
 #### setTNorm(tnorm='L')
 
-#### xorVar(\_, var1, var2, onlyConstrains=False)
+#### xorVar(\_, \*var, onlyConstrains=False)
+
+Two‑input **exclusive‑or**.
+
+Reified form (returns *varXOR*): standard 4‑constraint encoding
+ensuring *varXOR* = 1 exactly when the inputs differ.
+
+Constraint‑only: enforce `Σ v_i == 1` (one True, others False).
 
 ## domiknows.solver.lcLossSampleBooleanMethods module
 
@@ -334,33 +864,151 @@ Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanPro
 
 Bases: [`ilpBooleanProcessor`](#domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor)
 
-#### and2Var(\_, var1, var2, onlyConstrains=False)
-
 #### andVar(\_, \*var, onlyConstrains=False)
+
+General **N‑ary conjunction**.
+
+Reified form:
+: varAND ≤ v_i               for every i
+  Σ v_i ≤ varAND + N − 1
+
+Constraint‑only: enforce `Σ v_i ≥ N` (all inputs are 1).
+
+#### compareCountsVar(\_, varsA, varsB, , compareOp='>', diff: int = 0, onlyConstrains=False, logicMethodName='COUNT_CMP')
+
+Compare two literal-sets by their per-sample counts.
+
+### Returns
+
+torch.BoolTensor  (shape = [sampleSize])
+: • if onlyConstrains is False “success” mask
+  • if onlyConstrains is True  “loss”  mask  (¬success)
 
 #### countVar(\_, \*var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName='COUNT')
 
-#### epqVar(\_, var1, var2, onlyConstrains=False)
+Compare the **number of True literals** in *var* against a constant.
+
+Supports three relations via *limitOp*:
+: • ‘>=’  (at least *limit* Trues)
+  • ‘<=’  (at most  *limit* Trues)
+  • ‘==’  (exactly *limit* Trues)
+
+Reified form returns a binary *varCOUNT* that is 1 when the chosen
+relation is satisfied. Constraint‑only mode merely imposes the count
+without introducing *varCOUNT*.
+
+#### equivalenceVar(\_, \*var, onlyConstrains=False)
+
+Logical **equivalence** (biconditional/if-and-only-if).
+
+Returns true when all input variables have the same truth value 
+(all true or all false).
+
+For binary case: equiv(a, b) = (a ↔ b) = (a → b) ∧ (b → a)
+For n-ary case: equiv(a, b, c, …) = (all true) ∨ (all false)
+
+Reified form (returns *varEQ*): constraints ensure *varEQ* = 1 
+exactly when all inputs are equivalent.
+
+Constraint‑only: enforce that all variables have the same truth value.
+
+Args:
+: m: Model context
+  <br/>
+  ```
+  *
+  ```
+  <br/>
+  var: Variable number of boolean variables to compare
+  onlyConstrains: If True, return loss (constraint violation);
+  <br/>
+  > if False, return success (truth degree)
+
+Returns:
+: Truth degree of equivalence or constraint violation measure
 
 #### fixedVar(\_, var, onlyConstrains=False)
+
+Fix an ILP literal to its ground‑truth label.
+
+• If the data node says the variable is *true*, constrain `_var == 1`.
+• If labelled *false*, constrain `_var == 0`.
+• If the label is missing (e.g. VTag = “-100”), simply return 1 so
+  the downstream logic treats it as satisfied.
 
 #### ifNone(var)
 
 #### ifVar(\_, var1, var2, onlyConstrains=False)
 
-#### nand2Var(\_, var1, var2, onlyConstrains=False)
+Logical **implication**  (var1 ⇒ var2).
+
+Reified form (returns *varIF*):
+: 1 − var1 ≤ varIF
+  var2     ≤ varIF
+  1 − var1 + var2 ≥ varIF
+
+so *varIF* = 1 unless var1 = 1 and var2 = 0.
+
+Constraint‑only: enforce `var1 ≤ var2`.
 
 #### nandVar(\_, \*var, onlyConstrains=False)
 
+General **N‑ary NAND**.
+
+Reified form:
+: NOT(varNAND) ≤ v_i          for every i
+  Σ v_i ≤ NOT(varNAND) + N − 1
+
+Constraint‑only: enforce `Σ v_i ≤ N − 1` (not all can be True).
+
 #### norVar(\_, \*var, onlyConstrains=False)
+
+General **N‑ary NOR**.
+
+Reified form:
+: v_i ≤ NOT(varNOR)           for every i
+  Σ v_i ≥ NOT(varNOR)
+
+Constraint‑only: enforce `Σ v_i ≤ 0` (all inputs 0).
 
 #### notVar(\_, var, onlyConstrains=False)
 
-#### or2Var(\_, var1, var2, onlyConstrains=False)
+Logical **negation**.
+
+Reified form:   create binary *varNOT* and add
+: 1 − \_var  ==  varNOT             (two‑way equivalence)
+
+so *varNOT* equals the logical *NOT(_var)*.
+
+Constraint‑only form: simply force `_var == 0` so that NOT(_var)
+would be *True* without introducing *varNOT*.
 
 #### orVar(\_, \*var, onlyConstrains=False)
 
-#### xorVar(\_, var1, var2, onlyConstrains=False)
+General **N‑ary disjunction**.
+
+Reified form:
+: v_i ≤ varOR                for every i
+  Σ v_i ≥ varOR
+
+Constraint‑only: enforce `Σ v_i ≥ 1`.
+
+#### xorVar(\_, \*var, onlyConstrains=False)
+
+Two‑input **exclusive‑or**.
+
+Reified form (returns *varXOR*): standard 4‑constraint encoding
+ensuring *varXOR* = 1 exactly when the inputs differ.
+
+Constraint‑only: enforce `Σ v_i == 1` (one True, others False).
+
+## domiknows.solver.lossCalculator module
+
+### *class* domiknows.solver.lossCalculator.LossCalculator
+
+Bases: `object`
+
+#### calculateLcLoss(dn, tnorm: str = 'L', counting_tnorm: str | None = None, sample: bool = False, sampleSize: int = 0, sampleGlobalLoss: bool = False, conceptsRelations=None) → Dict[str, Dict]
 
 ## domiknows.solver.mini_solver_debug module
 
@@ -388,14 +1036,14 @@ Bases: [`ilpOntSolver`](#domiknows.solver.ilpOntSolver.ilpOntSolver)
 
 Bases: `object`
 
-#### argmax()
+#### argmax() → Any
 
-#### argmin()
+#### argmin() → Any
 
-#### max()
+#### max() → Any
 
-#### min()
+#### min() → Any
 
-#### *abstract* optimize(min=True)
+#### *abstractmethod* optimize(min=True) → Tuple[Any, Any]
 
 ## Module contents

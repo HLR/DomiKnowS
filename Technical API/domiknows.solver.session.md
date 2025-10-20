@@ -8,11 +8,11 @@
 
 Bases: [`SolverSession`](#domiknows.solver.session.solver_session.SolverSession)
 
-#### CMAP *= {<CTYPE.EQ: '=='>: (1, '='), <CTYPE.LT: '<'>: (-1, '>'), <CTYPE.LE: '<='>: (1, '<'), <CTYPE.GT: '>'>: (-1, '<'), <CTYPE.GE: '>='>: (1, '>')}*
+#### CMAP *= {CTYPE.EQ: (1, '='), CTYPE.GE: (1, '>'), CTYPE.GT: (-1, '<'), CTYPE.LE: (1, '<'), CTYPE.LT: (-1, '>')}*
 
-#### OMAP *= {<OTYPE.MAX: 'max'>: -1, <OTYPE.MIN: 'min'>: 1}*
+#### OMAP *= {OTYPE.MAX: -1, OTYPE.MIN: 1}*
 
-#### VMAP *= {<VTYPE.BIN: <class 'bool'>>: 'B', <VTYPE.INT: <class 'int'>>: 'I', <VTYPE.DEC: <class 'float'>>: 'C'}*
+#### VMAP *= {VTYPE.BIN: 'B', VTYPE.DEC: 'C', VTYPE.INT: 'I'}*
 
 #### constr(lhs, ctype, rhs, name=None)
 
@@ -30,11 +30,9 @@ Bases: [`SolverSession`](#domiknows.solver.session.solver_session.SolverSession)
 
 Bases: `object`
 
-#### *class* CTYPE(value)
+#### *class* CTYPE(\*values)
 
 Bases: `Enum`
-
-An enumeration.
 
 #### EQ *= '=='*
 
@@ -46,21 +44,17 @@ An enumeration.
 
 #### LT *= '<'*
 
-#### *class* OTYPE(value)
+#### *class* OTYPE(\*values)
 
 Bases: `Enum`
-
-An enumeration.
 
 #### MAX *= 'max'*
 
 #### MIN *= 'min'*
 
-#### *class* VTYPE(value)
+#### *class* VTYPE(\*values)
 
 Bases: `Enum`
-
-An enumeration.
 
 #### BIN *= <class 'bool'>*
 

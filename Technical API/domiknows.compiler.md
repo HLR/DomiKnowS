@@ -38,6 +38,6 @@ Class building graph based on ontology
 
 Bases: `object`
 
-#### *abstract* compile(src: str, dst: str)
+#### *abstractmethod* compile(src: str, dst: str) → NoReturn
 
 ## Module contents

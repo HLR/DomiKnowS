@@ -14,13 +14,10 @@
     * [`LSTMModel`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.LSTMModel)
       * [`LSTMModel.forward()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.LSTMModel.forward)
       * [`LSTMModel.init_hidden()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.LSTMModel.init_hidden)
-      * [`LSTMModel.training`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.LSTMModel.training)
     * [`PyTorchFC`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.PyTorchFC)
       * [`PyTorchFC.forward()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.PyTorchFC.forward)
-      * [`PyTorchFC.training`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.PyTorchFC.training)
     * [`PyTorchFCRelu`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.PyTorchFCRelu)
       * [`PyTorchFCRelu.forward()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.PyTorchFCRelu.forward)
-      * [`PyTorchFCRelu.training`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learnerModels.PyTorchFCRelu.training)
   * [domiknows.sensor.pytorch.learners module](domiknows.sensor.pytorch.md#module-domiknows.sensor.pytorch.learners)
     * [`FullyConnectedLearner`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learners.FullyConnectedLearner)
       * [`FullyConnectedLearner.forward()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.learners.FullyConnectedLearner.forward)
@@ -161,7 +158,6 @@
     * [`UnBatchWrap`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.utils.UnBatchWrap)
       * [`UnBatchWrap.batch()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.utils.UnBatchWrap.batch)
       * [`UnBatchWrap.forward()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.utils.UnBatchWrap.forward)
-      * [`UnBatchWrap.training`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.utils.UnBatchWrap.training)
       * [`UnBatchWrap.unbatch()`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.utils.UnBatchWrap.unbatch)
   * [Module contents](domiknows.sensor.pytorch.md#module-domiknows.sensor.pytorch)
 
@@ -173,7 +169,7 @@
 
 Bases: [`Sensor`](#domiknows.sensor.sensor.Sensor)
 
-#### *abstract property* parameters*: Any*
+#### *abstract property* parameters *: Any*
 
 ## domiknows.sensor.sensor module
 
@@ -186,7 +182,7 @@ Represents the bare parent sensor that can update and propagate context of a dat
 Inherits from:
 - BaseGraphTreeNode: A parent node class that provides basic graph functionalities.
 
-#### forward(data_item: Dict[str, Any])
+#### forward(data_item: Dict[str, Any]) → Any
 
 Computes the forward pass for the given data item. This method should be implemented by subclasses. This function defines how to calcualte the new properties based on the current data.
 

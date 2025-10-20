@@ -8,7 +8,7 @@
 
 Bases: [`EdgeSensor`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.relation_sensors.EdgeSensor)
 
-#### forward()
+#### forward() → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
@@ -38,7 +38,7 @@ Returns:
 
 Bases: [`EdgeSensor`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.relation_sensors.EdgeSensor), [`JointSensor`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.sensors.JointSensor)
 
-#### forward(text)
+#### forward(text) → Any
 
 Computes the forward pass for this functional sensor, making use of a provided forward function if available.
 
