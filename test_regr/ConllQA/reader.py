@@ -60,8 +60,8 @@ def conll4_reader(data_path, dataset_portion):
             if str_query == "":
                 continue
 
-            if asked_number == 0 or asked_number == len(tokens):
-                continue
+            # if asked_number == 0 or asked_number == len(tokens):
+            #     continue
 
             current_portion.append({
                 "tokens": tokens,

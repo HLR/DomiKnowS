@@ -210,7 +210,7 @@ def program_declaration(train, device='auto'):
 
     program = InferenceProgram(graph, SolverModel,
                                poi=[phrase, sentence, word, people, organization, location, graph.constraint],
-                               tnorm="G", inferTypes=['local/argmax'])
+                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'])
     return program, train_dataset
 
 
@@ -219,6 +219,10 @@ def parse_arguments():
     parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
+    parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
+    parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
+    parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     args = parser.parse_args()
 
     return args
@@ -228,17 +232,12 @@ def main(args):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
-    train, dev, test = conll4_reader(data_path="conllQA.json", dataset_portion="entities_only_with_1_things_YN")
+    train, dev, test = conll4_reader(data_path="conllQA.json", dataset_portion=args.train_portion)
+
+    if args.train_size != -1:
+        train = train[:args.train_size]
 
     program, dataset = program_declaration(train if not args.evaluate else test, device="auto")
-    output_f = open("result.txt", 'a')
-
-    before_train = program.evaluate_condition(dataset)
-    portion = "Training" if not args.evaluate else "Testing"
-    print(f"training_{args.epochs}_lr_{args.lr}.pth", file=output_f)
-    print(f"{portion} Acc: {before_train}", file=output_f)
-    output_f.close()
-    return
 
     if not args.evaluate:
         program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
@@ -252,6 +251,12 @@ def main(args):
     print(f"training_{args.epochs}_lr_{args.lr}.pth", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
     print("#" * 40, file=output_f)
+
+    if args.checked_acc:
+        print(f"<acc>{train_acc}</acc>")
+        assert train_acc > args.checked_acc
+
+    return 0
 
 
 if __name__ == '__main__':
