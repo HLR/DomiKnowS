@@ -2,6 +2,7 @@ import pytest
 import torch
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 
@@ -15,6 +16,9 @@ class TestTraining:
         
     def test_minimal_training_run(self):
         """Test that training completes successfully with minimal parameters"""
+        env = os.environ.copy()
+        env['PYTHONPATH'] = str(Path(__file__).parent.parent.parent.parent)
+        
         result = subprocess.run(
             [
                 sys.executable, "main_rel.py",
@@ -27,7 +31,8 @@ class TestTraining:
             capture_output=True,
             text=True,
             timeout=300,
-            cwd=self.test_dir
+            cwd=self.test_dir,
+            env=env
         )
         
         assert result.returncode == 0, f"Training failed with error: {result.stderr}"
@@ -41,6 +46,9 @@ class TestTraining:
 
     def test_training_with_constraint(self):
         """Test training with logical constraints"""
+        env = os.environ.copy()
+        env['PYTHONPATH'] = str(Path(__file__).parent.parent.parent.parent)
+        
         result = subprocess.run(
             [
                 sys.executable, "main_rel.py",
@@ -53,13 +61,17 @@ class TestTraining:
             capture_output=True,
             text=True,
             timeout=300,
-            cwd=self.test_dir
+            cwd=self.test_dir,
+            env=env
         )
         
         assert result.returncode == 0, f"Training with constraint failed: {result.stderr}"
 
     def test_model_save_and_load(self):
         """Test model persistence"""
+        env = os.environ.copy()
+        env['PYTHONPATH'] = str(Path(__file__).parent.parent.parent.parent)
+        
         # Train and save
         result_train = subprocess.run(
             [
@@ -73,7 +85,8 @@ class TestTraining:
             capture_output=True,
             text=True,
             timeout=300,
-            cwd=self.test_dir
+            cwd=self.test_dir,
+            env=env
         )
         
         assert result_train.returncode == 0, f"Training failed: {result_train.stderr}"
@@ -90,7 +103,8 @@ class TestTraining:
             capture_output=True,
             text=True,
             timeout=300,
-            cwd=self.test_dir
+            cwd=self.test_dir,
+            env=env
         )
         
         assert result_eval.returncode == 0, f"Evaluation failed: {result_eval.stderr}"

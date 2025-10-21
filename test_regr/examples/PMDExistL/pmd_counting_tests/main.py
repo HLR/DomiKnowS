@@ -19,7 +19,6 @@ from utils import TestTrainLearner, return_contain, create_dataset, evaluate_mod
 import traceback
 torch.autograd.set_detect_anomaly(True)
 
-# CI-friendly: disable logging when running in CI environment
 is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
 if is_ci:
     setProductionLogMode(True)
@@ -55,7 +54,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def setup_graph(args, a, b, a_contain_b, b_answer, device: str = "cpu") -> None:
-    a["index"] = ReaderSensor(keyword="a")  # if these accept device=..., pass device=device
+    a["index"] = ReaderSensor(keyword="a")
     b["index"] = ReaderSensor(keyword="b")
     b["temp_answer"] = ReaderSensor(keyword="label")
     b[a_contain_b] = EdgeSensor(b["index"], a["index"], relation=a_contain_b, forward=return_contain)
@@ -70,13 +69,12 @@ def setup_graph(args, a, b, a_contain_b, b_answer, device: str = "cpu") -> None:
     return model
 
 def _run_answer_module(mod, x):
-    # x: [M, N] float tensor on the right device
     with torch.no_grad():
         try:
-            out = mod(x)                 # works if forward(self, x)
+            out = mod(x)
         except TypeError:
-            out = mod(None, x)           # works if forward(self, _, x)
-    if isinstance(out, tuple):            # some modules return (logits, extra)
+            out = mod(None, x)
+    if isinstance(out, tuple):
         out = out[0]
     return out
 
@@ -98,8 +96,8 @@ def main(args: argparse.Namespace):
 
     answer_module = setup_graph(args, a, b, a_contain_b, b_answer, device=device)
     
-    train_infer = ['local/softmax']   # differentiable
-    eval_infer  = ['local/argmax']    # discrete for evaluation
+    train_infer = ['local/softmax']
+    eval_infer  = ['local/argmax']
 
     if args.model == "sampling":
         program = SampleLossProgram(
@@ -108,7 +106,7 @@ def main(args: argparse.Namespace):
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             sample=True, 
             sampleSize=args.sample_size, 
-            sampleGlobalLoss=True, # original was False
+            sampleGlobalLoss=True,
             beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
     else:
@@ -119,22 +117,19 @@ def main(args: argparse.Namespace):
             beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
 
-    # --- Decide warm-up epochs based on labels vs target ---
     labels = dataset[0]['label']
     num_ones = sum(labels)
     M = len(labels)
-    # If labels are all 1 but we’re targeting 0 (or vice versa), skip warmup
+    
     warmup_epochs = 0
     if not ((args.expected_value == 0 and num_ones == M) or (args.expected_value == 1 and num_ones == 0)):
-        warmup_epochs = 2  # only warm up when labels don’t fully contradict the target
+        warmup_epochs = 2
 
     expected_value = args.expected_value
 
-    # ---------------- Warmup train (soft) ----------------
     if warmup_epochs > 0:
         train_model(program, dataset, num_epochs=warmup_epochs)
     
-    # ---- Eval baseline (discrete) ----
     program.inferTypes = eval_infer
     expected_value = args.expected_value
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
@@ -144,7 +139,6 @@ def main(args: argparse.Namespace):
 
     w_before = flat_params(answer_module)
     
-    # ---- Constraint-only phase (soft) ----
     program.inferTypes = train_infer
     train_model(program, dataset, args.epoch, constr_loss_only=True)
     
@@ -159,27 +153,24 @@ def main(args: argparse.Namespace):
         import torch
         s = 0.0
         for item in dataset:
-            x = torch.as_tensor(item["b"], dtype=torch.float32, device=device)  # [M,N]
-            logits = _run_answer_module(module, x)                               # your wrapper
-            p = torch.softmax(logits, dim=-1)[:, 0]                              # prob of "zero"
+            x = torch.as_tensor(item["b"], dtype=torch.float32, device=device)
+            logits = _run_answer_module(module, x)
+            p = torch.softmax(logits, dim=-1)[:, 0]
             s += p.sum().item()
         return s
 
     print("soft sum zero (before):", soft_count_zero(answer_module, dataset, device))
-    # constraint-only training...
     print("soft sum zero (after):", soft_count_zero(answer_module, dataset, device))
 
-
-    # ---- Final eval (discrete) ----
     program.inferTypes = eval_infer
     actual_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
 
     with torch.no_grad():
         expected = args.expected_value
         for di, item in enumerate(dataset):
-            x = torch.as_tensor(item["b"], device=device)           # shape [M, N]
-            logits = _run_answer_module(answer_module, x)           # shape [M, C]
-            preds = logits.argmax(dim=-1).tolist()                  # [M]
+            x = torch.as_tensor(item["b"], device=device)
+            logits = _run_answer_module(answer_module, x)
+            preds = logits.argmax(dim=-1).tolist()
             idx_expected = [i for i, p in enumerate(preds) if p == expected]
             idx_other    = [i for i, p in enumerate(preds) if p != expected]
             print(f"[data {di}] preds={preds}")

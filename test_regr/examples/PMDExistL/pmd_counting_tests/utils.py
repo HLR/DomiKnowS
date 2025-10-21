@@ -19,6 +19,7 @@ class TestTrainLearner(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(input_size, input_size),
+            nn.ReLU(),
             nn.Linear(input_size, 2)
         )
 
@@ -46,16 +47,15 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
     program.cmodel.reset()
     program.model.mode(Mode.TRAIN)
 
-    # Safer optimizers
-    opt = torch.optim.AdamW(program.model.parameters(), lr=1e-4, weight_decay=1e-4)
-    copt = torch.optim.AdamW(program.cmodel.parameters(), lr=1e-4, weight_decay=1e-4)
+    # Higher learning rates for constraint-only phase
+    lr = 1e-3 if constr_loss_only else 1e-4
+    opt = torch.optim.AdamW(program.model.parameters(), lr=lr, weight_decay=1e-5)
+    copt = torch.optim.AdamW(program.cmodel.parameters(), lr=lr, weight_decay=1e-5)
 
-    # Cosine decay over epochs (simple, epoch-level step)
     msched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=num_epochs)
     csched = torch.optim.lr_scheduler.CosineAnnealingLR(copt, T_max=num_epochs)
 
-    # Small, optional gradient accumulation (helps when batch_size=1)
-    ACCUM_STEPS = 8  # set to 1 to disable
+    ACCUM_STEPS = 4
 
     for _ in tqdm(range(num_epochs), desc="Training with PMD"):
         opt.zero_grad(set_to_none=True)
@@ -65,44 +65,31 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
             mloss, _, *output = program.model(data)
             closs, *_ = program.cmodel(output[1])
 
-            # Match your previous semantics:
-            # - constr_loss_only=True  -> use ONLY constraint loss
-            # - constr_loss_only=False -> use ONLY model loss
             if constr_loss_only:
-                loss = (closs if torch.is_tensor(closs) else 0.0)
-                if not torch.is_tensor(loss):
-                    # nothing to backprop; skip step
+                # Use constraint loss to update model parameters
+                loss = closs if torch.is_tensor(closs) else None
+                if loss is None or not torch.isfinite(loss):
                     continue
+                
+                # Scale up constraint loss for stronger signal
+                loss = loss * 10.0
             else:
                 loss = mloss
+                if not torch.isfinite(loss):
+                    continue
 
-            # Robustness: skip bad/NaN/inf losses
-            if not torch.isfinite(loss):
-                print("[WARN] non-finite loss encountered; skipping step.")
-                opt.zero_grad(set_to_none=True)
-                copt.zero_grad(set_to_none=True)
-                continue
-
-            # Backprop (accumulated)
             (loss / ACCUM_STEPS).backward()
 
             if step % ACCUM_STEPS == 0:
-                # Clip to stabilize
-                torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=1.0)
-                torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=2.0)
+                torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=2.0)
 
                 if constr_loss_only:
-                    # Check if model params actually have gradients from constraint loss
-                    has_model_grads = any(
-                        p.grad is not None and p.grad.abs().sum() > 0 
-                        for p in program.model.parameters() if p.requires_grad
-                    )
-                    if has_model_grads:
-                        opt.step()
+                    # Always step both optimizers in constraint phase
+                    opt.step()
                     copt.step()
                 else:
                     opt.step()
-                    # Only step copt if we're doing dual updates
                     has_cmodel_grads = any(
                         p.grad is not None and p.grad.abs().sum() > 0 
                         for p in program.cmodel.parameters() if p.requires_grad
@@ -113,7 +100,6 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                 opt.zero_grad(set_to_none=True)
                 copt.zero_grad(set_to_none=True)
 
-        # End of epoch: step schedulers
         msched.step()
         csched.step()
 

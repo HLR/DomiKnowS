@@ -59,7 +59,6 @@ def test_over_counting_lukas():
 def test_over_counting_product():
     run_test(["--epochs", "1", "--train_portion", "over_counting_YN", "--counting_tnorm", "P"])
 
-@pytest.mark.skip(reason="Ignoring this test")
 def test_over_counting_simple_product():
     run_test(["--epochs", "1", "--train_portion", "over_counting_YN", "--counting_tnorm", "SP"])
 
