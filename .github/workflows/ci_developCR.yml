@@ -79,7 +79,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-cpu
-          path: /tmp/test_results_test-cpu.txt
+          path: |
+            /tmp/test_results_test-cpu.txt
+            /tmp/test_outputs_test-cpu/
           retention-days: 1
 
   test-gpu:
@@ -127,7 +129,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-gpu
-          path: /tmp/test_results_test-gpu.txt
+          path: |
+            /tmp/test_results_test-gpu.txt
+            /tmp/test_outputs_test-gpu/
           retention-days: 1
 
   report:

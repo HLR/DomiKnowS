@@ -26,8 +26,10 @@ declare -A FAILED_TESTS
 declare -A TEST_OUTPUTS
 declare -A SKIPPED_TESTS
 
-# Create results file with runner-specific name
+# Create results file and detailed output directory
 RESULTS_FILE="/tmp/test_results_${RUNNER_ID}.txt"
+OUTPUT_DIR="/tmp/test_outputs_${RUNNER_ID}"
+mkdir -p "$OUTPUT_DIR"
 echo "" > "$RESULTS_FILE"
 
 # Run tests from specified subfolders
@@ -37,12 +39,16 @@ for subfolder in "${TEST_LIST[@]}"; do
   echo "🔍 DEBUGGING: Processing $subfolder"
   echo "   Full path: $test_path"
   
+  # Sanitize subfolder name for filename
+  safe_name=$(echo "$subfolder" | tr '/' '_')
+  output_file="$OUTPUT_DIR/${safe_name}.log"
+  
   # Check if directory exists
   if [ -d "$test_path" ]; then
     echo "   ✅ Directory exists"
     
     # List all files in the directory for debugging
-    echo "   📁 Directory contents:"
+    echo "   📂 Directory contents:"
     ls -la "$test_path" || echo "   ❌ Failed to list directory contents"
     
     # Check if there are any test files in the directory
@@ -55,7 +61,7 @@ for subfolder in "${TEST_LIST[@]}"; do
     fi
     
     if [ $test_files_count -gt 0 ]; then
-      echo "   📝 Found $test_files_count test file(s):"
+      echo "   🔍 Found $test_files_count test file(s):"
       echo "$test_files"
     else
       echo "   ⚠️  No test files found matching patterns test_*.py or *_test.py"
@@ -64,34 +70,35 @@ for subfolder in "${TEST_LIST[@]}"; do
       py_files=$(find "$test_path" -name "*.py" 2>/dev/null)
       if [ -n "$py_files" ]; then
         py_files_count=$(echo "$py_files" | wc -l)
-        echo "   📝 Found $py_files_count Python file(s) (but not matching test patterns):"
+        echo "   🔍 Found $py_files_count Python file(s) (but not matching test patterns):"
         echo "$py_files"
       else
         py_files_count=0
-        echo "   📝 No Python files found at all"
+        echo "   🔍 No Python files found at all"
       fi
     fi
     
     echo "   🧪 Running pytest..."
     echo "   Command: uv run pytest -v --tb=short --no-header \"$test_path\""
     
-    # Capture both stdout and stderr, with detailed pytest output
-    test_output=$(uv run pytest -v --tb=short --no-header "$test_path" 2>&1)
+    # Capture both stdout and stderr to file
+    uv run pytest -v --tb=short --no-header "$test_path" > "$output_file" 2>&1
     test_exit_code=$?
     
     echo "   📊 Pytest exit code: $test_exit_code"
-    echo "   📄 Pytest output length: $(echo "$test_output" | wc -l) lines"
+    echo "   📄 Full output saved to: $output_file"
+    echo "   📄 Output length: $(wc -l < "$output_file") lines"
     echo "   📄 First few lines of pytest output:"
-    echo "$test_output" | head -5
+    head -5 "$output_file"
     
     if [ $test_exit_code -eq 5 ]; then
       # Exit code 5: No tests collected - treat as warning, not failure
       echo "   ⚠️  Exit code 5: No tests collected"
       if [ $test_files_count -eq 0 ]; then
-        echo "   📝 Reason: No test files found in directory"
+        echo "   🔍 Reason: No test files found in directory"
         skip_reason="No test files found (*.py files matching test_* or *_test pattern)"
       else
-        echo "   📝 Reason: Test files exist but no tests discovered by pytest"
+        echo "   🔍 Reason: Test files exist but no tests discovered by pytest"
         skip_reason="No tests collected - test files exist but pytest couldn't discover any tests"
       fi
       SKIPPED_TESTS["$subfolder"]="$skip_reason"
@@ -102,20 +109,19 @@ for subfolder in "${TEST_LIST[@]}"; do
       OVERALL_RESULT=1
       
       # Extract failure summary from pytest output
-      failure_summary=$(echo "$test_output" | grep -A 10 "short test summary info" | tail -n +2 | head -20)
+      failure_summary=$(grep -A 10 "short test summary info" "$output_file" | tail -n +2 | head -20)
       if [ -z "$failure_summary" ]; then
         # Fallback: look for FAILED lines
-        failure_summary=$(echo "$test_output" | grep "FAILED\|ERROR\|Exception:" | head -10)
+        failure_summary=$(grep "FAILED\|ERROR\|Exception:" "$output_file" | head -10)
       fi
       if [ -z "$failure_summary" ]; then
         # Last resort: get last few lines of output
-        failure_summary=$(echo "$test_output" | tail -10)
+        failure_summary=$(tail -10 "$output_file")
       fi
       
       FAILED_TESTS["$subfolder"]="$failure_summary"
-      TEST_OUTPUTS["$subfolder"]="$test_output"
       echo "FAIL:$subfolder:$failure_summary" >> "$RESULTS_FILE"
-      echo "   📝 Failure details preview:"
+      echo "   🔍 Failure details preview:"
       echo "$failure_summary" | head -3
     else
       echo "   ✅ Exit code 0: Tests PASSED"
@@ -125,6 +131,7 @@ for subfolder in "${TEST_LIST[@]}"; do
     echo "   ❌ Directory does not exist: $test_path"
     SKIPPED_TESTS["$subfolder"]="Directory not found"
     echo "SKIP:$subfolder:Directory not found" >> "$RESULTS_FILE"
+    echo "Directory not found: $test_path" > "$output_file"
   fi
   echo "============================================"
 done
