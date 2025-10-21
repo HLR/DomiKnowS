@@ -81,7 +81,7 @@ jobs:
           name: test-results-cpu
           path: |
             /tmp/test_results_test-cpu.txt
-            /tmp/test_outputs_test-cpu/
+            /tmp/test_failures_test-cpu.txt
           retention-days: 1
 
   test-gpu:
@@ -131,7 +131,7 @@ jobs:
           name: test-results-gpu
           path: |
             /tmp/test_results_test-gpu.txt
-            /tmp/test_outputs_test-gpu/
+            /tmp/test_failures_test-gpu.txt
           retention-days: 1
 
   report:

@@ -26,11 +26,12 @@ declare -A FAILED_TESTS
 declare -A TEST_OUTPUTS
 declare -A SKIPPED_TESTS
 
-# Create results file and detailed output directory
+# Create results file and failed tests output file
 RESULTS_FILE="/tmp/test_results_${RUNNER_ID}.txt"
-OUTPUT_DIR="/tmp/test_outputs_${RUNNER_ID}"
-mkdir -p "$OUTPUT_DIR"
+FAILED_OUTPUT_FILE="/tmp/test_failures_${RUNNER_ID}.txt"
 echo "" > "$RESULTS_FILE"
+echo "=== FAILED TEST OUTPUTS FOR ${RUNNER_ID} ===" > "$FAILED_OUTPUT_FILE"
+echo "" >> "$FAILED_OUTPUT_FILE"
 
 # Run tests from specified subfolders
 for subfolder in "${TEST_LIST[@]}"; do
@@ -38,10 +39,6 @@ for subfolder in "${TEST_LIST[@]}"; do
   echo "============================================"
   echo "🔍 DEBUGGING: Processing $subfolder"
   echo "   Full path: $test_path"
-  
-  # Sanitize subfolder name for filename
-  safe_name=$(echo "$subfolder" | tr '/' '_')
-  output_file="$OUTPUT_DIR/${safe_name}.log"
   
   # Check if directory exists
   if [ -d "$test_path" ]; then
@@ -81,15 +78,14 @@ for subfolder in "${TEST_LIST[@]}"; do
     echo "   🧪 Running pytest..."
     echo "   Command: uv run pytest -v --tb=short --no-header \"$test_path\""
     
-    # Capture both stdout and stderr to file
-    uv run pytest -v --tb=short --no-header "$test_path" > "$output_file" 2>&1
+    # Capture both stdout and stderr
+    test_output=$(uv run pytest -v --tb=short --no-header "$test_path" 2>&1)
     test_exit_code=$?
     
     echo "   📊 Pytest exit code: $test_exit_code"
-    echo "   📄 Full output saved to: $output_file"
-    echo "   📄 Output length: $(wc -l < "$output_file") lines"
+    echo "   📄 Pytest output length: $(echo "$test_output" | wc -l) lines"
     echo "   📄 First few lines of pytest output:"
-    head -5 "$output_file"
+    echo "$test_output" | head -5
     
     if [ $test_exit_code -eq 5 ]; then
       # Exit code 5: No tests collected - treat as warning, not failure
@@ -109,20 +105,31 @@ for subfolder in "${TEST_LIST[@]}"; do
       OVERALL_RESULT=1
       
       # Extract failure summary from pytest output
-      failure_summary=$(grep -A 10 "short test summary info" "$output_file" | tail -n +2 | head -20)
+      failure_summary=$(echo "$test_output" | grep -A 10 "short test summary info" | tail -n +2 | head -20)
       if [ -z "$failure_summary" ]; then
         # Fallback: look for FAILED lines
-        failure_summary=$(grep "FAILED\|ERROR\|Exception:" "$output_file" | head -10)
+        failure_summary=$(echo "$test_output" | grep "FAILED\|ERROR\|Exception:" | head -10)
       fi
       if [ -z "$failure_summary" ]; then
         # Last resort: get last few lines of output
-        failure_summary=$(tail -10 "$output_file")
+        failure_summary=$(echo "$test_output" | tail -10)
       fi
       
       FAILED_TESTS["$subfolder"]="$failure_summary"
       echo "FAIL:$subfolder:$failure_summary" >> "$RESULTS_FILE"
       echo "   🔍 Failure details preview:"
       echo "$failure_summary" | head -3
+      
+      # Append full test output to failed output file
+      echo "============================================" >> "$FAILED_OUTPUT_FILE"
+      echo "FAILED TEST: $subfolder" >> "$FAILED_OUTPUT_FILE"
+      echo "Test path: $test_path" >> "$FAILED_OUTPUT_FILE"
+      echo "Exit code: $test_exit_code" >> "$FAILED_OUTPUT_FILE"
+      echo "--------------------------------------------" >> "$FAILED_OUTPUT_FILE"
+      echo "$test_output" >> "$FAILED_OUTPUT_FILE"
+      echo "" >> "$FAILED_OUTPUT_FILE"
+      echo "============================================" >> "$FAILED_OUTPUT_FILE"
+      echo "" >> "$FAILED_OUTPUT_FILE"
     else
       echo "   ✅ Exit code 0: Tests PASSED"
       echo "PASS:$subfolder:" >> "$RESULTS_FILE"
@@ -131,7 +138,6 @@ for subfolder in "${TEST_LIST[@]}"; do
     echo "   ❌ Directory does not exist: $test_path"
     SKIPPED_TESTS["$subfolder"]="Directory not found"
     echo "SKIP:$subfolder:Directory not found" >> "$RESULTS_FILE"
-    echo "Directory not found: $test_path" > "$output_file"
   fi
   echo "============================================"
 done
@@ -139,6 +145,14 @@ done
 # Save overall result and runner ID
 echo "OVERALL_RESULT=$OVERALL_RESULT" >> "$RESULTS_FILE"
 echo "RUNNER_ID=$RUNNER_ID" >> "$RESULTS_FILE"
+
+# Add summary to failed output file
+if [ $OVERALL_RESULT -eq 0 ]; then
+  echo "=== ALL TESTS PASSED ===" >> "$FAILED_OUTPUT_FILE"
+else
+  echo "=== SUMMARY ===" >> "$FAILED_OUTPUT_FILE"
+  echo "Total failed tests: ${#FAILED_TESTS[@]}" >> "$FAILED_OUTPUT_FILE"
+fi
 
 # Always exit 0 during debugging phase
 echo "🚧 DEBUG MODE: CI set to always pass (not failing on test failures)"
