@@ -26,8 +26,13 @@ jobs:
 
       - name: Install spaCy model
         run: |
-          uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
+          uv run python -m spacy download en_core_web_sm
+          uv run python -m spacy download en_core_web_lg
           python -m spacy validate || true
+
+      - name: set USE_SUBPROCESS true
+        run: |
+          echo "USE_SUBPROCESS=true" >> $GITHUB_ENV
 
       # --- Quality gate: formatting & types ---
       - name: Check formatting (black)
@@ -44,6 +49,7 @@ jobs:
           set +e
           uv run mypy --install-types --non-interactive .
 
+      # --- Run CPU tests ---
       - name: Run CPU tests
         run: |
           TEST_LIST=(
@@ -101,6 +107,10 @@ jobs:
           uv run python -m spacy download en_core_web_sm
           uv run python -m spacy download en_core_web_lg
           python -m spacy validate || true
+
+      - name: set USE_SUBPROCESS true
+        run: |
+          echo "USE_SUBPROCESS=true" >> $GITHUB_ENV
 
       - name: Run GPU tests
         run: |
