@@ -1,9 +1,15 @@
 import pytest
 import torch
 import numpy as np
+import sys
+from pathlib import Path
+
+# Add the parent directory to the Python path to import local modules
+sys.path.insert(0, str(Path(__file__).parent))
+
 from main import parse_arguments, main
 from graph import get_graph
-from utils import create_dataset, setup_graph, train_model, evaluate_model
+from utils import create_dataset, train_model, evaluate_model
 from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.program.metric import MacroAverageTracker
