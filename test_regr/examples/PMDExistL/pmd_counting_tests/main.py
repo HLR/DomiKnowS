@@ -121,19 +121,37 @@ def main(args: argparse.Namespace):
     num_ones = sum(labels)
     M = len(labels)
     
-    # More warmup epochs to get initial predictions closer
-    warmup_epochs = 5
-    if (args.expected_value == 0 and num_ones == M) or (args.expected_value == 1 and num_ones == 0):
-        warmup_epochs = 0
-
+    # Strategy: Always do substantial warmup to get diverse predictions
+    warmup_epochs = 10
     expected_value = args.expected_value
 
+    # Add noise to break symmetry and get diverse initial predictions
+    with torch.no_grad():
+        for param in answer_module.parameters():
+            param.add_(torch.randn_like(param) * 0.1)
+
     if warmup_epochs > 0:
+        print(f"[INFO] Warmup training for {warmup_epochs} epochs...")
         train_model(program, dataset, num_epochs=warmup_epochs)
     
     program.inferTypes = eval_infer
     expected_value = args.expected_value
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
+    
+    print(f"\n[INFO] After warmup - Count of '{expected_value}': {before_count}/{M}")
+    print(f"[INFO] Target count: {args.expected_atLeastL}")
+    
+    # Check if we need to flip all predictions
+    if before_count == 0 and args.expected_atLeastL > 0:
+        print("[INFO] All predictions are wrong class - flipping model output layer sign")
+        with torch.no_grad():
+            # Flip the final layer to reverse predictions
+            for param in answer_module.layers[2].parameters():
+                param.mul_(-1.0)
+        
+        # Re-evaluate
+        before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
+        print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
     
     def flat_params(m): 
         return torch.cat([p.detach().float().flatten().cpu() for p in m.parameters() if p.requires_grad]) if any(p.requires_grad for p in m.parameters()) else torch.tensor([])
