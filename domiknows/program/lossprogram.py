@@ -1,5 +1,6 @@
 import logging
 import torch
+import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 
@@ -33,6 +34,32 @@ def reverse_sign_grad(parameters, factor=-1.):
     for parameter in parameters:
         if parameter.grad is not None:
             parameter.grad = factor * parameter.grad
+
+def gumbel_softmax(logits, temperature=1.0, hard=False, dim=-1):
+    """
+    Gumbel-Softmax sampling for differentiable discrete sampling.
+    
+    Args:
+        logits: [..., num_classes] unnormalized log probabilities
+        temperature: controls sharpness (lower = more discrete, higher = more smooth)
+        hard: if True, returns one-hot but backprops through soft (straight-through estimator)
+        dim: dimension to apply softmax
+    
+    Returns:
+        Sampled probabilities (soft or hard)
+    """
+    # Sample from Gumbel(0, 1)
+    gumbels = -torch.empty_like(logits).exponential_().log()
+    gumbels = (logits + gumbels) / temperature
+    y_soft = F.softmax(gumbels, dim=dim)
+    
+    if hard:
+        # Straight-through estimator: forward = one-hot, backward = soft
+        index = y_soft.max(dim, keepdim=True)[1]
+        y_hard = torch.zeros_like(logits).scatter_(dim, index, 1.0)
+        return y_hard - y_soft.detach() + y_soft
+    
+    return y_soft
 
 class LossProgram(LearningBasedProgram):
     DEFAULTCMODEL = PrimalDualModel
@@ -342,6 +369,83 @@ class PrimalDualProgram(LossProgram):
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
 
+class GumbelPrimalDualProgram(PrimalDualProgram):
+    """
+    Primal-Dual Program with Gumbel-Softmax support for better discrete optimization.
+    
+    Backward compatible: when use_gumbel=False or temperature=1.0, behaves like standard PMD.
+    """
+    
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1, 
+                 use_gumbel=False, 
+                 initial_temp=1.0, 
+                 final_temp=0.1, 
+                 anneal_start_epoch=0,
+                 anneal_epochs=None,
+                 **kwargs):
+        """
+        Args:
+            graph: Knowledge graph
+            Model: Model class
+            beta: Constraint weight
+            use_gumbel: If True, use Gumbel-Softmax instead of standard softmax
+            initial_temp: Starting temperature (1.0 = standard softmax)
+            final_temp: Ending temperature (0.1 = nearly discrete)
+            anneal_start_epoch: Epoch to start annealing (default: 0)
+            anneal_epochs: Number of epochs to anneal over (default: total epochs)
+            **kwargs: Other arguments passed to parent
+        """
+        super().__init__(graph, Model, beta=beta, **kwargs)
+        self.use_gumbel = use_gumbel
+        self.initial_temp = initial_temp
+        self.final_temp = final_temp
+        self.anneal_start_epoch = anneal_start_epoch
+        self.anneal_epochs = anneal_epochs
+        self.current_epoch = 0
+        self.current_temp = initial_temp
+        
+        if use_gumbel:
+            self.logger.info(f"[Gumbel] Enabled with temp: {initial_temp} → {final_temp}")
+    
+    def get_temperature(self):
+        """Compute current temperature with linear annealing."""
+        if not self.use_gumbel:
+            return 1.0
+        
+        if self.current_epoch < self.anneal_start_epoch:
+            return self.initial_temp
+        
+        if self.anneal_epochs is None:
+            return self.final_temp
+        
+        progress = (self.current_epoch - self.anneal_start_epoch) / self.anneal_epochs
+        progress = min(1.0, max(0.0, progress))
+        
+        return self.initial_temp - (self.initial_temp - self.final_temp) * progress
+    
+    def train(self, training_set, valid_set=None, test_set=None, 
+              num_epochs=None, **kwargs):
+        """Override train to set anneal_epochs if not provided."""
+        if self.use_gumbel and self.anneal_epochs is None and num_epochs is not None:
+            self.anneal_epochs = num_epochs
+            self.logger.info(f"[Gumbel] Auto-set anneal_epochs to {num_epochs}")
+        
+        return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
+    
+    def train_epoch(self, dataset, **kwargs):
+        """Override to update temperature each epoch."""
+        self.current_temp = self.get_temperature()
+        
+        if self.use_gumbel and self.current_epoch % 10 == 0:
+            self.logger.info(f"[Gumbel] Epoch {self.current_epoch}: temp={self.current_temp:.3f}")
+        
+        # Call parent's train_epoch
+        yield from super().train_epoch(dataset, **kwargs)
+        
+        self.current_epoch += 1
+
 class InferenceProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
@@ -389,7 +493,6 @@ class InferenceProgram(LossProgram):
             return None
 
         return acc / total
-
 
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
@@ -478,6 +581,70 @@ class SampleLossProgram(LossProgram):
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter    
+        
+class GumbelSampleLossProgram(SampleLossProgram):
+    """
+    Sample Loss Program with Gumbel-Softmax support.
+    
+    Backward compatible with standard SampleLossProgram.
+    """
+    
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model, beta=1,
+                 use_gumbel=False,
+                 initial_temp=1.0,
+                 final_temp=0.1,
+                 anneal_start_epoch=0,
+                 anneal_epochs=None,
+                 **kwargs):
+        super().__init__(graph, Model, beta=beta, **kwargs)
+        self.use_gumbel = use_gumbel
+        self.initial_temp = initial_temp
+        self.final_temp = final_temp
+        self.anneal_start_epoch = anneal_start_epoch
+        self.anneal_epochs = anneal_epochs
+        self.current_epoch = 0
+        self.current_temp = initial_temp
+        
+        if use_gumbel:
+            self.logger.info(f"[Gumbel] Enabled with temp: {initial_temp} → {final_temp}")
+    
+    def get_temperature(self):
+        """Compute current temperature with linear annealing."""
+        if not self.use_gumbel:
+            return 1.0
+        
+        if self.current_epoch < self.anneal_start_epoch:
+            return self.initial_temp
+        
+        if self.anneal_epochs is None:
+            return self.final_temp
+        
+        progress = (self.current_epoch - self.anneal_start_epoch) / self.anneal_epochs
+        progress = min(1.0, max(0.0, progress))
+        
+        return self.initial_temp - (self.initial_temp - self.final_temp) * progress
+    
+    def train(self, training_set, valid_set=None, test_set=None,
+              num_epochs=None, **kwargs):
+        """Override train to set anneal_epochs if not provided."""
+        if self.use_gumbel and self.anneal_epochs is None and num_epochs is not None:
+            self.anneal_epochs = num_epochs
+            self.logger.info(f"[Gumbel] Auto-set anneal_epochs to {num_epochs}")
+        
+        return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
+    
+    def train_epoch(self, dataset, **kwargs):
+        """Override to update temperature each epoch."""
+        self.current_temp = self.get_temperature()
+        
+        if self.use_gumbel and self.current_epoch % 10 == 0:
+            self.logger.info(f"[Gumbel] Epoch {self.current_epoch}: temp={self.current_temp:.3f}")
+        
+        yield from super().train_epoch(dataset, **kwargs)
+        
+        self.current_epoch += 1
         
 class GBIProgram(LossProgram):
     logger = logging.getLogger(__name__)

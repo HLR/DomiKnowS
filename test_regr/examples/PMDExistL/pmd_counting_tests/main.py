@@ -10,7 +10,7 @@ from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor import Sensor
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
-from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from domiknows.program.lossprogram import GumbelPrimalDualProgram, SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows import setProductionLogMode
 
@@ -110,11 +110,18 @@ def main(args: argparse.Namespace):
             beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
         )
     else:
-        program = PrimalDualProgram(
-            graph, SolverModel, poi=[a, b, b_answer],
+       program = GumbelPrimalDualProgram(
+            graph, SolverModel,
+            poi=[a, b, b_answer],
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+            use_gumbel=True,
+            initial_temp=0.1,  # Always sharp
+            final_temp=0.1,
+            beta=args.beta,
+            device=device,
+            tnorm="L",
+            counting_tnorm=args.counting_tnorm
         )
 
     labels = dataset[0]['label']

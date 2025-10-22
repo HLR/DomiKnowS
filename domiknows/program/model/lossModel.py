@@ -181,7 +181,6 @@ class LossModel(torch.nn.Module):
         # (*out, datanode, builder)
         return lmbd_loss, datanode, builder
 
-
 # The `PrimalDualModel` class is a subclass of `LossModel` that implements a primal-dual optimization
 # algorithm.
 class PrimalDualModel(LossModel):
@@ -229,7 +228,6 @@ class PrimalDualModel(LossModel):
             self.primalDualLogger.info("PrimalDualModel logger disabled due to production mode")
         else:
             self.primalDualLogger.info("=== PrimalDualModel Operations Logger Initialized ===")
-
 
 class InferenceModel(LossModel):
     logger = logging.getLogger(__name__)

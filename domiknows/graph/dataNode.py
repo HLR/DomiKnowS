@@ -1560,6 +1560,88 @@ class DataNode:
                     dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
                     dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
+    def inferGumbelLocal(self, temperature=1.0, hard=False):
+        """
+        Apply Gumbel-Softmax to local inference results for differentiable discrete sampling.
+        
+        This method modifies the local/softmax attributes in-place to use Gumbel-Softmax
+        instead of standard softmax, enabling better gradient flow for discrete decisions.
+        
+        Args:
+            temperature (float): Controls sharpness of distribution (lower = more discrete)
+            hard (bool): If True, use straight-through estimator (discrete forward, soft backward)
+        """
+        from torch.nn import functional as F
+        
+        conceptsRelations = self.collectConceptsAndRelations()
+        
+        for c in conceptsRelations:
+            cRoot = self.findRootConceptOrRelation(c[0])
+            
+            # Handle skeleton mode with tensor
+            if getDnSkeletonMode() and "variableSet" in self.attributes:
+                vKeyInVariableSet = cRoot.name + "/<" + c[0].name +">"
+                localSoftmaxKeyInVariableSet = vKeyInVariableSet + "/local/softmax"
+                
+                if self.hasAttribute(localSoftmaxKeyInVariableSet):
+                    # Already computed, apply Gumbel-Softmax
+                    logits = self.attributes["variableSet"][vKeyInVariableSet]
+                    
+                    if logits is None or not torch.is_tensor(logits):
+                        continue
+                    
+                    if not(isinstance(logits, torch.FloatTensor) or isinstance(logits, torch.cuda.FloatTensor)):
+                        logits = logits.float()
+                    
+                    # Apply Gumbel-Softmax
+                    gumbels = -torch.empty_like(logits).exponential_().log()
+                    gumbels = (logits + gumbels) / temperature
+                    y_soft = F.softmax(gumbels, dim=-1)
+                    
+                    if hard:
+                        # Straight-through estimator
+                        if y_soft.dim() > 1:
+                            index = y_soft.max(dim=1, keepdim=True)[1]
+                            y_hard = torch.zeros_like(logits).scatter_(1, index, 1.0)
+                        else:
+                            index = y_soft.max(dim=-1, keepdim=True)[1]
+                            y_hard = torch.zeros_like(logits).scatter_(-1, index, 1.0)
+                        y_soft = y_hard - y_soft.detach() + y_soft
+                    
+                    self.attributes["variableSet"][localSoftmaxKeyInVariableSet] = y_soft
+            else:
+                # Handle individual DataNodes
+                dns = self.findDatanodes(select=cRoot)
+                if not dns:
+                    continue
+                
+                keySoftmax = "<" + c[0].name + ">/local/softmax"
+                
+                for dn in dns:
+                    if dn.hasAttribute(keySoftmax):
+                        # Get the logits (pre-softmax values)
+                        logits = dn.getAttribute(c[0])
+                        
+                        if logits is None or not torch.is_tensor(logits):
+                            continue
+                        
+                        if not(isinstance(logits, torch.FloatTensor) or isinstance(logits, torch.cuda.FloatTensor)):
+                            logits = logits.float()
+                        
+                        # Apply Gumbel-Softmax
+                        gumbels = -torch.empty_like(logits).exponential_().log()
+                        gumbels = (logits + gumbels) / temperature
+                        y_soft = F.softmax(gumbels, dim=-1)
+                        
+                        if hard:
+                            # Straight-through estimator
+                            index = y_soft.max(dim=-1, keepdim=True)[1]
+                            y_hard = torch.zeros_like(logits).scatter_(-1, index, 1.0)
+                            y_soft = y_hard - y_soft.detach() + y_soft
+                        
+                        # Update the softmax attribute with Gumbel-Softmax result
+                        dn.attributes[keySoftmax] = y_soft.squeeze(0) if y_soft.dim() > 1 and y_soft.shape[0] == 1 else y_soft
+    
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
         """
         Infer local probabilities and information for given concepts and relations.
