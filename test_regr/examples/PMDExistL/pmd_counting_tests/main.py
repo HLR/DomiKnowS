@@ -121,9 +121,10 @@ def main(args: argparse.Namespace):
     num_ones = sum(labels)
     M = len(labels)
     
-    warmup_epochs = 0
-    if not ((args.expected_value == 0 and num_ones == M) or (args.expected_value == 1 and num_ones == 0)):
-        warmup_epochs = 2
+    # More warmup epochs to get initial predictions closer
+    warmup_epochs = 5
+    if (args.expected_value == 0 and num_ones == M) or (args.expected_value == 1 and num_ones == 0):
+        warmup_epochs = 0
 
     expected_value = args.expected_value
 
@@ -139,8 +140,35 @@ def main(args: argparse.Namespace):
 
     w_before = flat_params(answer_module)
     
-    program.inferTypes = train_infer
+    # Check constraint loss before training
+    print("\n[DEBUG] Checking constraint loss before constraint training...")
+    program.model.eval()
+    program.cmodel.eval()
+    with torch.no_grad():
+        for data in dataset:
+            _, _, *output = program.model(data)
+            closs, *_ = program.cmodel(output[1])
+            if torch.is_tensor(closs):
+                print(f"[DEBUG] Initial constraint loss: {closs.item():.6f}")
+            else:
+                print(f"[DEBUG] Initial constraint loss is not a tensor: {closs}")
+    
+    program.model.train()
+    program.cmodel.train()
     train_model(program, dataset, args.epoch, constr_loss_only=True)
+    
+    # Check constraint loss after training
+    print("\n[DEBUG] Checking constraint loss after constraint training...")
+    program.model.eval()
+    program.cmodel.eval()
+    with torch.no_grad():
+        for data in dataset:
+            _, _, *output = program.model(data)
+            closs, *_ = program.cmodel(output[1])
+            if torch.is_tensor(closs):
+                print(f"[DEBUG] Final constraint loss: {closs.item():.6f}")
+            else:
+                print(f"[DEBUG] Final constraint loss is not a tensor: {closs}")
     
     w_after = flat_params(answer_module)
     print("[DEBUG] Delta-norm(weights):", torch.norm(w_after - w_before).item())

@@ -47,61 +47,96 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
     program.cmodel.reset()
     program.model.mode(Mode.TRAIN)
 
-    # Higher learning rates for constraint-only phase
-    lr = 1e-3 if constr_loss_only else 1e-4
-    opt = torch.optim.AdamW(program.model.parameters(), lr=lr, weight_decay=1e-5)
-    copt = torch.optim.AdamW(program.cmodel.parameters(), lr=lr, weight_decay=1e-5)
+    # Much higher learning rates for constraint-only phase
+    lr = 5e-3 if constr_loss_only else 1e-4
+    opt = torch.optim.SGD(program.model.parameters(), lr=lr, momentum=0.9)
+    copt = torch.optim.SGD(program.cmodel.parameters(), lr=lr, momentum=0.9)
 
-    msched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=num_epochs)
-    csched = torch.optim.lr_scheduler.CosineAnnealingLR(copt, T_max=num_epochs)
+    constraint_loss_zero_count = 0
+    no_gradient_count = 0
 
-    ACCUM_STEPS = 4
-
-    for _ in tqdm(range(num_epochs), desc="Training with PMD"):
-        opt.zero_grad(set_to_none=True)
-        copt.zero_grad(set_to_none=True)
-
-        for step, data in enumerate(dataset, start=1):
+    for epoch in tqdm(range(num_epochs), desc="Training with PMD"):
+        epoch_loss = 0.0
+        num_steps = 0
+        
+        for data in dataset:
+            opt.zero_grad(set_to_none=True)
+            copt.zero_grad(set_to_none=True)
+            
             mloss, _, *output = program.model(data)
             closs, *_ = program.cmodel(output[1])
 
             if constr_loss_only:
                 # Use constraint loss to update model parameters
                 loss = closs if torch.is_tensor(closs) else None
-                if loss is None or not torch.isfinite(loss):
+                
+                # Check if constraint loss exists and is valid
+                if loss is None:
+                    if epoch == 0:
+                        print("[WARN] Constraint loss is None - constraints may not be active")
                     continue
                 
-                # Scale up constraint loss for stronger signal
-                loss = loss * 10.0
+                if not torch.isfinite(loss):
+                    if epoch == 0:
+                        print(f"[WARN] Non-finite constraint loss: {loss.item()}")
+                    continue
+                
+                # Check if constraint loss is non-zero
+                if abs(loss.item()) < 1e-8:
+                    constraint_loss_zero_count += 1
+                    if constraint_loss_zero_count == 1:
+                        print(f"[WARN] Constraint loss is near zero: {loss.item()} - constraints may already be satisfied or not properly configured")
+                    continue
+                
+                # Very strong scaling for constraint loss
+                loss = loss * 50.0
             else:
                 loss = mloss
                 if not torch.isfinite(loss):
                     continue
 
-            (loss / ACCUM_STEPS).backward()
-
-            if step % ACCUM_STEPS == 0:
-                torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=2.0)
-                torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=2.0)
-
-                if constr_loss_only:
-                    # Always step both optimizers in constraint phase
-                    opt.step()
-                    copt.step()
-                else:
-                    opt.step()
-                    has_cmodel_grads = any(
-                        p.grad is not None and p.grad.abs().sum() > 0 
-                        for p in program.cmodel.parameters() if p.requires_grad
-                    )
-                    if has_cmodel_grads:
-                        copt.step()
+            loss.backward()
+            
+            # Check if gradients were actually computed
+            if constr_loss_only:
+                has_model_grads = any(
+                    p.grad is not None and p.grad.abs().sum() > 1e-8
+                    for p in program.model.parameters() if p.requires_grad
+                )
                 
-                opt.zero_grad(set_to_none=True)
-                copt.zero_grad(set_to_none=True)
+                if not has_model_grads:
+                    no_gradient_count += 1
+                    if no_gradient_count == 1:
+                        print("[WARN] No gradients flowing to model parameters from constraint loss")
+                        print("      This means constraints are not connected to model outputs")
+                    continue
+            
+            # Aggressive gradient clipping
+            torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=5.0)
+            torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=5.0)
 
-        msched.step()
-        csched.step()
+            if constr_loss_only:
+                # Always step both optimizers in constraint phase
+                opt.step()
+                copt.step()
+            else:
+                opt.step()
+                has_cmodel_grads = any(
+                    p.grad is not None and p.grad.abs().sum() > 0 
+                    for p in program.cmodel.parameters() if p.requires_grad
+                )
+                if has_cmodel_grads:
+                    copt.step()
+            
+            epoch_loss += loss.item()
+            num_steps += 1
+    
+    # Summary at end of training
+    if constr_loss_only:
+        if constraint_loss_zero_count > 0:
+            print(f"[INFO] Constraint loss was zero for {constraint_loss_zero_count}/{num_epochs * len(dataset)} steps")
+        if no_gradient_count > 0:
+            print(f"[INFO] No gradients to model for {no_gradient_count}/{num_epochs * len(dataset)} steps")
 
 
 def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_answer: Any) -> Dict[int, int]:
