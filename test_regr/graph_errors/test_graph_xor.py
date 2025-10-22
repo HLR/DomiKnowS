@@ -22,7 +22,7 @@ with Graph('email_spam_consistency') as graph:
 
     xorL(m1.spam, m2.not_spam)
 
-def random_cifar10_instance():
+def random_emailspam_instance():
     email = [1]
     m1 = [random.randint(0,1)]
     m2 = [random.randint(0, 1)]
@@ -49,7 +49,7 @@ class DummyLearner(TorchLearner):
         result[torch.arange(len(x)), random_indices] = 1
         return result
 
-dataset = [random_cifar10_instance() for _ in range(1)]
+dataset = [random_emailspam_instance() for _ in range(1)]
 
 email['email_id'] = ReaderSensor(keyword='email_id')
 m1['m1_id'] = ReaderSensor(keyword='m1_id')
