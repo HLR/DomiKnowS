@@ -522,24 +522,6 @@ class SolverModel(PoiModel):
         lose, metric = super().populate(builder, datanode = datanode, run=False)
         
         return datanode, lose, metric
-    
-def _infer_gumbel_local(self, datanode):
-        """
-        Helper method to apply Gumbel-Softmax for local inference in model classes.
-        
-        This should be called from the inference() method when use_gumbel=True.
-        
-        Args:
-            datanode: The DataNode to apply Gumbel-Softmax inference to
-        """
-        # First perform standard local inference to get the logits
-        datanode.inferLocal(keys=("softmax",))
-        
-        # Then apply Gumbel-Softmax transformation
-        datanode.inferGumbelLocal(
-            temperature=self.temperature,
-            hard=self.hard_gumbel
-        )
         
 class GumbelSolverModel(SolverModel):
     """
@@ -571,6 +553,37 @@ class GumbelSolverModel(SolverModel):
         """Update Gumbel-Softmax temperature (can be called during training)."""
         self.temperature = temperature
     
+    def _infer_gumbel_local(self, datanode):
+        """
+        Apply Gumbel-Softmax to local inference results.
+        
+        This method should be called after standard local inference to replace
+        softmax probabilities with Gumbel-Softmax samples.
+        """
+        # First perform standard local inference to get the logits
+        datanode.inferLocal(keys=("softmax",))
+        
+        # Then apply Gumbel-Softmax transformation to each property
+        for prop in self.poi:
+            for sensor in prop.find(TorchSensor):
+                if not sensor.label:  # Only apply to predictions, not labels
+                    # Get the current inference results
+                    # This is a simplified version - you may need to adapt based on your datanode structure
+                    try:
+                        logits = sensor.get_logits(datanode)  # You'll need to implement this
+                        if logits is not None:
+                            # Apply Gumbel-Softmax
+                            gumbel_probs = gumbel_softmax(
+                                logits, 
+                                temperature=self.temperature,
+                                hard=self.hard_gumbel
+                            )
+                            # Store back to datanode
+                            sensor.set_probabilities(datanode, gumbel_probs)  # You'll need to implement this
+                    except AttributeError:
+                        # If methods don't exist, skip this sensor
+                        pass
+    
     def inference(self, builder):
         """
         Override inference to inject Gumbel-Softmax when use_gumbel=True.
@@ -599,7 +612,13 @@ class GumbelSolverModel(SolverModel):
             for infertype in self.inferTypes:
                 # Apply Gumbel-Softmax for local/softmax inference when enabled
                 if self.use_gumbel and infertype == 'local/softmax':
-                    self._infer_gumbel_local(datanode)
+                    # First compute standard local inference (this gets the logits)
+                    datanode.inferLocal(keys=("softmax",))
+                    # Then apply Gumbel-Softmax transformation
+                    datanode.inferGumbelLocal(
+                        temperature=self.temperature,
+                        hard=self.hard_gumbel
+                    )
                 else:
                     # Standard inference
                     {
