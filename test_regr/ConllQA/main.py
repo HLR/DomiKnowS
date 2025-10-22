@@ -39,7 +39,7 @@ FEATURE_DIM = 768 + 96
 def find_data_file(filename):
     """Find data file by checking multiple possible locations"""
     current_dir = Path(__file__).parent
-    
+
     # List of possible locations to check
     possible_paths = [
         current_dir / filename,
@@ -51,11 +51,11 @@ def find_data_file(filename):
         Path.cwd() / filename,
         Path.cwd() / "data" / filename,
     ]
-    
+
     for path in possible_paths:
         if path.exists():
             return str(path)
-    
+
     raise FileNotFoundError(f"Could not find {filename} in any of the expected locations: {possible_paths}")
 
 
@@ -180,6 +180,57 @@ def program_declaration(train, args, device='auto'):
 
         return find
 
+    # Normal Label
+    # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
+    # phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
+    # phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
+    # phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
+    # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
+
+    # Below Code is for relation
+    # def filter_pairs(phrase_text, arg1, arg2, data):
+    #     for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
+    #         if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+    #             return True
+    #     return False
+    #
+    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
+    #     phrase['text'],
+    #     relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+    #     keyword='relation',
+    #     forward=filter_pairs)
+    # pair['emb'] = FunctionalSensor(
+    #     rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
+    #     forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
+    #
+    # pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    # pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    # pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    # pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    # pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    #
+    # def find_relation(relation_type):
+    #     def find(arg1m, arg2m, data):
+    #         label = torch.zeros(arg1m.shape[0], dtype=torch.bool)
+    #         for rel, (arg1, *_), (arg2, *_) in data:
+    #             if rel == relation_type:
+    #                 i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
+    #                 label[i] = True
+    #         return label  # torch.stack((~label, label), dim=1)
+    #
+    #     return find
+    #
+    # pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+    #                                         keyword='relation', forward=find_relation('Work_For'), label=True)
+    # pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+    #                                           keyword='relation', forward=find_relation('Located_In'), label=True)
+    # pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+    #                                        keyword='relation', forward=find_relation('Live_In'), label=True)
+    # pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+    #                                           keyword='relation', forward=find_relation('OrgBased_In'), label=True)
+    # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+    #                                     keyword='relation', forward=find_relation('Kill'), label=True)
+
     train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
     program = InferenceProgram(graph, SolverModel,
@@ -209,7 +260,7 @@ def main(args):
 
     # Find the data file automatically
     data_file_path = find_data_file(args.data_path)
-    
+
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 
     if args.train_size != -1:

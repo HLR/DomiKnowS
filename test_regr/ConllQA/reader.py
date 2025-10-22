@@ -28,8 +28,8 @@ def create_query(question, question_type="YN"):
         raise Exception("Only Support YN Question Currently")
     asked_number = int(re.findall(r'[+-]?\d+', question['question'])[0])
     asked_type = question["count_ask"]
-    asked_entity = question["entity_asking"][0]
-    str_query = f"{ASKING_TYPE[asked_type]}({ENTITIES_NAME[asked_entity]}, {asked_number})"
+    asked_entity = ",".join([ENTITIES_NAME[entity] for entity in question["entity_asking"]])
+    str_query = f"{ASKING_TYPE[asked_type]}({asked_entity}, {asked_number})"
     label = [int(question["label"] == "YES")]
     return str_query, label, asked_number
 
