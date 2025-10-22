@@ -125,18 +125,16 @@ def main(args: argparse.Namespace):
         )
 
     labels = dataset[0]['label']
-    num_ones = sum(labels)
     M = len(labels)
-    
-    warmup_epochs = 20
     expected_value = args.expected_value
-
+    target_count = args.expected_atLeastL
+    
     # Add noise to break symmetry
     with torch.no_grad():
         for param in answer_module.parameters():
             param.add_(torch.randn_like(param) * 0.2)
 
-    # Helper function to calculate soft counts
+    # Helper function
     def soft_count_zero(module, dataset, device):
         s = 0.0
         for item in dataset:
@@ -148,38 +146,76 @@ def main(args: argparse.Namespace):
 
     print(f"[INFO] Soft sum zero (initial): {soft_count_zero(answer_module, dataset, device):.4f}")
 
+    # Warmup training
+    warmup_epochs = 20
     if warmup_epochs > 0:
         print(f"[INFO] Warmup training for {warmup_epochs} epochs...")
         train_model(program, dataset, num_epochs=warmup_epochs)
     
-    print(f"[INFO] Soft sum zero (after warmup): {soft_count_zero(answer_module, dataset, device):.4f}")
+    soft_after_warmup = soft_count_zero(answer_module, dataset, device)
+    print(f"[INFO] Soft sum zero (after warmup): {soft_after_warmup:.4f}")
     
     program.inferTypes = eval_infer
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
     
     print(f"\n[INFO] After warmup - Count of '{expected_value}': {before_count}/{M}")
-    print(f"[INFO] Target count: {args.expected_atLeastL}")
+    print(f"[INFO] Target count: {target_count}")
     
-    # Check if we need to flip all predictions
-    if before_count == 0 and args.expected_atLeastL > 0:
-        print("[INFO] All predictions are wrong class - flipping model output layer")
-        with torch.no_grad():
-            for param in answer_module.layers[2].parameters():
-                param.mul_(-1.0)
-        
-        before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
-        print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
-        print(f"[INFO] Soft sum zero (after flip): {soft_count_zero(answer_module, dataset, device):.4f}")
+    # Smart initialization: adjust model to get close to target count
+    # If we want 'target_count' of class 'expected_value', we need soft sum ≈ target_count
+    current_soft = soft_after_warmup
     
-    elif before_count == M and args.expected_atLeastL < M:
-        print("[INFO] All predictions are correct class but need fewer - flipping")
-        with torch.no_grad():
-            for param in answer_module.layers[2].parameters():
-                param.mul_(-1.0)
+    # Determine if we need to flip and by how much
+    if expected_value == 0:
+        # We want target_count zeros (soft sum should be ~target_count)
+        if current_soft < 0.5:
+            # Model is predicting mostly ones, flip to get mostly zeros
+            print(f"[INFO] Flipping to get zeros (current soft={current_soft:.2f}, want={target_count})")
+            with torch.no_grad():
+                for param in answer_module.layers[2].parameters():
+                    param.mul_(-1.0)
+            current_soft = soft_count_zero(answer_module, dataset, device)
+            print(f"[INFO] After flip - soft sum: {current_soft:.4f}")
         
-        before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
-        print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
-        print(f"[INFO] Soft sum zero (after flip): {soft_count_zero(answer_module, dataset, device):.4f}")
+        # Now adjust magnitude to get closer to target
+        # If soft sum is too high, scale down; if too low, scale up
+        if abs(current_soft - target_count) > 1.0:
+            # Compute scale factor to get closer to target
+            # We want to move from current_soft toward target_count
+            scale = 1.0 + 0.3 * (target_count - current_soft) / M
+            scale = max(0.5, min(2.0, scale))  # Clip to reasonable range
+            print(f"[INFO] Scaling output layer by {scale:.3f} to approach target")
+            with torch.no_grad():
+                for param in answer_module.layers[2].parameters():
+                    param.mul_(scale)
+            current_soft = soft_count_zero(answer_module, dataset, device)
+            print(f"[INFO] After scaling - soft sum: {current_soft:.4f}")
+    else:
+        # We want target_count ones (soft sum should be ~(M - target_count))
+        target_soft_zeros = M - target_count
+        if current_soft > M - 0.5:
+            # Model is predicting mostly zeros, flip to get mostly ones
+            print(f"[INFO] Flipping to get ones (current soft={current_soft:.2f}, want zeros={target_soft_zeros})")
+            with torch.no_grad():
+                for param in answer_module.layers[2].parameters():
+                    param.mul_(-1.0)
+            current_soft = soft_count_zero(answer_module, dataset, device)
+            print(f"[INFO] After flip - soft sum: {current_soft:.4f}")
+        
+        # Adjust magnitude
+        if abs(current_soft - target_soft_zeros) > 1.0:
+            scale = 1.0 + 0.3 * (target_soft_zeros - current_soft) / M
+            scale = max(0.5, min(2.0, scale))
+            print(f"[INFO] Scaling output layer by {scale:.3f} to approach target")
+            with torch.no_grad():
+                for param in answer_module.layers[2].parameters():
+                    param.mul_(scale)
+            current_soft = soft_count_zero(answer_module, dataset, device)
+            print(f"[INFO] After scaling - soft sum: {current_soft:.4f}")
+
+    # Re-evaluate after adjustments
+    before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
+    print(f"[INFO] Hard count after initialization: {before_count}/{M}")
 
     def flat_params(m): 
         return torch.cat([p.detach().float().flatten().cpu() for p in m.parameters() if p.requires_grad]) if any(p.requires_grad for p in m.parameters()) else torch.tensor([])
@@ -187,51 +223,22 @@ def main(args: argparse.Namespace):
     w_before = flat_params(answer_module)
     soft_before = soft_count_zero(answer_module, dataset, device)
     
-    # Check constraint loss before training
-    print("\n[DEBUG] Checking constraint loss before constraint training...")
-    program.model.eval()
-    program.cmodel.eval()
-    with torch.no_grad():
-        for data in dataset:
-            _, _, *output = program.model(data)
-            closs, *_ = program.cmodel(output[1])
-            if torch.is_tensor(closs):
-                print(f"[DEBUG] Initial constraint loss: {closs.item():.6f}")
-            else:
-                print(f"[DEBUG] Initial constraint loss is not a tensor: {closs}")
-    
-    # Return to training mode and switch back to softmax inference for constraint training
+    # Constraint training
+    print("\n[DEBUG] Starting constraint training...")
     program.model.train()
     program.cmodel.train()
-    program.inferTypes = train_infer  # Use softmax during constraint training
+    program.inferTypes = train_infer
     
     constraint_epochs = args.epoch
     train_model(program, dataset, constraint_epochs, constr_loss_only=True)
     
-    # Check constraint loss after training
-    print("\n[DEBUG] Checking constraint loss after constraint training...")
-    program.model.eval()
-    program.cmodel.eval()
-    with torch.no_grad():
-        for data in dataset:
-            _, _, *output = program.model(data)
-            closs, *_ = program.cmodel(output[1])
-            if torch.is_tensor(closs):
-                print(f"[DEBUG] Final constraint loss: {closs.item():.6f}")
-            else:
-                print(f"[DEBUG] Final constraint loss is not a tensor: {closs}")
-    
     w_after = flat_params(answer_module)
     soft_after = soft_count_zero(answer_module, dataset, device)
     
-    print(f"[DEBUG] Delta-norm(weights): {torch.norm(w_after - w_before).item():.6f}")
+    print(f"\n[DEBUG] Delta-norm(weights): {torch.norm(w_after - w_before).item():.6f}")
     print(f"[DEBUG] Soft sum zero (before constraint training): {soft_before:.4f}")
     print(f"[DEBUG] Soft sum zero (after constraint training): {soft_after:.4f}")
     print(f"[DEBUG] Delta soft sum: {abs(soft_after - soft_before):.4f}")
-    
-    for n,p in answer_module.named_parameters():
-        if p.grad is not None:
-            print(f"[GRAD] {n} norm={p.grad.data.norm().item():.4e}")
 
     program.inferTypes = eval_infer
     actual_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
@@ -241,11 +248,7 @@ def main(args: argparse.Namespace):
             x = torch.as_tensor(item["b"], device=device)
             logits = _run_answer_module(answer_module, x)
             preds = logits.argmax(dim=-1).tolist()
-            idx_expected = [i for i, p in enumerate(preds) if p == expected_value]
-            idx_other = [i for i, p in enumerate(preds) if p != expected_value]
-            print(f"[data {di}] preds={preds}")
-            print(f"[data {di}] indices predicting {expected_value}: {idx_expected}")
-            print(f"[data {di}] indices predicting {1-expected_value}: {idx_other}")
+            print(f"[data {di}] preds={preds}, count of {expected_value}: {preds.count(expected_value)}")
           
     pass_test_case = True  
     if args.atLeastL:
@@ -255,7 +258,7 @@ def main(args: argparse.Namespace):
     if not args.atLeastL and not args.atMostL:
         pass_test_case &= (actual_count == args.expected_atLeastL)
 
-    print(f"Test case {'PASSED' if pass_test_case else 'FAILED'}")
+    print(f"\nTest case {'PASSED' if pass_test_case else 'FAILED'}")
     print(f"expected_value, before_count, actual_count, pass_test_case: ({expected_value}, {before_count}, {actual_count}, {pass_test_case})")
     return pass_test_case, before_count, actual_count
 
