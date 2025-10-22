@@ -116,8 +116,8 @@ def main(args: argparse.Namespace):
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             use_gumbel=True,
-            initial_temp=5.0,  # Start with high temp for exploration
-            final_temp=0.5,    # Anneal to sharper distribution
+            initial_temp=5.0,
+            final_temp=0.5,
             beta=args.beta,
             device=device,
             tnorm="L",
@@ -128,7 +128,6 @@ def main(args: argparse.Namespace):
     num_ones = sum(labels)
     M = len(labels)
     
-    # Warmup to establish diverse predictions
     warmup_epochs = 20
     expected_value = args.expected_value
 
@@ -137,12 +136,25 @@ def main(args: argparse.Namespace):
         for param in answer_module.parameters():
             param.add_(torch.randn_like(param) * 0.2)
 
+    # Helper function to calculate soft counts
+    def soft_count_zero(module, dataset, device):
+        s = 0.0
+        for item in dataset:
+            x = torch.as_tensor(item["b"], dtype=torch.float32, device=device)
+            logits = _run_answer_module(module, x)
+            p = torch.softmax(logits, dim=-1)[:, 0]
+            s += p.sum().item()
+        return s
+
+    print(f"[INFO] Soft sum zero (initial): {soft_count_zero(answer_module, dataset, device):.4f}")
+
     if warmup_epochs > 0:
         print(f"[INFO] Warmup training for {warmup_epochs} epochs...")
         train_model(program, dataset, num_epochs=warmup_epochs)
     
+    print(f"[INFO] Soft sum zero (after warmup): {soft_count_zero(answer_module, dataset, device):.4f}")
+    
     program.inferTypes = eval_infer
-    expected_value = args.expected_value
     before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
     
     print(f"\n[INFO] After warmup - Count of '{expected_value}': {before_count}/{M}")
@@ -150,27 +162,30 @@ def main(args: argparse.Namespace):
     
     # Check if we need to flip all predictions
     if before_count == 0 and args.expected_atLeastL > 0:
-        print("[INFO] All predictions are wrong class - flipping model output layer sign")
+        print("[INFO] All predictions are wrong class - flipping model output layer")
         with torch.no_grad():
             for param in answer_module.layers[2].parameters():
                 param.mul_(-1.0)
         
         before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
         print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
+        print(f"[INFO] Soft sum zero (after flip): {soft_count_zero(answer_module, dataset, device):.4f}")
     
     elif before_count == M and args.expected_atLeastL < M:
-        print("[INFO] All predictions are correct class but need fewer - flipping some")
+        print("[INFO] All predictions are correct class but need fewer - flipping")
         with torch.no_grad():
             for param in answer_module.layers[2].parameters():
                 param.mul_(-1.0)
         
         before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
         print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
+        print(f"[INFO] Soft sum zero (after flip): {soft_count_zero(answer_module, dataset, device):.4f}")
 
     def flat_params(m): 
         return torch.cat([p.detach().float().flatten().cpu() for p in m.parameters() if p.requires_grad]) if any(p.requires_grad for p in m.parameters()) else torch.tensor([])
 
     w_before = flat_params(answer_module)
+    soft_before = soft_count_zero(answer_module, dataset, device)
     
     # Check constraint loss before training
     print("\n[DEBUG] Checking constraint loss before constraint training...")
@@ -185,10 +200,11 @@ def main(args: argparse.Namespace):
             else:
                 print(f"[DEBUG] Initial constraint loss is not a tensor: {closs}")
     
+    # Return to training mode and switch back to softmax inference for constraint training
     program.model.train()
     program.cmodel.train()
+    program.inferTypes = train_infer  # Use softmax during constraint training
     
-    # Use higher epochs for constraint training  
     constraint_epochs = args.epoch
     train_model(program, dataset, constraint_epochs, constr_loss_only=True)
     
@@ -206,39 +222,30 @@ def main(args: argparse.Namespace):
                 print(f"[DEBUG] Final constraint loss is not a tensor: {closs}")
     
     w_after = flat_params(answer_module)
-    print("[DEBUG] Delta-norm(weights):", torch.norm(w_after - w_before).item())
+    soft_after = soft_count_zero(answer_module, dataset, device)
+    
+    print(f"[DEBUG] Delta-norm(weights): {torch.norm(w_after - w_before).item():.6f}")
+    print(f"[DEBUG] Soft sum zero (before constraint training): {soft_before:.4f}")
+    print(f"[DEBUG] Soft sum zero (after constraint training): {soft_after:.4f}")
+    print(f"[DEBUG] Delta soft sum: {abs(soft_after - soft_before):.4f}")
     
     for n,p in answer_module.named_parameters():
         if p.grad is not None:
             print(f"[GRAD] {n} norm={p.grad.data.norm().item():.4e}")
-            
-    def soft_count_zero(module, dataset, device):
-        import torch
-        s = 0.0
-        for item in dataset:
-            x = torch.as_tensor(item["b"], dtype=torch.float32, device=device)
-            logits = _run_answer_module(module, x)
-            p = torch.softmax(logits, dim=-1)[:, 0]
-            s += p.sum().item()
-        return s
-
-    print("soft sum zero (before):", soft_count_zero(answer_module, dataset, device))
-    print("soft sum zero (after):", soft_count_zero(answer_module, dataset, device))
 
     program.inferTypes = eval_infer
     actual_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
 
     with torch.no_grad():
-        expected = args.expected_value
         for di, item in enumerate(dataset):
             x = torch.as_tensor(item["b"], device=device)
             logits = _run_answer_module(answer_module, x)
             preds = logits.argmax(dim=-1).tolist()
-            idx_expected = [i for i, p in enumerate(preds) if p == expected]
-            idx_other    = [i for i, p in enumerate(preds) if p != expected]
+            idx_expected = [i for i, p in enumerate(preds) if p == expected_value]
+            idx_other = [i for i, p in enumerate(preds) if p != expected_value]
             print(f"[data {di}] preds={preds}")
-            print(f"[data {di}] indices predicting {expected}: {idx_expected}")
-            print(f"[data {di}] indices predicting {1-expected}: {idx_other}")
+            print(f"[data {di}] indices predicting {expected_value}: {idx_expected}")
+            print(f"[data {di}] indices predicting {1-expected_value}: {idx_other}")
           
     pass_test_case = True  
     if args.atLeastL:
@@ -249,10 +256,8 @@ def main(args: argparse.Namespace):
         pass_test_case &= (actual_count == args.expected_atLeastL)
 
     print(f"Test case {'PASSED' if pass_test_case else 'FAILED'}")
-    print(
-        f"expected_value, before_count, actual_count,pass_test_case): {expected_value, before_count, actual_count, pass_test_case}")
+    print(f"expected_value, before_count, actual_count, pass_test_case: ({expected_value}, {before_count}, {actual_count}, {pass_test_case})")
     return pass_test_case, before_count, actual_count
-
 
 if __name__ == "__main__":
     args = parse_arguments()
