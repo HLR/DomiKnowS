@@ -28,6 +28,7 @@ def parameterized_dataset(seed: int, size: int):
         "orL(x, y)",
         "ifL(x, y)",
         "atLeastL(x, 1)",
+        "atMostL(x, 1)"
     ]
 
     data = [
