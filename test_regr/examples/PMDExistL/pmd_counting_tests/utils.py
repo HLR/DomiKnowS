@@ -47,9 +47,16 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
     program.cmodel.reset()
     program.model.mode(Mode.TRAIN)
 
-    # Much higher learning rates for constraint-only phase
-    lr = 5e-3 if constr_loss_only else 1e-4
-    opt = torch.optim.SGD(program.model.parameters(), lr=lr, momentum=0.9)
+    # Different learning rates based on training phase
+    if constr_loss_only:
+        # For constraint-only training, use higher LR
+        lr = 1e-2
+        opt = torch.optim.Adam(program.model.parameters(), lr=lr, betas=(0.9, 0.999))
+    else:
+        # For regular training
+        lr = 1e-4
+        opt = torch.optim.SGD(program.model.parameters(), lr=lr, momentum=0.9)
+    
     copt = torch.optim.SGD(program.cmodel.parameters(), lr=lr, momentum=0.9)
 
     constraint_loss_zero_count = 0
@@ -85,7 +92,7 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                 
                 # Log constraint loss in first few steps
                 if total_steps <= 5:
-                    print(f"[DEBUG] Step {total_steps} - Constraint loss before scaling: {loss.item():.6f}")
+                    print(f"[DEBUG] Step {total_steps} - Constraint loss: {loss.item():.6f}")
                 
                 # Check if constraint loss is non-zero
                 if abs(loss.item()) < 1e-8:
@@ -94,11 +101,8 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                         print(f"[WARN] Constraint loss is near zero: {loss.item()}")
                     continue
                 
-                # Very strong scaling for constraint loss
-                loss = loss * 50.0
-                
-                if total_steps <= 5:
-                    print(f"[DEBUG] Step {total_steps} - Constraint loss after scaling: {loss.item():.6f}")
+                # Strong scaling for constraint loss
+                loss = loss * 100.0
             else:
                 loss = mloss
                 if not torch.isfinite(loss):
@@ -106,7 +110,7 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
 
             loss.backward()
             
-            # Check if gradients were actually computed
+            # Check if gradients were actually computed (only in first few steps)
             if constr_loss_only and total_steps <= 5:
                 print(f"[DEBUG] Step {total_steps} - Checking gradients...")
                 for name, param in program.model.named_parameters():
@@ -129,9 +133,9 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                         print(f"[WARN] Step {total_steps}: No gradients flowing to model parameters")
                     continue
             
-            # Aggressive gradient clipping
-            torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=5.0)
-            torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=5.0)
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=10.0)
+            torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=10.0)
 
             if constr_loss_only:
                 opt.step()
@@ -155,7 +159,6 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
         print(f"  Steps with zero loss: {constraint_loss_zero_count}")
         print(f"  Steps with no gradients: {no_gradient_count}")
         print(f"  Successful steps: {total_steps - constraint_loss_zero_count - no_gradient_count}")
-
 
 def evaluate_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]], b_answer: Any) -> Dict[int, int]:
     program.model.eval()

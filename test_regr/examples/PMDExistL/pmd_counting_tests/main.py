@@ -116,8 +116,8 @@ def main(args: argparse.Namespace):
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             use_gumbel=True,
-            initial_temp=0.1,  # Always sharp
-            final_temp=0.1,
+            initial_temp=5.0,  # Start with high temp for exploration
+            final_temp=0.5,    # Anneal to sharper distribution
             beta=args.beta,
             device=device,
             tnorm="L",
@@ -128,14 +128,14 @@ def main(args: argparse.Namespace):
     num_ones = sum(labels)
     M = len(labels)
     
-    # Strategy: Always do substantial warmup to get diverse predictions
-    warmup_epochs = 10
+    # Warmup to establish diverse predictions
+    warmup_epochs = 20
     expected_value = args.expected_value
 
-    # Add noise to break symmetry and get diverse initial predictions
+    # Add noise to break symmetry
     with torch.no_grad():
         for param in answer_module.parameters():
-            param.add_(torch.randn_like(param) * 0.1)
+            param.add_(torch.randn_like(param) * 0.2)
 
     if warmup_epochs > 0:
         print(f"[INFO] Warmup training for {warmup_epochs} epochs...")
@@ -152,14 +152,21 @@ def main(args: argparse.Namespace):
     if before_count == 0 and args.expected_atLeastL > 0:
         print("[INFO] All predictions are wrong class - flipping model output layer sign")
         with torch.no_grad():
-            # Flip the final layer to reverse predictions
             for param in answer_module.layers[2].parameters():
                 param.mul_(-1.0)
         
-        # Re-evaluate
         before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
         print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
     
+    elif before_count == M and args.expected_atLeastL < M:
+        print("[INFO] All predictions are correct class but need fewer - flipping some")
+        with torch.no_grad():
+            for param in answer_module.layers[2].parameters():
+                param.mul_(-1.0)
+        
+        before_count = evaluate_model(program, dataset, b_answer).get(expected_value, 0)
+        print(f"[INFO] After flip - Count of '{expected_value}': {before_count}/{M}")
+
     def flat_params(m): 
         return torch.cat([p.detach().float().flatten().cpu() for p in m.parameters() if p.requires_grad]) if any(p.requires_grad for p in m.parameters()) else torch.tensor([])
 
@@ -180,7 +187,10 @@ def main(args: argparse.Namespace):
     
     program.model.train()
     program.cmodel.train()
-    train_model(program, dataset, args.epoch, constr_loss_only=True)
+    
+    # Use higher epochs for constraint training  
+    constraint_epochs = args.epoch
+    train_model(program, dataset, constraint_epochs, constr_loss_only=True)
     
     # Check constraint loss after training
     print("\n[DEBUG] Checking constraint loss after constraint training...")
