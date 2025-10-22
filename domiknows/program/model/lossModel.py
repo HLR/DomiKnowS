@@ -442,42 +442,49 @@ class SampleLossModel(torch.nn.Module):
                 self.lmbd[self.lmbd_index[key]] = 0
         return self.lmbd[self.lmbd_index[key]]
 
-    def forward(self, builder, build=None):
+    def forward(self, builder, build=None, use_gumbel=False, temperature=1.0, hard_gumbel=False):
         """
-        The `forward` function calculates the loss for a PrimalDualModel using a DataNodeBuilder and
-        returns the loss value, the DataNode, and the builder.
+        Forward pass with optional Gumbel-Softmax support.
         
-        :param builder: The `builder` parameter is an instance of the `DataNodeBuilder` class. It is
-        used to create a batch root data node and retrieve a data node
-        :param build: The `build` parameter is an optional argument that specifies whether the
-        `DataNodeBuilder` should be invoked or not. If `build` is `None`, then the value of `self.build`
-        is used. If `build` is `True`, then the `createBatchRootDN()` method
-        :return: three values: lmbd_loss, datanode, and builder.
+        Args:
+            builder: DataNodeBuilder
+            build: Whether to build datanode
+            use_gumbel: If True, apply Gumbel-Softmax to local inference
+            temperature: Gumbel-Softmax temperature
+            hard_gumbel: If True, use straight-through estimator
         """
         self.sampleLossLogger.info("=== SampleLossModel Forward Operation Started ===")
         self.sampleLossLogger.info(f"Iteration step: {self.iter_step}")
-        self.sampleLossLogger.info(f"Parameters: build={build}, sample={self.sample}, sampleSize={self.sampleSize}")
-        self.sampleLossLogger.info(f"Warmup threshold: {self.warmpup}")
+        self.sampleLossLogger.info(f"Gumbel settings: use={use_gumbel}, temp={temperature}, hard={hard_gumbel}")
         
         if build is None:
             build = self.build
-            self.sampleLossLogger.debug(f"Using default build value: {build}")
         self.iter_step += 1
             
         if not build and not isinstance(builder, DataNodeBuilder):
-            self.sampleLossLogger.error("PrimalDualModel must be invoked with `build` on or with provided DataNode Builder")
-            raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
+            self.sampleLossLogger.error("SampleLossModel must be invoked with `build` on")
+            raise ValueError('SampleLossModel must be invoked with `build` on or with provided DataNode Builder.')
         
         self.sampleLossLogger.debug("Creating batch root data node")
         builder.createBatchRootDN()
-
-#       self.loss.reset()
-
         datanode = builder.getDataNode(device=self.device)
         
-        # Call the loss calculation returns a dictionary, keys are matching the constraints
+        # Apply Gumbel-Softmax if enabled
+        if use_gumbel:
+            self.sampleLossLogger.info(f"Applying Gumbel-Softmax with temp={temperature}, hard={hard_gumbel}")
+            # First compute standard local/softmax
+            datanode.inferLocal(keys=("softmax",))
+            # Then apply Gumbel transformation
+            datanode.inferGumbelLocal(temperature=temperature, hard=hard_gumbel)
+        
+        # Calculate LC loss (this now uses Gumbel-Softmax if applied above)
         self.sampleLossLogger.info("Calculating LC loss...")
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize, sampleGlobalLoss = self.sampleGlobalLoss)
+        constr_loss = datanode.calculateLcLoss(
+            tnorm=self.tnorm, 
+            sample=self.sample, 
+            sampleSize=self.sampleSize, 
+            sampleGlobalLoss=self.sampleGlobalLoss
+        )
         self.sampleLossLogger.info(f"Constraint loss keys: {list(constr_loss.keys())}")
         
         import math

@@ -10,7 +10,9 @@ from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor import Sensor
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
-from domiknows.program.lossprogram import GumbelPrimalDualProgram, SampleLossProgram
+from domiknows.program.lossprogram import GumbelPrimalDualProgram
+from domiknows.program.lossprogram import GumbelSampleLossProgram
+
 from domiknows.program.model.pytorch import SolverModel
 from domiknows import setProductionLogMode
 
@@ -100,14 +102,25 @@ def main(args: argparse.Namespace):
     eval_infer  = ['local/argmax']
 
     if args.model == "sampling":
-        program = SampleLossProgram(
-            graph, SolverModel, poi=[a, b, b_answer],
+        
+        program = GumbelSampleLossProgram(
+            graph, SolverModel, 
+            poi=[a, b, b_answer],
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             sample=True, 
-            sampleSize=args.sample_size, 
+            sampleSize=args.sample_size,
             sampleGlobalLoss=True,
-            beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
+            # Enable Gumbel-Softmax for better discrete optimization
+            use_gumbel=True,
+            initial_temp=2.0,      # Start warmer for exploration
+            final_temp=0.1,        # End cooler for exploitation
+            hard_gumbel=False,     # Use soft for better gradients
+            anneal_start_epoch=20, # Start annealing after warmup
+            beta=args.beta, 
+            device=device, 
+            tnorm="L", 
+            counting_tnorm=args.counting_tnorm
         )
     else:
        program = GumbelPrimalDualProgram(

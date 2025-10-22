@@ -584,9 +584,7 @@ class SampleLossProgram(LossProgram):
         
 class GumbelSampleLossProgram(SampleLossProgram):
     """
-    Sample Loss Program with Gumbel-Softmax support.
-    
-    Backward compatible with standard SampleLossProgram.
+    Sample Loss Program with Gumbel-Softmax support for better discrete optimization.
     """
     
     logger = logging.getLogger(__name__)
@@ -597,6 +595,7 @@ class GumbelSampleLossProgram(SampleLossProgram):
                  final_temp=0.1,
                  anneal_start_epoch=0,
                  anneal_epochs=None,
+                 hard_gumbel=False,  # Add this parameter
                  **kwargs):
         super().__init__(graph, Model, beta=beta, **kwargs)
         self.use_gumbel = use_gumbel
@@ -604,11 +603,12 @@ class GumbelSampleLossProgram(SampleLossProgram):
         self.final_temp = final_temp
         self.anneal_start_epoch = anneal_start_epoch
         self.anneal_epochs = anneal_epochs
+        self.hard_gumbel = hard_gumbel  # Store it
         self.current_epoch = 0
         self.current_temp = initial_temp
         
         if use_gumbel:
-            self.logger.info(f"[Gumbel] Enabled with temp: {initial_temp} → {final_temp}")
+            self.logger.info(f"[Gumbel] Enabled: temp {initial_temp}→{final_temp}, hard={hard_gumbel}")
     
     def get_temperature(self):
         """Compute current temperature with linear annealing."""
@@ -635,15 +635,60 @@ class GumbelSampleLossProgram(SampleLossProgram):
         
         return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
     
-    def train_epoch(self, dataset, **kwargs):
-        """Override to update temperature each epoch."""
+    def train_epoch(self, dataset, c_warmup_iters=0, c_session={}, **kwargs):
+        """Override to update temperature and pass Gumbel params to model."""
         self.current_temp = self.get_temperature()
         
         if self.use_gumbel and self.current_epoch % 10 == 0:
             self.logger.info(f"[Gumbel] Epoch {self.current_epoch}: temp={self.current_temp:.3f}")
         
-        yield from super().train_epoch(dataset, **kwargs)
+        # Modified train loop to pass Gumbel parameters
+        self.model.mode(Mode.TRAIN)
+        assert c_session
+        iter = c_session['iter']
+        self.model.train()
+        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
         
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+                
+            mloss, metric, *output = self.model(data)
+            
+            if iter < c_warmup_iters:
+                loss = mloss
+            else:
+                # CRITICAL: Pass Gumbel parameters to cmodel forward
+                closs, *_ = self.cmodel.forward(
+                    output[1], 
+                    use_gumbel=self.use_gumbel,
+                    temperature=self.current_temp,
+                    hard_gumbel=self.hard_gumbel
+                )
+                
+                if torch.is_tensor(closs):
+                    loss = mloss + self.beta * closs
+                else:
+                    loss = mloss
+                    
+                if loss != loss:
+                    raise Exception("Calculated loss is nan")
+                
+            if self.opt is not None and loss:
+                loss.backward()
+                self.opt.step()
+                iter += 1
+            
+            if self.copt is not None and loss:
+                self.copt.step()
+            
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter
         self.current_epoch += 1
         
 class GBIProgram(LossProgram):
