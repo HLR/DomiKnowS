@@ -4,10 +4,9 @@ import numpy as np
 import sys
 from pathlib import Path
 
-# Add the parent directory to the Python path to import local modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from main import parse_arguments, main
+from main import main
 from graph import get_graph
 from utils import create_dataset, train_model, evaluate_model
 from domiknows.program.lossprogram import PrimalDualProgram
@@ -76,26 +75,10 @@ def test_exact_constraint_satisfaction(setup_environment, create_args):
     args = create_args
     args.expected_atLeastL = 2
     args.expected_value = 0
-    args.epoch = 100
+    args.epoch = 200
     
-    graph, a, b, a_contain_b, b_answer = get_graph(args)
-    dataset = create_dataset(args.N, args.M)
-    
-    from main import setup_graph as main_setup_graph
-    answer_module = main_setup_graph(args, a, b, a_contain_b, b_answer, device=device)
-    
-    program = PrimalDualProgram(
-        graph, SolverModel, poi=[a, b, b_answer],
-        inferTypes=['local/softmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
-    )
-    
-    train_model(program, dataset, num_epochs=2, constr_loss_only=False)
-    train_model(program, dataset, num_epochs=args.epoch, constr_loss_only=True)
-    
-    program.inferTypes = ['local/argmax']
-    actual_count = evaluate_model(program, dataset, b_answer).get(args.expected_value, 0)
+    # Just call main which has all the proper logic
+    pass_test, before_count, actual_count = main(args)
     
     assert actual_count == args.expected_atLeastL
 
@@ -107,26 +90,10 @@ def test_atleast_constraint_satisfaction(setup_environment, create_args):
     args.atLeastL = True
     args.expected_atLeastL = 2
     args.expected_value = 0
-    args.epoch = 100
+    args.epoch = 200
     
-    graph, a, b, a_contain_b, b_answer = get_graph(args)
-    dataset = create_dataset(args.N, args.M)
-    
-    from main import setup_graph as main_setup_graph
-    answer_module = main_setup_graph(args, a, b, a_contain_b, b_answer, device=device)
-    
-    program = PrimalDualProgram(
-        graph, SolverModel, poi=[a, b, b_answer],
-        inferTypes=['local/softmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
-    )
-    
-    train_model(program, dataset, num_epochs=2, constr_loss_only=False)
-    train_model(program, dataset, num_epochs=args.epoch, constr_loss_only=True)
-    
-    program.inferTypes = ['local/argmax']
-    actual_count = evaluate_model(program, dataset, b_answer).get(args.expected_value, 0)
+    # Just call main which has all the proper logic
+    pass_test, before_count, actual_count = main(args)
     
     assert actual_count >= args.expected_atLeastL
 
@@ -138,26 +105,10 @@ def test_atmost_constraint_satisfaction(setup_environment, create_args):
     args.atMostL = True
     args.expected_atMostL = 3
     args.expected_value = 0
-    args.epoch = 100
+    args.epoch = 200
     
-    graph, a, b, a_contain_b, b_answer = get_graph(args)
-    dataset = create_dataset(args.N, args.M)
-    
-    from main import setup_graph as main_setup_graph
-    answer_module = main_setup_graph(args, a, b, a_contain_b, b_answer, device=device)
-    
-    program = PrimalDualProgram(
-        graph, SolverModel, poi=[a, b, b_answer],
-        inferTypes=['local/softmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        beta=args.beta, device=device, tnorm="L", counting_tnorm=args.counting_tnorm
-    )
-    
-    train_model(program, dataset, num_epochs=2, constr_loss_only=False)
-    train_model(program, dataset, num_epochs=args.epoch, constr_loss_only=True)
-    
-    program.inferTypes = ['local/argmax']
-    actual_count = evaluate_model(program, dataset, b_answer).get(args.expected_value, 0)
+    # Just call main which has all the proper logic
+    pass_test, before_count, actual_count = main(args)
     
     assert actual_count <= args.expected_atMostL
 
