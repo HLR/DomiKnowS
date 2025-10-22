@@ -490,8 +490,11 @@ For example, in [Clever](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-re
 Specifically, during training, the program outputs are calculated by finding the (differentiable) soft-logic conversion of the underlying logical expressions. Model parameters are then updated based on the loss between these predicted program outputs and the ground-truth program outputs.
 
 To do this in DomiKnowS, we need to add the programs (i.e., the logical expressions) that we want to execute to the graph and also provide the ground-truth outputs to these programs. There are two ways to do this, depending on whether the programs are the same across training examples or if they are different.
+- Global Program Query – The queries that will be used throughout the program.
+- Individual Program Query  – The queries that will be used within specific instant.
 
-### Programs are the same across examples
+
+### Programs are the same across examples (Global Program Query)
 If the program(s) we'd like to execute are fixed across training examples, then the API is similar to performing regular supervised learning in DomiKnowS.
 
 We specify programs in the same way that we would specify logical constraints except, now, we also assign the expression to a variable as we need to be able to reference it later. For example, we could have the following question which can be specified as follows:
@@ -535,7 +538,7 @@ The dataset here must specify the program output label (here, in the `question_l
 
 A complete example of this API can be found [here](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/InferenceAPI).
 
-### Programs are different across examples
+### Programs are different across examples (Individual Program Query)
 On the other hand, if the programs to be executed are different across training examples, we need to specify *both* the program (in the form of logical expression strings) and the program output labels in each data item. The syntax for specifying the programs is the same as before, except now, instead of directly adding it to the graph, we specify it through the dataset first *then* add it to the graph.
 
 The previous example would be specified as:
@@ -555,7 +558,10 @@ dataset = [
 ]
 ```
 
-We would then add it to the graph; e.g.,:
+Then, we call ``graph.compile_logic`` to add the execution of each specific example, along with its corresponding label, into the DomiKnowS knowledge graph.
+This process automatically integrates the defined knowledge as an executable query within the DomiKnowS program.
+An example of invoking this function is provided below:
+
 ```python
 # Notice that compile_logic returns a new dataset instance here.
 # During training, this "transformed" dataset should be used as it
@@ -585,4 +591,4 @@ program = InferenceProgram(
 program.train(transformed_dataset, ...)
 ```
 
-A complete example of this API can be found [here](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/Clever).
+Two complete examples of this API can be found [CLEVR Example](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/Clever) and [Relation Learning Example](https://github.com/HLR/DomiKnowS/tree/develop-CLEVER-relations/test_regr/examples/PMDExistL/relation_learning_tests)
