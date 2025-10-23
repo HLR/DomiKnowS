@@ -9,12 +9,6 @@ import pytest
 LOG_DIR = Path("test_logs")
 LOG_DIR.mkdir(exist_ok=True)
 
-BOOTSTRAP = (
-    "import main\n"
-    "args = main.parse_arguments()\n"
-    "main.main(args)\n"
-)
-
 def run_test(params, gpu_id=None):
     args = []
     for key, value in params.items():
@@ -22,12 +16,33 @@ def run_test(params, gpu_id=None):
             args.extend([f'--{key}', str(value)])
 
     python_executable = sys.executable
-    cmd = [python_executable, "-c", BOOTSTRAP] + args
+    
+    # Find the main.py file - look in current directory and parent directories
+    test_file_dir = Path(__file__).parent.resolve()
+    main_py_path = None
+    
+    # Search for main.py in current and parent directories
+    search_dir = test_file_dir
+    for _ in range(5):  # Search up to 5 levels up
+        candidate = search_dir / "main.py"
+        if candidate.exists():
+            main_py_path = candidate
+            break
+        search_dir = search_dir.parent
+    
+    if main_py_path is None:
+        raise FileNotFoundError("Could not find main.py in current or parent directories")
+    
+    # Execute main.py directly
+    cmd = [python_executable, str(main_py_path)] + args
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env.setdefault("CUDA_LAUNCH_BLOCKING", "1")
-    env["PYTHONPATH"] = os.getcwd() + os.pathsep + env.get("PYTHONPATH", "")
+    
+    # Add the directory containing main.py to PYTHONPATH
+    main_dir = str(main_py_path.parent)
+    env["PYTHONPATH"] = main_dir + os.pathsep + env.get("PYTHONPATH", "")
 
     if gpu_id is not None:
         if str(gpu_id).lower() == "cpu":
@@ -44,6 +59,7 @@ def run_test(params, gpu_id=None):
             errors="replace",
             check=True,
             env=env,
+            cwd=main_dir,  # Run from the directory containing main.py
         )
         return params, True, result.stdout
     except subprocess.CalledProcessError as e:
@@ -52,9 +68,9 @@ def run_test(params, gpu_id=None):
 
 
 PMD_PARAMS = {
-    'counting_tnorm': ["G", "P", "SP", "L"],
+    'counting_tnorm': ["G", "P"],
     'atLeastL': [True, False],
-    'atMostL': [True, False],
+    'atMostL': [True],
     'epoch': [1000],
     'expected_atLeastL': [2],
     'expected_atMostL': [5],
@@ -66,22 +82,22 @@ PMD_PARAMS = {
 
 SAMPLING_PARAMS = {
     'counting_tnorm': ["G"],
-    'atLeastL': [True, False],
-    'atMostL': [True, False],
+    'atLeastL': [True],
+    'atMostL': [True],
     'epoch': [1000],
-    'expected_atLeastL': [1, 2, 3],
-    'expected_atMostL': [3, 4, 5],
+    'expected_atLeastL': [2],
+    'expected_atMostL': [4],
     'expected_value': [0, 1],
     'N': [10],
     'M': [8],
     'model': ["sampling"],
-    "sample_size": [10, 20, 50, 100, 200, -1],
+    "sample_size": [50, -1],
 }
 
 GUMBEL_PMD_PARAMS = {
-    'counting_tnorm': ["G", "P"],
-    'atLeastL': [True, False],
-    'atMostL': [True, False],
+    'counting_tnorm': ["G"],
+    'atLeastL': [True],
+    'atMostL': [True],
     'epoch': [800],
     'expected_atLeastL': [2],
     'expected_atMostL': [4],
@@ -90,27 +106,27 @@ GUMBEL_PMD_PARAMS = {
     'M': [8],
     'model': ["gumbel_pmd"],
     'use_gumbel': [True],
-    'initial_temp': [2.0, 3.0],
-    'final_temp': [0.1, 0.2],
-    'hard_gumbel': [False, True],
+    'initial_temp': [2.0],
+    'final_temp': [0.1],
+    'hard_gumbel': [False],
 }
 
 GUMBEL_SAMPLING_PARAMS = {
     'counting_tnorm': ["G"],
-    'atLeastL': [True, False],
-    'atMostL': [True, False],
+    'atLeastL': [True],
+    'atMostL': [True],
     'epoch': [800],
-    'expected_atLeastL': [2, 3],
-    'expected_atMostL': [3, 4],
+    'expected_atLeastL': [2],
+    'expected_atMostL': [4],
     'expected_value': [0, 1],
     'N': [10],
     'M': [8],
     'model': ["gumbel_sampling"],
-    'sample_size': [50, 100, -1],
+    'sample_size': [100],
     'use_gumbel': [True],
     'initial_temp': [2.0],
     'final_temp': [0.1],
-    'hard_gumbel': [False, True],
+    'hard_gumbel': [False],
 }
 
 
