@@ -29,7 +29,7 @@ def get_graph(args):
         else:
             exactL(expected_value, args.expected_atLeastL)
             
-        for lc in graph.getLogicalConstraints():
+        for lc in graph.logicalConstrains():
             print(f"Defined logical constraint: {lc.strEs()}")
 
     return graph, a, b, a_contain_b, b_answer
