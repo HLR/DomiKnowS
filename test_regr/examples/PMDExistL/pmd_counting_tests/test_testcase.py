@@ -1,29 +1,22 @@
 import itertools
 import json
-import os
-import subprocess
 import sys
+import os
 from pathlib import Path
+from io import StringIO
+from contextlib import redirect_stdout, redirect_stderr
 import pytest
 
 LOG_DIR = Path("test_logs")
 LOG_DIR.mkdir(exist_ok=True)
 
 def run_test(params, gpu_id=None):
-    args = []
-    for key, value in params.items():
-        if not str(value) == "False":
-            args.extend([f'--{key}', str(value)])
-
-    python_executable = sys.executable
-    
-    # Find the main.py file - look in current directory and parent directories
+    # Find the main.py file
     test_file_dir = Path(__file__).parent.resolve()
     main_py_path = None
     
-    # Search for main.py in current and parent directories
     search_dir = test_file_dir
-    for _ in range(5):  # Search up to 5 levels up
+    for _ in range(5):
         candidate = search_dir / "main.py"
         if candidate.exists():
             main_py_path = candidate
@@ -33,38 +26,79 @@ def run_test(params, gpu_id=None):
     if main_py_path is None:
         raise FileNotFoundError("Could not find main.py in current or parent directories")
     
-    # Execute main.py directly
-    cmd = [python_executable, str(main_py_path)] + args
-
-    env = os.environ.copy()
-    env["PYTHONUNBUFFERED"] = "1"
-    env.setdefault("CUDA_LAUNCH_BLOCKING", "1")
+    main_dir = main_py_path.parent
     
-    # Add the directory containing main.py to PYTHONPATH
-    main_dir = str(main_py_path.parent)
-    env["PYTHONPATH"] = main_dir + os.pathsep + env.get("PYTHONPATH", "")
-
-    if gpu_id is not None:
-        if str(gpu_id).lower() == "cpu":
-            env["CUDA_VISIBLE_DEVICES"] = ""
-        else:
-            env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-
+    # Set up environment
+    old_environ = os.environ.copy()
+    old_argv = sys.argv.copy()
+    old_cwd = os.getcwd()
+    
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=True,
-            env=env,
-            cwd=main_dir,  # Run from the directory containing main.py
-        )
-        return params, True, result.stdout
-    except subprocess.CalledProcessError as e:
-        full = (e.stdout or "") + ("\n" if e.stdout and e.stderr else "") + (e.stderr or "")
-        return params, False, full
+        # Configure environment
+        os.environ["PYTHONUNBUFFERED"] = "1"
+        os.environ.setdefault("CUDA_LAUNCH_BLOCKING", "1")
+        
+        # Add main directory to path if not already there
+        main_dir_str = str(main_dir)
+        if main_dir_str not in sys.path:
+            sys.path.insert(0, main_dir_str)
+        
+        if gpu_id is not None:
+            if str(gpu_id).lower() == "cpu":
+                os.environ["CUDA_VISIBLE_DEVICES"] = ""
+            else:
+                os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+        
+        # Change to main directory
+        os.chdir(main_dir)
+        
+        # Build arguments
+        args = [str(main_py_path)]
+        for key, value in params.items():
+            if not str(value) == "False":
+                args.extend([f'--{key}', str(value)])
+        
+        sys.argv = args
+        
+        # Capture output
+        stdout_capture = StringIO()
+        stderr_capture = StringIO()
+        
+        # Import and run main
+        success = False
+        try:
+            # Clear any cached imports of main module
+            if 'main' in sys.modules:
+                del sys.modules['main']
+            
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                # Read and execute main.py
+                with open(main_py_path, 'r') as f:
+                    code = compile(f.read(), str(main_py_path), 'exec')
+                    exec(code, {'__name__': '__main__', '__file__': str(main_py_path)})
+            
+            success = True
+            output = stdout_capture.getvalue() + stderr_capture.getvalue()
+            
+        except SystemExit as e:
+            output = stdout_capture.getvalue() + stderr_capture.getvalue()
+            success = (e.code == 0)
+        except Exception as e:
+            output = stdout_capture.getvalue() + stderr_capture.getvalue() + f"\n{type(e).__name__}: {str(e)}"
+            success = False
+        
+        return params, success, output
+        
+    finally:
+        # Restore original state
+        os.environ.clear()
+        os.environ.update(old_environ)
+        sys.argv = old_argv
+        os.chdir(old_cwd)
+        
+        # Remove main_dir from sys.path if we added it
+        if main_dir_str in sys.path:
+            sys.path.remove(main_dir_str)
 
 
 PMD_PARAMS = {
