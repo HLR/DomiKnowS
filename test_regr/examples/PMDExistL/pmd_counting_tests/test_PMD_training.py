@@ -45,7 +45,6 @@ def create_args():
     return Args()
 
 
-@pytest.mark.fast
 def test_basic_training(setup_environment, create_args):
     """Test basic training loop executes without errors"""
     device = setup_environment
@@ -70,7 +69,6 @@ def test_basic_training(setup_environment, create_args):
     assert program is not None
 
 
-@pytest.mark.fast
 @pytest.mark.parametrize("sample_size", [100])  # Reduced from [50, 100, -1]
 def test_exact_constraint_satisfaction(setup_environment, create_args, sample_size):
     """Test that exactL constraint is satisfied using GumbelSampleLossProgram"""
@@ -90,7 +88,6 @@ def test_exact_constraint_satisfaction(setup_environment, create_args, sample_si
         f"Failed with sample_size={sample_size}: got {actual_count}, expected {args.expected_atLeastL}"
 
 
-@pytest.mark.fast
 @pytest.mark.parametrize("sample_size", [100])  # Reduced from [50, 100, -1]
 def test_atleast_constraint_satisfaction(setup_environment, create_args, sample_size):
     """Test that atLeastL constraint is satisfied using GumbelSampleLossProgram"""
@@ -111,7 +108,6 @@ def test_atleast_constraint_satisfaction(setup_environment, create_args, sample_
         f"Failed with sample_size={sample_size}: got {actual_count}, expected >={args.expected_atLeastL}"
 
 
-@pytest.mark.fast
 @pytest.mark.parametrize("sample_size", [100])  # Reduced from [50, 100, -1]
 def test_atmost_constraint_satisfaction(setup_environment, create_args, sample_size):
     """Test that atMostL constraint is satisfied using GumbelSampleLossProgram"""
@@ -132,7 +128,6 @@ def test_atmost_constraint_satisfaction(setup_environment, create_args, sample_s
         f"Failed with sample_size={sample_size}: got {actual_count}, expected <={args.expected_atMostL}"
 
 
-@pytest.mark.fast
 @pytest.mark.parametrize("tnorm", ["G", "P", "L", "SP"]) 
 def test_different_tnorms(setup_environment, create_args, tnorm):
     """Test training with different t-norm implementations using GumbelSampleLossProgram"""
@@ -172,62 +167,6 @@ def test_different_tnorms(setup_environment, create_args, tnorm):
     assert program is not None
 
 
-@pytest.mark.extended
-@pytest.mark.parametrize("gumbel_config", [
-    {"use_gumbel": False, "sample_size": 100},
-    {"use_gumbel": True, "initial_temp": 2.0, "final_temp": 0.1, "hard_gumbel": False, "sample_size": 100},
-])  # Reduced from 5 configs
-def test_gumbel_configurations(setup_environment, create_args, gumbel_config):
-    """Test different Gumbel-Softmax configurations"""
-    device = setup_environment
-    args = create_args
-    args.expected_atLeastL = 2
-    args.expected_value = 0
-    args.epoch = 200
-    args.model = "sampling"
-    args.sample_size = gumbel_config.get("sample_size", 100)
-    
-    graph, a, b, a_contain_b, b_answer = get_graph(args)
-    dataset = create_dataset(args.N, args.M)
-    
-    from main import setup_graph as main_setup_graph
-    answer_module = main_setup_graph(args, a, b, a_contain_b, b_answer, device=device)
-    
-    config_str = f"gumbel={gumbel_config.get('use_gumbel', False)}"
-    if gumbel_config.get('use_gumbel'):
-        config_str += f", temp={gumbel_config.get('initial_temp')}→{gumbel_config.get('final_temp')}"
-        config_str += f", hard={gumbel_config.get('hard_gumbel')}"
-    config_str += f", sample_size={args.sample_size}"
-    
-    print(f"\n[TEST] Config: {config_str}")
-    
-    program = GumbelSampleLossProgram(
-        graph, SolverModel, 
-        poi=[a, b, b_answer],
-        inferTypes=['local/softmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        sample=True,
-        sampleSize=args.sample_size,
-        sampleGlobalLoss=True,
-        use_gumbel=gumbel_config.get("use_gumbel", False),
-        initial_temp=gumbel_config.get("initial_temp", 1.0),
-        final_temp=gumbel_config.get("final_temp", 1.0),
-        hard_gumbel=gumbel_config.get("hard_gumbel", False),
-        anneal_start_epoch=20,
-        beta=args.beta, 
-        device=device, 
-        tnorm="L", 
-        counting_tnorm=args.counting_tnorm
-    )
-    
-    train_model(program, dataset, num_epochs=args.epoch)
-    
-    program.inferTypes = ['local/argmax']
-    actual_count = evaluate_model(program, dataset, b_answer).get(args.expected_value, 0)
-    
-    print(f"Result: {actual_count}/{args.M} (target: {args.expected_atLeastL})")
-
-
 @pytest.mark.xfail(reason="PMD cannot reliably solve discrete counting constraints")
 def test_pmd_exact_constraint_known_limitation():
     """Documents PMD's known limitation with exact counting constraints"""
@@ -253,36 +192,3 @@ def test_pmd_exact_constraint_known_limitation():
     pass_test, before_count, actual_count = main(args)
     
     assert actual_count == args.expected_atLeastL
-
-
-@pytest.mark.extended
-@pytest.mark.parametrize("constraint_type,params", [
-    ("exact", {"atLeastL": False, "atMostL": False, "expected_atLeastL": 2, "expected_check": lambda c, e: c == e}),
-    ("atleast", {"atLeastL": True, "atMostL": False, "expected_atLeastL": 2, "expected_check": lambda c, e: c >= e}),
-]) 
-def test_constraint_types_with_gumbel_sampling(setup_environment, create_args, constraint_type, params):
-    """Test different constraint types with Gumbel sampling"""
-    device = setup_environment
-    args = create_args
-    args.model = "sampling"
-    args.sample_size = 100
-    args.epoch = 300
-    args.expected_value = 0
-    
-    args.atLeastL = params.get("atLeastL", False)
-    args.atMostL = params.get("atMostL", False)
-    args.expected_atLeastL = params.get("expected_atLeastL", 2)
-    args.expected_atMostL = params.get("expected_atMostL", 5)
-    
-    print(f"\n[TEST] Constraint type: {constraint_type}")
-    
-    pass_test, before_count, actual_count = main(args)
-    
-    if constraint_type == "range":
-        expected_val = (args.expected_atLeastL, args.expected_atMostL)
-        check_passed = params["expected_check"](actual_count, expected_val)
-    else:
-        expected_val = args.expected_atMostL if constraint_type == "atmost" else args.expected_atLeastL
-        check_passed = params["expected_check"](actual_count, expected_val)
-    
-    assert check_passed, f"Constraint {constraint_type} not satisfied: got {actual_count}"

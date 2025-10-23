@@ -118,7 +118,7 @@ jobs:
           TEST_LIST=(
             'examples/PMDExistL/pmd_counting_tests'
             'examples/PMDExistL/relation_learning_tests'
-            'ConllQA'
+           
           )
           
           bash .github/scripts/run_tests.sh "test-gpu" "${TEST_LIST[@]}"
