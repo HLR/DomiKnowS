@@ -10,14 +10,9 @@ LOG_DIR = Path("test_logs")
 LOG_DIR.mkdir(exist_ok=True)
 
 BOOTSTRAP = (
-    "import debug.debug_utils as DU\n"
-    "DU.enable_full_debug()\n"
-    "DU.enable_memory_profiling()\n"
-    "from debug.debug_utils import memory_meter\n"
     "import main\n"
     "args = main.parse_arguments()\n"
-    "with memory_meter('subprocess-main'):\n"
-    "    main.main(args)\n"
+    "main.main(args)\n"
 )
 
 def run_test(params, gpu_id=None):
