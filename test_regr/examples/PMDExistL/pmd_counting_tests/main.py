@@ -50,8 +50,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--expected_value", default=0, type=int, help="Expected value")
     parser.add_argument("--N", default=10, type=int, help="N parameter")
     parser.add_argument("--M", default=8, type=int, help="M parameter")
-    parser.add_argument("--model", default="sampling", type=str, help="Model Types [Sampling/PMD]")
+    parser.add_argument("--model", default="sampling", type=str, help="Model Types [Sampling/PMD/gumbel_pmd/gumbel_sampling]")
     parser.add_argument("--sample_size", default=-1, type=int, help="Sample size for sampling program")
+    parser.add_argument("--use_gumbel", default=True, type=bool, help="Enable Gumbel-Softmax")
+    parser.add_argument("--initial_temp", default=2.0, type=float, help="Initial temperature for Gumbel-Softmax")
+    parser.add_argument("--final_temp", default=0.1, type=float, help="Final temperature for Gumbel-Softmax")
+    parser.add_argument("--hard_gumbel", default=False, type=bool, help="Use hard Gumbel-Softmax")
     return parser.parse_args()
 
 
@@ -101,8 +105,7 @@ def main(args: argparse.Namespace):
     train_infer = ['local/softmax']
     eval_infer  = ['local/argmax']
 
-    if args.model == "sampling":
-        
+    if args.model in ["sampling", "gumbel_sampling"]:
         program = GumbelSampleLossProgram(
             graph, SolverModel, 
             poi=[a, b, b_answer],
@@ -111,26 +114,25 @@ def main(args: argparse.Namespace):
             sample=True, 
             sampleSize=args.sample_size,
             sampleGlobalLoss=True,
-            # Enable Gumbel-Softmax for better discrete optimization
-            use_gumbel=True,
-            initial_temp=2.0,      # Start warmer for exploration
-            final_temp=0.1,        # End cooler for exploitation
-            hard_gumbel=False,     # Use soft for better gradients
-            anneal_start_epoch=20, # Start annealing after warmup
+            use_gumbel=args.use_gumbel,
+            initial_temp=args.initial_temp,
+            final_temp=args.final_temp,
+            hard_gumbel=args.hard_gumbel,
+            anneal_start_epoch=20,
             beta=args.beta, 
             device=device, 
             tnorm="L", 
             counting_tnorm=args.counting_tnorm
         )
-    else:
-       program = GumbelPrimalDualProgram(
+    else:  # PMD or gumbel_pmd
+        program = GumbelPrimalDualProgram(
             graph, SolverModel,
             poi=[a, b, b_answer],
             inferTypes=train_infer,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            use_gumbel=True,
-            initial_temp=5.0,
-            final_temp=0.5,
+            use_gumbel=args.use_gumbel,
+            initial_temp=args.initial_temp,
+            final_temp=args.final_temp,
             beta=args.beta,
             device=device,
             tnorm="L",
