@@ -41,6 +41,10 @@ def create_args():
         M = 5
         model = "sampling"
         sample_size = 100
+        use_gumbel = True
+        initial_temp = 2.0
+        final_temp = 0.1
+        hard_gumbel = False
     
     return Args()
 
@@ -187,6 +191,10 @@ def test_pmd_exact_constraint_known_limitation():
         M = 5
         model = "PMD"
         sample_size = -1
+        use_gumbel = True
+        initial_temp = 5.0
+        final_temp = 0.5
+        hard_gumbel = False
     
     args = Args()
     pass_test, before_count, actual_count = main(args)
