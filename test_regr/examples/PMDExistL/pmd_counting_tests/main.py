@@ -176,14 +176,18 @@ def main(args: argparse.Namespace):
             preds = logits.argmax(dim=-1).tolist()
             print(f"[data {di}] preds={preds}, count of {args.expected_value}: {preds.count(args.expected_value)}")
           
-    # Check if constraints are satisfied
+    # Check if constraints are satisfied - FIXED LOGIC
     pass_test_case = True  
-    if args.atLeastL:
-        pass_test_case &= (actual_count >= args.expected_atLeastL)
-    if args.atMostL:
-        pass_test_case &= (actual_count <= args.expected_atMostL)
-    if not args.atLeastL and not args.atMostL:
-        pass_test_case &= (actual_count == args.expected_atLeastL)
+    if args.atLeastL and args.atMostL:
+        # Both constraints must be satisfied
+        pass_test_case = (actual_count >= args.expected_atLeastL) and (actual_count <= args.expected_atMostL)
+    elif args.atLeastL:
+        pass_test_case = (actual_count >= args.expected_atLeastL)
+    elif args.atMostL:
+        pass_test_case = (actual_count <= args.expected_atMostL)
+    else:
+        # exactL constraint
+        pass_test_case = (actual_count == args.expected_atLeastL)
 
     print(f"\nTest case {'PASSED' if pass_test_case else 'FAILED'}")
     print(f"expected_value, before_count, actual_count, pass_test_case: ({args.expected_value}, {before_count}, {actual_count}, {pass_test_case})")

@@ -52,21 +52,21 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
 
     # Different learning rates based on training phase
     if constr_loss_only:
-        # For constraint-only training, use higher LR
-        lr = 1e-2
+        # For constraint-only training, use higher LR with Adam
+        lr = 5e-3
         opt = torch.optim.Adam(program.model.parameters(), lr=lr, betas=(0.9, 0.999))
     else:
         # For regular training
         lr = 1e-4
         opt = torch.optim.SGD(program.model.parameters(), lr=lr, momentum=0.9)
     
-    copt = torch.optim.SGD(program.cmodel.parameters(), lr=lr, momentum=0.9)
+    copt = torch.optim.Adam(program.cmodel.parameters(), lr=lr, betas=(0.9, 0.999))
 
     constraint_loss_zero_count = 0
     no_gradient_count = 0
     total_steps = 0
 
-    for epoch in tqdm(range(num_epochs), desc="Training with PMD"):
+    for epoch in tqdm(range(num_epochs), desc="Training"):
         epoch_loss = 0.0
         num_steps = 0
         
@@ -104,8 +104,8 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                         print(f"[WARN] Constraint loss is near zero: {loss.item()}")
                     continue
                 
-                # Strong scaling for constraint loss
-                loss = loss * 100.0
+                # Stronger scaling for constraint loss
+                loss = loss * 200.0
             else:
                 loss = mloss
                 if not torch.isfinite(loss):
@@ -136,9 +136,13 @@ def train_model(program: PrimalDualProgram, dataset: List[Dict[str, Any]],
                         print(f"[WARN] Step {total_steps}: No gradients flowing to model parameters")
                     continue
             
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=10.0)
-            torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=10.0)
+            # Gradient clipping - stronger for constraint training
+            if constr_loss_only:
+                torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=5.0)
+                torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=5.0)
+            else:
+                torch.nn.utils.clip_grad_norm_(program.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(program.cmodel.parameters(), max_norm=10.0)
 
             if constr_loss_only:
                 opt.step()
