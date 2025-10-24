@@ -260,3 +260,4 @@ venv
 .vscode/
 
 *.png
+test_regr/examples/PMDExistL/pmd_counting_tests/PMD_Counting_Constraints_Root _Causeand_Solution.md

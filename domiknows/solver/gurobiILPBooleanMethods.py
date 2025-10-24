@@ -317,11 +317,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         return varNAND
     
     def norVar(self, m, *var, onlyConstrains = False):
-        return self.notVar(m, self.orVar(m, var), onlyConstrains=onlyConstrains) # Negation of the disjunction
+        return self.notVar(m, self.orVar(m, *var), onlyConstrains=onlyConstrains) # Negation of the disjunction
     
     def xorVar(self, m, *var, onlyConstrains = False):        
         # Conjunction of the disjunction and the negation of the conjunction
-        return self.andVar(m, self.orVar(m, var), self.notVar(m, self.andVar(m, var)), onlyConstrains=onlyConstrains) 
+        return self.andVar(m, self.orVar(m, *var), self.notVar(m, self.andVar(m, *var)), onlyConstrains=onlyConstrains) 
     
     def ifVar(self, m, var1, var2, onlyConstrains=False):
         """
@@ -453,7 +453,6 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if self.ifLog:
             self.myLogger.debug("%s returns : %s" % (logicMethodName, varsInfo["varName"]))
         return varIF
-
            
     def equivalenceVar(self, m, *var, onlyConstrains = False):
         logicMethodName = "EQUIVALENCE"
@@ -759,6 +758,10 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             return None
         # --
                 
+        # check if we have only on variable if more  throw exception
+        if len(var) > 1:
+            raise Exception("%s called with more than single variable"%(logicMethodName))
+        
         varName = var
         if not self.__varIsNumber(var):
             varName = var.VarName

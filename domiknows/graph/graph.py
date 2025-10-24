@@ -1075,7 +1075,7 @@ class Graph(BaseGraphTree):
         data: and iterable of dicts containing the keys specified by `logic_keyword` and `logic_label_keyword`
         extra_namespace_values: dict[str, Any], any values added to this dictionary get added to the namespace used when executing the logical expressions (the variable names are the keys).
         '''
-        from .executable import LogicDataset, add_keyword, get_full_funcs
+        from .executable import LogicDataset, get_full_funcs
         from ..sensor.pytorch.sensors import ReaderSensor
         import importlib
         if self.varContext is None:
@@ -1113,14 +1113,14 @@ class Graph(BaseGraphTree):
         from .executable import LogicDataset, add_keyword, get_full_funcs
         from ..sensor.pytorch.sensors import ReaderSensor
         import importlib
+        from .logicalConstrain import LogicalConstrain
         
         for i, data_item in enumerate(data):
             if logic_keyword not in data_item:
                 raise ValueError(f'Invalid data_item at index {i}: must contain keys {logic_keyword} and {logic_label_keyword} but instead just found: {data_item.keys()}')
             lc_string = data_item[logic_keyword]
-            constr_reader_key = LogicDataset.KEYWORD_FMT.format(index=i)
-            lc_string_fmt = add_keyword(lc_string, 'name', constr_reader_key)
-            lc_string_fmt = get_full_funcs(lc_string_fmt)
+            
+            lc_string_fmt = get_full_funcs(lc_string)
             
             target_namespace = {
                 'domiknows': importlib.import_module('domiknows'),
@@ -1146,10 +1146,20 @@ class Graph(BaseGraphTree):
                     f"Failed to evaluate constraint '{lc_string_fmt}'. "
                     f"Error: {str(e)}"
                 ) from None
-            
+        
+            if not isinstance(c, LogicalConstrain):
+                raise TypeError(
+                    f"expected {lc_string_fmt} (originally: {lc_string}) to compile to an instance of "
+                    f"LogicalConstrain, but instead got an object of type {type(c)}"
+                )
+
+            new_lc_name = str(c)
+            constr_reader_key = LogicDataset.KEYWORD_FMT.format(lc_name=new_lc_name)
+            c.name = constr_reader_key
+
             self.constraint[c] = ReaderSensor(
                 keyword=constr_reader_key,
                 is_constraint=True,
                 label=True
             )
-            lc_name_list.append(str(c))
+            lc_name_list.append(new_lc_name)

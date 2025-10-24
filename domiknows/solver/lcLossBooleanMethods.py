@@ -59,6 +59,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             if self.ifLog: self.myLogger.info("Using Godel t-norms Formulation")
         elif tnorm =='P':
             if self.ifLog: self.myLogger.info("Using Product t-norms Formulation")
+        elif tnorm =='SP':
+            if self.ifLog: self.myLogger.info("Using Simplified Product t-norms Formulation")
         else:
             raise Exception('Unknown type of t-norms formulation - %s'%(tnorm))
 
@@ -98,12 +100,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v == None or self._isTensor(v) == -100:
-                varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=torch.float64)) # Uses 0 for None
+                varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=torch.float64))
             else:
+                # Ensure the tensor has gradient tracking
+                if torch.is_tensor(v) and not v.requires_grad:
+                    v = v.detach().requires_grad_(True)
                 varFixed.append(v)
         
         return varFixed
-    # -- 
 
     def notVar(self, _, var, onlyConstrains = False):
         logicMethodName = "NOT"
@@ -117,9 +121,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         if onlyConstrains:
             notLoss = torch.sub(tOne, notSuccess)
-            
             return notLoss
         else:            
+            return notSuccess
             return notSuccess
         
     def andVar(self, _, *var, onlyConstrains = False):
@@ -230,7 +234,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         elif self.tnorm =='G':
             orSuccess = torch.clone(var[0])
             for v in var[1:]:
-                orSuccess.maximum(v)
+                orSuccess = torch.maximum(orSuccess, v)  # Fixed: was orSuccess.maximum(v)
         elif self.tnorm =='P':
             varPod = torch.clone(var[0])
             for v in var[1:]:
@@ -309,24 +313,19 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         zeroInVar2 = 0 in var2
         
         if self.tnorm =='L':
-            # min(1, 1 - var1 + var2) #torch.sub
+            # min(1, 1 - var1 + var2)
             oneMinusVar1 = torch.sub(tOneSize, var1)
             sumOneMinusVar1AndVar2 = torch.add(oneMinusVar1, var2)
             
             ifSuccess = torch.minimum(tOneSize, sumOneMinusVar1AndVar2) 
         elif self.tnorm =='G':
-            #if var2Item > var1Item: 
-            #   ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
-            #else: 
-            #   ifSuccess = var2
-            
             if not zeroInVar2:
                 var2Larger = torch.gt(var2, var1)
                 var1Larger = torch.ge(var1, var2)
                 
                 var2Inverse = torch.div(tOneSize, var2)
-                var2LargerSuccess = torch.mul(torch.mul(var2Larger, var2), var2Inverse)
-                var1LargerSuccess = torch.mul(var1Larger, var2)
+                var2LargerSuccess = torch.mul(torch.mul(var2Larger.float(), var2), var2Inverse)
+                var1LargerSuccess = torch.mul(var1Larger.float(), var2)
                 
                 ifSuccess = var2LargerSuccess + var1LargerSuccess
             else:
@@ -336,12 +335,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                     
                 ifSuccess = torch.stack(ifSuccessList, dim=0)            
         elif self.tnorm =='P':
-            #if var1Item != 0:
-            #   tOne = torch.ones(tSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
-            #   ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
-            #else:
-            #   ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
-            
             if not zeroInVar1:
                 div1DivisionDiv2 = torch.div(var2, var1)
                 
@@ -397,14 +390,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             for v in var[1:]:
                 if self.tnorm == 'L':  # Łukasiewicz
                     # XOR(a, b) = min(1, a + b) - max(0, a + b - 1)
-                    tOne = torch.ones_like(xorSuccess)
-                    tZero = torch.zeros_like(xorSuccess)
+                    tOne = torch.ones_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                    tZero = torch.zeros_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=torch.float64)
                     sum_ab = torch.add(xorSuccess, v)
                     xorSuccess = torch.minimum(tOne, sum_ab) - torch.maximum(tZero, sum_ab - tOne)
                     
                 elif self.tnorm == 'G':  # Gödel
                     # XOR(a, b) = max(min(a, 1-b), min(1-a, b))
-                    tOne = torch.ones_like(xorSuccess)
+                    tOne = torch.ones_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=torch.float64)
                     not_a = torch.sub(tOne, xorSuccess)
                     not_b = torch.sub(tOne, v)
                     xorSuccess = torch.maximum(torch.minimum(xorSuccess, not_b), 
@@ -417,7 +410,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         if onlyConstrains:
             xorLoss = torch.sub(tOne, xorSuccess)
-            
             return xorLoss
         else:
             return xorSuccess
@@ -438,8 +430,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             var = self._fixVar(var)
             
             if self.tnorm == 'L':  # Łukasiewicz
-                # AND(a,b,c,...) = max(0, sum(vars) - (n-1))
-                # AND(¬a,¬b,¬c,...) = max(0, sum(1-vars) - (n-1)) = max(0, n - sum(vars) - (n-1)) = max(0, 1 - sum(vars))
                 n = len(var)
                 tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
                 tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
@@ -458,15 +448,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 equivSuccess = torch.minimum(tOne, all_true + all_false)
                 
             elif self.tnorm == 'G':  # Gödel
-                # AND = min, OR = max
                 # All true case: min(all vars)
                 all_true = torch.clone(var[0])
                 for v in var[1:]:
                     all_true = torch.minimum(all_true, v)
                 
                 # All false case: min(all 1-vars)
-                tOne = torch.ones_like(var[0])
-                all_false = torch.sub(tOne, var[0])  # 1 - var[0]
+                tOne = torch.ones_like(var[0], device=self.current_device, requires_grad=True, dtype=torch.float64)
+                all_false = torch.sub(tOne, var[0])
                 for v in var[1:]:
                     all_false = torch.minimum(all_false, torch.sub(tOne, v))
                 
@@ -474,15 +463,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 equivSuccess = torch.maximum(all_true, all_false)
                 
             elif self.tnorm == 'P':  # Product
-                # AND = product, OR = sum - product
                 # All true case: product(all vars)
                 all_true = torch.clone(var[0])
                 for v in var[1:]:
                     all_true.mul_(v)
                 
                 # All false case: product(all 1-vars)
-                tOne = torch.ones_like(var[0])
-                all_false = torch.sub(tOne, var[0])  # 1 - var[0]
+                tOne = torch.ones_like(var[0], device=self.current_device, requires_grad=True, dtype=torch.float64)
+                all_false = torch.sub(tOne, var[0])
                 for v in var[1:]:
                     all_false.mul_(torch.sub(tOne, v))
                 
@@ -492,7 +480,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         if onlyConstrains:
             equivLoss = torch.sub(tOne, equivSuccess)
-            
             return equivLoss
         else:
             return equivSuccess
@@ -567,11 +554,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         if len(vals) == 0:
             self.countLogger.info("No valid variables found, using zero tensor")
-            t = torch.zeros(1, device=self.current_device, dtype=torch.float64)
+            t = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
         else:
             # If scalar -> keep as scalar; if vector/tensor -> flatten.
             parts = [x.reshape(()) if x.numel() == 1 else x.flatten() for x in vals]
             t = torch.cat([p.view(-1) for p in parts])  # t is 1-D, length n = total literals
+            # Ensure gradient tracking
+            if not t.requires_grad:
+                t = t.detach().requires_grad_(True)
 
         n = t.numel()
         s = int(limit)  # ensure Python int
@@ -587,17 +577,52 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if method == "G":  # Gödel
             self.countLogger.debug("Defining Gödel t-norm helper functions")
             exists_at_least_one = lambda t: 1 - torch.max(t)  # loss is 0 when any literal is 1
-            exists_at_least_s = lambda t, s: 1 - torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)])
-            exists_at_most_s = lambda t, s: 1 - torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)])
-            exists_exactly_s = lambda t, s: 1 - torch.min(
-                torch.min(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]),
-                torch.min(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]),
-            )
+            
+            def exists_at_least_s_godel(t, s):
+                slice_size = max(min(s, n), 0)
+                if slice_size == 0:
+                    return torch.tensor(1.0, device=t.device, dtype=t.dtype, requires_grad=True)
+                sorted_vals = torch.sort(t, descending=True)[0][:slice_size]
+                min_val = torch.min(sorted_vals)
+                return 1.0 - min_val
+            
+            def exists_at_most_s_godel(t, s):
+                slice_size = max(n - max(min(s, n), 0), 0)
+                if slice_size == 0:
+                    return torch.tensor(1.0, device=t.device, dtype=t.dtype, requires_grad=True)
+                inverted = 1.0 - t
+                sorted_vals = torch.sort(inverted, descending=True)[0][:slice_size]
+                min_val = torch.min(sorted_vals)
+                return 1.0 - min_val
+            
+            def exists_exactly_s_godel(t, s):
+                slice_size_1 = max(min(s, n), 0)
+                slice_size_2 = max(n - max(min(s, n), 0), 0)
+                
+                if slice_size_1 == 0:
+                    min_val_1 = torch.tensor(1.0, device=t.device, dtype=t.dtype, requires_grad=True)
+                else:
+                    sorted_vals_1 = torch.sort(t, descending=True)[0][:slice_size_1]
+                    min_val_1 = torch.min(sorted_vals_1)
+                
+                if slice_size_2 == 0:
+                    min_val_2 = torch.tensor(1.0, device=t.device, dtype=t.dtype, requires_grad=True)
+                else:
+                    inverted = 1.0 - t
+                    sorted_vals_2 = torch.sort(inverted, descending=True)[0][:slice_size_2]
+                    min_val_2 = torch.min(sorted_vals_2)
+                
+                combined_min = torch.min(min_val_1, min_val_2)
+                return 1.0 - combined_min
+            
+            exists_at_least_s = exists_at_least_s_godel
+            exists_at_most_s = exists_at_most_s_godel
+            exists_exactly_s = exists_exactly_s_godel
 
         elif method == "L":  # Łukasiewicz
             self.countLogger.debug("Defining Łukasiewicz t-norm helper functions")
-            one = torch.tensor(1.0, device=self.current_device, dtype=torch.float64)
-            zero = torch.tensor(0.0, device=self.current_device, dtype=torch.float64)
+            one = torch.tensor(1.0, device=self.current_device, dtype=torch.float64, requires_grad=True)
+            zero = torch.tensor(0.0, device=self.current_device, dtype=torch.float64, requires_grad=True)
             exists_at_least_one = lambda t: 1 - torch.minimum(torch.sum(t), one)
             exists_at_least_s = lambda t, s: 1 - torch.maximum(
                 torch.sum(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) - (max(min(s, n), 0) - 1),
@@ -623,8 +648,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:  # "SP" Simplified Product
             self.countLogger.debug("Defining Simplified Product t-norm helper functions")
             exists_at_least_one = lambda t: torch.prod(1 - t)
-            exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) if max(min(s, n), 0) > 0 else 1.0
-            exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) if max(n - max(min(s, n), 0), 0) > 0 else 1.0
+            exists_at_least_s = lambda t, s: 1 - torch.prod(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) if max(min(s, n), 0) > 0 else torch.tensor(1.0, device=t.device, dtype=t.dtype, requires_grad=True)
+            exists_at_most_s = lambda t, s: 1 - torch.prod(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) if max(n - max(min(s, n), 0), 0) > 0 else torch.tensor(1.0, device=t.device, dtype=t.dtype, requires_grad=True)
             exists_exactly_s = lambda t, s: 1 - self.calc_probabilities(t, t.numel())[max(min(s, n), 0)]
 
         # ---- Compute loss or success
@@ -649,6 +674,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         self.countLogger.info(f"Computed loss: {loss.item() if hasattr(loss, 'item') else loss}")
 
+        # Ensure result has gradient tracking
+        if isinstance(loss, torch.Tensor) and not loss.requires_grad:
+            loss = loss.detach().requires_grad_(True)
+
         # Check if loss is in valid range [0,1]
         loss_val = loss.item() if hasattr(loss, 'item') else float(loss)
         if not (0 <= loss_val <= 1):
@@ -672,7 +701,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         self,
         _,
         varsA, varsB,
-        *,                         # kwargs only
+        *,
         compareOp: str = '>',
         diff: int | float = 0,
         onlyConstrains: bool = False,
@@ -680,15 +709,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     ):
         """
         Truth / loss for  count(varsA)  compareOp  count(varsB) + diff
-
-        compareOp ∈ {'>', '>=', '<', '<=', '==', '!='}
-        diff       constant offset (can be negative)
-        onlyConstrains
-            • True  → return loss  (1-truth degree)
-            • False → return success (truth degree)
         """
         
-        # Enhanced logging for compareCountsVar operations
         self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
         self.countLogger.info(f"Input parameters: compareOp='{compareOp}', diff={diff}, onlyConstrains={onlyConstrains}")
         self.countLogger.info(f"Number of varsA: {len(varsA)}, Number of varsB: {len(varsB)}")
@@ -696,7 +718,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         method = self.counting_tnorm if self.counting_tnorm else self.tnorm
         self.countLogger.info(f"Using method: {method}")
 
-        # ── build the two counts ─────────────────────────────────────────────
+        # Build the two counts
         self.countLogger.debug("Processing varsA...")
         varsA = self._fixVar(tuple(varsA))
         for i, v in enumerate(varsA):
@@ -717,116 +739,86 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             sumB.add_(v)
         self.countLogger.info(f"Sum of varsB: {sumB.item() if sumB.numel() == 1 else sumB}")
 
-        expr = sumA - sumB - diff          # Δ = count(A) − count(B) − diff
+        expr = sumA - sumB - diff
         self.countLogger.info(f"Expression (countA - countB - diff): {expr.item() if expr.numel() == 1 else expr}")
         
-        tZero = torch.zeros_like(expr)
-        tOne  = torch.ones_like(expr)
+        tZero = torch.zeros_like(expr, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne  = torch.ones_like(expr, device=self.current_device, requires_grad=True, dtype=torch.float64)
 
-        # ── Gödel logic ─────────────────────────────────────────────────────
+        # Gödel logic
         if method == "G":
             self.countLogger.debug("Using Gödel logic")
             if   compareOp == '>' : 
                 success = torch.where(expr >  0, tOne, tZero)
-                self.countLogger.debug(f"Gödel '>' condition: expr > 0 → {success.item() if success.numel() == 1 else success}")
             elif compareOp == '>=': 
                 success = torch.where(expr >= 0, tOne, tZero)
-                self.countLogger.debug(f"Gödel '>=' condition: expr >= 0 → {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<' : 
                 success = torch.where(expr <  0, tOne, tZero)
-                self.countLogger.debug(f"Gödel '<' condition: expr < 0 → {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<=': 
                 success = torch.where(expr <= 0, tOne, tZero)
-                self.countLogger.debug(f"Gödel '<=' condition: expr <= 0 → {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==': 
                 success = torch.where(expr == 0, tOne, tZero)
-                self.countLogger.debug(f"Gödel '==' condition: expr == 0 → {success.item() if success.numel() == 1 else success}")
-            else:                   
+            else:
                 success = torch.where(expr != 0, tOne, tZero)
-                self.countLogger.debug(f"Gödel '!=' condition: expr != 0 → {success.item() if success.numel() == 1 else success}")
 
-        # ── Product logic (smooth) ──────────────────────────────────────────
+        # Product logic (smooth)
         elif method == "P":
-            β = 10.0  # steepness factor
+            β = 10.0
             self.countLogger.debug(f"Using Product logic with steepness β={β}")
             if   compareOp in ('>', '>='):
                 k = (0.0 if compareOp == '>=' else 1e-6)
                 sigmoid_input = β * (expr - k)
                 success = torch.sigmoid(sigmoid_input)
-                self.countLogger.debug(f"Product '{compareOp}' sigmoid input: {sigmoid_input.item() if sigmoid_input.numel() == 1 else sigmoid_input}")
-                self.countLogger.debug(f"Product '{compareOp}' result: {success.item() if success.numel() == 1 else success}")
             elif compareOp in ('<', '<='):
                 k = (0.0 if compareOp == '<=' else -1e-6)
                 sigmoid_input = β * (-expr + k)
                 success = torch.sigmoid(sigmoid_input)
-                self.countLogger.debug(f"Product '{compareOp}' sigmoid input: {sigmoid_input.item() if sigmoid_input.numel() == 1 else sigmoid_input}")
-                self.countLogger.debug(f"Product '{compareOp}' result: {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==':
                 tanh_input = β * torch.abs(expr)
                 success = 1.0 - torch.tanh(tanh_input)
-                self.countLogger.debug(f"Product '==' tanh input: {tanh_input.item() if tanh_input.numel() == 1 else tanh_input}")
-                self.countLogger.debug(f"Product '==' result: {success.item() if success.numel() == 1 else success}")
             else:  # '!='
                 tanh_input = β * torch.abs(expr)
                 success = torch.tanh(tanh_input)
-                self.countLogger.debug(f"Product '!=' tanh input: {tanh_input.item() if tanh_input.numel() == 1 else tanh_input}")
-                self.countLogger.debug(f"Product '!=' result: {success.item() if success.numel() == 1 else success}")
 
-        # ── Łukasiewicz logic (piece-wise linear) ───────────────────────────
+        # Łukasiewicz logic (piece-wise linear)
         elif method == "L":
             self.countLogger.debug("Using Łukasiewicz logic")
             if   compareOp == '>':
                 success = torch.clamp(expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"Łukasiewicz '>' clamp(expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '>=':
                 success = torch.clamp(expr + 1.0, min=0.0, max=1.0)
-                self.countLogger.debug(f"Łukasiewicz '>=' clamp(expr + 1, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<':
                 success = torch.clamp(-expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"Łukasiewicz '<' clamp(-expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<=':
                 success = torch.clamp(1.0 - expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"Łukasiewicz '<=' clamp(1 - expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==':
                 abs_expr = torch.abs(expr)
                 success = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"Łukasiewicz '==' abs(expr): {abs_expr.item() if abs_expr.numel() == 1 else abs_expr}")
-                self.countLogger.debug(f"Łukasiewicz '==' clamp(1 - |expr|, 0, 1): {success.item() if success.numel() == 1 else success}")
             else:  # '!='
                 abs_expr = torch.abs(expr)
                 success_eq = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
                 success = 1.0 - success_eq
-                self.countLogger.debug(f"Łukasiewicz '!=' success_eq: {success_eq.item() if success_eq.numel() == 1 else success_eq}")
-                self.countLogger.debug(f"Łukasiewicz '!=' final: {success.item() if success.numel() == 1 else success}")
 
-        # ── Simplified-product logic (fallback / default) ───────────────────
+        # Simplified-product logic
         else:  # "SP"
             self.countLogger.debug("Using Simplified Product logic")
             if   compareOp == '>':
                 success = torch.clamp(expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"SP '>' clamp(expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '>=':
                 success = torch.clamp(expr + 1.0, min=0.0, max=1.0)
-                self.countLogger.debug(f"SP '>=' clamp(expr + 1, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<':
                 success = torch.clamp(-expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"SP '<' clamp(-expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '<=':
                 success = torch.clamp(1.0 - expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"SP '<=' clamp(1 - expr, 0, 1): {success.item() if success.numel() == 1 else success}")
             elif compareOp == '==':
                 abs_expr = torch.abs(expr)
                 success = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
-                self.countLogger.debug(f"SP '==' abs(expr): {abs_expr.item() if abs_expr.numel() == 1 else abs_expr}")
-                self.countLogger.debug(f"SP '==' clamp(1 - |expr|, 0, 1): {success.item() if success.numel() == 1 else success}")
             else:  # '!='
                 abs_expr = torch.abs(expr)
                 success_eq = torch.clamp(1.0 - abs_expr, min=0.0, max=1.0)
                 success = 1.0 - success_eq
-                self.countLogger.debug(f"SP '!=' success_eq: {success_eq.item() if success_eq.numel() == 1 else success_eq}")
-                self.countLogger.debug(f"SP '!=' final: {success.item() if success.numel() == 1 else success}")
 
-        # ── return loss or success ──────────────────────────────────────────
+        # return loss or success
         if onlyConstrains:
             result = 1.0 - success
             self.countLogger.info(f"Returning loss (onlyConstrains=True): {result.item() if result.numel() == 1 else result}")
@@ -836,7 +828,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         self.countLogger.info(f"=== {logicMethodName} Operation Completed ===\n")
         return result
-
+    
     def fixedVar(self, _, _var, onlyConstrains = False):
         logicMethodName = "FIXED"
         
