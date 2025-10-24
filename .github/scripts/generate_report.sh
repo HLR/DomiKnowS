@@ -3,6 +3,8 @@ set +e
 
 # Directory containing downloaded artifacts
 RESULTS_DIR="$1"
+# Debug mode parameter: "true" or "false" (default: "true")
+DEBUG_MODE="${2:-true}"
 
 if [ ! -d "$RESULTS_DIR" ]; then
   echo "❌ Results directory not found: $RESULTS_DIR"
@@ -111,6 +113,10 @@ if [ $total_failed -eq 0 ]; then
       echo "   ⚠️  $subfolder [$runner]: $reason"
     done
   fi
+  
+  echo ""
+  echo "✅ Report completed successfully"
+  exit 0
 else
   echo "💥 TEST FAILURES DETECTED"
   echo ""
@@ -146,13 +152,19 @@ else
     echo ""
   fi
   
-  echo "🚧 DEBUG MODE: CI configured to not fail on test failures"
-  echo "   Real failures are logged above but won't trigger notifications"
-  echo "   To restore normal CI behavior, uncomment the exit 1 in the workflow"
-  # exit 1  # Commented out - don't fail CI during debugging
+  # Check debug mode and exit accordingly
+  if [ "$DEBUG_MODE" = "true" ]; then
+    echo "🚧 DEBUG MODE: CI configured to not fail on test failures"
+    echo "   Real failures are logged above but won't trigger notifications"
+    echo "   To restore normal CI behavior, set DEBUG_MODE=false in the workflow"
+    echo ""
+    echo "✅ Report completed (debug mode - always passing)"
+    exit 0
+  else
+    echo "🚨 PRODUCTION MODE: CI will fail due to test failures"
+    echo "   This will trigger notifications and block the pipeline"
+    echo ""
+    echo "❌ Report completed with failures"
+    exit 1
+  fi
 fi
-
-# Always exit 0 during debug mode
-echo ""
-echo "✅ Report completed (debug mode - always passing)"
-exit 0

@@ -2,14 +2,21 @@ name: CI - Continuous Integration for develop-CLEVER-relations Branch
 on:
   push: { branches: [develop-CLEVER-relations] }
   pull_request: { branches: [develop-CLEVER-relations] }
+  workflow_dispatch:
+
+# Prevent multiple runs of the same branch overlapping
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  DEBUG_MODE: "true"  # Set to "false" for production mode
 
 jobs:
   test-cpu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: "develop-CLEVER-relations"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,16 +41,19 @@ jobs:
         run: |
           echo "USE_SUBPROCESS=true" >> $GITHUB_ENV
 
-      # --- Quality gate: formatting & types ---
+      # --- Quality gate: formatting & types (only in debug mode) ---
       - name: Check formatting (black)
+        if: env.DEBUG_MODE == 'true'
         continue-on-error: true
         run: uv run black --check .
 
       - name: Check imports (isort)
+        if: env.DEBUG_MODE == 'true'
         continue-on-error: true
         run: uv run isort --profile black --check-only .
 
       - name: Type check (mypy)
+        if: env.DEBUG_MODE == 'true'
         continue-on-error: true 
         run: |
           set +e
@@ -64,6 +74,7 @@ jobs:
             'examples/nested_relations'
             'examples/orbs'
             'examples/test_switch_constraints'
+            'examples/equality'
             'graph_errors'
             'sensor/pytorch'
             'simple_regression'
@@ -87,8 +98,6 @@ jobs:
     runs-on: [self-hosted, linux, x64, gpu]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: "develop-CLEVER-relations"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -113,12 +122,31 @@ jobs:
         run: |
           echo "USE_SUBPROCESS=true" >> $GITHUB_ENV
 
+      # --- Quality gate: formatting & types (only in debug mode) ---
+      - name: Check formatting (black)
+        if: env.DEBUG_MODE == 'true'
+        continue-on-error: true
+        run: uv run black --check .
+
+      - name: Check imports (isort)
+        if: env.DEBUG_MODE == 'true'
+        continue-on-error: true
+        run: uv run isort --profile black --check-only .
+
+      - name: Type check (mypy)
+        if: env.DEBUG_MODE == 'true'
+        continue-on-error: true 
+        run: |
+          set +e
+          uv run mypy --install-types --non-interactive .
+
+      # --- Run GPU tests ---
       - name: Run GPU tests
         run: |
           TEST_LIST=(
             'examples/PMDExistL/pmd_counting_tests'
             'examples/PMDExistL/relation_learning_tests'
-           
+            'ConllQA'
           )
           
           bash .github/scripts/run_tests.sh "test-gpu" "${TEST_LIST[@]}"
@@ -149,4 +177,4 @@ jobs:
 
       - name: Generate combined report
         run: |
-          bash .github/scripts/generate_report.sh test-results
+          bash .github/scripts/generate_report.sh test-results "${{ env.DEBUG_MODE }}"

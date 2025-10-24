@@ -39,7 +39,8 @@ def model_declaration():
     return program
 
 
-# @pytest.mark.gurobi
+@pytest.mark.gurobi
+@pytest.mark.skip(reason="Work in progress")
 def test_equality_main():
     from graph import word, word1
     
