@@ -73,7 +73,7 @@ def test_basic_training(setup_environment, create_args):
     assert program is not None
 
 
-@pytest.mark.parametrize("sample_size", [100])  # Reduced from [50, 100, -1]
+@pytest.mark.parametrize("sample_size", [100]) 
 def test_exact_constraint_satisfaction(setup_environment, create_args, sample_size):
     """Test that exactL constraint is satisfied using GumbelSampleLossProgram"""
     device = setup_environment
@@ -92,7 +92,7 @@ def test_exact_constraint_satisfaction(setup_environment, create_args, sample_si
         f"Failed with sample_size={sample_size}: got {actual_count}, expected {args.expected_atLeastL}"
 
 
-@pytest.mark.parametrize("sample_size", [100])  # Reduced from [50, 100, -1]
+@pytest.mark.parametrize("sample_size", [100])
 def test_atleast_constraint_satisfaction(setup_environment, create_args, sample_size):
     """Test that atLeastL constraint is satisfied using GumbelSampleLossProgram"""
     device = setup_environment
@@ -112,7 +112,7 @@ def test_atleast_constraint_satisfaction(setup_environment, create_args, sample_
         f"Failed with sample_size={sample_size}: got {actual_count}, expected >={args.expected_atLeastL}"
 
 
-@pytest.mark.parametrize("sample_size", [100])  # Reduced from [50, 100, -1]
+@pytest.mark.parametrize("sample_size", [100])
 def test_atmost_constraint_satisfaction(setup_environment, create_args, sample_size):
     """Test that atMostL constraint is satisfied using GumbelSampleLossProgram"""
     device = setup_environment

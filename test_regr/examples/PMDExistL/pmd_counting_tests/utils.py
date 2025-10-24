@@ -23,7 +23,10 @@ class TestTrainLearner(nn.Module):
             nn.Linear(input_size, 2)
         )
 
-    def forward(self, _, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, relation_tensor: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        # Ensure x is on the same device as the model
+        if x.device != next(self.parameters()).device:
+            x = x.to(next(self.parameters()).device)
         return self.layers(x)
 
 
