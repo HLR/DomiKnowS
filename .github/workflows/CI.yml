@@ -1,7 +1,9 @@
-name: CI - Continuous Integration for develop-CLEVER-relations Branch
+name: CI - Continuous Integration
 on:
-  push: { branches: [develop-CLEVER-relations] }
-  pull_request: { branches: [develop-CLEVER-relations] }
+  push: 
+    branches: [develop-CLEVER-relations, main]
+  pull_request: 
+    branches: [develop-CLEVER-relations, main]
   workflow_dispatch:
 
 # Prevent multiple runs of the same branch overlapping
@@ -10,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEBUG_MODE: "true"  # Set to "false" for production mode
+  DEBUG_MODE: ${{ github.ref == 'refs/heads/main' && 'false' || 'true' }}
 
 jobs:
   test-cpu:
@@ -161,14 +163,66 @@ jobs:
             /tmp/test_failures_test-gpu.txt
           retention-days: 1
 
+  generate-requirements:
+    runs-on: ubuntu-latest
+    needs: [test-cpu, test-gpu]
+    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Generate requirements.txt (CPU)
+        run: |
+          uv export --extra cpu --no-hashes --no-dev -o requirements.txt
+
+      - name: Generate requirements-dev.txt (CPU)
+        run: |
+          uv export --extra cpu --extra dev --no-hashes -o requirements-dev.txt
+
+      - name: Generate requirements-cu128.txt (CUDA 12.8)
+        run: |
+          uv export --extra cu128 --no-hashes --no-dev -o requirements-cu128.txt
+
+      - name: Generate requirements-cu128-dev.txt (CUDA 12.8)
+        run: |
+          uv export --extra cu128 --extra dev --no-hashes -o requirements-cu128-dev.txt
+
+      - name: Generate requirements-cu126.txt (CUDA 12.6)
+        run: |
+          uv export --extra cu126 --no-hashes --no-dev -o requirements-cu126.txt
+
+      - name: Generate requirements-cu126-dev.txt (CUDA 12.6)
+        run: |
+          uv export --extra cu126 --extra dev --no-hashes -o requirements-cu126-dev.txt
+
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add requirements*.txt
+          git diff --staged --quiet || git commit -m "chore: update requirements files [skip ci]"
+          git push
+
   report:
     runs-on: ubuntu-latest
     needs: [test-cpu, test-gpu]
     if: always()
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: "develop-CLEVER-relations"
 
       - name: Download all test results
         uses: actions/download-artifact@v4
