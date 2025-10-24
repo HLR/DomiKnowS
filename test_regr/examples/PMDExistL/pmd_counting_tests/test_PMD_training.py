@@ -171,9 +171,7 @@ def test_different_tnorms(setup_environment, create_args, tnorm):
     assert program is not None
 
 
-@pytest.mark.xfail(reason="PMD cannot reliably solve discrete counting constraints")
-def test_pmd_exact_constraint_known_limitation():
-    """Documents PMD's known limitation with exact counting constraints"""
+def test_pmd_exact_constraint_improved():
     np.random.seed(0)
     torch.manual_seed(0)
     
@@ -192,11 +190,12 @@ def test_pmd_exact_constraint_known_limitation():
         model = "PMD"
         sample_size = -1
         use_gumbel = True
-        initial_temp = 5.0
-        final_temp = 0.5
+        initial_temp = 2.0
+        final_temp = 0.1
         hard_gumbel = False
     
     args = Args()
     pass_test, before_count, actual_count = main(args)
     
-    assert actual_count == args.expected_atLeastL
+    assert actual_count == args.expected_atLeastL, \
+        f"PMD failed to satisfy exact constraint: got {actual_count}, expected {args.expected_atLeastL}"
