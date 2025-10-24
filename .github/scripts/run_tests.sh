@@ -84,8 +84,10 @@ for subfolder in "${TEST_LIST[@]}"; do
     
     echo "   📊 Pytest exit code: $test_exit_code"
     echo "   📄 Pytest output length: $(echo "$test_output" | wc -l) lines"
-    echo "   📄 First few lines of pytest output:"
-    echo "$test_output" | head -5
+    echo "   📄 Pytest output:"
+    echo "   ----------------------------------------"
+    echo "$test_output"
+    echo "   ----------------------------------------"
     
     if [ $test_exit_code -eq 5 ]; then
       # Exit code 5: No tests collected - treat as warning, not failure
