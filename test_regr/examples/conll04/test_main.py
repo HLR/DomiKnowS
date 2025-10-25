@@ -6,7 +6,20 @@ from flaky import flaky
 @pytest.fixture(name='case')
 def test_case():
     import torch
+    import random
+    import numpy as np
     from domiknows.utils import Namespace
+
+    # Fix all random seeds for reproducibility
+    torch.manual_seed(42)
+    random.seed(42)
+    np.random.seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(42)
+        torch.cuda.manual_seed_all(42)
+        # Make CUDA operations deterministic
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     word_emb = torch.randn(4, 2048, device=device)
@@ -81,10 +94,10 @@ def test_case():
                                       [0.5, 0.5],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30],  # IBM
                                      ], device=device),
             
-            'live_in': torch.mul(torch.rand(16, 2, device=device), 0.5), # TODO: add examable values
-            'located_in': torch.mul(torch.rand(16, 2, device=device), 0.5), # TODO: add examable values
-            'orgbase_on': torch.mul(torch.rand(16, 2, device=device), 0.5), # TODO: add examable values
-            'kill': torch.mul(torch.rand(16, 2, device=device), 0.5), # TODO: add examable values
+            'live_in': torch.mul(torch.rand(16, 2, device=device), 0.5),
+            'located_in': torch.mul(torch.rand(16, 2, device=device), 0.5),
+            'orgbase_on': torch.mul(torch.rand(16, 2, device=device), 0.5),
+            'kill': torch.mul(torch.rand(16, 2, device=device), 0.5),
         }, 
         
         # nandL(people,organization)
@@ -93,7 +106,6 @@ def test_case():
                            "G" : torch.tensor([0.5000, 0.3100, 0.2769, 0.5000],  device=device),
                            "P" : torch.tensor([0.2993, 0.1099, 0.0778, 0.3471],  device=device)
                         },
-        #                 torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
         # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         #                                 John           works          for      IBM

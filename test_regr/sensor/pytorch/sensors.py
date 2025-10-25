@@ -22,9 +22,9 @@ class BaseTestSensor(JointSensor, ConstantSensor):
 
     def evaluate(self, inputs, expected_inputs):
         assert len(inputs) == len(expected_inputs)
-        for input, expected_input in  zip(inputs, expected_inputs):
-            if (isinstance(input, (torch.Tensor,np.ndarray, np.generic)) or
-                isinstance(expected_input, (torch.Tensor,np.ndarray, np.generic))):
+        for input, expected_input in zip(inputs, expected_inputs):
+            if (isinstance(input, (torch.Tensor, np.ndarray, np.generic)) or
+                isinstance(expected_input, (torch.Tensor, np.ndarray, np.generic))):
                 try:
                     if isinstance(input, torch.Tensor):
                         input = input.detach().clone().to(self.device)
@@ -37,7 +37,13 @@ class BaseTestSensor(JointSensor, ConstantSensor):
                         expected_input = torch.tensor(expected_input, device=self.device)
                 except:
                     pass
-                assert (input == expected_input).all()
+                
+                # Use torch.equal for exact tensor comparison, with fallback
+                if isinstance(input, torch.Tensor) and isinstance(expected_input, torch.Tensor):
+                    assert torch.equal(input, expected_input) or (input == expected_input).all(), \
+                        f"Tensor mismatch: shapes {input.shape} vs {expected_input.shape}"
+                else:
+                    assert (input == expected_input).all()
             else:
                 assert input == expected_input
 
