@@ -533,56 +533,59 @@ class GumbelSolverModel(SolverModel):
     def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=None, 
                  inference_with=None, probKey=("local", "softmax"), device='auto', 
                  probAcc=None, ignore_modules=False, kwargs=None,
-                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003):
         """
         Args:
             ... (same as SolverModel)
             use_gumbel: If True, use Gumbel-Softmax for 'local/softmax' inference
-            temperature: Gumbel-Softmax temperature (1.0 = standard softmax, lower = more discrete)
+            temperature: Initial Gumbel-Softmax temperature (1.0 = standard softmax, lower = more discrete)
             hard_gumbel: If True, use straight-through estimator (discrete forward, soft backward)
+            temperature_schedule: 'constant', 'exponential', or 'linear'
+            min_temperature: Minimum temperature for annealing
+            anneal_rate: Rate of temperature decay
         """
         super().__init__(graph, poi=poi, loss=loss, metric=metric, inferTypes=inferTypes,
                         inference_with=inference_with, probKey=probKey, device=device,
                         probAcc=probAcc, ignore_modules=ignore_modules, kwargs=kwargs)
         
         self.use_gumbel = use_gumbel
+        self.initial_temperature = temperature
         self.temperature = temperature
         self.hard_gumbel = hard_gumbel
+        self.temperature_schedule = temperature_schedule
+        self.min_temperature = min_temperature
+        self.anneal_rate = anneal_rate
+        self._step_count = 0
     
     def set_temperature(self, temperature):
         """Update Gumbel-Softmax temperature (can be called during training)."""
-        self.temperature = temperature
+        self.temperature = max(temperature, self.min_temperature)
     
-    def _infer_gumbel_local(self, datanode):
-        """
-        Apply Gumbel-Softmax to local inference results.
+    def anneal_temperature(self):
+        """Anneal temperature according to schedule."""
+        if self.temperature_schedule == 'constant':
+            return
         
-        This method should be called after standard local inference to replace
-        softmax probabilities with Gumbel-Softmax samples.
-        """
-        # First perform standard local inference to get the logits
-        datanode.inferLocal(keys=("softmax",))
+        self._step_count += 1
         
-        # Then apply Gumbel-Softmax transformation to each property
-        for prop in self.poi:
-            for sensor in prop.find(TorchSensor):
-                if not sensor.label:  # Only apply to predictions, not labels
-                    # Get the current inference results
-                    # This is a simplified version - you may need to adapt based on your datanode structure
-                    try:
-                        logits = sensor.get_logits(datanode)  # You'll need to implement this
-                        if logits is not None:
-                            # Apply Gumbel-Softmax
-                            gumbel_probs = gumbel_softmax(
-                                logits, 
-                                temperature=self.temperature,
-                                hard=self.hard_gumbel
-                            )
-                            # Store back to datanode
-                            sensor.set_probabilities(datanode, gumbel_probs)  # You'll need to implement this
-                    except AttributeError:
-                        # If methods don't exist, skip this sensor
-                        pass
+        if self.temperature_schedule == 'exponential':
+            # Exponential decay: T = max(T0 * exp(-rate * step), T_min)
+            new_temp = self.initial_temperature * torch.exp(
+                torch.tensor(-self.anneal_rate * self._step_count)
+            ).item()
+        elif self.temperature_schedule == 'linear':
+            # Linear decay: T = max(T0 - rate * step, T_min)
+            new_temp = self.initial_temperature - self.anneal_rate * self._step_count
+        else:
+            new_temp = self.temperature
+        
+        self.temperature = max(new_temp, self.min_temperature)
+    
+    def reset_temperature(self):
+        """Reset temperature to initial value."""
+        self.temperature = self.initial_temperature
+        self._step_count = 0
     
     def inference(self, builder):
         """
@@ -611,13 +614,16 @@ class GumbelSolverModel(SolverModel):
         if datanode:
             for infertype in self.inferTypes:
                 # Apply Gumbel-Softmax for local/softmax inference when enabled
-                if self.use_gumbel and infertype == 'local/softmax':
-                    # First compute standard local inference (this gets the logits)
-                    datanode.inferLocal(keys=("softmax",))
-                    # Then apply Gumbel-Softmax transformation
+                if self.use_gumbel and infertype in ['local/softmax', 'softmax']:
+                    # Anneal temperature if using scheduling
+                    if self.training:
+                        self.anneal_temperature()
+                    
+                    # Apply Gumbel-Softmax transformation
                     datanode.inferGumbelLocal(
                         temperature=self.temperature,
-                        hard=self.hard_gumbel
+                        hard=self.hard_gumbel,
+                        keys=("softmax",) if infertype == 'local/softmax' else None
                     )
                 else:
                     # Standard inference
@@ -798,17 +804,46 @@ class GumbelSolverModelDictLoss(SolverModelDictLoss):
     
     def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None, 
                  inferTypes=['ILP'], device='auto',
-                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003):
         super().__init__(graph, poi=poi, loss=loss, metric=metric, dictloss=dictloss,
                         inferTypes=inferTypes, device=device)
         
         self.use_gumbel = use_gumbel
+        self.initial_temperature = temperature
         self.temperature = temperature
         self.hard_gumbel = hard_gumbel
+        self.temperature_schedule = temperature_schedule
+        self.min_temperature = min_temperature
+        self.anneal_rate = anneal_rate
+        self._step_count = 0
     
     def set_temperature(self, temperature):
         """Update Gumbel-Softmax temperature."""
-        self.temperature = temperature
+        self.temperature = max(temperature, self.min_temperature)
+    
+    def anneal_temperature(self):
+        """Anneal temperature according to schedule."""
+        if self.temperature_schedule == 'constant':
+            return
+        
+        self._step_count += 1
+        
+        if self.temperature_schedule == 'exponential':
+            new_temp = self.initial_temperature * torch.exp(
+                torch.tensor(-self.anneal_rate * self._step_count)
+            ).item()
+        elif self.temperature_schedule == 'linear':
+            new_temp = self.initial_temperature - self.anneal_rate * self._step_count
+        else:
+            new_temp = self.temperature
+        
+        self.temperature = max(new_temp, self.min_temperature)
+    
+    def reset_temperature(self):
+        """Reset temperature to initial value."""
+        self.temperature = self.initial_temperature
+        self._step_count = 0
     
     def inference(self, builder):
         """Override inference to support Gumbel-Softmax."""
@@ -820,8 +855,17 @@ class GumbelSolverModelDictLoss(SolverModelDictLoss):
         datanode = builder.getDataNode(device=self.device)
         
         for infertype in self.inferTypes:
-            if self.use_gumbel and infertype == 'local/softmax':
-                self._infer_gumbel_local(datanode)
+            if self.use_gumbel and infertype in ['local/softmax', 'softmax']:
+                # Anneal temperature if using scheduling
+                if self.training:
+                    self.anneal_temperature()
+                
+                # Apply Gumbel-Softmax transformation
+                datanode.inferGumbelLocal(
+                    temperature=self.temperature,
+                    hard=self.hard_gumbel,
+                    keys=("softmax",) if infertype == 'local/softmax' else None
+                )
             else:
                 {
                     'ILP': lambda: datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
