@@ -23,7 +23,12 @@ class GBIModel(torch.nn.Module):
             lr=1e-1,
             reg_weight=1,
             reset_params=True,
-            device='auto'
+            device='auto',
+            grad_clip=None,
+            early_stop_patience=5,
+            loss_plateau_threshold=1e-6,
+            optimizer='sgd',
+            momentum=0.0
         ):
         """
         This class specifies a model that uses gradient-based inference (GBI) for each inference step.
@@ -36,19 +41,30 @@ class GBIModel(torch.nn.Module):
         :param reg_weight: The weight of the regularization loss. Increasing this value will result in parameter updates that are closer to the original, unoptimized parameters. Defaults to 1. (Optional)
         :param reset_params: If set to `True`, the parameters of the model will be reset to the original (non-optimized) parameters after GBI is complete. If set to `False`, the parameters will *only* be reset if the loss becomes `NaN` or the constraints aren't satisfied after `gbi_iters` updates. Set this to `True` if GBI is to only be used during inference. Defaults to `True`. (Optional)
         :param device: The device to use for GBI updates. Defaults to 'auto'. (Optional)
+        :param grad_clip: Maximum gradient norm for clipping. If None, no clipping is applied. (Optional)
+        :param early_stop_patience: Number of iterations to wait for improvement before early stopping. Defaults to 5. (Optional)
+        :param loss_plateau_threshold: Minimum loss improvement to reset patience counter. Defaults to 1e-6. (Optional)
+        :param optimizer: Optimizer type ('sgd' or 'adam'). Defaults to 'sgd'. (Optional)
+        :param momentum: Momentum for SGD optimizer. Defaults to 0.0. (Optional)
         """
 
         super().__init__()
         
+        # Fixed typo: should be solver_model consistently
         if solver_model is None:
             self.solver_model = self
         else:
-            self.server_model = solver_model
+            self.solver_model = solver_model
             
         self.gbi_iters = gbi_iters
         self.lr = lr
         self.reg_weight = reg_weight
         self.reset_params = reset_params
+        self.grad_clip = grad_clip
+        self.early_stop_patience = early_stop_patience
+        self.loss_plateau_threshold = loss_plateau_threshold
+        self.optimizer_type = optimizer.lower()
+        self.momentum = momentum
 
         self.device = device
         
@@ -60,20 +76,26 @@ class GBIModel(torch.nn.Module):
             
         self.loss = MacroAverageTracker(NBCrossEntropyLoss())
         
+        # Statistics tracking
+        self.stats = {
+            'total_iterations': 0,
+            'early_stops': 0,
+            'constraint_satisfied_stops': 0,
+            'nan_resets': 0,
+            'avg_iterations': 0
+        }
+        
     def reset(self):
         if hasattr(self, 'loss') and self.solver_model.loss and isinstance(self.solver_model.loss, MetricTracker):
             self.solver_model.loss.reset()
 
- # --- GBI methods
     def get_constraints_satisfaction(self, node):
         """
         Get constraint satisfaction from datanode. Returns number of satisfied constraints and total number of constraints.
 
         :params: node: The DataNode to get constraint satisfaction from.
         """
-
         verifyResult = node.verifyResultsLC(key = "/local/argmax")
-
         assert verifyResult
 
         satisfied_constraints = []
@@ -85,43 +107,24 @@ class GBIModel(torch.nn.Module):
 
         return num_satisfied, num_constraints
     
-    def reg_loss(self, model_updated, model, exclude_names=set()):
+    def reg_loss(self, model_updated, model_original):
         """
-        Calculates regularization loss for GBI. The loss is defined as the L2 distance between the original and updated model parameters.
+        Calculates regularization loss for GBI using efficient parameter grouping.
 
         :param model_updated: The model being optimized.
-        :param model: The original, unoptimized model. The parameters for this model should be frozen.
-        :param exclude_names: A set of parameter names to exclude from the regularization loss calculation. Defaults to an empty set. (Optional)
+        :param model_original: The original, unoptimized model parameters (frozen).
         """
-
-        orig_params = {}
-        lambda_params = {}
-
-        for key in model.keys():
-            key_prefix = '/'.join(key.split('/')[:3])
-
-            # print(key, key_prefix)
-
-            w_orig = model[key]
-            w_curr = model_updated[key]
-
-            if key_prefix not in orig_params:
-                orig_params[key_prefix] = []
-                lambda_params[key_prefix] = []
-
-            if key not in exclude_names:
-                orig_params[key_prefix].append(w_orig.flatten())
-                lambda_params[key_prefix].append(w_curr.flatten())
-            else:
-                print('skipping %s' % key)
-
         result_norm = 0.0
-
-        for key in orig_params.keys():
-            orig_params_module = torch.cat(orig_params[key], dim=0)
-            lambda_params_module = torch.cat(lambda_params[key], dim=0)
-
-            result_norm += torch.linalg.norm(orig_params_module - lambda_params_module, dim=0, ord=2)
+        
+        # Efficient computation without intermediate lists
+        for (name_updated, param_updated), (name_orig, param_orig) in zip(
+            model_updated.items(), model_original.items()
+        ):
+            # Ensure we're comparing the same parameters
+            assert name_updated == name_orig, f"Parameter mismatch: {name_updated} vs {name_orig}"
+            
+            # Compute L2 norm directly
+            result_norm += torch.linalg.norm(param_orig - param_updated, ord=2)
 
         return result_norm
 
@@ -133,15 +136,23 @@ class GBIModel(torch.nn.Module):
         :param orig_params: The original, unoptimized parameters of the model.
         """
         model.load_state_dict(orig_params)
-
-    def get_argmax_from_node(self, node):
-        probs_named = {}
-        for var_name, var_val in node.getAttribute('variableSet').items():
-            if var_name.endswith('>'):
-                probs_named[var_name] = F.log_softmax(var_val, dim=-1).flatten()
-
-        argmax_vals = {name: torch.argmax(param).item() for name, param in probs_named.items()}
-        return argmax_vals
+        
+    def _create_optimizer(self, parameters):
+        """Create optimizer based on configuration."""
+        if self.optimizer_type == 'adam':
+            return Adam(parameters, lr=self.lr)
+        elif self.optimizer_type == 'sgd':
+            return SGD(parameters, lr=self.lr, momentum=self.momentum)
+        else:
+            raise ValueError(f"Unknown optimizer type: {self.optimizer_type}")
+    
+    def _apply_gradient_clipping(self):
+        """Apply gradient clipping if configured."""
+        if self.grad_clip is not None:
+            torch.nn.utils.clip_grad_norm_(
+                self.solver_model.parameters(), 
+                self.grad_clip
+            )
 
     def forward(self, datanode, build=None, verbose=False):
         """
@@ -151,132 +162,191 @@ class GBIModel(torch.nn.Module):
         :param build: Defaults to `None`. (Optional)
         :param verbose: Print intermediate values during inference. Defaults to `False`. (Optional)
         """
-
         # Get constraint satisfaction for the current DataNode
         num_satisfied, num_constraints = self.get_constraints_satisfaction(datanode)
         model_has_GBI_inference = False
 
         # --- Test if to start GBI for this data_item
         if num_satisfied == num_constraints:
+            if verbose:
+                print('All constraints already satisfied, skipping GBI')
             return 0.0, datanode, datanode.myBuilder
-        # ------- Continue with GBI
-
-        # to be optimized by gbi
-        optimized_parameters = {name: param for name, param in self.server_model.named_parameters()}
-
-        # for regularization calculation
-        original_parameters = {name: param.clone().detach() for name, param in self.server_model.named_parameters()}
-
-        # for reloading parameters after gbi
-        reload_parameters = self.server_model.state_dict()
-        for name, param in reload_parameters.items():
-            reload_parameters[name] = param.clone().detach()
         
-        # Print original and cloned parameters to verify they are the same but different in memory location
-        for name, param in self.server_model.named_parameters():
-            are_equal = torch.equal(param, original_parameters[name])
-            same_memory = param.storage().data_ptr() == original_parameters[name].untyped_storage().data_ptr()
-            if same_memory or not are_equal:
-                print(f"{name} -> Equal: {are_equal}, Same Memory: {same_memory}")
-    
+        # ------- Continue with GBI
+        if verbose:
+            print(f'Starting GBI: {num_satisfied}/{num_constraints} constraints satisfied')
+
+        # Store original parameters for regularization and potential reset
+        original_parameters = {
+            name: param.clone().detach() 
+            for name, param in self.solver_model.named_parameters()
+        }
+        
+        # Store state dict for reset (more memory efficient than cloning all)
+        reload_parameters = {
+            name: param.clone().detach()
+            for name, param in self.solver_model.state_dict().items()
+        }
+        
         # Data to be used for inference
         x = datanode.myBuilder["data_item"]
                         
-        # -- self.server_mode is the model that gets optimized by GBI
-        self.server_model.reset()        
+        # Reset solver model
+        self.solver_model.reset()        
 
-        modelLParams = self.server_model.parameters()
-        c_opt = SGD(modelLParams, lr=self.lr)
+        # Create optimizer
+        c_opt = self._create_optimizer(self.solver_model.parameters())
         
         # Remove "GBI" from the list of inference types if model has it
-        if hasattr(self.server_model, 'inferTypes'):
-            if 'GBI' in self.server_model.inferTypes:
-                self.server_model.inferTypes.remove('GBI')
+        if hasattr(self.solver_model, 'inferTypes'):
+            if 'GBI' in self.solver_model.inferTypes:
+                self.solver_model.inferTypes.remove('GBI')
                 model_has_GBI_inference = True
+        
+        # Early stopping variables
+        best_loss = float('inf')
+        patience_counter = 0
+        best_iteration = 0
         
         node_l = None
         for c_iter in range(self.gbi_iters):
-            # perform inference using weights from self.server_mode
-            loss, metric, node_l, _ = self.server_model(x)
+            # Perform inference using weights from solver_model
+            loss, metric, node_l, _ = self.solver_model(x)
 
             num_satisfied_l, num_constraints_l = self.get_constraints_satisfaction(node_l)
 
-            # -- collect probs from datanode (in skeleton mode) 
+            # Collect probabilities from datanode
             probs = []
             for var_name, var_val in node_l.getAttribute('variableSet').items():
-                if var_name.endswith('>'):# and var_val.requires_grad:
+                if var_name.endswith('>'):
                     probs.append(F.log_softmax(var_val, dim=-1).flatten())
 
             log_probs_cat = torch.cat(probs, dim=0)
             log_probs = log_probs_cat.mean()
 
             if verbose:
-                print('probs mean:')
-                print(log_probs)
+                print(f'Iter {c_iter}: log_probs mean = {log_probs.item():.6f}')
 
-            #  -- Constraint loss: NLL * binary satisfaction + regularization loss
-            # reg loss is calculated based on L2 distance of weights between optimized model and original weights
-            reg_loss =  self.reg_loss(optimized_parameters, original_parameters)
-            c_loss = log_probs * ((num_constraints_l - num_satisfied_l) / num_constraints_l) + self.reg_weight * reg_loss
+            # Constraint loss: NLL * binary satisfaction + regularization loss
+            optimized_parameters = {name: param for name, param in self.solver_model.named_parameters()}
+            reg_loss_val = self.reg_loss(optimized_parameters, original_parameters)
+            c_loss = log_probs * ((num_constraints_l - num_satisfied_l) / num_constraints_l) + self.reg_weight * reg_loss_val
 
-            if c_loss != c_loss:
-                # if parameter reset is normally disabled, reset parameters here
-                if not self.reset_params:
-                    self.set_pretrained(self.server_model, reload_parameters)
-
+            # Check for NaN loss
+            if torch.isnan(c_loss):
+                if verbose:
+                    print(f'NaN loss detected at iteration {c_iter}, resetting parameters')
+                
+                self.stats['nan_resets'] += 1
+                # Always reset on NaN
+                self.set_pretrained(self.solver_model, reload_parameters)
+                if model_has_GBI_inference:
+                    self.solver_model.inferTypes.append('GBI')
                 break
             
             if verbose:
-                print("iter={}, c_loss={:.4f}, c_loss.grad_fn={}, num_constraints_l={}, satisfied={}".format(c_iter, c_loss.item(), c_loss.grad_fn.__class__.__name__, num_constraints_l, num_satisfied_l))
-                print("reg_loss={:.4f}, reg_loss.grad_fn={}, log_probs={:.4f}, log_probs.grad_fn={}\n".format(reg_loss.item(), reg_loss.grad_fn.__class__.__name__, log_probs.item(), log_probs.grad_fn.__class__.__name__))
+                print(f"iter={c_iter}, c_loss={c_loss.item():.6f}, "
+                      f"reg_loss={reg_loss_val.item():.6f}, "
+                      f"satisfied={num_satisfied_l}/{num_constraints_l}")
                 
             # --- Check if constraints are satisfied
             if num_satisfied_l == num_constraints_l:
-                # --- End early if constraints are satisfied
-                if model_has_GBI_inference:
-                    self.server_model.inferTypes.append('GBI')
-
-                # reset model parameters
-                self.server_model.zero_grad()
-                if self.reset_params:
-                    self.set_pretrained(self.server_model, reload_parameters)
+                if verbose:
+                    print(f'Constraints satisfied after {c_iter} iterations')
                 
-                print(f'Finishing GBI - Constraints are satisfied after {c_iter} iteration')
+                self.stats['constraint_satisfied_stops'] += 1
+                self.stats['total_iterations'] += c_iter
+                
+                # Reset model parameters if configured
+                self.solver_model.zero_grad()
+                if self.reset_params:
+                    self.set_pretrained(self.solver_model, reload_parameters)
+                
+                if model_has_GBI_inference:
+                    self.solver_model.inferTypes.append('GBI')
+                
                 return c_loss, node_l, node_l.myBuilder
+            
+            # Early stopping based on loss plateau
+            if c_loss.item() < best_loss - self.loss_plateau_threshold:
+                best_loss = c_loss.item()
+                patience_counter = 0
+                best_iteration = c_iter
+            else:
+                patience_counter += 1
+                
+            if patience_counter >= self.early_stop_patience:
+                if verbose:
+                    print(f'Early stopping at iteration {c_iter} '
+                          f'(best was {best_iteration} with loss {best_loss:.6f})')
+                
+                self.stats['early_stops'] += 1
+                self.stats['total_iterations'] += c_iter
+                break
                         
-            # --- Backward pass on self.server_model
+            # --- Backward pass on solver_model
             if c_loss.requires_grad:
+                # Zero gradients
+                c_opt.zero_grad()
+                
                 # Compute gradients
                 c_loss.backward()
                 
-                if verbose:
-                    # Print the params of the model parameters which have grad
-                    print("Params before model step which have grad")
-                    for name, param in self.server_model.named_parameters():
-                        if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
-                            print(name, 'param sum ', torch.sum(torch.abs(param)).item())
-                                            
-                # Update self.server_model params based on gradients
-                c_opt.step()
+                # Apply gradient clipping if configured
+                self._apply_gradient_clipping()
                 
                 if verbose:
-                    # Print the params of the model parameters which have grad
-                    print("Params after model step which have grad")
-                    for name, param in self.server_model.named_parameters():
-                        if param.grad is not None and torch.sum(torch.abs(param.grad)) > 0:
-                            print(name, 'param sum ', torch.sum(torch.abs(param)).item())
-            
-        if model_has_GBI_inference:
-            self.server_model.inferTypes.append('GBI')
+                    # Print gradient statistics
+                    total_norm = 0.0
+                    for name, param in self.solver_model.named_parameters():
+                        if param.grad is not None:
+                            param_norm = param.grad.data.norm(2)
+                            total_norm += param_norm.item() ** 2
+                    total_norm = total_norm ** 0.5
+                    print(f'  Total gradient norm: {total_norm:.6f}')
+                                            
+                # Update solver_model params based on gradients
+                c_opt.step()
+        else:
+            # Loop completed without break (max iterations reached)
+            self.stats['total_iterations'] += self.gbi_iters
+            if verbose:
+                print(f'Max iterations ({self.gbi_iters}) reached without satisfying constraints')
         
-        # reset model parameters
-        self.server_model.zero_grad()
+        # Update statistics
+        if self.stats['constraint_satisfied_stops'] + self.stats['early_stops'] > 0:
+            self.stats['avg_iterations'] = (
+                self.stats['total_iterations'] / 
+                (self.stats['constraint_satisfied_stops'] + self.stats['early_stops'])
+            )
+        
+        if model_has_GBI_inference:
+            self.solver_model.inferTypes.append('GBI')
+        
+        # Reset model parameters
+        self.solver_model.zero_grad()
+        
+        # Always reset parameters if constraints not satisfied
+        self.set_pretrained(self.solver_model, reload_parameters)
 
-        # reset parameters regardless of self.reset_params flag because constraints aren't satisfied
-        self.set_pretrained(self.server_model, reload_parameters)
-
-        print(f'Finishing GBI - Constraints not are satisfied after {self.gbi_iters} iteration')
+        if verbose:
+            print(f'Finishing GBI - Constraints not satisfied after {self.gbi_iters} iterations')
+        
         return c_loss, node_l, node_l.myBuilder
+ 
+    def get_stats(self):
+        """Return GBI optimization statistics."""
+        return self.stats.copy()
+    
+    def reset_stats(self):
+        """Reset statistics tracking."""
+        self.stats = {
+            'total_iterations': 0,
+            'early_stops': 0,
+            'constraint_satisfied_stops': 0,
+            'nan_resets': 0,
+            'avg_iterations': 0
+        }
  
     def calculateGBISelection(self, datanode, conceptsRelations):
         c_loss, updatedDatanode, updatedBuilder = self.forward(datanode)
@@ -297,15 +367,13 @@ class GBIModel(torch.nn.Module):
                 gbiForConcept = torch.zeros([len(dns), conceptLen], dtype=torch.float, device=updatedDatanode.current_device)
                    
             for i, (dn, originalDn) in enumerate(zip(dns, originalDns)): 
-                v = dn.getAttribute(currentConcept) # Get learned probabilities
-                #print(f'Net(depth={i}inGBI); pred: {torch.argmax(v, dim=-1)}')
+                v = dn.getAttribute(currentConcept)
                 if v is None:
                     continue
                 
                 # Calculate GBI results
                 vGBI = torch.zeros(v.size(), dtype=torch.float, device=updatedDatanode.current_device)
                 vArgmaxIndex = torch.argmax(v).item()
-                #print(f'vArgmaxIndex: {vArgmaxIndex}')
                 vGBI[vArgmaxIndex] = 1
                                 
                 # Add GBI inference result to the original datanode 
@@ -320,7 +388,7 @@ class GBIModel(torch.nn.Module):
             if gbiForConcept is not None:
                 rootConceptName = cRoot.name
                 keyGBIInVariableSet = rootConceptName + "/" + keyGBI
-                datanode.attributes["variableSet"][keyGBIInVariableSet]=gbiForConcept
-                updatedDatanode.attributes["variableSet"][keyGBIInVariableSet]=gbiForConcept
+                datanode.attributes["variableSet"][keyGBIInVariableSet] = gbiForConcept
+                updatedDatanode.attributes["variableSet"][keyGBIInVariableSet] = gbiForConcept
 
         return
