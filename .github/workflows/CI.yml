@@ -169,18 +169,11 @@ jobs:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     permissions:
       contents: write
-      pull-requests: write
     
     steps:
-      - name: Debug GitHub context
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Base ref: ${{ github.base_ref }}"
-          echo "Head ref: ${{ github.head_ref }}"
-          echo "Ref: ${{ github.ref }}"
-
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
@@ -217,26 +210,17 @@ jobs:
         run: |
           uv export --extra cu126 --extra dev --no-hashes -o requirements-cu126-dev.txt
 
-      - name: Create Pull Request
-        id: cpr
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: update requirements files [skip ci]"
-          branch: auto-update-requirements
-          delete-branch: true
-          title: "chore: update requirements files"
-          body: |
-            Auto-generated requirements files update from CI workflow.
-            
-            This PR updates all requirements files based on the current pyproject.toml dependencies.
-          labels: dependencies,automated
-
-      - name: Enable auto-merge
-        if: steps.cpr.outputs.pull-request-number != ''
-        run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add requirements*.txt
+          if git diff --staged --quiet; then
+            echo "No changes to requirements files"
+          else
+            git commit -m "chore: update requirements files"
+            git push
+          fi
 
   report:
     runs-on: ubuntu-latest
