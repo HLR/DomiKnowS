@@ -366,7 +366,9 @@ class SampleLossModel(torch.nn.Module):
 
     def __init__(self, graph, 
                  tnorm='P', 
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto',
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003):
         super().__init__()
         self.graph = graph
         self.build = True
@@ -377,6 +379,16 @@ class SampleLossModel(torch.nn.Module):
         self.sample = sample
         self.sampleSize = sampleSize
         self.sampleGlobalLoss = sampleGlobalLoss
+        
+        # Gumbel-Softmax parameters
+        self.use_gumbel = use_gumbel
+        self.initial_temperature = temperature
+        self.temperature = temperature
+        self.hard_gumbel = hard_gumbel
+        self.temperature_schedule = temperature_schedule
+        self.min_temperature = min_temperature
+        self.anneal_rate = anneal_rate
+        self._step_count = 0
         
         self.constr = OrderedDict(graph.logicalConstrainsRecursive)
         nconstr = len(self.constr)
@@ -441,6 +453,33 @@ class SampleLossModel(torch.nn.Module):
             with torch.no_grad():
                 self.lmbd[self.lmbd_index[key]] = 0
         return self.lmbd[self.lmbd_index[key]]
+    
+    def set_temperature(self, temperature):
+        """Update Gumbel-Softmax temperature."""
+        self.temperature = max(temperature, self.min_temperature)
+    
+    def anneal_temperature(self):
+        """Anneal temperature according to schedule."""
+        if self.temperature_schedule == 'constant':
+            return
+        
+        self._step_count += 1
+        
+        if self.temperature_schedule == 'exponential':
+            # Exponential decay: T = max(T0 * exp(-rate * step), T_min)
+            new_temp = self.initial_temperature * np.exp(-self.anneal_rate * self._step_count)
+        elif self.temperature_schedule == 'linear':
+            # Linear decay: T = max(T0 - rate * step, T_min)
+            new_temp = self.initial_temperature - self.anneal_rate * self._step_count
+        else:
+            new_temp = self.temperature
+        
+        self.temperature = max(new_temp, self.min_temperature)
+    
+    def reset_temperature(self):
+        """Reset temperature to initial value."""
+        self.temperature = self.initial_temperature
+        self._step_count = 0
 
     def forward(self, builder, build=None, use_gumbel=False, temperature=1.0, hard_gumbel=False):
         """
@@ -470,12 +509,16 @@ class SampleLossModel(torch.nn.Module):
         datanode = builder.getDataNode(device=self.device)
         
         # Apply Gumbel-Softmax if enabled
-        if use_gumbel:
-            self.sampleLossLogger.info(f"Applying Gumbel-Softmax with temp={temperature}, hard={hard_gumbel}")
+        if self.use_gumbel:
+            # Anneal temperature during training
+            if self.training:
+                self.anneal_temperature()
+            
+            self.sampleLossLogger.info(f"Applying Gumbel-Softmax with temp={self.temperature}, hard={self.hard_gumbel}")
             # First compute standard local/softmax
             datanode.inferLocal(keys=("softmax",))
             # Then apply Gumbel transformation
-            datanode.inferGumbelLocal(temperature=temperature, hard=hard_gumbel)
+            datanode.inferGumbelLocal(temperature=self.temperature, hard=self.hard_gumbel)
         
         # Calculate LC loss (this now uses Gumbel-Softmax if applied above)
         self.sampleLossLogger.info("Calculating LC loss...")
