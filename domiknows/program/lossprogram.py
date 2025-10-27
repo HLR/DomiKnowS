@@ -2,13 +2,9 @@ import logging
 import torch
 import torch.nn.functional as F
 import numpy as np
-from tqdm import tqdm
-
-from domiknows.program.model.pytorch import SolverModel
-#from domiknows.graph.LeftLogic import LeftLogicElementOutput
 
 from .program import LearningBasedProgram, get_len
-from ..utils import consume, entuple, detuple
+from ..utils import consume, safe_tqdm as tqdm
 from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
 from .model.base import Mode
 
