@@ -138,31 +138,41 @@ def test_different_tnorms(setup_environment, create_args, tnorm):
     args.model = "PMD"
     try:
         pass_test, before_count, actual_count = main(args)
-        assert actual_count is not None
-        print(f"  PrimalDualProgram succeeded with tnorm={tnorm}")
-        return
+        if pass_test:
+            print(f"  PrimalDualProgram succeeded with tnorm={tnorm}: count={actual_count}, expected={args.expected_atLeastL}")
+            assert actual_count == args.expected_atLeastL
+            return
+        else:
+            print(f"  PrimalDualProgram did not satisfy constraint with tnorm={tnorm}: count={actual_count}, expected={args.expected_atLeastL}")
     except Exception as e:
-        print(f"  PrimalDualProgram failed with tnorm={tnorm}: {e}")
+        print(f"  PrimalDualProgram failed with exception for tnorm={tnorm}: {e}")
     
     # If failed, try GumbelPrimalDualProgram
     args.model = "gumbel_pmd"
     try:
         pass_test, before_count, actual_count = main(args)
-        assert actual_count is not None
-        print(f"  GumbelPrimalDualProgram succeeded with tnorm={tnorm}")
-        return
+        if pass_test:
+            print(f"  GumbelPrimalDualProgram succeeded with tnorm={tnorm}: count={actual_count}, expected={args.expected_atLeastL}")
+            assert actual_count == args.expected_atLeastL
+            return
+        else:
+            print(f"  GumbelPrimalDualProgram did not satisfy constraint with tnorm={tnorm}: count={actual_count}, expected={args.expected_atLeastL}")
     except Exception as e:
-        print(f"  GumbelPrimalDualProgram failed with tnorm={tnorm}: {e}")
+        print(f"  GumbelPrimalDualProgram failed with exception for tnorm={tnorm}: {e}")
     
     # If both failed, try GumbelSampleLossProgram
     args.model = "sampling"
     args.sample_size = 100
+    args.epoch = 100  # More epochs for sampling
     pass_test, before_count, actual_count = main(args)
-    assert actual_count is not None
-    print(f"  GumbelSampleLossProgram succeeded with tnorm={tnorm}"), print(f"  All models failed with tnorm={tnorm}")
+    print(f"  GumbelSampleLossProgram: count={actual_count}, expected={args.expected_atLeastL}, pass={pass_test}")
+    
+    # For sampling, we expect it to work
+    assert actual_count == args.expected_atLeastL, \
+        f"All methods failed for tnorm={tnorm}. Final count={actual_count}, expected={args.expected_atLeastL}"
 
 
-def test_pmd_exact_constraint_improved(setup_environment, create_args):
+def test_pmd_exact_constraint(setup_environment, create_args):
     """Test PMD with exact constraint"""
     args = create_args
     args.counting_tnorm = "G"
