@@ -94,7 +94,7 @@ class TestTraining:
         assert scene is not None
         assert obj is not None
 
-    def test_minimal_training_run(self, mock_tqdm):
+    def test_minimal_training_run(self):
         """Test minimal training without subprocess"""
         import argparse
         import numpy as np
