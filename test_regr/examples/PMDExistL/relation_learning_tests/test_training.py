@@ -2,6 +2,7 @@ import pytest
 import torch
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 # Add the test directory to path so we can import the modules
 sys.path.insert(0, str(Path(__file__).parent))
@@ -94,7 +95,8 @@ class TestTraining:
         assert scene is not None
         assert obj is not None
 
-    def test_minimal_training_run(self):
+    @patch('tqdm.tqdm', side_effect=lambda x, *args, **kwargs: x)
+    def test_minimal_training_run(self, mock_tqdm):
         """Test minimal training without subprocess"""
         import argparse
         import numpy as np
