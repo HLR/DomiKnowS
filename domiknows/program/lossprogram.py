@@ -125,49 +125,78 @@ class LossProgram(LearningBasedProgram):
         # To provide a session cache for cross-epoch variables like iter-count
         c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  
         
-        # NEW: Phase-based training
-        if warmup_epochs > 0:
-            self.logger.info(f"[Phase 1] Warmup training for {warmup_epochs} epochs")
-            super().train(
-                training_set,
-                valid_set=None,
-                test_set=None,
-                epochs=warmup_epochs,
-                c_lr=c_lr,
-                c_warmup_iters=warmup_epochs,  # Set warmup for entire phase
-                c_freq_increase=c_freq_increase,
-                c_freq_increase_freq=c_freq_increase_freq,
-                c_lr_decay=c_lr_decay,
-                c_lr_decay_param=c_lr_decay_param,
-                c_session=c_session,
-                batch_size=batch_size,
-                dataset_size=dataset_size,
-                print_loss=print_loss,
-                training_mode='warmup',
-                **kwargs)
-        
-        if constraint_epochs > 0:
-            mode = 'constraint_only' if constraint_only else 'standard'
-            self.logger.info(f"[Phase 2] {mode} training for {constraint_epochs} epochs")
-            super().train(
-                training_set,
-                valid_set=valid_set,
-                test_set=test_set,
-                epochs=constraint_epochs,
-                c_lr=c_lr,
-                c_warmup_iters=0,  # No warmup in this phase
-                c_freq_increase=c_freq_increase,
-                c_freq_increase_freq=c_freq_increase_freq,
-                c_lr_decay=c_lr_decay,
-                c_lr_decay_param=c_lr_decay_param,
-                c_session=c_session,
-                batch_size=batch_size,
-                dataset_size=dataset_size,
-                print_loss=print_loss,
-                training_mode=mode,
-                constraint_loss_scale=constraint_loss_scale,
-                **kwargs)
-        elif warmup_epochs == 0:
+        # NEW: Phase-based training - handle both cases
+        if warmup_epochs > 0 or constraint_epochs > 0:
+            # Custom phased training with manual epoch loop
+            self.stop = False
+            epoch_counter = 0
+            
+            if warmup_epochs > 0:
+                self.logger.info(f"[Phase 1] Warmup training for {warmup_epochs} epochs")
+                for i in range(warmup_epochs):
+                    if self.stop:
+                        break
+                    epoch_counter += 1
+                    self.epoch = epoch_counter
+                    self.logger.info(f'Epoch: {self.epoch}')
+                    self.call_epoch(
+                        'Training',
+                        training_set,
+                        self.train_epoch,
+                        c_lr=c_lr,
+                        c_warmup_iters=warmup_epochs,
+                        c_freq_increase=c_freq_increase,
+                        c_freq_increase_freq=c_freq_increase_freq,
+                        c_lr_decay=c_lr_decay,
+                        c_lr_decay_param=c_lr_decay_param,
+                        c_session=c_session,
+                        batch_size=batch_size,
+                        dataset_size=dataset_size,
+                        print_loss=print_loss,
+                        training_mode='warmup',
+                        **kwargs
+                    )
+                    if valid_set is not None:
+                        self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+            
+            if constraint_epochs > 0 and not self.stop:
+                mode = 'constraint_only' if constraint_only else 'standard'
+                self.logger.info(f"[Phase 2] {mode} training for {constraint_epochs} epochs")
+                for i in range(constraint_epochs):
+                    if self.stop:
+                        break
+                    epoch_counter += 1
+                    self.epoch = epoch_counter
+                    self.logger.info(f'Epoch: {self.epoch}')
+                    self.call_epoch(
+                        'Training',
+                        training_set,
+                        self.train_epoch,
+                        c_lr=c_lr,
+                        c_warmup_iters=0,
+                        c_freq_increase=c_freq_increase,
+                        c_freq_increase_freq=c_freq_increase_freq,
+                        c_lr_decay=c_lr_decay,
+                        c_lr_decay_param=c_lr_decay_param,
+                        c_session=c_session,
+                        batch_size=batch_size,
+                        dataset_size=dataset_size,
+                        print_loss=print_loss,
+                        training_mode=mode,
+                        constraint_loss_scale=constraint_loss_scale,
+                        **kwargs
+                    )
+                    if valid_set is not None:
+                        self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+            
+            # Final evaluation if test set provided
+            if test_set is not None:
+                self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
+            
+            # Reset epoch and stop after training
+            self.epoch = None
+            self.stop = None
+        else:
             # No phases specified, use standard training
             return super().train(
                 training_set,
@@ -184,7 +213,7 @@ class LossProgram(LearningBasedProgram):
                 dataset_size=dataset_size,
                 print_loss=print_loss,
                 **kwargs)
-    
+
     def call_epoch(self, name, dataset, epoch_fn, **kwargs):
         if dataset is not None:
             self.logger.info(f'{name}:')
@@ -195,22 +224,11 @@ class LossProgram(LearningBasedProgram):
             if self.model.loss:
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
-
-                metricName = 'loss'
-                metricResult = self.model.loss
                     
             if self.cmodel.loss is not None and  repr(self.cmodel.loss) == "'None'":
-                losSTr = str(self.cmodel.loss)
                 desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
                 self.logger.info(' - Constraint loss:')
                 self.logger.info(self.cmodel.loss)
-
-                metricName = 'Constraint_loss'
-                metricResult = self.cmodel.loss
-
-
-            ilpMetric = None
-            softmaxMetric = None
 
             if self.model.metric:
                 self.logger.info(' - metric:')
@@ -224,8 +242,8 @@ class LossProgram(LearningBasedProgram):
                         self.f.write(str(metric))
                         self.f.write("\n")
                     except:
-                        pass
-
+                        pass    
+    
     def train_epoch(
         self, dataset,
         c_lr=1,
@@ -447,7 +465,7 @@ class LossProgram(LearningBasedProgram):
         c_session['c_update_iter'] = c_update_iter
         c_session['c_update_freq'] = c_update_freq
         c_session['c_update'] = c_update
-                
+                  
 class PrimalDualProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
