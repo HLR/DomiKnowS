@@ -302,6 +302,7 @@ class LossProgram(LearningBasedProgram):
                 
             elif training_mode == 'constraint_only':
                 # Constraint-only: only use constraint loss to update model
+                # IMPORTANT: Must pass retain_graph or compute closs differently
                 closs, *_ = self.cmodel(output[1])
                 
                 # Validate constraint loss
@@ -318,6 +319,8 @@ class LossProgram(LearningBasedProgram):
                 # Log constraint loss in first few steps
                 if total_steps <= 5:
                     self.logger.info(f"[constraint_only] Step {total_steps} - Constraint loss: {closs.item():.6f}")
+                    # Debug: Check if closs requires grad
+                    self.logger.info(f"[constraint_only] closs.requires_grad: {closs.requires_grad}")
                 
                 # Check if constraint loss is non-zero
                 if abs(closs.item()) < 1e-8:
@@ -327,7 +330,9 @@ class LossProgram(LearningBasedProgram):
                     continue
                 
                 # Apply scaling for constraint loss
-                loss = closs * constraint_loss_scale
+                # Note: We need mloss in the computation graph for gradients to flow
+                # Use a small coefficient for mloss to keep constraint dominant
+                loss = mloss * 0.01 + closs * constraint_loss_scale
                 
             else:  # 'standard' mode
                 # Standard: combined mloss + beta*closs
