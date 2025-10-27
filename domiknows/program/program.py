@@ -2,7 +2,7 @@ import logging
 import torch
 from tqdm import tqdm
 
-from ..utils import consume, entuple, detuple
+from ..utils import consume, detuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
@@ -12,118 +12,6 @@ def get_len(dataset, default=None):
         return len(dataset)
     except TypeError:  # `generator` does not have __len__
         return default
-
-
-class dbUpdate():
-    def getTimeStamp(self):
-        from datetime import datetime, timezone, timedelta
-
-        timeNow = datetime.now(tz=timezone.utc)
-        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
-        timestamp_micros = (timeNow - epoch) // timedelta(microseconds=1)
-
-        return timestamp_micros
-
-    def __init__(self, graph):
-        self.experimentID = "startAt_%d"%(self.getTimeStamp())
-
-        import os
-        self.cwd = os.getcwd()
-        self.cwd = os.path.basename(self.cwd)
-
-        import __main__
-        if hasattr(__main__, '__file__'):
-            self.programName = os.path.basename(__main__.__file__)
-            if self.programName.index('.') >= 0:
-                self.programName = self.programName[:self.programName.index('.')]
-        else:
-            self.programName = ''
-
-        self.activeLCs = []
-        for _, lc in graph.logicalConstrains.items():
-            if lc.headLC:
-                self.activeLCs.append(lc.name)
-
-    def __calculateMetricTotal(self, metricResult):
-
-        if not isinstance(metricResult, dict):
-            return None
-
-        pT= 0
-        rT = 0
-
-        for _, v in metricResult.items():
-            if not isinstance(v, dict):
-                return None
-
-            if not ({'P', 'R'} <= v.keys()):
-                return None
-
-            pT += v['P']
-            rT += v['R']
-
-        pT = pT/len(metricResult.keys())
-        rT = rT/len(metricResult.keys())
-
-        total = {}
-        if pT + rT:
-            f1T = 2 * pT * rT / (pT + rT) # F1 score is the harmonic mean of precision and recall
-            total['F1'] = f1T
-        else:
-            return None
-
-        total['P'] = pT
-        total['R'] = rT
-
-        return total
-
-    def __call__(self, stepName, metricName, metricResult):
-
-        if self.dbClient is None:
-            return
-
-        upatedmetricResult = {}
-        for k, r in metricResult.value().items():
-            if torch.is_tensor(r):
-                upatedmetricResult[k] = r.item()
-            elif isinstance(r, dict):
-                updatedDict = {}
-
-                for j, e in r.items():
-                    if torch.is_tensor(e):
-                        updatedDict[j] = e.item()
-                    else:
-                        updatedDict[j] = e
-
-                upatedmetricResult[k] = updatedDict
-            else:
-                upatedmetricResult[k] = r
-
-        mlResult = {
-            'experimentID' : self.experimentID,
-            'experimant'   : self.cwd,
-            'program'      : self.programName,
-            'usedLCs'      : self.activeLCs,
-            'timestamp'    : self.getTimeStamp(),
-            'step'         : stepName,
-            'metric'       : metricName,
-            'results'      : upatedmetricResult
-        }
-
-        metricTotal = self.__calculateMetricTotal(upatedmetricResult)
-
-        if metricTotal is not None:
-            mlResult['metricTotal'] = metricTotal
-
-        #Step 3: Insert business object directly into MongoDB via isnert_one
-        try:
-            result = self.results.insert_one(mlResult)
-        except Exception as e:
-            return
-
-        if result.inserted_id:
-            pass
-
 
 class LearningBasedProgram():
     def __init__(self, graph, Model, logger=None, **kwargs):
@@ -257,8 +145,6 @@ class LearningBasedProgram():
 
                     metricName = key
                     metricResult = metric
-                    if self.dbUpdate is not None:
-                        self.dbUpdate(desc, metricName, metricResult)
 
                     if key == 'ILP':
                         ilpMetric = metric
