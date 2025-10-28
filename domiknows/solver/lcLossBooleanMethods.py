@@ -632,11 +632,42 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 torch.sum(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) - (max(n - max(min(s, n), 0), 0) - 1),
                 zero,
             )
-            exists_exactly_s = lambda t, s: 1 - torch.maximum(
-                torch.sum(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) - (max(min(s, n), 0) - 1)
-                + torch.sum(torch.sort(1 - t, descending=True)[0][: max(n - max(min(s, n), 0), 0)]) - (max(n - max(min(s, n), 0), 0) - 1),
-                zero,
-            )
+            
+            def exists_exactly_s_lukasiewicz(t, s):
+                """
+                Exact count: AND_L(AtLeast(s), AtMost(s))
+                where AND_L(a, b) = max(0, a + b - 1)
+                """
+                slice_size = max(min(s, n), 0)
+                num_false = max(n - slice_size, 0)
+                
+                # At-least-s success
+                if slice_size > 0:
+                    at_least_success = torch.maximum(
+                        torch.sum(torch.sort(t, descending=True)[0][:slice_size]) - (slice_size - 1),
+                        zero,
+                    )
+                else:
+                    at_least_success = one
+                
+                # At-most-s success  
+                if num_false > 0:
+                    at_most_success = torch.maximum(
+                        torch.sum(torch.sort(1 - t, descending=True)[0][:num_false]) - (num_false - 1),
+                        zero,
+                    )
+                else:
+                    at_most_success = one
+                
+                # Łukasiewicz AND: max(0, a + b - 1)
+                exact_success = torch.maximum(
+                    at_least_success + at_most_success - one,
+                    zero
+                )
+                
+                return 1.0 - exact_success
+            
+            exists_exactly_s = exists_exactly_s_lukasiewicz
 
         elif method == "P":  # Product
             self.countLogger.debug("Defining Product t-norm helper functions")
