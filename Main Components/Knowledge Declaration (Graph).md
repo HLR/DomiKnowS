@@ -283,8 +283,8 @@ Auxiliary logical constraint methods:
 
 ##### Counting methods
 
-DomiKnows also provides counting methods as an extension of logical connectives. Each counting method contains a list of predicates or nested logical constraints, and optionally, several required predicates that need to be satisfied. If the number isn't specified as the last argument in the counting method, then the default value of 1 is used. There are two  flavors of counting methods: one counts over candidates in the current context of constraint evaluation, and the other counts the domain of discourse, which is the present ML example. The latter type has an 'A' suffix in its name, indicating accumulation. Four types of counting methods are implemented: **exists, exact, atLeast,** and **atMost**.
- 
+DomiKnows also provides counting methods as an extension of logical connectives. Each counting method contains a list of predicates or nested logical constraints, and optionally, several required predicates that need to be satisfied. If the number isn't specified as the last argument in the counting method, then the default value of 1 is used. There are two flavors of counting methods: one counts over candidates in the current context of constraint evaluation, and the other counts the domain of discourse, which is the present ML example. The latter type has an 'A' suffix in its name, indicating accumulation. Four types of counting methods are implemented: **exists, exact, atLeast,** and **atMost**.
+
 Examples of counting methods usage in the logical constraint:  
 * _existsAL(firestationCity)_ -   
     In the current ML example, there exists a candidate with the classification 'firestationCity'.  
@@ -296,6 +296,14 @@ Examples of counting methods usage in the logical constraint:
     In the present ML example, there are at least four candidates with classification firestationCity,  
 * _atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ -  
     For every candidate in the present ML example, each city has no more than four candidates that reach through the path cityLink with attribute *neighbors* equal to True, which are classified as firestationCity.  
+
+***Counting methods also possible to accept multiple concepts*** as shown in example of _existsAL(firestationCity, policeStationCity)_. For other counting method, the example of calling counting with multiple concepts are provided below
+* _atLeastL(firestationCity, policeStationCity, 5)_ -   
+    In the present ML example, there are at least five candidate with classification firestationCity or policeStationCity.  
+* _atMostL(firestationCity, policeStationCity, 5)_ -  
+    In the present ML example, there are at most five candidates with classification firestationCity or policeStationCity,
+
+
 
 #### Candidate Selection
 
