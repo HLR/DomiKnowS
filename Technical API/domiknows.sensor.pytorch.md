@@ -223,7 +223,46 @@ Returns:
 
 ## domiknows.sensor.pytorch.relation_sensors module
 
+### *class* domiknows.sensor.pytorch.relation_sensors.EdgeSensor(\*pres, \*\*kwargs, relations)
+
+**Objective**: Use to create the relation (edge) between two concepts, need to specify which relation to create
+
+Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.query_sensor.QuerySensor)
+
+#### *property* args
+
+
+#### relation()
+
+Returns:
+- The relation linked from this sensor.
+
+#### update_pre_context(data_item, concept=None)
+
+Update either concept or source of the edge (head of relation) if concept is not provided into provided data item
+
+Args:
+- data_item: The data item used to update concept
+- concept (optional): The concept associated with this sensor. Defaults to the sensor’s own concept.
+- 
+
+
+#### fetch_value(pre, selector=None, concept=None)
+
+Args:
+- pre: The predecessor to fetch the value for.
+- selector (optional): An optional selector to find a specific value.
+- concept (optional): The concept associated with this sensor. Defaults to the sensor’s own concept.
+
+Returns:
+- The fetched value for the given predecessor.
+
+Fetch the value of concept or source of the edge (head of relation) if concept is not provided using optional selector.
+
 ### *class* domiknows.sensor.pytorch.relation_sensors.BaseCandidateSensor(\*pres, \*\*kwargs)
+
+**Objective**: Based class for Sensor to determine the connection between Concept
+
 
 Bases: [`QuerySensor`](#domiknows.sensor.pytorch.query_sensor.QuerySensor)
 
@@ -267,9 +306,14 @@ Returns:
 
 ### *class* domiknows.sensor.pytorch.relation_sensors.CompositionCandidateReaderSensor(\*args, relations, \*\*kwargs)
 
+**Objective**: Reading whether there is connection between concept considered within relations.
+
+
 Bases: [`CompositionCandidateSensor`](#domiknows.sensor.pytorch.relation_sensors.CompositionCandidateSensor), [`FunctionalReaderSensor`](#domiknows.sensor.pytorch.sensors.FunctionalReaderSensor)
 
 ### *class* domiknows.sensor.pytorch.relation_sensors.CompositionCandidateSensor(\*args, relations, \*\*kwargs)
+
+**Objective**: Creating the mapping between multiple concepts and relations. Required the function to return whether there is connection based on defined relation.
 
 Bases: [`JointSensor`](#domiknows.sensor.pytorch.sensors.JointSensor), [`BaseCandidateSensor`](#domiknows.sensor.pytorch.relation_sensors.BaseCandidateSensor)
 
@@ -283,6 +327,8 @@ Returns:
 - The result of the forward method, moved to the appropriate device if necessary.
 
 ### *class* domiknows.sensor.pytorch.relation_sensors.EdgeReaderSensor(\*args, keyword, is_constraint=False, \*\*kwargs)
+
+**Objective**: Reading the edge sensor in the form of list from data item
 
 Bases: [`ReaderSensor`](#domiknows.sensor.pytorch.sensors.ReaderSensor), [`EdgeSensor`](#domiknows.sensor.pytorch.relation_sensors.EdgeSensor)
 
@@ -333,38 +379,6 @@ Updates the context of the given data item for this torch sensor. The fucntion t
 Args:
 - data_item (Dict[str, Any]): The data dictionary to update.
 - force (bool, optional): Flag to force recalculation even if result is cached. Default is False.
-
-### *class* domiknows.sensor.pytorch.sensors.BertTokenizorSensor(\*pres, forward=None, build=True, \*\*kwargs)
-
-Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.sensors.FunctionalSensor)
-
-#### TRANSFORMER_MODEL *= 'bert-base-uncased'*
-
-#### forward(sentences)
-
-Computes the forward pass for this functional sensor, making use of a provided forward function if available.
-
-Args:
-- 
-
-```
-*
-```
-
-inputs: Variable-length argument list of inputs for the forward function.
-- 
-
-```
-**
-```
-
-kwinputs: Additional keyword inputs for the forward function.
-
-Returns:
-- The result of the forward computation.
-- Calls the superclass forward method if no forward function was provided during initialization.
-
-#### *property* tokenizer
 
 ### *class* domiknows.sensor.pytorch.sensors.Cache
 
@@ -762,29 +776,35 @@ alias of `EnglishDefaults`
 
 #### forward(sentences)
 
-Computes the forward pass for this functional sensor, making use of a provided forward function if available.
+Computes the forward pass for converting sentence into token using Spacy
 
 Args:
-- 
-
-```
-*
-```
-
-inputs: Variable-length argument list of inputs for the forward function.
-- 
-
-```
-**
-```
-
-kwinputs: Additional keyword inputs for the forward function.
+- sentences: sentences to be converted into list(s) of tokens
 
 Returns:
-- The result of the forward computation.
-- Calls the superclass forward method if no forward function was provided during initialization.
+- The list(s) of token converted from provided sentence
 
 #### nlp *= <spacy.lang.en.English object>*
+
+### *class* domiknows.sensor.pytorch.sensors.BertTokenizorSensor(\*pres, forward=None, build=True, \*\*kwargs)
+
+**Objective**: Sensor to convert sentence into token using BertTokenizer
+
+Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.sensors.FunctionalSensor)
+
+#### TRANSFORMER_MODEL *= 'bert-base-uncased'*
+
+#### forward(sentences)
+
+Computes the forward pass for converting sentence into token using BertTokenizer
+
+Args:
+- sentences: sentences to be converted into list(s) of tokens
+
+Returns:
+- The list(s) of token converted from provided sentence
+
+#### *property* tokenizer
 
 ### *class* domiknows.sensor.pytorch.sensors.TorchCache(path)
 
