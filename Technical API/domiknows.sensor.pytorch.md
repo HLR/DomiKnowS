@@ -658,27 +658,13 @@ Bases: [`FunctionalSensor`](#domiknows.sensor.pytorch.sensors.FunctionalSensor)
 
 #### forward(\*inputs)
 
-Computes the forward pass for this functional sensor, making use of a provided forward function if available.
+Computes the forward pass based on given module when initialize the sensor. **Note that this ModuleSensor is no gradient. So, the module parameters will not change during training.**
 
 Args:
-- 
-
-```
-*
-```
-
-inputs: Variable-length argument list of inputs for the forward function.
-- 
-
-```
-**
-```
-
-kwinputs: Additional keyword inputs for the forward function.
+- inputs: inputs to feed into the module.
 
 Returns:
-- The result of the forward computation.
-- Calls the superclass forward method if no forward function was provided during initialization.
+- The output of the module based on given input
 
 #### *property* model
 
