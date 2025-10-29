@@ -475,38 +475,119 @@ def joint(SensorClass, JointSensorClass=JointSensor):
 
 
 class Cache:
+    """
+    A base Cache interface that supports setting & getting.
+    """
     def __setitem__(self, name, value):
+        """
+        Store a value by name.
+
+        Args:
+        - name: Cache key
+        - value: Cached value
+        """
         raise NotImplementedError
 
     def __getitem__(self, name):
+        """
+        Retrieve a cached value by name.
+
+        Args:
+        - name: Cache key
+
+        Returns:
+        - Cached value corresponding to the given key
+        """
         raise NotImplementedError
 
 
 class TorchCache(Cache):
+    """
+    Disk-based cache that serializes values with `torch.save` & uses file-names as keys.
+
+    Inherits from:
+    - Cache: Parent Cache interface supporting getting/setting.
+    """
     def __init__(self, path):
+        """
+        Initialize TorchCache instance.
+
+        Args:
+        - path: Folder to store cached values.
+        """
         super().__init__()
         self.path = path
 
     @property
     def path(self):
+        """
+        Path of folder where cached values will be saved.
+
+        Returns:
+        - Save folder path
+        """
         return self._path
 
     @path.setter
     def path(self, path):
+        """
+        Set save folder path and recursively create the folder if it doesn't
+        already exist.
+        """
         os.makedirs(path, exist_ok=True)
         self._path = path
 
     def sanitize(self, name):
+        """
+        Helper function for creating the cache file name by removing/replacing
+        certain symbols.
+
+        Args:
+        - name: Cache key
+        
+        Returns:
+        - Sanitized cache key
+        """
         return name.replace('/', '_').replace("<","").replace(">","")
 
     def file_path(self, name):
+        """
+        Gets the save/load path of the values given a cache key.
+
+        Args:
+        - name: Cache key
+
+        Returns:
+        - File-path where the cached values are located.
+        """
         return os.path.join(self.path, self.sanitize(name) + '.pt')
 
     def __setitem__(self, name, value):
+        """
+        Saves the value with the given name to disk using `torch.save`.
+
+        Args:
+        - name: Cache key
+        - value: Value to cache
+        """
         file_path = self.file_path(name)
         torch.save(value, file_path)
 
     def __getitem__(self, name):
+        """
+        Retrieves a cached value according to the given name (cache key).
+        Retrieves from disk using `torch.load`.
+
+        Args:
+        - name: Cache key
+
+        Returns:
+        - Cached value
+
+        Raises:
+        - KeyError if the cache key is not found (if the expected file does not exist on disk)
+        """
+
         file_path = self.file_path(name)
         try:
             return torch.load(file_path)
@@ -515,15 +596,56 @@ class TorchCache(Cache):
 
 
 class CacheSensor(FunctionalSensor):
+    """
+    FunctionalSensor with cached forward calls.
+    Can be backed by any dict-like object that supports __getitem__ and __setitem__.
+
+    Inherits from:
+    - FunctionalSensor: Parent class that performs forward passes using the provided
+        function.
+    """
     def __init__(self, *args, cache=dict(), **kwargs):
+        """
+        Creates an instance of CacheSensor.
+
+        Args:
+        - *args: Variable-length arguments for FunctionalSensor
+        - cache (optional): Any dict-like object that supports __getitem__ and __setitem__
+            and raises a KeyError if the key is not found.
+            Defaults to a globally set in-memory dict. An alternative cache is
+            `domiknows.sensor.pytorch.sensors.TorchCache`.
+            Setting the cache to None will result in the regular FunctionalSensor
+            behavior.
+        - **kwargs: Variable-length keyword-arguments for FunctionalSensor. e.g.,
+            `forward` for the underlying `forward` call.
+        """
         super().__init__(*args, **kwargs)
         self.cache = cache
         self._hash = None
 
     def fill_hash(self, hash):
+        """
+        Sets the cache key to use for the current instance. Should be
+        unique for the instance.
+
+        Args:
+        - hash: unique identifier for the current instance
+        """
         self._hash = hash
 
     def forward_wrap(self):
+        """
+        Wraps the parent `forward_wrap` by checking in the cache first.
+
+        If the key is not found, then it performs the regular `forward_wrap`
+        call and stores the resulting value.
+
+        The hash for the current data item must be set already by calling
+        `self.fill_hash`, otherwise None will be used as the cache key.
+
+        Returns:
+        - Cached `forward_wrap` call
+        """
         if self.cache is not None:
             try:
                 return self.cache[self._hash]
@@ -542,12 +664,58 @@ def cache(SensorClass, CacheSensorClass=CacheSensor):
 
 
 class ReaderSensor(ConstantSensor):
+    """
+    A sensor that retrieves values from input data dictionary for each instance.
+
+    Inherits from:
+    - ConstantSensor: A parent sensor class that just returns a constant value.
+    """
     def __init__(self, *args, keyword, is_constraint = False, **kwargs):
+        """
+        Initializes a ReaderSensor, used for loading values from data_items; e.g.,
+        for loading model inputs/labels.
+        
+        Tries to get the value from each data_item with key `keyword`.
+
+        Args:
+        - *args: Variable length arguments for ConstantSensor superclass.
+        - keyword: key by which values are retrieved from data_items. Keyword
+            can be a single keys or a tuple of keys. If a tuple is given
+            given, then ReaderSensor will retrieve each key individually and
+            return a tuple of values.
+        - is_constraint: if set to True, allows for the keyword to be
+            missing from data_items. If set to False, missing keywords will
+            result in a KeyError being raised. This is used for setting labels
+            by e.g., domiknows.graph.Graph.compile_logic when we have many
+            properties (many logical expressions) that we need to load labels
+            (and calculate loss) for, but not all at the same time. Set to
+            False by default.
+        - **kwargs: Variable length arguments for ConstantSensor superclass.
+            You may want to set as_tensor to False in order to prevent
+            read values from being converted to a tensor.
+
+        """
         super().__init__(*args, data=None, **kwargs)
         self.keyword = keyword
         self.is_constraint = is_constraint
 
     def fill_data(self, data_item):
+        """
+        Read the target value (based on the set keyword attribute) from the given
+        data_item into self.data.
+        By default, expects the keyword to be present in the data_item. However,
+        if self.is_constraint is set, then it allows the keyword to be missing (and
+        instead just sets self.data to None).
+
+        If the keyword is a tuple of values, then will read each item individually.
+        
+        Args:
+        - data_item: The data dictionary to read values from
+        
+        Raises:
+        - KeyError if self.is_constraint is False and the desired keyword
+            is missing from the input data_item.
+        """
         # If we're reading in a constraint, then allow for missing keywords in data items
         # in those cases, we just set the value to None
         if self.is_constraint:
@@ -567,6 +735,20 @@ class ReaderSensor(ConstantSensor):
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
 
     def forward(self, *_, **__) -> Any:
+        """
+        Computes the forward pass by returning the values read from the keyword.
+        Converts the data to torch tensors by default. Returns values that have
+        already been read (from self.data): expects self.fill_data to be called first
+        for each input sample.
+
+        May return None in certain conditions, including if self.fill_data has not
+        yet been called (see: self.fill_data).
+
+        Returns:
+        - Read values corresponding to the keyword; either a single value or a
+            tuple of values if the keyword is a tuple.
+        """
+
         if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
             return (super().forward(data) for data in self.data)
         else:
@@ -574,7 +756,35 @@ class ReaderSensor(ConstantSensor):
 
 
 class FunctionalReaderSensor(ReaderSensor):
+    """
+    Combines FunctionalSensor and ReaderSensor. Retrieves values
+    from input data dictionary for each instance, then applies the specified
+    `forward` function.
+
+    The given forward function must have a keyword argument `data`, which is
+    how the read values will be passed.
+
+    Similar to ReaderSensor, supports tuple keywords; the specified function
+    will be applied for each retrieved value individually.
+
+    Inherits from:
+    - ReaderSensor: A parent sensor class that retrieves values from the input data dictionary.
+    """
     def forward(self, *args, **kwargs) -> Any:
+        """
+        Computes the forward pass by applying the specified `forward` function to
+        the read values from the keyword.
+        Uses values that have already been read (from self.data): expects
+        self.fill_data to be called first for each input sample.
+
+        The `forward` function will always be called, but the passed `data` may be
+        None in certain circumstances, including if self.fill_data has not yet been
+        called (see: ReaderSensor.fill_data).
+
+        Returns:
+        - Read and processed values corresponding to the keyword; either a single
+            value or a tuple of values if the keyword is a tuple.
+        """
         if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
             return (super(ConstantSensor, self).forward(*args, data=data, **kwargs) for data in self.data)
         else:
@@ -582,11 +792,31 @@ class FunctionalReaderSensor(ReaderSensor):
 
 
 class JointReaderSensor(JointSensor, ReaderSensor):
+    """
+    Combines JointSensor and ReaderSensor. Retrieves values from the
+    input data dictionary into multiple properties.
+
+    Inherits from:
+    - JointSensor: A parent sensor class that calculates multiple properties.
+    - ReaderSensor: A parent sensor class that retrieves values from the input data dictionary.
+    """
     pass
 
-
 class LabelReaderSensor(ReaderSensor):
+    """
+    A ReaderSensor that's also a label. Equivalent to creating a ReaderSensor with the
+    `label` keyword argument set to True.
+
+    Inherits from:
+    - ReaderSensor: A parent sensor class that retrieves values from the input data dictionary.
+    """
     def __init__(self, *args, **kwargs):
+        """
+        Initializes a ReaderSensor that's also a label. Equivalent to:
+        `ReaderSensor(*args, **kwargs, label=True)`.
+        
+        See ReaderSensor for more information.
+        """
         kwargs['label'] = True
         super().__init__(*args, **kwargs)
 
