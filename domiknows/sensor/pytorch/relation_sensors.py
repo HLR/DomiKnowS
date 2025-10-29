@@ -1,4 +1,5 @@
-from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor, JointReaderSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor, \
+    JointReaderSensor
 from domiknows.sensor.sensor import Sensor
 from domiknows.graph.graph import Property
 from domiknows.sensor.pytorch.query_sensor import QuerySensor
@@ -9,39 +10,80 @@ from itertools import product
 
 
 class EdgeSensor(FunctionalSensor):
+    """
+    Edge sensor used to create the link/edge between two concept to create relation
+
+    Inherits from:
+        - FunctionalSensor:  A functional sensor with functionality for forward pass operations making it directly usable.
+    """
+
     def __init__(self, *pres, relation, **kwargs):
         super().__init__(*pres, **kwargs)
         self.relation = relation
 
     @property
     def relation(self):
+        """
+        Returns the relation linked by this Edge Sensor
+        """
         return self._relation
 
     @relation.setter
     def relation(self, relation):
+        """
+        Sets the relation linked by this Edge Sensor
+
+         Args:
+            - relation: relation to set the link between two concepts
+        """
         self._relation = relation
         self.src = self.relation.src
         self.dst = self.relation.dst
 
     def update_pre_context(
-        self,
-        data_item: Dict[str, Any],
-        concept=None
+            self,
+            data_item: Dict[str, Any],
+            concept=None
     ) -> Any:
+        """
+        Updates the concept of the relation by provided data items
+
+        Args:
+            - data_item: data item to be updated the head of relation with
+        """
         concept = concept or self.src
         super().update_pre_context(data_item, concept)
 
     def fetch_value(self, pre, selector=None, concept=None):
+        """
+        Fetch the value of the head of relation using the optional selector
+
+        Args:
+            - pre: data item to be updated the head of relation with
+            - selector: optional selector used to fetch data
+            - concept: optional concept to fetch data if not, concept to fetch data is source of relation
+
+        Return:
+            - the value of the head of relation
+        """
         concept = concept or self.src
         return super().fetch_value(pre, selector, concept)
 
 
 class BaseCandidateSensor(QuerySensor):
+    """
+    Base class for Candidate Sensor used to query the input for creating the list of candidate
+    Inherits from:
+        - QuerySensor:
+    """
     @property
     def args(self):
         raise NotImplementedError
 
     def define_inputs(self):
+        """
+        Defines the input/candidate concept of the query
+        """
         super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
         args = {}
         rootDn = self.builder.getDataNode(device=self.device)
@@ -52,12 +94,25 @@ class BaseCandidateSensor(QuerySensor):
             args[name] = datanodes
         self.kwinputs['datanodes'] = args
 
+
 class CandidateSensor(EdgeSensor, BaseCandidateSensor):
+    """
+    Base class for Edge Candidate Sensor used to query the possible concept to link the relation
+    Inherits from:
+        - EdgeSensor: Edge sensor used to create the link/edge between two concept to create relation
+        - BaseCandidateSensor: Base class for Candidate Sensor used to query the input for creating the list of candidate
+    """
     @property
     def args(self):
         return OrderedDict((('dst', self.dst), ('src', self.src)))
 
     def forward_wrap(self):
+        """
+        Forwards whether pair of concepts will be used to create the link/edge for relation
+
+        Return:
+            - List of output whether the pair of concepts will be used to create the link/edge for relation
+        """
         # args
         args = self.kwinputs['datanodes']
         # functional inputs
@@ -77,6 +132,12 @@ class CandidateSensor(EdgeSensor, BaseCandidateSensor):
 
 
 class CompositionCandidateSensor(JointSensor, BaseCandidateSensor):
+    """
+    Composition candidate Sensor used to join two ot more concepts for constructing relation
+    Inherits from:
+        - JointSensor: Represents a joint sensor that generates multiple properties.
+        - BaseCandidateSensor: Base class for Candidate Sensor used to query the input for creating the list of candidate
+    """
     @property
     def args(self):
         return OrderedDict((relation.reversed.name, relation.src) for relation in self.relations)
@@ -86,6 +147,12 @@ class CompositionCandidateSensor(JointSensor, BaseCandidateSensor):
         self.relations = relations
 
     def forward_wrap(self):
+        """
+        Forward whether the mapping of candidate concepts ad their corresponding relations
+
+        Return:
+            - List of mapping indicating the link between two/more concepts with specific relation
+        """
         # args
         args = self.kwinputs['datanodes']
         # functional inputs
@@ -146,7 +213,7 @@ class CandidateEqualSensor(CandidateSensor):
         if relations:
             self.relations = relations
             # Add identification of equality and the  name of the equal concept type
-            self.name += "_Equality_" +  self.relations[0].dst.name
+            self.name += "_Equality_" + self.relations[0].dst.name
         else:
             self.relations = []
 
@@ -165,8 +232,8 @@ class CandidateEqualSensor(CandidateSensor):
         dims = (len(conceptDns), len(equalDns))
         output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
 
-        for dns_product in product(conceptDns,equalDns):
-            index = (dns_product[0].getInstanceID(), dns_product[1].getInstanceID() )
+        for dns_product in product(conceptDns, equalDns):
+            index = (dns_product[0].getInstanceID(), dns_product[1].getInstanceID())
             output[(*index,)] = self.forward("", dns_product[0], dns_product[1])
 
         return output
