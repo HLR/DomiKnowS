@@ -33,8 +33,8 @@ class EdgeSensor(FunctionalSensor):
         """
         Sets the relation linked by this Edge Sensor
 
-         Args:
-            - relation: relation to set the link between two concepts
+        Args:
+        - relation: relation to set the link between two concepts
         """
         self._relation = relation
         self.src = self.relation.src
@@ -49,7 +49,7 @@ class EdgeSensor(FunctionalSensor):
         Updates the concept of the relation by provided data items
 
         Args:
-            - data_item: data item to be updated the head of relation with
+         - data_item: data item to be updated the head of relation with
         """
         concept = concept or self.src
         super().update_pre_context(data_item, concept)
@@ -59,12 +59,12 @@ class EdgeSensor(FunctionalSensor):
         Fetch the value of the head of relation using the optional selector
 
         Args:
-            - pre: data item to be updated the head of relation with
-            - selector: optional selector used to fetch data
-            - concept: optional concept to fetch data if not, concept to fetch data is source of relation
+        - pre: data item to be updated the head of relation with
+        - selector: optional selector used to fetch data
+        - concept: optional concept to fetch data if not, concept to fetch data is source of relation
 
         Return:
-            - the value of the head of relation
+        - the value of the head of relation
         """
         concept = concept or self.src
         return super().fetch_value(pre, selector, concept)
@@ -74,7 +74,7 @@ class BaseCandidateSensor(QuerySensor):
     """
     Base class for Candidate Sensor used to query the input for creating the list of candidate
     Inherits from:
-        - QuerySensor:
+    - QuerySensor:
     """
     @property
     def args(self):
@@ -99,8 +99,8 @@ class CandidateSensor(EdgeSensor, BaseCandidateSensor):
     """
     Base class for Edge Candidate Sensor used to query the possible concept to link the relation
     Inherits from:
-        - EdgeSensor: Edge sensor used to create the link/edge between two concept to create relation
-        - BaseCandidateSensor: Base class for Candidate Sensor used to query the input for creating the list of candidate
+    - EdgeSensor: Edge sensor used to create the link/edge between two concept to create relation
+    - BaseCandidateSensor: Base class for Candidate Sensor used to query the input for creating the list of candidate
     """
     @property
     def args(self):
@@ -111,7 +111,7 @@ class CandidateSensor(EdgeSensor, BaseCandidateSensor):
         Forwards whether pair of concepts will be used to create the link/edge for relation
 
         Return:
-            - List of output whether the pair of concepts will be used to create the link/edge for relation
+        - List of output whether the pair of concepts will be used to create the link/edge for relation
         """
         # args
         args = self.kwinputs['datanodes']
@@ -135,8 +135,8 @@ class CompositionCandidateSensor(JointSensor, BaseCandidateSensor):
     """
     Composition candidate Sensor used to join two ot more concepts for constructing relation
     Inherits from:
-        - JointSensor: Represents a joint sensor that generates multiple properties.
-        - BaseCandidateSensor: Base class for Candidate Sensor used to query the input for creating the list of candidate
+    - JointSensor: Represents a joint sensor that generates multiple properties.
+    - BaseCandidateSensor: Base class for Candidate Sensor used to query the input for creating the list of candidate
     """
     @property
     def args(self):
@@ -151,7 +151,7 @@ class CompositionCandidateSensor(JointSensor, BaseCandidateSensor):
         Forward whether the mapping of candidate concepts ad their corresponding relations
 
         Return:
-            - List of mapping indicating the link between two/more concepts with specific relation
+        - List of mapping indicating the link between two/more concepts with specific relation
         """
         # args
         args = self.kwinputs['datanodes']
@@ -185,8 +185,18 @@ class CompositionCandidateSensor(JointSensor, BaseCandidateSensor):
 
 
 class CandidateRelationSensor(CandidateSensor):
+    """
+    Candidate Sensor with Relation. The behavior is similar to Candidate Sensor.
+    However, it provides the relation's candidate instead of property
+    Inherits from:
+    - CandidateSensor: Base class for Edge Candidate Sensor used to query the possible concept to link the relation
+    """
     @property
     def args(self):
+        """
+        Return:
+        - Order Dict of name of relation and concept/property linked to
+        """
         # guess which side of the relation?
         concept = self.concept
         return OrderedDict((rel.name, rel.dst) if concept is rel.src else (rel.reversed.name, rel.src) for rel in self.relations)
@@ -207,12 +217,18 @@ class JointEdgeReaderSensor(JointReaderSensor, EdgeSensor):
 
 
 class CandidateEqualSensor(CandidateSensor):
+    """
+    Candidate Sensor with Equal Relation. The behavior is similar to Candidate Sensor.
+    However, it adds identification of equality and the name of the equal concept type
+    Inherits from:
+    - CandidateSensor: Base class for Edge Candidate Sensor used to query the possible concept to link the relation
+    """
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', relations=None):
         super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
 
         if relations:
             self.relations = relations
-            # Add identification of equality and the  name of the equal concept type
+            # Add identification of equality and the name of the equal concept type
             self.name += "_Equality_" + self.relations[0].dst.name
         else:
             self.relations = []
@@ -225,6 +241,12 @@ class CandidateEqualSensor(CandidateSensor):
             return [self.concept, self.concept.equal()[0].dst]
 
     def forward_wrap(self):
+        """
+        Forward wrapper for returning candidate with equal relations
+
+        Return:
+        - Candidate of equal relations
+        """
         # current existing datNnodes (if any) for first element of equality
         conceptDns = self.inputs[1]
         equalDns = self.inputs[2]
