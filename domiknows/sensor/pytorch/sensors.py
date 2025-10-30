@@ -822,11 +822,30 @@ class LabelReaderSensor(ReaderSensor):
 
 
 class NominalSensor(TorchSensor):
+    """
+    A base sensor class that calculates the one-hot encoded form of the `forward` function.
+    This class must be inherited and reimplemeted and is not usable.
+
+    Inherits from:
+    - TorchSensor: A parent sensor class for torch-based sensors in the graph.
+    """
     def __init__(self, *pres, vocab=None, edges=None, device='auto'):
+        """
+        Initializes a NominalSensor instance.
+
+        Args:
+        - *pres: Variable-length argument list of predecessors.
+        - vocab (optional): Vocabulary used to calculate the one-hot encodings.
+        - edges (optional): Edges associated with this sensor.
+        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. Defaults to 'auto'.
+        """
         super().__init__(*pres, edges=edges, device=device)
         self.vocab = vocab
 
     def complete_vocab(self):
+        """
+        Adds values to the vocabulary based on the forward pass output.
+        """
         if not self.vocab:
             self.vocab = []
         value = self.forward()
@@ -834,6 +853,20 @@ class NominalSensor(TorchSensor):
             self.vocab.append(value)
 
     def one_hot_encoder(self, value):
+        """
+        Helper function for calculating the one-hot encoding of a given value or set of values.
+
+        One-hot encodings are calculated by indexing against the self.vocab attribute.
+
+        Args:
+        - value: A value or list of values to encode as a one-hot tensor.
+        
+        Returns:
+        - A tensor of one-hot encoded values.
+            If a single value is provided, then outputs a tensor of size (1, V).
+            If a list of values is provided with non-zero size, then outputs a tensor of size (N, 1, V).
+            If an empty list of values is provided, then outputs a tensor of size (1, 1, V) with all zeros.
+        """
         if not isinstance(value, list):
             output = torch.zeros([1, len(self.vocab)], device=self.device)
             output[0][self.vocab.index(value)] = 1
@@ -850,6 +883,13 @@ class NominalSensor(TorchSensor):
         self,
         data_item: Dict[str, Any],
         force=False):
+        """
+        Updates the context of the given data item for this sensor and calculates the one-hot encoding of the function output.
+
+        Args:
+        - data_item: The data dictionary to update.
+        - force (optional): Flag to force recalculation even if result is cached. Default is False.
+        """
         if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self]
@@ -944,12 +984,36 @@ class TorchEdgeSensor(FunctionalSensor):
 
 
 class ConcatSensor(TorchSensor):
+    """
+    A sensor that concatenates the inputs on the last dimension for each
+    forward pass.
+    """
     def forward(self,) -> Any:
+        """
+        Concatenate all tensors in self.inputs along the last dimension. Expects self.inputs
+        to already be tensors.
+
+        Returns:
+        - The concatenated tensor with shape identical to the inputs except for the
+            last dimension, which is the sum of all inputs' last-dimension sizes.
+        """
         return torch.cat(self.inputs, dim=-1)
 
 
 class ListConcator(TorchSensor):
+    """
+    A sensor that stacks lists of tensors and concatenates them
+    on the last dimension for each forward pass.
+    """
     def forward(self,) -> Any:
+        """
+        Stacks lists of tensors into a single tensor (in-place) and concatenates
+        all those inputs on the last dimension.
+
+        Returns:
+        - The concatenated tensor. The last dimension equals the sum of the
+            last-dimension sizes of all (converted) inputs.
+        """
         for it in range(len(self.inputs)):
             if isinstance(self.inputs[it], list):
                 self.inputs[it] = torch.stack(self.inputs[it])

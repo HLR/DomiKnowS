@@ -244,7 +244,8 @@ class LSTMLearner(TorchLearner):
 
 class FullyConnectedLearner(TorchLearner):
     """
-    A learner backed by a single fully-connected layer and a softmax.
+    A learner for a sequence input backed by a single fully-connected layer and a softmax.
+    Calculates the probabilities on the last time-step only.
 
     Inherits from:
     - TorchLearner: Provides learner and sensor functionality.
@@ -272,10 +273,14 @@ class FullyConnectedLearner(TorchLearner):
             self,
     ) -> Any:
         """
-        Runs the linear layer and softmax on the first item of the stored inputs.
+        Runs the linear layer and softmax on the first item of the stored inputs. Calculates the
+        probabilities for the last timestep of the sequence inputs only.
+
+        Expects `self.inputs[0]` to have shape `(batch_size, seq_len, input_dim)`.
 
         Returns:
         - The linear layer and softmax output for the input.
+            Has shape `(batch_size, output_dim)`.
         """
         _tensor = self.inputs[0]
         output = self.model(_tensor)
@@ -284,14 +289,14 @@ class FullyConnectedLearner(TorchLearner):
 
 class FullyConnectedLearnerRelu(TorchLearner):
     """
-    A learner backed by a single fully-connected layer with a ReLU non-linearity.
+    A learner backed by a single fully-connected layer with a leaky ReLU non-linearity.
 
     Inherits from:
     - TorchLearner: Provides learner and sensor functionality.
     """
     def __init__(self, *pres, input_dim, output_dim, device='auto'):
         """
-        Initializes a learner backed by a single fully-connected layer and ReLU non-linearity.
+        Initializes a learner backed by a single fully-connected layer and leaky ReLU non-linearity.
         
         Args:
         - *pres: Variable-length argument list of predecessors.
@@ -315,7 +320,7 @@ class FullyConnectedLearnerRelu(TorchLearner):
         Runs the linear layer and non-linearity on the first item of the stored inputs.
 
         Returns:
-        - The linear layer and ReLU output for the input.
+        - The linear layer and leaky ReLU output for the input.
         """
         _tensor = self.inputs[0]
         output = self.model(_tensor)
