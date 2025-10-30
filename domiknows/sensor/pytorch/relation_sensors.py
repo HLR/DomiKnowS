@@ -207,12 +207,27 @@ class CandidateRelationSensor(CandidateSensor):
 
 
 class CompositionCandidateReaderSensor(CompositionCandidateSensor, FunctionalReaderSensor):
+    """
+    Inherits from:
+    - CompositionCandidateSensor
+    - FunctionalReaderSensor
+    """
     pass
 
 class EdgeReaderSensor(ReaderSensor, EdgeSensor):
+    """
+    Inherits from:
+    - ReaderSensor
+    - EdgeSensor
+    """
     pass
 
 class JointEdgeReaderSensor(JointReaderSensor, EdgeSensor):
+    """
+    Inherits from:
+    - JointReaderSensor
+    - EdgeSensor
+    """
     pass
 
 
