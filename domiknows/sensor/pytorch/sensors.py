@@ -331,12 +331,38 @@ class FunctionalSensor(TorchSensor):
 
 
 class ConstantSensor(FunctionalSensor):
+    """
+    A sensor that provides a constant value.
+
+    Inherits from:
+    - FunctionalSensor: A sensor with defined forward functionality; this class
+        replaces that with a constant value.
+    """
     def __init__(self, *args, data, as_tensor=True, **kwargs):
+        """
+        Initializes a ConstantSensor.
+
+        Args:
+        - *args: Variable-length arguments for FunctionalSensor
+        - data: Constant values to return.
+        - as_tensor (optional): Flag for whether to create a new tensor instance
+            when returning the given constant value. If the provided value is
+            already a tensor, then will return a detached copy, otherwise will
+            try to create a new tensor instance with `torch.tensor`. Defaults to
+            True.
+        """
         super().__init__(*args, **kwargs)
         self.data = data
         self.as_tensor = as_tensor
 
     def forward(self, *_, **__) -> Any:
+        """
+        Performs the forward function call by returning the set constant value.
+
+        Returns:
+            - The set constant value, optionally creating a new tensor instance.
+                If the conversion fails, returns the set constant object as-is.
+        """
         try:
             if self.as_tensor:
                 if torch.is_tensor(self.data):
@@ -350,16 +376,51 @@ class ConstantSensor(FunctionalSensor):
 
 
 class PrefilledSensor(FunctionalSensor):
+    """
+    A sensor that returns the existing filled value of the property associated with this sensor.
+
+    Inherits from:
+    - FunctionalSensor: A sensor with defined forward functionality; this class
+        replaces that with the pre-filled property value.
+    """
     def forward(self, *args, **kwargs) -> Any:
+        """
+        Performs the forward function call by returning the pre-filled property value.
+
+        Returns:
+        - The existing filled value corresponding to the property associated with this sensor.
+        """
         return self.context_helper[self.prop]
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
+    """
+    A sensor that returns the existing filled value of the property associated with this sensor
+    and triggers a callback to another Sensor.
+
+    Inherits from:
+    - PrefilledSensor: A sensor that returns the existing value of the property.
+    """
     def __init__(self, *args, callback_sensor=None, **kwargs):
+        """
+        Initializes a TriggerPrefilledSensor instance.
+
+        Args:
+        - *args: Variable-length argument list for FunctionalSensor
+        - callback_sensor: The sensor instance to be called with the current `self.context_helper` value
+        - **kwargs: Additional keyword arguments for FunctionalSensor
+        """
         super().__init__(*args, **kwargs)
         self.callback_sensor = callback_sensor
 
     def forward(self, *args, **kwargs) -> Any:
+        """
+        Performs the forward function call by returning the pre-filled property value, but first
+        triggering a callback to the set `self.callback_sensor`.
+        
+        Returns:
+        - The existing filled value corresponding to the property associated with this sensor.
+        """
         self.callback_sensor(self.context_helper)
         return super().forward(*args, **kwargs)
 
