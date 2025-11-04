@@ -750,7 +750,25 @@ def wrap_batch(values, fillvalue=0):
 
 
 class SafeTqdm(tqdm_original):
-    """Safe wrapper for tqdm that handles missing attributes in __del__"""
+    """Safe wrapper for tqdm that handles missing attributes and nested bars"""
+    
+    def __init__(self, *args, **kwargs):
+        # Disable nested progress bars by default for better compatibility
+        # Set position explicitly to avoid conflicts
+        if 'position' not in kwargs and hasattr(tqdm_original, '_instances'):
+            kwargs['position'] = len(tqdm_original._instances)
+        
+        # Add leave=False for inner progress bars to prevent conflicts
+        if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
+            kwargs['leave'] = False
+            
+        try:
+            super().__init__(*args, **kwargs)
+        except (OSError, ValueError) as e:
+            # If terminal positioning fails, fall back to simpler display
+            kwargs['position'] = None
+            kwargs['dynamic_ncols'] = False
+            super().__init__(*args, **kwargs)
     
     def __del__(self):
         try:
@@ -758,28 +776,49 @@ class SafeTqdm(tqdm_original):
             if not hasattr(self, 'last_print_t'):
                 self.last_print_t = getattr(self, 'start_t', 0)
             super().__del__()
-        except (AttributeError, TypeError):
-            # Silently ignore any attribute errors during cleanup
+        except (AttributeError, TypeError, OSError):
+            # Silently ignore any errors during cleanup
             pass
 
 class SafeTqdmAsync(tqdm_asyncio_original):
-    """Safe wrapper for tqdm_asyncio that handles missing attributes in __del__"""
+    """Safe wrapper for tqdm_asyncio that handles missing attributes"""
+    
+    def __init__(self, *args, **kwargs):
+        if 'position' not in kwargs and hasattr(tqdm_asyncio_original, '_instances'):
+            kwargs['position'] = len(tqdm_asyncio_original._instances)
+        
+        if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
+            kwargs['leave'] = False
+            
+        try:
+            super().__init__(*args, **kwargs)
+        except (OSError, ValueError):
+            kwargs['position'] = None
+            kwargs['dynamic_ncols'] = False
+            super().__init__(*args, **kwargs)
     
     def __del__(self):
         try:
-            # Ensure last_print_t exists before closing
             if not hasattr(self, 'last_print_t'):
                 self.last_print_t = getattr(self, 'start_t', 0)
             super().__del__()
-        except (AttributeError, TypeError):
-            # Silently ignore any attribute errors during cleanup
+        except (AttributeError, TypeError, OSError):
             pass
 
-# Use SafeTqdm as the default
 def safe_tqdm(*args, **kwargs):
     """
-    Safe tqdm wrapper that handles missing attributes during cleanup.
-    Falls back to SafeTqdmAsync if asyncio is detected in kwargs.
+    Safe tqdm wrapper that handles:
+    - Missing attributes during cleanup
+    - Nested progress bar conflicts
+    - Terminal positioning issues
+    
+    Usage:
+        from utils import safe_tqdm as tqdm
+        
+        for item in tqdm(items):
+            # Nested bars work automatically
+            for subitem in tqdm(subitems):
+                process(subitem)
     """
     if kwargs.get('asyncio', False):
         kwargs.pop('asyncio')

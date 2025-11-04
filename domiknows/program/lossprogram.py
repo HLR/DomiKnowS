@@ -560,7 +560,15 @@ class InferenceProgram(LossProgram):
         acc = 0
         total = 0
 
-        for datanode in tqdm(self.populate(evaluate_data, device=device), total=len(evaluate_data), desc="Evaluating"):
+        # Use tqdm with proper positioning for outer loop
+        # The inner populate() call will automatically disable its tqdm
+        for datanode in tqdm(
+            self.populate(evaluate_data, device=device), 
+            total=len(evaluate_data), 
+            desc="Evaluating",
+            position=0,
+            leave=True
+        ):
 
             # Finding the label of constraints/condition
             find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
@@ -594,9 +602,11 @@ class InferenceProgram(LossProgram):
 
         if total == 0:
             self.logger.error("No Valid Constraint found for this dataset.")
-            return None
-
-        return acc / total
+            return 0
+        
+        accuracy = acc / total
+        self.logger.info(f"Condition evaluation accuracy: {accuracy:.2%}")
+        return accuracy
 
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)

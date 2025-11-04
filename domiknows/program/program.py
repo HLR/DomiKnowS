@@ -279,10 +279,10 @@ class LearningBasedProgram():
             self.to(device)
         return next(self.populate_epoch([data_item], grad = grad))
 
-    def populate_epoch(self, dataset, grad = False):
+    def populate_epoch(self, dataset, grad=False):
         """
-        The `populate_epoch` function is used to iterate over a dataset and yield the output of a model
-        for each data item, either with or without gradient calculations.
+        The function populates the model with data from the dataset, either with or without computing
+        gradients.
         
         :param dataset: The `dataset` parameter is the input data that you want to use to populate the
         model. It could be a list, array, or any other iterable object that contains the data items
@@ -300,23 +300,33 @@ class LearningBasedProgram():
         except:
             pass
 
+        # Disable inner tqdm when called from another tqdm context
+        # Check if we're already inside a tqdm by looking at active instances
+        use_tqdm = True
+        try:
+            if hasattr(tqdm, '_instances') and len(tqdm._instances) > 0:
+                # Already inside a tqdm, disable nested one
+                use_tqdm = False
+        except:
+            pass
+
         if not grad:
             with torch.no_grad():
-                for i, data_item in tqdm(enumerate(dataset)):
-                    # import time
-                    # start = time.time()
+                iterator = enumerate(dataset)
+                if use_tqdm:
+                    iterator = tqdm(iterator, desc="Populating", leave=False)
+                
+                for i, data_item in iterator:
                     loss, metric, datanode, builder = self.model(data_item)
-                    # end = time.time()
-                    # print("Time taken for one data item in populate epoch: ", end - start)
                     yield detuple(datanode)
         else:
-            for i, data_item in tqdm(enumerate(dataset)):
-                # import time
-                # start = time.time()
+            iterator = enumerate(dataset)
+            if use_tqdm:
+                iterator = tqdm(iterator, desc="Populating (grad)", leave=False)
+                
+            for i, data_item in iterator:
                 data_item["modelKwargs"] = self.modelKwargs
                 _, _, *output = self.model(data_item)
-                # end = time.time()
-                # print("Time taken for one data item in populate epoch: ", end - start)
                 yield detuple(*output[:1])
 
     def save(self, path, **kwargs):
