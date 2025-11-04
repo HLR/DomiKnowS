@@ -316,8 +316,6 @@ class InferenceModel(LossModel):
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
         self.inferenceLogger.info(f"Constraint loss keys: {list(constr_loss.keys())}")
 
-        # print('retrieved labels:', read_labels)
-
         # Compile losses
         losses = []
         for i, (lcName, loss_dict) in enumerate(constr_loss.items()):
@@ -328,15 +326,45 @@ class InferenceModel(LossModel):
             lc = self.graph.logicalConstrains[lcName]
             lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
             self.inferenceLogger.debug(f"Processing constraint '{lcName}' ({i+1}/{len(constr_loss)}) with representation: {lcRepr}")
-                      
-            # Get the t-norm translated output of the constraint
-            constr_out = loss_dict['conversionSigmoid']
-            self.inferenceLogger.debug(f"Constraint '{lcName}' conversion (succes) output shape: {constr_out.shape}: {constr_out}")
+            
+            # Check if this is a counting constraint (sumL)
+            from domiknows.graph.logicalConstrain import sumL
+            is_counting_constraint = isinstance(lc, sumL)
+            self.inferenceLogger.debug(f"Constraint '{lcName}' is_counting: {is_counting_constraint}")
+            
+            if is_counting_constraint:
+                # For counting constraints (sumL), use the raw sum value directly
+                # The conversionSigmoid contains the count, not a probability
+                constr_out = loss_dict['conversionSigmoid']
+                self.inferenceLogger.debug(f"Counting constraint '{lcName}' output (count): {constr_out}")
+                
+                # Target is the expected count
+                lbl = read_labels[f'{lcName}/label'].float()
+                if lbl.dim() == 0:  # scalar
+                    lbl = lbl.unsqueeze(0)
+                lbl = lbl.squeeze()  # remove any singleton dimensions
+                self.inferenceLogger.debug(f"Counting constraint '{lcName}' target (expected count): {lbl}")
+                
+                # Use MSE loss for counting (regression), not BCE (classification)
+                constraint_loss = torch.nn.functional.mse_loss(constr_out.float(), lbl)
+                self.inferenceLogger.debug(f"Counting constraint '{lcName}' MSE loss: {constraint_loss.item()}")
+                
+            else:
+                # For boolean constraints, use the standard BCE loss
+                # Get the t-norm translated output of the constraint
+                constr_out = loss_dict['conversionSigmoid']
+                self.inferenceLogger.debug(f"Boolean constraint '{lcName}' conversion (success) output shape: {constr_out.shape}: {constr_out}")
 
-            # Target for for constraint lcName
-            lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
-            lbl = lbl.squeeze() # remove singleton dimension if present
-            self.inferenceLogger.debug(f"Constraint '{lcName}' label shape: {lbl.shape}: {lbl}")
+                # Target for constraint lcName (0 or 1 for boolean)
+                lbl = read_labels[f'{lcName}/label'].float()
+                if lbl.dim() == 0:  # scalar
+                    lbl = lbl.unsqueeze(0)
+                lbl = lbl.squeeze()  # remove singleton dimension if present
+                self.inferenceLogger.debug(f"Boolean constraint '{lcName}' label shape: {lbl.shape}: {lbl}")
+
+                # Calculate BCE loss for boolean constraints
+                constraint_loss = self.loss_func(constr_out.float(), lbl)
+                self.inferenceLogger.debug(f"Boolean constraint '{lcName}' calculated loss with function {self.loss_func.__class__.__name__}: {constraint_loss.item()}")
 
             if MONITORING_AVAILABLE:
                 log_single_lc(
@@ -345,21 +373,21 @@ class InferenceModel(LossModel):
                     label_tensor=lbl,
                     lc_formulation=lcRepr
                 )
+            
+            losses.append(constraint_loss)
 
-            # Calcluate loss 
-            constraint_loss = self.loss_func(constr_out.float(), lbl)
-            self.inferenceLogger.debug(f"Constraint '{lcName}' calculated loss with function {self.loss_func.__class__.__name__}: {constraint_loss.item()}")
-            losses.append(constraint_loss) # TODO: match dtypes too?
-
-        loss_scalar = sum(losses)
-        self.inferenceLogger.info(f"Total inference loss: {loss_scalar.item() if hasattr(loss_scalar, 'item') else loss_scalar}")
-        
+        if len(losses) == 0:
+            self.inferenceLogger.warning("No valid losses computed - returning zero loss")
+            loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+        else:
+            loss = sum(losses)
+            self.inferenceLogger.info(f"Total inference loss: {loss.item()}")
+            
         if MONITORING_AVAILABLE:
             log_memory() 
-
-        self.inferenceLogger.info("=== InferenceModel Forward Operation Completed ===\n")
-        # (*out, datanode, builder)
-        return loss_scalar, datanode, builder
+        
+        self.inferenceLogger.info("=== InferenceModel Forward Operation Completed ===")
+        return loss, datanode, builder
 
 class SampleLossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
