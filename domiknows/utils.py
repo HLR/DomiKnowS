@@ -749,26 +749,68 @@ def wrap_batch(values, fillvalue=0):
     return values
 
 
+# Detect if we're in a problematic terminal environment
+def _is_terminal_safe():
+    """Check if terminal supports advanced features like cursor movement"""
+    # Check if output is redirected
+    if not sys.stderr.isatty():
+        return False
+    
+    # Check for problematic environments
+    term = os.environ.get('TERM', '').lower()
+    if term in ('', 'dumb', 'unknown'):
+        return False
+    
+    # Check if colorama winterm will fail (Windows specific issue)
+    if sys.platform == 'win32':
+        try:
+            from colorama import ansitowin32
+            # Test if winterm is properly initialized
+            test_stream = ansitowin32.StreamWrapper()
+            if not hasattr(test_stream, 'stream') or test_stream.stream is None:
+                return False
+        except:
+            pass
+    
+    return True
+
+_TERMINAL_SAFE = _is_terminal_safe()
+
 class SafeTqdm(tqdm_original):
-    """Safe wrapper for tqdm that handles missing attributes and nested bars"""
+    """Safe wrapper for tqdm that handles terminal issues and missing attributes"""
     
     def __init__(self, *args, **kwargs):
-        # Disable nested progress bars by default for better compatibility
-        # Set position explicitly to avoid conflicts
-        if 'position' not in kwargs and hasattr(tqdm_original, '_instances'):
-            kwargs['position'] = len(tqdm_original._instances)
-        
-        # Add leave=False for inner progress bars to prevent conflicts
-        if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
-            kwargs['leave'] = False
+        # Force disable colorama/ncols features in problematic environments
+        if not _TERMINAL_SAFE:
+            kwargs['ncols'] = 80  # Fixed width
+            kwargs['dynamic_ncols'] = False
+            kwargs['position'] = None  # Disable positioning
+            # Use simpler output format
+            if 'bar_format' not in kwargs:
+                kwargs['bar_format'] = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
+        else:
+            # Safe positioning for nested bars
+            if 'position' not in kwargs and hasattr(tqdm_original, '_instances'):
+                kwargs['position'] = len(tqdm_original._instances)
             
+            # Inner bars should not persist
+            if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
+                kwargs['leave'] = False
+        
         try:
             super().__init__(*args, **kwargs)
-        except (OSError, ValueError) as e:
-            # If terminal positioning fails, fall back to simpler display
-            kwargs['position'] = None
+        except (OSError, ValueError, AttributeError, TypeError) as e:
+            # If initialization fails, fall back to minimal display
+            kwargs['ncols'] = 80
             kwargs['dynamic_ncols'] = False
-            super().__init__(*args, **kwargs)
+            kwargs['position'] = None
+            kwargs['bar_format'] = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}'
+            try:
+                super().__init__(*args, **kwargs)
+            except:
+                # Last resort: disable progress bar entirely, just show counter
+                kwargs['disable'] = True
+                super().__init__(*args, **kwargs)
     
     def __del__(self):
         try:
@@ -781,21 +823,34 @@ class SafeTqdm(tqdm_original):
             pass
 
 class SafeTqdmAsync(tqdm_asyncio_original):
-    """Safe wrapper for tqdm_asyncio that handles missing attributes"""
+    """Safe wrapper for tqdm_asyncio that handles terminal issues"""
     
     def __init__(self, *args, **kwargs):
-        if 'position' not in kwargs and hasattr(tqdm_asyncio_original, '_instances'):
-            kwargs['position'] = len(tqdm_asyncio_original._instances)
-        
-        if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
-            kwargs['leave'] = False
+        if not _TERMINAL_SAFE:
+            kwargs['ncols'] = 80
+            kwargs['dynamic_ncols'] = False
+            kwargs['position'] = None
+            if 'bar_format' not in kwargs:
+                kwargs['bar_format'] = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
+        else:
+            if 'position' not in kwargs and hasattr(tqdm_asyncio_original, '_instances'):
+                kwargs['position'] = len(tqdm_asyncio_original._instances)
             
+            if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
+                kwargs['leave'] = False
+        
         try:
             super().__init__(*args, **kwargs)
-        except (OSError, ValueError):
-            kwargs['position'] = None
+        except (OSError, ValueError, AttributeError, TypeError):
+            kwargs['ncols'] = 80
             kwargs['dynamic_ncols'] = False
-            super().__init__(*args, **kwargs)
+            kwargs['position'] = None
+            kwargs['bar_format'] = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}'
+            try:
+                super().__init__(*args, **kwargs)
+            except:
+                kwargs['disable'] = True
+                super().__init__(*args, **kwargs)
     
     def __del__(self):
         try:
@@ -811,13 +866,18 @@ def safe_tqdm(*args, **kwargs):
     - Missing attributes during cleanup
     - Nested progress bar conflicts
     - Terminal positioning issues
+    - Colorama/winterm failures
+    - Non-TTY environments
+    
+    Automatically detects problematic terminal environments and falls back
+    to simpler display modes when necessary.
     
     Usage:
         from utils import safe_tqdm as tqdm
         
-        for item in tqdm(items):
+        for item in tqdm(items, desc="Processing"):
             # Nested bars work automatically
-            for subitem in tqdm(subitems):
+            for subitem in tqdm(subitems, desc="Sub-process"):
                 process(subitem)
     """
     if kwargs.get('asyncio', False):
