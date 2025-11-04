@@ -181,19 +181,6 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
             
             equivSuccess = 1 if all_same else 0
             return equivSuccess
-            # -- Consider None
-            if var1 is None:
-                var1 = 0
-                
-            if var2 is None:
-                var2 = 0
-            # --
-            
-            epqSuccess = 0
-            if var1 - var2 == 0:
-                epqSuccess = 1
-                
-            return epqSuccess     
         
     def countVar(
         self,
@@ -295,3 +282,27 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         fixedSuccess = 1
         
         return fixedSuccess
+    
+    def summationVar(self, _, *var, onlyConstrains=False, logicMethodName="SUMMATION"):
+        """
+        Sums up a list of binary literals to an integer literal.
+        
+        Parameters:
+        - _: Model (ignored, kept for signature compatibility)
+        - *var: Variable number of binary literals (int, bool, torch.Tensor, or None)
+        - onlyConstrains: Not used for summation (kept for signature consistency)
+        - logicMethodName: Name for logging purposes
+        
+        Returns:
+        - Integer sum of all truthy values
+        """
+        varSum = 0
+        for v in var:
+            if v is None:
+                continue
+            if torch.is_tensor(v):
+                varSum += int(v.item())
+            else:
+                varSum += int(v)
+        
+        return varSum

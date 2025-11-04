@@ -539,6 +539,54 @@ class LogicalConstrain(LcElement):
             model.update()
         return zVars
     
+    def createSummation(self, model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName = "SUMMATION"):  
+    
+        # Ignore value of integrate
+        integrate = True
+            
+        try:
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
+            pass
+            
+        lcVariableName0 = lcVariableNames[0] # First variable
+        lcVariableSet0 =  v[lcVariableName0]
+
+        zVars = [] # Output ILP variables
+        
+        # Accumulate all variables
+        varsSetup = []
+        for i, _ in enumerate(lcVariableSet0):
+            
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
+                
+            if len(var) == 0:
+                if not (headConstrain or integrate):
+                    varsSetup.append([None])
+                    
+                continue
+            
+            if headConstrain or integrate:
+                varsSetup.extend(var)
+            else:
+                varsSetup.append(var)
+            
+        # -- Use ILP variable setup to create constrains   
+        if headConstrain or integrate:
+            r = myIlpBooleanProcessor.summationVar(model, *varsSetup)
+            for _ in lcVariableSet0:
+                zVars.append([r])
+        else:
+            for current_var in varsSetup:
+                zVars.append([myIlpBooleanProcessor.summationVar(model, *current_var)])
+    
+        if model is not None:
+            model.update()
+            
+        return zVars
+
 def use_grad(grad):
     if not grad:
         torch.no_grad()
@@ -772,3 +820,13 @@ class fixedL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
             return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)        
+        
+# ----------------- Summation
+
+class sumL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+    
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
+            return self.createSummation(model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName='Summation')

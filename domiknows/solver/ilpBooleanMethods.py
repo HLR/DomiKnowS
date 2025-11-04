@@ -209,3 +209,9 @@ class ilpBooleanProcessor(object, metaclass=abc.ABCMeta):
         • If the label is missing (e.g. VTag = "-100"), simply return 1 so
           the downstream logic treats it as satisfied.
         """
+        
+    # ------------------------------------------------------------------
+    # Summation
+    # ------------------------------------------------------------------
+    def summationVar(self, m, *_var):
+        "Sums up a list of binary literals to an integer literal."

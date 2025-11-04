@@ -874,3 +874,37 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return fixedLoss
         else:
             return fixedSuccess
+        
+    def summationVar(self, m, *_var, onlyConstrains=False, logicMethodName="SUMMATION"):
+        """        
+        Parameters:
+        - m: Model (ignored)
+        - *_var: Variable number of binary variables (tensors, scalars, or None)
+        - onlyConstrains: Not used for summation (kept for signature consistency)
+        - logicMethodName: Name for logging purposes
+        
+        Returns:
+        - Differentiable tensor representing the sum
+        """
+        if self.ifLog: 
+            self.myLogger.debug("%s called with %d variables" % (logicMethodName, len(_var)))
+        
+        # Convert None values and ensure we have tensors
+        var = self._fixVar(_var)
+        
+        if len(var) == 0:
+            # Return zero tensor on the correct device
+            return torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        
+        # Sum up all variables as tensors (preserving gradients)
+        sumResult = torch.clone(var[0])
+        for v in var[1:]:
+            sumResult = sumResult + v  # Use + instead of add_ to handle potential shape mismatches
+        
+        if self.ifLog:
+            self.myLogger.debug("%s returns tensor sum: %s" % (
+                logicMethodName, 
+                sumResult.item() if sumResult.numel() == 1 else sumResult
+            ))
+        
+        return sumResult

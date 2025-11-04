@@ -261,3 +261,5 @@ venv
 
 *.png
 test_regr/examples/PMDExistL/pmd_counting_tests/PMD_Counting_Constraints_Root _Causeand_Solution.md
+test_regr/ConllQA/debug_data.py
+test_regr/ConllQA/entities_*

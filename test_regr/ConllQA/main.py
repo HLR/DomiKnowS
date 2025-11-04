@@ -36,11 +36,26 @@ TRANSFORMER_MODEL = 'bert-base-uncased'
 FEATURE_DIM = 768 + 96
 
 
-def find_data_file(filename):
+def find_data_file(filename, train_portion=None):
     """Find data file by checking multiple possible locations"""
     current_dir = Path(__file__).parent
 
-    # List of possible locations to check
+    # First, check if extracted portion file exists
+    if train_portion:
+        extracted_filename = f"{train_portion}.json"
+        possible_extracted_paths = [
+            current_dir / extracted_filename,
+            current_dir / "data" / extracted_filename,
+            Path.cwd() / extracted_filename,
+            Path.cwd() / "data" / extracted_filename,
+        ]
+        
+        for path in possible_extracted_paths:
+            if path.exists():
+                print(f"Using extracted data file: {path}")
+                return str(path)
+
+    # List of possible locations to check for main file
     possible_paths = [
         current_dir / filename,
         current_dir / "data" / filename,
@@ -258,8 +273,8 @@ def main(args):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
-    # Find the data file automatically
-    data_file_path = find_data_file(args.data_path)
+    # Find the data file automatically (will use extracted file if exists)
+    data_file_path = find_data_file(args.data_path, args.train_portion)
 
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 

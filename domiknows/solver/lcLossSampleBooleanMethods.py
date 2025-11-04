@@ -292,3 +292,14 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return fixedLoss
         else:
             return fixedSuccess
+        
+    def summationVar(self, _, *var):
+        "Sums up a list of binary literals to an integer literal."
+        if self.ifNone(var):
+            return None
+        
+        sumResult = torch.zeros([self.sampleSize], device=self.current_device)
+        for v in var:
+            sumResult.add_(v)
+        
+        return sumResult

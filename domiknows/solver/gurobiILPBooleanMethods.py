@@ -799,3 +799,33 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,1))
         return 1
+    
+    def summationVar(self, m, *var, onlyConstrains=False, logicMethodName="SUMMATION"):
+        """
+        Returns a linear expression that sums all provided binary variables.
+        
+        Parameters:
+        - m: Gurobi model
+        - *var: Variable number of binary variables or constants
+        - onlyConstrains: Not used for summation (kept for signature consistency)
+        - logicMethodName: Name for logging purposes
+        
+        Returns:
+        - Linear expression representing the sum
+        """
+        # -- Consider None
+        varFixed = []  
+        for v in var:
+            if v is None:
+                varFixed.append(0) # when None
+            else:
+                varFixed.append(v)
+        # --
+        
+        varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, logicMethodName, minN=0)
+        S = varsInfo['varSumLinExpr'] + varsInfo['numberSum']
+        
+        if self.ifLog: 
+            self.myLogger.debug("%s returns linear expression: %s"%(logicMethodName, varsInfo['varSumLinExprStr']))
+        
+        return S
