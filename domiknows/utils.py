@@ -1,7 +1,6 @@
 import shutil
 import sys
 import os
-import re
 import time
 import pathlib
 import inspect
@@ -13,6 +12,9 @@ from typing import Iterable
 from contextlib import contextmanager
 import logging
 from logging.handlers import RotatingFileHandler
+
+from tqdm import tqdm as tqdm_original
+from tqdm.asyncio import tqdm as tqdm_asyncio_original
 
 from colorama import init
 
@@ -747,77 +749,42 @@ def wrap_batch(values, fillvalue=0):
     return values
 
 
-def _should_disable_tqdm():
-    """
-    Detect if tqdm should be disabled based on environment.
+class SafeTqdm(tqdm_original):
+    """Safe wrapper for tqdm that handles missing attributes in __del__"""
     
-    Returns:
-        bool: True if tqdm should be disabled
-    """
-    # Check environment variable
-    if os.environ.get('TQDM_DISABLE', '0') == '1':
-        return True
-    
-    # Check if running in pytest
-    if 'pytest' in sys.modules:
-        return True
-    
-    # Check if stdout is not a tty (e.g., CI/CD, no terminal)
-    if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
-        return True
-    
-    return False
-
-# Cache the result since it won't change during runtime
-_TQDM_DISABLE = _should_disable_tqdm()
-
-def safe_tqdm(iterable, *args, disable=None, **kwargs):
-    """
-    Safe wrapper around tqdm that handles terminal compatibility issues.
-    
-    This function:
-    1. Respects TQDM_DISABLE environment variable
-    2. Auto-detects test environments (pytest)
-    3. Detects headless environments (CI/CD, no TTY)
-    4. Handles missing terminal gracefully
-    5. Falls back to returning plain iterable on any error
-    
-    Args:
-        iterable: The iterable to wrap
-        *args: Positional arguments to pass to tqdm
-        disable: Explicit disable flag. If None, auto-detection is used
-        **kwargs: Keyword arguments to pass to tqdm
-    
-    Returns:
-        Either a tqdm-wrapped iterable or the plain iterable
-    
-    Example:
-        >>> for item in safe_tqdm(my_list, desc="Processing"):
-        ...     process(item)
-    """
-    # Use explicit disable parameter if provided, otherwise use auto-detection
-    if disable is None:
-        disable = _TQDM_DISABLE
-    
-    if disable:
-        return iterable
-    
-    try:
-        # Try to import and use tqdm.auto for better environment detection
+    def __del__(self):
         try:
-            from tqdm.auto import tqdm as _tqdm
-        except ImportError:
-            from tqdm import tqdm as _tqdm
-        
-        return _tqdm(iterable, *args, disable=False, **kwargs)
-        
-    except (AttributeError, OSError, TypeError, ImportError) as e:
-        # If tqdm fails for any reason, just return the iterable
-        # Log debug message if possible
-        try:
-            logger = logging.getLogger(__name__)
-            logger.debug(f"tqdm failed, falling back to plain iteration: {e}")
-        except:
+            # Ensure last_print_t exists before closing
+            if not hasattr(self, 'last_print_t'):
+                self.last_print_t = getattr(self, 'start_t', 0)
+            super().__del__()
+        except (AttributeError, TypeError):
+            # Silently ignore any attribute errors during cleanup
             pass
-        
-        return iterable
+
+class SafeTqdmAsync(tqdm_asyncio_original):
+    """Safe wrapper for tqdm_asyncio that handles missing attributes in __del__"""
+    
+    def __del__(self):
+        try:
+            # Ensure last_print_t exists before closing
+            if not hasattr(self, 'last_print_t'):
+                self.last_print_t = getattr(self, 'start_t', 0)
+            super().__del__()
+        except (AttributeError, TypeError):
+            # Silently ignore any attribute errors during cleanup
+            pass
+
+# Use SafeTqdm as the default
+def safe_tqdm(*args, **kwargs):
+    """
+    Safe tqdm wrapper that handles missing attributes during cleanup.
+    Falls back to SafeTqdmAsync if asyncio is detected in kwargs.
+    """
+    if kwargs.get('asyncio', False):
+        kwargs.pop('asyncio')
+        return SafeTqdmAsync(*args, **kwargs)
+    return SafeTqdm(*args, **kwargs)
+
+# For backwards compatibility
+tqdm = safe_tqdm
