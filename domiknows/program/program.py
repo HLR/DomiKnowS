@@ -1,7 +1,10 @@
 import logging
 import torch
 
-from ..utils import consume, detuple, safe_tqdm as tqdm
+from ..utils import consume, detuple
+#from ..utils import safe_tqdm as tqdm
+from tqdm import tqdm
+
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 

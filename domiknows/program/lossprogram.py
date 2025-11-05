@@ -4,7 +4,10 @@ import torch.nn.functional as F
 import numpy as np
 
 from .program import LearningBasedProgram, get_len
-from ..utils import consume, safe_tqdm as tqdm
+from ..utils import consume
+#from ..utils import safe_tqdm as tqdm
+from tqdm import tqdm
+
 from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
 from .model.base import Mode
 
@@ -595,8 +598,6 @@ class InferenceProgram(LossProgram):
         acc = 0
         total = 0
 
-        # Use tqdm with proper positioning for outer loop
-        # The inner populate() call will automatically disable its tqdm
         for datanode in tqdm(
             self.populate(evaluate_data, device=device), 
             total=len(evaluate_data), 
