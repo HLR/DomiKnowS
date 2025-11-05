@@ -15,6 +15,8 @@ from logging.handlers import RotatingFileHandler
 
 from tqdm import tqdm as tqdm_original
 from tqdm.asyncio import tqdm as tqdm_asyncio_original
+import atexit
+
 
 from colorama import init
 
@@ -748,6 +750,22 @@ def wrap_batch(values, fillvalue=0):
         values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
     return values
 
+
+# Suppress tqdm monitor thread warnings during exit
+def _cleanup_tqdm_monitor():
+    """Clean up tqdm monitor thread to prevent atexit warnings"""
+    try:
+        from tqdm import _monitor
+        if hasattr(_monitor, 'TMonitor') and hasattr(_monitor.TMonitor, '_instances'):
+            for instance in list(_monitor.TMonitor._instances):
+                try:
+                    instance.exit()
+                except:
+                    pass
+    except:
+        pass
+
+atexit.register(_cleanup_tqdm_monitor)
 
 # Detect if we're in a problematic terminal environment
 def _is_terminal_safe():

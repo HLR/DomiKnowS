@@ -243,17 +243,17 @@ class LossProgram(LearningBasedProgram):
     def train_epoch(
         self, dataset,
         c_lr=1,
-        c_warmup_iters=10,  # warmup
-        c_freq_increase=1,  # d
+        c_warmup_iters=10,
+        c_freq_increase=1,
         c_freq_increase_freq=1,
-        c_lr_decay=0,  # strategy
+        c_lr_decay=0,
         c_lr_decay_param=1,
         c_session={},
         batch_size = 1,
-        dataset_size = None, # provide dataset_size if dataset does not have len implemented
-        print_loss = True, # print loss on each grad update
-        training_mode='standard',  # NEW: 'standard', 'warmup', 'constraint_only'
-        constraint_loss_scale=1.0,  # NEW: scale factor for constraint-only mode
+        dataset_size = None,
+        print_loss = True,
+        training_mode='standard',
+        constraint_loss_scale=1.0,
         **kwargs):
 
         if batch_size < 1:
@@ -261,6 +261,8 @@ class LossProgram(LearningBasedProgram):
 
         assert c_session
         from torch import autograd
+        import time
+        
         torch.autograd.set_detect_anomaly(False)
         self.model.mode(Mode.TRAIN)
         iter = c_session['iter']
@@ -272,39 +274,61 @@ class LossProgram(LearningBasedProgram):
         self.cmodel.train()
         self.cmodel.reset()
 
-        # try to get the number of iterations
+        # Get dataset size
         num_data_iters = dataset_size
         if num_data_iters is None:
             if not hasattr(dataset, '__len__'):
                 raise ValueError(f'dataset must have attribute __len__ if dataset_size is not provided')
             num_data_iters = len(dataset)
 
-        # NEW: Track stats for constraint-only mode
+        # Track stats
         constraint_loss_zero_count = 0
         no_gradient_count = 0
         total_steps = 0
-
-        batch_loss = 0.0 # track accumulated loss across batch for logging
+        batch_loss = 0.0
+        
         for data_idx, data in enumerate(dataset):
             total_steps += 1
             
-            # forward pass
-            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
+            # DIAGNOSTIC: Log before forward pass
+            if total_steps <= 3:
+                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Starting forward pass...")
+                start_time = time.time()
             
-            # NEW: Compute loss based on training mode
+            try:
+                # Forward pass
+                mloss, metric, *output = self.model(data)
+                
+                # DIAGNOSTIC: Log after forward pass
+                if total_steps <= 3:
+                    elapsed = time.time() - start_time
+                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Forward pass completed in {elapsed:.2f}s")
+                    self.logger.info(f"[DIAGNOSTIC] mloss: {mloss}, metric: {metric}")
+                    
+            except Exception as e:
+                self.logger.error(f"[DIAGNOSTIC] Step {total_steps} - Forward pass failed: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+            
+            # Compute loss based on training mode
             if training_mode == 'warmup':
-                # Warmup: only use model loss
                 loss = mloss
                 
             elif training_mode == 'constraint_only':
-                # Constraint-only: only use constraint loss to update model
-                # IMPORTANT: Must pass retain_graph or compute closs differently
+                if total_steps <= 3:
+                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Computing constraint loss...")
+                    start_time = time.time()
+                    
                 closs, *_ = self.cmodel(output[1])
                 
-                # Validate constraint loss
+                if total_steps <= 3:
+                    elapsed = time.time() - start_time
+                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Constraint loss computed in {elapsed:.2f}s: {closs}")
+                
                 if not torch.is_tensor(closs):
                     if total_steps <= 5:
-                        self.logger.warning("[constraint_only] Constraint loss is None - constraints may not be active")
+                        self.logger.warning("[constraint_only] Constraint loss is None")
                     continue
                 
                 if not torch.isfinite(closs):
@@ -312,30 +336,28 @@ class LossProgram(LearningBasedProgram):
                         self.logger.warning(f"[constraint_only] Non-finite constraint loss: {closs.item()}")
                     continue
                 
-                # Log constraint loss in first few steps
-                if total_steps <= 5:
-                    self.logger.info(f"[constraint_only] Step {total_steps} - Constraint loss: {closs.item():.6f}")
-                    # Debug: Check if closs requires grad
-                    self.logger.info(f"[constraint_only] closs.requires_grad: {closs.requires_grad}")
-                
-                # Check if constraint loss is non-zero
                 if abs(closs.item()) < 1e-8:
                     constraint_loss_zero_count += 1
                     if constraint_loss_zero_count == 1:
                         self.logger.warning(f"[constraint_only] Constraint loss is near zero: {closs.item()}")
                     continue
                 
-                # Apply scaling for constraint loss
-                # Note: We need mloss in the computation graph for gradients to flow
-                # Use a small coefficient for mloss to keep constraint dominant
                 loss = mloss * 0.01 + closs * constraint_loss_scale
                 
             else:  # 'standard' mode
-                # Standard: combined mloss + beta*closs
                 if iter < c_warmup_iters:
                     loss = mloss
                 else:
+                    if total_steps <= 3:
+                        self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Computing constraint loss (standard mode)...")
+                        start_time = time.time()
+                        
                     closs, *_ = self.cmodel(output[1])
+                    
+                    if total_steps <= 3:
+                        elapsed = time.time() - start_time
+                        self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Constraint loss computed in {elapsed:.2f}s")
+                    
                     if torch.is_nonzero(closs):
                         loss = mloss + self.beta * closs
                     else:
@@ -344,22 +366,28 @@ class LossProgram(LearningBasedProgram):
             if not loss:
                 continue
 
-            # get hypothetical position in the batch
+            # Batch position
             batch_pos = data_idx % batch_size
 
-            # calculate gradients for item
+            # Calculate gradients
             loss /= batch_size
             batch_loss += loss.item()
+            
+            if total_steps <= 3:
+                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Starting backward pass...")
+                start_time = time.time()
+                
             loss.backward()
+            
+            if total_steps <= 3:
+                elapsed = time.time() - start_time
+                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Backward pass completed in {elapsed:.2f}s")
 
-            # only update if we're the last item in the batch
-            # or if we're the last item in the dataset
+            # Determine if we should update
             do_update = (
                 (batch_pos == (batch_size - 1)) or
                 (data_idx == (num_data_iters - 1))
             )
-
-            # NEW: Check gradients in constraint-only mode
             if training_mode == 'constraint_only' and do_update and total_steps <= 5:
                 self.logger.info(f"[constraint_only] Step {total_steps} - Checking gradients...")
                 for name, param in self.model.named_parameters():
@@ -368,7 +396,7 @@ class LossProgram(LearningBasedProgram):
                         if grad_norm > 1e-8:
                             self.logger.info(f"  {name}: grad_sum={grad_norm:.6e}")
 
-            # NEW: Verify gradients exist in constraint-only mode
+            # Verify gradients in constraint-only mode
             if training_mode == 'constraint_only' and do_update:
                 has_model_grads = any(
                     p.grad is not None and p.grad.abs().sum() > 1e-8
@@ -379,7 +407,6 @@ class LossProgram(LearningBasedProgram):
                     no_gradient_count += 1
                     if no_gradient_count <= 5:
                         self.logger.warning(f"[constraint_only] Step {total_steps}: No gradients flowing to model parameters")
-                    # Zero out and skip update
                     if self.opt is not None:
                         self.opt.zero_grad()
                     if self.copt is not None:
@@ -387,7 +414,7 @@ class LossProgram(LearningBasedProgram):
                     batch_loss = 0.0
                     continue
 
-            # NEW: Gradient clipping - stronger for constraint-only mode
+            # Gradient clipping
             if do_update:
                 if training_mode == 'constraint_only':
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
@@ -398,12 +425,14 @@ class LossProgram(LearningBasedProgram):
                     if self.copt is not None:
                         torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
 
-            # do backwards pass update
+            # Optimizer step
             if self.opt is not None and do_update:
+                if total_steps <= 3:
+                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Optimizer step...")
                 self.opt.step()
             iter += 1
 
-            # NEW: In constraint-only mode, always update copt
+            # Constraint optimizer
             if training_mode == 'constraint_only' and self.copt is not None and do_update:
                 self.copt.step()
             elif (
@@ -413,16 +442,15 @@ class LossProgram(LearningBasedProgram):
                 do_update and
                 iter - c_update_iter > c_update_freq
             ):
-                # Standard primal-dual update logic
                 reverse_sign_grad(self.model.parameters())
                 self.copt.step()
-                # update counting
                 c_update_iter = iter
                 c_update += 1
-                # update freq
+                
                 if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
                     c_update_freq += c_freq_increase
-                # update c_lr
+                
+                # Update learning rate
                 if c_lr_decay == 0:
                     def update_lr(lr):
                         return c_lr * 1. / (1 + c_lr_decay_param * c_update)
@@ -441,12 +469,20 @@ class LossProgram(LearningBasedProgram):
                         return lr * np.sqrt((c_update+1) / (c_update+2))
                 else:
                     raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
+                        
                 for param_group in self.copt.param_groups:
                     param_group['lr'] = update_lr(param_group['lr'])
             
+            # DIAGNOSTIC: Log before yield
+            if total_steps <= 3:
+                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Yielding results...")
+                
             yield (loss, metric, *output[:1])
+            
+            if total_steps <= 3:
+                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Completed successfully")
 
-            # only zero out grads & loss tracker if we've done an update
+            # Zero gradients if updated
             if do_update:
                 batch_loss = 0.0
                 if self.opt is not None:
@@ -454,19 +490,18 @@ class LossProgram(LearningBasedProgram):
                 if self.copt is not None:
                     self.copt.zero_grad()
 
-        # NEW: Summary at end of constraint-only training
+        # Summary at end of constraint-only training
         if training_mode == 'constraint_only':
             self.logger.info(f"[constraint_only] Training summary:")
             self.logger.info(f"  Total steps: {total_steps}")
             self.logger.info(f"  Steps with zero loss: {constraint_loss_zero_count}")
             self.logger.info(f"  Steps with no gradients: {no_gradient_count}")
-            self.logger.info(f"  Successful steps: {total_steps - constraint_loss_zero_count - no_gradient_count}")
 
         c_session['iter'] = iter
         c_session['c_update_iter'] = c_update_iter
         c_session['c_update_freq'] = c_update_freq
         c_session['c_update'] = c_update
-                  
+                    
 class PrimalDualProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
