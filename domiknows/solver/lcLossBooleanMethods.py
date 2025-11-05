@@ -898,8 +898,17 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         # Sum up all variables as tensors (preserving gradients)
         sumResult = torch.clone(var[0])
-        for v in var[1:]:
-            sumResult = sumResult + v  # Use + instead of add_ to handle potential shape mismatches
+        self.countLogger.debug(f"Initial sum (var[0]): {sumResult.item() if sumResult.numel() == 1 else sumResult}")
+        
+        for i, v in enumerate(var[1:], 1):
+            sumResult = sumResult + v 
+        
+        # Ensure result has gradient tracking
+        if not sumResult.requires_grad:
+            self.countLogger.warning("Sum result does not require gradients - fixing...")
+            sumResult = sumResult.detach().requires_grad_(True)
+        
+        self.countLogger.info(f"Final sum result: {sumResult.item() if sumResult.numel() == 1 else sumResult} (requires_grad: {sumResult.requires_grad})")
         
         if self.ifLog:
             self.myLogger.debug("%s returns tensor sum: %s" % (
@@ -907,4 +916,4 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 sumResult.item() if sumResult.numel() == 1 else sumResult
             ))
         
-        return sumResult
+        return sumResult 
