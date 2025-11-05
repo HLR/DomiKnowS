@@ -2,7 +2,6 @@ import logging
 import torch
 
 from ..utils import consume, detuple
-#from ..utils import safe_tqdm as tqdm
 from tqdm import tqdm
 
 from .model.base import Mode
@@ -124,11 +123,6 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
 
-                metricName = 'loss'
-                metricResult = self.model.loss
-
-            ilpMetric = None
-            softmaxMetric = None
 
             if self.model.metric:
                 self.logger.info(' - metric:')
@@ -144,23 +138,7 @@ class LearningBasedProgram():
                         self.f.write("\n")
                     except:
                         pass
-
-                    metricName = key
-                    metricResult = metric
-
-                    if key == 'ILP':
-                        ilpMetric = metric
-
-                    if key == 'softmax':
-                        softmaxMetric = metric
-
-            """if ilpMetric is not None and softmaxMetric is not None:
-                metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
-                metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
-
-                self.logger.info(f' - - {metricDeltaKey}')
-                self.logger.info(metricDelta)"""
-
+                    
     def train(
         self,
         training_set,

@@ -5,7 +5,6 @@ import numpy as np
 
 from .program import LearningBasedProgram, get_len
 from ..utils import consume
-#from ..utils import safe_tqdm as tqdm
 from tqdm import tqdm
 
 from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
@@ -293,23 +292,11 @@ class LossProgram(LearningBasedProgram):
         for data_idx, data in enumerate(dataset):
             total_steps += 1
             
-            # DIAGNOSTIC: Log before forward pass
-            if total_steps <= 3:
-                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Starting forward pass...")
-                start_time = time.time()
-            
             try:
                 # Forward pass
                 mloss, metric, *output = self.model(data)
-                
-                # DIAGNOSTIC: Log after forward pass
-                if total_steps <= 3:
-                    elapsed = time.time() - start_time
-                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Forward pass completed in {elapsed:.2f}s")
-                    self.logger.info(f"[DIAGNOSTIC] mloss: {mloss}, metric: {metric}")
                     
             except Exception as e:
-                self.logger.error(f"[DIAGNOSTIC] Step {total_steps} - Forward pass failed: {e}")
                 import traceback
                 traceback.print_exc()
                 raise
@@ -319,15 +306,7 @@ class LossProgram(LearningBasedProgram):
                 loss = mloss
                 
             elif training_mode == 'constraint_only':
-                if total_steps <= 3:
-                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Computing constraint loss...")
-                    start_time = time.time()
-                    
                 closs, *_ = self.cmodel(output[1])
-                
-                if total_steps <= 3:
-                    elapsed = time.time() - start_time
-                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Constraint loss computed in {elapsed:.2f}s: {closs}")
                 
                 if not torch.is_tensor(closs):
                     if total_steps <= 5:
@@ -351,15 +330,7 @@ class LossProgram(LearningBasedProgram):
                 if iter < c_warmup_iters:
                     loss = mloss
                 else:
-                    if total_steps <= 3:
-                        self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Computing constraint loss (standard mode)...")
-                        start_time = time.time()
-                        
-                    closs, *_ = self.cmodel(output[1])
-                    
-                    if total_steps <= 3:
-                        elapsed = time.time() - start_time
-                        self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Constraint loss computed in {elapsed:.2f}s")
+                    closs, *_ = self.cmodel(output[1])                  
                     
                     if torch.is_nonzero(closs):
                         loss = mloss + self.beta * closs
@@ -376,16 +347,8 @@ class LossProgram(LearningBasedProgram):
             loss /= batch_size
             batch_loss += loss.item()
             
-            if total_steps <= 3:
-                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Starting backward pass...")
-                start_time = time.time()
-                
             loss.backward()
             
-            if total_steps <= 3:
-                elapsed = time.time() - start_time
-                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Backward pass completed in {elapsed:.2f}s")
-
             # Determine if we should update
             do_update = (
                 (batch_pos == (batch_size - 1)) or
@@ -430,8 +393,6 @@ class LossProgram(LearningBasedProgram):
 
             # Optimizer step
             if self.opt is not None and do_update:
-                if total_steps <= 3:
-                    self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Optimizer step...")
                 self.opt.step()
             iter += 1
 
@@ -476,15 +437,8 @@ class LossProgram(LearningBasedProgram):
                 for param_group in self.copt.param_groups:
                     param_group['lr'] = update_lr(param_group['lr'])
             
-            # DIAGNOSTIC: Log before yield
-            if total_steps <= 3:
-                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Yielding results...")
-                
             yield (loss, metric, *output[:1])
             
-            if total_steps <= 3:
-                self.logger.info(f"[DIAGNOSTIC] Step {total_steps} - Completed successfully")
-
             # Zero gradients if updated
             if do_update:
                 batch_loss = 0.0
