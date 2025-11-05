@@ -549,7 +549,21 @@ class InferenceProgram(LossProgram):
         super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
 
     def evaluate_condition(self, evaluate_data, device="cpu"):
-        acc = 0
+        """
+        Evaluate constraints with proper metrics for different constraint types.
+        - Boolean constraints (atLeastAL, exactAL, etc.): Binary accuracy
+        - Counting constraints (sumL): Mean Absolute Error (MAE)
+        """
+        from domiknows.graph.logicalConstrain import sumL
+        
+        # Separate metrics for boolean and counting constraints
+        boolean_correct = 0
+        boolean_total = 0
+        
+        counting_errors = []
+        counting_predictions = []
+        counting_labels = []
+        
         total = 0
 
         for datanode in tqdm(
@@ -559,7 +573,6 @@ class InferenceProgram(LossProgram):
             position=0,
             leave=True
         ):
-
             # Finding the label of constraints/condition
             find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
             if len(find_constraints_label) < 1:
@@ -579,24 +592,161 @@ class InferenceProgram(LossProgram):
                     lc.active = False
 
             total += 1
+            
             # Inference the final output
             verify_constrains = datanode.verifyResultsLC()
             if not verify_constrains:
                 continue
-            # Getting label of constraints and convert to 0-1
+                
+            # Getting label of constraints and convert appropriately based on type
             verify_constrains = {k: v for k, v in verify_constrains.items() if k in active_lc_name}
 
-            condition_list = [1 if verify_constrains[lc]["satisfied"] == 100.0 else 0 for lc in verify_constrains]
-            constraint_labels = [int(constraint_labels_dict[lc + "/label"].item()) for lc in active_lc_name]
-            acc += int(constraint_labels == condition_list)
+            for lc_name in verify_constrains:
+                lc = self.graph.logicalConstrains[lc_name]
+                label = constraint_labels_dict[f'{lc_name}/label']
+                
+                # Check if this is a counting constraint
+                is_counting = isinstance(lc, sumL)
+                
+                if is_counting:
+                    # For counting constraints: Mean Absolute Error
+                    constr_loss = datanode.calculateLcLoss(
+                        tnorm=self.graph.tnorm if hasattr(self.graph, 'tnorm') else 'P',
+                        counting_tnorm=self.graph.counting_tnorm if hasattr(self.graph, 'counting_tnorm') else None,
+                        sample=False,
+                        sampleSize=0
+                    )
+                    
+                    if lc_name in constr_loss and 'conversionSigmoid' in constr_loss[lc_name]:
+                        # Get the predicted count (the sum)
+                        predicted_count = constr_loss[lc_name]['conversionSigmoid']
+                        if torch.is_tensor(predicted_count):
+                            predicted_count = predicted_count.item()
+                        
+                        expected_count = label.item() if torch.is_tensor(label) else float(label)
+                        
+                        # Calculate absolute error
+                        error = abs(predicted_count - expected_count)
+                        counting_errors.append(error)
+                        counting_predictions.append(predicted_count)
+                        counting_labels.append(expected_count)
+                        
+                        self.logger.debug(f"Counting constraint '{lc_name}': predicted={predicted_count:.2f}, expected={expected_count}, error={error:.2f}")
+                else:
+                    # For boolean constraints: binary accuracy
+                    is_satisfied = verify_constrains[lc_name]["satisfied"] == 100.0
+                    expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
+                    
+                    if is_satisfied == expected_satisfied:
+                        boolean_correct += 1
+                    boolean_total += 1
+                    
+                    self.logger.debug(f"Boolean constraint '{lc_name}': satisfied={is_satisfied}, expected={expected_satisfied}")
 
         if total == 0:
             self.logger.error("No Valid Constraint found for this dataset.")
             return 0
         
-        accuracy = acc / total
-        self.logger.info(f"Condition evaluation accuracy: {accuracy:.2%}")
-        return accuracy
+        # Report results based on what constraints were evaluated
+        results = {}
+        
+        if boolean_total > 0:
+            boolean_accuracy = boolean_correct / boolean_total
+            results['boolean_accuracy'] = boolean_accuracy
+            self.logger.info(f"Boolean constraint accuracy: {boolean_accuracy:.2%} ({boolean_correct}/{boolean_total})")
+            print(f"Boolean constraint accuracy: {boolean_accuracy:.2%} ({boolean_correct}/{boolean_total})")
+        
+        if len(counting_errors) > 0:
+            counting_mae = sum(counting_errors) / len(counting_errors)
+            counting_rmse = (sum(e**2 for e in counting_errors) / len(counting_errors)) ** 0.5
+            
+            # Calculate "accuracy within threshold" (e.g., within 0.5 of correct answer)
+            threshold = 0.5
+            counting_accurate = sum(1 for e in counting_errors if e <= threshold)
+            counting_accuracy_threshold = counting_accurate / len(counting_errors)
+            
+            results['counting_mae'] = counting_mae
+            results['counting_rmse'] = counting_rmse
+            results['counting_accuracy_threshold'] = counting_accuracy_threshold
+            
+            self.logger.info(f"Counting constraint MAE: {counting_mae:.3f}")
+            self.logger.info(f"Counting constraint RMSE: {counting_rmse:.3f}")
+            self.logger.info(f"Counting constraint accuracy (±{threshold}): {counting_accuracy_threshold:.2%} ({counting_accurate}/{len(counting_errors)})")
+            
+            print(f"\nCounting constraint results:")
+            print(f"  MAE: {counting_mae:.3f}")
+            print(f"  RMSE: {counting_rmse:.3f}")
+            print(f"  Accuracy (±{threshold}): {counting_accuracy_threshold:.2%} ({counting_accurate}/{len(counting_errors)})")
+            
+            # Show some example predictions
+            if len(counting_predictions) > 0:
+                print(f"\nSample predictions (first 5):")
+                for i in range(min(5, len(counting_predictions))):
+                    print(f"  Predicted: {counting_predictions[i]:.2f}, Expected: {counting_labels[i]:.0f}, Error: {counting_errors[i]:.2f}")
+        
+        # Return comprehensive results for mixed constraints
+        if len(counting_errors) > 0 and boolean_total == 0:
+            # Only counting constraints
+            primary_metric = results['counting_accuracy_threshold']
+            self.logger.info(f"Primary metric (counting accuracy ±{threshold}): {primary_metric:.2%}")
+            print(f"\n=== Overall Evaluation ===")
+            print(f"Primary metric: {primary_metric:.2%} (counting accuracy ±{threshold})")
+            return primary_metric
+            
+        elif boolean_total > 0 and len(counting_errors) == 0:
+            # Only boolean constraints
+            primary_metric = results['boolean_accuracy']
+            self.logger.info(f"Primary metric (boolean accuracy): {primary_metric:.2%}")
+            print(f"\n=== Overall Evaluation ===")
+            print(f"Primary metric: {primary_metric:.2%} (boolean accuracy)")
+            return primary_metric
+            
+        elif boolean_total > 0 and len(counting_errors) > 0:
+            # Mixed constraints: compute combined metrics
+            
+            # Option 1: Weighted average based on number of constraints
+            total_constraints = boolean_total + len(counting_errors)
+            boolean_weight = boolean_total / total_constraints
+            counting_weight = len(counting_errors) / total_constraints
+            
+            weighted_accuracy = (boolean_weight * results['boolean_accuracy'] + 
+                                counting_weight * results['counting_accuracy_threshold'])
+            
+            # Option 2: Harmonic mean (balanced performance on both types)
+            if results['boolean_accuracy'] > 0 and results['counting_accuracy_threshold'] > 0:
+                harmonic_mean = 2 * (results['boolean_accuracy'] * results['counting_accuracy_threshold']) / \
+                            (results['boolean_accuracy'] + results['counting_accuracy_threshold'])
+            else:
+                harmonic_mean = 0.0
+            
+            results['weighted_accuracy'] = weighted_accuracy
+            results['harmonic_mean'] = harmonic_mean
+            
+            self.logger.info(f"\nMixed constraint evaluation:")
+            self.logger.info(f"  Boolean constraints: {boolean_total} ({boolean_weight:.1%})")
+            self.logger.info(f"  Counting constraints: {len(counting_errors)} ({counting_weight:.1%})")
+            self.logger.info(f"  Weighted average: {weighted_accuracy:.2%}")
+            self.logger.info(f"  Harmonic mean: {harmonic_mean:.2%}")
+            
+            print(f"\n=== Mixed Constraint Evaluation ===")
+            print(f"Constraint distribution:")
+            print(f"  Boolean:  {boolean_total:3d} ({boolean_weight:5.1%}) - Accuracy: {results['boolean_accuracy']:.2%}")
+            print(f"  Counting: {len(counting_errors):3d} ({counting_weight:5.1%}) - Accuracy: {results['counting_accuracy_threshold']:.2%}")
+            print(f"\nCombined metrics:")
+            print(f"  Weighted average: {weighted_accuracy:.2%}")
+            print(f"  Harmonic mean:    {harmonic_mean:.2%}")
+            
+            # Use weighted average as primary metric
+            primary_metric = weighted_accuracy
+            print(f"\nPrimary metric: {primary_metric:.2%} (weighted average)")
+            
+            return primary_metric
+            
+        else:
+            # No valid constraints evaluated
+            self.logger.warning("No valid constraints evaluated")
+            print("\nWarning: No valid constraints evaluated")
+            return 0.0
 
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
