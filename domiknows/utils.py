@@ -13,11 +13,6 @@ from contextlib import contextmanager
 import logging
 from logging.handlers import RotatingFileHandler
 
-from tqdm import tqdm as tqdm_original
-from tqdm.asyncio import tqdm as tqdm_asyncio_original
-import atexit
-
-
 from colorama import init
 
 init(autoreset=True, convert=True)        # enable Windows console colours
@@ -751,157 +746,77 @@ def wrap_batch(values, fillvalue=0):
     return values
 
 
-# Suppress tqdm monitor thread warnings during exit
-def _cleanup_tqdm_monitor():
-    """Clean up tqdm monitor thread to prevent atexit warnings"""
+def _should_disable_tqdm():
+    """
+    Detect if tqdm should be disabled based on environment.
+    
+    Returns:
+        bool: True if tqdm should be disabled
+    """
+    # Check environment variable
+    if os.environ.get('TQDM_DISABLE', '0') == '1':
+        return True
+    
+    # Check if running in pytest
+    if 'pytest' in sys.modules:
+        return True
+    
+    # Check if stdout is not a tty (e.g., CI/CD, no terminal)
+    if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
+        return True
+    
+    return False
+
+# Cache the result since it won't change during runtime
+_TQDM_DISABLE = _should_disable_tqdm()
+
+def safe_tqdm(iterable, *args, disable=None, **kwargs):
+    """
+    Safe wrapper around tqdm that handles terminal compatibility issues.
+    
+    This function:
+    1. Respects TQDM_DISABLE environment variable
+    2. Auto-detects test environments (pytest)
+    3. Detects headless environments (CI/CD, no TTY)
+    4. Handles missing terminal gracefully
+    5. Falls back to returning plain iterable on any error
+    
+    Args:
+        iterable: The iterable to wrap
+        *args: Positional arguments to pass to tqdm
+        disable: Explicit disable flag. If None, auto-detection is used
+        **kwargs: Keyword arguments to pass to tqdm
+    
+    Returns:
+        Either a tqdm-wrapped iterable or the plain iterable
+    
+    Example:
+        >>> for item in safe_tqdm(my_list, desc="Processing"):
+        ...     process(item)
+    """
+    # Use explicit disable parameter if provided, otherwise use auto-detection
+    if disable is None:
+        disable = _TQDM_DISABLE
+    
+    if disable:
+        return iterable
+    
     try:
-        from tqdm import _monitor
-        if hasattr(_monitor, 'TMonitor') and hasattr(_monitor.TMonitor, '_instances'):
-            for instance in list(_monitor.TMonitor._instances):
-                try:
-                    instance.exit()
-                except:
-                    pass
-    except:
-        pass
-
-atexit.register(_cleanup_tqdm_monitor)
-
-# Detect if we're in a problematic terminal environment
-def _is_terminal_safe():
-    """Check if terminal supports advanced features like cursor movement"""
-    # Check if output is redirected
-    if not sys.stderr.isatty():
-        return False
-    
-    # Check for problematic environments
-    term = os.environ.get('TERM', '').lower()
-    if term in ('', 'dumb', 'unknown'):
-        return False
-    
-    # Check if colorama winterm will fail (Windows specific issue)
-    if sys.platform == 'win32':
+        # Try to import and use tqdm.auto for better environment detection
         try:
-            from colorama import ansitowin32
-            # Test if winterm is properly initialized
-            test_stream = ansitowin32.StreamWrapper()
-            if not hasattr(test_stream, 'stream') or test_stream.stream is None:
-                return False
+            from tqdm.auto import tqdm as _tqdm
+        except ImportError:
+            from tqdm import tqdm as _tqdm
+        
+        return _tqdm(iterable, *args, disable=False, **kwargs)
+        
+    except (AttributeError, OSError, TypeError, ImportError) as e:
+        # If tqdm fails for any reason, just return the iterable
+        # Log debug message if possible
+        try:
+            logger = logging.getLogger(__name__)
+            logger.debug(f"tqdm failed, falling back to plain iteration: {e}")
         except:
             pass
-    
-    return True
-
-_TERMINAL_SAFE = _is_terminal_safe()
-
-class SafeTqdm(tqdm_original):
-    """Safe wrapper for tqdm that handles terminal issues and missing attributes"""
-    
-    def __init__(self, *args, **kwargs):
-        # Force disable colorama/ncols features in problematic environments
-        if not _TERMINAL_SAFE:
-            kwargs['ncols'] = 80  # Fixed width
-            kwargs['dynamic_ncols'] = False
-            kwargs['position'] = None  # Disable positioning
-            # Use simpler output format
-            if 'bar_format' not in kwargs:
-                kwargs['bar_format'] = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
-        else:
-            # Safe positioning for nested bars
-            if 'position' not in kwargs and hasattr(tqdm_original, '_instances'):
-                kwargs['position'] = len(tqdm_original._instances)
-            
-            # Inner bars should not persist
-            if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
-                kwargs['leave'] = False
         
-        try:
-            super().__init__(*args, **kwargs)
-        except (OSError, ValueError, AttributeError, TypeError) as e:
-            # If initialization fails, fall back to minimal display
-            kwargs['ncols'] = 80
-            kwargs['dynamic_ncols'] = False
-            kwargs['position'] = None
-            kwargs['bar_format'] = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}'
-            try:
-                super().__init__(*args, **kwargs)
-            except:
-                # Last resort: disable progress bar entirely, just show counter
-                kwargs['disable'] = True
-                super().__init__(*args, **kwargs)
-    
-    def __del__(self):
-        try:
-            # Ensure last_print_t exists before closing
-            if not hasattr(self, 'last_print_t'):
-                self.last_print_t = getattr(self, 'start_t', 0)
-            super().__del__()
-        except (AttributeError, TypeError, OSError):
-            # Silently ignore any errors during cleanup
-            pass
-
-class SafeTqdmAsync(tqdm_asyncio_original):
-    """Safe wrapper for tqdm_asyncio that handles terminal issues"""
-    
-    def __init__(self, *args, **kwargs):
-        if not _TERMINAL_SAFE:
-            kwargs['ncols'] = 80
-            kwargs['dynamic_ncols'] = False
-            kwargs['position'] = None
-            if 'bar_format' not in kwargs:
-                kwargs['bar_format'] = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
-        else:
-            if 'position' not in kwargs and hasattr(tqdm_asyncio_original, '_instances'):
-                kwargs['position'] = len(tqdm_asyncio_original._instances)
-            
-            if kwargs.get('position', 0) > 0 and 'leave' not in kwargs:
-                kwargs['leave'] = False
-        
-        try:
-            super().__init__(*args, **kwargs)
-        except (OSError, ValueError, AttributeError, TypeError):
-            kwargs['ncols'] = 80
-            kwargs['dynamic_ncols'] = False
-            kwargs['position'] = None
-            kwargs['bar_format'] = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}'
-            try:
-                super().__init__(*args, **kwargs)
-            except:
-                kwargs['disable'] = True
-                super().__init__(*args, **kwargs)
-    
-    def __del__(self):
-        try:
-            if not hasattr(self, 'last_print_t'):
-                self.last_print_t = getattr(self, 'start_t', 0)
-            super().__del__()
-        except (AttributeError, TypeError, OSError):
-            pass
-
-def safe_tqdm(*args, **kwargs):
-    """
-    Safe tqdm wrapper that handles:
-    - Missing attributes during cleanup
-    - Nested progress bar conflicts
-    - Terminal positioning issues
-    - Colorama/winterm failures
-    - Non-TTY environments
-    
-    Automatically detects problematic terminal environments and falls back
-    to simpler display modes when necessary.
-    
-    Usage:
-        from utils import safe_tqdm as tqdm
-        
-        for item in tqdm(items, desc="Processing"):
-            # Nested bars work automatically
-            for subitem in tqdm(subitems, desc="Sub-process"):
-                process(subitem)
-    """
-    if kwargs.get('asyncio', False):
-        kwargs.pop('asyncio')
-        return SafeTqdmAsync(*args, **kwargs)
-    return SafeTqdm(*args, **kwargs)
-
-# For backwards compatibility
-tqdm = safe_tqdm
+        return iterable
