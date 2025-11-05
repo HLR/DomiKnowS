@@ -299,32 +299,14 @@ class LearningBasedProgram():
             print(f"\nNumber of iterations in epoch: {lenI}")
         except:
             pass
-
-        # Disable inner tqdm when called from another tqdm context
-        # Check if we're already inside a tqdm by looking at active instances
-        use_tqdm = True
-        try:
-            if hasattr(tqdm, '_instances') and len(tqdm._instances) > 0:
-                # Already inside a tqdm, disable nested one
-                use_tqdm = False
-        except:
-            pass
-
+        
         if not grad:
             with torch.no_grad():
-                iterator = enumerate(dataset)
-                if use_tqdm:
-                    iterator = tqdm(iterator, desc="Populating", leave=False)
-                
-                for i, data_item in iterator:
+                for i, data_item in enumerate(dataset):
                     loss, metric, datanode, builder = self.model(data_item)
                     yield detuple(datanode)
         else:
-            iterator = enumerate(dataset)
-            if use_tqdm:
-                iterator = tqdm(iterator, desc="Populating (grad)", leave=False)
-                
-            for i, data_item in iterator:
+            for i, data_item in enumerate(dataset):
                 data_item["modelKwargs"] = self.modelKwargs
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
