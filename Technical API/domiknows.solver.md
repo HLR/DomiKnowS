@@ -194,6 +194,25 @@ Constraint‑only: enforce `Σ v_i ≥ 1`.
 
 #### preprocessLogicalMethodVar(var, logicMethodName, varNameConnector, minN=2)
 
+#### summationVar(m, \*var, onlyConstrains=False, logicMethodName='SUMMATION')
+
+Returns a linear expression that sums all provided binary variables.
+
+Parameters:
+- m: Gurobi model
+- 
+
+```
+*
+```
+
+var: Variable number of binary variables or constants
+- onlyConstrains: Not used for summation (kept for signature consistency)
+- logicMethodName: Name for logging purposes
+
+Returns:
+- Linear expression representing the sum
+
 #### xorVar(m, \*var, onlyConstrains=False)
 
 Two‑input **exclusive‑or**.
@@ -489,6 +508,10 @@ Reified form:
 
 Constraint‑only: enforce `Σ v_i ≥ 1`.
 
+#### summationVar(m, \*\_var)
+
+Sums up a list of binary literals to an integer literal.
+
 #### *abstractmethod* xorVar(m, \*var, onlyConstrains: bool = False)
 
 Two‑input **exclusive‑or**.
@@ -659,6 +682,25 @@ Reified form:
 
 Constraint‑only: enforce `Σ v_i ≥ 1`.
 
+#### summationVar(\_, \*var, onlyConstrains=False, logicMethodName='SUMMATION')
+
+Sums up a list of binary literals to an integer literal.
+
+Parameters:
+- \_: Model (ignored, kept for signature compatibility)
+- 
+
+```
+*
+```
+
+var: Variable number of binary literals (int, bool, torch.Tensor, or None)
+- onlyConstrains: Not used for summation (kept for signature consistency)
+- logicMethodName: Name for logging purposes
+
+Returns:
+- Integer sum of all truthy values
+
 #### xorVar(\_, \*var, onlyConstrains=False)
 
 Two‑input **exclusive‑or**.
@@ -728,13 +770,6 @@ Differentiable w.r.t. t. t is 1-D with entries in [0,1].
 #### compareCountsVar(\_, varsA, varsB, , compareOp: str = '>', diff: int | float = 0, onlyConstrains: bool = False, logicMethodName: str = 'COUNT_CMP')
 
 Truth / loss for  count(varsA)  compareOp  count(varsB) + diff
-
-compareOp ∈ {‘>’, ‘>=’, ‘<’, ‘<=’, ‘==’, ‘!=’}
-diff       constant offset (can be negative)
-onlyConstrains
-
-> • True  → return loss  (1-truth degree)
-> • False → return success (truth degree)
 
 #### countVar(\_, \*var, onlyConstrains: bool = False, limitOp: str = '==', limit: int = 1, logicMethodName: str = 'COUNT')
 
@@ -848,6 +883,23 @@ Constraint‑only: enforce `Σ v_i ≥ 1`.
 #### setCountingTNorm(tnorm='L')
 
 #### setTNorm(tnorm='L')
+
+#### summationVar(m, \*\_var, onlyConstrains=False, logicMethodName='SUMMATION')
+
+Parameters:
+- m: Model (ignored)
+- 
+
+```
+*
+```
+
+\_var: Variable number of binary variables (tensors, scalars, or None)
+- onlyConstrains: Not used for summation (kept for signature consistency)
+- logicMethodName: Name for logging purposes
+
+Returns:
+- Differentiable tensor representing the sum
 
 #### xorVar(\_, \*var, onlyConstrains=False)
 
@@ -992,6 +1044,10 @@ Reified form:
   Σ v_i ≥ varOR
 
 Constraint‑only: enforce `Σ v_i ≥ 1`.
+
+#### summationVar(\_, \*var)
+
+Sums up a list of binary literals to an integer literal.
 
 #### xorVar(\_, \*var, onlyConstrains=False)
 

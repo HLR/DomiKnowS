@@ -13,10 +13,11 @@
     * [`GBIModel`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel)
       * [`GBIModel.calculateGBISelection()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.calculateGBISelection)
       * [`GBIModel.forward()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.forward)
-      * [`GBIModel.get_argmax_from_node()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.get_argmax_from_node)
       * [`GBIModel.get_constraints_satisfaction()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.get_constraints_satisfaction)
+      * [`GBIModel.get_stats()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.get_stats)
       * [`GBIModel.reg_loss()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.reg_loss)
       * [`GBIModel.reset()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.reset)
+      * [`GBIModel.reset_stats()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.reset_stats)
       * [`GBIModel.set_pretrained()`](domiknows.program.model.md#domiknows.program.model.gbi.GBIModel.set_pretrained)
   * [domiknows.program.model.ilpu module](domiknows.program.model.md#module-domiknows.program.model.ilpu)
     * [`ILPUModel`](domiknows.program.model.md#domiknows.program.model.ilpu.ILPUModel)
@@ -38,12 +39,25 @@
     * [`PrimalDualModel`](domiknows.program.model.md#domiknows.program.model.lossModel.PrimalDualModel)
       * [`PrimalDualModel.logger`](domiknows.program.model.md#domiknows.program.model.lossModel.PrimalDualModel.logger)
     * [`SampleLossModel`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel)
+      * [`SampleLossModel.anneal_temperature()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.anneal_temperature)
       * [`SampleLossModel.forward()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.forward)
       * [`SampleLossModel.get_lmbd()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.get_lmbd)
       * [`SampleLossModel.logger`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.logger)
       * [`SampleLossModel.reset()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.reset)
       * [`SampleLossModel.reset_parameters()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.reset_parameters)
+      * [`SampleLossModel.reset_temperature()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.reset_temperature)
+      * [`SampleLossModel.set_temperature()`](domiknows.program.model.md#domiknows.program.model.lossModel.SampleLossModel.set_temperature)
   * [domiknows.program.model.pytorch module](domiknows.program.model.md#module-domiknows.program.model.pytorch)
+    * [`GumbelSolverModel`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModel)
+      * [`GumbelSolverModel.anneal_temperature()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModel.anneal_temperature)
+      * [`GumbelSolverModel.inference()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModel.inference)
+      * [`GumbelSolverModel.reset_temperature()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModel.reset_temperature)
+      * [`GumbelSolverModel.set_temperature()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModel.set_temperature)
+    * [`GumbelSolverModelDictLoss`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModelDictLoss)
+      * [`GumbelSolverModelDictLoss.anneal_temperature()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModelDictLoss.anneal_temperature)
+      * [`GumbelSolverModelDictLoss.inference()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModelDictLoss.inference)
+      * [`GumbelSolverModelDictLoss.reset_temperature()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModelDictLoss.reset_temperature)
+      * [`GumbelSolverModelDictLoss.set_temperature()`](domiknows.program.model.md#domiknows.program.model.pytorch.GumbelSolverModelDictLoss.set_temperature)
     * [`PoiModel`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel)
       * [`PoiModel.default_poi()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.default_poi)
       * [`PoiModel.find_sensors()`](domiknows.program.model.md#domiknows.program.model.pytorch.PoiModel.find_sensors)
@@ -74,6 +88,7 @@
       * [`TorchModel.move()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.move)
       * [`TorchModel.populate()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.populate)
       * [`TorchModel.reset()`](domiknows.program.model.md#domiknows.program.model.pytorch.TorchModel.reset)
+    * [`gumbel_softmax()`](domiknows.program.model.md#domiknows.program.model.pytorch.gumbel_softmax)
     * [`model_helper()`](domiknows.program.model.md#domiknows.program.model.pytorch.model_helper)
   * [domiknows.program.model.torch module](domiknows.program.model.md#domiknows-program-model-torch-module)
   * [Module contents](domiknows.program.model.md#module-domiknows.program.model)
@@ -276,11 +291,57 @@ Bases: [`LossProgram`](#domiknows.program.lossprogram.LossProgram)
 
 #### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
 
+### *class* domiknows.program.lossprogram.GumbelPrimalDualProgram(graph, Model, beta=1, use_gumbel=False, initial_temp=1.0, final_temp=0.1, anneal_start_epoch=0, anneal_epochs=None, \*\*kwargs)
+
+Bases: [`PrimalDualProgram`](#domiknows.program.lossprogram.PrimalDualProgram)
+
+Primal-Dual Program with Gumbel-Softmax support for better discrete optimization.
+
+Backward compatible: when use_gumbel=False or temperature=1.0, behaves like standard PMD.
+
+#### get_temperature()
+
+Compute current temperature with linear annealing.
+
+#### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
+
+#### train(training_set, valid_set=None, test_set=None, num_epochs=None, \*\*kwargs)
+
+Override train to set anneal_epochs if not provided.
+
+#### train_epoch(dataset, \*\*kwargs)
+
+Override to update temperature each epoch.
+
+### *class* domiknows.program.lossprogram.GumbelSampleLossProgram(graph, Model, beta=1, use_gumbel=False, initial_temp=1.0, final_temp=0.1, anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False, \*\*kwargs)
+
+Bases: [`SampleLossProgram`](#domiknows.program.lossprogram.SampleLossProgram)
+
+Sample Loss Program with Gumbel-Softmax support for better discrete optimization.
+
+#### get_temperature()
+
+Compute current temperature with linear annealing.
+
+#### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
+
+#### train(training_set, valid_set=None, test_set=None, num_epochs=None, \*\*kwargs)
+
+Override train to set anneal_epochs if not provided.
+
+#### train_epoch(dataset, c_warmup_iters=0, c_session={}, \*\*kwargs)
+
+Override to update temperature and pass Gumbel params to model.
+
 ### *class* domiknows.program.lossprogram.InferenceProgram(graph, Model, beta=1, \*\*kwargs)
 
 Bases: [`LossProgram`](#domiknows.program.lossprogram.LossProgram)
 
 #### evaluate_condition(evaluate_data, device='cpu')
+
+Evaluate constraints with proper metrics for different constraint types.
+- Boolean constraints (atLeastAL, exactAL, etc.): Binary accuracy
+- Counting constraints (sumL): Mean Absolute Error (MAE)
 
 #### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
 
@@ -309,34 +370,9 @@ metrics
 
 #### logger *= <Logger domiknows.program.lossprogram (WARNING)>*
 
-#### populate_epoch(dataset, grad=False)
-
-The populate_epoch function is used to iterate over a dataset and yield the output of a model
-for each data item, either with or without gradient calculations.
-
-* **Parameters:**
-  **dataset** – The dataset parameter is the input data that you want to use to populate the
-
-model. It could be a list, array, or any other iterable object that contains the data items
-:param grad: The grad parameter is a boolean flag that determines whether or not to compute
-gradients during the epoch. If grad is set to False, the epoch will be executed in
-evaluation mode without computing gradients. If grad is set to True, the epoch will be
-executed in training, defaults to False (optional)
-
-#### test_epoch(dataset, \*\*kwargs)
-
-The function test_epoch is used to evaluate a model on a dataset during the testing phase,
-yielding the loss, metric, and output for each data item.
-
-* **Parameters:**
-  **dataset** – The dataset parameter is the input dataset that you want to test your model
-
-on. It could be a list, generator, or any other iterable object that provides the data items to
-be tested. Each data item should be in a format that can be processed by your model
-
 #### to(device)
 
-#### train(training_set, valid_set=None, test_set=None, c_lr=0.05, c_momentum=0.9, c_warmup_iters=10, c_freq=10, c_freq_increase=5, c_freq_increase_freq=1, c_lr_decay=4, c_lr_decay_param=1, batch_size=1, dataset_size=None, print_loss=True, \*\*kwargs)
+#### train(training_set, valid_set=None, test_set=None, c_lr=0.05, c_momentum=0.9, c_warmup_iters=10, c_freq=10, c_freq_increase=5, c_freq_increase_freq=1, c_lr_decay=4, c_lr_decay_param=1, batch_size=1, dataset_size=None, print_loss=True, warmup_epochs=0, constraint_epochs=0, constraint_only=False, constraint_loss_scale=1.0, \*\*kwargs)
 
 The train function is used to train a model on a given training set, with optional validation
 and testing sets, for a specified number of epochs.
@@ -364,7 +400,7 @@ model. It should be a class that implements the optimization algorithm, such as
 torch.optim.SGD or torch.optim.Adam. The optimizer is responsible for updating the model’s
 parameters based on the computed gradients
 
-#### train_epoch(dataset, c_lr=1, c_warmup_iters=10, c_freq_increase=1, c_freq_increase_freq=1, c_lr_decay=0, c_lr_decay_param=1, c_session={}, batch_size=1, dataset_size=None, print_loss=True, \*\*kwargs)
+#### train_epoch(dataset, c_lr=1, c_warmup_iters=10, c_freq_increase=1, c_freq_increase_freq=1, c_lr_decay=0, c_lr_decay_param=1, c_session={}, batch_size=1, dataset_size=None, print_loss=True, training_mode='standard', constraint_loss_scale=1.0, \*\*kwargs)
 
 The function train_epoch trains a model on a dataset for one epoch, updating the model’s
 parameters based on the calculated loss and performing gradient descent if an optimizer is
@@ -427,6 +463,19 @@ provided.
 corresponding labels. It is used to iterate over the data items during training
 
 ### domiknows.program.lossprogram.backward(loss, parameters)
+
+### domiknows.program.lossprogram.gumbel_softmax(logits, temperature=1.0, hard=False, dim=-1)
+
+Gumbel-Softmax sampling for differentiable discrete sampling.
+
+Args:
+: logits: […, num_classes] unnormalized log probabilities
+  temperature: controls sharpness (lower = more discrete, higher = more smooth)
+  hard: if True, returns one-hot but backprops through soft (straight-through estimator)
+  dim: dimension to apply softmax
+
+Returns:
+: Sampled probabilities (soft or hard)
 
 ### domiknows.program.lossprogram.reverse_sign_grad(parameters, factor=-1.0)
 
@@ -646,8 +695,8 @@ The function loads a saved model state dictionary from a specified path.
 
 #### populate_epoch(dataset, grad=False)
 
-The populate_epoch function is used to iterate over a dataset and yield the output of a model
-for each data item, either with or without gradient calculations.
+The function populates the model with data from the dataset, either with or without computing
+gradients.
 
 * **Parameters:**
   **dataset** – The dataset parameter is the input data that you want to use to populate the
@@ -750,12 +799,6 @@ function will verify the results for all constraints available in the verifyResu
 should be performed. It is an optional parameter and if not provided, the default device will be
 used
 :return: None.
-
-### *class* domiknows.program.program.dbUpdate(graph)
-
-Bases: `object`
-
-#### getTimeStamp()
 
 ### domiknows.program.program.get_len(dataset, default=None)
 

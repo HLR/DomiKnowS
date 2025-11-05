@@ -16,7 +16,7 @@ Bases: `Enum`
 
 ## domiknows.program.model.gbi module
 
-### *class* domiknows.program.model.gbi.GBIModel(graph, solver_model=None, gbi_iters=50, lr=0.1, reg_weight=1, reset_params=True, device='auto')
+### *class* domiknows.program.model.gbi.GBIModel(graph, solver_model=None, gbi_iters=50, lr=0.1, reg_weight=1, reset_params=True, device='auto', grad_clip=None, early_stop_patience=5, loss_plateau_threshold=1e-06, optimizer='sgd', momentum=0.0)
 
 Bases: `Module`
 
@@ -31,8 +31,6 @@ Performs a forward pass on the model and updates the parameters using gradient-b
   * **build** – Defaults to None. (Optional)
   * **verbose** – Print intermediate values during inference. Defaults to False. (Optional)
 
-#### get_argmax_from_node(node)
-
 #### get_constraints_satisfaction(node)
 
 Get constraint satisfaction from datanode. Returns number of satisfied constraints and total number of constraints.
@@ -40,16 +38,23 @@ Get constraint satisfaction from datanode. Returns number of satisfied constrain
 * **Params:**
   node: The DataNode to get constraint satisfaction from.
 
-#### reg_loss(model_updated, model, exclude_names={})
+#### get_stats()
 
-Calculates regularization loss for GBI. The loss is defined as the L2 distance between the original and updated model parameters.
+Return GBI optimization statistics.
+
+#### reg_loss(model_updated, model_original)
+
+Calculates regularization loss for GBI using efficient parameter grouping.
 
 * **Parameters:**
   * **model_updated** – The model being optimized.
-  * **model** – The original, unoptimized model. The parameters for this model should be frozen.
-  * **exclude_names** – A set of parameter names to exclude from the regularization loss calculation. Defaults to an empty set. (Optional)
+  * **model_original** – The original, unoptimized model parameters (frozen).
 
 #### reset()
+
+#### reset_stats()
+
+Reset statistics tracking.
 
 #### set_pretrained(model, orig_params)
 
@@ -249,23 +254,24 @@ Bases: [`LossModel`](#domiknows.program.model.lossModel.LossModel)
 
 #### logger *= <Logger domiknows.program.model.lossModel (WARNING)>*
 
-### *class* domiknows.program.model.lossModel.SampleLossModel(graph, tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto')
+### *class* domiknows.program.model.lossModel.SampleLossModel(graph, tnorm='P', sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto', use_gumbel=False, temperature=1.0, hard_gumbel=False, temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003)
 
 Bases: `Module`
 
-#### forward(builder, build=None)
+#### anneal_temperature()
 
-The forward function calculates the loss for a PrimalDualModel using a DataNodeBuilder and
-returns the loss value, the DataNode, and the builder.
+Anneal temperature according to schedule.
 
-* **Parameters:**
-  **builder** – The builder parameter is an instance of the DataNodeBuilder class. It is
+#### forward(builder, build=None, use_gumbel=False, temperature=1.0, hard_gumbel=False)
 
-used to create a batch root data node and retrieve a data node
-:param build: The build parameter is an optional argument that specifies whether the
-DataNodeBuilder should be invoked or not. If build is None, then the value of self.build
-is used. If build is True, then the createBatchRootDN() method
-:return: three values: lmbd_loss, datanode, and builder.
+Forward pass with optional Gumbel-Softmax support.
+
+Args:
+: builder: DataNodeBuilder
+  build: Whether to build datanode
+  use_gumbel: If True, apply Gumbel-Softmax to local inference
+  temperature: Gumbel-Softmax temperature
+  hard_gumbel: If True, use straight-through estimator
 
 #### get_lmbd(key)
 
@@ -284,7 +290,61 @@ is used as an index to retrieve the corresponding value from the list
 
 #### reset_parameters()
 
+#### reset_temperature()
+
+Reset temperature to initial value.
+
+#### set_temperature(temperature)
+
+Update Gumbel-Softmax temperature.
+
 ## domiknows.program.model.pytorch module
+
+### *class* domiknows.program.model.pytorch.GumbelSolverModel(graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with=None, probKey=('local', 'softmax'), device='auto', probAcc=None, ignore_modules=False, kwargs=None, use_gumbel=False, temperature=1.0, hard_gumbel=False, temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003)
+
+Bases: [`SolverModel`](#domiknows.program.model.pytorch.SolverModel)
+
+SolverModel with Gumbel-Softmax support for better discrete optimization.
+
+Backward compatible: when use_gumbel=False or temperature=1.0, behaves like standard SolverModel.
+
+#### anneal_temperature()
+
+Anneal temperature according to schedule.
+
+#### inference(builder)
+
+Override inference to inject Gumbel-Softmax when use_gumbel=True.
+
+#### reset_temperature()
+
+Reset temperature to initial value.
+
+#### set_temperature(temperature)
+
+Update Gumbel-Softmax temperature (can be called during training).
+
+### *class* domiknows.program.model.pytorch.GumbelSolverModelDictLoss(graph, poi=None, loss=None, metric=None, dictloss=None, inferTypes=['ILP'], device='auto', use_gumbel=False, temperature=1.0, hard_gumbel=False, temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003)
+
+Bases: [`SolverModelDictLoss`](#domiknows.program.model.pytorch.SolverModelDictLoss)
+
+SolverModelDictLoss with Gumbel-Softmax support.
+
+#### anneal_temperature()
+
+Anneal temperature according to schedule.
+
+#### inference(builder)
+
+Override inference to support Gumbel-Softmax.
+
+#### reset_temperature()
+
+Reset temperature to initial value.
+
+#### set_temperature(temperature)
+
+Update Gumbel-Softmax temperature.
 
 ### *class* domiknows.program.model.pytorch.PoiModel(graph, poi=None, loss=None, metric=None, device='auto', ignore_modules=False)
 
@@ -514,6 +574,19 @@ take one of the following values:
 #### populate()
 
 #### reset()
+
+### domiknows.program.model.pytorch.gumbel_softmax(logits, temperature=1.0, hard=False, dim=-1)
+
+Gumbel-Softmax sampling for differentiable discrete sampling.
+
+Args:
+: logits: […, num_classes] unnormalized log probabilities
+  temperature: controls sharpness (lower = more discrete, higher = more smooth)
+  hard: if True, returns one-hot but backprops through soft (straight-through estimator)
+  dim: dimension to apply softmax
+
+Returns:
+: Sampled probabilities (soft or hard)
 
 ### domiknows.program.model.pytorch.model_helper(Model, \*args, \*\*kwargs)
 

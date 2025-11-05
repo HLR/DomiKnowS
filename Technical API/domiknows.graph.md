@@ -526,6 +526,17 @@ Logging:
 Side Effects:
 - Modifies the state of the self.graph object to store GBI results.
 
+#### inferGumbelLocal(temperature=1.0, hard=False)
+
+Apply Gumbel-Softmax to local inference results for differentiable discrete sampling.
+
+This method modifies the local/softmax attributes in-place to use Gumbel-Softmax
+instead of standard softmax, enabling better gradient flow for discrete decisions.
+
+Args:
+: temperature (float): Controls sharpness of distribution (lower = more discrete)
+  hard (bool): If True, use straight-through estimator (discrete forward, soft backward)
+
 #### inferILPResults(\*\_conceptsRelations, key=('local', 'softmax'), fun=None, epsilon=1e-05, minimizeObjective=False, ignorePinLCs=False, Acc=None)
 
 Calculate ILP (Integer Linear Programming) prediction for a data graph using this instance as the root.
@@ -877,7 +888,7 @@ Bases: `Sequence`[`data_type`]
 
 Wrapper around dataset containing executable logical expressions.
 
-#### KEYWORD_FMT *: str* *= '_constraint_{index}'*
+#### KEYWORD_FMT *: str* *= '_constraint_{lc_name}'*
 
 #### *property* curr_lc_key *: str*
 
@@ -1318,6 +1329,8 @@ diff      : constant offset  (we enforce  count(A) - count(B) ∘ diff)
 
 #### createSingleVarILPConstrains(lcName, lcFun, model, v, headConstrain)
 
+#### createSummation(model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName='SUMMATION')
+
 #### getLcConcepts()
 
 #### strEs()
@@ -1459,6 +1472,10 @@ Bases: `_CompareCountsBaseL`
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 
 ### *class* domiknows.graph.logicalConstrain.orL(\*e, p=100, active=True, sampleEntries=False, name=None)
+
+Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
+
+### *class* domiknows.graph.logicalConstrain.sumL(\*e, p=100, active=True, sampleEntries=False, name=None)
 
 Bases: [`LogicalConstrain`](#domiknows.graph.logicalConstrain.LogicalConstrain)
 

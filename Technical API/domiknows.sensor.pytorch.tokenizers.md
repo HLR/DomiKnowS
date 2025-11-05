@@ -8,29 +8,14 @@
 
 Bases: [`EdgeSensor`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.relation_sensors.EdgeSensor)
 
+Tokenize text using spaCy’s English tokenizer.
+Inherits from:
+- EdgeSensor:  Edge sensor used to create the link/edge between two concept to create relation
+
 #### forward() → Any
 
-Computes the forward pass for this functional sensor, making use of a provided forward function if available.
-
-Args:
-- 
-
-```
-*
-```
-
-inputs: Variable-length argument list of inputs for the forward function.
-- 
-
-```
-**
-```
-
-kwinputs: Additional keyword inputs for the forward function.
-
-Returns:
-- The result of the forward computation.
-- Calls the superclass forward method if no forward function was provided during initialization.
+Return:
+- A list of token after calling spaCy’s English tokenizer.
 
 ## domiknows.sensor.pytorch.tokenizers.transformers module
 
@@ -38,28 +23,13 @@ Returns:
 
 Bases: [`EdgeSensor`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.relation_sensors.EdgeSensor), [`JointSensor`](domiknows.sensor.pytorch.md#domiknows.sensor.pytorch.sensors.JointSensor)
 
+Tokenize text using BERT tokenizer.
+Inherits from:
+- EdgeSensor:  Edge sensor used to create the link/edge between two concept to create relation
+
 #### forward(text) → Any
 
-Computes the forward pass for this functional sensor, making use of a provided forward function if available.
-
-Args:
-- 
-
-```
-*
-```
-
-inputs: Variable-length argument list of inputs for the forward function.
-- 
-
-```
-**
-```
-
-kwinputs: Additional keyword inputs for the forward function.
-
-Returns:
-- The result of the forward computation.
-- Calls the superclass forward method if no forward function was provided during initialization.
+Return:
+- A list of token after calling BERT tokenizer and list of offset
 
 ## Module contents
