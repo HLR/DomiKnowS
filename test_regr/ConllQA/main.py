@@ -6,7 +6,9 @@ sys.path.append('.')
 sys.path.append('../..')
 
 import argparse
+from domiknows.program.lossprogram import PrimalDualProgram, GumbelPrimalDualProgram
 from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.callbackprogram import ProgramStorageCallback
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.lossprogram import PrimalDualProgram, InferenceProgram
@@ -247,10 +249,23 @@ def program_declaration(train, args, device='auto'):
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
 
     train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
-
-    program = InferenceProgram(graph, SolverModel,
-                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
-                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'])
+    
+    program = GumbelPrimalDualProgram(
+        graph, 
+        SolverModel,
+        poi=[phrase, sentence, word, people, organization, location, graph.constraint],
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        inferTypes=['local/softmax'],  # Use softmax during training
+        use_gumbel=True,               # Enable Gumbel-Softmax
+        initial_temp=2.0,              # Start with high temperature
+        final_temp=0.1,                # Anneal to low temperature
+        hard_gumbel=False,             # Use soft Gumbel
+        beta=200.0,                    # Strong constraint weight (200x)
+        device=device,
+        tnorm='L',                     # Łukasiewicz t-norm
+        counting_tnorm=args.counting_tnorm
+    )
+    
     return program, train_dataset
 
 
@@ -264,8 +279,13 @@ def parse_arguments():
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file (can be relative or absolute)")
+    
+    # New PDM-specific parameters
+    parser.add_argument("--warmup_epochs", type=int, default=20, help="Warmup epochs for neural training")
+    parser.add_argument("--constraint_epochs", type=int, default=100, help="Constraint optimization epochs")
+    parser.add_argument("--constraint_loss_scale", type=float, default=200.0, help="Constraint loss scaling factor")
+    
     args = parser.parse_args()
-
     return args
 
 
@@ -273,9 +293,7 @@ def main(args):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
-    # Find the data file automatically (will use extracted file if exists)
     data_file_path = find_data_file(args.data_path, args.train_portion)
-
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 
     if args.train_size != -1:
@@ -284,11 +302,33 @@ def main(args):
     program, dataset = program_declaration(train if not args.evaluate else test, args, device="auto")
 
     if not args.evaluate:
-        program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
-                      batch_size=1, print_loss=False)
+        # Enhanced PDM training with phased approach
+        print(f"[INFO] Starting PDM training:")
+        print(f"  - Warmup epochs: {args.warmup_epochs}")
+        print(f"  - Constraint epochs: {args.constraint_epochs}")
+        print(f"  - Constraint loss scale: {args.constraint_loss_scale}x")
+        print(f"  - T-norm: {args.counting_tnorm}, Gumbel: enabled")
+        print(f"  - Learning rate: {args.lr}")
+        
+        program.train(
+            dataset, 
+            Optim=torch.optim.Adam,           # Use Adam optimizer
+            train_epoch_num=args.epochs,
+            warmup_epochs=args.warmup_epochs,
+            constraint_epochs=args.constraint_epochs,
+            constraint_only=True,             # Constraint-only phase 2
+            constraint_loss_scale=args.constraint_loss_scale,
+            c_lr=args.lr,
+            c_warmup_iters=-1,
+            batch_size=1,
+            print_loss=False
+        )
     else:
         program.load(f"training_{args.epochs}_lr_{args.lr}.pth")
 
+    # Switch to argmax for evaluation
+    program.inferTypes = ['local/argmax']
+    
     output_f = open("result.txt", 'a')
     train_acc = program.evaluate_condition(dataset)
     portion = "Training" if not args.evaluate else "Testing"

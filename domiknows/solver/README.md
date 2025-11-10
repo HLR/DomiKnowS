@@ -1,187 +1,852 @@
-### ILP Solver 
+# DomiKnows Solver Components
 
-The solver builds the ILP (Integer Linear Programming) model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to example tokens.
-The actual used ILP is Zero-one linear programming in which the variables are restricted to be either 0 or 1.
-It solves the ILP model and provides the most optimized assignment.
+This directory contains the constraint solver implementations for the DomiKnows framework, enabling inference and learning with logical constraints.
 
-The solver can be called on the DataNode (usually the root DataNode of the Data Graph) with DataNode method:
- 
+---
+
+## Solver Hierarchy Overview
+
+| Solver Class | File | Parent Class | Primary Use Case |
+|-------------|------|--------------|------------------|
+| **Base Solvers** | | | |
+| `ilpOntSolver` | `ilpOntSolver.py` | Abstract | Base interface for all solvers |
+| `dummyILPOntSolver` | `dummyILPOntSolver.py` | `ilpOntSolver` | Pass-through solver (no inference) |
+| **ILP Solvers** | | | |
+| `gurobiILPOntSolver` | `gurobiILPOntSolver.py` | `ilpOntSolver` | Gurobi-based ILP inference |
+| **Boolean Method Processors** | | | |
+| `ilpBooleanProcessor` | `ilpBooleanMethods.py` | Abstract | Base interface for logical operations |
+| `gurobiILPBooleanProcessor` | `gurobiILPBooleanMethods.py` | `ilpBooleanProcessor` | ILP encoding of logical operators |
+| `lcLossBooleanMethods` | `lcLossBooleanMethods.py` | `ilpBooleanProcessor` | Differentiable t-norm logic |
+| `lcLossSampleBooleanMethods` | `lcLossSampleBooleanMethods.py` | `ilpBooleanProcessor` | Sample-based logic evaluation |
+| `booleanMethodsCalculator` | `ilpBooleanMethodsCalculator.py` | `ilpBooleanProcessor` | Numeric logic evaluation |
+| **Factory** | | | |
+| `ilpOntSolverFactory` | `ilpOntSolverFactory.py` | - | Solver instance management |
+
+### Quick Selection Guide
+
+**Choose based on your needs:**
+
+- **Constraint-based inference**: `gurobiILPOntSolver` (requires Gurobi license)
+- **Differentiable constraint learning**: Use `lcLossBooleanMethods` with loss models
+- **Constraint verification**: Use `booleanMethodsCalculator` 
+- **No inference needed**: `dummyILPOntSolver`
+
+---
+
+## Core Components
+
+### Solver Factory (`ilpOntSolverFactory.py`)
+
+#### `ilpOntSolverFactory`
+Centralized factory for creating and managing solver instances.
+
+**Key Features:**
+- Automatic solver selection based on configuration
+- Instance caching (singleton per graph+ontology combination)
+- Support for multiple solver types
+
+**Usage:**
+```python
+from domiknows.solver import ilpOntSolverFactory
+
+# Create solver instance
+solver = ilpOntSolverFactory.getOntSolverInstance(
+    graph,
+    _ilpConfig={
+        'ilpSolver': 'Gurobi',
+        'log_level': logging.INFO
+    }
+)
+
+# Solver is cached - subsequent calls return same instance
+solver2 = ilpOntSolverFactory.getOntSolverInstance(graph)
+assert solver is solver2
 ```
-inferILPConstrains(*_conceptsRelations, fun=None)
+
+---
+
+## Base Classes
+
+### `ilpOntSolver` (`ilpOntSolver.py`)
+Abstract base class defining the solver interface.
+
+**Key Methods:**
+```python
+class ilpOntSolver:
+    def calculateILPSelection(self, dn, *conceptsRelations, **kwargs):
+        """
+        Main inference method - finds optimal variable assignments.
+        
+        Args:
+            dn: Root DataNode
+            *conceptsRelations: Concepts/relations to solve for
+            key: Probability key (default: ("local", "softmax"))
+            fun: Optional probability transformation
+            epsilon: Probability clipping value
+            minimizeObjective: Minimize vs maximize (default: False)
+        
+        Returns:
+            Updated DataNode with ILP inference results
+        """
+        pass
+    
+    def calculateLcLoss(self, dn, tnorm='L', **kwargs):
+        """
+        Calculate differentiable constraint loss.
+        
+        Args:
+            dn: DataNode
+            tnorm: T-norm type ('L', 'G', 'P', 'SP')
+            sample: Enable sampling
+            sampleSize: Number of samples
+        
+        Returns:
+            Dictionary mapping constraint names to loss values
+        """
+        pass
+    
+    def verifyResultsLC(self, dn, key="/argmax"):
+        """
+        Verify constraint satisfaction on predictions.
+        
+        Args:
+            dn: DataNode with predictions
+            key: Attribute key for predictions
+        
+        Returns:
+            Dictionary with satisfaction rates per constraint
+        """
+        pass
 ```
-The method retrieves the constrains from the ontology graph associated with the Data Graph and the probabilities from Data Graph nodes attributes.
-It has two arguments:
-* *_conceptsRelations* is a collection of concepts and relations for which the ILP model should be solved. 
-They can be provide as Concepts (nodes in the model graph) or strings representing concepts or relations names. 
-If this collection is empty then the methods will use all concepts and relations in the Data Graph.
 
+---
 
-* *fun* is a optional function modifying the original probability in the Data Graph before they are used in the ILP model.
+## ILP Solver Implementation
 
-The results of the ILP solution are added to nodes in the Data Graph with key ILP.
+### `gurobiILPOntSolver` (`gurobiILPOntSolver.py`)
+Full-featured ILP solver using Gurobi optimizer.
 
-## The source of constrains 
+**Key Features:**
+- Creates ILP variables for concepts/relations
+- Encodes logical constraints as linear inequalities
+- Solves for optimal assignment maximizing probabilities
+- Supports multiclass concepts with exclusivity constraints
+- Model reuse for efficiency
+- Comprehensive logging and debugging
 
-The ILP constrains could be specified in the **ontology graph itself with defined logical constrains** or in the **ontology (in OWL file)** provided as url in the ontology graph.
+**Constraint Types Encoded:**
+1. **Graph constraints**: Subclass relations, disjointness, domain/range
+2. **Logical constraints**: User-defined constraints from graph
+3. **Multiclass exclusivity**: Exactly one label per instance
 
-# Graph with logical Constrains
+**Main Workflow:**
+```python
+solver = gurobiILPOntSolver(graph, ontologies, config)
 
-**If ontology url is not provided in the graph then the graph defined constrains and logical constrains will be retrieved by the ILP solver.**
+# 1. Create ILP variables for each concept instance
+# 2. Add graph-based constraints (subclass, disjoint, etc.)
+# 3. Add user logical constraints
+# 4. Set objective: maximize sum of (probability × variable)
+# 5. Solve ILP model
+# 6. Extract solution and update DataNode
+```
 
-The graph can specify constrains:
-* **Subclass relation between concepts**: e.g. people = word(name='people')
-* **Disjointment between concepts**: e.g. disjoint(people, organization, location, other, o)
-* **Domain and ranges for relations**: e.g. work_for.has_a(people, organization)
+**Advanced Features:**
 
-Additional, logical constrains defined within the graph can use the following logical functions to build logical expression: 
-* **notL**, 
-* **andL**, 
-* **orL**, 
-* **nandL**, 
-* **existsL**, 
-* **ifL**, 
-* **equalA**, 
-* **inSetA**.
+#### Model Reuse
+```python
+solver = gurobiILPOntSolver(graph, ontologies, config, reuse_model=True)
 
-The logical constraint can use variables to associate related objects of the logical expression. 
-The expressions use concepts defined in the graph and set additional constrains on them. 
-Example:
+# First call builds complete model
+solver.calculateILPSelection(dn, *concepts)
 
-	ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-	
-This above example logical constraint specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
+# Subsequent calls with same structure reuse model
+# (much faster - only updates objective coefficients)
+solver.calculateILPSelection(dn2, *concepts)
+```
 
-The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
+#### Probability Transformation
+```python
+def clip_extreme(probs):
+    """Custom probability transformation"""
+    return torch.clamp(probs, min=0.01, max=0.99)
 
-# Ontology file as a source of constrains
+solver.calculateILPSelection(
+    dn, 
+    *concepts,
+    fun=clip_extreme,
+    epsilon=0.00001
+)
+```
 
-**If ontology url is provided in the graph then only this ontology will be used to retrieved constrains by the ILP solver.**
+#### Constraint Priority (P-values)
+```python
+# Constraints with priority p=100 enforced first
+# Then try p=90, p=80, etc. until model feasible
+# Returns solution with maximum priority satisfied
 
-The OWL ontology, on which the learning system graph was build is loaded into the [ilpOntSolver](https://github.com/kordjamshidi/RelationalGraph/blob/master/domiknows/solver/ilpOntSolver.py) and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/). 
+logicalConstraint.p = 90  # Set priority on constraint
+solver.calculateILPSelection(dn, *concepts)
+```
 
-The OWL ontology language allows to specify constrains on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constrains.   
+---
 
-The [ilpBooleanMethods](https://github.com/kordjamshidi/RelationalGraph/blob/master/domiknows/solver/ilpBooleanMethods.py) module encodes basic logical expressions (*[AND](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L48)*, *[OR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L102)*, *[IF](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L264)*, *[NAND](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L156)*, *[XOR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L245)*, *[EPQ](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L281)*, *[NOR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L210)*, *[NOT](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/domiknows/solver/ilpBooleanMethods.py#L16)*) into the ILP equations.  
+## Boolean Method Processors
 
-The solver [implementation using Gurobi](https://github.com/kordjamshidi/RelationalGraph/blob/master/domiknows/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. The solver encodes mapping from OWL constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities. 
-The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned. 
+### `ilpBooleanProcessor` (`ilpBooleanMethods.py`)
+Abstract interface defining logical operations. All implementations support:
 
-This detail of mapping from OWL to logical representation is presented below for each OWL constraint.
+**Core Operations:**
+- `notVar`: Logical negation
+- `andVar`: N-ary conjunction
+- `orVar`: N-ary disjunction
+- `nandVar`: N-ary NAND
+- `norVar`: N-ary NOR
+- `xorVar`: Exclusive OR
+- `ifVar`: Implication (→)
+- `equivalenceVar`: Bi-conditional (↔)
 
-**Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*)**:
+**Quantifiers:**
+- `countVar`: Count-based constraints (≥, ≤, ==)
+- `compareCountsVar`: Compare counts between sets
+- `summationVar`: Sum of binary variables
 
-- **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Classes "OWL example of disjoint statement for classes")** statement between two classes *Concept1* and *Concept2* in ontology is mapped to equivalent logical expression -  
-  
-  *NAND(Concept1(token), Concept2(token))*
-        
-- **[equivalent](https://www.w3.org/TR/owl2-syntax/#Equivalent_Classes "OWL example of equivalent statement for classes")** statement between two classes *Concept1* and *Concept2* in ontology is mapped to equivalent logical expression -  
-  
-  *AND(Concept1(token), concept2(token))*
-       
-- **[subClassOf](https://www.w3.org/TR/owl2-syntax/#Subclass_Axioms "OWL example of subclass statement for classes")** statement between two classes *Concept1* and *SuperConcept2* in ontology is mapped to equivalent logical expression -  
-  
-  *IF(concept1(token), SuperConcept2(token))*   
- 
-- **[intersection](https://www.w3.org/TR/owl2-syntax/#Intersection_of_Class_Expressions "OWL example of intersection statement for classes")** statement between classes *Concept1*, *Concept2*, *Concept3*, ... in ontology is mapped to equivalent logical expression 
-  
-  *AND(Concept1(token), Concept2(token), Concept3(token), ..)*
-        
-- **[union](https://www.w3.org/TR/owl2-syntax/#Union_of_Class_Expressions "OWL example of union statement for classes")** statement between classes *Concept1*, *Concept2*, *Concept3*, ... in ontology is mapped to equivalent logical expression -  
+**Special:**
+- `fixedVar`: Fix variables to ground truth
 
-  *OR(concept1(token), Concept2(token), Concept3(token), ..)*
-        
-- **[objectComplementOf](https://www.w3.org/TR/owl2-syntax/#Complement_of_Class_Expressions "OWL example of complement of statement for classes")** statement between two classes *Concept1* and *Concept2* in ontology is mapped to equivalent logical expression - 
-  
-  *XOR(Concept1(token), Concept2(token))*
-        
-##### No supported yet:
+**Two Modes:**
+1. **Reified** (`onlyConstrains=False`): Returns binary variable representing truth value
+2. **Hard** (`onlyConstrains=True`): Adds constraints forcing truth
 
-- **[disjonitUnion](https://www.w3.org/TR/owl2-syntax/#Disjoint_Union_of_Class_Expressions "OWL example of disjointUnion of classes")** statement between classes *Concept1*, *Concept2*, *Concept3*, ... is Not yet supported by owlready2 Python ontology parser used inside the solver
+### `gurobiILPBooleanProcessor` (`gurobiILPBooleanMethods.py`)
+Encodes logical operators as ILP constraints.
 
-- **[oneOf](https://www.w3.org/TR/owl2-syntax/#Enumeration_of_Individuals "OWL example of enumeration of individuals for classes")** statements for a class *Concept* in ontology 
-   
-**Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)**
+**Example Encodings:**
 
-- **[domain](https://www.w3.org/TR/owl2-syntax/#Object_Property_Domain "OWL example of domain statement for property")** of relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+#### NOT
+```python
+# varNOT + var = 1
+# Creates: varNOT ∈ {0,1}, varNOT = 1 - var
+```
 
-  *IF(P(token1, token2), domainConcept(token1))*
-  
-- **[range](https://www.w3.org/TR/owl2-syntax/#Object_Property_Range, "OWL example of range statement for property")** of relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+#### AND
+```python
+# varAND ≤ var_i  (for all i)
+# Σ var_i ≤ varAND + N - 1
+```
 
-  *IF(P(token1, token2), rangeConcept(token2))*
-  
-- **[subproperty](https://www.w3.org/TR/owl2-syntax/#Object_Subproperties "OWL example of subproperty statement for properties")** of relations *P(token1, token2)* and *SP(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+#### OR  
+```python
+# var_i ≤ varOR  (for all i)
+# Σ var_i ≥ varOR
+```
 
-  *IF(P(token1, token2), SP(token1, token2))*
+#### IF (Implication)
+```python
+# varIF ≥ 1 - var1
+# varIF ≥ var2
+# varIF ≤ 1 - var1 + var2
+# Encodes: var1 → var2 ≡ ¬var1 ∨ var2
+```
 
-- **[equivalent](https://www.w3.org/TR/owl2-syntax/#Equivalent_Object_Properties "OWL example of equivalent statement for properties")** of relations *P1(token1, token2)* and *P2(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+#### COUNT (At Least K)
+```python
+# For ">=" operator with limit k:
+# Σ var_i ≥ k - M(1 - varCOUNT)
+# Σ var_i ≤ k - 1 + M·varCOUNT
+# varCOUNT = 1 iff count ≥ k
+```
 
-  *AND(P1(token1, token2), P2(token1, token2))*
-        
-- **[inverse](https://www.w3.org/TR/owl2-syntax/#Inverse_Object_Properties_2 "OWL example of inverse statement for properties")** relations *P1(token1, token2)* and *P2(token1, token2)* statements in ontology are mapped to equivalent logical expression -   
+**Key Implementation Details:**
+- Uses "None" → 1 for positive context, 0 for negative
+- Handles mixed numeric/variable arguments
+- Automatic constraint naming for debugging
+- BigM method for indicator constraints
 
-  *IF(P1(token1, token2), P2(token1, token2))*
-            
-- **[reflexive](https://www.w3.org/TR/owl2-syntax/#Reflexive_Object_Properties "OWL example of reflexive statement for property")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -    
+### `lcLossBooleanMethods` (`lcLossBooleanMethods.py`)
+Differentiable logic using t-norms for gradient-based learning.
 
-  *P(token, token)*
-       
-- **[irreflexive](https://www.w3.org/TR/owl2-syntax/#Irreflexive_Object_Properties "OWL example of irreflexive statement for property")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+**Supported T-norms:**
 
-  *NOT(P(x,x))*
-      
-- **[symmetrical](https://www.w3.org/TR/owl2-syntax/#Symmetric_Object_Properties "OWL example of symemtrical statement for property")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+| T-norm | Symbol | AND | OR | Key Feature |
+|--------|--------|-----|-----|-------------|
+| Łukasiewicz | 'L' | max(0, Σx - n + 1) | min(1, Σx) | Piece-wise linear |
+| Gödel | 'G' | min(x₁,...,xₙ) | max(x₁,...,xₙ) | Idempotent |
+| Product | 'P' | ∏x_i | Σx - ∏x_i | Smooth gradients |
+| Simplified Product | 'SP' | ∏x_i | Similar to 'P' | Faster computation |
 
-  *IF(P(token1, token2), P(token2, token1))*
-       
-- **[asymmetric](https://www.w3.org/TR/owl2-syntax/#Asymmetric_Object_Properties "OWL example of asymmetric statement for property")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+**Usage:**
+```python
+processor = lcLossBooleanMethods()
+processor.setTNorm('P')  # Product t-norm
+processor.setCountingTNorm('L')  # Different for counting
+
+# Differentiable AND
+success = processor.andVar(None, var1, var2)  # Returns tensor
+loss = 1 - success  # Constraint violation
+
+# With gradient tracking
+loss.backward()  # Gradients flow through logical operations
+```
+
+**Advanced Counting:**
+
+The counting operations use **Poisson-binomial PMF** for exact probability:
+
+```python
+# For count(vars) == k with Product t-norm
+pmf = processor.calc_probabilities(probs, n)  # Full PMF over 0..n
+loss = 1 - pmf[k]  # Differentiable loss
+```
+
+**Count Loss Computation:**
+- **Łukasiewicz**: Selects top-k probabilities, sums with offset
+- **Gödel**: Takes minimum of top-k (for ≥) or bottom-(n-k) (for ≤)
+- **Product**: Exact Poisson-binomial distribution
+- **Simplified Product**: Approximation using top-k products
+
+**Logging:**
+Dedicated count operations logger tracks:
+- Input variables and their values
+- Intermediate calculations
+- Final loss/success values
+- Stored in `logs/lc_loss_count_operations.log`
+
+### `lcLossSampleBooleanMethods` (`lcLossSampleBooleanMethods.py`)
+Sample-based constraint evaluation for large-scale problems.
+
+**How It Works:**
+1. Generate binary samples from probability distributions
+2. Evaluate constraints on samples (Boolean logic)
+3. Aggregate results: success rate = fraction of satisfied samples
+
+**Usage:**
+```python
+processor = lcLossSampleBooleanMethods()
+processor.sampleSize = 100
+
+# Samples are generated once per concept
+# Then reused across all constraints
+success = processor.andVar(None, sampled_var1, sampled_var2)
+# Returns: Boolean tensor [batch_size] indicating constraint satisfaction
+```
+
+**When to Use:**
+- Large constraint groundings (>1000 instances)
+- Memory constraints
+- Approximate constraint satisfaction sufficient
+
+### `booleanMethodsCalculator` (`ilpBooleanMethodsCalculator.py`)
+Numeric evaluation for constraint verification.
+
+**Usage:**
+```python
+calculator = booleanMethodsCalculator()
+
+# Evaluates constraints on concrete 0/1 assignments
+result = calculator.andVar(None, 1, 0, 1)  # Returns: 0
+result = calculator.countVar(None, 1, 1, 0, limitOp='>=', limit=2)  # Returns: 1
+```
+
+**Use Cases:**
+- Constraint verification after inference
+- Testing constraint definitions
+- Debugging logical expressions
+
+---
+
+## Configuration
+
+### `ilpConfig` (`ilpConfig.py`)
+Global solver configuration dictionary.
+
+**Key Settings:**
+```python
+ilpConfig = {
+    'ilpSolver': 'Gurobi',  # Solver type
+    'ifLog': True,          # Enable logging
+    'log_name': 'ilpOntSolver',
+    'log_level': logging.INFO,
+    'log_filename': 'logs/ilpOntSolver',
+    'log_filesize': 5*1024*1024*1024,  # 5GB
+    'log_backupCount': 5,
+    'log_fileMode': 'a'
+}
+```
+
+**Customization:**
+```python
+custom_config = ilpConfig.copy()
+custom_config['log_level'] = logging.DEBUG
+custom_config['ilpSolver'] = 'Gurobi'
+
+solver = ilpOntSolverFactory.getOntSolverInstance(
+    graph, 
+    _ilpConfig=custom_config
+)
+```
+
+---
+
+## Common Workflows
+
+### 1. ILP Inference
+```python
+from domiknows.solver import ilpOntSolverFactory
+
+# Create solver
+solver = ilpOntSolverFactory.getOntSolverInstance(graph)
+
+# Run inference
+solver.calculateILPSelection(
+    root_datanode,
+    *concepts_and_relations,
+    key=("local", "softmax"),
+    epsilon=0.00001
+)
+
+# Results stored in datanode attributes with key '<concept>/ILP'
+```
+
+### 2. Constraint Loss Calculation
+```python
+# During training
+lcLosses = solver.calculateLcLoss(
+    datanode,
+    tnorm='P',              # Product t-norm
+    counting_tnorm='L',     # Łukasiewicz for counts
+    sample=False
+)
+
+# Extract losses
+for lc_name, lc_info in lcLosses.items():
+    loss = lc_info['loss']
+    conversion = lc_info['conversion']  # 1 - loss
+    print(f"{lc_name}: loss={loss:.4f}, satisfaction={conversion:.4f}")
+
+# Aggregate loss
+total_loss = sum(lc['loss'] for lc in lcLosses.values() if lc['loss'] is not None)
+```
+
+### 3. Sample-Based Loss (Large Scale)
+```python
+lcLosses = solver.calculateLcLoss(
+    datanode,
+    sample=True,
+    sampleSize=100,          # 100 samples per constraint
+    sampleGlobalLoss=False   # Per-constraint sampling
+)
+```
+
+### 4. Constraint Verification
+```python
+# After inference/prediction
+verification = solver.verifyResultsLC(
+    datanode,
+    key="/local/argmax"  # or "/ILP" for ILP results
+)
+
+for lc_name, results in verification.items():
+    satisfied_pct = results['satisfied']
+    print(f"{lc_name}: {satisfied_pct:.2f}% satisfied")
     
-  *Not(IF(P(token1, token2), P(token2, token1)))*
-      
-- **[transitive](https://www.w3.org/TR/owl2-syntax/#Transitive_Object_Properties "OWL example of asymetric statement for property")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
+    # For implication constraints
+    if 'ifSatisfied' in results:
+        if_satisfied = results['ifSatisfied']
+        print(f"  (when antecedent true: {if_satisfied:.2f}%)")
+```
 
-  *IF(AND(P(token1, token2) and P(token2, token3)), P(token1, token3))*
-  
-- **[allValuesFrom](https://www.w3.org/TR/owl2-syntax/#Universal_Quantification "OWL example of allValuesFrom statement for property")** statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
+### 5. Model Reuse for Efficiency
+```python
+solver = ilpOntSolverFactory.getOntSolverInstance(
+    graph,
+    _ilpConfig={'ilpSolver': 'Gurobi'},
+    reuse_model=True
+)
 
-  *...*
-  
-- **[someValueFrom](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of someValueFrom statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
+# First call: builds full model (~1s)
+solver.calculateILPSelection(batch1, *concepts)
 
-  *This is an Existential constraint not possible to check without assumption of close world *
-  
-- **[hasValue](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of hasValue statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
+# Subsequent calls: reuse model (~0.1s)
+for batch in batches:
+    solver.calculateILPSelection(batch, *concepts)
+```
 
-  *This is an Existential constraint not possible to check without assumption of close world*
- 
-- **[objectHasSelf](https://www.w3.org/TR/owl2-syntax/#Self-Restriction "OWL example of objectHasSelf statement for property")** statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
+---
 
-  *...*
-        
-- **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Object_Properties "OWL example of disjoint statement for properties")** statements for relations *P1(token1, token2)* and *P2(token1, token2)* in ontology are mapped to equivalent logical expression -  
+## Constraint Definition
 
-  *NOT(IF(P1(token1, token2), P2(token1, token2)))*
+### Graph-Based Constraints
 
-- **[key](https://www.w3.org/TR/owl2-syntax/#Keys "OWL example of key statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
+Automatically derived from graph structure:
 
-  *...*
-      
-- **[exactCardinality](https://www.w3.org/TR/owl2-syntax/#Exact_Cardinality "OWL example of exactCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
+```python
+from domiknows.graph import Concept, Relation
 
-  *This is an Existential constraint not possible to check without assumption of close world*
+# Subclass constraint: Person ⊆ Entity
+person = Concept('person')
+entity = Concept('entity')
+person.is_a(entity)
+# Generates: IF(person(x), entity(x))
+
+# Disjoint constraint: Person ⊥ Organization  
+organization = Concept('organization')
+person.not_a(organization)
+# Generates: NAND(person(x), organization(x))
+
+# Domain/range constraint
+work_for = Relation('work_for')
+work_for.has_a(person, organization)
+# Generates: IF(work_for(x,y), AND(person(x), organization(y)))
+```
+
+### User-Defined Logical Constraints
+
+```python
+from domiknows.graph import V, ifL, andL, orL, countL
+
+# Implication: work_for(x,y) → person(x) ∧ organization(y)
+ifL(work_for(V.pair), andL(person(V.pair[0]), organization(V.pair[1])))
+
+# Counting: At least 2 entities per sentence
+countL(entity(V.x), V.x.from_sentence(V.s), '>=', 2)
+
+# Complex: If someone works_for an org, they must have a job_title
+ifL(
+    work_for(V.x, V.y),
+    countL(job_title(V.x, V.t), V.t.from_person(V.x), '>=', 1)
+)
+```
+
+### Constraint Priority
+
+```python
+# Critical constraints (always satisfied if possible)
+critical_lc.p = 100
+
+# Important constraints
+important_lc.p = 80
+
+# Nice-to-have constraints  
+optional_lc.p = 50
+
+# Solver tries to satisfy highest priority first
+# Falls back to lower priorities if infeasible
+```
+
+---
+
+## T-norm Selection Guide
+
+| Use Case | Recommended T-norm | Reason |
+|----------|-------------------|---------|
+| Smooth gradients | Product ('P') | Continuous derivatives |
+| Sparse constraints | Łukasiewicz ('L') | Piece-wise linear, efficient |
+| Hard constraints | Gödel ('G') | Idempotent (repeated AND doesn't change) |
+| Counting operations | Łukasiewicz ('L') | Exact for discrete counts |
+| Fast approximation | Simplified Product ('SP') | Faster than full Product |
+
+**Mixed T-norms:**
+```python
+# Use Product for main logic, Łukasiewicz for counts
+processor.setTNorm('P')
+processor.setCountingTNorm('L')
+```
+
+---
+
+## Performance Optimization
+
+### 1. Model Reuse
+```python
+# Enable model caching
+solver = ilpOntSolverFactory.getOntSolverInstance(
+    graph, 
+    reuse_model=True
+)
+# Subsequent calls ~10x faster
+```
+
+### 2. Constraint Sampling
+```python
+# For >1000 constraint groundings
+lcLosses = solver.calculateLcLoss(
+    datanode,
+    sample=True,
+    sampleSize=100  # Approximate with 100 samples
+)
+```
+
+### 3. Semantic Sampling
+```python
+# Generate all valid assignments (for small domains)
+lcLosses = solver.calculateLcLoss(
+    datanode,
+    sample=True,
+    sampleSize=-1,  # Special: semantic complete sampling
+    conceptsRelations=concepts
+)
+```
+
+### 4. Batch Processing
+```python
+# Process multiple datanodes with same structure
+for batch in batches:
+    solver.calculateILPSelection(batch, *concepts)
+    # Reuses model automatically
+```
+
+---
+
+## Debugging
+
+### Logging Levels
+```python
+import logging
+
+# Detailed constraint processing
+ilpConfig['log_level'] = logging.DEBUG
+
+# Timing information  
+ilpConfig['log_level'] = logging.INFO
+
+# Errors only
+ilpConfig['log_level'] = logging.ERROR
+```
+
+### Model Inspection
+```python
+# ILP model written to logs/GurobiModel.lp
+# Infeasible models written to logs/GurobiInfeasible.ilp
+# Solutions written to logs/GurobiSolution.sol
+
+# After solving, inspect:
+# 1. GurobiModel.lp - full model
+# 2. GurobiSolution.sol - optimal values
+# 3. ilpOntSolver.log - detailed execution log
+```
+
+### Count Operations Logging
+```python
+# Dedicated logger for count operations
+# Logs every step of count constraint evaluation
+# Stored in logs/lc_loss_count_operations.log
+
+# Enable debug logging
+custom_config = ilpConfig.copy()
+custom_config['count_log_level'] = logging.DEBUG
+```
+
+### Constraint Verification
+```python
+# Verify constraints are satisfied
+verification = solver.verifyResultsLC(datanode)
+
+for lc_name, results in verification.items():
+    if results['satisfied'] < 95.0:
+        print(f"Warning: {lc_name} only {results['satisfied']:.1f}% satisfied")
+```
+
+---
+
+## Advanced Features
+
+### Custom Boolean Processors
+
+Create custom logic implementations:
+
+```python
+class CustomBooleanProcessor(ilpBooleanProcessor):
+    def andVar(self, m, *var, onlyConstrains=False):
+        # Custom AND implementation
+        pass
     
-- **[minCardinality](https://www.w3.org/TR/owl2-syntax/#Minimum_Cardinality "OWL example of minCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
+    def countVar(self, m, *var, limitOp='==', limit=1, **kwargs):
+        # Custom counting logic
+        pass
 
-  *This is an Existential constraint not possible to check without assumption of close world*
+# Use with solver
+solver.myIlpBooleanProcessor = CustomBooleanProcessor()
+```
 
-- **[maxCardinality](https://www.w3.org/TR/owl2-syntax/#Maximum_Cardinality "OWL example of maxCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
+### Constraint-Specific T-norms
 
-  *count of token2 for which P(token1, token2) <= maxCardinality*
-  
-- **[functional](https://www.w3.org/TR/owl2-syntax/#Functional_Object_Properties "OWL example of functional statement for properties")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
-   
-  *Syntactic shortcut for the following maxCardinality of P(token1, token2) is 1*
-   
-- **[inverse functional](https://www.w3.org/TR/owl2-syntax/#Inverse-Functional_Object_Properties "OWL example of inverse functional statement for properties")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
-   
-  *Syntactic shortcut for the following maxCardinality of inverse P(token2, token1) is 1*
+```python
+# Use different t-norms for different constraint types
+processor = lcLossBooleanMethods()
+
+# Main logic: Product
+processor.setTNorm('P')
+
+# Counting: Łukasiewicz  
+processor.setCountingTNorm('L')
+
+# Automatically applies appropriate t-norm per operation
+```
+
+### Gumbel-Softmax Integration
+
+```python
+# For discrete optimization during training
+from domiknows.model import SampleLossModel
+
+model = SampleLossModel(
+    graph,
+    use_gumbel=True,
+    temperature=1.0,
+    hard_gumbel=False
+)
+
+# Solver automatically uses Gumbel-Softmax samples
+lcLosses = solver.calculateLcLoss(datanode, sample=True, sampleSize=100)
+```
+
+---
+
+## Best Practices
+
+1. **Start with ILP**: Use `gurobiILPOntSolver` for initial inference
+2. **Profile constraints**: Check satisfaction rates with `verifyResultsLC`
+3. **Choose t-norms carefully**: Product for smooth gradients, Łukasiewicz for efficiency
+4. **Use sampling**: For >1000 constraint groundings
+5. **Enable model reuse**: 10x speedup for repeated inference
+6. **Set priorities**: Critical constraints should have p=100
+7. **Monitor logs**: Check `ilpOntSolver.log` for issues
+8. **Verify results**: Always run `verifyResultsLC` on test set
+
+---
+
+## Common Issues
+
+### Infeasible Models
+```python
+# Check logs/GurobiInfeasible.ilp
+# Common causes:
+# 1. Conflicting constraints
+# 2. Over-constrained problem
+# 3. Bug in constraint definition
+
+# Solution: Lower priority of some constraints
+optional_constraint.p = 50  # Instead of 100
+```
+
+### Slow Inference
+```python
+# Enable model reuse
+solver = ilpOntSolverFactory.getOntSolverInstance(graph, reuse_model=True)
+
+# Or use sampling
+lcLosses = solver.calculateLcLoss(datanode, sample=True, sampleSize=100)
+```
+
+### NaN Losses
+```python
+# Usually caused by extreme probabilities
+# Use epsilon clipping
+solver.calculateILPSelection(datanode, *concepts, epsilon=0.001)
+
+# Or probability transformation
+def safe_probs(p):
+    return torch.clamp(p, min=0.01, max=0.99)
+
+solver.calculateILPSelection(datanode, *concepts, fun=safe_probs)
+```
+
+---
+
+## Requirements
+
+- **Gurobi Optimizer**: Required for `gurobiILPOntSolver` (free academic license available)
+- **PyTorch**: For differentiable constraint learning
+- **owlready2**: For ontology loading (optional)
+
+---
+
+## Example: Complete Workflow
+
+```python
+from domiknows.solver import ilpOntSolverFactory
+from domiknows.graph import Concept, V, ifL, andL
+import torch
+
+# 1. Define graph with constraints
+graph = Graph('my_graph')
+person = Concept('person')
+organization = Concept('organization') 
+work_for = Relation('work_for')
+
+# Add logical constraint
+ifL(work_for(V.x, V.y), andL(person(V.x), organization(V.y)))
+
+# 2. Create solver
+solver = ilpOntSolverFactory.getOntSolverInstance(
+    graph,
+    _ilpConfig={'ilpSolver': 'Gurobi'},
+    reuse_model=True
+)
+
+# 3. Training: compute constraint loss
+for batch in train_loader:
+    # Forward pass
+    predictions = model(batch)
+    
+    # Compute constraint loss
+    lcLosses = solver.calculateLcLoss(
+        batch,
+        tnorm='P',
+        counting_tnorm='L'
+    )
+    
+    # Aggregate losses
+    data_loss = criterion(predictions, labels)
+    constraint_loss = sum(lc['loss'] for lc in lcLosses.values())
+    
+    total_loss = data_loss + 0.5 * constraint_loss
+    total_loss.backward()
+    optimizer.step()
+
+# 4. Inference: use ILP
+for batch in test_loader:
+    predictions = model(batch)
+    
+    # Apply ILP inference
+    solver.calculateILPSelection(
+        batch,
+        person, organization, work_for,
+        key=("local", "softmax")
+    )
+    
+    # Results in batch attributes under '<concept>/ILP'
+
+# 5. Verification
+verification = solver.verifyResultsLC(test_data, key="/ILP")
+for lc_name, results in verification.items():
+    print(f"{lc_name}: {results['satisfied']:.2f}% satisfied")
+```
+
+---
+
+## Migration Notes
+
+### From Earlier Versions
+
+If using legacy `torch.py` models:
+- Import from `pytorch.py` instead
+- Update `ilpConfig` structure if customized
+- Check constraint definitions for new syntax
+
+### Gurobi License
+
+Academic license: https://www.gurobi.com/academia/academic-program-and-licenses/
+- Free for academic use
+- Requires institutional email
+- Includes WLS (Web License Service)
+
+---
+
+## Further Reading
+
+- **Logical Constraints**: See `domiknows/graph/logicalConstrain.py`
+- **T-norms**: See papers on fuzzy logic and t-norm semantics
+- **ILP Encoding**: Review `gurobiILPBooleanMethods.py` for details
+- **Gurobi**: Official documentation at gurobi.com
