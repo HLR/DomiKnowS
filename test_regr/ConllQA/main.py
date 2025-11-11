@@ -135,6 +135,15 @@ def program_declaration(train, args, device='auto'):
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_pair_phrase1, rel_pair_phrase2, \
         rel_sentence_contains_phrase
 
+    if device == 'auto':
+        if torch.cuda.is_available():
+            device = 'cuda:0'
+            print(f"[INFO] GPU detected - using {device}")
+            print(f"[INFO] GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            device = 'cpu'
+            print("[WARNING] No GPU detected - using CPU (will be slow!)")
+    
     graph.detach()
 
     phrase['text'] = ReaderSensor(keyword='tokens')
@@ -271,19 +280,24 @@ def program_declaration(train, args, device='auto'):
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
-    parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
-    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
+    parser.add_argument("--lr", type=float, default=5e-4, help="Learning rate (increased from 1e-6)")
+    parser.add_argument("--epochs", type=int, default=10, help="Total epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
     parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
-    parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file (can be relative or absolute)")
+    parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file")
     
-    # New PDM-specific parameters
-    parser.add_argument("--warmup_epochs", type=int, default=20, help="Warmup epochs for neural training")
-    parser.add_argument("--constraint_epochs", type=int, default=100, help="Constraint optimization epochs")
-    parser.add_argument("--constraint_loss_scale", type=float, default=200.0, help="Constraint loss scaling factor")
+    # Performance parameters
+    parser.add_argument("--device", type=str, default="cuda:0", help="Device: cuda:0, cuda:1, cpu, auto")
+    parser.add_argument("--warmup_epochs", type=int, default=5, help="Warmup epochs (reduced from 20)")
+    parser.add_argument("--constraint_epochs", type=int, default=20, help="Constraint epochs (reduced from 100)")
+    parser.add_argument("--constraint_loss_scale", type=float, default=200.0, help="Constraint loss scaling")
+    
+    # BERT optimization
+    parser.add_argument("--freeze_bert", action='store_true', default=True, help="Freeze BERT (faster)")
+    parser.add_argument("--batch_accumulation", type=int, default=4, help="Gradient accumulation steps")
     
     args = parser.parse_args()
     return args
@@ -293,44 +307,73 @@ def main(args):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
+    # Force device selection
+    if args.device == 'auto':
+        device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    else:
+        device = args.device
+    
+    print(f"\n{'='*60}")
+    print(f"DEVICE CONFIGURATION")
+    print(f"{'='*60}")
+    print(f"Selected device: {device}")
+    if 'cuda' in device:
+        print(f"GPU: {torch.cuda.get_device_name(torch.device(device))}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(device).total_memory / 1e9:.2f} GB")
+    print(f"{'='*60}\n")
+
     data_file_path = find_data_file(args.data_path, args.train_portion)
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 
     if args.train_size != -1:
         train = train[:args.train_size]
+    
+    print(f"[INFO] Dataset size: {len(train)}")
 
-    program, dataset = program_declaration(train if not args.evaluate else test, args, device="auto")
+    # Pass device explicitly
+    program, dataset = program_declaration(
+        train if not args.evaluate else test, 
+        args, 
+        device=device
+    )
 
     if not args.evaluate:
-        # Enhanced PDM training with phased approach
-        print(f"[INFO] Starting PDM training:")
+        print(f"\n[INFO] Starting OPTIMIZED PDM training:")
+        print(f"  - Device: {device}")
         print(f"  - Warmup epochs: {args.warmup_epochs}")
         print(f"  - Constraint epochs: {args.constraint_epochs}")
+        print(f"  - Total epochs: {args.epochs}")
         print(f"  - Constraint loss scale: {args.constraint_loss_scale}x")
-        print(f"  - T-norm: {args.counting_tnorm}, Gumbel: enabled")
         print(f"  - Learning rate: {args.lr}")
+        print(f"  - T-norm: {args.counting_tnorm}")
+        print(f"  - Batch accumulation: {args.batch_accumulation}")
+        
+        # Ensure program is on correct device
+        program.to(device)
         
         program.train(
             dataset, 
-            Optim=torch.optim.Adam,           # Use Adam optimizer
+            Optim=torch.optim.Adam,
             train_epoch_num=args.epochs,
             warmup_epochs=args.warmup_epochs,
             constraint_epochs=args.constraint_epochs,
-            constraint_only=True,             # Constraint-only phase 2
+            constraint_only=True,
             constraint_loss_scale=args.constraint_loss_scale,
             c_lr=args.lr,
             c_warmup_iters=-1,
             batch_size=1,
-            print_loss=False
+            device=device,                    
+            print_loss=True                   # Enable progress monitoring
         )
     else:
         program.load(f"training_{args.epochs}_lr_{args.lr}.pth")
+        program.to(device)
 
     # Switch to argmax for evaluation
     program.inferTypes = ['local/argmax']
     
     output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset)
+    train_acc = program.evaluate_condition(dataset, device=device)  # Pass device
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.lr}.pth", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
@@ -341,7 +384,6 @@ def main(args):
         assert train_acc > args.checked_acc
 
     return 0
-
 
 if __name__ == '__main__':
     args = parse_arguments()
