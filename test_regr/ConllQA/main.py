@@ -1,6 +1,7 @@
 import sys
 import torch
 from pathlib import Path
+import torch.nn as nn
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -154,6 +155,11 @@ def program_declaration(train, args, device='auto'):
             print("[WARNING] No GPU detected - using CPU (will be slow!)")
     
     graph.detach()
+    
+    # DEBUG: Check graph constraints
+    print("[DEBUG] Checking graph constraints...")
+    for lc_name, lc in graph.logicalConstrains.items():
+        print(f"  Constraint: {lc_name}, Type: {type(lc).__name__}")
 
     phrase['text'] = ReaderSensor(keyword='tokens')
 
@@ -230,12 +236,14 @@ def program_declaration(train, args, device='auto'):
         use_gumbel=True,
         initial_temp=2.0,      
         final_temp=0.5,        
+        hard_gumbel=False,
         beta=10.0,
         device=device,
         tnorm='L',
         counting_tnorm=args.counting_tnorm,
-        sample=True,
-        sampleSize=50
+        sample=True,             
+        sampleSize=50,
+        sampleGlobalLoss=True
     )
     
     # Store both inference types
@@ -248,6 +256,12 @@ def program_declaration(train, args, device='auto'):
     print(f"[INFO] Total parameters: {total_params:,}")
     print(f"[INFO] Trainable parameters: {trainable_params:,}")
     print(f"[INFO] Frozen parameters: {total_params - trainable_params:,}")
+    
+    if torch.cuda.device_count() > 1 and args.use_multi_gpu:
+        gpu_ids = [int(x) for x in args.gpu_ids.split(',')]
+        print(f"[INFO] Using DataParallel on GPUs: {gpu_ids}")
+        program.model = nn.DataParallel(program.model, device_ids=gpu_ids)
+        print(f"[INFO] Model replicated across {len(gpu_ids)} GPUs")
     
     return program, train_dataset
 
@@ -271,10 +285,16 @@ def parse_arguments():
     parser.add_argument("--c_freq", type=int, default=50, help="Constraint update frequency (INCREASED)")
     
     # ILP control
-    parser.add_argument("--use_ilp_eval", action='store_true', 
+    parser.add_argument("--use_ilp_eval", action='store_false', 
                        help="Use ILP solver during evaluation (slow)")
     parser.add_argument("--no_constraints", action='store_false',
                        help="Train without constraint loss (faster)")
+    
+    # MULTI-GPU PARAMETERS
+    parser.add_argument("--use_multi_gpu", action='store_true',
+                       help="Use DataParallel for multi-GPU training")
+    parser.add_argument("--gpu_ids", type=str, default="1,2,3",
+                       help="Comma-separated GPU IDs for DataParallel (e.g., '1,2,3')")
     
     
     # Quick testing
