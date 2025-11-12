@@ -80,6 +80,7 @@ def dataset():
 
 @pytest.mark.gurobi
 def test_comparison_constraints(program, dataset):
+    """Test comparison constraints like greaterL, lessL, equalCountsL, etc."""
     from graph import (
         city, firestationCity, mainFirestation, ancillaryFirestation,
         emergencyService, groceryShop, cityLink
@@ -144,3 +145,68 @@ def test_comparison_constraints(program, dataset):
             f"atLeastAL constraint failed: {grocery_count} < 3"
         assert grocery_count <= 9, \
             f"lessEqL constraint failed: {grocery_count} > 9"
+            
+@pytest.mark.gurobi
+def test_sumL_constraints(program, dataset):
+    """Test sumL (summation) constraints"""
+    from graph import (
+        city, firestationCity, mainFirestation, ancillaryFirestation,
+        emergencyService, groceryShop
+    )
+
+    for datanode in program.populate(dataset=dataset):
+        assert datanode is not None
+        assert len(datanode.getChildDataNodes()) == 9
+
+        # Call solver with all concepts
+        conceptsRelations = (
+            firestationCity, mainFirestation, ancillaryFirestation,
+            emergencyService, groceryShop
+        )
+        datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=True)
+        
+        # Collect results
+        main_firestation_count = 0
+        ancillary_firestation_count = 0
+        emergency_count = 0
+        grocery_count = 0
+        
+        for child_node in datanode.getChildDataNodes():
+            if child_node.getAttribute(mainFirestation, 'ILP').item() > 0:
+                main_firestation_count += 1
+            if child_node.getAttribute(ancillaryFirestation, 'ILP').item() > 0:
+                ancillary_firestation_count += 1
+            if child_node.getAttribute(emergencyService, 'ILP').item() > 0:
+                emergency_count += 1
+            if child_node.getAttribute(groceryShop, 'ILP').item() > 0:
+                grocery_count += 1
+        
+        print(f"Main Firestations: {main_firestation_count}")
+        print(f"Ancillary Firestations: {ancillary_firestation_count}")
+        print(f"Emergency Services: {emergency_count}")
+        print(f"Grocery Shops: {grocery_count}")
+        
+        # Test sumL constraints from graph.py
+        
+        # Example 1: exactL(sumL(emergency, grocery), 14)
+        total_emergency_grocery = emergency_count + grocery_count
+        assert total_emergency_grocery == 14, \
+            f"sumL constraint failed: sum(emergency, grocery) = {total_emergency_grocery}, expected 14"
+        
+        # Example 2: atLeastL(sumL(emergency, main, ancillary), 8)
+        total_services = emergency_count + main_firestation_count + ancillary_firestation_count
+        assert total_services >= 8, \
+            f"sumL constraint failed: sum(emergency, main, ancillary) = {total_services}, expected >= 8"
+        
+        # Example 3: greaterL(emergency, sumL(main, ancillary))
+        total_firestations = main_firestation_count + ancillary_firestation_count
+        assert emergency_count > total_firestations, \
+            f"sumL constraint failed: emergency ({emergency_count}) not > sum(main, ancillary) ({total_firestations})"
+        
+        # Example 4: ifL with sumL
+        # If sum(emergency, grocery) >= 6, then at least one firestation must exist
+        if total_emergency_grocery >= 6:
+            assert total_firestations >= 1, \
+                f"sumL conditional constraint failed: sum(emergency, grocery) >= 6 but firestations = {total_firestations}"
+        
+        print("All sumL constraints validated successfully!")

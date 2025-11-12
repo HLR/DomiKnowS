@@ -1,7 +1,7 @@
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import (
-    lessEqL, orL, ifL, notL, existsL, eqL, atMostL, atMostAL, 
-    atLeastAL, exactAL, greaterL, greaterEqL, lessL, equalCountsL, notEqualCountsL
+    atLeastL, exactL, lessEqL, orL, ifL, notL, existsL, eqL, atMostL, atMostAL, 
+    atLeastAL, exactAL, greaterL, greaterEqL, lessL, equalCountsL, notEqualCountsL, sumL
 )
 
 Graph.clear()
@@ -46,8 +46,35 @@ with Graph('global') as graph:
     notEqualCountsL(emergencyService, groceryShop) # Emergency ≠ grocery (different counts ✓)
     lessEqL(firestationCity, city)                 # Firestations ⊆ cities
     lessEqL(groceryShop, city)                     # Grocery shops ≤ total cities
+
+
+    # Example 1: Simple sumL - Total emergency + grocery services MUST equal 14
+    # Using exactL to enforce equality between sum and constant
+    exactL(
+        sumL(emergencyService, groceryShop),
+        14  # Must equal exactly 14
+    )
     
-    # Each city with grocery shop should have at least one neighbor with emergency service
-    ifL(groceryShop('x'), 
-        existsL(emergencyService(path=('x', city1.reversed, eqL(cityLink, "neighbor", {True}), city2))), 
-        p=70)
+    # Example 2: sumL in comparison - Total emergency services + firestations should be at least 8
+    atLeastL(
+        sumL(emergencyService, mainFirestation, ancillaryFirestation),  # Sum emergency + all firestations
+        8  # Must be >= 8
+    )
+    
+    # Example 3: sumL in another comparison - emergency services > sum of firestation types
+    greaterL(
+        emergencyService,  # Emergency count
+        sumL(mainFirestation, ancillaryFirestation)  # Sum of firestation types
+    )
+    
+    # Example 4: Complex nested sumL in ifL
+    # If a city has more than 10 total services (emergency + grocery), 
+    # then it must have at least one firestation
+    ifL(
+        atLeastL(
+            sumL(emergencyService, groceryShop),  # Total emergency + grocery
+            6  # More than 6
+        ),
+        existsL(firestationCity)  # Must have at least one firestation    
+    )
+    

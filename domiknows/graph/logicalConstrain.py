@@ -379,41 +379,69 @@ class LogicalConstrain(LcElement):
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
-        if cLimit == None:
+        if cLimit is None:
             cLimit = 1
-        lcVariableName0 = lcVariableNames[0]  # First variable
+
+        lcVariableName0 = lcVariableNames[0]
         lcVariableSet0 = v[lcVariableName0]
 
-        varsSetup = []
+        # -----------------------------
+        # Build flattened var list(s)
+        # -----------------------------
+        batch_vars = []   # list of lists (per-row), unless headConstrain/integrate
         for i, _ in enumerate(lcVariableSet0):
-            var = []
+            row = []
             for currentV in iter(v):
-                var.extend(v[currentV][i])
-
-            if len(var) == 0:
-                if not (headConstrain or integrate):
-                    zVars.append([None])
-
-                continue
+                row.extend(v[currentV][i])
 
             if headConstrain or integrate:
-                varsSetup.extend(var)
+                # accumulate globally
+                batch_vars.extend(row)
             else:
-                varsSetup.append(var)
+                # element-wise
+                if len(row) == 0:
+                    batch_vars.append([])     # <-- mark empty row; we’ll return None for it
+                else:
+                    batch_vars.append(row)
 
-        # -- Use ILP variable setup to create constrains
-        zVars = [] # Output ILP variables
+        # -----------------------------
+        # Build constraints
+        # -----------------------------
+        zVars = []
+
         if headConstrain or integrate:
-            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
-                                                         logicMethodName = logicMethodName)])
+            # Global mode: if we have *no* buildable candidates, propagate None
+            if len(batch_vars) == 0:
+                zVars.append([None])
+            else:
+                r = myIlpBooleanProcessor.countVar(
+                    model,
+                    *batch_vars,
+                    onlyConstrains=headConstrain,
+                    limitOp=cOperation,
+                    limit=cLimit,
+                    logicMethodName=logicMethodName,
+                )
+                zVars.append([r])
         else:
-            for current_var in varsSetup:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit,
-                                                         logicMethodName = logicMethodName)])
-           
+            # Element-wise mode
+            for row in batch_vars:
+                if len(row) == 0:
+                    zVars.append([None])
+                else:
+                    r = myIlpBooleanProcessor.countVar(
+                        model,
+                        *row,
+                        onlyConstrains=headConstrain,
+                        limitOp=cOperation,
+                        limit=cLimit,
+                        logicMethodName=logicMethodName,
+                    )
+                    zVars.append([r])
+
         if model is not None:
             model.update()
-            
+
         return zVars
 
     def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):  
@@ -539,52 +567,44 @@ class LogicalConstrain(LcElement):
             model.update()
         return zVars
     
-    def createSummation(self, model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName = "SUMMATION"):  
-    
-        # Ignore value of integrate
-        integrate = True
-            
+    # logicalConstrain.py
+    def createSummation(self, model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName="SUMMATION"):
         try:
-            lcVariableNames = [e for e in iter(v)]
+            lcVariableNames = [name for name in iter(v)]
         except StopIteration:
-            pass
-            
-        lcVariableName0 = lcVariableNames[0] # First variable
-        lcVariableSet0 =  v[lcVariableName0]
+            return []
 
-        zVars = [] # Output ILP variables
-        
-        # Accumulate all variables
-        varsSetup = []
+        lcVariableSet0 = v[lcVariableNames[0]]
+        zVars = []
+
+        # Build per-row lists of literals across *all* inputs to sumL
+        rows = []
         for i, _ in enumerate(lcVariableSet0):
-            
-            var = []
-            for currentV in iter(v):
-                var.extend(v[currentV][i])
-                
-            if len(var) == 0:
-                if not (headConstrain or integrate):
-                    varsSetup.append([None])
-                    
-                continue
-            
-            if headConstrain or integrate:
-                varsSetup.extend(var)
-            else:
-                varsSetup.append(var)
-            
-        # -- Use ILP variable setup to create constrains   
+            row = []
+            for name in lcVariableNames:
+                row.extend(v[name][i])                 
+            rows.append(row)
+
         if headConstrain or integrate:
-            r = myIlpBooleanProcessor.summationVar(model, *varsSetup)
-            for _ in lcVariableSet0:
-                zVars.append([r])
+            # Global sum across all rows
+            flat = [lit for row in rows for lit in row]
+            if len(flat) == 0:
+                zVars.append([0])                       # sum([]) = 0 as a linear constant
+            else:
+                S = myIlpBooleanProcessor.summationVar(model, *flat)
+                zVars.append([S])
         else:
-            for current_var in varsSetup:
-                zVars.append([myIlpBooleanProcessor.summationVar(model, *current_var)])
-    
+            # Element-wise per-row sums (useful when nested under per-row comparators)
+            for row in rows:
+                flat = [lit for lit in row]
+                if len(flat) == 0:
+                    zVars.append([0])
+                else:
+                    S = myIlpBooleanProcessor.summationVar(model, *flat)
+                    zVars.append([S])
+
         if model is not None:
             model.update()
-            
         return zVars
 
 def use_grad(grad):

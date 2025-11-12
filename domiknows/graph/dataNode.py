@@ -2747,6 +2747,10 @@ class DataNodeBuilder(dict):
             if dn.relationLinks:
                 if any(il in dnsRoots for il in dn.relationLinks):
                     flattenDns.append(dn)
+                else:
+                    if dn in dnsRoots:
+                        # remove dn from dnsRoots if present
+                        dnsRoots.remove(dn)
             else:
                 flattenDns.append(dn)
 
@@ -2768,9 +2772,7 @@ class DataNodeBuilder(dict):
             else:
                 dnTypes[dn.ontologyNode] = [dn]
 
-            for il in dn.impactLinks:
-                if il in incomingLinks:
-                    incomingLinks[il] += 1
+            incomingLinks[dn] = len(dn.impactLinks)
 
         # Find the root dataNodes which have no incoming links
         noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
