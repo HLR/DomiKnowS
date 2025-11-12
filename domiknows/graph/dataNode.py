@@ -2741,22 +2741,23 @@ class DataNodeBuilder(dict):
         # Flatten the list of new dataNodes
         _flattenDns = list(flatten(dns))
         
+        # -- These dnds are filtered out in methods building batches nad providing root databNode
         # remove any dataNodes from flattenDns that do not have relationLinks to any of the existing root dataNodes
-        flattenDns = []
-        for dn in _flattenDns:
-            if dn.relationLinks:
-                if any(il in dnsRoots for il in dn.relationLinks):
-                    flattenDns.append(dn)
-                else:
-                    if dn in dnsRoots:
-                        # remove dn from dnsRoots if present
-                        dnsRoots.remove(dn)
-            else:
-                flattenDns.append(dn)
+        #flattenDns = []
+        #for dn in _flattenDns:
+        #    if dn.relationLinks:
+        #        if any(il in dnsRoots for il in dn.relationLinks):
+        #           flattenDns.append(dn)
+        #        else:
+        #            if dn in dnsRoots:
+        #                # remove dn from dnsRoots if present
+        #                dnsRoots.remove(dn)
+        #    else:
+        #        flattenDns.append(dn)
 
         # Create a set of all unique dataNodes in dnsRoots and flattenDns
         allDns = set(dnsRoots)
-        allDns.update(flattenDns)
+        allDns.update(_flattenDns)
 
         # -- Update list of existing root dataNotes
 
@@ -2876,7 +2877,7 @@ class DataNodeBuilder(dict):
                 attributeNames = [*existingDnsForAttr]
 
                 # Create links between this relation and instance dataNode based on the candidate information provided by sensor for each relation attribute
-                for relationDnIndex, relationDn in existingDnsForRelationSorted.items():
+                for relationDnIndex, relationDn in existingDnsForRelationSorted.items():    
                     for attributeIndex, attribute in enumerate(attributeNames):
                         candidatesForRelation = relationAttrsCache[attribute][relationDnIndex]
 
@@ -2885,6 +2886,12 @@ class DataNodeBuilder(dict):
                             if isInRelation == 0:
                                 continue
 
+                            if attribute not in existingDnsForAttr:
+                                _DataNodeBuilder__Logger.error('Attribute %s not found in existing dataNodes for relation %s'%(attribute,relationName))
+                                continue
+                            if candidateIndex >= len(existingDnsForAttr[attribute]):
+                                _DataNodeBuilder__Logger.error('Candidate index %i is out of range for existing dataNodes of attribute %s for relation %s'%(candidateIndex,attribute,relationName))
+                                continue
                             candidateDn = existingDnsForAttr[attribute][candidateIndex]
 
                             #if attributeIndex == 0:
@@ -3815,10 +3822,108 @@ class DataNodeBuilder(dict):
             self.myLoggerTime.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
         else:
             raise ValueError('DataNode Builder has no DataNode started yet')
+        
+    def findRootDataNode(self, dns):
+        """
+        Find the root DataNode from a list of DataNodes based on relationLinks, impactLinks, and ontologyType.
+        
+        Args:
+            dns (list): List of DataNodes to search through
+        
+        Returns:
+            DataNode: The identified root DataNode. Guaranteed to return a DataNode if dns is not empty.
+            
+        Notes:
+            - A root DataNode is one with no incoming impactLinks (or only "contains" impactLinks)
+            - If multiple candidates exist, prefers nodes with the rarest ontologyType
+            - Falls back to the node with the most outgoing relationLinks
+            - Always returns a DataNode if the input list is not empty
+        """
+        if not dns:
+            _DataNodeBuilder__Logger.error('findRootDataNode called with empty dns list')
+            return None
+        
+        # Filter out nodes with non-"contains" incoming links (impactLinks)
+        root_candidates = []
+        for dn in dns:
+            # Check if node has no impactLinks or only "contains" impactLinks
+            has_non_contains_impact = any(
+                link_type != "contains" 
+                for link_type in dn.impactLinks.keys()
+            )
+            
+            if not has_non_contains_impact:
+                root_candidates.append(dn)
+        
+        # If no clear root candidates found, use all nodes as candidates
+        if not root_candidates:
+            _DataNodeBuilder__Logger.warning('No clear root DataNode found based on impactLinks, using all nodes as candidates')
+            root_candidates = dns
+        
+        if len(root_candidates) == 1:
+            return root_candidates[0]
+        
+        # Multiple candidates - apply additional filtering
+        
+        # 1. Count occurrences of each ontologyType among candidates
+        ontology_type_counts = {}
+        for dn in root_candidates:
+            ont_name = dn.ontologyNode.name
+            ontology_type_counts[ont_name] = ontology_type_counts.get(ont_name, 0) + 1
+        
+        # Find the minimum count (rarest type)
+        min_count = min(ontology_type_counts.values())
+        
+        # Filter to only nodes with the rarest ontologyType
+        rarest_candidates = [
+            dn for dn in root_candidates 
+            if ontology_type_counts[dn.ontologyNode.name] == min_count
+        ]
+        
+        if len(rarest_candidates) == 1:
+            selected_root = rarest_candidates[0]
+            _DataNodeBuilder__Logger.info(
+                f'Selected DataNode with id {selected_root.instanceID} '
+                f'of type {selected_root.ontologyNode.name} (rarest ontologyType with {min_count} occurrence(s))'
+            )
+            return selected_root
+        
+        # 2. Count outgoing relationLinks (excluding "contains")
+        def count_outgoing_relations(dn):
+            return sum(
+                len(targets) 
+                for rel_name, targets in dn.relationLinks.items() 
+                if rel_name != "contains"
+            )
+        
+        # Sort by number of outgoing relations (descending)
+        rarest_candidates.sort(key=count_outgoing_relations, reverse=True)
+        
+        # 3. If still tied, prefer nodes with more children
+        max_outgoing = count_outgoing_relations(rarest_candidates[0])
+        tied_candidates = [
+            dn for dn in rarest_candidates 
+            if count_outgoing_relations(dn) == max_outgoing
+        ]
+        
+        if len(tied_candidates) > 1:
+            tied_candidates.sort(
+                key=lambda dn: len(dn.getChildDataNodes() or []), 
+                reverse=True
+            )
+        
+        selected_root = tied_candidates[0]
+        
+        _DataNodeBuilder__Logger.info(
+            f'Multiple root candidates found. Selected DataNode with id {selected_root.instanceID} '
+            f'of type {selected_root.ontologyNode.name} based on rarest ontologyType and relationLinks analysis'
+        )
+        
+        return selected_root
 
     def getDataNode(self, context="interference", device='auto'):
         """
-        Retrieves and returns the first DataNode from the DataNodeBuilder object based on the given context and device.
+        Retrieves and returns the root DataNode from the DataNodeBuilder object based on the given context and device.
 
         Parameters:
         -----------
@@ -3830,21 +3935,7 @@ class DataNodeBuilder(dict):
         Returns:
         --------
         DataNode or None
-            Returns the first DataNode if it exists, otherwise returns None.
-
-        Side Effects:
-        -------------
-        - Updates the torch device for the returned DataNode based on the 'device' parameter.
-        - Logs various messages based on the context and production mode.
-
-        Raises:
-        -------
-        None
-
-        Notes:
-        ------
-        - This method makes use of internal logging for debugging and timing.
-
+            Returns the root DataNode if it exists, otherwise returns None.
         """
         self.__addGetDataNodeCounter()
 
@@ -3854,72 +3945,56 @@ class DataNodeBuilder(dict):
             if 'Counter' + '_setitem' in self:
                 self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem']))
             if 'DataNodeTime' in self:
-                # self['DataNodeTime'] is in nanoseconds, so divide by 1000000 to get milliseconds
                 elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
                 self.myLoggerTime.info(f"DataNode Builder time usage - {elapsedInMsDataNodeBuilder:.5f}ms")
 
-                #self.myLoggerTime.info(f"DataNode Builder elapsed time in ns - {self['DataNodeTime']}")
-                #self.myLoggerTime.info(f"DataNode Builder start time in ns - {self['DataNodeTime_start']}")
-                #self.myLoggerTime.info(f"DataNode Builder end time in ns - {self['DataNodeTime_end']}")
-
-        # If DataNode it created then return it
+        # If DataNode is created then return it
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
             
-            noRelationRoots = []
-            for dn in existingDns:
-                # Consider nodes that either have no relationLinks or only have "contains" relation
-                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
-                    noRelationRoots.append(dn)
+            if len(existingDns) == 0:
+                _DataNodeBuilder__Logger.error('Returning None - dataNode list is empty')
+                return None
+            
+            # Use method to find the root DataNode
+            returnDn = self.findRootDataNode(existingDns)
+            
+            if returnDn is None:
+                _DataNodeBuilder__Logger.error('findRootDataNode returned None')
+                return None
 
-            if len(noRelationRoots) != 0:
-                returnDn = noRelationRoots[0]
+            # Set the torch device
+            returnDn.current_device = device
+            if returnDn.current_device == 'auto':
+                returnDn.current_device = 'cpu'
+                if torch.cuda.is_available():
+                    returnDn.current_device = 'cuda'
 
-                # Set the torch device
-                returnDn.current_device = device
-                if returnDn.current_device == 'auto': # if not set use cpu or cuda if available
-                    returnDn.current_device = 'cpu'
-                    if torch.cuda.is_available():
-                        returnDn.current_device = 'cuda'
+            if len(existingDns) != 1:
+                typesInDNs = {d.getOntologyNode().name for d in existingDns}
+                _DataNodeBuilder__Logger.warning(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+            else:
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
+                self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
 
-                if len(noRelationRoots) != 1:
-                    typesInDNs = {d.getOntologyNode().name for d in noRelationRoots[1:]}
-                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
-                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
-                else:
-                    if not getProductionModeStatus():
-                        _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
-                    self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
+            if self.skeletonDataNode:
+                variableSet = self.get("variableSet", {})
+                variableSetDict = {k2: self[k1] for k1, k2 in dict(variableSet).items()}
+                returnDn.attributes["variableSet"] = variableSetDict
 
-                if self.skeletonDataNode:
-                    # Get the "variableSet" dictionary from the data node, or create a new empty dictionary if it doesn't exist
-                    variableSet = self.get("variableSet", {})
+                propertySet = self.get("propertySet", {})
+                propertySetDict = {k2: self[k1] for k1, k2 in dict(propertySet).items()}
+                returnDn.attributes["propertySet"] = propertySetDict
 
-                    # Create a dictionary of the items in "variableSet" with the keys and values swapped
-                    variableSetDict = {k2: self[k1] for k1, k2 in dict(variableSet).items()}
+                allDns = self.get("allDns", set())
+                for dn in allDns:
+                    if dn == returnDn:
+                        continue
+                    dn.attributes["rootDataNode"] = returnDn
 
-                    # Add the "variableSet" dictionary to the return data node attributes
-                    returnDn.attributes["variableSet"] = variableSetDict
-
-                    # Get the "propertySet" dictionary from the data node, or create a new empty dictionary if it doesn't exist
-                    propertySet = self.get("propertySet", {})
-
-                    # Create a dictionary of the items in "propertySet"
-                    propertySetDict = {k2: self[k1] for k1, k2 in dict(propertySet).items()}
-
-                    # Add the "propertySet" dictionary to the return data node attributes
-                    returnDn.attributes["propertySet"] = propertySetDict
-
-                    # Get the "allDns" set from the data node, or create a new empty set if it doesn't exist
-                    allDns = self.get("allDns", set())
-
-                    # Iterate over the data nodes in "allDns" and add the "rootDataNode" attribute to them
-                    for dn in allDns:
-                        if dn == returnDn:
-                            continue
-                        dn.attributes["rootDataNode"] = returnDn
-
-                return returnDn
+            return returnDn
 
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNode')
         return None
@@ -3944,6 +4019,7 @@ class DataNodeBuilder(dict):
         Notes:
         ------
         - This method makes use of internal logging for debugging and timing.
+        - Uses findRootDataNode to identify the root, then returns all DataNodes at the same level.
         """
         self.__addGetDataNodeCounter()
 
@@ -3957,18 +4033,40 @@ class DataNodeBuilder(dict):
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
             
-            noRelationRoots = []
-            for dn in existingDns:
-                # Consider nodes that either have no relationLinks or only have "contains" relation
-                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
-                    noRelationRoots.append(dn)
-
-            if len(noRelationRoots) > 0:
-
+            if len(existingDns) == 0:
+                _DataNodeBuilder__Logger.error('Returning None - dataNode list is empty')
+                return None
+            
+            # Use findRootDataNode to determine the root
+            rootDn = self.findRootDataNode(existingDns)
+            
+            if rootDn is None:
+                _DataNodeBuilder__Logger.error('findRootDataNode returned None')
+                return None
+            
+            # If the root is a batch node with children, return the children
+            # Otherwise, return all existing DataNodes at the root level
+            if rootDn.ontologyNode.name == 'batch' and rootDn.getChildDataNodes():
+                batchChildren = rootDn.getChildDataNodes()
                 if not getProductionModeStatus():
-                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(noRelationRoots),noRelationRoots))
-
-                return noRelationRoots
+                    _DataNodeBuilder__Logger.info('Returning %i batch child dataNodes'%(len(batchChildren)))
+                return batchChildren
+            
+            # Return all DataNodes that are at the same structural level as the root
+            # (i.e., nodes with no non-contains impactLinks)
+            batchLevelDns = []
+            for dn in existingDns:
+                has_non_contains_impact = any(
+                    link_type != "contains" 
+                    for link_type in dn.impactLinks.keys()
+                )
+                if not has_non_contains_impact:
+                    batchLevelDns.append(dn)
+            
+            if len(batchLevelDns) > 0:
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(batchLevelDns), batchLevelDns))
+                return batchLevelDns
 
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNodes')
         return None

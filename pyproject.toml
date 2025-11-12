@@ -45,8 +45,8 @@ cpu = [
   "torchvision>=0.22.0",
 ]
 cu128 = [
-  "torch>=2.7.0",
-  "torchvision>=0.22.0",
+  "torch==2.8.*",
+  "torchvision==0.23.*",
 ]
 cu126 = [
   "torch>=2.7.0",

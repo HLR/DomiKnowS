@@ -559,11 +559,11 @@ requires-dist = [
     { name = "tokenizers", specifier = ">=0.22.0" },
     { name = "torch", marker = "extra == 'cpu'", specifier = ">=2.7.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "domiknows", extra = "cpu" } },
     { name = "torch", marker = "extra == 'cu126'", specifier = ">=2.7.0", index = "https://download.pytorch.org/whl/cu126", conflict = { package = "domiknows", extra = "cu126" } },
-    { name = "torch", marker = "extra == 'cu128'", specifier = ">=2.7.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "domiknows", extra = "cu128" } },
+    { name = "torch", marker = "extra == 'cu128'", specifier = "==2.8.*", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "domiknows", extra = "cu128" } },
     { name = "torch", marker = "extra == 'xpu'", specifier = ">=2.7.0", index = "https://download.pytorch.org/whl/xpu", conflict = { package = "domiknows", extra = "xpu" } },
     { name = "torchvision", marker = "extra == 'cpu'", specifier = ">=0.22.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "domiknows", extra = "cpu" } },
     { name = "torchvision", marker = "extra == 'cu126'", specifier = ">=0.22.0", index = "https://download.pytorch.org/whl/cu126", conflict = { package = "domiknows", extra = "cu126" } },
-    { name = "torchvision", marker = "extra == 'cu128'", specifier = ">=0.22.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "domiknows", extra = "cu128" } },
+    { name = "torchvision", marker = "extra == 'cu128'", specifier = "==0.23.*", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "domiknows", extra = "cu128" } },
     { name = "torchvision", marker = "extra == 'xpu'", specifier = ">=0.22.0", index = "https://download.pytorch.org/whl/xpu", conflict = { package = "domiknows", extra = "xpu" } },
     { name = "transformers", specifier = ">=4.56.1" },
 ]
