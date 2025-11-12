@@ -257,12 +257,6 @@ def program_declaration(train, args, device='auto'):
     print(f"[INFO] Trainable parameters: {trainable_params:,}")
     print(f"[INFO] Frozen parameters: {total_params - trainable_params:,}")
     
-    if torch.cuda.device_count() > 1 and args.use_multi_gpu:
-        gpu_ids = [int(x) for x in args.gpu_ids.split(',')]
-        print(f"[INFO] Using DataParallel on GPUs: {gpu_ids}")
-        program.model = nn.DataParallel(program.model, device_ids=gpu_ids)
-        print(f"[INFO] Model replicated across {len(gpu_ids)} GPUs")
-    
     return program, train_dataset
 
 
@@ -272,7 +266,7 @@ def parse_arguments():
     parser.add_argument("--epochs", type=int, default=5, help="Total epochs (REDUCED)")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
-    parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
+    parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_Counting", help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="T-norm for counting")
     parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file")
@@ -289,13 +283,6 @@ def parse_arguments():
                        help="Use ILP solver during evaluation (slow)")
     parser.add_argument("--no_constraints", action='store_false',
                        help="Train without constraint loss (faster)")
-    
-    # MULTI-GPU PARAMETERS
-    parser.add_argument("--use_multi_gpu", action='store_true',
-                       help="Use DataParallel for multi-GPU training")
-    parser.add_argument("--gpu_ids", type=str, default="1,2,3",
-                       help="Comma-separated GPU IDs for DataParallel (e.g., '1,2,3')")
-    
     
     # Quick testing
     parser.add_argument("--quick_test", action='store_true', help="Quick test with 100 samples")

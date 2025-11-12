@@ -877,14 +877,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
     def summationVar(self, m, *_var, onlyConstrains=False, logicMethodName="SUMMATION"):
         """        
-        Parameters:
-        - m: Model (ignored)
-        - *_var: Variable number of binary variables (tensors, scalars, or None)
-        - onlyConstrains: Not used for summation (kept for signature consistency)
-        - logicMethodName: Name for logging purposes
-        
         Returns:
-        - Differentiable tensor representing the sum
+        - Differentiable scalar tensor representing the sum (gradients preserved)
         """
         if self.ifLog: 
             self.myLogger.debug("%s called with %d variables" % (logicMethodName, len(_var)))
@@ -896,24 +890,31 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             # Return zero tensor on the correct device
             return torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         
-        # Sum up all variables as tensors (preserving gradients)
-        sumResult = torch.clone(var[0])
-        self.countLogger.debug(f"Initial sum (var[0]): {sumResult.item() if sumResult.numel() == 1 else sumResult}")
+        # Create tensor with each variable as a separate entry (preserving gradients)
+       
+        if len(var) == 0:
+            sumResult = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        else:
+            # Convert each variable to scalar if needed and stack them
+            var_scalars = []
+            for i, v in enumerate(var):
+                v_scalar = v.sum() if v.numel() > 1 else v.clone()
+                var_scalars.append(v_scalar)
+                self.countLogger.debug(f"Variable {i} as scalar: {v_scalar.item()}")
+            
+            # Stack all variables as separate entries in the tensor
+            sumResult = torch.stack(var_scalars)
+            
+        self.countLogger.info(f"sumResult tensor with separate entries: {sumResult} (shape: {sumResult.shape})")
         
         for i, v in enumerate(var[1:], 1):
-            sumResult = sumResult + v 
+            # Sum all elements of v if multi-dimensional (gradient-preserving operation)
+            v_sum = v.sum() if v.numel() > 1 else v
+            sumResult = sumResult + v_sum
         
-        # Ensure result has gradient tracking
-        if not sumResult.requires_grad:
-            self.countLogger.warning("Sum result does not require gradients - fixing...")
-            sumResult = sumResult.detach().requires_grad_(True)
-        
-        self.countLogger.info(f"Final sum result: {sumResult.item() if sumResult.numel() == 1 else sumResult} (requires_grad: {sumResult.requires_grad})")
+        self.countLogger.info(f"Final sum result: {sumResult.item()} (requires_grad: {sumResult.requires_grad})")
         
         if self.ifLog:
-            self.myLogger.debug("%s returns tensor sum: %s" % (
-                logicMethodName, 
-                sumResult.item() if sumResult.numel() == 1 else sumResult
-            ))
+            self.myLogger.debug("%s returns tensor sum: %s" % (logicMethodName, sumResult.item()))
         
-        return sumResult 
+        return sumResult
