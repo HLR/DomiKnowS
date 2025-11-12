@@ -250,7 +250,7 @@ def program_declaration(train, args, device='auto'):
 
     program = InferenceProgram(graph, SolverModel,
                                poi=[phrase, sentence, word, people, organization, location, graph.constraint],
-                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'])
+                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
     return program, train_dataset
 
 
@@ -264,6 +264,7 @@ def parse_arguments():
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file (can be relative or absolute)")
+    parser.add_argument("--device", type=str, default="auto", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
     args = parser.parse_args()
 
     return args
@@ -281,7 +282,7 @@ def main(args):
     if args.train_size != -1:
         train = train[:args.train_size]
 
-    program, dataset = program_declaration(train if not args.evaluate else test, args, device="auto")
+    program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
 
     if not args.evaluate:
         program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
