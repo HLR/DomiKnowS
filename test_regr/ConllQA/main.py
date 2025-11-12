@@ -299,6 +299,17 @@ def main(args):
     print(f"{'='*60}")
     print(f"Selected device: {device}")
     if 'cuda' in device:
+        # Extract GPU index from device string
+        gpu_id = int(device.split(':')[1]) if ':' in device else 0
+        print(f"GPU: {torch.cuda.get_device_name(gpu_id)}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(gpu_id).total_memory / 1e9:.2f} GB")
+    print(f"{'='*60}\n")
+    
+    print(f"\n{'='*60}")
+    print(f"DEVICE CONFIGURATION")
+    print(f"{'='*60}")
+    print(f"Selected device: {device}")
+    if 'cuda' in device:
         print(f"GPU: {torch.cuda.get_device_name(torch.device(device))}")
         print(f"GPU Memory: {torch.cuda.get_device_properties(device).total_memory / 1e9:.2f} GB")
     print(f"{'='*60}\n")
