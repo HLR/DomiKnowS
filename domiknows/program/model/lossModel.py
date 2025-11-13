@@ -333,21 +333,34 @@ class InferenceModel(LossModel):
             self.inferenceLogger.debug(f"Constraint '{lcName}' is_counting: {is_counting_constraint}")
             
             if is_counting_constraint:
-                # For counting constraints (sumL), use the raw sum value directly
-                # The conversionSigmoid contains the count, not a probability
-                constr_out = loss_dict['conversionSigmoid']
-                self.inferenceLogger.debug(f"Counting constraint '{lcName}' output (count): {constr_out}")
-                
-                # Target is the expected count
+                if 'expectedCount' in loss_dict and loss_dict['expectedCount'] is not None:
+                    constr_out = loss_dict['expectedCount']
+                    self.inferenceLogger.debug(
+                        f"Counting constraint '{lcName}' using expectedCount: {constr_out}"
+                    )
+                else:
+                    # backward-compatible fallback
+                    constr_out = loss_dict['conversionSigmoid']
+                    self.inferenceLogger.debug(
+                        f"Counting constraint '{lcName}' using legacy conversionSigmoid as count: {constr_out}"
+                    )
+
+                # make sure it's a float tensor
+                constr_out = constr_out.float()
+
+                # Target is the expected count (integer label)
                 lbl = read_labels[f'{lcName}/label'].float()
-                if lbl.dim() == 0:  # scalar
+                if lbl.dim() == 0:
                     lbl = lbl.unsqueeze(0)
-                lbl = lbl.squeeze()  # remove any singleton dimensions
-                self.inferenceLogger.debug(f"Counting constraint '{lcName}' target (expected count): {lbl}")
-                
-                # Use MSE loss for counting (regression), not BCE (classification)
-                constraint_loss = torch.nn.functional.mse_loss(constr_out.float(), lbl)
-                self.inferenceLogger.debug(f"Counting constraint '{lcName}' MSE loss: {constraint_loss.item()}")
+                lbl = lbl.squeeze()
+                self.inferenceLogger.debug(
+                    f"Counting constraint '{lcName}' target (expected count): {lbl}"
+                )
+
+                constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
+                self.inferenceLogger.debug(
+                    f"Counting constraint '{lcName}' MSE loss: {constraint_loss.item()}"
+                )
                 
             else:
                 # For boolean constraints, use the standard BCE loss

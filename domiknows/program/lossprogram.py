@@ -801,7 +801,6 @@ class InferenceProgram(LossProgram):
                 is_counting = isinstance(lc, sumL)
                 
                 if is_counting:
-                    # For counting constraints: Mean Absolute Error
                     constr_loss = datanode.calculateLcLoss(
                         tnorm=self.graph.tnorm if hasattr(self.graph, 'tnorm') else 'P',
                         counting_tnorm=self.graph.counting_tnorm if hasattr(self.graph, 'counting_tnorm') else None,
@@ -809,21 +808,32 @@ class InferenceProgram(LossProgram):
                         sampleSize=0
                     )
                     
-                    if lc_name in constr_loss and 'conversionSigmoid' in constr_loss[lc_name]:
-                        # Get the predicted count (the sum)
-                        predicted_count = constr_loss[lc_name]['conversionSigmoid']
+                    if lc_name in constr_loss:
+                        lc_loss_dict = constr_loss[lc_name]
+
+                        # NEW: prefer expectedCount
+                        if 'expectedCount' in lc_loss_dict and lc_loss_dict['expectedCount'] is not None:
+                            predicted_count = lc_loss_dict['expectedCount']
+                        elif 'conversionSigmoid' in lc_loss_dict:
+                            # backward-compatible fallback
+                            predicted_count = lc_loss_dict['conversionSigmoid']
+                        else:
+                            continue  # nothing usable
+
                         if torch.is_tensor(predicted_count):
                             predicted_count = predicted_count.item()
-                        
+
                         expected_count = label.item() if torch.is_tensor(label) else float(label)
-                        
-                        # Calculate absolute error
+
                         error = abs(predicted_count - expected_count)
                         counting_errors.append(error)
                         counting_predictions.append(predicted_count)
                         counting_labels.append(expected_count)
-                        
-                        self.logger.debug(f"Counting constraint '{lc_name}': predicted={predicted_count:.2f}, expected={expected_count}, error={error:.2f}")
+
+                        self.logger.debug(
+                            f"Counting constraint '{lc_name}': "
+                            f"predicted={predicted_count:.2f}, expected={expected_count}, error={error:.2f}"
+                        )
                 else:
                     # For boolean constraints: binary accuracy
                     is_satisfied = verify_constrains[lc_name]["satisfied"] == 100.0

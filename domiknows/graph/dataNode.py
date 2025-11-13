@@ -13,6 +13,10 @@ from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
 from domiknows.graph.relation import Contains
 
+from domiknows.solver.lossCalculator import LossCalculator
+from domiknows.solver.sampleLossCalculator import SampleLossCalculator
+from domiknows.solver.logicalConstraintVerifier import LogicalConstraintVerifier
+
 from .property import Property
 from .concept import Concept, EnumConcept
 
@@ -2059,7 +2063,8 @@ class DataNode:
             results that satisfy each logical constraint.
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
-
+        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        
         # Check if full data node is created and create it if not
         if self.myBuilder != None:
             self.myBuilder.createFullDataNode(self)
@@ -2071,7 +2076,7 @@ class DataNode:
         else:
             _DataNode__Logger.error("Not supported key %s for verifyResultsLC"%(key))
 
-        verifyResult = myilpOntSolver.verifyResultsLC(self, key = key)
+        verifyResult = verifier.verifyResults(self, key = key)
 
         return verifyResult
 
@@ -2101,13 +2106,30 @@ class DataNode:
         self.myBuilder.createFullDataNode(self)
 
         myilpOntSolver, conceptsRelations = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
-
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm=tnorm,counting_tnorm=counting_tnorm, sample=sample,
-                                                  sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss,
-                                                  conceptsRelations=conceptsRelations)
-
-        return lcResult
+        
+        """Calculate loss values for logical constraints."""
+        start = perf_counter()
+                
+        if sample:
+            sampleCalculator = SampleLossCalculator(myilpOntSolver)
+            lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
+        else:
+            lossCalculator = LossCalculator(myilpOntSolver)
+            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
+        
+        end = perf_counter()
+        elapsedInS = end - start
+        
+        if elapsedInS > 1:
+            self.myLoggerTime.info('End of Loss Calculation - total internal time: %fs' % (elapsedInS))
+        else:
+            elapsedInMs = (end - start) * 1000
+            self.myLoggerTime.info('End of Loss Calculation - total internal time: %ims' % (elapsedInMs))
+        
+        [h.flush() for h in self.myLoggerTime.handlers]
+        
+        return lcLosses
 
     def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
         """

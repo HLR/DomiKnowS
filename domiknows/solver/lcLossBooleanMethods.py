@@ -876,45 +876,37 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return fixedSuccess
         
     def summationVar(self, m, *_var, onlyConstrains=False, logicMethodName="SUMMATION"):
-        """        
-        Returns:
-        - Differentiable scalar tensor representing the sum (gradients preserved)
         """
-        if self.ifLog: 
-            self.myLogger.debug("%s called with %d variables" % (logicMethodName, len(_var)))
-        
-        # Convert None values and ensure we have tensors
-        var = self._fixVar(_var)
-        
-        if len(var) == 0:
-            # Return zero tensor on the correct device
-            return torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        
-        # Create tensor with each variable as a separate entry (preserving gradients)
-       
-        if len(var) == 0:
-            sumResult = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        else:
-            # Convert each variable to scalar if needed and stack them
-            var_scalars = []
-            for i, v in enumerate(var):
-                v_scalar = v.sum() if v.numel() > 1 else v.clone()
-                var_scalars.append(v_scalar)
-                self.countLogger.debug(f"Variable {i} as scalar: {v_scalar.item()}")
-            
-            # Stack all variables as separate entries in the tensor
-            sumResult = torch.stack(var_scalars)
-            
-        self.countLogger.info(f"sumResult tensor with separate entries: {sumResult} (shape: {sumResult.shape})")
-        
-        for i, v in enumerate(var[1:], 1):
-            # Sum all elements of v if multi-dimensional (gradient-preserving operation)
-            v_sum = v.sum() if v.numel() > 1 else v
-            sumResult = sumResult + v_sum
-        
-        self.countLogger.info(f"Final sum result: {sumResult.item()} (requires_grad: {sumResult.requires_grad})")
-        
+        Returns a differentiable scalar tensor equal to the arithmetic sum of all inputs.
+        """
         if self.ifLog:
-            self.myLogger.debug("%s returns tensor sum: %s" % (logicMethodName, sumResult.item()))
-        
+            self.myLogger.debug("%s called with %d variables", logicMethodName, len(_var))
+
+        # Normalize inputs: None / plain numbers → 0-tensors on the right device
+        var = self._fixVar(_var)
+
+        # No variables → 0 (on correct device, with gradients)
+        if len(var) == 0:
+            zero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+            if self.ifLog:
+                self.myLogger.debug("%s called with empty var list, returning 0", logicMethodName)
+            return zero
+
+        # Start from 0 (scalar tensor) to accumulate the sum
+        sumResult = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+
+        for i, v in enumerate(var):
+            # If v is vector/matrix, sum over all its elements in a differentiable way
+            v_sum = v.sum() if v.numel() > 1 else v
+            self.countLogger.debug(f"{logicMethodName} - variable {i} contribution: {v_sum}")
+            sumResult = sumResult + v_sum
+
+        self.countLogger.info(
+            f"{logicMethodName} final sum result: {sumResult.item()} "
+            f"(requires_grad: {sumResult.requires_grad})"
+        )
+
+        if self.ifLog:
+            self.myLogger.debug("%s returns tensor sum: %s", logicMethodName, sumResult.item())
+
         return sumResult
