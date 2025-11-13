@@ -2063,6 +2063,7 @@ class DataNode:
             results that satisfy each logical constraint.
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
+        myilpOntSolver.current_device = self.current_device
         verifier = LogicalConstraintVerifier(myilpOntSolver)
         
         # Check if full data node is created and create it if not
@@ -2106,6 +2107,7 @@ class DataNode:
         self.myBuilder.createFullDataNode(self)
 
         myilpOntSolver, conceptsRelations = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
+        myilpOntSolver.current_device = self.current_device
         self.inferLocal()
         
         """Calculate loss values for logical constraints."""
