@@ -99,9 +99,11 @@ class Tokenizer():
 
 
 class BERT(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, device='auto'):
         super().__init__()
         self.module = BertModel.from_pretrained(TRANSFORMER_MODEL)
+        if device != 'auto' and device != 'cpu':
+            self.module = self.module.to(device)
         # to freeze BERT, uncomment the following
         for param in self.module.base_model.parameters():
             param.requires_grad = False
@@ -121,8 +123,10 @@ class BERT(torch.nn.Module):
 
 
 class Classifier(torch.nn.Sequential):
-    def __init__(self, in_features) -> None:
+    def __init__(self, in_features, device='auto'):
         linear = torch.nn.Linear(in_features, 2)
+        if device != 'auto' and device != 'cpu':
+            linear = linear.to(device)
         super().__init__(linear)
 
 
@@ -135,22 +139,22 @@ def program_declaration(train, args, device='auto'):
 
     graph.detach()
 
-    phrase['text'] = ReaderSensor(keyword='tokens')
+    phrase['text'] = ReaderSensor(keyword='tokens', device=device)
 
     def word2vec(text):
         texts = list(map(lambda x: ' '.join(x.split('/')), text))
         tokens_list = list(nlp.pipe(texts))
-        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]))
+        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device=device)
 
-    phrase['w2v'] = FunctionalSensor('text', forward=word2vec)
+    phrase['w2v'] = FunctionalSensor('text', forward=word2vec, device=device)
 
     def merge_phrase(phrase_text):
-        return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
+        return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)), device=device)
 
-    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
+    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase, device=device)
 
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
-    word['bert'] = ModuleSensor('ids', module=BERT())
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer(), device=device)
+    word['bert'] = ModuleSensor('ids', module=BERT(), device=device)
 
     def match_phrase(phrase, word_offset):
         def overlap(a_s, a_e, b_s, b_e):
@@ -170,27 +174,26 @@ def program_declaration(train, args, device='auto'):
                     word_overlap.append(overlap(ph_offset, ph_offset + ph_len, word_s, word_e))
             ph_word_overlap.append(word_overlap)
             ph_offset += ph_len + 1
-        return torch.tensor(ph_word_overlap)
+        return torch.tensor(ph_word_overlap, device=device)
 
     phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'],
                                                            relation=rel_phrase_contains_word.reversed,
-                                                           forward=match_phrase)
+                                                           forward=match_phrase, device=device)
 
     def phrase_bert(bert):
         return bert
 
-    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
-    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1))
+    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert, device=device)
+    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1), device=device)
 
-    phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
-    phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
-    phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
-    phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
-    phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
-
+    phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
+    phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
+    phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
+    phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
+    phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
     def find_label(label_type):
         def find(data):
-            label = torch.tensor([item == label_type for item in data])
+            label = torch.tensor([item == label_type for item in data], device=device)
             return label
 
         return find
