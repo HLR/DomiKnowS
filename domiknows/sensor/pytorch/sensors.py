@@ -14,6 +14,61 @@ class TorchSensor(Sensor):
     Inherits from:
     - Sensor: The base class for sensors.
     """
+    
+    # Class-level default device (None means use instance-level logic)
+    _default_device = None
+    
+    @classmethod
+    def set_default_device(cls, device):
+        """
+        Set the default device for all TorchSensor instances created after this call.
+        
+        Args:
+            device (str or torch.device): The device to use ('auto', 'cuda', 'cpu', or torch.device object)
+        """
+        if device == 'auto':
+            is_cuda = torch.cuda.is_available()
+            cls._default_device = torch.device("cuda" if is_cuda else "cpu")
+        else:
+            cls._default_device = torch.device(device) if isinstance(device, str) else device
+    
+    @classmethod
+    def get_default_device(cls):
+        """
+        Get the current default device setting.
+        
+        Returns:
+            torch.device or None: The default device, or None if not set
+        """
+        return cls._default_device
+    
+    @classmethod
+    def clear_default_device(cls):
+        """
+        Clear the class-level default device, reverting to instance-level 'auto' behavior.
+        """
+        cls._default_device = None
+    
+    @staticmethod
+    def _resolve_device(device):
+        """
+        Helper method for subclasses that override __init__.
+        Resolves device string to torch.device following class default logic.
+        
+        Args:
+            device (str or torch.device): Device specification
+            
+        Returns:
+            torch.device: Resolved device
+        """
+        if device != 'auto':
+            return torch.device(device) if isinstance(device, str) else device
+        elif TorchSensor._default_device is not None:
+            return TorchSensor._default_device
+        else:
+            is_cuda = torch.cuda.is_available()
+            return torch.device("cuda" if is_cuda else "cpu")
+    
     def __init__(self, *pres, edges=None, label=False, device='auto'):
         """
         Initializes the TorchSensor with the provided parameters.
@@ -22,7 +77,9 @@ class TorchSensor(Sensor):
         - *pres: Variable-length argument list of predecessors.
         - edges (optional): Edges associated with this sensor.
         - label (bool, optional): Flag to indicate if this sensor is a label. Defaults to False.
-        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. Defaults to 'auto'.
+        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. 
+          Defaults to 'auto'. If a class-level default device is set via set_default_device(), it will be 
+          used when device='auto'.
         """
         super().__init__()
         if not edges:
@@ -32,14 +89,9 @@ class TorchSensor(Sensor):
         self.inputs = []
         self.edges = edges
         self.label = label
-        if device == 'auto':
-            is_cuda = torch.cuda.is_available()
-            if is_cuda:
-                self.device = torch.device("cuda")
-            else:
-                self.device = torch.device("cpu")
-        else:
-            self.device = device
+        
+        # Resolve device using helper method
+        self.device = self._resolve_device(device)
 
     def __call__(
         self,

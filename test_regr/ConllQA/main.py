@@ -13,7 +13,7 @@ from domiknows.program.lossprogram import PrimalDualProgram, InferenceProgram
 from domiknows.program.model.pytorch import SolverModel, SolverModelDictLoss
 from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, \
-    FunctionalReaderSensor, cache, TorchCache
+    FunctionalReaderSensor, TorchSensor, cache, TorchCache
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, \
     CompositionCandidateReaderSensor
@@ -75,20 +75,21 @@ def find_data_file(filename, train_portion=None):
 
 
 class Tokenizer():
-    def __init__(self) -> None:
+    def __init__(self, device='cpu') -> None:
         self.tokenizer = BertTokenizerFast.from_pretrained(TRANSFORMER_MODEL)
+        self.device = device
 
     def __call__(self, text):
         if isinstance(text, str):
             text = [text]
         tokens = self.tokenizer(text, padding=True, return_tensors='pt', return_offsets_mapping=True)
 
-        ids = tokens['input_ids']
-        mask = tokens['attention_mask']
-        offset = tokens['offset_mapping']
+        ids = tokens['input_ids'].to(self.device)
+        mask = tokens['attention_mask'].to(self.device)
+        offset = tokens['offset_mapping'].to(self.device)
 
         idx = mask.nonzero()[:, 0].unsqueeze(-1)
-        mapping = torch.zeros(idx.shape[0], idx.max() + 1)
+        mapping = torch.zeros(idx.shape[0], idx.max() + 1, device=self.device)
         mapping.scatter_(1, idx, 1)
 
         mask = mask.bool()
@@ -99,17 +100,17 @@ class Tokenizer():
 
 
 class BERT(torch.nn.Module):
-    def __init__(self, device='auto'):
+    def __init__(self, device='cpu'):
         super().__init__()
         self.module = BertModel.from_pretrained(TRANSFORMER_MODEL)
-        if device != 'auto' and device != 'cpu':
-            self.module = self.module.to(device)
+        self.device = device
+        self.module.to(self.device)
         # to freeze BERT, uncomment the following
         for param in self.module.base_model.parameters():
             param.requires_grad = False
 
     def forward(self, input):
-        input = input.unsqueeze(0)
+        input = input.unsqueeze(0).to(self.device)
         _out = self.module(input)
 
         out, *_ = _out
@@ -123,12 +124,10 @@ class BERT(torch.nn.Module):
 
 
 class Classifier(torch.nn.Sequential):
-    def __init__(self, in_features, device='auto'):
+    def __init__(self, in_features, device='cpu') -> None:
         linear = torch.nn.Linear(in_features, 2)
-        if device != 'auto' and device != 'cpu':
-            linear = linear.to(device)
         super().__init__(linear)
-
+        self.to(device)
 
 def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
@@ -138,23 +137,26 @@ def program_declaration(train, args, device='auto'):
         rel_sentence_contains_phrase
 
     graph.detach()
-
-    phrase['text'] = ReaderSensor(keyword='tokens', device=device)
+    
+    # Set device for all Sensors
+    TorchSensor.set_default_device(device)
+    
+    phrase['text'] = ReaderSensor(keyword='tokens')
 
     def word2vec(text):
         texts = list(map(lambda x: ' '.join(x.split('/')), text))
         tokens_list = list(nlp.pipe(texts))
-        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device=device)
+        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device = device)
 
-    phrase['w2v'] = FunctionalSensor('text', forward=word2vec, device=device)
+    phrase['w2v'] = FunctionalSensor('text', forward=word2vec)
 
     def merge_phrase(phrase_text):
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)), device=device)
 
-    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase, device=device)
+    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer(), device=device)
-    word['bert'] = ModuleSensor('ids', module=BERT(), device=device)
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
+    word['bert'] = ModuleSensor('ids', module=BERT())
 
     def match_phrase(phrase, word_offset):
         def overlap(a_s, a_e, b_s, b_e):
@@ -178,19 +180,20 @@ def program_declaration(train, args, device='auto'):
 
     phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'],
                                                            relation=rel_phrase_contains_word.reversed,
-                                                           forward=match_phrase, device=device)
+                                                           forward=match_phrase)
 
     def phrase_bert(bert):
         return bert
 
-    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert, device=device)
-    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1), device=device)
+    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
+    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1, device=device))
 
-    phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
-    phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
-    phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
-    phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
-    phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM).to(device), device=device)
+    phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+    phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+    phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+    phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+    phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+
     def find_label(label_type):
         def find(data):
             label = torch.tensor([item == label_type for item in data], device=device)
