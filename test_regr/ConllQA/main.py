@@ -146,7 +146,7 @@ def program_declaration(train, args, device='auto'):
     def word2vec(text):
         texts = list(map(lambda x: ' '.join(x.split('/')), text))
         tokens_list = list(nlp.pipe(texts))
-        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device = device)
+        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device=device)
 
     phrase['w2v'] = FunctionalSensor('text', forward=word2vec)
 
@@ -155,8 +155,13 @@ def program_declaration(train, args, device='auto'):
 
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
-    word['bert'] = ModuleSensor('ids', module=BERT())
+    # Create Tokenizer with device parameter
+    tokenizer = Tokenizer(device=device)
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=tokenizer)
+    
+    # Create BERT with device parameter
+    bert_model = BERT(device=device)
+    word['bert'] = ModuleSensor('ids', module=bert_model)
 
     def match_phrase(phrase, word_offset):
         def overlap(a_s, a_e, b_s, b_e):
@@ -186,7 +191,11 @@ def program_declaration(train, args, device='auto'):
         return bert
 
     phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
-    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1, device=device))
+    
+    def concat_features(bert, w2v):
+        return torch.cat((bert, w2v), dim=-1)
+    
+    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=concat_features)
 
     phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
@@ -200,6 +209,13 @@ def program_declaration(train, args, device='auto'):
             return label
 
         return find
+
+    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+
+    program = InferenceProgram(graph, SolverModel,
+                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
+                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
+    return program, train_dataset
 
     # Normal Label
     # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
@@ -252,12 +268,7 @@ def program_declaration(train, args, device='auto'):
     # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
 
-    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
-
-    program = InferenceProgram(graph, SolverModel,
-                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
-                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
-    return program, train_dataset
+    
 
 
 def parse_arguments():
