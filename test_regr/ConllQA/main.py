@@ -110,7 +110,11 @@ class BERT(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, input):
-        input = input.unsqueeze(0).to(self.device)
+        # Ensure input is on the correct device
+        if input.device != self.device:
+            input = input.to(self.device)
+        
+        input = input.unsqueeze(0)
         _out = self.module(input)
 
         out, *_ = _out
@@ -121,6 +125,11 @@ class BERT(torch.nn.Module):
         assert out.shape[0] == 1
         out = out.squeeze(0)
         return out
+    
+    def to(self, device):
+        """Override to method to update self.device"""
+        self.device = device
+        return super().to(device)
 
 
 class Classifier(torch.nn.Sequential):
