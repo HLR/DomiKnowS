@@ -78,3 +78,10 @@ with Graph('global') as graph:
         existsL(firestationCity)  # Must have at least one firestation    
     )
     
+    # Example 5: sumL with equalCountsL and usage of explicit constant
+    # The total number of emergency services and grocery shops combined 
+    # must equal 0 - the number of cities
+    equalCountsL(
+        sumL(emergencyService, groceryShop),  # Total emergency + grocery
+        9  # Must equal number 9 which represent number of cities
+    )
