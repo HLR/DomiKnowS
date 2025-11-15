@@ -212,17 +212,19 @@ The constraints are collected from three sources:
 - **graph declaration** - definitions in the graph (the relationships declared in the graph, e.g., parent-child relations, etc.)
 - **ontology (OWL file)** - alternative source of knowledge, provided as a URL to the OWL file in the ontology graph.
 
-### Logical Constraints (LC)
+# Logical Constraints (LC)
 
-The basic elements of a logical constraint are its **predicates**. A predicate is constructed using the name of a concept or a relation from the declared graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether the given concept or relation positively classifies a candidate.  
+The basic elements of a logical constraint are its **predicates**. A predicate is constructed using the name of a concept or a relation from the declared graph, and it includes the name of a variable. This variable name is utilized to identify the set of entities pertinent to the current predicate. In DomiKnows, these entities are referred to as **candidates**. The purpose of a predicate is to evaluate whether a candidate is positively classified by the given concept or relation.
 
-If the variable is not explicitly specified in the predicate, then a default variable name will be used. This is typically used when the variable is not referenced in the other parts of the logical constraint.
+If the variable is not explicitly specified in the predicate, then a default variable name will be used. This is usually used when the variable is not referred in the other parts of the logical constraint.
 
-As in First Order Logic, we have to define the interpretation of a variable in the predicate. An interpretation (or model) of a first-order formula specifies what each predicate means, and the entities that can instantiate the variables. These entities form the domain of discourse or universe. In DomiKnows, the domain of discourse is the set of candidates. By default, the variable in the predicate is associated with all candidates from the data. This basic set of variable candidates is identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests that check the values of specified properties of the nodes along the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path. 
+As in First Order Logic we have to define the interpretation of variable in the predicate. An interpretation (or model) of a first-order formula specifies what each predicate means, and the entities that can instantiate the variables. These entities form the domain of discourse or universe. In DomiKnows, the domain of discourse is the set of candidates. By default, the variable in the predicate is associated with all candidates from the data. This basic set of variable candidate is identified by searching the data of the parent 'data node' of the concept or relation used to define the predicate. This default can be modified by specifying the quantifier in the predicate (using 'path'). The quantifier defines the search criteria for selecting the candidates from the data. It employs definitions of paths through the graph to identify the candidates for the predicate. These paths can be augmented with tests checking values of specified properties of the nodes in the path. If multiple paths are defined, then the candidates are selected from the intersection of the candidates from each path.
 
-The BNF definition of DomiKnows logical constraint is available at [DomiKnows Logical Constraint BNF](https://tinyurl.com/DomiKnowsConstraint-BNF). This website allows you to test the logical constraint syntax.
+The BNF definition of DomiKnows logical constraint is available at [DomiKnows Logical Constraint BNF](https://tinyurl.com/DomiKnowsConstraint-BNF). This web site allows to test the logical constraint syntax.
 
-This is a simple example of the logical constraint:
+## Basic Examples
+
+This is a simple example of a logical constraint:
 
 ```Python
 ifL(
@@ -233,12 +235,12 @@ ifL(
     )
   )
 ```
-This example above states that _for every candidate in the present ML example, if a current candidate is classified as `'work_for'`concept, then the candidates found by following the paths from the current candidate to the first and second argument of the `'pair'` relation have to  be positively classified as `'people'` and `'organization'` concepts_.
 
-The example defines variable `x` representing candidates for the 'work_for' predicate. 
-This variable `x` is then used to define candidates for `'people'` and `'organization'` predicates by specifying `path` to them using names of graph edges respectively:`'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
+This example states that _for every candidate in the present ML example if a current candidate is classified as `'work_for'` concept, then the candidates found by following the paths from the current candidate to first and second argument of the `'pair'` relation have to be positively classified as `'people'` and `'organization'` concepts_.
 
-Please notice that `'people'` and `'organization'` predicates do not have their variables specified as they are not referred in other parts of this simple logical constraint.  
+The example defines variable `x` representing candidates for `'work_for'` predicate. This variable `x` is then used to define candidates for `'people'` and `'organization'` predicates by specifying `path` to them using names of graph edges respectively: `'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
+
+Please notice that `'people'` and `'organization'` predicates do not have their variables specified as they are not referred in other parts of this simple logical constraint.
 
 ```Python
 ifL(
@@ -247,12 +249,12 @@ ifL(
     active = True
   )
 ```
-Another example above states that _for every candidate in the present ML example, if a current candidate is classified as `'people'` concept, then not more then one candidate found by following the path from the current candidate to first argument of the `'pair'` relation will be positively classified as `'live_in'` concept_.
 
-The logical constraint defines variable `p` representing candidates for the `people` predicate. 
-This variable is then used to define candidates for the `live_in` predicate by specifying `path` to the candidates using names of the graph edge 'rel_pair_phrase1'. This edge is decorated with the `reversed` keyword to follow the edge in the reversed direction from the `people` concept to the corresponding `live_in` relation candidates.
+Another example states that _for every candidate in the present ML example if a current candidate is classified as `'people'` concept, then not more than one candidate found by following the path from the current candidate to first argument of the `'pair'` relation will be positively classified as `'live_in'` concept_.
 
-Additionally, this constraint shows a logical constraint, an optional attribute `active`, which allows for activating or deactivating this constraint.
+The logical constraint defines variable `p` representing candidates for `'people'` predicate. This variable is then used to define candidates for `'live_in'` predicate by specifying `path` to the candidates using names of graph edge `'rel_pair_phrase1'`. This edge is decorated with `reversed` keyword to follow the edge in reversed direction from `people` concept to corresponding `live_in` relation candidates.
+
+Additionally this constraint shows logical constraint optional attribute `active` which allows to activate or deactivate this constraint.
 
 ```Python
 ifL(
@@ -261,65 +263,271 @@ ifL(
     p=90
   )
 ```
-The above example states that _for every candidate in the present ML example, if a current candidate is classified as `'city'` concept, then not more then three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_.
 
-This logical constraint shows the usage of another optional logical constraint attribute `p`, which specifies, with the value from 0 to 100, the certainty of validity of the constraint.   
+The above example states that _for every candidate in the present ML example if a current candidate is classified as `'city'` concept, then not more than three candidates found by following the path from the current candidate to first argument of the `'neighbor'` relation will be positively classified as `'firestationCity'` concept_.
+
+This logical constraint shows usage of another optional logical constraint attribute `p` which specifies with the value from 0 to 100 the certainty of validity of the constraint.
+
+## Logical Operations
 
 The full list of DomiKnows functions implementing **logical operations**:
-	- `notL()`,
-	- `andL()`,
-	- `orL()`,
-	- `nandL()`,
-	- `ifL()`,
-	- `norL()`,
-	- `xorL()`,
-	- `epqL()` (equal p q).
 
-Auxiliary logical constraint methods:  
-    - `eqL()` -  used in the path definition to filter based on the specified attribute, e.g.: 
-      _eqL(cityLink, 'neighbor', {True}) - instances of cityLink with attribute neighbor in the set containing only the single value True,  
-    - `fixedL()`, used to fix selected candidates to selected classification, e.g.:  
-       _fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True}))) - candidates for empty_entry_label which have attribute fixed equal True should have their classification reset to the value of its attribute label. Candidates who do not have an attribute fixed to True should not have their classification affected.
+| Function | Mathematical Definition | Description |
+|----------|------------------------|-------------|
+| `notL(P)` | $\neg P$ | Logical negation |
+| `andL(P₁, P₂, ..., Pₙ)` | $P_1 \land P_2 \land \cdots \land P_n$ | Logical conjunction |
+| `orL(P₁, P₂, ..., Pₙ)` | $P_1 \lor P_2 \lor \cdots \lor P_n$ | Logical disjunction |
+| `nandL(P₁, P₂, ..., Pₙ)` | $\neg(P_1 \land P_2 \land \cdots \land P_n)$ | Negated conjunction |
+| `ifL(P, Q)` | $P \rightarrow Q$ | Implication |
+| `norL(P₁, P₂, ..., Pₙ)` | $\neg(P_1 \lor P_2 \lor \cdots \lor P_n)$ | Negated disjunction |
+| `xorL(P₁, P₂)` | $P_1 \oplus P_2$ | Exclusive or |
+| `eqL(P, Q)` | $P \leftrightarrow Q$ | Equivalence (biconditional) |
 
-##### Counting methods
+## Auxiliary Methods
 
-DomiKnows also provides counting methods as an extension of logical connectives. Each counting method contains a list of predicates or nested logical constraints, and optionally, several required predicates that need to be satisfied. If the number isn't specified as the last argument in the counting method, then the default value of 1 is used. There are two flavors of counting methods: one counts over candidates in the current context of constraint evaluation, and the other counts the domain of discourse, which is the present ML example. The latter type has an 'A' suffix in its name, indicating accumulation. Four types of counting methods are implemented: **exists, exact, atLeast,** and **atMost**.
+Auxiliary logical constraint methods:
+- `eqL()` - used in the path definition to filter based on the specified attribute, e.g.:
+  - `eqL(cityLink, 'neighbor', {True})` - instances of cityLink with attribute neighbor in the set containing only single value True
+- `fixedL()` - used to fix selected candidates to selected classification, e.g.:
+  - `fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})))` - candidates for empty_entry_label which have attribute fixed equal True should have their classification reset to the value of its attribute label. The candidates which do not have attribute fixed equal True should have their classification be not affected.
 
-Examples of counting methods usage in the logical constraint:  
-* _existsAL(firestationCity)_ -   
-    In the current ML example, there exists a candidate with the classification 'firestationCity'.  
-* _existsAL(firestationCity, policeStationCity)_ -   
-    In the present ML example, there exists a candidate with classification firestationCity or policeStationCity.  
-* _exactL(firestationCity, 2)_ -  
-    In the present ML example, there are exactly two candidates with classification firestationCity,   
-* _atLeastL(firestationCity, 4)_ -  
-    In the present ML example, there are at least four candidates with classification firestationCity,  
-* _atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)_ -  
-    For every candidate in the present ML example, each city has no more than four candidates that reach through the path cityLink with attribute *neighbors* equal to True, which are classified as firestationCity.  
+## Counting Methods
 
-***Counting methods also possible to accept multiple concepts*** as shown in example of _existsAL(firestationCity, policeStationCity)_. For other counting method, the example of calling counting with multiple concepts are provided below
-* _atLeastL(firestationCity, policeStationCity, 5)_ -   
-    In the present ML example, there are at least five candidate with classification firestationCity or policeStationCity.  
-* _atMostL(firestationCity, policeStationCity, 5)_ -  
-    In the present ML example, there are at most five candidates with classification firestationCity or policeStationCity,
+DomiKnows provides counting methods as an extension of logical connectives. Each counting method contains a list of predicates or nested logical constraints, and optionally, a number of required predicates that need to be satisfied. If the number isn't specified as the last argument in the counting method, then the default value of 1 is used. There are two flavors of counting methods: one counts over candidates in the current context of constraint's evaluation, and the other counts the domain of discourse, which is the present ML example. The latter type has an 'A' suffix in its name, indicating accumulation.
 
+### Basic Counting Constraints
 
+| Function | Mathematical Definition | Description |
+|----------|------------------------|-------------|
+| `existsL(P₁, ..., Pₙ)` | $\exists x: (P_1(x) \lor \cdots \lor P_n(x))$ | At least one predicate is satisfied in current context |
+| `existsAL(P₁, ..., Pₙ)` | $\exists x \in D: (P_1(x) \lor \cdots \lor P_n(x))$ | At least one predicate is satisfied in domain D |
+| `exactL(P₁, ..., Pₙ, k)` | $\sum_{i=1}^{n} \mathbb{1}[P_i(x)] = k$ | Exactly k predicates are satisfied |
+| `exactAL(P₁, ..., Pₙ, k)` | $\sum_{x \in D} \sum_{i=1}^{n} \mathbb{1}[P_i(x)] = k$ | Exactly k predicates satisfied across domain |
+| `atLeastL(P₁, ..., Pₙ, k)` | $\sum_{i=1}^{n} \mathbb{1}[P_i(x)] \geq k$ | At least k predicates are satisfied |
+| `atLeastAL(P₁, ..., Pₙ, k)` | $\sum_{x \in D} \sum_{i=1}^{n} \mathbb{1}[P_i(x)] \geq k$ | At least k predicates satisfied across domain |
+| `atMostL(P₁, ..., Pₙ, k)` | $\sum_{i=1}^{n} \mathbb{1}[P_i(x)] \leq k$ | At most k predicates are satisfied |
+| `atMostAL(P₁, ..., Pₙ, k)` | $\sum_{x \in D} \sum_{i=1}^{n} \mathbb{1}[P_i(x)] \leq k$ | At most k predicates satisfied across domain |
 
-#### Candidate Selection
+Where $\mathbb{1}[P(x)]$ is the indicator function: $\mathbb{1}[P(x)] = \begin{cases} 1 & \text{if } P(x) \text{ is true} \\ 0 & \text{otherwise} \end{cases}$
 
-The candidates for each predicate in the logical constraint are selected independently from the current ML example. By default, all candidates are chosen. However, this default can be modified by specifying a quantifier within the predicate.
+Examples of counting methods usage in logical constraints:
 
-When defining the logical constraint, predicates typically do not use a quantifier, or the predicate's quantifier refers to the variable that represents the candidates for the previous predicates in the current logical constraint. In this case, there will be an equal number of candidates for each predicate in the logical constraint. This is typically the case with logical constraints.
+- `existsAL(firestationCity)` - $\exists x \in D: \text{firestationCity}(x)$ - in the present ML example exists candidate with classification firestationCity
+- `existsAL(firestationCity, policeStationCity)` - $\exists x \in D: (\text{firestationCity}(x) \lor \text{policeStationCity}(x))$ - exists candidate with either classification
+- `exactL(firestationCity, 2)` - $|\{x : \text{firestationCity}(x)\}| = 2$ - exactly 2 candidates with classification firestationCity
+- `atLeastL(firestationCity, 4)` - $|\{x : \text{firestationCity}(x)\}| \geq 4$ - at least 4 candidates with classification firestationCity
+- `atMostL(ifL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)` - for every city, at most 4 connected firestations
 
-However, if the predicates in the logical constraint employ disjoint quantifiers to select their candidates, the selected sets of candidates for each predicate can be different. This presents a problem when evaluating the logical constraint, as it is unclear how to match candidates between predicates. To solve this problem, DomiKnows allows the definition of a mechanism for selecting candidates for each predicate in the logical constraint. This mechanism is called **candidate selection**. This is achieved by defining a new class that inherits from _CandidateSelection_ and overrides the _get_candidates_ method.
+### Comparison Constraints
 
-An example of a new candidate selection class is combinationC, which creates a Cartesian product of candidates for each concept in the selection. Here is the code example:
+DomiKnows provides comparison constraints for establishing numerical relationships between concept counts:
 
-  class combinationC(CandidateSelection):
-      def __call__(self, candidates_list, keys=None):
-        from  itertools import product
+| Function | Mathematical Definition | Description |
+|----------|------------------------|-------------|
+| `lessL(C₁, C₂)` | $\|C_1\| < \|C_2\|$ | Count of C₁ less than C₂ |
+| `lessEqL(C₁, C₂)` | $\|C_1\| \leq \|C_2\|$ | Count of C₁ less than or equal to C₂ |
+| `greaterL(C₁, C₂)` | $\|C_1\| > \|C_2\|$ | Count of C₁ greater than C₂ |
+| `greaterEqL(C₁, C₂)` | $\|C_1\| \geq \|C_2\|$ | Count of C₁ greater than or equal to C₂ |
+| `equalCountsL(C₁, C₂)` | $\|C_1\| = \|C_2\|$ | Count of C₁ equals count of C₂ |
+| `notEqualCountsL(C₁, C₂)` | $\|C_1\| \neq \|C_2\|$ | Count of C₁ not equal to count of C₂ |
+
+Where $|C|$ denotes the count (cardinality) of candidates classified as concept C.
+
+Example usage:
+
+```Python
+# Define hierarchy: main < ancillary firestations
+lessL(mainFirestation, ancillaryFirestation)
+# |mainFirestation| < |ancillaryFirestation|
+
+# Emergency services must be >= firestations
+greaterEqL(emergencyService, firestationCity)
+# |emergencyService| ≥ |firestationCity|
+
+# Grocery shops must be > emergency services
+greaterL(groceryShop, emergencyService)
+# |groceryShop| > |emergencyService|
+
+# Emergency and grocery counts must differ
+notEqualCountsL(emergencyService, groceryShop)
+# |emergencyService| ≠ |groceryShop|
+
+# Firestations must not exceed total cities
+lessEqL(firestationCity, city)
+# |firestationCity| ≤ |city|
+```
+
+### Summation Constraints with sumL
+
+The `sumL()` function enables summing counts of multiple concepts together, which can then be used in comparison or counting constraints.
+
+**Mathematical Definition:**
+
+For concepts $C_1, C_2, \ldots, C_n$:
+
+$$\text{sumL}(C_1, C_2, \ldots, C_n) = \sum_{i=1}^{n} |C_i|$$
+
+Where $|C_i|$ is the count of candidates classified as concept $C_i$.
+
+**Basic syntax:**
+```Python
+sumL(concept1, concept2, concept3, ...)
+```
+
+**Usage examples:**
+
+```Python
+# Example 1: Total must equal exact value
+# |emergencyService| + |groceryShop| = 14
+exactL(
+    sumL(emergencyService, groceryShop),
+    14
+)
+
+# Example 2: Sum in comparison constraint
+# |emergencyService| + |mainFirestation| + |ancillaryFirestation| ≥ 8
+atLeastL(
+    sumL(emergencyService, mainFirestation, ancillaryFirestation),
+    8
+)
+
+# Example 3: Comparing concept to sum
+# |emergencyService| > |mainFirestation| + |ancillaryFirestation|
+greaterL(
+    emergencyService,
+    sumL(mainFirestation, ancillaryFirestation)
+)
+
+# Example 4: Conditional constraint with sum
+# (|emergencyService| + |groceryShop| ≥ 6) → (∃x: firestationCity(x))
+ifL(
+    atLeastL(
+        sumL(emergencyService, groceryShop),
+        6
+    ),
+    existsL(firestationCity)
+)
+
+# Example 5: Equality between sum and constant
+# |emergencyService| + |groceryShop| = 9
+equalCountsL(
+    sumL(emergencyService, groceryShop),
+    9
+)
+```
+
+The `sumL` function can be nested within other counting constraints (`exactL`, `atLeastL`, `atMostL`), comparison constraints (`lessL`, `greaterL`, `equalCountsL`, etc.), and conditional constraints (`ifL`).
+
+## Hierarchical Constraints
+
+Example of using enumerated concepts with hierarchical constraints:
+
+```Python
+# Ensure exactly one category per image
+# ∑ᵢ 𝟙[categoryᵢ(x)] = 1
+exactL(*[category.__getattr__(i[1]) for i in category.attributes])
+
+# Top-down constraint: category implies one of its valid labels
+# categoryᵢ(x) → (label₁(x) ∨ label₂(x) ∨ ... ∨ labelₖ(x))
+for i in category.attributes:
+    lj = [Label.get_concept(l) for l in structure[i[1]]]
+    ifL(category.__getattr__(i[1]), orL(*[Label.__getattr__(ii[1]) for ii in lj]))
+
+# Bottom-up constraint: label implies its parent category
+# (label₁(x) ∨ label₂(x) ∨ ... ∨ labelₖ(x)) → categoryᵢ(x)
+for i in category.attributes:
+    lj = [Label.get_concept(l) for l in structure[i[1]]]
+    ifL(orL(*[Label.__getattr__(ii[1]) for ii in lj]), category.__getattr__(i[1]))
+
+# Mutual exclusion using nandL
+# ¬(labelⱼ(x) ∧ categoryᵢ(x)) for labelⱼ ∉ structure[categoryᵢ]
+for i in category.attributes:
+    lj = [Label.get_concept(l) for l in structure[i[1]]]
+    for j in Label.attributes:
+        if not j in lj:
+            nandL(j, i)
+```
+
+## Transitive and Symmetric Constraints
+
+Example of temporal relationship constraints:
+
+```Python
+# Symmetric constraints
+# Before(e1, e2) ↔ After(e2, e1)
+# after(x) ∧ (∃s: symmetric(s, x)) → before(s.event2)
+ifL(andL(relation_classes.after('x'), existsL(symmetric('s', path=('x', symmetric)))),
+    relation_classes.before(path=('x', symmetric, s_event2)))
+
+# Transitive constraints
+# ∀x,y,z: (before(x,y) ∧ before(y,z)) → before(x,z)
+ifL(andL(relation_classes.before('x'), 
+         existsL(transitive("t", path=('x', transitive))), 
+         relation_classes.before(path=('t', t_event2))),
+    relation_classes.before(path=('t', t_event3)))
+
+# Mixed transitive constraint
+# ∀x,y,z: (before(x,y) ∧ equal(y,z)) → before(x,z)
+ifL(andL(relation_classes.before('x'), 
+         existsL(transitive("t", path=('x', transitive))), 
+         relation_classes.EQUAL(path=('t', t_event2))),
+    relation_classes.before(path=('t', t_event3)))
+```
+
+## Candidate Selection
+
+The candidates for each predicate in the logical constraint are selected independently from the current ML example. By default, all candidates are selected. However, this default can be modified by specifying a quantifier within the predicate (using the `path` parameter).
+
+### Default Candidate Selection
+
+When defining the logical constraint, predicates typically do not use a quantifier, or the predicate's quantifier refers to the variable that defines the candidates for the previous predicates in the current logical constraint. In this case, there will be an equal number of candidates for each predicate in the logical constraint.
+
+**Path-based Filtering:**
+
+The `path` parameter in predicates limits the candidate set by following graph relationships:
+
+```Python
+# People predicate uses only candidates reachable via path from 'x'
+people(path=('x', rel_pair_phrase1))
+```
+
+**Mathematical Definition:**
+
+For a predicate $P$ with path specification, the candidate set is restricted:
+
+$C_P = \{c \in D : \exists x \in C_{prev}, \; (x, c) \in \text{path}\}$
+
+Where:
+- $D$ is the full domain of candidates
+- $C_{prev}$ is the candidate set from the previous variable
+- $\text{path}$ defines the graph traversal relationship
+
+This filtering ensures that candidates are not independent but constrained by the graph structure and relationships.
+
+### Custom Candidate Selection Classes
+
+However, if the predicates in the logical constraint employ disjoint quantifiers to select their candidates, the selected sets of candidates for each predicate can be different. To solve this problem, DomiKnows allows the definition of a mechanism for selecting candidates for each predicate in the logical constraint through **candidate selection** classes.
+
+Example of a custom candidate selection class using Cartesian product:
+
+**Mathematical Definition:**
+
+For candidate sets $S_1, S_2, \ldots, S_n$, the Cartesian product is:
+
+$S_1 \times S_2 \times \cdots \times S_n = \{(s_1, s_2, \ldots, s_n) : s_i \in S_i \text{ for all } i\}$
+
+However, when used with `path` specifications, the resulting set is further restricted:
+
+$C_{result} = \{(s_1, \ldots, s_n) \in S_1 \times \cdots \times S_n : \phi(s_1, \ldots, s_n, \text{path})\}$
+
+Where $\phi$ is a predicate that checks if the tuple satisfies the path constraints.
+
+```Python
+class combinationC(CandidateSelection):
+    def __call__(self, candidates_list, keys=None):
+        from itertools import product
         
-        # Create the Cartesian product of all candidates
+        # Create the Cartesian product: S₁ × S₂ × ... × Sₙ
         cartesian_product = list(product(*candidates_list))
         
         # Extract lists of first elements, second elements, etc.
@@ -329,21 +537,28 @@ An example of a new candidate selection class is combinationC, which creates a C
         result_dict = dict(zip(keys, extracted_elements))
         
         return result_dict
-  
-  This class is already available in the DomiKnows library.
+```
 
-  This class can be used in the logical constraint by specifying the `candidate_selection` parameter, e.g.:
+Usage in logical constraints:
 
-        forAllL(
-            combinationC(step, entity)('i', 'e'), # this is the search space
-            exactL(
-                final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 1
-            ),
-        )
-  
-In this example, the combination of all possible candidates for `step` and `entity` concepts is created and then returned as a dictionary with keys `i and `e` respectively. This dictionary is then used to define the path for the `final_decision` concept. The forAllL constraint is then applied to all possible assignments of `i and `e` to the path of the `final_decision` concept.
+```Python
+# ∀(i,e) ∈ (step × entity) ∩ ValidPaths: exactL(final_decision(x, path((i,e))), 1)
+forAllL(
+    combinationC(step, entity)('i', 'e'),  # Create Cartesian product search space
+    exactL(
+        # Path further restricts the Cartesian product to valid combinations
+        final_decision('x', path=(('i', rel_step.reversed), ('e', rel_entity.reversed))), 
+        1
+    ),
+)
+```
 
-The example shows the generic semantics of the `CandidateSelection` candidate selection class. It takes a list of concepts and returns a dictionary with keys corresponding to the ideas and values corresponding to the candidates for the concepts. The keys are provided as a tuple behind the `CandidateSelection` call.
+In this example, the combination of all possible candidates for `step` and `entity` concepts is created (Cartesian product) and returned as a dictionary with keys `i` and `e` respectively. However, the `path` specification in the `final_decision` predicate further limits this Cartesian product to only those combinations $(i, e)$ where valid graph paths exist through `rel_step` and `rel_entity` relationships. This means:
+
+1. **First stage**: Create full Cartesian product $\text{step} \times \text{entity}$
+2. **Second stage**: Filter via path constraints to get valid subset: $\{(i,e) : \exists x \text{ reachable from both } i \text{ and } e \text{ via specified paths}\}$
+
+The path specification acts as a filter on the Cartesian product, ensuring only structurally valid combinations are considered by the constraint.
 
 ### Graph Constraints
 

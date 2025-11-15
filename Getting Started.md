@@ -28,7 +28,7 @@ Following is an example of a simple classifier:
 
 ```python
 import torch, logging
-from transformers import AdamW
+from torch.optim import AdamW
 
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.program import SolverPOIProgram
