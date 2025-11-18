@@ -211,6 +211,8 @@ class CompositionCandidateReaderSensor(CompositionCandidateSensor, FunctionalRea
     Inherits from:
     - CompositionCandidateSensor
     - FunctionalReaderSensor
+
+    Used to read the compositional candidate from the dataset using inherits functions
     """
     pass
 
@@ -219,6 +221,8 @@ class EdgeReaderSensor(ReaderSensor, EdgeSensor):
     Inherits from:
     - ReaderSensor
     - EdgeSensor
+
+    Used to read the Edge Sensor from the dataset using inherits functions
     """
     pass
 
@@ -227,6 +231,8 @@ class JointEdgeReaderSensor(JointReaderSensor, EdgeSensor):
     Inherits from:
     - JointReaderSensor
     - EdgeSensor
+
+     Used to read the Joint Edge Sensor from the dataset using inherits functions
     """
     pass
 

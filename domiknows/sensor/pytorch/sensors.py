@@ -1045,6 +1045,12 @@ class ModuleSensor(FunctionalSensor):
 
 
 class TorchEdgeSensor(FunctionalSensor):
+    """
+    Torch Edge sensor used to create the link/edge between two concept to create relation
+
+    Inherits from:
+        - FunctionalSensor:  A functional sensor with functionality for forward pass operations making it directly usable.
+    """
     modes = ("forward", "backward", "selection")
 
     def __init__(self, *pres, to, mode="forward", edges=None, forward=None, label=False, device='auto'):
@@ -1057,6 +1063,12 @@ class TorchEdgeSensor(FunctionalSensor):
         self.dst = None
 
     def attached(self, sup):
+        """
+        Attaches the two sensors using provide relation sup
+
+        Args:
+            sup: Relation to attach to source and destination concepts
+        """
         super().attached(sup)
         self.relation = sup.sup
         if self.mode == "forward":
@@ -1083,10 +1095,27 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any],
         concept=None
     ) -> Any:
+        """
+        Updates the concept of the relation by provided data items
+
+        Args:
+         - data_item: data item to be updated the head of relation with
+        """
         concept = concept or self.src
         super().update_pre_context(data_item, concept)
 
     def fetch_value(self, pre, selector=None, concept=None):
+        """
+        Fetch the value of the head of relation using the optional selector
+
+        Args:
+        - pre: data item to be updated the head of relation with
+        - selector: optional selector used to fetch data
+        - concept: optional concept to fetch data if not, concept to fetch data is source of relation
+
+        Return:
+        - the value of the head of relation
+        """
         concept = concept or self.src
         return super().fetch_value(pre, selector, concept)
 
