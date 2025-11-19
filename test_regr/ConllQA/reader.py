@@ -23,14 +23,37 @@ ENTITIES_NAME = {
     "Loc": "location"
 }
 
+RELATIONS_NAME = {
+    'Located_In': 'located_in',
+    'Work_For': 'work_for',
+    'OrgBased_In': 'orgbase_on',
+    'Live_In': 'live_in',
+    'Kill': 'kill'
+}
 
 def create_query(question, question_type="YN"):
-    
-    asked_entities = ",".join([ENTITIES_NAME[entity] for entity in question["entity_asking"]])
+
+    # Prepare the entities to ask
+    if question_type == "Counting-Entity-Relation":
+        asked_entities = ""
+        all_obj = []
+        define_character = ord("a")
+        for entity_relation in question["entity_asking"]:
+            entity1, rel1, entity2 = entity_relation.split("-")
+            entity1 = ENTITIES_NAME[entity1]
+            entity2 = ENTITIES_NAME[entity2]
+            rel1 = RELATIONS_NAME[rel1]
+            object_name = f"andL({entity1}('{chr(define_character)}'), {rel1}('{chr(define_character+1)}', path=('{chr(define_character)}', rel_pair_phrase1.reversed)), {entity2}('{chr(define_character+2)}', path=('{chr(define_character+1)}', rel_pair_phrase2)))"
+            define_character += 3
+            all_obj.append(object_name)
+        asked_entities += ",".join(all_obj)
+    else:
+        asked_entities = ",".join([ENTITIES_NAME[entity] for entity in question["entity_asking"]])
+
     asked_type = question["count_ask"]
     
     # For Counting questions, the label is the actual count number
-    if question_type == "Counting":
+    if question_type == "Counting" or question_type == "Counting-Entity-Relation":
         asked_number = question["label"]  # The label IS the number for counting
         label = [asked_number]  # Return the count as label
     # For YN questions
@@ -39,7 +62,8 @@ def create_query(question, question_type="YN"):
         label = [int(question["label"] == "YES")]
     else:
         raise Exception("Only Support YN and Counting Question Currently")
-    
+
+
     str_query = f"{ASKING_TYPE[asked_type]}({asked_entities}, {asked_number})"
     return str_query, label, asked_number
 
@@ -50,6 +74,8 @@ def conll4_reader(data_path, dataset_portion):
     
     # Determine question type from portion name
     question_type = "Counting" if "Counting" in dataset_portion else "YN"
+    if "conllQA2" in data_path:
+        question_type = "Counting-Entity-Relation"
     
     # Check if the file is an extracted single-portion file
     # Extracted files have a single key that matches the portion name
@@ -81,7 +107,6 @@ def conll4_reader(data_path, dataset_portion):
                 index = entity['end']
                 label.append(entity['type'])
                 tokens.append("/".join(data['tokens'][entity['start']: entity['end']]))
-
             str_query, label_query, asked_number = create_query(data["qa_questions"][0], question_type)
             if str_query == "":
                 continue

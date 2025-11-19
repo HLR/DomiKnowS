@@ -234,38 +234,27 @@ def program_declaration(train, args, device='auto'):
     # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
     # Below Code is for relation
-    # def filter_pairs(phrase_text, arg1, arg2, data):
-    #     for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
-    #         if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
-    #             return True
-    #     return False
-    #
-    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
-    #     phrase['text'],
-    #     relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-    #     keyword='relation',
-    #     forward=filter_pairs)
-    # pair['emb'] = FunctionalSensor(
-    #     rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
-    #     forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
-    #
-    # pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    # pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    # pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    # pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    # pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    #
-    # def find_relation(relation_type):
-    #     def find(arg1m, arg2m, data):
-    #         label = torch.zeros(arg1m.shape[0], dtype=torch.bool)
-    #         for rel, (arg1, *_), (arg2, *_) in data:
-    #             if rel == relation_type:
-    #                 i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
-    #                 label[i] = True
-    #         return label  # torch.stack((~label, label), dim=1)
-    #
-    #     return find
-    #
+    def filter_pairs(phrase_text, arg1, arg2, data):
+        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
+            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+                return True
+        return False
+
+    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
+        phrase['text'],
+        relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+        keyword='relation',
+        forward=filter_pairs)
+    pair['emb'] = FunctionalSensor(
+        rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
+        forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
+
+    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+
     # pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                         keyword='relation', forward=find_relation('Work_For'), label=True)
     # pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
@@ -285,8 +274,10 @@ def parse_arguments():
     parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
+    parser.add_argument("--load_previous", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
     parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
+    parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file (can be relative or absolute)")
@@ -310,16 +301,20 @@ def main(args):
 
     program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
 
+    suffix = "_curriculum_learning" if args.load_previous else ""
     if not args.evaluate:
+        if args.load_previous:
+            program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
         program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
                       batch_size=1, print_loss=False)
+        program.save(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
     else:
-        program.load(f"training_{args.epochs}_lr_{args.lr}.pth")
+        program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
     train_acc = program.evaluate_condition(dataset)
     portion = "Training" if not args.evaluate else "Testing"
-    print(f"training_{args.epochs}_lr_{args.lr}.pth", file=output_f)
+    print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
     print("#" * 40, file=output_f)
 
