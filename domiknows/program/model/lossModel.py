@@ -18,6 +18,11 @@ except ImportError:
     MONITORING_AVAILABLE = False
 
 class LossModel(torch.nn.Module):
+    """
+    Base model for training from constraint loss
+    
+    Implements the Primal Dual algorithm for constraint loss calculation.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
@@ -119,7 +124,8 @@ class LossModel(torch.nn.Module):
 
     def get_lmbd(self, key):
         """
-        The function `get_lmbd` returns a clamped value from a dictionary based on a given key.
+        The function `get_lmbd` returns a clamped lambda parameter tensor
+        from a dictionary based on a given key.
         
         :param key: The key parameter is used to access a specific value in the lmbd dictionary
         :return: the value of `self.lmbd[self.lmbd_index[key]]` after clamping it to a maximum value of
@@ -128,6 +134,13 @@ class LossModel(torch.nn.Module):
         return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
 
     def forward(self, builder, build=None):
+        """
+        Calculates the constraint loss based on the soft-logic translation
+        and the lambda parmeters.
+
+        :param builder: DataNode builder instance.
+        :returns: tuple of the constraint loss, a DataNode instance, and the DataNodeBuilder instance.
+        """
         self.lossModelLogger.info("=== LossModel Forward Operation Started ===")
         self.lossModelLogger.info(f"Parameters: build={build}, sample={self.sample}, sampleSize={self.sampleSize}")
         self.lossModelLogger.info(f"T-norm: {self.tnorm}, counting_tnorm: {self.counting_tnorm}")
@@ -184,6 +197,12 @@ class LossModel(torch.nn.Module):
 # The `PrimalDualModel` class is a subclass of `LossModel` that implements a primal-dual optimization
 # algorithm.
 class PrimalDualModel(LossModel):
+    """
+    Class used to train from the constraint loss, calculated using the Primal Dual method.
+
+    Algorithm for loss calculation (i.e., `.forward(...)`) is inherited from the parent
+    LossModel class.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, tnorm='P',counting_tnorm=None, device='auto'):
@@ -230,6 +249,9 @@ class PrimalDualModel(LossModel):
             self.primalDualLogger.info("=== PrimalDualModel Operations Logger Initialized ===")
 
 class InferenceModel(LossModel):
+    """
+    Class used to train from the program execution loss.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
@@ -237,6 +259,29 @@ class InferenceModel(LossModel):
                  loss=torch.nn.BCELoss,
                  counting_tnorm=None,
                  sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+        """
+        Initializes an instance of InferenceModel.
+
+        :param graph: The initialized graph either containing the logical expressions to be executed
+            and/or called with `.compile_logic` to use the logical expressions in the dataset.
+        :param tnorm: Sets the method used to perform the soft-logic translation of the logical expressions.
+            Defaults to 'P' (Product).
+        :param loss: Loss function to use for binary program outputs.
+        :counting_tnorm: Sets the method used to perform the soft-logic translation of the counting logical
+            expressions. If set to None, uses the same method as `tnorm`. Defaults to None.
+        :param sample: The `sample` parameter is a boolean flag that determines whether to use sampling
+        during training. If set to `True`, the model will use sampling to estimate the loss function. If
+        set to `False`, the model will not use sampling and will use the exact loss function, defaults
+        to False (optional)
+        :param sampleSize: The `sampleSize` parameter determines the size of the sample used for
+        training. It specifies the number of samples that will be randomly selected from the dataset for
+        each training iteration, defaults to 0 (optional)
+        :param sampleGlobalLoss: The parameter `sampleGlobalLoss` is a boolean flag that determines
+        whether to sample the global loss during training. If `sampleGlobalLoss` is set to `True`, the
+        global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
+        :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
+        be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        """
 
         # The concept where all the labels for the constraints are stored as properties
         self.constraint_concept = graph.get_constraint_concept()
@@ -274,6 +319,19 @@ class InferenceModel(LossModel):
             self.inferenceLogger.info("=== InferenceModel Operations Logger Initialized ===")
 
     def forward(self, builder, build=None):
+        """
+        Performs a forward pass using a DataNodeBuilder.
+
+        Loss is calculated using the predicted program execution output and the ground-truth value
+        of the program execution output (read from the DataNode).
+        
+        The losses are summed over each program (specifically, the head of each logical expression).
+        Separate loss functions are used for binary program outputs versus counting outputs.
+
+        :param builder: Instance of DataNodeBuilder.
+        :returns: tuple of the loss (from the program execution), the DataNode instance,
+            and the DataNodeBuilder instance.
+        """
         self.inferenceLogger.info("=== InferenceModel Forward Operation Started ===")
         
         if MONITORING_AVAILABLE:
@@ -403,6 +461,9 @@ class InferenceModel(LossModel):
         return loss, datanode, builder
 
 class SampleLossModel(torch.nn.Module):
+    """
+    Class used to train from the constraint loss, calculated using sampling.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 

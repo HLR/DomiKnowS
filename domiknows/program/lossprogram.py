@@ -60,11 +60,27 @@ def gumbel_softmax(logits, temperature=1.0, hard=False, dim=-1):
     return y_soft
 
 class LossProgram(LearningBasedProgram):
+    """
+    Base class that performs training using a combination of the regular model loss
+    (based on the provided Model class) and the constraint model loss (based on the
+    provided CModel class).
+    """
     DEFAULTCMODEL = PrimalDualModel
 
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
+        """
+        Initializes an instance of the LossProgram.
+
+        :param graph: Instance of the initialized DomiKnowS graph.
+        :param Model: Class used to calculate the regular model loss (e.g., SolverModel).
+        :param CModel: Class used to calculate the constraint model loss. If set to None uses
+            the `DEFAULTCMODEL`, which is `PrimalDualModel`.
+        :param beta: Weight given to the constraint model loss.
+        :params kwargs: Keyword arguments are passed to both the parent class and the CModel.
+            (if found in the signature).
+        """
         super().__init__(graph, Model, **kwargs)
         if CModel is None:
             CModel = self.DEFAULTCMODEL
@@ -82,6 +98,11 @@ class LossProgram(LearningBasedProgram):
         self.beta = beta
 
     def to(self, device):
+        """
+        Moves both the model and cmodel parameters to a device.
+
+        :param device: Device to move the parameters to.
+        """
         super().to(device=device)
         if self.device is not None:
             self.model.to(self.device)
@@ -110,6 +131,28 @@ class LossProgram(LearningBasedProgram):
         constraint_only=False,  # NEW: if True, use constraint-only training for main phase
         constraint_loss_scale=1.0,  # NEW: scale factor for constraint loss in constraint-only mode
         **kwargs):
+        """
+        Performs training using the model and constraint loss.
+
+        Optionally performs batched training using gradient accumulation.
+
+        :param training_set: Iterable of data items to train on.
+        :param c_lr: Learning rate for updating parameters with the constraint loss.
+        :param c_warmup_iters: The number of initial steps to perform where only the
+            regular model loss is used to perform updates.
+        :param c_freq_increase: Schedules the rate of parameter updates from constraint loss.
+        :param c_freq_increase_freq: Schedules the rate of parameter updates from constraint loss.
+        :param c_lr_decay: Method for scheduling the learning rate of the constraint loss.
+        :param c_lr_decay_param: Parameter used in the learning rate scheduler.
+        :param batch_size: If set > 1, batches updates using gradient accumulation.
+        :param dataset_size: Used to determine when to update the last batch. If set to None, tries
+            to calculate using len(dataset).
+        :param print_loss: Whether to print the loss on each gradient update.
+        :param warmup_epochs: Number of epochs for constraint-only phase.
+        :param constraint_epochs: Number of epochs for constraint-only phase.
+        :param constraint_only: If True, use constraint-only training for main phase
+        :param constraint_loss_scale: Used in `constraint_only` mode; rescales the constraint loss.
+        """
         
         # if COptim is None:
         #     COptim = Optim
@@ -257,6 +300,34 @@ class LossProgram(LearningBasedProgram):
         training_mode='standard',
         constraint_loss_scale=1.0,
         **kwargs):
+        """
+        Performs training over a single epoch using a combination of the model loss
+        and the constraint model loss.
+
+        Optionally performs batched training using gradient accumulation.
+
+        In `standard` training_mode, updates using the constraint loss are scheduled 
+        based on the `c_*` parameters.
+
+        In `constraint_only` training_mode, updates on each iteration and rescales
+        the constraint loss.
+        
+        :param dataset: Iterable of data items to train on.
+        :param c_lr: Learning rate for updating parameters with the constraint loss.
+        :param c_warmup_iters: The number of initial steps to perform where only the
+            regular model loss is used to perform updates.
+        :param c_freq_increase: Schedules the rate of parameter updates from constraint loss.
+        :param c_freq_increase_freq: Schedules the rate of parameter updates from constraint loss.
+        :param c_lr_decay: Method for scheduling the learning rate of the constraint loss.
+        :param c_lr_decay_param: Parameter used in the learning rate scheduler.
+        :param c_session: Saves the constraint update schedule state from epoch to epoch. Gets updated
+            at the end of the epoch.
+        :param batch_size: If set > 1, batches updates using gradient accumulation.
+        :param dataset_size: Used to determine when to update the last batch. If set to None, tries
+            to calculate using len(dataset).
+        :param training_mode: `standard`, `constraint_only`, or `warmup` (see above).
+        :param constraint_loss_scale: Used in `constraint_only` mode; rescales the constraint loss.
+        """
 
         if batch_size < 1:
             raise ValueError(f'batch_size must be at least 1, but got batch_size={batch_size}')
@@ -735,9 +806,27 @@ class GumbelPrimalDualProgram(PrimalDualProgram):
         return results
 
 class InferenceProgram(LossProgram):
+    """
+    Program for training with program execution.
+
+    During training, logical expressions either specified directly in the graph,
+    or compiled from the dataset are executed using soft-logic. Parameters are
+    then updated based on the soft-logic output and the provided ground-truth value
+    of the logical expression.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, beta=1, **kwargs):
+        """
+        Initializes an InferenceProgram instance.
+
+        :param graph: The initialized graph either containing the logical expressions to be executed
+            and/or called with `.compile_logic` to use the logical expressions in the dataset.
+        :param Model: The class to use for the regular forward pass and
+            supervised training (e.g., `SolverModel`).
+        :param beta: The weight given to the CModel loss (in this case, the loss from the program
+            execution output)
+        """
         super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
 
     def evaluate_condition(self, evaluate_data, device="cpu"):
@@ -745,6 +834,10 @@ class InferenceProgram(LossProgram):
         Evaluate constraints with proper metrics for different constraint types.
         - Boolean constraints (atLeastAL, exactAL, etc.): Binary accuracy
         - Counting constraints (sumL): Mean Absolute Error (MAE)
+
+        :param evaluate_data: Iterable of data items to evaluate the program on.
+        :param device: Device to perform evaluation on. Defaults to cpu.
+        :return: The primary evaluation metric (either the counting error or the binary boolean accuracy).
         """
         from domiknows.graph.logicalConstrain import sumL
         
