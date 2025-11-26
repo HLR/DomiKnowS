@@ -206,32 +206,14 @@ def program_declaration(train, args, device='auto'):
     
     phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=concat_features)
 
-    # TODO: Change this to output Answer
     phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
-
-    def find_label(label_type):
-        def find(data):
-            label = torch.tensor([item == label_type for item in data], device=device)
-            return label
-
-        return find
-
-    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
-
-    # Normal Label
-    # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
-    # phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
-    # phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
-    # phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
-    # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
-
-    # Below Code is for relation
+    
     def filter_pairs(phrase_text, arg1, arg2, data):
-        for rel, rel_arg1, rel_arg2 in data:
+        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
             if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
                 return True
         return False
@@ -239,7 +221,7 @@ def program_declaration(train, args, device='auto'):
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
         phrase['text'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        keyword='relation',
+        keyword='relations',
         forward=filter_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
@@ -250,6 +232,30 @@ def program_declaration(train, args, device='auto'):
     pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
     pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
     pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+
+    def find_label(label_type):
+        def find(data):
+            label = torch.tensor([item == label_type for item in data], device=device)
+            return label
+
+        return find
+
+    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+
+    program = InferenceProgram(graph, SolverModel,
+                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
+                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
+    return program, train_dataset
+
+    # Normal Label
+    # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
+    # phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
+    # phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
+    # phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
+    # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
+
+    # Below Code is for relation
+    
 
     # pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                         keyword='relation', forward=find_relation('Work_For'), label=True)
@@ -262,12 +268,7 @@ def program_declaration(train, args, device='auto'):
     # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
 
-    program = InferenceProgram(graph, SolverModel,
-                               poi=[phrase, sentence, word, people, organization, location,
-                                    pair, work_for, located_in, live_in, orgbase_on, kill,
-                                    graph.constraint],
-                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
-    return program, train_dataset
+    
 
 
 def parse_arguments():
@@ -313,7 +314,7 @@ def main(args):
         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset)
+    train_acc = program.evaluate_condition(dataset, threshold=0.5)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)
