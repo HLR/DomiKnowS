@@ -211,6 +211,27 @@ def program_declaration(train, args, device='auto'):
     phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+    
+    def filter_pairs(phrase_text, arg1, arg2, data):
+        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
+            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+                return True
+        return False
+
+    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
+        phrase['text'],
+        relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+        keyword='relations',
+        forward=filter_pairs)
+    pair['emb'] = FunctionalSensor(
+        rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
+        forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
+
+    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
 
     def find_label(label_type):
         def find(data):
@@ -234,26 +255,7 @@ def program_declaration(train, args, device='auto'):
     # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
     # Below Code is for relation
-    def filter_pairs(phrase_text, arg1, arg2, data):
-        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
-            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
-                return True
-        return False
-
-    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
-        phrase['text'],
-        relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        keyword='relation',
-        forward=filter_pairs)
-    pair['emb'] = FunctionalSensor(
-        rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
-        forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
-
-    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    
 
     # pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                         keyword='relation', forward=find_relation('Work_For'), label=True)
@@ -312,7 +314,7 @@ def main(args):
         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset)
+    train_acc = program.evaluate_condition(dataset, threshold=0.5)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)

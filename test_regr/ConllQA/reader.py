@@ -98,6 +98,7 @@ def conll4_reader(data_path, dataset_portion):
         current_portion = []
         for data in dataset[portion]:
             entities = data['entities']
+            relations = data.get('relations', [])  # Get relations if they exist
 
             index = 0
             label = []
@@ -108,6 +109,28 @@ def conll4_reader(data_path, dataset_portion):
                 index = entity['end']
                 label.append(entity['type'])
                 tokens.append("/".join(data['tokens'][entity['start']: entity['end']]))
+            
+            # Add remaining tokens after last entity
+            if index < len(data['tokens']):
+                label.extend(['O'] * (len(data['tokens']) - index))
+                tokens.extend(data['tokens'][index:])
+            
+            # Process relations if they exist
+            relation_labels = []
+            if relations:
+                for rel in relations:
+                    head_idx = rel['head']
+                    tail_idx = rel['tail']
+                    rel_type = rel['type']
+                    relation_labels.append({
+                        'head': head_idx,
+                        'tail': tail_idx,
+                        'type': rel_type
+                    })
+            
+            if 'qa_questions' not in data or not data["qa_questions"]:
+                continue
+                
             str_query, label_query, asked_number = create_query(data["qa_questions"][0], question_type)
             if str_query == "":
                 continue
@@ -118,6 +141,7 @@ def conll4_reader(data_path, dataset_portion):
             current_portion.append({
                 "tokens": tokens,
                 "label": label,
+                "relations": relation_labels,  # Add relations to output
                 "logic_str": str_query,
                 "logic_label": label_query
             })
