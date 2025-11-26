@@ -26,8 +26,7 @@ from domiknows.graph import CandidateSelection
 from domiknows.utils import getReuseModel
 from domiknows.utils import getDnSkeletonMode
 
-from domiknows.graph.candidates import getCandidates
-
+from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -38,6 +37,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
+        self.constraintConstructor = LogicalConstraintConstructor(self.myLogger)
+
         self.logical_constraints = {}
         for g in graph:
             self.logical_constraints = {**self.logical_constraints, **g.logicalConstrains}
@@ -58,21 +59,23 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.logical_constraints = self.myGraph[0].logicalConstrains ### Can myGraph really be multiple graphs?
         
     def getConcept(self, concept):
-        return concept[0]
+        return self.constraintConstructor.getConcept(concept)
     
     def getConceptName(self, concept):
-        return concept[0].name
+        return self.constraintConstructor.getConceptName(concept)
     
     def conceptIsBinary(self, concept):
-        return concept[2] is None
+        return self.constraintConstructor.conceptIsBinary(concept)
     
     def conceptIsMultiClass(self, concept):
-        return concept[2] is not None
+        return self.constraintConstructor.conceptIsMultiClass(concept)
     
-    # Check if value is NaN or if and has to be skipped
     def valueToBeSkipped(self, x):
-        return math.isnan(x) or math.isinf(x)
-        
+        return self.constraintConstructor.valueToBeSkipped(x)
+    
+    def getDatanodesForConcept(self, rootDn, currentName, conceptToDNSCash=None):
+        return self.constraintConstructor.getDatanodesForConcept(rootDn, currentName, conceptToDNSCash)
+    
     # Get Ground Truth for provided concept
     def __getLabel(self, dn, conceptRelation, fun=None, epsilon = None):
         value = dn.getAttribute(conceptRelation, 'label')
@@ -141,7 +144,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         return xNew
         
-    def getDatanodesForConcept(self, rootDn, currentName, conceptToDNSCash=None):
         if conceptToDNSCash is None or currentName is None:
             conceptToDNSCash = {}
            
@@ -679,7 +681,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
     def addLogicalConstrains(self, m, dn, lcs, p, key = None):        
         if key == None:
-            key = "/ILP/xP" # to get ILP variable from datanodes
+            key = "/ILP/xP"
         
         for lc in lcs:   
             startLC = perf_counter_ns()
@@ -693,7 +695,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue
 
             lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-            result, _ = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
+            
+            # Use the constraint constructor
+            self.constraintConstructor.current_device = self.current_device
+            self.constraintConstructor.myGraph = self.myGraph
+            result, _ = self.constraintConstructor.constructLogicalConstrains(
+                lc, self.myIlpBooleanProcessor, m, dn, p, key=key, headLC=True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -712,574 +719,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Failed to add Logical Constraint %r\n'%(lc))
                 self.myLoggerTime.error('Failed to add Logical Constraint %r'%(lc))
-
-    def isConceptFixed(self, conceptName):
-        for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                if not lc.headLC or not lc.active: # Process only active and head lcs
-                    continue
-                    
-                if type(lc) is not fixedL: # Skip not fixedL lc
-                    continue
                 
-                if not lc.e:
-                    continue
-                
-                if lc.e[0][1] == conceptName:
-                    return True
-            
-        return False
-                
-    def isVariableFixed(self, dn, conceptName, e):
-        fixedAttribute= None
-        fixedValue = None
-        
-        for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                if not lc.headLC or not lc.active: # Process only active and head lcs
-                    continue
-                    
-                if type(lc) is not fixedL: # Skip not fixedL lc
-                    continue
-                
-                if not lc.e:
-                    continue
-                
-                if lc.e[0][1] != conceptName:
-                    continue
-                
-                fixedAttribute = lc.e[1].v[1].e[1]
-                fixedValue = lc.e[1].v[1].e[2]
-                break
-                
-        if fixedAttribute == None or fixedValue == None:
-            return None
-                      
-        # For spec
-        if fixedAttribute not in dn.getAttributes():
-            return None
-        
-        attributeValue = dn.getAttribute(fixedAttribute).item()
-        
-        if attributeValue in fixedValue:
-            pass
-        elif (True in  fixedValue ) and attributeValue == 1:
-            pass
-        elif (False in  fixedValue ) and attributeValue == 0:
-            pass
-        else:
-            return None
-       
-        vDnLabel = self.__getLabel(dn, conceptName).item()
-
-        if vDnLabel == e[2]:
-            return 1
-        else:
-            return 0
-                    
-    def getMLResult(self, dn, xPkey, e, p, loss = False, sample = False):
-        if dn == None:
-            raise Exception("No datanode provided")
-            
-        conceptName = e[0]
-        
-        sampleKey = '<' + conceptName + ">/sample" 
-        if sample and sampleKey not in dn.getAttributes():
-            dn.getAttributes()[sampleKey] = {}
-        
-        if dn.ontologyNode.name == conceptName:
-            if not sample:
-                if "xP" in xPkey:
-                    return 1
-                elif loss:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                    
-                else:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=False)
-                    
-                tOneSqueezed = torch.squeeze(tOne)
-                return tOneSqueezed
-            else:
-                sampleSize = p
-                
-                if sampleSize not in dn.getAttributes()[sampleKey]: 
-                    dn.getAttributes()[sampleKey][sampleSize] = {}
-                    
-                xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
-
-                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device = self.current_device)
-                xP = torch.ones(sampleSize, device = self.current_device)
-                
-                return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
-        
-        if dn.getAttribute(xPkey) == None:
-            if not sample:
-                return None
-            else:   
-                return ([None], (None, [None]))
-        
-        if not loss: # ------- If ILP inference
-            if "xP" in xPkey:
-                vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept
-            elif "local/argmax" in xPkey:
-                vDn = dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concep
-            else:
-                vDn = dn.getAttribute(xPkey)[e[2]] # Get ILP variable for the concept
-                
-            return vDn # ILP variable for ILP inference
-        
-        # ----- Loss calculation
-        
-        isFiexd = self.isVariableFixed(dn, conceptName, e)
-
-        if isFiexd != None:
-            if isFiexd == 1:
-                vDn = torch.tensor(1.0, device=self.current_device, requires_grad=True)
-            else:
-                vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True)
-        else:
-            try:
-                vDn = dn.getAttribute(xPkey)[e[1]] # Get value for the concept 
-            except IndexError: 
-                vDn = None
-    
-        if not sample:
-            return vDn # Return here if not sample
-        
-        # --- Generate sample 
-        if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
-            vDn = vDn.item()  
-             
-        sampleSize = p
-
-        xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
-                
-        usedSampleSize = sampleSize
-        if sampleSize == -1:
-            usedSampleSize = dn.getAttributes()[sampleKey][-1][e[1]].shape[0]
-        if isFiexd != None:  
-            if isFiexd == 1:
-                xP = torch.ones(usedSampleSize, device = self.current_device, requires_grad=True)
-            else:
-                xP = torch.zeros(usedSampleSize, device = self.current_device, requires_grad=True)
-        else:
-            xV = dn.getAttribute(xPkey)
-            xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV.squeeze(0)))
-            xP = xEp[:,e[1]]
-          
-        if sampleSize > -1: 
-            if sampleSize not in dn.getAttributes()[sampleKey]: 
-                dn.getAttributes()[sampleKey][sampleSize] = {}
-                
-            if e[1] not in dn.getAttributes()[sampleKey][sampleSize]:
-                # check if not already generated
-                if vDn == None or vDn != vDn:
-                    dn.getAttributes()[sampleKey][sampleSize][e[1]] = [None]
-                else:
-                    # Create sample for this concept and sample size
-                    dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.bernoulli(xP)
-            
-        return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName)) # Return sample data and probability info
-                      
-    def fixedLSupport(self, _dn, conceptName, vDn, i, m):
-        vDnLabel = self.__getLabel(_dn, conceptName).item()
-
-        if isinstance(vDn, Var):                                 
-            if vDnLabel == -100:
-                vDn.VTag = "None" + vDn.VarName
-            elif vDnLabel == i:
-                vDn.VTag = "True" + vDn.VarName
-            else:
-                vDn.VTag = "False" + vDn.VarName
-                
-            m.update()
-            return vDn
-        elif torch.is_tensor(vDn):
-            if vDnLabel == -100:
-                return None
-            elif vDnLabel == i:
-                ones = torch.ones(vDn.shape[0])
-                return ones
-            else:
-                zeros = torch.zeros(vDn.shape[0])
-                return zeros
-        else:
-            if vDnLabel == -100:
-                return None
-            elif vDnLabel == i:
-                return 1
-            else:
-                return 0
-        
-    def __addLossTovDns(self, loss, vDns):
-        if loss and vDns:
-            vDnsOriginal = vDns
-            vDnsList = [v[0] for v in  vDns]
-            
-            updatedVDns = []
-            try:
-                if len(vDnsList) > 1:
-                    tStack = torch.stack(vDnsList, dim=1)
-                else:
-                    tStack = vDnsList[0]
-                tsqueezed = torch.squeeze(tStack, dim=0)
-
-            except IndexError as ie:
-                tsqueezed = torch.stack(vDnsList, dim=0)
-                pass
-        
-            if not len(tsqueezed.shape):
-                tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                
-            tList = [tsqueezed]
-            updatedVDns.append(tList)
-            
-            return updatedVDns
-        else:
-            return vDns
-    
-    from collections import OrderedDict
-
-    def eliminate_duplicate_columns(self, data_dict, rows_to_consider, data_dict_target):
-        """
-        Eliminates columns that have identical elements across specified rows.
-        
-        Args:
-            data_dict: OrderedDict with row names as keys and lists as values
-            rows_to_consider: List of row names to check for duplicates
-            data_dict_target: OrderedDict with same structure to apply same column elimination
-        
-        Returns:
-            OrderedDict (data_dict_target) with same columns removed
-        """
-        if not rows_to_consider or not data_dict or not data_dict_target:
-            return data_dict_target
-        
-        # Get the length of columns (all rows have same length)
-        first_row = list(data_dict.values())[0]
-        num_columns = len(first_row)
-        
-        # Track which columns to keep
-        columns_to_keep = []
-        
-        for col_idx in range(num_columns):
-            # Get column values for specified rows
-            column_values = []
-            for row_name in rows_to_consider:
-                if row_name in data_dict:
-                    if col_idx >= len(data_dict[row_name]):
-                        continue
-                    column_values.append(data_dict[row_name][col_idx])
-            
-            # Check if there are any duplicate values in this column
-            unique_values = set(str(val) for val in column_values)
-            if len(unique_values) < len(column_values):
-                pass
-            else:
-                columns_to_keep.append(col_idx)
-        
-        # Create new OrderedDict with only non-duplicate columns from target
-        result = OrderedDict()
-        for row_name, row_data in data_dict_target.items():
-            if len(row_data) == 1:
-                try:
-                    # Try tensor indexing first
-                    original_tensor = row_data[0][0]
-                    filtered_tensor = original_tensor[columns_to_keep]
-                    result[row_name] = [[filtered_tensor]]
-                except (TypeError, IndexError):
-                    # Fall back to regular list indexing
-                    result[row_name] = [row_data[i] for i in columns_to_keep]
-            else:
-                # Handle regular list case
-                result[row_name] = [row_data[i] for i in columns_to_keep]
-        
-        return result
-
-    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, lcVariables = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
-        if key == None:
-            key = ""
-            
-        lcRepr = f'{lc.__class__.__name__} {lc.strEs()}' # for debugging
-
-        if lcVariablesDns == None:
-            lcVariablesDns = OrderedDict()
-
-        if lcVariables == None:
-            lcVariables = OrderedDict()
-            
-        usedVariablesNames = set()
-
-        if sample:
-            sampleInfo = OrderedDict()
-            lcVariablesSet = OrderedDict()
-            
-        if vNo == None:
-            vNo = [1, 1]
-        
-        firstV = None
-        integrate = False
-        newVariables = {}
-        for eIndex, e in enumerate(lc.e):
-            if  isinstance(e, V):
-                continue # Already processed in the previous Concept 
-            
-            if isinstance(e, (Concept,  LcElement, tuple)): 
-                # Look one step ahead in the parsed logical constraint and get variables names (if present) after the current concept
-                if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
-                    variable = lc.e[eIndex+1]
-                else:
-                    if isinstance(e, LogicalConstrain):
-                        variable = V(name="_lc" + str(vNo[1]))
-                        vNo[1] += 1
-                    elif isinstance(e, tuple) and isinstance(e[0], CandidateSelection):
-                        e[0].CandidateSelectionVariable = e[1]
-                        e = e[0]
-                        
-                        variable = V(name="_cs" + str(vNo[1]))
-                        vNo[1] += 1
-                    else:
-                        if firstV == None:
-                            variable = V(name="_x" + str(vNo[0]) )
-                            if not isinstance(lc, CandidateSelection):
-                                firstV = variable.name
-                            vNo[0] += 1
-                        else:
-                            variable = V(name="_x" + str(vNo[0]), v = (firstV,))
-                            vNo[0] += 1
-                    
-                if variable.name:
-                    variableName = variable.name
-                else:
-                    variableName = "V" + str(vNo[0])
-                    vNo[0] += 1
-                    
-                if variableName in lcVariables:
-                    newVariableName = "_x" + str(vNo[0])
-                    vNo[0] += 1
-
-                    lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
-                    if None in lcVariablesDns:
-                        pass
-
-                    lcVariables[newVariableName] = lcVariables[variableName]
-                    usedVariablesNames.add(variableName)
-
-                elif isinstance(e, (Concept, tuple)): # -- Concept 
-                    # -- Get dataNodes candidates 
-                    dnsList, referedVariables = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
-                    lcVariablesDns[variableName] = dnsList
-                                
-                    if isinstance(lc, CandidateSelection):
-                        continue
-                    
-                    if len(referedVariables) == 1:
-                        referedVariable = referedVariables.pop()
-                        
-                        # if referedVariable starts with letter p - meaning it it variable of relation
-                        if referedVariable.startswith('p'):
-                            if referedVariable not in newVariables:
-                                newVariables[referedVariable] = set()
-                            newVariables[referedVariable].add(variableName)
-
-                    # -- Get ILP variables from collected DataNodes for the given element of logical constraint
-                    
-                    conceptName = e[0].name
-                    vDns = [] # Stores ILP variables
-                    if sample:
-                        sampleInfoForVariable = []
-                    xPkey = '<' + conceptName + ">" + key
-                    
-                    for dns in dnsList:
-                        _vDns = []
-                        if sample:
-                            _sampleInfoForVariable = []
-                            
-                        for _dn in dns:
-                            if not _dn:
-                                vDn = None
-                                _vDns.append(vDn)
-                                continue
-
-                            if isinstance(e[0], EnumConcept) and e[2] == None: # Multiclass concept
-                                eList = e[0].enum
-                                for i, _ in enumerate(eList):
-                                    eT = (e[0].name, i, i)
-                                    if sample:
-                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                        
-                                        _sampleInfoForVariable.append(vDnSampleInfo)
-                                    else:
-                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                    
-                                    if lc.__str__() == "fixedL":
-                                        vDn = self.fixedLSupport(_dn, conceptName, vDn, i, m)
-                                        
-                                    _vDns.append(vDn)
-                            elif isinstance(e[0], EnumConcept) and e[2] != None: # Multiclass concept label
-                                eT = (e[0].name, e[2], e[2])
-                                
-                                if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)                                    
-                                    _sampleInfoForVariable.append(vDnSampleInfo)
-                                else:
-                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                
-                                if lc.__str__() == "fixedL":
-                                    self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
-                                    
-                                vDn = _vDns.append(vDn)
-                            else: # Binary concept
-                                eT = (conceptName, 1, 0)
-                                if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-
-                                    _sampleInfoForVariable.append(vDnSampleInfo)
-                                else:
-                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                
-                                if lc.__str__() == "fixedL":
-                                    self.fixedLSupport(_dn, conceptName, vDn, 1, m)
-                                        
-                                vDn = _vDns.append(vDn)
-                        
-                        if len(_vDns) == 0:
-                            #continue
-                            pass
-                        
-                        vDns.append(_vDns)
-                        
-                        if sample:
-                            sampleInfoForVariable.append(_sampleInfoForVariable)
-                        
-                    # -- Store ILP variables
-                    
-                    if None in lcVariablesDns:
-                        pass
-                    
-                    if vDns and loss and not sample:
-                        vDnsList = [v[0] for v in vDns]
-                        try:
-                            tStack = torch.stack(vDnsList, dim=0)
-                            tsqueezed = torch.squeeze(tStack, dim=0)
-                            if not len(tsqueezed.shape):
-                                tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                            lcVariables[variableName] = [[tStack]]
-                        except TypeError:
-                            for v in vDns:
-                                if v[0] != None and torch.is_tensor(v[0]):
-                                    v[0] = torch.unsqueeze(v[0], 0)
-                                                                    
-                            lcVariables[variableName] = vDns
-                    else:
-                        lcVariables[variableName] = vDns
-                    
-                    if sample:
-                        sampleInfo[variableName] = sampleInfoForVariable
-                        
-                    usedVariablesNames.add(variableName)
-                
-                if isinstance(e, LcElement):
-
-                    if isinstance(e, CandidateSelection): # -- nested LogicalConstrain - process recursively 
-                        lcVariablesDnsNew = self.constructLogicalConstrains(
-                                                                        e, booleanProcessor, m, dn, p, key = key, 
-                                                                        lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
-                                                                        headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                         
-                        lcVariablesDns = lcVariablesDnsNew
-                        vDns = None
-                        if lcVariablesDns:
-                            length_of_list = len(next(iter(lcVariablesDns.values())))
-
-                            if sample:
-                                vDns = [[torch.ones(p, device=self.current_device, requires_grad=False, dtype=torch.bool)] for _ in range(length_of_list)]
-                            elif loss:
-                                vDns = [[torch.zeros(length_of_list, device=self.current_device, requires_grad=True, dtype=torch.float64)]]
-                                vDns = self.__addLossTovDns(loss, vDns)
-                            else:
-                                vDns = [[1] for _ in range(length_of_list)]
-                                   
-                    if isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
-                        self.myLogger.info('Processing Nested %r - %s'%(e, e.strEs()))
-
-                        if sample:
-                            vDns, sampleInfoLC, lcVariablesLC, lcVariableUpdated = self.constructLogicalConstrains(
-                                                                                e, booleanProcessor, m, dn, p, key = key, 
-                                                                                lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
-                                                                                headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                            sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
-                            
-                            lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
-                            lcVariables = lcVariableUpdated 
-                        else:
-                            vDns, lcVariableUpdated = self.constructLogicalConstrains(
-                                                                    e, booleanProcessor, m, dn, p, key = key, 
-                                                                    lcVariablesDns = lcVariablesDns, lcVariables = lcVariables,
-                                                                    headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                            
-                            vDns = self.__addLossTovDns(loss, vDns)
-                            lcVariables = lcVariableUpdated
-
-                    if vDns == None:
-                        self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
-                        return None
-                        
-                    countValid = sum(1 for sublist in vDns if sublist and any(elem is not None for elem in sublist))
-                    self.myLogger.info('Size of candidate list returned by %s(%s) nested Logical Constraint is %i of which %i is not None'%(e.lcName,e,len(vDns),countValid))
-                    lcVariables[variableName] = vDns   
-                    usedVariablesNames.add(variableName)    
-            # Int - limit 
-            elif isinstance(e, int): 
-                if eIndex == 0:
-                    pass # if this lc using it
-                else:
-                    pass # error!
-            elif isinstance(e, str): 
-                if eIndex == 2:
-                    pass # if this lc using it
-                else:
-                    pass # error!
-            else:
-                self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
-                return None
-
-        for referedVariable in newVariables: # assume relations are irreflexive
-            refVarSet = newVariables[referedVariable]
-            refVarSet.add(referedVariable)  
-            lcVariables = self.eliminate_duplicate_columns(lcVariablesDns, refVarSet, lcVariables)
-
-        # from lcVariables select used Variables in this lc
-        useLcVariables = {k: v for k, v in lcVariables.items() if k in usedVariablesNames}
-
-        if isinstance(lc, CandidateSelection):
-            return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
-        elif sample:
-            lcVariablesSet[lc] = useLcVariables
-            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet, lcVariables
-        elif verify and headLC:
-            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
-        else:
-            if loss:
-                slpitT = False
-                for v in useLcVariables:
-                    if useLcVariables[v] and len(useLcVariables[v]) > 1:
-                        slpitT = True
-                        break
-                    
-                if slpitT:
-                    for v in useLcVariables:
-                        if useLcVariables[v] and len(useLcVariables[v]) > 1:
-                            continue
-                         
-                        lcVSplitted = torch.split(useLcVariables[v][0][0], 1)
-                        useLcVariables[v] = []
-                        
-                        for s in lcVSplitted:
-                            useLcVariables[v].append([s]) 
-                    
-            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
-    
     # ---------------
                 
     # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification  

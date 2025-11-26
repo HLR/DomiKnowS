@@ -67,7 +67,9 @@ class SampleLossCalculator:
                 lcLosses[lcName] = {}
                 current_lcLosses = lcLosses[lcName]
                 
-                lossList, sampleInfo, inputLc, _ = self.solver.constructLogicalConstrains(
+                self.solver.constraintConstructor.current_device = dn.current_device
+                self.solver.constraintConstructor.myGraph = self.solver.myGraph
+                lossList, sampleInfo, inputLc, _ = self.solver.constraintConstructor.constructLogicalConstrains(
                     lc, myBooleanMethods, None, dn, p, key=key, headLC=True, loss=True, sample=True)
                 
                 current_lcLosses['lossList'] = lossList
@@ -370,7 +372,7 @@ class SampleLossCalculator:
                 
                 masterConcepts[currentConceptName]['xkey'] = '<' + currentConceptName + '>/sample'
                  
-                if self.solver.isConceptFixed(currentConceptName):
+                if self.isConceptFixed(currentConceptName):
                     continue
                 
                 for _ in dns:
@@ -426,3 +428,20 @@ class SampleLossCalculator:
                     index += 1
         
         return productSize
+    
+    def isConceptFixed(self, conceptName):
+        for graph in self.myGraph: # Loop through graphs
+            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
+                if not lc.headLC or not lc.active: # Process only active and head lcs
+                    continue
+                    
+                if type(lc) is not fixedL: # Skip not fixedL lc
+                    continue
+                
+                if not lc.e:
+                    continue
+                
+                if lc.e[0][1] == conceptName:
+                    return True
+            
+        return False

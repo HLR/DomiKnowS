@@ -1125,7 +1125,8 @@ class Graph(BaseGraphTree):
             target_namespace = {
                 'domiknows': importlib.import_module('domiknows'),
                 **(self.varContext or {}),
-                **(extra_namespace_values or {})
+                **(extra_namespace_values or {}),
+                'path': lambda *args: args,  # Add path as a helper if needed
             }
             
             if verbose:

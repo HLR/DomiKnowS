@@ -73,7 +73,9 @@ class LogicalConstraintVerifier:
         self.solver.myLogger.info('\n')
         self.solver.myLogger.info('Processing %r - %s' % (lc, lc.strEs()))
         
-        verifyList, lcVariables = self.solver.constructLogicalConstrains(
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        verifyList, lcVariables = self.solver.constraintConstructor.constructLogicalConstrains(
             lc, myBooleanMethods, m, dn, p, key=key, headLC=True, verify=True)
         result['verifyList'] = verifyList
         

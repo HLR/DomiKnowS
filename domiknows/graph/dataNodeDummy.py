@@ -322,8 +322,10 @@ def satisfactionReportOfConstraints(dn):
             lcSatisfaction[lcName] = {}
             lcSatisfactionTest = lcSatisfaction[lcName]
             
+            mySolver.constraintConstructor.current_device = dn.current_device
+            mySolver.constraintConstructor.myGraph = mySolver.myGraph
             lcResult, lcVariables, inputLc, *extra = \
-                mySolver.constructLogicalConstrains(lc, mySolver.myLcLossSampleBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = True)
+                mySolver.constraintConstructor.constructLogicalConstrains(lc, mySolver.myLcLossSampleBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = True)
             lcSatisfactionTest['lcResult'] = lcResult
             lcSatisfactionTest['lcVariables'] = lcVariables
             lcSatisfactionTest['lcs'] = inputLc

@@ -63,7 +63,9 @@ class LossCalculator:
                 
                 current_lcLosses['lc'] = lc
                 
-                lossList = self.solver.constructLogicalConstrains(
+                self.solver.constraintConstructor.current_device = self.solver.current_device
+                self.solver.constraintConstructor.myGraph = self.solver.myGraph
+                lossList  = self.solver.constraintConstructor.constructLogicalConstrains(
                     lc, myBooleanMethods, None, dn, 0, 
                     key=key, headLC=True, loss=True, sample=False)
                 current_lcLosses['lossList'] = lossList

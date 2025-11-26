@@ -261,7 +261,7 @@ def program_declaration(train, args, device='auto'):
     #                                           keyword='relation', forward=find_relation('Located_In'), label=True)
     # pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                        keyword='relation', forward=find_relation('Live_In'), label=True)
-    # pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+    # pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],   
     #                                           keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
@@ -276,12 +276,12 @@ def parse_arguments():
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
-    parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
+    parser.add_argument("--train_portion", type=str, default="entities_with_relation", help="Training subset")
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
-    parser.add_argument("--data_path", type=str, default="conllQA.json", help="Path to data file (can be relative or absolute)")
-    parser.add_argument("--device", type=str, default="auto", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--data_path", type=str, default="C:\\Users\\auszok\\git\\RelationalGraph\\test_regr\\ConllQA\\conllQA2.json", help="Path to data file (can be relative or absolute)")
+    parser.add_argument("--device", type=str, default="cuda", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
     args = parser.parse_args()
 
     return args
