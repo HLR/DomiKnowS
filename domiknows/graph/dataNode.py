@@ -2081,6 +2081,64 @@ class DataNode:
 
         return verifyResult
 
+    def verifySingleConstraint(self, lcName, key="/local/argmax"):
+        """
+        Verify a single logical constraint against model predictions.
+        
+        This method evaluates how well the model's predictions satisfy a specific logical
+        constraint identified by name. It operates on discrete predictions (e.g., argmax 
+        results) rather than probability distributions, providing binary satisfaction metrics.
+        
+        Args:
+            lcName: The name of the logical constraint to verify
+            key: Attribute key for accessing predictions in datanodes.
+                 Default: "/local/argmax" for discrete predicted labels
+            
+        Returns:
+            dict: Verification result for the constraint with structure:
+                {
+                    'verifyList': [[bool, ...], ...],  # Satisfaction per instance
+                    'satisfied': float,                 # Overall satisfaction % (0-100)
+                    'ifVerifyList': [[bool, ...], ...], # (ifL/forAllL only) Filtered list
+                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100)
+                    'elapsedInMsLC': float              # Processing time in milliseconds
+                }
+                
+        Raises:
+            DataNodeError: If the constraint is not found or ILP solver is not initialized.
+        """
+        myilpOntSolver, _ = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
+        myilpOntSolver.current_device = self.current_device
+        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        
+        # Check if full data node is created and create it if not
+        if self.myBuilder is not None:
+            self.myBuilder.createFullDataNode(self)
+
+        if "local" in key:
+            self.inferLocal(keys=[key])
+        elif "ILP" in key:
+            self.infer()
+        else:
+            _DataNode__Logger.error("Not supported key %s for verifySingleConstraint" % (key))
+            raise DataNode.DataNodeError("Not supported key %s for verifySingleConstraint" % (key))
+
+        # Find the constraint by name
+        lc = None
+        for graph in myilpOntSolver.myGraph:
+            if lcName in graph.logicalConstrains:
+                lc = graph.logicalConstrains[lcName]
+                break
+        
+        if lc is None:
+            _DataNode__Logger.error("Constraint %s not found" % (lcName))
+            raise DataNode.DataNodeError("Constraint %s not found" % (lcName))
+        
+        myBooleanMethods = myilpOntSolver.booleanMethodsCalculator
+        myBooleanMethods.current_device = self.current_device
+        
+        return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key)
+   
     def calculateLcLoss(self, tnorm='P',counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.

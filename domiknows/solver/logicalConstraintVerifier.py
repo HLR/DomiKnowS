@@ -38,6 +38,96 @@ class LogicalConstraintVerifier:
                    - myLogger/myLoggerTime: Logging facilities
         """
         self.solver = solver
+    
+    def verifySingleConstraint(self, lc, myBooleanMethods, dn, key="/argmax"):
+        """
+        Verify a single logical constraint against model predictions.
+        
+        This method evaluates how well the model's predictions satisfy a single logical
+        constraint. It operates on discrete predictions (e.g., argmax results) rather than
+        probability distributions, providing binary satisfaction metrics.
+        
+        Args:
+            lc: The logical constraint to verify
+            myBooleanMethods: Boolean methods calculator instance
+            dn: Data node containing the predictions to verify
+            key: Attribute key for accessing predictions in datanodes.
+                 Default: "/argmax" for discrete predicted labels
+            
+        Returns:
+            dict: Verification result for the constraint with structure:
+                {
+                    'verifyList': [[bool, ...], ...],  # Satisfaction per instance
+                    'satisfied': float,                 # Overall satisfaction % (0-100)
+                    'ifVerifyList': [[bool, ...], ...], # (ifL/forAllL only) Filtered list
+                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100)
+                    'elapsedInMsLC': float              # Processing time in milliseconds
+                }
+        """
+        startLC = perf_counter_ns()
+        
+        m = None
+        p = 0
+        result = {}
+        
+        self.solver.myLogger.info('\n')
+        self.solver.myLogger.info('Processing %r - %s' % (lc, lc.strEs()))
+        
+        verifyList, lcVariables = self.solver.constructLogicalConstrains(
+            lc, myBooleanMethods, m, dn, p, key=key, headLC=True, verify=True)
+        result['verifyList'] = verifyList
+        
+        verifyListLen = 0
+        verifyListSatisfied = 0
+        for vl in verifyList:
+            verifyListLen += len(vl)
+            verifyListSatisfied += sum(vl)
+        
+        if verifyListLen:
+            result['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
+        else:
+            result['satisfied'] = 0
+            
+        # If this is an if logical constraint
+        if type(lc) is ifL or type(lc) is forAllL:
+            firstKey = next(iter(lcVariables))
+            firstLcV = lcVariables[firstKey]
+            
+            ifVerifyList = []
+            ifVerifyListLen = 0
+            ifVerifyListSatisfied = 0
+            
+            for i, v in enumerate(verifyList):
+                ifVi = []
+                if len(v) != len(firstLcV[i]):
+                    continue
+                
+                for j, w in enumerate(v):
+                    if torch.is_tensor(firstLcV[i][j]):
+                        currentAntecedent = firstLcV[i][j].item()
+                    else: 
+                        currentAntecedent = firstLcV[i][j] 
+                        
+                    if currentAntecedent == 1:
+                        ifVi.append(w)
+                            
+                ifVerifyList.append(ifVi)
+                
+                ifVerifyListLen += len(ifVi)
+                ifVerifyListSatisfied += sum(ifVi)
+            
+            result['ifVerifyList'] = ifVerifyList
+            if ifVerifyListLen:
+                result['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) * 100
+            else:
+                result['ifSatisfied'] = 0
+
+        endLC = perf_counter_ns()
+        elapsedInNsLC = endLC - startLC
+        elapsedInMsLC = elapsedInNsLC / 1000000
+        result['elapsedInMsLC'] = elapsedInMsLC
+        
+        return result
         
     def verifyResults(self, dn, key="/argmax"):
         """
@@ -83,9 +173,6 @@ class LogicalConstraintVerifier:
             - Lower satisfaction rates indicate constraint violations that may need attention
         """
         start = perf_counter()
-
-        m = None 
-        p = 0
         
         myBooleanMethods = self.solver.booleanMethodsCalculator
         myBooleanMethods.current_device = dn.current_device
@@ -98,8 +185,6 @@ class LogicalConstraintVerifier:
         
         for graph in self.solver.myGraph:
             for _, lc in graph.logicalConstrains.items():
-                startLC = perf_counter_ns()
-
                 if not lc.headLC or not lc.active:
                     continue
                     
@@ -107,68 +192,8 @@ class LogicalConstraintVerifier:
                     continue
                     
                 lcCounter += 1
-                self.solver.myLogger.info('\n')
-                self.solver.myLogger.info('Processing %r - %s' % (lc, lc.strEs()))
-
                 lcName = lc.lcName
-                    
-                lcVerifyResult[lcName] = {}
-                current_verifyResult = lcVerifyResult[lcName]
-                
-                verifyList, lcVariables = self.solver.constructLogicalConstrains(
-                    lc, myBooleanMethods, m, dn, p, key=key, headLC=True, verify=True)
-                current_verifyResult['verifyList'] = verifyList
-                
-                verifyListLen = 0
-                verifyListSatisfied = 0
-                for vl in verifyList:
-                    verifyListLen += len(vl)
-                    verifyListSatisfied += sum(vl)
-                
-                if verifyListLen:
-                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
-                else:
-                    current_verifyResult['satisfied'] = 0
-                    
-                # If this is an if logical constraint
-                if type(lc) is ifL or type(lc) is forAllL:
-                    firstKey = next(iter(lcVariables))
-                    firstLcV = lcVariables[firstKey]
-                    
-                    ifVerifyList = []
-                    
-                    ifVerifyListLen = 0
-                    ifVerifyListSatisfied = 0
-                    
-                    for i, v in enumerate(verifyList):
-                        ifVi = []
-                        if len(v) != len(firstLcV[i]):
-                            continue
-                        
-                        for j, w in enumerate(v):
-                            if torch.is_tensor(firstLcV[i][j]):
-                                currentAntecedent = firstLcV[i][j].item()
-                            else: 
-                                currentAntecedent = firstLcV[i][j] 
-                                
-                            if currentAntecedent == 1:
-                                ifVi.append(w)
-                                    
-                        ifVerifyList.append(ifVi)
-                        
-                        ifVerifyListLen += len(ifVi)
-                        ifVerifyListSatisfied += sum(ifVi)
-                    
-                    current_verifyResult['ifVerifyList'] = ifVerifyList
-                    if ifVerifyListLen:
-                        current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) * 100
-                    else:
-                        current_verifyResult['ifSatisfied'] = 0
-
-                endLC = perf_counter_ns()
-                elapsedInNsLC = endLC - startLC
-                elapsedInMsLC = elapsedInNsLC / 1000000
-                current_verifyResult['elapsedInMsLC'] = elapsedInMsLC
+                lcVerifyResult[lcName] = self.verifySingleConstraint(lc, myBooleanMethods, dn, key)
         
         self.solver.myLogger.info('Processed %i logical constraints' % (lcCounter))
         self.solver.myLoggerTime.info('Processed %i logical constraints' % (lcCounter))
