@@ -49,7 +49,7 @@ def find_data_file(filename, train_portion=None):
             Path.cwd() / extracted_filename,
             Path.cwd() / "data" / extracted_filename,
         ]
-        
+
         for path in possible_extracted_paths:
             if path.exists():
                 print(f"Using extracted data file: {path}")
@@ -113,7 +113,7 @@ class BERT(torch.nn.Module):
         # Ensure input is on the correct device
         if input.device != self.device:
             input = input.to(self.device)
-        
+
         input = input.unsqueeze(0)
         _out = self.module(input)
 
@@ -125,7 +125,7 @@ class BERT(torch.nn.Module):
         assert out.shape[0] == 1
         out = out.squeeze(0)
         return out
-    
+
     def to(self, device):
         """Override to method to update self.device"""
         self.device = device
@@ -138,6 +138,7 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
         self.to(device)
 
+
 def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
@@ -146,10 +147,10 @@ def program_declaration(train, args, device='auto'):
         rel_sentence_contains_phrase
 
     graph.detach()
-    
+
     # Set device for all Sensors
     TorchSensor.set_default_device(device)
-    
+
     phrase['text'] = ReaderSensor(keyword='tokens')
 
     def word2vec(text):
@@ -167,7 +168,7 @@ def program_declaration(train, args, device='auto'):
     # Create Tokenizer with device parameter
     tokenizer = Tokenizer(device=device)
     word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=tokenizer)
-    
+
     # Create BERT with device parameter
     bert_model = BERT(device=device)
     word['bert'] = ModuleSensor('ids', module=bert_model)
@@ -200,13 +201,12 @@ def program_declaration(train, args, device='auto'):
         return bert
 
     phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
-    
+
     def concat_features(bert, w2v):
         return torch.cat((bert, w2v), dim=-1)
-    
+
     phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=concat_features)
 
-    # TODO: Change this to output Answer
     phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
@@ -220,14 +220,15 @@ def program_declaration(train, args, device='auto'):
 
         return find
 
-    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    # Do not compile logic here
+    train_dataset = train
 
     # Normal Label
-    # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
-    # phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
-    # phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
-    # phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
-    # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
+    phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
+    phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
+    phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
+    phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
+    phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
     # Below Code is for relation
     def filter_pairs(phrase_text, arg1, arg2, data):
@@ -251,22 +252,33 @@ def program_declaration(train, args, device='auto'):
     pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
     pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
 
-    # pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                         keyword='relation', forward=find_relation('Work_For'), label=True)
-    # pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                           keyword='relation', forward=find_relation('Located_In'), label=True)
-    # pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                        keyword='relation', forward=find_relation('Live_In'), label=True)
-    # pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],   
-    #                                           keyword='relation', forward=find_relation('OrgBased_In'), label=True)
-    # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                     keyword='relation', forward=find_relation('Kill'), label=True)
+    def find_relation(relation_type):
+        def find(arg1m, arg2m, data):
+            label = torch.zeros(arg1m.shape[0], dtype=torch.bool)
+            for rel, arg1, arg2 in data:
+                if rel == relation_type:
+                    i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
+                    label[i] = True
+            return label  # torch.stack((~label, label), dim=1)
 
-    program = InferenceProgram(graph, SolverModel,
-                               poi=[phrase, sentence, word, people, organization, location,
-                                    pair, work_for, located_in, live_in, orgbase_on, kill,
-                                    graph.constraint],
-                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
+        return find
+
+    pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+                                            keyword='relation', forward=find_relation('Work_For'), label=True)
+    pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+                                              keyword='relation', forward=find_relation('Located_In'), label=True)
+    pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+                                           keyword='relation', forward=find_relation('Live_In'), label=True)
+    pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+                                              keyword='relation', forward=find_relation('OrgBased_In'), label=True)
+    pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
+                                        keyword='relation', forward=find_relation('Kill'), label=True)
+
+    program = POIProgram(graph,
+                         poi=[phrase, sentence, word, people, organization, location,
+                              pair, work_for, located_in, live_in, orgbase_on, kill,
+                              graph.constraint], inferTypes=['local/argmax'],
+                         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, device=device)
     return program, train_dataset
 
 
@@ -277,12 +289,13 @@ def parse_arguments():
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
-    parser.add_argument("--train_portion", type=str, default="entities_with_relation", help="Training subset")
-    parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
-    parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
-    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
-    parser.add_argument("--data_path", type=str, default="C:\\Users\\auszok\\git\\RelationalGraph\\test_regr\\ConllQA\\conllQA2.json", help="Path to data file (can be relative or absolute)")
-    parser.add_argument("--device", type=str, default="cuda", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--train_portion", type=str, default="entities_only_with_1_things_YN", help="Training subset")
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G",
+                        help="The tnorm method to use for the counting constraints")
+    parser.add_argument("--data_path", type=str, default="conllQA.json",
+                        help="Path to data file (can be relative or absolute)")
+    parser.add_argument("--device", type=str, default="cpu",
+                        help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
     args = parser.parse_args()
 
     return args
@@ -302,26 +315,27 @@ def main(args):
 
     program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
 
-    suffix = "_curriculum_learning" if args.load_previous else ""
-    if not args.evaluate:
-        if args.load_previous:
-            program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
-        program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
-                      batch_size=1, print_loss=False)
-        program.save(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
-    else:
-        program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
+    # TODO: Need to get sentence and pair, then, checking the output and label from all of them
+    for node in program.populate(dataset, ):
+        test = program.model.find_sensors(phrase)
 
-    output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset)
-    portion = "Training" if not args.evaluate else "Testing"
-    print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
-    print(f"{portion} Acc: {train_acc}", file=output_f)
-    print("#" * 40, file=output_f)
+    # Note: Below are training code
 
-    if args.checked_acc:
-        print(f"<acc>{train_acc}</acc>")
-        assert train_acc > args.checked_acc
+    # if not args.evaluate:
+    #     if args.load_previous:
+    #         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
+    #     program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
+    #                   batch_size=1, print_loss=False)
+    #     program.save(f"training_og_{args.epochs}_lr_{args.lr}.pth")
+    # else:
+    #     program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
+
+    # output_f = open("result_og.txt", 'a')
+    # train_acc = 0
+    # portion = "Training" if not args.evaluate else "Testing"
+    # print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
+    # print(f"{portion} Acc: {train_acc}", file=output_f)
+    # print("#" * 40, file=output_f)
 
     return 0
 

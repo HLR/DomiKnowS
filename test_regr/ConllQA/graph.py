@@ -19,6 +19,7 @@ with Graph('global') as graph:
     (rel_sentence_contains_phrase,) = sentence.contains(phrase)
     (rel_phrase_contains_word,) = phrase.contains(word)
 
+
     pair = Concept(name='pair')
     (rel_pair_phrase1, rel_pair_phrase2,) = pair.has_a(arg1=phrase, arg2=phrase)
 

@@ -47,6 +47,8 @@ def create_query(question, question_type="YN"):
             print(object_name)
             define_character += 3
             all_obj.append(object_name)
+            # Thresholding in the counting (only in the inference time)
+
         asked_entities += ",".join(all_obj)
     else:
         asked_entities = ",".join([ENTITIES_NAME[entity] for entity in question["entity_asking"]])
@@ -99,6 +101,23 @@ def conll4_reader(data_path, dataset_portion):
         for data in dataset[portion]:
             entities = data['entities']
 
+            relations = data['relations']
+
+            all_pos_relations = [["" for _ in range(len(entities))] for _ in range(len(entities))]
+            for relation in relations:
+                head = relation['head']
+                tail = relation['tail']
+                rel_text = relation['type']
+                all_pos_relations[head][tail] = rel_text
+
+            relation = []
+            for i in range(len(entities)):
+                for j in range(len(entities)):
+                    if all_pos_relations[i][j] == "":
+                        continue
+                    cur_rel = (all_pos_relations[i][j], i, j)
+                    relation.append(cur_rel)
+
             index = 0
             label = []
             tokens = []
@@ -114,10 +133,10 @@ def conll4_reader(data_path, dataset_portion):
 
             # if asked_number == 0 or asked_number == len(tokens):
             #     continue
-
             current_portion.append({
                 "tokens": tokens,
                 "label": label,
+                "relation": relation,
                 "logic_str": str_query,
                 "logic_label": label_query
             })
