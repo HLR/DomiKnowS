@@ -3942,12 +3942,27 @@ class DataNodeBuilder(dict):
             _DataNodeBuilder__Logger.warning('No clear root DataNode found based on impactLinks, using all nodes as candidates')
             root_candidates = dns
         
+        # If only one candidate, return it
         if len(root_candidates) == 1:
             return root_candidates[0]
         
-        # Multiple candidates - apply additional filtering
+        # ---  Multiple candidates - apply additional filtering
         
-        # 1. Count occurrences of each ontologyType among candidates
+        # 1. Check for initial instanceID preference
+        initialInstanceID = -1
+        if "READER" in self:
+            initialInstanceID = dict.__getitem__(self, "READER")
+        else:
+            initialInstanceID = 0
+            
+        # Check if any candidate matches the initial instanceID
+        if initialInstanceID >= 0:
+            for dn in root_candidates:
+                if dn.instanceID == initialInstanceID:
+                    _DataNodeBuilder__Logger.info(f'Selected DataNode with id {dn.instanceID} of type {dn.ontologyNode.name} based on matching initial instanceID {initialInstanceID}')
+                    return dn
+        
+        # 2. Count occurrences of each ontologyType among candidates
         ontology_type_counts = {}
         for dn in root_candidates:
             ont_name = dn.ontologyNode.name
@@ -3970,7 +3985,7 @@ class DataNodeBuilder(dict):
             )
             return selected_root
         
-        # 2. Count outgoing relationLinks (excluding "contains")
+        # 3. Count outgoing relationLinks (excluding "contains")
         def count_outgoing_relations(dn):
             return sum(
                 len(targets) 
@@ -3981,7 +3996,7 @@ class DataNodeBuilder(dict):
         # Sort by number of outgoing relations (descending)
         rarest_candidates.sort(key=count_outgoing_relations, reverse=True)
         
-        # 3. If still tied, prefer nodes with more children
+        # 4. If still tied, prefer nodes with more children
         max_outgoing = count_outgoing_relations(rarest_candidates[0])
         tied_candidates = [
             dn for dn in rarest_candidates 
