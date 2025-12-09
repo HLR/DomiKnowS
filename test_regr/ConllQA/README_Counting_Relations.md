@@ -361,7 +361,7 @@ sumL(
         organization('c1', path=('b1', rel_pair_phrase2)),
         work_for('b2', path=('a', rel_pair_phrase1.reversed)),
         organization('c2', path=('b2', rel_pair_phrase2)),
-        notL(eqL(organization, 'instanceID', 'c1', 'c2'))  # Ensure c1 ≠ c2
+        notL(eqL('c1', 'c2'))  # Ensure c1 ≠ c2
     )
 )
 ```
