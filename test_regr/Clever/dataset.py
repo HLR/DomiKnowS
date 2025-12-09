@@ -533,6 +533,9 @@ class CLEVRDatasetFilterableView:
         return self.filter(filt, f'filter-program-type-concept-only') 
     
     def filter_one_relation(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions with exactly one `spatial relation` operation in their program, excluding those with 'query', 'same_', 'than', or 'count' operations.
+        """
         def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
             """Converts a program to a string representation."""
             return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
@@ -545,6 +548,19 @@ class CLEVRDatasetFilterableView:
             else:
                 return False        
         return self.filter(filt, f'filter-one-left-or-right')
+
+    def filter_only_query(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions that are simple attribute queries without any relational operations, excluding those with 'query' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str:
+                return False
+        return self.filter(filt, f'filter-out-query')
 
     def filter_atmostlatleastlequal(self, relation_number=1, make_outputs_true_false = True) -> 'CLEVRDatasetFilterableView':
         def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
