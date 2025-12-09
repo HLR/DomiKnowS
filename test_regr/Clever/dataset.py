@@ -520,6 +520,21 @@ class CLEVRDatasetFilterableView:
         elif disallowed is not None: filter_name_suffix = f"[disallowed={{{','.join(list(disallowed))}}}]"
         return self.filter(filt, f'filter-question-type{filter_name_suffix}')
     
+    def filter_out_query(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions that are simple attribute queries without any relational operations, excluding those with 'query' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str:
+                return False
+            else:
+                return True
+        return self.filter(filt, f'filter-out-query')
+    
     def filter_relational_type(self, *args) -> 'CLEVRDatasetFilterableView':
         def convert_program_to_str(program: List[Dict[str, Any]]) -> str:
             """Converts a program to a string representation."""
