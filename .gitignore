@@ -264,3 +264,4 @@ test_regr/examples/PMDExistL/pmd_counting_tests/PMD_Counting_Constraints_Root _C
 test_regr/ConllQA/debug_data.py
 test_regr/ConllQA/entities_*
 test_regr/ConllQA/result.txt
+test_regr/examples/conll04/sumL/*

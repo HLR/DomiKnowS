@@ -256,3 +256,239 @@ greaterL(
 )
 ```
 
+---
+
+## Counting Relations Between Specific Entities
+
+To count relations involving **specific entities** (not just types), use `eqL` to filter by property values:
+
+### Filter by Entity Name
+
+**Question:** "How many organizations does **Alice** work for?"
+
+```python
+from domiknows.graph.logicalConstrain import eqL
+
+sumL(
+    andL(
+        people('a', path=(eqL(people, 'name', 'Alice'),)),  # Only Alice
+        work_for('b', path=('a', rel_pair_phrase1.reversed)),
+        organization('c', path=('b', rel_pair_phrase2))  # Any organization
+    )
+)
+```
+
+### Filter Both Entities
+
+**Question:** "Does **Alice** work for **Microsoft**?"
+
+```python
+sumL(
+    andL(
+        people('a', path=(eqL(people, 'name', 'Alice'),)),
+        work_for('b', path=('a', rel_pair_phrase1.reversed)),
+        organization('c', path=('b', rel_pair_phrase2, eqL(organization, 'name', 'Microsoft')))
+    )
+)
+```
+- Returns 1 if the relation exists, 0 otherwise
+
+### Filter by Instance ID
+
+**Question:** "How many work_for relations involve entity 'phrase_5'?"
+
+```python
+sumL(
+    andL(
+        people('a', path=(eqL(people, 'instanceID', 'phrase_5'),)),
+        work_for('b', path=('a', rel_pair_phrase1.reversed)),
+        organization('c', path=('b', rel_pair_phrase2))
+    )
+)
+```
+
+### Filter by Properties
+
+**Question:** "How many people from **Boston** work for organizations in **Seattle**?"
+
+```python
+sumL(
+    andL(
+        people('a', path=(eqL(people, 'city', 'Boston'),)),
+        work_for('b', path=('a', rel_pair_phrase1.reversed)),
+        organization('c', path=('b', rel_pair_phrase2, eqL(organization, 'headquarters', 'Seattle')))
+    )
+)
+```
+
+### Multiple Relations from Same Entity
+
+**Question:** "How many people work for **Microsoft** AND live in **Seattle**?"
+
+```python
+sumL(
+    andL(
+        people('a'),  # Person 'a'
+        work_for('b', path=('a', rel_pair_phrase1.reversed)),
+        organization('c', path=('b', rel_pair_phrase2, eqL(organization, 'name', 'Microsoft'))),
+        live_in('d', path=('a', rel_pair_phrase1.reversed)),
+        location('e', path=('d', rel_pair_phrase2, eqL(location, 'name', 'Seattle')))
+    )
+)
+```
+
+**Explanation:** This counts people where:
+1. Person 'a' works for organization 'c' (which must be Microsoft)
+2. **Same** person 'a' lives in location 'e' (which must be Seattle)
+
+**Example data:**
+- "Alice works for Microsoft and lives in Seattle." → ✓ Counts (1)
+- "Bob works for Microsoft and lives in Boston." → ✗ Doesn't count
+- "Carol works for Google and lives in Seattle." → ✗ Doesn't count
+- **Total count: 1**
+
+---
+
+### Multiple Relations of Same Type
+
+**Question 1:** "How many people work for **at least two companies** (any companies)?"
+
+```python
+sumL(
+    andL(
+        people('a'),  # Person 'a'
+        work_for('b1', path=('a', rel_pair_phrase1.reversed)),
+        organization('c1', path=('b1', rel_pair_phrase2)),
+        work_for('b2', path=('a', rel_pair_phrase1.reversed)),
+        organization('c2', path=('b2', rel_pair_phrase2)),
+        notL(eqL('c1', 'c2'))  # Ensure c1 ≠ c2
+    )
+)
+```
+
+**Explanation:** This counts people where:
+1. Person 'a' works for organization 'c1'
+2. **Same** person 'a' works for **a different** organization 'c2'
+3. The two organizations must be different entities
+
+**Example data:**
+- "Alice works for Microsoft and Google." → ✓ Counts (1)
+- "Bob works for Apple and Amazon." → ✓ Counts (1)
+- "Carol works for Microsoft." → ✗ Doesn't count (only one employer)
+- **Total count: 2**
+
+**Use case:** Finding people with multiple employers, contractors, or part-time workers.
+
+---
+
+**Question 2:** "How many people work for **both Microsoft AND Google** (specific companies)?"
+
+```python
+sumL(
+    andL(
+        people('a'),  # Person 'a'
+        work_for('b1', path=('a', rel_pair_phrase1.reversed)),
+        organization('c1', path=('b1', rel_pair_phrase2, eqL(organization, 'name', 'Microsoft'))),
+        work_for('b2', path=('a', rel_pair_phrase1.reversed)),
+        organization('c2', path=('b2', rel_pair_phrase2, eqL(organization, 'name', 'Google')))
+    )
+)
+```
+
+**Explanation:** This counts people where:
+1. Person 'a' works for organization 'c1' (which must be Microsoft)
+2. **Same** person 'a' works for organization 'c2' (which must be Google)
+3. Note: 'b1' and 'b2' are **different work_for relation instances**
+
+**Example data:**
+- "Alice works for Microsoft. Alice also works for Google." → ✓ Counts (1)
+- "Bob works for Microsoft." → ✗ Doesn't count (only one employer)
+- "Carol works for Google and Apple." → ✗ Doesn't count (wrong companies)
+- **Total count: 1**
+
+**Use case:** Finding specific people working for two particular companies.
+
+**Note:** `eqL(concept, 'property', 'value')` filters entities where `property == value`. Common properties include `'instanceID'`, `'name'`, `'text'`, or any custom attributes.
+
+---
+
+## Understanding sumL with Multiple Arguments
+
+### `sumL(people('x'), organization('y'))` - Separate Counts
+
+**Natural Language:** "Count the **total number of people and organizations combined**."
+
+**What it does:** Adds the count of people + count of organizations
+
+```python
+sumL(people('x'), organization('y'))
+```
+
+**Example:** "Alice, Bob, and Carol work for Microsoft and Google."
+- People: 3 (Alice, Bob, Carol)
+- Organizations: 2 (Microsoft, Google)
+- **Total count: 5**
+
+This is equivalent to: `count(people) + count(organizations)`
+
+---
+
+### `sumL(andL(people('x'), organization(path=('x'))))` - Overlap Count
+
+**Natural Language:** "Count entities that are **simultaneously classified as both person AND organization**."
+
+**What it does:** Counts entities satisfying BOTH conditions at the same time
+
+```python
+sumL(andL(people('x'), organization(path=('x'))))
+```
+
+**Example (correct data):** "Alice works for Microsoft."
+- Alice: person only → doesn't count
+- Microsoft: organization only → doesn't count
+- **Total count: 0** (expected, since people and organizations are disjoint)
+
+**Example (classification error):** Model incorrectly classifies "Alice" as both person (0.8) and organization (0.3)
+- Alice satisfies both conditions simultaneously
+- **Total count: 1** (indicates a problem!)
+
+**Use case:** Detecting classification errors or enforcing mutual exclusivity
+
+---
+
+## Common Use Cases
+
+1. **Question Answering:** "How many employment relations are in this document?"
+2. **Data Validation:** Ensure annotated datasets have expected relation counts
+3. **Training Constraints:** Guide models to predict valid relation structures
+4. **Inference Enforcement:** Require predictions satisfy domain requirements
+5. **Quality Metrics:** Compare relation distributions across different texts
+
+---
+
+## Key Principles
+
+### 1. Type Signatures Must Match
+
+The constraint checks both entity types match the relation's signature:
+
+```python
+work_for.has_a(people, organization)  # Signature: (person, organization)
+
+# Counting constraint must match this signature
+sumL(andL(
+    people('a'),           # ✓ First arg: person
+    work_for('b', path=('a', rel_pair_phrase1.reversed)),
+    organization('c', path=('b', rel_pair_phrase2))  # ✓ Second arg: organization
+))
+```
+
+### 2. Path Direction Matters
+
+```python
+# CORRECT: Go backward from entity to relation
+work_for('b', path=('a', rel_pair_phrase1.reversed))
+
+# WRONG: Forward direction won't connect properly
+work_for('b', path=('a', rel_pair_phrase1))  # ✗
+```
