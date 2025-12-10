@@ -910,3 +910,136 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             self.myLogger.debug("%s returns tensor sum: %s", logicMethodName, sumResult.item())
 
         return sumResult
+    
+    def iotaVar(self, _, *var, onlyConstrains=False, temperature=1.0, logicMethodName="IOTA"):
+        """
+        Differentiable definite description operator: selects THE unique entity satisfying condition.
+        
+        Following definition:
+            iota(var, expr) = softmax(E(expr))
+        
+        The operator returns a probability distribution over entities representing
+        soft selection. During training, this allows gradients to flow through
+        the selection process.
+        
+        Mathematical formulation:
+            Given condition satisfaction probabilities p_i for each entity i:
+            selection_i = softmax(p_i / temperature)
+            
+            The loss encourages:
+            1. Exactly one entity to have high probability (low entropy)
+            2. At least one entity to satisfy (existence)
+        
+        Args:
+            _: Model context (unused, kept for interface compatibility)
+            *var: Tensors containing condition satisfaction probabilities [0,1]
+            onlyConstrains: If True, return loss; if False, return selection distribution
+            temperature: Softmax temperature (lower = harder selection)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: Loss tensor (high when violation, low when satisfied)
+            - If onlyConstrains=False: Selection distribution tensor [n] summing to 1
+        
+        T-norm variations:
+            - Product/Łukasiewicz: Use softmax for differentiable selection
+            - Gödel: Use hard argmax (non-differentiable)
+        """
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} called with {len(var)} variables, temperature={temperature}")
+        
+        # -- Normalize inputs using existing _fixVar helper
+        var = self._fixVar(var)
+        
+        # Concatenate all inputs into single tensor
+        if len(var) == 0:
+            t = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        elif len(var) == 1:
+            t = var[0].flatten() if var[0].numel() > 1 else var[0].view(1)
+        else:
+            parts = [v.flatten() if v.numel() > 1 else v.view(1) for v in var]
+            t = torch.cat(parts)
+        
+        # Ensure gradient tracking
+        if not t.requires_grad:
+            t = t.detach().requires_grad_(True)
+        
+        # Clamp to valid probability range
+        t = torch.clamp(t, 0.0, 1.0)
+        n = t.numel()
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} input tensor shape: {t.shape}, values: {t}")
+        
+        # -- Compute selection distribution based on t-norm
+        tOne = torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        
+        if self.tnorm == 'G':  # Gödel - hard argmax
+            # Non-differentiable hard selection
+            max_idx = torch.argmax(t)
+            selection = torch.zeros_like(t)
+            selection[max_idx] = 1.0
+            
+            if onlyConstrains:
+                # Loss: check if exactly one entity has probability ~1
+                max_val = t[max_idx]
+                # Penalize if max is low or if multiple have same max
+                num_at_max = (t >= max_val - 1e-6).sum().float()
+                uniqueness_penalty = torch.clamp(num_at_max - 1.0, min=0.0)
+                existence_loss = 1.0 - max_val
+                loss = existence_loss + 0.1 * uniqueness_penalty
+                return loss
+            else:
+                return selection
+        
+        elif self.tnorm == 'L':  # Łukasiewicz - softmax with straight-through flavor
+            # Scale logits by temperature
+            logits = t / temperature
+            selection = torch.softmax(logits, dim=0)
+            
+            if onlyConstrains:
+                # Łukasiewicz existence: clamp sum to [0,1]
+                sum_t = torch.sum(t)
+                existence_success = torch.clamp(sum_t, max=tOne)
+                
+                # Entropy-based uniqueness loss (low entropy = more certain selection)
+                entropy = -torch.sum(selection * torch.log(selection + 1e-8))
+                max_entropy = torch.log(torch.tensor(float(n), device=self.current_device))
+                normalized_entropy = entropy / (max_entropy + 1e-8)
+                
+                # Combined loss: penalize both non-existence and high entropy
+                loss = (1.0 - existence_success) + 0.5 * normalized_entropy
+                return loss
+            else:
+                return selection
+        
+        else:  # Product ('P') or Simplified Product ('SP')
+            # Standard softmax selection (most differentiable)
+            logits = t / temperature
+            selection = torch.softmax(logits, dim=0)
+            
+            if onlyConstrains:
+                # Existence: probability that at least one is true
+                # P(at least one) = 1 - Π(1 - p_i)
+                existence_prob = 1.0 - torch.prod(1.0 - t)
+                existence_loss = 1.0 - existence_prob
+                
+                # Entropy-based uniqueness loss
+                entropy = -torch.sum(selection * torch.log(selection + 1e-8))
+                max_entropy = torch.log(torch.tensor(float(n), device=self.current_device))
+                normalized_entropy = entropy / (max_entropy + 1e-8)
+                
+                # For small n, use exact Poisson-binomial P(exactly 1)
+                if n <= 20:
+                    pmf = self.calc_probabilities(t, n)
+                    uniqueness_prob = pmf[1] if len(pmf) > 1 else torch.tensor(0.0, device=self.current_device)
+                    uniqueness_loss = 1.0 - uniqueness_prob
+                    loss = 0.5 * uniqueness_loss + 0.5 * existence_loss
+                else:
+                    # For large n, use entropy as proxy for uniqueness
+                    loss = existence_loss + 0.3 * normalized_entropy
+                
+                return loss
+            else:
+                return selection
+

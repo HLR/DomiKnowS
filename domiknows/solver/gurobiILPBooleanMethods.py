@@ -844,3 +844,132 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.myLogger.debug("%s returns linear expression: %s"%(logicMethodName, varsInfo['varSumLinExprStr']))
         
         return S
+    
+    def iotaVar(self, m, *var, onlyConstrains=False, temperature=1.0, logicMethodName="IOTA"):
+        """
+        Definite description operator for ILP: selects THE unique entity satisfying condition.
+        
+        ILP Formulation:
+            Given: condition variables c_i ∈ {0,1} for each entity i indicating satisfaction
+            Create: selection variables s_i ∈ {0,1} for each entity i
+            
+            Constraints:
+                1. Σ s_i = 1                    (exactly one entity selected)
+                2. s_i ≤ c_i  for all i         (can only select satisfying entities)
+                3. Σ c_i ≥ 1                    (existence: at least one must satisfy)
+            
+            The uniqueness presupposition (exactly one satisfies) is enforced by
+            constraints 1 and 2 together: if we must select exactly one, and we can
+            only select from satisfying entities, then there must be exactly one
+            satisfying entity for a feasible solution.
+        
+        Args:
+            m: Gurobi model
+            *var: Binary variables indicating condition satisfaction for each entity
+            onlyConstrains: If True, only add constraints without returning selection vars
+            temperature: Not used in ILP (kept for interface compatibility)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: None (constraints added to model)
+            - If onlyConstrains=False: List of selection variables [s_0, s_1, ..., s_n]
+            representing a one-hot selection over entities
+        
+        Raises:
+            Exception: If model becomes infeasible (no entity can satisfy condition)
+        """
+        from gurobipy import GRB, LinExpr
+        
+        # -- Handle None values
+        varFixed = []
+        for v in var:
+            if v is None:
+                varFixed.append(0)  # None treated as not satisfying
+            else:
+                varFixed.append(v)
+        
+        if len(varFixed) == 0:
+            if self.ifLog:
+                self.myLogger.error(f"{logicMethodName} called with no variables")
+            return None
+        
+        varsInfo = self.preprocessLogicalMethodVar(varFixed, logicMethodName, "iota", minN=1)
+        n = varsInfo['N']
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} called with {n} condition variables")
+        
+        # -- Quick check: if all inputs are constants
+        if varsInfo['No_of_ilp'] == 0:
+            # All constants - find which one is 1
+            ones_indices = [i for i, v in enumerate(varFixed) if v == 1]
+            
+            if len(ones_indices) == 0:
+                if onlyConstrains:
+                    raise Exception(f"ILP model is infeasible - {logicMethodName}: no entity satisfies condition")
+                return [0] * n  # No selection possible
+            
+            if len(ones_indices) > 1:
+                if self.ifLog:
+                    self.myLogger.warning(f"{logicMethodName}: multiple entities satisfy, selecting first")
+            
+            # Return one-hot selection for the first satisfying entity
+            if onlyConstrains:
+                return None  # Constraint trivially satisfied
+            
+            result = [0] * n
+            result[ones_indices[0]] = 1
+            return result
+        
+        # -- Create selection variables
+        select_vars = []
+        for i in range(n):
+            var_name = f"{varsInfo['varName']}_sel_{i}"
+            s_i = m.addVar(vtype=GRB.BINARY, name=var_name)
+            select_vars.append(s_i)
+        
+        if m:
+            m.update()
+        
+        # -- Build linear expression for sum of selections
+        S_select = LinExpr()
+        for s_i in select_vars:
+            S_select.addTerms(1.0, s_i)
+        
+        # -- Add constraints
+        
+        # Constraint 1: Exactly one entity selected (Σ s_i = 1)
+        m.addConstr(S_select == 1, name=f'{logicMethodName}_exactly_one:')
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} added constraint: Σ s_i = 1")
+        
+        # Constraint 2: Can only select satisfying entities (s_i ≤ c_i)
+        for i, (s_i, c_i) in enumerate(zip(select_vars, varFixed)):
+            if self.__varIsNumber(c_i):
+                if c_i == 0:
+                    # Entity i cannot satisfy - force s_i = 0
+                    m.addConstr(s_i == 0, name=f'{logicMethodName}_not_satisfy_{i}:')
+                # If c_i == 1, s_i can be 0 or 1 (no constraint needed beyond sum=1)
+            else:
+                # c_i is an ILP variable
+                m.addConstr(s_i <= c_i, name=f'{logicMethodName}_satisfy_{i}:')
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} added constraints: s_i ≤ c_i for all i")
+        
+        # Constraint 3: Existence - at least one must satisfy (Σ c_i ≥ 1)
+        # This ensures the model is feasible
+        S_condition = varsInfo['varSumLinExpr']
+        m.addConstr(S_condition + varsInfo['numberSum'] >= 1, name=f'{logicMethodName}_exists:')
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} added constraint: Σ c_i ≥ 1 (existence)")
+        
+        if onlyConstrains:
+            if self.ifLog:
+                self.myLogger.debug(f"{logicMethodName} constraints only mode - returning None")
+            return None
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} returns {n} selection variables")
+        
+        return select_vars

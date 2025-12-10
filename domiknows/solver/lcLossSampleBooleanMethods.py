@@ -303,3 +303,73 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             sumResult.add_(v)
         
         return sumResult
+    
+    def iotaVar(self, _, *var, onlyConstrains=False, temperature=1.0, logicMethodName="IOTA"):
+        """
+        Sample-based definite description: selects THE unique entity satisfying condition.
+        
+        In sample-based evaluation, variables are already binary samples from the
+        probability distribution. We find which entity satisfies in each sample.
+        
+        For each sample:
+            1. Find entities where condition is True (sampled value = 1)
+            2. If exactly one satisfies: select it (success)
+            3. If zero or multiple satisfy: violation
+        
+        Args:
+            _: Model context (unused)
+            *var: Sampled binary tensors [sample_size] or [sample_size, n]
+            onlyConstrains: If True, return violation indicator; if False, return selected index
+            temperature: Not used in sample-based (kept for interface)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: Boolean tensor indicating violations [sample_size]
+            - If onlyConstrains=False: Tensor of selected entity indices [sample_size]
+            (-1 indicates no valid selection)
+        """
+        if self.ifNone(var):
+            return None
+        
+        # -- Combine inputs into matrix [sample_size, n_entities]
+        # Each variable may be [sample_size] for one entity or [sample_size, k] for k entities
+        samples_list = []
+        for v in var:
+            if torch.is_tensor(v):
+                if v.dim() == 1:
+                    samples_list.append(v.unsqueeze(1))  # [sample_size, 1]
+                else:
+                    samples_list.append(v)  # [sample_size, k]
+        
+        if len(samples_list) == 0:
+            return None
+        
+        # Concatenate along entity dimension
+        # Result: [sample_size, n_entities]
+        samples = torch.cat(samples_list, dim=1)
+        sample_size, n = samples.shape
+        
+        # -- Convert to boolean (samples should be 0/1)
+        satisfied = samples > 0.5  # [sample_size, n]
+        
+        # Count how many entities satisfy in each sample
+        counts = satisfied.sum(dim=1)  # [sample_size]
+        
+        if onlyConstrains:
+            # Violation if count != 1 (either 0 or > 1)
+            violation = (counts != 1)
+            return violation
+        else:
+            # Find selected entity index for each sample
+            # If exactly one satisfies, return its index; otherwise -1
+            
+            # For samples with exactly one True, find the index
+            # torch.argmax returns first occurrence of max value
+            selected_indices = torch.argmax(satisfied.float(), dim=1)  # [sample_size]
+            
+            # Mark invalid selections (count != 1) with -1
+            valid = (counts == 1)
+            selected_indices = torch.where(valid, selected_indices, 
+                                        torch.tensor(-1, device=selected_indices.device))
+            
+            return selected_indices

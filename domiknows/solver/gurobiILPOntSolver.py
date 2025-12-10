@@ -19,7 +19,7 @@ from domiknows.solver.ilpOntSolver import ilpOntSolver
 from domiknows.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
-from domiknows.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
+from domiknows.solver.booleanMethodsCalculator import booleanMethodsCalculator
 
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection

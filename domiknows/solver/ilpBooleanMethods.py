@@ -215,3 +215,57 @@ class ilpBooleanProcessor(object, metaclass=abc.ABCMeta):
     # ------------------------------------------------------------------
     def summationVar(self, m, *_var):
         "Sums up a list of binary literals to an integer literal."
+        
+    # ------------------------------------------------------------------
+    # Definite Description (Iota)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def iotaVar(
+        self, 
+        m, 
+        *_var, 
+        onlyConstrains: bool = False,
+        temperature: float = 1.0,
+        logicMethodName: str = "IOTA"
+    ):
+        """Definite description operator - selects THE unique entity satisfying condition.
+        
+        Implements Russell's iota operator (ι): ιx.φ(x) denotes "the unique x such that φ(x)".
+        
+        Semantics:
+            - Presupposes existence: at least one entity satisfies φ
+            - Presupposes uniqueness: at most one entity satisfies φ
+            - Returns: the entity that satisfies φ (or a distribution over entities)
+        
+        Implementation varies by processor:
+            - ILP: Creates selection variables with exactly-one constraint
+            - Loss: Returns softmax distribution over satisfaction scores
+            - Sample: Returns index of satisfying entity in each sample
+            - Verify: Returns index if exactly one satisfies, -1 otherwise
+        
+        Args:
+            m: Model context (Gurobi model for ILP, None for others)
+            *_var: Variables representing condition satisfaction for each entity
+                - ILP: Binary Gurobi variables
+                - Loss: Probability tensors in [0,1]
+                - Sample: Binary sampled tensors
+                - Verify: Discrete 0/1 values
+            onlyConstrains: 
+                - If True: Add constraints / return loss (constraint violation measure)
+                - If False: Return selection variables / distribution / index
+            temperature: Softmax temperature for differentiable selection (lower = harder)
+            logicMethodName: Name for logging and constraint naming
+        
+        Returns:
+            - ILP (onlyConstrains=False): List of binary selection variables [s_0, ..., s_n]
+            - ILP (onlyConstrains=True): None (constraints added to model)
+            - Loss (onlyConstrains=False): Tensor [n] representing selection distribution
+            - Loss (onlyConstrains=True): Scalar loss tensor
+            - Sample (onlyConstrains=False): Tensor [sample_size] of selected indices
+            - Sample (onlyConstrains=True): Boolean tensor [sample_size] of violations
+            - Verify (onlyConstrains=False): Integer index of selected entity, -1 if invalid
+            - Verify (onlyConstrains=True): 1 if valid (exactly one), 0 if violated
+        
+        Raises:
+            Exception: In ILP mode, if model is infeasible (no entity can satisfy)
+        """

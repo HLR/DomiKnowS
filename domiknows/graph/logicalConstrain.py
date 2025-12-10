@@ -567,7 +567,6 @@ class LogicalConstrain(LcElement):
             model.update()
         return zVars
     
-    # logicalConstrain.py
     def createSummation(self, model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName="SUMMATION"):
         try:
             lcVariableNames = [name for name in iter(v)]
@@ -850,3 +849,123 @@ class sumL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
             return self.createSummation(model, myIlpBooleanProcessor, v, headConstrain, integrate, logicMethodName='Summation')
+        
+#----------------- Definite Description
+class iotaL(LogicalConstrain):
+    """
+    Definite description operator - selects THE unique entity satisfying a condition.
+    
+    From Russell's theory of definite descriptions:
+    iota(var, expr) returns the entity that uniquely satisfies expr.
+    
+    Semantics:
+        - Returns a probability distribution over entities (soft selection via softmax)
+        - In ILP: enforces exactly one entity satisfies, returns selection variables
+        - Presupposes existence and uniqueness of satisfying entity
+    
+    Usage:
+        # Select THE person who works for Microsoft
+        iotaL(person(V.x), path=(V.x, work_for, eqL(organization, 'name', 'Microsoft')))
+        
+        # Select THE sphere in the scene (assuming exactly one)
+        iotaL(sphere(V.x))
+        
+        # Can be nested in other constraints
+        # "Is there something left of THE blue sphere?"
+        existsL(left(V.x, iotaL(andL(blue(V.y), sphere(V.y)))))
+    
+    Parameters:
+        *e: Constraint elements defining the selection condition
+        p: Priority (0-100, higher = more important)
+        temperature: Softmax temperature for differentiable selection (lower = harder)
+        active: Enable/disable constraint
+        sampleEntries: Use sampling for large groundings
+        name: Constraint name (auto-generated if None)
+    
+    Returns:
+        - ILP: Selection indicator variables (one-hot among satisfying entities)
+        - Loss: Entity distribution tensor [N] via softmax over satisfaction scores
+        - Sample: Selected entity indices
+        - Verify: Index of selected entity or -1 if violation
+    
+    Notes:
+        - Unlike existsL which returns boolean, iotaL returns entity selection
+        - Implicitly enforces uniqueness (exactly one should satisfy)
+        - For soft selection during training, uses temperature-scaled softmax
+        - Gradient flows through softmax for differentiable entity selection
+    """
+    
+    def __init__(self, *e, p=100, temperature=1.0, active=True, 
+                 sampleEntries=False, name=None):
+        super().__init__(*e, p=p, active=active, 
+                        sampleEntries=sampleEntries, name=name)
+        self.temperature = temperature
+        # Mark as returning entity selection rather than boolean
+        self._returns_selection = True
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, 
+                 headConstrain=False, integrate=False):
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createIotaSelection(
+                model,
+                myIlpBooleanProcessor,
+                v,
+                headConstrain,
+                integrate,
+                temperature=self.temperature,
+                logicMethodName=str(self),
+            )
+    
+    def createIotaSelection(self, model, myIlpBooleanProcessor, v, 
+                            headConstrain, integrate, temperature, logicMethodName):
+        """
+        Build ILP constraints / loss for definite description selection.
+        
+        The iota operator:
+        1. Collects all variables representing condition satisfaction
+        2. Enforces exactly one entity satisfies (uniqueness presupposition)
+        3. Returns selection distribution over entities
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+        
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+        
+        lcVariableName0 = lcVariableNames[0]
+        lcVariableSet0 = v[lcVariableName0]
+        
+        zVars = []
+        
+        for i, _ in enumerate(lcVariableSet0):
+            # Collect all condition variables for this grounding
+            condition_vars = []
+            for currentV in iter(v):
+                condition_vars.extend(v[currentV][i])
+            
+            if len(condition_vars) == 0:
+                zVars.append([None])
+                continue
+            
+            # Call the boolean processor's iotaVar method
+            result = myIlpBooleanProcessor.iotaVar(
+                model,
+                *condition_vars,
+                onlyConstrains=headConstrain,
+                temperature=temperature,
+                logicMethodName=logicMethodName,
+            )
+            
+            # iotaVar returns a list/tensor of selection weights, not a single value
+            if isinstance(result, (list, tuple)):
+                zVars.append(list(result))
+            else:
+                zVars.append([result])
+        
+        if model is not None:
+            model.update()
+        
+        return zVars

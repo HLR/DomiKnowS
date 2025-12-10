@@ -306,3 +306,58 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
                 varSum += int(v)
         
         return varSum
+    
+
+    def iotaVar(self, _, *var, onlyConstrains=False, temperature=1.0, logicMethodName="IOTA"):
+        """
+        Verification of definite description: checks if exactly one entity satisfies
+        and returns which one.
+        
+        In verification mode, variables are discrete 0/1 values. We check:
+        1. Existence: at least one entity has value 1
+        2. Uniqueness: exactly one entity has value 1
+        
+        Args:
+            _: Model context (unused)
+            *var: Discrete binary values (0 or 1) for each entity
+            onlyConstrains: If True, return 1 if satisfied, 0 if violated
+            temperature: Not used in verification
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: 1 if exactly one entity is 1, else 0
+            - If onlyConstrains=False: Index of the selected entity (0-indexed),
+            or -1 if constraint violated (zero or multiple satisfy)
+        """
+        # Convert to list of values
+        values = []
+        for v in var:
+            if v is None:
+                values.append(0)
+            elif torch.is_tensor(v):
+                # Handle tensor - flatten and extract values
+                flat = v.flatten()
+                for i in range(flat.numel()):
+                    values.append(int(flat[i].item() > 0.5))
+            elif hasattr(v, 'item'):
+                values.append(int(v.item() > 0.5))
+            else:
+                values.append(int(float(v) > 0.5))
+        
+        if len(values) == 0:
+            return -1 if not onlyConstrains else 0
+        
+        # Find indices where value is 1 (satisfied)
+        satisfied_indices = [i for i, v in enumerate(values) if v == 1]
+        count = len(satisfied_indices)
+        
+        if onlyConstrains:
+            # Return 1 if exactly one, 0 otherwise
+            return 1 if count == 1 else 0
+        else:
+            # Return index of selected entity
+            if count == 1:
+                return satisfied_indices[0]
+            else:
+                # Violation: zero or multiple satisfy
+                return -1
