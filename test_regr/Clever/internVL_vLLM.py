@@ -407,12 +407,16 @@ class InternVL():
             # return torch.stack(probs).to(self.device)
 
 class InternVLShared(torch.nn.Module):
+    model = None
+
     def __init__(self,model_path="OpenGVLab/InternVL3_5-8B",device = "cuda", relation=1, attr="no name", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.relation = relation
         self.attr = attr
-        self.model = InternVL(model_path=model_path, device=device)
-        
+        if InternVLShared.model is None:
+            InternVLShared.model = InternVL(model_path=model_path, device=device)
+        self.model = InternVLShared.model
+
     def forward(self, image, bounding_boxes):
         if isinstance(image, str):
             image = Image.open(image).convert("RGB")
