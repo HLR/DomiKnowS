@@ -201,8 +201,6 @@ class InternVL():
             # model_path: str = "OpenGVLab/InternVL2_5-4B-MPO",
             # model_path: str = "OpenGVLab/InternVL2_5-26B-MPO-AWQ",
             device: str = "cuda",
-            relation = 1,
-            attr = "no name",
             trust_remote_code: bool = True,
             llm=None,
             *args,
@@ -216,7 +214,6 @@ class InternVL():
         :param trust_remote_code: Whether to trust the remote code
         """
         super().__init__(*args, **kwargs)
-        self.relation = relation
         # model_path = "/egr/research-hlr2/kamalida/model_weights/refcocog_lora_adapters_refgta_2000_samples/merged1"
         self.device = device
         # 1) Load tokenizer
@@ -249,28 +246,7 @@ class InternVL():
                 no_token_id=self.no_token_id,
             )
 
-    def forward(self, image, bounding_boxes):
-        if isinstance(image, str):
-            image = Image.open(image).convert("RGB")
-        
-        images, questions = [], []
-        if self.relation == 2:
-            for box1 in bounding_boxes:
-                for box2 in bounding_boxes:
-                    img_copy = image.copy()
-                    draw = ImageDraw.Draw(img_copy)
-                    draw.rectangle(box1, outline="green", width=3)
-                    draw.rectangle(box2, outline="green", width=3)
-                    images.append(img_copy)
-                    questions.append("Are the two objects in the bounding boxes red?")
-        else:
-            for box in bounding_boxes:
-                img_copy = image.copy()
-                ImageDraw.Draw(img_copy).rectangle(box, outline="green", width=3)
-                images.append(img_copy)
-                questions.append("Is the object in the bounding box red?")
-            
-        return self._score_batch(images, questions)
+    
 
     def _score(self, image_paths: Union[str, 'PIL.Image', list], question: str, target_token="Yes",
                candidates: list = None, temperature=0.5, target_tokens=None):
@@ -430,6 +406,35 @@ class InternVL():
             # return torch.tensor(probs[0], device=self.device)
             # return torch.stack(probs).to(self.device)
 
+class InternVLShared(torch.nn.Module):
+    def __init__(self,model_path="OpenGVLab/InternVL3_5-8B",device = "cuda", relation=1, attr="no name", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.relation = relation
+        self.attr = attr
+        self.model = InternVL(model_path=model_path, device=device)
+        
+    def forward(self, image, bounding_boxes):
+        if isinstance(image, str):
+            image = Image.open(image).convert("RGB")
+        
+        images, questions = [], []
+        if self.relation == 2:
+            for box1 in bounding_boxes:
+                for box2 in bounding_boxes:
+                    img_copy = image.copy()
+                    draw = ImageDraw.Draw(img_copy)
+                    draw.rectangle(box1, outline="green", width=3)
+                    draw.rectangle(box2, outline="green", width=3)
+                    images.append(img_copy)
+                    questions.append("Are the two objects in the bounding boxes red?")
+        else:
+            for box in bounding_boxes:
+                img_copy = image.copy()
+                ImageDraw.Draw(img_copy).rectangle(box, outline="green", width=3)
+                images.append(img_copy)
+                questions.append("Is the object in the bounding box red?")
+            
+        return self.model._score_batch(images, questions)
 
 
 if __name__ == "__main__":
