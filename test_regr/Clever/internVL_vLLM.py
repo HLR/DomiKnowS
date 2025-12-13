@@ -1,6 +1,6 @@
 import torch
 import os
-
+from torchvision.transforms import functional as F
 from PIL import Image
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
@@ -418,6 +418,7 @@ class InternVLShared(torch.nn.Module):
         self.model = InternVLShared.model
 
     def forward(self, image, bounding_boxes):
+        image = image[0]
         if isinstance(image, str):
             image = Image.open(image).convert("RGB")
         
@@ -426,15 +427,27 @@ class InternVLShared(torch.nn.Module):
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
                     img_copy = image.copy()
+                    if isinstance(img_copy, torch.Tensor):
+                        if img_copy.is_cuda:
+                            img_copy = img_copy.cpu()
+                        if img_copy.dim() == 4:
+                            img_copy = img_copy.squeeze(0)
+                        img_copy = F.to_pil_image(img_copy)
                     draw = ImageDraw.Draw(img_copy)
-                    draw.rectangle(box1, outline="green", width=3)
-                    draw.rectangle(box2, outline="green", width=3)
+                    draw.rectangle(box1.tolist(), outline="green", width=3)
+                    draw.rectangle(box2.tolist(), outline="green", width=3)
                     images.append(img_copy)
                     questions.append("Are the two objects in the bounding boxes red?")
         else:
             for box in bounding_boxes:
                 img_copy = image.copy()
-                ImageDraw.Draw(img_copy).rectangle(box, outline="green", width=3)
+                if isinstance(img_copy, torch.Tensor):
+                    if img_copy.is_cuda:
+                        img_copy = img_copy.cpu()
+                    if img_copy.dim() == 4:
+                        img_copy = img_copy.squeeze(0)
+                    img_copy = F.to_pil_image(img_copy)
+                ImageDraw.Draw(img_copy).rectangle(box.tolist(), outline="green", width=3)
                 images.append(img_copy)
                 questions.append("Is the object in the bounding box red?")
             
