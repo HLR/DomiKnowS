@@ -401,7 +401,7 @@ class InternVL():
                 # Apply softmax
                 exp_logits = np.exp(logits - np.max(logits))  # numerical stability
                 temp_probs = exp_logits / exp_logits.sum()
-                probs.append(torch.tensor(temp_probs[0]))
+                probs.append(torch.tensor(temp_probs))
             return probs
             # return torch.tensor(probs[0], device=self.device)
             # return torch.stack(probs).to(self.device)
