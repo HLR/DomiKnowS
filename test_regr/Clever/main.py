@@ -144,11 +144,11 @@ if __name__ == "__main__":
             print("Saving result at", save_file)
     else:
         # Choose which epoch index to evaluate; often the last one:
-        epoch_to_eval = args.epochs if args.epochs > 0 else 1
-        save_file = ckpt_path(args.lr, epoch_to_eval, args.load_epoch, args.batch_size, args.tnorm, args.subset)
-        assert save_file.exists(), f"Missing checkpoint: {save_file} (cwd={Path.cwd()})"
-        print("Loading program from checkpoint...", save_file)
-        program.load(save_file)
+        #epoch_to_eval = args.epochs if args.epochs > 0 else 1
+        #save_file = ckpt_path(args.lr, epoch_to_eval, args.load_epoch, args.batch_size, args.tnorm, args.subset)
+        #assert save_file.exists(), f"Missing checkpoint: {save_file} (cwd={Path.cwd()})"
+        #print("Loading program from checkpoint...", save_file)
+        #program.load(save_file)
         acc = program.evaluate_condition(dataset, device=device)
         save_results_f= open('results.txt', 'a')
         print(save_file, file=save_results_f)

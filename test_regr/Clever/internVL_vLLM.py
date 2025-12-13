@@ -1,5 +1,7 @@
 import torch
 import os
+#os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["VLLM_CONFIGURE_LOGGING"] = "0"
 from torchvision.transforms import functional as F
 from PIL import Image
 import torchvision.transforms as T
@@ -435,9 +437,9 @@ class InternVLShared(torch.nn.Module):
                         img_copy = F.to_pil_image(img_copy)
                     draw = ImageDraw.Draw(img_copy)
                     draw.rectangle(box1.tolist(), outline="green", width=3)
-                    draw.rectangle(box2.tolist(), outline="green", width=3)
+                    draw.rectangle(box2.tolist(), outline="red", width=3)
                     images.append(img_copy)
-                    questions.append("Are the two objects in the bounding boxes red?")
+                    questions.append(f"Is the object in the green bounding box {self.attr} of the object in the red bounding box? answer with only Yes or No.")
         else:
             for box in bounding_boxes:
                 img_copy = image.copy()
@@ -449,7 +451,7 @@ class InternVLShared(torch.nn.Module):
                     img_copy = F.to_pil_image(img_copy)
                 ImageDraw.Draw(img_copy).rectangle(box.tolist(), outline="green", width=3)
                 images.append(img_copy)
-                questions.append("Is the object in the bounding box red?")
+                questions.append(f"Is the object in the bounding box {self.attr}? answer with only Yes or No.")
             
         return self.model._score_batch(images, questions)
 
