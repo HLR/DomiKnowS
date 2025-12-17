@@ -75,7 +75,6 @@ class ResnetLEFT(torch.nn.Module):
         
         return x
 
-
 class PrRoIPoolApprox(torch.nn.Module):
     def __init__(self, output_size=(32, 32), spatial_scale=1.0/16):
         super().__init__()
@@ -99,49 +98,6 @@ class PrRoIPoolApprox(torch.nn.Module):
             sampling_ratio=-1,  # let PyTorch choose automatically
             aligned=True        # bilinear interpolation
         )
-    
-class ResnetLEFT(torch.nn.Module):
-    def __init__(self, device):
-        super().__init__()
-        
-        base_resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.conv1 = base_resnet.conv1
-        self.bn1 = base_resnet.bn1
-        self.relu = base_resnet.relu
-        self.maxpool = base_resnet.maxpool
-        self.layer1 = base_resnet.layer1
-        self.layer2 = base_resnet.layer2
-        self.layer3 = base_resnet.layer3
-        self.layer4 = torch.nn.Identity()
-
-        self.preprocessor = T.Compose([
-            T.Resize((224, 224)),  # Resize to ResNet input size
-            T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-
-        self.device = device
-
-    def forward(self, sample_id, image):
-        if image is None:
-            # Return zero tensor when image is not available
-            return torch.zeros(1, 256, 14, 14, device=self.device)
-        if isinstance(image, list):
-            image = image[0]
-        x = self.preprocessor(image).unsqueeze(0).to(self.device)
-        
-        # Forward through individual layers
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        
-        return x
-
 
 class LEFTObjectEMB(torch.nn.Module):
     def __init__(self, resnet_model_name: str = 'resnet50', pretrained: bool = True, device: Optional[str] = None):
@@ -210,7 +166,6 @@ class LinearLayer(torch.nn.Module):
     def forward(self, feature, box):
         emb = self._norm(self.object_fc(feature.view(box.size(0), -1)))
         return emb
-
 
 class LEFTRelationEMB(torch.nn.Module):
     def __init__(self, input_size: int, output_size: int, pretrained: bool = True, device: Optional[str] = None):
