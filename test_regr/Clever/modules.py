@@ -13,6 +13,7 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 from functional_2d import generate_intersection_map, generate_union_box
+import jactorch.models.vision.resnet as resnet
 
 def meshgrid_single(tensor, dim=0):
     """
