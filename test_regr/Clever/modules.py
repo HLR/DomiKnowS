@@ -61,7 +61,22 @@ class ResnetLEFT(torch.nn.Module):
             return torch.zeros(1, 256, 14, 14, device=self.device)
         if isinstance(image, list):
             image = image[0]
-        x = self.preprocessor(image).unsqueeze(0).to(self.device)
+        
+        # Handle both PIL Images and tensors
+        if isinstance(image, torch.Tensor):
+            # If already a tensor, just resize and normalize
+            if image.dim() == 2:  # Grayscale
+                image = image.unsqueeze(0)
+            if image.size(0) == 1:  # Single channel, convert to 3 channels
+                image = image.repeat(3, 1, 1)
+            x = torch.nn.functional.interpolate(
+                image.unsqueeze(0), size=(224, 224), mode='bilinear', align_corners=False
+            )
+            x = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(x.squeeze(0))
+            x = x.unsqueeze(0).to(self.device)
+        else:
+            # PIL Image path
+            x = self.preprocessor(image).unsqueeze(0).to(self.device)
         
         # Forward through modified resnet
         x = self.conv1(x)
