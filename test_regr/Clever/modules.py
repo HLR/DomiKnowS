@@ -13,7 +13,6 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 from functional_2d import generate_intersection_map, generate_union_box
-import jactorch.models.vision.resnet as resnet
 
 def meshgrid_single(tensor, dim=0):
     """
@@ -102,8 +101,15 @@ class ResnetLEFT(torch.nn.Module):
     def __init__(self, device):
         super().__init__()
         
-        self.resnet = resnet.resnet34(pretrained=True, incl_gap=False, num_classes=None)
-        self.resnet.layer4 = jactorch.nn.Identity()
+        base_resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        self.conv1 = base_resnet.conv1
+        self.bn1 = base_resnet.bn1
+        self.relu = base_resnet.relu
+        self.maxpool = base_resnet.maxpool
+        self.layer1 = base_resnet.layer1
+        self.layer2 = base_resnet.layer2
+        self.layer3 = base_resnet.layer3
+        self.layer4 = torch.nn.Identity()
 
         self.preprocessor = T.Compose([
             T.Resize((224, 224)),  # Resize to ResNet input size
@@ -113,14 +119,22 @@ class ResnetLEFT(torch.nn.Module):
 
         self.device = device
 
-
     def forward(self, sample_id, image):
-        # Cache here
         if isinstance(image, list):
             image = image[0]
         x = self.preprocessor(image).unsqueeze(0).to(self.device)
-        feature_emb = self.resnet(x)
-        return feature_emb
+        
+        # Forward through individual layers
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        
+        return x
 
 
 class LEFTObjectEMB(torch.nn.Module):
