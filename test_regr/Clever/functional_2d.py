@@ -24,13 +24,25 @@ def meshgrid_2d(y, x, dim=-1):
     Replacement for jactorch.meshgrid for 2D grid generation.
     Creates a grid from y and x tensors along the specified dimension.
     """
+    # Handle negative dimension
+    if dim < 0:
+        dim = y.dim() + dim
+    
     ny = y.size(dim)
     nx = x.size(dim)
     
+    # Build the target shape for y: insert nx at position dim+1
+    y_shape = list(y.shape)
+    y_shape.insert(dim + 1, nx)
+    
+    # Build the target shape for x: insert ny at position dim
+    x_shape = list(x.shape)
+    x_shape.insert(dim, ny)
+    
     # Expand y: repeat along x dimension
-    y_expanded = y.unsqueeze(dim + 1).expand(*y.shape[:dim], ny, nx, *y.shape[dim+1:])
+    y_expanded = y.unsqueeze(dim + 1).expand(y_shape)
     # Expand x: repeat along y dimension  
-    x_expanded = x.unsqueeze(dim).expand(*x.shape[:dim], ny, nx, *x.shape[dim+1:])
+    x_expanded = x.unsqueeze(dim).expand(x_shape)
     
     return y_expanded, x_expanded
 
