@@ -153,10 +153,23 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
             query_type = last_step['function'].replace('query_', '')
     
     def build_predicates_from_program(steps):
+        """
+        Build predicate list from program steps.
+        
+        Path structure:
+        - First object: defined directly with variable "a"
+        - After relation: access via (relation_var, obj2)
+        - Chained relations: build compound path (prev_rel, obj2, obj1.reversed)
+        """
         preds = []
         var_counter = ord('a')
-        current_var = chr(var_counter)
-        relation_stack = []
+        
+        # Track current path to reach the "current object"
+        # None means direct variable, otherwise it's a tuple like ("b", obj2)
+        current_obj_var = chr(var_counter)
+        current_obj_path = None  # Path to current object (None = direct var)
+        
+        first_predicate = True
         
         for step in steps:
             func = step['function']
@@ -168,21 +181,37 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
             elif func.startswith('filter_'):
                 if value_inputs:
                     val = value_inputs[0]
-                    if not preds:
-                        preds.append(f'{val}("{current_var}")')
-                    elif relation_stack:
-                        preds.append(f'{val}(path=("{relation_stack[-1]}", obj2))')
+                    if first_predicate:
+                        # First predicate - define the object variable
+                        preds.append(f'{val}("{current_obj_var}")')
+                        first_predicate = False
+                    elif current_obj_path:
+                        # After a relation - use path to reach object
+                        path_str = ", ".join(current_obj_path)
+                        preds.append(f'{val}(path=({path_str}))')
                     else:
-                        preds.append(f'{val}(path=("{current_var}"))')
+                        # Continuation of same object description
+                        preds.append(f'{val}(path=("{current_obj_var}"))')
             
             elif func == 'relate':
                 if value_inputs:
                     relation = value_inputs[0]
                     var_counter += 1
-                    new_var = chr(var_counter)
-                    preds.append(f'{relation}("{new_var}", path=("{current_var}", obj1.reversed))')
-                    relation_stack.append(new_var)
-                    current_var = new_var
+                    rel_var = chr(var_counter)
+                    
+                    if current_obj_path:
+                        # Chained relation - build path through previous relation
+                        # From prev relation's obj2, follow obj1.reversed
+                        path_parts = list(current_obj_path) + ["obj1.reversed"]
+                        path_str = ", ".join(path_parts)
+                        preds.append(f'{relation}("{rel_var}", path=({path_str}))')
+                    else:
+                        # First relation - from direct object variable
+                        preds.append(f'{relation}("{rel_var}", path=("{current_obj_var}", obj1.reversed))')
+                    
+                    # Update path: current object is now at (rel_var, obj2)
+                    current_obj_path = [f'"{rel_var}"', "obj2"]
+                    first_predicate = False
             
             elif func == 'unique':
                 continue
@@ -193,10 +222,17 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
             elif func.startswith('same_'):
                 attr_type = func.replace('same_', '')
                 var_counter += 1
-                new_var = chr(var_counter)
-                preds.append(f'same_{attr_type}("{new_var}", path=("{current_var}", obj1.reversed))')
-                relation_stack.append(new_var)
-                current_var = new_var
+                rel_var = chr(var_counter)
+                
+                if current_obj_path:
+                    path_parts = list(current_obj_path) + ["obj1.reversed"]
+                    path_str = ", ".join(path_parts)
+                    preds.append(f'same_{attr_type}("{rel_var}", path=({path_str}))')
+                else:
+                    preds.append(f'same_{attr_type}("{rel_var}", path=("{current_obj_var}", obj1.reversed))')
+                
+                current_obj_path = [f'"{rel_var}"', "obj2"]
+                first_predicate = False
         
         return preds
     
