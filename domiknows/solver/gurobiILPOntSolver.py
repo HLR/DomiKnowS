@@ -96,7 +96,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             value[1] = valueI[labelIndex] if self.conceptIsMultiClass(conceptRelation) else value[1]
             
         # If softmax process probability through function and apply epsilon
-        if "softmax" in key and value is not None and not math.isnan(value[0]) and epsilon is not None:
+        if "softmax" in key and value is not None and not torch.isnan(value[0]).item() and epsilon is not None:
             value[0] = max(epsilon, min(1-epsilon, value[0]))
             value[1] = max(epsilon, min(1-epsilon, value[1]))
                     
