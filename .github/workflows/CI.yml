@@ -82,7 +82,7 @@ jobs:
             'simple_regression'
             'solver'
             'namedTree'
-            'iota'
+            'examples/iota'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"
