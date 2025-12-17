@@ -62,6 +62,10 @@ class ResnetLEFT(torch.nn.Module):
         if isinstance(image, list):
             image = image[0]
         
+        # Check again after extracting from list
+        if image is None:
+            return torch.zeros(1, 256, 14, 14, device=self.device)
+        
         # Handle both PIL Images and tensors
         if isinstance(image, torch.Tensor):
             # If already a tensor, just resize and normalize
