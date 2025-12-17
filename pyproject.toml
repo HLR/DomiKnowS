@@ -25,7 +25,8 @@ dependencies = [
     "spacy>=3.8.0",
     "tokenizers>=0.22.0",
     "transformers>=4.56.1",
-    "colorama"
+    "colorama",
+    "pillow>=11.3.0",
 ]
 
 [project.optional-dependencies]
