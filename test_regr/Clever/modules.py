@@ -56,6 +56,9 @@ class ResnetLEFT(torch.nn.Module):
         self.device = device
 
     def forward(self, sample_id, image):
+        if image is None:
+            # Return zero tensor when image is not available
+            return torch.zeros(1, 256, 14, 14, device=self.device)
         if isinstance(image, list):
             image = image[0]
         x = self.preprocessor(image).unsqueeze(0).to(self.device)
@@ -120,6 +123,9 @@ class ResnetLEFT(torch.nn.Module):
         self.device = device
 
     def forward(self, sample_id, image):
+        if image is None:
+            # Return zero tensor when image is not available
+            return torch.zeros(1, 256, 14, 14, device=self.device)
         if isinstance(image, list):
             image = image[0]
         x = self.preprocessor(image).unsqueeze(0).to(self.device)
