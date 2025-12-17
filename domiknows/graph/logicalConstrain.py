@@ -940,30 +940,29 @@ class iotaL(LogicalConstrain):
         
         zVars = []
         
+        condition_vars = []
         for i, _ in enumerate(lcVariableSet0):
             # Collect all condition variables for this grounding
-            condition_vars = []
-            for currentV in iter(v):
-                condition_vars.extend(v[currentV][i])
+            condition_vars.extend(lcVariableSet0[i])
             
-            if len(condition_vars) == 0:
-                zVars.append([None])
-                continue
+        # Call the boolean processor's iotaVar method
+        result = myIlpBooleanProcessor.iotaVar(
+            model,
+            *condition_vars,
+            onlyConstrains=headConstrain,
+            temperature=temperature,
+            logicMethodName=logicMethodName,
+        )
+        
+        if len(condition_vars) == 0:
+            zVars.append([None])
+    
             
-            # Call the boolean processor's iotaVar method
-            result = myIlpBooleanProcessor.iotaVar(
-                model,
-                *condition_vars,
-                onlyConstrains=headConstrain,
-                temperature=temperature,
-                logicMethodName=logicMethodName,
-            )
-            
-            # iotaVar returns a list/tensor of selection weights, not a single value
-            if isinstance(result, (list, tuple)):
-                zVars.append(list(result))
-            else:
-                zVars.append([result])
+        # iotaVar returns a list/tensor of selection weights, not a single value
+        if isinstance(result, (list, tuple)):
+            zVars.append(list(result))
+        else:
+            zVars.append([result])
         
         if model is not None:
             model.update()

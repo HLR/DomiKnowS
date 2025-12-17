@@ -1,8 +1,16 @@
-from domiknows.graph import Graph, Concept
+from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import iotaL, andL, existsL
 
+Graph.clear()
+Concept.clear()
+Relation.clear()
+
 with Graph('visual_qa') as graph:
+    # Container concept (image/scene)
+    image = Concept(name='image')
+    
     object_node = Concept(name='object')
+    (image_contains_object,) = image.contains(object_node)
     
     # Object properties
     big = object_node(name='big')
@@ -29,12 +37,12 @@ with Graph('visual_qa') as graph:
     
     # Step 1: THE brown cylinder
     the_brown_cylinder = iotaL(
-        andL(brown('x'), cylinder('x'))
+        andL(brown('x'), cylinder(path='x'))
     )
     
     # Step 2: THE large brown sphere  
     the_large_brown_sphere = iotaL(
-        andL(large('y'), brown('y'), sphere('y'))
+        andL(large('y'), brown(path='y'), sphere(path='y'))
     )
     
     # Step 3: THE big object that is right of #1 and left of #2
