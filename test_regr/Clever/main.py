@@ -39,16 +39,16 @@ parser = argparse.ArgumentParser(
     epilog="""
 Examples:
   # Dummy mode test with existsL (default)
-  python main.py --dummy --epochs 4
+  uv run  main.py --dummy --epochs 4
 
   # Train with iotaL for query questions  
-  python main.py --dummy --question-type query --epochs 4
+  uv run main.py --dummy --question-type query --epochs 4
 
   # Full training run
-  python main.py --train-size 6000 --test-size 1000 --epochs 1 --lr 1e-5 --question-type query
+  uv run main.py --train-size 6000 --test-size 1000 --epochs 1 --lr 1e-5 --question-type query
 
   # Evaluation only
-  python main.py --eval-only --question-type query --test-size 1000
+  uv run main.py --eval-only --question-type query --test-size 1000
 
 Question Types:
   relation       : "Is there a cube right of the sphere?" -> existsL
