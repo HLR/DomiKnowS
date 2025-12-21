@@ -1,6 +1,8 @@
 from collections import OrderedDict
 from itertools import chain, product
 from typing import Type
+
+from torch import softmax
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
 #from .relation import Contains, HasA, IsA

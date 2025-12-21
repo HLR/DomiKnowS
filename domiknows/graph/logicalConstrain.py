@@ -707,7 +707,7 @@ class notL(LogicalConstrain):
         
     def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False): 
         with torch.set_grad_enabled(myConstraintVarProcessor.grad):
-            return self.createSingleVarILPConstrains("Not", myConstraintVarProcessor.notVar, model, v, headConstrain)
+            return self.createSingleVarLogicalConstrains("Not", myConstraintVarProcessor.notVar, model, v, headConstrain)
 
 # ----------------- Logical
 
@@ -927,7 +927,7 @@ class fixedL(LogicalConstrain):
         
     def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False):
         with torch.set_grad_enabled(myConstraintVarProcessor.grad): 
-            return self.createSingleVarILPConstrains("Fixed", myConstraintVarProcessor.fixedVar, model, v, headConstrain)        
+            return self.createSingleVarLogicalConstrains("Fixed", myConstraintVarProcessor.fixedVar, model, v, headConstrain)        
         
 # ----------------- Summation
 
