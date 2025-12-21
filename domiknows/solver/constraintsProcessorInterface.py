@@ -8,9 +8,9 @@ else:
     from .ilpConfig import ilpConfig
 
 
-class ilpBooleanProcessor(object, metaclass=abc.ABCMeta):
+class constraintsProcessor(object, metaclass=abc.ABCMeta):
     """Abstract base class that specifies *logical* building blocks for
-    Integer‑Linear‑Programming encodings.
+    constraints  encodings in different backends (ILP, Loss, Sampling, Verification).
 
     Every concrete subclass must implement each Boolean operator as *either*
     a *reified* form (returning a fresh binary that represents the truth

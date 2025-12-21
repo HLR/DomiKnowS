@@ -1,10 +1,10 @@
 import logging
 
 import torch
-from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from domiknows.solver.constraintsProcessorInterface import constraintsProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
 
-class booleanMethodsCalculator(ilpBooleanProcessor):
+class booleanMethodsCalculator(constraintsProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()

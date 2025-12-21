@@ -4,6 +4,11 @@ from execution import create_execution_for_question
 import os
 
 
+# {'color': ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
+#  'material': ['rubber', 'metal'],
+#  'shape': ['cube', 'sphere', 'cylinder'],
+#  'size': ['small', 'large']}
+
 def create_graph(dataset, return_graph_text=False, include_query_questions=False):
     """
     Create the DomiKnows graph for CLEVR dataset.

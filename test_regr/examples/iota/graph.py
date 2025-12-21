@@ -1,12 +1,11 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import iotaL, andL, existsL
+from domiknows.graph.logicalConstrain import iotaL, andL, existsL, queryL
 
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
 with Graph('visual_qa') as graph:
-    # Container concept (image/scene)
     image = Concept(name='image')
     
     object_node = Concept(name='object')
@@ -26,8 +25,14 @@ with Graph('visual_qa') as graph:
     right_of = pair(name='right_of')
     left_of = pair(name='left_of')
     
-    # Material property (what we want to query)
-    material = object_node(name='material') 
+    # =========================================================
+    # Material as multiclass concept with subclasses
+    # =========================================================
+    material = object_node(name='material')
+    
+    # Subclasses of material
+    metal = material(name='metal')
+    rubber = material(name='rubber')
 
     # =========================================================
     # Query: "What material is the big object that is 
@@ -50,8 +55,15 @@ with Graph('visual_qa') as graph:
         andL(
             big('z'),
             right_of('r1', path=('z', rel_arg1.reversed)),
-            the_brown_cylinder,  # nested iota for arg2 of right_of
+            the_brown_cylinder,
             left_of('r2', path=('z', rel_arg1.reversed)),
-            the_large_brown_sphere  # nested iota for arg2 of left_of
+            the_large_brown_sphere
         )
+    )
+    
+    # Step 4: Query material of the target object
+    # queryL returns the most probable subclass (metal or rubber)
+    the_material_answer = queryL(
+        material,          # Parent multiclass concept
+        the_target_object  # Entity selection from iotaL
     )

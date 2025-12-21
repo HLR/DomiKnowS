@@ -2,11 +2,11 @@ import logging
 
 import torch
 
-from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from domiknows.solver.constraintsProcessorInterface import constraintsProcessor 
 
 from domiknows.solver.ilpConfig import ilpConfig 
    
-class lcLossSampleBooleanMethods(ilpBooleanProcessor):
+class lcLossSampleBooleanMethods(constraintsProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
         self.grad = False

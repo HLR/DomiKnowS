@@ -43,9 +43,11 @@ class Concept(BaseGraphTree):
                 
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
+                    originalDst = None
                     if 'is_a' in dst._out:
+                        originalDst = dst
                         dst = dst._out['is_a'][0].dst
-                    rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
+                    rel_inst = Rel(src, dst, originalDst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
 
