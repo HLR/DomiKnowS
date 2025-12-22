@@ -481,7 +481,6 @@ class Graph(BaseGraphTree):
                     exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
                     raise Exception(f"{exceptionStr1} {exceptionStr2}")
 
-
     def are_keys_new(self, given_dict, dict_list):
         """
         Check if all keys in 'given_dict' are not present in any dictionary within 'dict_list'.
@@ -633,6 +632,77 @@ class Graph(BaseGraphTree):
                 newE.append(e)
                     
         lc.e = newE #Update logical constraint element - all VarMaps are removed
+    
+    def validate_queryL_constraints(self, lc, headLc=None):
+        """
+        Validates queryL constraints to ensure they have a proper multiclass concept.
+        
+        A queryL constraint requires its first argument (the concept) to be either:
+        1. An EnumConcept with explicit values
+        2. A Concept that has subclasses defined via is_a() relationships
+        
+        This method recursively checks all queryL constraints within a logical constraint,
+        including nested ones.
+        
+        Args:
+            lc (LogicalConstrain): The logical constraint to validate.
+            headLc (str, optional): The name of the parent logical constraint for error messages.
+                                Defaults to None.
+        
+        Raises:
+            Exception: If a queryL constraint has a concept without subclasses.
+        """
+        from .logicalConstrain import queryL, LogicalConstrain
+        from .concept import EnumConcept, Concept
+        
+        if headLc is None:
+            headLc = lc.name
+        
+        # Check if this constraint itself is a queryL
+        if isinstance(lc, queryL):
+            concept = lc.concept
+            concept_name = concept.name if hasattr(concept, 'name') else str(concept)
+            
+            # Check if it's an EnumConcept
+            if isinstance(concept, EnumConcept):
+                if not hasattr(concept, 'enum') or not concept.enum:
+                    exceptionStr1 = f"queryL constraint in {headLc} has invalid EnumConcept '{concept_name}'."
+                    exceptionStr2 = f"EnumConcept must have non-empty 'enum' values defined."
+                    raise Exception(f"{exceptionStr1} {exceptionStr2}")
+                # Valid EnumConcept
+                return
+            
+            # Check if it's a regular Concept with is_a subclasses
+            if isinstance(concept, Concept):
+                # Check for incoming is_a relations (subclasses pointing to this concept)
+                has_subclasses = False
+                
+                if hasattr(concept, '_in') and 'is_a' in concept._in:
+                    is_a_relations = concept._in.get('is_a', [])
+                    if is_a_relations and len(is_a_relations) > 0:
+                        has_subclasses = True
+                
+                if not has_subclasses:
+                    exceptionStr1 = f"queryL constraint in {headLc} has concept '{concept_name}' without subclasses."
+                    exceptionStr2 = f"The concept used in queryL must be a multiclass concept with subclasses defined via is_a()."
+                    exceptionStr3 = f"Example: metal.is_a({concept_name}), rubber.is_a({concept_name})"
+                    exceptionStr4 = f"Alternatively, use EnumConcept: {concept_name} = EnumConcept('{concept_name}', values=['value1', 'value2'])"
+                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4}")
+                
+                # Valid - concept has subclasses
+                return
+            
+            # Neither EnumConcept nor Concept
+            exceptionStr1 = f"queryL constraint in {headLc} has invalid concept type: {type(concept)}."
+            exceptionStr2 = f"The first argument to queryL must be a Concept with is_a subclasses or an EnumConcept."
+            raise Exception(f"{exceptionStr1} {exceptionStr2}")
+        
+        # Recursively check nested logical constraints
+        for e in lc.e:
+            if isinstance(e, LogicalConstrain):
+                self.validate_queryL_constraints(e, headLc=headLc)
+            elif isinstance(e, tuple) and len(e) > 0 and isinstance(e[0], LogicalConstrain):
+                self.validate_queryL_constraints(e[0], headLc=headLc)
                 
     def __exit__(self, exc_type, exc_value, traceback):
         '''Handles the exiting logic for the context manager.
@@ -749,7 +819,14 @@ class Graph(BaseGraphTree):
                             continue # skip this path it is empty
                             
                         self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
-                       
+         
+        # --- Validate queryL constraints have proper multiclass concepts ---
+        for lc_name, lc in self.logicalConstrains.items():
+            if not lc.active or not lc.headLC:
+                continue
+            
+            self.validate_queryL_constraints(lc, headLc=lc.name)  
+                        
     @property
     def ontology(self):
         '''Gets the ontology associated with the object.

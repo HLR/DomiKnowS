@@ -141,3 +141,36 @@ class MaterialLearner(TorchLearner):
             else:
                 result[i] = torch.tensor([0.9, 0.1])
         return result
+    
+class MetalLearner(TorchLearner):
+    """
+    Returns high probability for object 3 being metal.
+    Ground truth: object 3 is metal, others are not.
+    """
+    def forward(self, x):
+        batch_size = len(x)
+        result = torch.zeros(batch_size, 2)
+        for i in range(batch_size):
+            obj_id = x[i].item() if hasattr(x[i], 'item') else int(x[i])
+            if obj_id == 3:  # Object 3 is metal
+                result[i] = torch.tensor([0.1, 0.9])
+            else:
+                result[i] = torch.tensor([0.9, 0.1])
+        return result
+
+
+class RubberLearner(TorchLearner):
+    """
+    Returns high probability for object 4 being rubber.
+    Ground truth: object 4 is rubber, others are not.
+    """
+    def forward(self, x):
+        batch_size = len(x)
+        result = torch.zeros(batch_size, 2)
+        for i in range(batch_size):
+            obj_id = x[i].item() if hasattr(x[i], 'item') else int(x[i])
+            if obj_id == 4:  # Object 4 is rubber
+                result[i] = torch.tensor([0.1, 0.9])
+            else:
+                result[i] = torch.tensor([0.9, 0.1])
+        return result

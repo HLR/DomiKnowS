@@ -13,16 +13,15 @@ def program():
     from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateSensor
     from domiknows.program import LearningBasedProgram
     from domiknows.program.model.pytorch import PoiModel
-
     from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
     
     from .graph import (
         graph, image, object_node, image_contains_object, pair, rel_arg1, rel_arg2,
-        big, large, brown, cylinder, sphere, right_of, left_of, material
+        big, large, brown, cylinder, sphere, right_of, left_of, material, metal, rubber
     )
     from .sensor import (
         BigLearner, LargeLearner, BrownLearner, CylinderLearner, SphereLearner,
-        MaterialLearner
+        MetalLearner, RubberLearner
     )
 
     graph.detach()
@@ -38,12 +37,11 @@ def program():
         forward=lambda x, _: torch.ones_like(x).unsqueeze(-1)
     )
     
-    # Pair sensors - composition of two objects
-    # forward returns True/False for candidate validity check
+    # Pair sensors
     pair[rel_arg1.reversed, rel_arg2.reversed] = CompositionCandidateSensor(
         object_node['index'],
         relations=(rel_arg1.reversed, rel_arg2.reversed),
-        forward=lambda *_, **__: True  # All pairs are valid candidates
+        forward=lambda *_, **__: True
     )
 
     # Object property learners
@@ -52,28 +50,27 @@ def program():
     object_node[brown] = BrownLearner('index')
     object_node[cylinder] = CylinderLearner('index')
     object_node[sphere] = SphereLearner('index')
-    object_node[material] = MaterialLearner('index')
     
-    # Spatial relation sensors using DataNodeReaderSensor
+    # Material subclass learners
+    object_node[metal] = MetalLearner('index')
+    object_node[rubber] = RubberLearner('index')
+    
+    # Spatial relation sensors
     def read_right_of(*_, data, datanode):
-        """Check if pair (arg1, arg2) is in the right_of set"""
         arg1_node = datanode.relationLinks[rel_arg1.name][0]
         arg2_node = datanode.relationLinks[rel_arg2.name][0]
         arg1_id = arg1_node.getAttribute('index').item()
         arg2_id = arg2_node.getAttribute('index').item()
-        # Return [0, 1] if in right_of, else [1, 0]
         if (arg1_id, arg2_id) in data:
             return torch.tensor([0, 1])
         else:
             return torch.tensor([1, 0])
     
     def read_left_of(*_, data, datanode):
-        """Check if pair (arg1, arg2) is in the left_of set"""
         arg1_node = datanode.relationLinks[rel_arg1.name][0]
         arg2_node = datanode.relationLinks[rel_arg2.name][0]
         arg1_id = arg1_node.getAttribute('index').item()
         arg2_id = arg2_node.getAttribute('index').item()
-        # Return [0, 1] if in left_of, else [1, 0]
         if (arg1_id, arg2_id) in data:
             return torch.tensor([0, 1])
         else:
@@ -99,27 +96,19 @@ def dataset():
     return VisualQAReader().run()
 
 
-# Expected values based on test data:
-# Object 1 = brown cylinder (THE brown cylinder)
-# Object 2 = large brown sphere (THE large brown sphere)
-# Object 3 = big target object, right of 1, left of 2 (THE target object)
-# Object 4 = other object
-
+# Expected values based on test data
 EXPECTED_BROWN_CYLINDER_ID = 1
 EXPECTED_LARGE_BROWN_SPHERE_ID = 2
 EXPECTED_TARGET_OBJECT_ID = 3
+EXPECTED_TARGET_MATERIAL = 'metal'
 
 
 @pytest.mark.gurobi  
 def test_iotaL_target_object_selection(program, dataset):
-    """
-    Test that the_target_object iotaL constraint correctly selects object 3.
-    
-    Uses ILP inference and then verifies the selection matches expected.
-    """
+    """Test that the_target_object iotaL constraint correctly selects object 3."""
     from .graph import (
-        graph, object_node, pair, 
-        big, large, brown, cylinder, sphere, right_of, left_of
+        object_node, big, large, brown, cylinder, sphere, right_of, left_of,
+        metal, rubber
     )
 
     for datanode in program.populate(dataset=dataset):
@@ -128,8 +117,8 @@ def test_iotaL_target_object_selection(program, dataset):
         object_nodes = [n for n in datanode.getChildDataNodes() if n.ontologyNode == object_node]
         assert len(object_nodes) == 4
         
-        # Run ILP inference
-        conceptsRelations = (big, large, brown, cylinder, sphere, right_of, left_of)
+        # Run ILP inference including material subclasses
+        conceptsRelations = (big, large, brown, cylinder, sphere, right_of, left_of, metal, rubber)
         datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=False)
         
         # Collect ILP results
@@ -148,44 +137,32 @@ def test_iotaL_target_object_selection(program, dataset):
         for obj_id, attrs in results.items():
             print(f"Object {obj_id}: {attrs}")
         
-        # Find THE brown cylinder (brown AND cylinder)
+        # Find THE brown cylinder
         brown_cylinders = [oid for oid, attrs in results.items() 
                           if attrs['brown'] and attrs['cylinder']]
         print(f"\nBrown cylinders found: {brown_cylinders}")
-        print(f"Expected: {EXPECTED_BROWN_CYLINDER_ID}")
         
-        # Find THE large brown sphere (large AND brown AND sphere)
+        # Find THE large brown sphere
         large_brown_spheres = [oid for oid, attrs in results.items()
                                if attrs['large'] and attrs['brown'] and attrs['sphere']]
         print(f"Large brown spheres found: {large_brown_spheres}")
-        print(f"Expected: {EXPECTED_LARGE_BROWN_SPHERE_ID}")
         
         # Find THE big object (target)
         big_objects = [oid for oid, attrs in results.items() if attrs['big']]
         print(f"Big objects found: {big_objects}")
-        print(f"Expected target: {EXPECTED_TARGET_OBJECT_ID}")
         
         # Verify expectations
-        assert EXPECTED_BROWN_CYLINDER_ID in brown_cylinders, \
-            f"Expected object {EXPECTED_BROWN_CYLINDER_ID} to be brown cylinder"
-        assert EXPECTED_LARGE_BROWN_SPHERE_ID in large_brown_spheres, \
-            f"Expected object {EXPECTED_LARGE_BROWN_SPHERE_ID} to be large brown sphere"
-        assert EXPECTED_TARGET_OBJECT_ID in big_objects, \
-            f"Expected object {EXPECTED_TARGET_OBJECT_ID} to be big"
+        assert EXPECTED_BROWN_CYLINDER_ID in brown_cylinders
+        assert EXPECTED_LARGE_BROWN_SPHERE_ID in large_brown_spheres
+        assert EXPECTED_TARGET_OBJECT_ID in big_objects
 
 
 @pytest.mark.gurobi
 def test_iotaL_spatial_relations(program, dataset):
-    """
-    Test that spatial relations in iotaL constraints are correctly evaluated.
-    
-    Verifies:
-    - Object 3 is right_of object 1 (the brown cylinder)
-    - Object 3 is left_of object 2 (the large brown sphere)
-    """
+    """Test that spatial relations in iotaL constraints are correctly evaluated."""
     from .graph import (
-        graph, object_node, pair, rel_arg1, rel_arg2,
-        big, large, brown, cylinder, sphere, right_of, left_of
+        object_node, pair, rel_arg1, rel_arg2,
+        big, large, brown, cylinder, sphere, right_of, left_of, metal, rubber
     )
 
     for datanode in program.populate(dataset=dataset):
@@ -194,7 +171,7 @@ def test_iotaL_spatial_relations(program, dataset):
         pair_nodes = [n for n in datanode.getChildDataNodes() if n.ontologyNode == pair]
         
         # Run ILP inference
-        conceptsRelations = (big, large, brown, cylinder, sphere, right_of, left_of)
+        conceptsRelations = (big, large, brown, cylinder, sphere, right_of, left_of, metal, rubber)
         datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=False)
         
         # Find right_of and left_of relations
@@ -221,17 +198,76 @@ def test_iotaL_spatial_relations(program, dataset):
         print(f"right_of pairs: {right_of_pairs}")
         print(f"left_of pairs: {left_of_pairs}")
         
-        # Expected: (3, 1) in right_of - object 3 is right of object 1 (brown cylinder)
         expected_right_of = (EXPECTED_TARGET_OBJECT_ID, EXPECTED_BROWN_CYLINDER_ID)
-        print(f"Expected right_of: {expected_right_of}")
-        
-        # Expected: (3, 2) in left_of - object 3 is left of object 2 (large brown sphere)
         expected_left_of = (EXPECTED_TARGET_OBJECT_ID, EXPECTED_LARGE_BROWN_SPHERE_ID)
-        print(f"Expected left_of: {expected_left_of}")
         
-        assert expected_right_of in right_of_pairs, \
-            f"Expected {expected_right_of} in right_of relations"
-        assert expected_left_of in left_of_pairs, \
-            f"Expected {expected_left_of} in left_of relations"
+        assert expected_right_of in right_of_pairs
+        assert expected_left_of in left_of_pairs
         
         print("\nAll spatial relation constraints verified!")
+
+
+@pytest.mark.gurobi
+def test_queryL_material_selection(program, dataset):
+    """
+    Test that queryL correctly identifies the material of the target object.
+    
+    The target object (object 3) should have material 'metal'.
+    queryL should return metal as the selected subclass.
+    """
+    from .graph import (
+        object_node, big, large, brown, cylinder, sphere, right_of, left_of,
+        material, metal, rubber
+    )
+
+    for datanode in program.populate(dataset=dataset):
+        assert datanode is not None
+        
+        object_nodes = [n for n in datanode.getChildDataNodes() if n.ontologyNode == object_node]
+        
+        # Run ILP inference with all concepts including material subclasses
+        conceptsRelations = (big, large, brown, cylinder, sphere, right_of, left_of, metal, rubber)
+        datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=False)
+        
+        # Collect material results per object
+        material_results = {}
+        for obj_node in object_nodes:
+            obj_id = obj_node.getAttribute('index').item()
+            
+            is_metal = obj_node.getAttribute(metal, 'ILP').item() > 0
+            is_rubber = obj_node.getAttribute(rubber, 'ILP').item() > 0
+            
+            material_results[obj_id] = {
+                'metal': is_metal,
+                'rubber': is_rubber
+            }
+        
+        print("\n=== Material Results per Object ===")
+        for obj_id, mats in material_results.items():
+            mat_str = 'metal' if mats['metal'] else ('rubber' if mats['rubber'] else 'none')
+            print(f"Object {obj_id}: {mat_str} (metal={mats['metal']}, rubber={mats['rubber']})")
+        
+        # Verify target object (3) has material 'metal'
+        target_material = material_results[EXPECTED_TARGET_OBJECT_ID]
+        
+        print(f"\n=== queryL Material Test ===")
+        print(f"Target object ID: {EXPECTED_TARGET_OBJECT_ID}")
+        print(f"Expected material: {EXPECTED_TARGET_MATERIAL}")
+        print(f"Target is metal: {target_material['metal']}")
+        print(f"Target is rubber: {target_material['rubber']}")
+        
+        # Assert target object is metal
+        assert target_material['metal'] == True, \
+            f"Expected object {EXPECTED_TARGET_OBJECT_ID} to be metal"
+        assert target_material['rubber'] == False, \
+            f"Expected object {EXPECTED_TARGET_OBJECT_ID} to NOT be rubber"
+        
+        # Verify object 4 is rubber (distractor)
+        distractor_material = material_results[4]
+        assert distractor_material['rubber'] == True, \
+            "Expected object 4 to be rubber"
+        assert distractor_material['metal'] == False, \
+            "Expected object 4 to NOT be metal"
+        
+        print("\nqueryL material selection test PASSED!")
+        print(f"Correctly identified object {EXPECTED_TARGET_OBJECT_ID} as '{EXPECTED_TARGET_MATERIAL}'")

@@ -1,6 +1,6 @@
 import logging
 
-from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from domiknows.solver.constraintsProcessorInterface import constraintsProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
 
 from gurobipy import Var, GRB, LinExpr
@@ -17,7 +17,7 @@ USE_De_Morgan = False # For orVar nandVar methods
 #   - number (0 or 1) representing True or False value,
 #   - None representing lack of information (when the candidate is missing in the dataNode).
 
-class gurobiILPBooleanProcessor(ilpBooleanProcessor):
+class gurobiILPBooleanProcessor(constraintsProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
@@ -973,3 +973,140 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.myLogger.debug(f"{logicMethodName} returns {n} selection variables")
         
         return select_vars
+
+    def queryVar(self, m, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+        """
+        Query operator for multiclass attribute selection in ILP.
+        
+        Given entity selection (from iotaL) and a multiclass concept with subclasses,
+        returns indicators for which subclass the selected entity belongs to.
+        
+        ILP Formulation:
+            Given:
+            - s_i: selection indicator for entity i (from iotaL, exactly one is 1)
+            - c_{j,i}: indicator that entity i has subclass j (from model predictions)
+            - Subclasses: {subclass_0, subclass_1, ..., subclass_k}
+            
+            Create:
+            - r_j: result indicator for subclass j
+            
+            Constraints:
+            1. Σ r_j = 1                    (exactly one subclass selected)
+            2. r_j ≤ Σ_i (s_i ∧ c_{j,i})   (can only select if entity has subclass)
+            
+            The selection s_i comes from iotaL (exactly one entity selected).
+            The result r_j indicates which subclass that entity has.
+        
+        Args:
+            m: Gurobi model
+            concept: Parent multiclass concept (e.g., material)
+            subclasses: List of (subclass_concept, name, index) tuples
+            selection_vars: Entity selection variables from iotaL (list of vars)
+            onlyConstrains: If True, only add constraints without returning vars
+            temperature: Not used in ILP (for interface compatibility)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: None
+            - If onlyConstrains=False: List of binary variables [r_0, r_1, ..., r_k]
+              representing subclass selection (one-hot)
+        """
+        from gurobipy import GRB, LinExpr
+        
+        if not subclasses:
+            if self.ifLog:
+                self.myLogger.error(f"{logicMethodName} called with no subclasses")
+            return None
+        
+        num_subclasses = len(subclasses)
+        
+        # Handle None values in selection_vars
+        sel_vars_fixed = []
+        for v in selection_vars:
+            if v is None:
+                sel_vars_fixed.append(0)
+            else:
+                sel_vars_fixed.append(v)
+        
+        if len(sel_vars_fixed) == 0:
+            if self.ifLog:
+                self.myLogger.warning(f"{logicMethodName} called with empty selection_vars")
+            if onlyConstrains:
+                return None
+            return [0] * num_subclasses
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} called with {len(sel_vars_fixed)} selection vars, {num_subclasses} subclasses")
+        
+        # Check if all selection vars are constants
+        all_constants = all(self.__varIsNumber(v) for v in sel_vars_fixed)
+        
+        if all_constants:
+            # Find which entity is selected (has value 1)
+            selected_idx = -1
+            for i, v in enumerate(sel_vars_fixed):
+                if v == 1:
+                    selected_idx = i
+                    break
+            
+            if selected_idx == -1:
+                # No entity selected
+                if onlyConstrains:
+                    return None
+                return [0] * num_subclasses
+            
+            # For constant case, return indicator for first subclass by default
+            # (actual subclass determination requires runtime prediction data)
+            if onlyConstrains:
+                return None
+            result = [0] * num_subclasses
+            if num_subclasses > 0:
+                result[0] = 1
+            return result
+        
+        # Create result variables for each subclass
+        result_vars = []
+        var_name_base = f"{logicMethodName}_{concept.name if hasattr(concept, 'name') else 'concept'}"
+        
+        for j, (subclass, name, idx) in enumerate(subclasses):
+            var_name = f"{var_name_base}_{name}_{j}"
+            r_j = m.addVar(vtype=GRB.BINARY, name=var_name[:254])
+            result_vars.append(r_j)
+        
+        if m:
+            m.update()
+        
+        # Constraint 1: Exactly one subclass selected (Σ r_j = 1)
+        sum_result = LinExpr()
+        for r_j in result_vars:
+            sum_result.addTerms(1.0, r_j)
+        
+        m.addConstr(sum_result == 1, name=f'{logicMethodName}_exactly_one_subclass:')
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} added constraint: Σ r_j = 1")
+        
+        # Constraint 2: Link result to selection
+        # Each r_j is bounded by whether an entity is selected
+        sum_selection = LinExpr()
+        for s_i in sel_vars_fixed:
+            if not self.__varIsNumber(s_i):
+                sum_selection.addTerms(1.0, s_i)
+            else:
+                sum_selection += s_i
+        
+        for j, r_j in enumerate(result_vars):
+            m.addConstr(r_j <= sum_selection, name=f'{logicMethodName}_bound_{j}:')
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} added {num_subclasses} bounding constraints")
+        
+        if onlyConstrains:
+            if self.ifLog:
+                self.myLogger.debug(f"{logicMethodName} constraints only - returning None")
+            return None
+        
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} returns {num_subclasses} result variables")
+        
+        return result_vars

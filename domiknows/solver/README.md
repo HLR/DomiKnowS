@@ -14,11 +14,11 @@ This directory contains the constraint solver implementations for the DomiKnows 
 | **ILP Solvers** | | | |
 | `gurobiILPOntSolver` | `gurobiILPOntSolver.py` | `ilpOntSolver` | Gurobi-based ILP inference |
 | **Boolean Method Processors** | | | |
-| `ilpBooleanProcessor` | `ilpBooleanMethods.py` | Abstract | Base interface for logical operations |
-| `gurobiILPBooleanProcessor` | `gurobiILPBooleanMethods.py` | `ilpBooleanProcessor` | ILP encoding of logical operators |
-| `lcLossBooleanMethods` | `lcLossBooleanMethods.py` | `ilpBooleanProcessor` | Differentiable t-norm logic |
-| `lcLossSampleBooleanMethods` | `lcLossSampleBooleanMethods.py` | `ilpBooleanProcessor` | Sample-based logic evaluation |
-| `booleanMethodsCalculator` | `ilpBooleanMethodsCalculator.py` | `ilpBooleanProcessor` | Numeric logic evaluation |
+| `constraintsProcessor` | `ilpBooleanMethods.py` | Abstract | Base interface for logical operations |
+| `gurobiILPBooleanProcessor` | `gurobiILPBooleanMethods.py` | `constraintsProcessor` | ILP encoding of logical operators |
+| `lcLossBooleanMethods` | `lcLossBooleanMethods.py` | `constraintsProcessor` | Differentiable t-norm logic |
+| `lcLossSampleBooleanMethods` | `lcLossSampleBooleanMethods.py` | `constraintsProcessor` | Sample-based logic evaluation |
+| `booleanMethodsCalculator` | `ilpBooleanMethodsCalculator.py` | `constraintsProcessor` | Numeric logic evaluation |
 | **Factory** | | | |
 | `ilpOntSolverFactory` | `ilpOntSolverFactory.py` | - | Solver instance management |
 
@@ -193,7 +193,7 @@ solver.calculateILPSelection(dn, *concepts)
 
 ## Boolean Method Processors
 
-### `ilpBooleanProcessor` (`ilpBooleanMethods.py`)
+### `constraintsProcessor` (`ilpBooleanMethods.py`)
 Abstract interface defining logical operations. All implementations support:
 
 **Core Operations:**
@@ -656,7 +656,7 @@ for lc_name, results in verification.items():
 Create custom logic implementations:
 
 ```python
-class CustomBooleanProcessor(ilpBooleanProcessor):
+class CustomBooleanProcessor(constraintsProcessor):
     def andVar(self, m, *var, onlyConstrains=False):
         # Custom AND implementation
         pass

@@ -3,11 +3,11 @@ import torch
 
 from domiknows.graph import DataNode
 
-from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from domiknows.solver.constraintsProcessorInterface import constraintsProcessor 
 from domiknows.solver.ilpConfig import ilpConfig 
 from domiknows import setup_logger, getProductionModeStatus
 
-class lcLossBooleanMethods(ilpBooleanProcessor):
+class lcLossBooleanMethods(constraintsProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
@@ -1043,3 +1043,186 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             else:
                 return selection
 
+def queryVar(self, _, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+        """
+        Differentiable query operator for multiclass attribute selection.
+        
+        Given entity selection (e.g. from iotaL) and a multiclass concept with subclasses,
+        returns a probability distribution over subclasses indicating which subclass
+        the selected entity belongs to.
+        
+        Mathematical formulation:
+            Given:
+            - s_i: selection probability for entity i (e.g. from iotaL softmax, Σs_i = 1)
+            - The selection_vars contain satisfaction scores for entity-subclass combinations
+            
+            Returns:
+            - r_j: probability distribution over subclasses [num_subclasses]
+            
+            For differentiable selection:
+            r_j = softmax(aggregate_scores_j / temperature)
+            
+        Args:
+            _: Model context (unused, kept for interface compatibility)
+            concept: Parent multiclass concept (e.g., material)
+            subclasses: List of (subclass_concept, name, index) tuples
+            selection_vars: Entity selection/satisfaction variables from upstream constraints
+            onlyConstrains: If True, return loss; if False, return selection distribution
+            temperature: Softmax temperature (lower = harder selection)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: Loss tensor (high when violation)
+            - If onlyConstrains=False: Probability distribution over subclasses [k]
+        
+        T-norm variations:
+            - Product: Softmax with product-based aggregation
+            - Åukasiewicz: Softmax with sum-based aggregation  
+            - GÃ¶del: Hard argmax selection
+        """
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} called with {len(selection_vars)} selection vars, "
+                              f"{len(subclasses)} subclasses, temperature={temperature}")
+        
+        self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
+        self.countLogger.info(f"Concept: {concept.name if hasattr(concept, 'name') else concept}")
+        self.countLogger.info(f"Number of subclasses: {len(subclasses)}")
+        self.countLogger.info(f"Number of selection_vars: {len(selection_vars)}")
+        self.countLogger.info(f"Temperature: {temperature}, onlyConstrains: {onlyConstrains}")
+        
+        num_subclasses = len(subclasses)
+        
+        if num_subclasses == 0:
+            self.countLogger.error(f"{logicMethodName} called with no subclasses")
+            if onlyConstrains:
+                return torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+            return torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        
+        # Log subclass info
+        for j, (subclass, name, idx) in enumerate(subclasses):
+            self.countLogger.debug(f"Subclass {j}: {name} (index={idx})")
+        
+        # -- Normalize selection vars
+        sel_vars_fixed = self._fixVar(tuple(selection_vars))
+        
+        # Log fixed selection vars
+        for i, v in enumerate(sel_vars_fixed):
+            val = v.item() if v.numel() == 1 else v
+            self.countLogger.debug(f"Selection var {i}: {val}")
+        
+        if len(sel_vars_fixed) == 0:
+            self.countLogger.warning(f"{logicMethodName} called with empty selection_vars after fixing")
+            if onlyConstrains:
+                return torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+            # Return uniform distribution over subclasses
+            return torch.ones(num_subclasses, device=self.current_device, dtype=torch.float64, 
+                            requires_grad=True) / num_subclasses
+        
+        # Concatenate selection vars into single tensor
+        if len(sel_vars_fixed) == 1:
+            t = sel_vars_fixed[0].flatten() if sel_vars_fixed[0].numel() > 1 else sel_vars_fixed[0].view(1)
+        else:
+            parts = [v.flatten() if v.numel() > 1 else v.view(1) for v in sel_vars_fixed]
+            t = torch.cat(parts)
+        
+        # Ensure gradient tracking and valid range
+        if not t.requires_grad:
+            t = t.detach().requires_grad_(True)
+        t = torch.clamp(t, 0.0, 1.0)
+        
+        n_entities = t.numel()
+        self.countLogger.info(f"Combined selection tensor shape: {t.shape}, n_entities: {n_entities}")
+        self.countLogger.debug(f"Selection tensor values: {t}")
+        
+        # -- Compute subclass selection based on t-norm
+        tOne = torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        tZero = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        
+        # For query selection, we aggregate scores per subclass
+        # If selection_vars are organized as [entity0_sub0, entity0_sub1, ..., entity1_sub0, ...]
+        # we need to reshape and aggregate
+    
+        if n_entities == num_subclasses:
+            # Direct mapping: each selection var corresponds to a subclass
+            subclass_scores = t
+            self.countLogger.debug("Direct mapping: selection vars match subclass count")
+        elif n_entities > num_subclasses and n_entities % num_subclasses == 0:
+            # Multiple entities per subclass: aggregate by summing/averaging
+            entities_per_subclass = n_entities // num_subclasses
+            t_reshaped = t.view(entities_per_subclass, num_subclasses)
+            subclass_scores = t_reshaped.sum(dim=0)  # Sum over entities
+            self.countLogger.debug(f"Aggregated: {entities_per_subclass} entities per subclass")
+        else:
+            # Fallback: use selection vars as-is, pad or truncate to num_subclasses
+            if n_entities < num_subclasses:
+                padding = torch.zeros(num_subclasses - n_entities, device=self.current_device, 
+                                     dtype=torch.float64, requires_grad=True)
+                subclass_scores = torch.cat([t, padding])
+            else:
+                subclass_scores = t[:num_subclasses]
+            self.countLogger.debug(f"Fallback: adjusted from {n_entities} to {num_subclasses}")
+        
+        self.countLogger.info(f"Subclass scores: {subclass_scores}")
+        
+        # -- Apply t-norm specific selection
+        if self.tnorm == 'G':  # GÃ¶del - hard argmax
+            self.countLogger.debug("Using GÃ¶del t-norm (hard argmax)")
+            max_idx = torch.argmax(subclass_scores)
+            selection = torch.zeros(num_subclasses, device=self.current_device, dtype=torch.float64)
+            selection[max_idx] = 1.0
+            
+            if onlyConstrains:
+                # Loss: penalize if max score is low
+                max_val = subclass_scores[max_idx]
+                loss = 1.0 - max_val
+                self.countLogger.info(f"GÃ¶del loss: {loss.item()}")
+                return loss
+            else:
+                self.countLogger.info(f"GÃ¶del selection: subclass {max_idx.item()}")
+                return selection
+        
+        elif self.tnorm == 'L':  # Åukasiewicz
+            self.countLogger.debug("Using Åukasiewicz t-norm")
+            # Softmax selection with temperature
+            logits = subclass_scores / temperature
+            selection = torch.softmax(logits, dim=0)
+            
+            if onlyConstrains:
+                # Existence: at least one subclass should have high score
+                sum_scores = torch.sum(subclass_scores)
+                existence_success = torch.clamp(sum_scores, max=tOne)
+                
+                # Entropy-based uniqueness (encourage low entropy = certain selection)
+                entropy = -torch.sum(selection * torch.log(selection + 1e-8))
+                max_entropy = torch.log(torch.tensor(float(num_subclasses), device=self.current_device))
+                normalized_entropy = entropy / (max_entropy + 1e-8)
+                
+                loss = (1.0 - existence_success) + 0.3 * normalized_entropy
+                self.countLogger.info(f"Åukasiewicz loss: {loss.item()} (existence: {existence_success.item()}, entropy: {normalized_entropy.item()})")
+                return loss
+            else:
+                self.countLogger.info(f"Åukasiewicz selection: {selection}")
+                return selection
+        
+        else:  # Product ('P') or Simplified Product ('SP')
+            self.countLogger.debug(f"Using {self.tnorm} t-norm (softmax)")
+            # Standard softmax selection
+            logits = subclass_scores / temperature
+            selection = torch.softmax(logits, dim=0)
+            
+            if onlyConstrains:
+                # Product existence: 1 - Î (1 - score_j)
+                existence_prob = 1.0 - torch.prod(1.0 - torch.clamp(subclass_scores, 0.0, 1.0))
+                existence_loss = 1.0 - existence_prob
+                
+                # Entropy-based uniqueness
+                entropy = -torch.sum(selection * torch.log(selection + 1e-8))
+                max_entropy = torch.log(torch.tensor(float(num_subclasses), device=self.current_device))
+                normalized_entropy = entropy / (max_entropy + 1e-8)
+                
+                loss = 0.5 * existence_loss + 0.5 * normalized_entropy
+                self.countLogger.info(f"Product loss: {loss.item()} (existence: {existence_loss.item()}, entropy: {normalized_entropy.item()})")
+                return loss
+            else:
+                self.countLogger.info(f"Product selection: {selection}")
+                return selection
