@@ -15,32 +15,6 @@ from ..tracker import MacroAverageTracker
 from ..metric import MetricTracker
 from domiknows.utils import setDnSkeletonMode, getDnSkeletonMode
 
-def gumbel_softmax(logits, temperature=1.0, hard=False, dim=-1):
-    """
-    Gumbel-Softmax sampling for differentiable discrete sampling.
-    
-    Args:
-        logits: [..., num_classes] unnormalized log probabilities
-        temperature: controls sharpness (lower = more discrete, higher = more smooth)
-        hard: if True, returns one-hot but backprops through soft (straight-through estimator)
-        dim: dimension to apply softmax
-    
-    Returns:
-        Sampled probabilities (soft or hard)
-    """
-    # Sample from Gumbel(0, 1)
-    gumbels = -torch.empty_like(logits).exponential_().log()
-    gumbels = (logits + gumbels) / temperature
-    y_soft = F.softmax(gumbels, dim=dim)
-    
-    if hard:
-        # Straight-through estimator: forward = one-hot, backward = soft
-        index = y_soft.max(dim, keepdim=True)[1]
-        y_hard = torch.zeros_like(logits).scatter_(dim, index, 1.0)
-        return y_hard - y_soft.detach() + y_soft
-    
-    return y_soft
-
 class TorchModel(torch.nn.Module):
 
     def __init__(self, graph, device='auto', ignore_modules=False):

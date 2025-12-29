@@ -253,7 +253,9 @@ class LogicalConstrain(LcElement):
     
     # Collects setups of variables for logical methods calls for the created Logical Constraint - recursive method
     def _collectVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
-        
+        """
+        Collects setups of variables for logical methods calls - recursive method.
+        """
         # Get set of ILP variables lists for the current variable name
         cLcVariables = v[lcVariableName]
         
@@ -262,7 +264,7 @@ class LogicalConstrain(LcElement):
         
         # --- Update the lcVars setup with ILP variables from this iteration
         
-        if not lcVars: # If ILP variables setup is not initialized yet - this is the first iteration of the _collectVariableSetups method
+        if not lcVars:  # First iteration - initialize
             if cLcVariables is None:
                 newV = [[None]]
                 newLcVars.append(newV)
@@ -275,7 +277,8 @@ class LogicalConstrain(LcElement):
                         newElement = [cvElement]
                         newV.append(newElement)
                     newLcVars.append(newV)
-        elif len(cLcVariables) == 1: # Single variable
+                    
+        elif len(cLcVariables) == 1:  # Single variable
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for lcVelement in lcV:
@@ -289,28 +292,47 @@ class LogicalConstrain(LcElement):
                             newElemenet.append(None)
                     newV.append(newElemenet)
                                     
-                newLcVars.append(newV)                
-        else: # Many ILP variables in the current set
+                newLcVars.append(newV)
+                
+        else:  # Many ILP variables in the current set
+            # Check if this is a nested constraint result indexed by inner variable
+            # A nested constraint result has shape [N, 1] - N rows, each with 1 element
+            is_nested_constraint_result = (
+                cLcVariables is not None and 
+                len(cLcVariables) > 0 and
+                all(len(row) == 1 for row in cLcVariables if row)
+            )
+            
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for indexElement, lcVelement in enumerate(lcV):
                     if cLcVariables is None:
                         newLcVelement = lcVelement.copy()
                         newLcVelement.append(None)
-                        
                         newV.append(newLcVelement)
                     elif len(lcV) == len(cLcVariables[indexLcV]):
+                        # Lengths match - use position-based indexing
                         cV = cLcVariables[indexLcV][indexElement]
                         newLcVelement = lcVelement.copy()
                         newLcVelement.append(cV)
-                            
                         newV.append(newLcVelement)
                     else:
-                        for cV in cLcVariables[indexLcV]:
+                        # For nested constraint results with shape [N,1],
+                        # use the inner index (indexElement) instead of outer index (indexLcV)
+                        # This handles cases like existsL(andL(concept(b), relation(b,y), nestedLC(y)))
+                        # where nestedLC produces per-y results that should align with y, not b
+                        if is_nested_constraint_result and indexElement < len(cLcVariables):
+                            # Use indexElement (inner/y index) to look up the value
+                            cV = cLcVariables[indexElement][0]
                             newLcVelement = lcVelement.copy()
                             newLcVelement.append(cV)
-                            
                             newV.append(newLcVelement)
+                        else:
+                            # Expand by iterating through values
+                            for cV in cLcVariables[indexLcV]:
+                                newLcVelement = lcVelement.copy()
+                                newLcVelement.append(cV)
+                                newV.append(newLcVelement)
                                 
                 newLcVars.append(newV)                
                             
@@ -321,6 +343,18 @@ class LogicalConstrain(LcElement):
             # Return collected setups
             return newLcVars
     
+    
+    # Helper to recursively flatten nested lists to scalar values
+    def flatten_to_scalars(self, item):
+        """Recursively flatten nested lists to a flat list of scalar values."""
+        result = []
+        if isinstance(item, (list, tuple)):
+            for sub_item in item:
+                result.extend(self.flatten_to_scalars(sub_item))
+        elif item is not None:
+            result.append(item)
+        return result
+        
     def createLogicalConstrains(self, lcName, lcFun, model, v, headConstrain):
         if len(v) < 2:
             myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
@@ -375,6 +409,11 @@ class LogicalConstrain(LcElement):
         return rVars
 
     def createCountConstraints(self, model, myConstraintVarProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName="COUNT"):
+        """
+        Build count constraints for existsL, atMostL, atLeastL, exactL.
+        
+        Fixed: Properly handles nested constraint results which may have nested list structure.
+        """
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
@@ -382,17 +421,27 @@ class LogicalConstrain(LcElement):
         if cLimit is None:
             cLimit = 1
 
+        if not lcVariableNames:
+            return [[None]]
+            
         lcVariableName0 = lcVariableNames[0]
         lcVariableSet0 = v[lcVariableName0]
+
+        if not lcVariableSet0:
+            return [[None]]
 
         # -----------------------------
         # Build flattened var list(s)
         # -----------------------------
         batch_vars = []   # list of lists (per-row), unless headConstrain/integrate
-        for i, _ in enumerate(lcVariableSet0):
+        
+        for i in range(len(lcVariableSet0)):
             row = []
-            for currentV in iter(v):
-                row.extend(v[currentV][i])
+            for currentV in lcVariableNames:
+                current_val = v[currentV][i] if i < len(v[currentV]) else None
+                # Flatten any nested structure to scalar values
+                flattened = self.flatten_to_scalars(current_val)
+                row.extend(flattened)
 
             if headConstrain or integrate:
                 # accumulate globally
@@ -400,7 +449,7 @@ class LogicalConstrain(LcElement):
             else:
                 # element-wise
                 if len(row) == 0:
-                    batch_vars.append([])     # <-- mark empty row; we’ll return None for it
+                    batch_vars.append([])     # <-- mark empty row; we'll return None for it
                 else:
                     batch_vars.append(row)
 
@@ -414,30 +463,40 @@ class LogicalConstrain(LcElement):
             if len(batch_vars) == 0:
                 zVars.append([None])
             else:
-                r = myConstraintVarProcessor.countVar(
-                    model,
-                    *batch_vars,
-                    onlyConstrains=headConstrain,
-                    limitOp=cOperation,
-                    limit=cLimit,
-                    logicMethodName=logicMethodName,
-                )
-                zVars.append([r])
-        else:
-            # Element-wise mode
-            for row in batch_vars:
-                if len(row) == 0:
+                # Filter out None values before passing to countVar
+                valid_vars = [v for v in batch_vars if v is not None]
+                if len(valid_vars) == 0:
                     zVars.append([None])
                 else:
                     r = myConstraintVarProcessor.countVar(
                         model,
-                        *row,
+                        *valid_vars,
                         onlyConstrains=headConstrain,
                         limitOp=cOperation,
                         limit=cLimit,
                         logicMethodName=logicMethodName,
                     )
                     zVars.append([r])
+        else:
+            # Element-wise mode
+            for row in batch_vars:
+                if len(row) == 0:
+                    zVars.append([None])
+                else:
+                    # Filter out None values
+                    valid_vars = [v for v in row if v is not None]
+                    if len(valid_vars) == 0:
+                        zVars.append([None])
+                    else:
+                        r = myConstraintVarProcessor.countVar(
+                            model,
+                            *valid_vars,
+                            onlyConstrains=headConstrain,
+                            limitOp=cOperation,
+                            limit=cLimit,
+                            logicMethodName=logicMethodName,
+                        )
+                        zVars.append([r])
 
         if model is not None:
             model.update()
@@ -568,38 +627,73 @@ class LogicalConstrain(LcElement):
         return zVars
     
     def createSummation(self, model, myConstraintVarProcessor, v, headConstrain, integrate, logicMethodName="SUMMATION"):
+        """
+        Build summation constraints for sumL.
+        
+        Fixed: Properly handles nested constraint results that may have 
+        different shapes/indexing than the primary iteration variable.
+        """
         try:
             lcVariableNames = [name for name in iter(v)]
         except StopIteration:
             return []
 
+        if not lcVariableNames:
+            return []
+            
         lcVariableSet0 = v[lcVariableNames[0]]
+        
+        if not lcVariableSet0:
+            return []
+            
         zVars = []
-
-        # Build per-row lists of literals across *all* inputs to sumL
-        rows = []
-        for i, _ in enumerate(lcVariableSet0):
-            row = []
-            for name in lcVariableNames:
-                row.extend(v[name][i])                 
-            rows.append(row)
+        num_rows = len(lcVariableSet0)
 
         if headConstrain or integrate:
-            # Global sum across all rows
-            flat = [lit for row in rows for lit in row]
-            if len(flat) == 0:
-                zVars.append([0])                       # sum([]) = 0 as a linear constant
+            # Global sum across all variables and all rows
+            # For global mode, collect ALL values from ALL variables
+            all_values = []
+            for name in lcVariableNames:
+                var_data = v[name]
+                if var_data is not None:
+                    all_values.extend(self.flatten_to_scalars(var_data))
+            
+            if len(all_values) == 0:
+                zVars.append([0])
             else:
-                S = myConstraintVarProcessor.summationVar(model, *flat)
+                S = myConstraintVarProcessor.summationVar(model, *all_values)
                 zVars.append([S])
         else:
-            # Element-wise per-row sums (useful when nested under per-row comparators)
-            for row in rows:
-                flat = [lit for lit in row]
-                if len(flat) == 0:
+            # Element-wise per-row sums
+            for i in range(num_rows):
+                row = []
+                for name in lcVariableNames:
+                    var_data = v[name]
+                    
+                    if var_data is None:
+                        continue
+                    
+                    # Check if this variable has the same number of rows
+                    if len(var_data) == num_rows:
+                        # Aligned - use direct index
+                        if i < len(var_data):
+                            row.extend(self.flatten_to_scalars(var_data[i]))
+                    elif len(var_data) == 1:
+                        # Single row - broadcast to all iterations
+                        row.extend(self.flatten_to_scalars(var_data[0]))
+                    else:
+                        # Different number of rows - nested constraint result
+                        # with different indexing. For element-wise sum,
+                        # we can't properly align, so include all values
+                        # in first row only to avoid double-counting
+                        if i == 0:
+                            row.extend(self.flatten_to_scalars(var_data))
+                            myLogger.warning(f"{logicMethodName}: variable '{name}' has mismatched row count; ")
+                            
+                if len(row) == 0:
                     zVars.append([0])
                 else:
-                    S = myConstraintVarProcessor.summationVar(model, *flat)
+                    S = myConstraintVarProcessor.summationVar(model, *row)
                     zVars.append([S])
 
         if model is not None:

@@ -388,4 +388,3 @@ class LearningBasedProgram():
         if IF_exsits:
             print("total accuracy ifL:",zero_check(sum([i for i in ifl_ac]),(sum([i for i in ifl_t]))))
         return None
-

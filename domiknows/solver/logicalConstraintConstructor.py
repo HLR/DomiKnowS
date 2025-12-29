@@ -559,6 +559,25 @@ class LogicalConstraintConstructor:
                                 lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
                                 headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify)
                             
+                            # Ensure vDns has the correct structure
+                            # Nested constraints return [[result1, result2, ...], [result3, ...], ...]
+                            # but we need [[result1], [result2], [result3], ...] for proper counting
+                            if verify and not loss and not sample:
+                                # Flatten the nested structure for counting
+                                flattened_vDns = []
+                                for row in vDns:
+                                    if isinstance(row, list):
+                                        for item in row:
+                                            if isinstance(item, list):
+                                                for subitem in item:
+                                                    flattened_vDns.append([subitem])
+                                            else:
+                                                flattened_vDns.append([item])
+                                    else:
+                                        flattened_vDns.append([row])
+                                if flattened_vDns:
+                                    vDns = flattened_vDns
+                            
                             vDns = self.addLossTovDns(loss, vDns)
                             lcVariables = lcVariableUpdated
 

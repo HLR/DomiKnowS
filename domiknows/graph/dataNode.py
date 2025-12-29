@@ -369,6 +369,10 @@ class DataNode:
                 key = key + "/"
                 keyBis = keyBis + "/"
 
+            # remove "/" from beginning of kConcept if present
+            if isinstance(kConcept, str) and kConcept.startswith("/"):
+                kConcept = kConcept[1:]
+                
             # Handle different way of representing concept in the key list
             if isinstance(kConcept, str): # Concept name
                 conceptForK = None
@@ -1446,7 +1450,16 @@ class DataNode:
         return torch.as_tensor(collectAttributeList)
 
     def infer(self):
-        """Calculate argMax and softMax for the ontology-based data structure."""
+        """Calculate argMax and softMax for the ontology-based data structure.
+        
+        This method calculates argmax/softmax ACROSS all datanodes (GLOBAL perspective):
+        - Collects values from ALL datanodes for a concept into a single tensor
+        - Finds which datanode has the maximum value (argmax gives index of winning datanode)
+        - Softmax is computed over all datanodes, showing probability distribution across them
+        - Example: If we have 3 datanodes with values [0.2, 0.8, 0.5], argmax=1 (2nd datanode wins)
+        
+        Compare with inferLocal() which calculates argmax/softmax WITHIN each datanode independently.
+        """
         conceptsRelations = self.collectConceptsAndRelations()
 
         for c in conceptsRelations:
@@ -1506,13 +1519,15 @@ class DataNode:
                         continue
 
             else:
-                # ---- loop through dns
+                # ---- loop through dns (GLOBAL CALCULATION MODE)
+                # This mode collects values from ALL datanodes and compares them
+                # to find which datanode has the maximum value (global competition)
                 dns = self.findDatanodes(select = cRoot)
 
                 if not dns:
                     continue
 
-                vs = []
+                vs = []  # Collect one value from each datanode
 
                 for dn in dns:
                     v = dn.getAttribute(c[0])
@@ -1536,12 +1551,14 @@ class DataNode:
                 if not vs:
                     continue
 
+                # Create tensor with one value per datanode: t[i] = value from dns[i]
                 t = torch.tensor(vs)
                 t[torch.isnan(t)] = 0 # NAN  -> 0
 
-                vM = torch.argmax(t).item() # argmax
+                # Find which datanode (by position index) has the maximum value
+                vM = torch.argmax(t).item() # argmax: index of winning datanode
 
-                # Elements for softmax
+                # Elements for softmax (computed across all datanodes)
                 tExp = torch.exp(t)
                 tExpSum = torch.sum(tExp).item()
 
@@ -1549,11 +1566,14 @@ class DataNode:
                 keySoftMax = "<" + c[0].name + ">/softmax"
 
                 # Add argmax and softmax to DataNodes
-                for dn in dns:
+                # Using enumerate to get position index (idx) which matches the tensor position
+                # idx=0 corresponds to first datanode, idx=1 to second, etc.
+                for idx, dn in enumerate(dns):
                     if keyArgmax not in dn.attributes:
                         dn.attributes[keyArgmax] = torch.empty(c[3], dtype=torch.float)
 
-                    if dn.getInstanceID() == vM:
+                    # Set argmax=1 only for the winning datanode (at position vM)
+                    if idx == vM:
                         dn.attributes[keyArgmax][c[2]] = 1
                     else:
                         dn.attributes[keyArgmax][c[2]] = 0
@@ -1561,7 +1581,8 @@ class DataNode:
                     if keySoftMax not in dn.attributes:
                         dn.attributes[keySoftMax] = torch.empty(c[3], dtype=torch.float)
 
-                    dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
+                    # Softmax probability for this datanode relative to all datanodes
+                    dnSoftmax = tExp[idx]/tExpSum
                     dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
     def inferGumbelLocal(self, temperature=1.0, hard=False):
@@ -1649,17 +1670,24 @@ class DataNode:
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
         """
         Infer local probabilities and information for given concepts and relations.
+        
+        This method calculates argmax/softmax WITHIN each datanode independently (LOCAL perspective):
+        - Each datanode's values are processed separately without comparing across datanodes
+        - For each datanode, finds which class/feature has the maximum value within that datanode
+        - Softmax is computed over the values within each datanode independently
+        - Example: DataNode1 [0.2, 0.8] → argmax at index 1; DataNode2 [0.9, 0.1] → argmax at index 0
+        
+        Compare with infer() which calculates argmax/softmax ACROSS all datanodes (global competition).
 
         Args:
             keys (tuple): Tuple containing the types of information to infer ('softmax', 'argmax', etc.).
-            Acc (dict, optional): A dictionary containing some form of accumulated data for normalization.
+            Acc (dict, optional): Accuracy dictionary mapping concept names to accuracy values (0.0-1.0).
+                                  Used to weight normalized probabilities based on concept-specific accuracy.
+                                  Higher accuracy concepts get stronger multipliers (raised to power 4 or 8).
+                                  Example: Acc={'SentimentConcept': 0.95, 'EntityConcept': 0.87}
 
         Attributes affected:
             - This function manipulates the 'attributes' dictionary attribute of the class instance.
-
-        Notes:
-            - The method uses PyTorch for tensor operations.
-            - Logging is done to capture the time taken for inferring local probabilities.
         """
         startInferLocal = perf_counter()
 
@@ -1668,6 +1696,15 @@ class DataNode:
 
         conceptsRelations = self.collectConceptsAndRelations()
 
+        # normalized_keys: Advanced probability normalization methods that adjust softmax probabilities
+        # These methods apply transformations beyond basic softmax, incorporating entropy, mean deviation, etc.
+        # - normalizedProb: Softmax weighted by inverse entropy and mean normalization
+        # - meanNormalizedProb: Simple mean normalization without entropy
+        # - normalizedProbAll: Entropy normalization with powered deviation adjustment
+        # - meanNormalizedProbStd: Standard deviation-based adjustment
+        # - normalizedProbAcc: Entropy normalization weighted by concept accuracy (uses Acc param)
+        # - entropyNormalizedProbAcc: Pure entropy normalization weighted by accuracy (uses Acc param)
+        # - normalizedJustAcc: Softmax weighted only by accuracy multiplier (uses Acc param)
         normalized_keys = set([
                     "normalizedProb", "meanNormalizedProb",
                     "normalizedProbAll", "meanNormalizedProbStd",
@@ -1675,6 +1712,7 @@ class DataNode:
                     "normalizedJustAcc",
                     ])
 
+        # Check if we need to compute softmax first (required for normalized methods)
         if "softmax" in keys or normalized_keys.intersection(set(keys)):
             needSoftmax = True
         else:
@@ -1734,7 +1772,9 @@ class DataNode:
             if not inferLocalKeys:
                 continue
 
-            # ---- loop through dns
+            # ---- loop through dns (LOCAL CALCULATION MODE)
+            # IMPORTANT: Each datanode is processed INDEPENDENTLY without comparing across datanodes
+            # Each datanode finds its own local argmax/softmax within its own values
             dns = self.findDatanodes(select = cRoot)
             if not dns:
                 continue
@@ -1746,6 +1786,7 @@ class DataNode:
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
 
                     if not dn.hasAttribute(keySoftmax):
+                        # Get this datanode's values only (no cross-datanode comparison)
                         v = dn.getAttribute(c[0])
 
                         # check if v is None or not a tensor
@@ -1898,6 +1939,8 @@ class DataNode:
                 if "argmax" in keys:
                     keyArgmax = "<" + c[0].name + ">/local/argmax"
                     if not dn.hasAttribute(keyArgmax):
+                        # LOCAL ARGMAX: Find max within THIS datanode's values only
+                        # (not comparing with other datanodes)
                         v = dn.getAttribute(c[0])
                         
                         # Check if v is None or not a tensor
@@ -1906,6 +1949,7 @@ class DataNode:
                         
                         # Create argmax tensor matching original shape
                         vArgmax = torch.zeros_like(v)
+                        # Find which position within this datanode has the max value
                         vArgmaxIndex = torch.argmax(v).item()
                         
                         # Use flat indexing to safely set value
