@@ -67,3 +67,19 @@ with Graph('visual_qa') as graph:
         material,          # Parent multiclass concept
         the_target_object  # Entity selection from iotaL
     )
+    
+    # Alternatively, inline all steps:
+    '''
+    the_material_answer = queryL(
+        material,          # Parent multiclass concept
+        iotaL(
+            andL(
+                big('z'),
+                right_of('r1', path=('z', rel_arg1.reversed)),
+                andL(brown('x'), cylinder(path='x')),
+                left_of('r2', path=('z', rel_arg1.reversed)),
+                andL(large('y'), brown(path='y'), sphere(path='y'))
+            )
+        )  # Entity selection from iotaL
+    )
+    '''

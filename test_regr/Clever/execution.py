@@ -29,109 +29,50 @@ def create_execution_existL(program, question_index, parent_img="img", property_
         constraint = f'existsL(obj("prop"))\n\t'
         return constraint
     
-    def nest(pred_list, level):
+    def flat_andL(pred_list, base_indent_level):
+        """Create a flat andL with all predicates as arguments."""
         if len(pred_list) == 1:
-            return indent * level + pred_list[0]
-        first, rest = pred_list[0], pred_list[1:]
-        return (
-            indent * level + "andL(\n\t"
-            + indent * (level + 1) + first + ",\n\t"
-            + nest(rest, level + 1) + "\n\t"
-            + indent * level + ")"
-        )
+            return indent * base_indent_level + pred_list[0]
+        
+        lines = [indent * base_indent_level + "andL("]
+        for i, pred in enumerate(pred_list):
+            comma = "," if i < len(pred_list) - 1 else ""
+            lines.append(indent * (base_indent_level + 1) + pred + comma)
+        lines.append(indent * base_indent_level + ")")
+        return "\n".join(lines)
 
     constraint = (
-        f'existsL(\n\t'
-        + nest(preds, 2) + "\n\t"
-        f'{indent})\n\t'
+        f'existsL(\n'
+        + flat_andL(preds, 1) + "\n"
+        f')\n'
     )
     return constraint
 
 
-def create_execution_iotaL_simple(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):
+def create_execution_queryL(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):
     """
-    Create iotaL execution for query-type questions.
-    iotaL selects THE unique entity satisfying a condition.
+    Create queryL execution for query-type questions.
     
-    For a question like "What color is the cube to the right of the yellow sphere?":
-    - We use iotaL to select the unique cube that is right of the yellow sphere
-    - The query_color tells us what attribute we're asking about (handled separately)
-    - Does not parse complex nested relations
-    """
-    query_type = None
-    if program:
-        last_op = program[-1]
-        op_type = last_op.get('type', last_op.get('function', ''))
-        if op_type.startswith('query_'):
-            query_type = op_type.replace('query_', '')
+    queryL wraps iotaL to query a multiclass attribute from the selected entity.
     
-    values = []
-    for step in program:
-        func = step.get('type', step.get('function', ''))
-        if func.startswith('query_'):
-            continue
-        for v in step.get("value_inputs", []):
-            values.append((v, func))
+    For a question like "What material is the big object that is right of the brown cylinder 
+    and left of the large brown sphere?":
     
-    define_character = ord("a")
-    check_use = False
-    current_relation_var = None
-    
-    preds = []
-    
-    for i, (val, func) in enumerate(values):
-        if val in g_relational_concepts.get("spatial_relation", []):
-            new_var = chr(define_character + 1)
-            if check_use:
-                preds.append(f'{val}("{new_var}", path=("{chr(define_character)}", obj1.reversed))')
-            else:
-                preds.append(f'{val}("{new_var}", path=("{chr(define_character)}", obj1.reversed))')
-                check_use = True
-            define_character += 1
-            current_relation_var = new_var
-        else:
-            if not check_use:
-                preds.append(f'{val}("{chr(define_character)}")')
-                check_use = True
-            elif current_relation_var:
-                preds.append(f'{val}(path=("{current_relation_var}", obj2))')
-            else:
-                preds.append(f'{val}(path=("{chr(define_character)}"))')
-    
-    if len(preds) == 0:
-        constraint = f'iotaL(obj("{property_prefix}0"))\n\t'
-        return constraint, query_type
-    
-    def nest_andL(pred_list, level):
-        if len(pred_list) == 1:
-            return indent * level + pred_list[0]
-        first, rest = pred_list[0], pred_list[1:]
-        return (
-            indent * level + "andL(\n\t"
-            + indent * (level + 1) + first + ",\n\t"
-            + nest_andL(rest, level + 1) + "\n\t"
-            + indent * level + ")"
+    queryL(
+        material,
+        iotaL(
+            andL(
+                big('z'),
+                right_of('r1', path=('z', rel_arg1.reversed)),
+                brown('x'),
+                cylinder(path='x'),
+                left_of('r2', path=('z', rel_arg1.reversed)),
+                large('y'),
+                brown(path='y'),
+                sphere(path='y')
+            )
         )
-
-    constraint = (
-        f'iotaL(\n\t'
-        + nest_andL(preds, 2) + "\n\t"
-        f'{indent})\n\t'
     )
-    
-    return constraint, query_type
-
-
-def create_execution_iotaL(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):
-    """
-    Create iotaL execution for query-type questions.
-    iotaL selects THE unique entity satisfying a condition.
-    
-    For a question like "What color is the cube to the right of the yellow sphere?":
-    - We use iotaL to select the unique cube that is right of the yellow sphere
-    - The query_color tells us what attribute we're asking about (handled separately)
-    
-    Handles complex nested relations.
     """
     query_type = None
     
@@ -155,19 +96,13 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
     def build_predicates_from_program(steps):
         """
         Build predicate list from program steps.
-        
-        Path structure:
-        - First object: defined directly with variable "a"
-        - After relation: access via (relation_var, obj2)
-        - Chained relations: build compound path (prev_rel, obj2, obj1.reversed)
+        Returns a flat list of all predicates.
         """
         preds = []
         var_counter = ord('a')
         
-        # Track current path to reach the "current object"
-        # None means direct variable, otherwise it's a tuple like ("b", obj2)
         current_obj_var = chr(var_counter)
-        current_obj_path = None  # Path to current object (None = direct var)
+        current_obj_path = None
         
         first_predicate = True
         
@@ -182,15 +117,12 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
                 if value_inputs:
                     val = value_inputs[0]
                     if first_predicate:
-                        # First predicate - define the object variable
                         preds.append(f'{val}("{current_obj_var}")')
                         first_predicate = False
                     elif current_obj_path:
-                        # After a relation - use path to reach object
                         path_str = ", ".join(current_obj_path)
                         preds.append(f'{val}(path=({path_str}))')
                     else:
-                        # Continuation of same object description
                         preds.append(f'{val}(path=("{current_obj_var}"))')
             
             elif func == 'relate':
@@ -200,16 +132,12 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
                     rel_var = chr(var_counter)
                     
                     if current_obj_path:
-                        # Chained relation - build path through previous relation
-                        # From prev relation's obj2, follow obj1.reversed
                         path_parts = list(current_obj_path) + ["obj1.reversed"]
                         path_str = ", ".join(path_parts)
                         preds.append(f'{relation}("{rel_var}", path=({path_str}))')
                     else:
-                        # First relation - from direct object variable
                         preds.append(f'{relation}("{rel_var}", path=("{current_obj_var}", obj1.reversed))')
                     
-                    # Update path: current object is now at (rel_var, obj2)
                     current_obj_path = [f'"{rel_var}"', "obj2"]
                     first_predicate = False
             
@@ -238,26 +166,45 @@ def create_execution_iotaL(program, question_index, parent_img="img", property_p
     
     preds = build_predicates_from_program(parsed_steps)
     
-    if len(preds) == 0:
-        constraint = f'iotaL(obj("{property_prefix}0"))\n\t'
-        return constraint, query_type
-    
-    def nest_andL(pred_list, level):
+    def flat_andL(pred_list, base_indent_level):
+        """Create a flat andL with all predicates as arguments."""
         if len(pred_list) == 1:
-            return indent * level + pred_list[0]
-        first, rest = pred_list[0], pred_list[1:]
-        return (
-            indent * level + "andL(\n\t"
-            + indent * (level + 1) + first + ",\n\t"
-            + nest_andL(rest, level + 1) + "\n\t"
-            + indent * level + ")"
-        )
+            return indent * base_indent_level + pred_list[0]
+        
+        lines = [indent * base_indent_level + "andL("]
+        for i, pred in enumerate(pred_list):
+            comma = "," if i < len(pred_list) - 1 else ""
+            lines.append(indent * (base_indent_level + 1) + pred + comma)
+        lines.append(indent * base_indent_level + ")")
+        return "\n".join(lines)
 
-    constraint = (
-        f'iotaL(\n\t'
-        + nest_andL(preds, 2) + "\n\t"
-        f'{indent})\n\t'
-    )
+    # Build the iotaL part
+    if len(preds) == 0:
+        iota_content = indent * 3 + f'obj("{property_prefix}0")'
+    else:
+        iota_content = flat_andL(preds, 3)
+    
+    # Wrap with queryL(query_type, iotaL(...))
+    if query_type:
+        constraint = (
+            f'queryL(\n'
+            f'{indent}{query_type},\n'
+            f'{indent}iotaL(\n'
+            + iota_content + "\n"
+            f'{indent})\n'
+            f')\n'
+        )
+    else:
+        # Fallback to just iotaL if no query_type
+        if len(preds) == 0:
+            fallback_content = indent * 2 + f'obj("{property_prefix}0")'
+        else:
+            fallback_content = flat_andL(preds, 2)
+        constraint = (
+            f'iotaL(\n'
+            + fallback_content + "\n"
+            f')\n'
+        )
     
     return constraint, query_type
 
@@ -267,13 +214,13 @@ def create_execution_for_question(program, question_index, question_type=None):
     Factory function to create the appropriate execution based on question type.
     """
     if not program:
-        return 'existsL(obj("prop"))\n\t', None
+        return 'existsL(obj("prop"))\n', None
     
     last_op = program[-1]
     op_type = last_op.get('type', last_op.get('function', ''))
     
     if op_type.startswith('query_'):
-        return create_execution_iotaL(program, question_index)
+        return create_execution_queryL(program, question_index)
     
     elif op_type == 'exist':
         return create_execution_existL(program, question_index), None
