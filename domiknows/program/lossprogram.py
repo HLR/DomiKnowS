@@ -479,10 +479,11 @@ class PrimalDualProgram(LossProgram):
 
     def _init_session(self):
         """Primal-dual specific session state."""
+        c_freq = getattr(self, '_c_freq', 10)
         return {
             'iter': 0,
             'c_update_iter': 0,
-            'c_update_freq': 10,  # Will be overridden by c_freq
+            'c_update_freq': c_freq,
             'c_update': 0
         }
 
@@ -529,10 +530,10 @@ class PrimalDualProgram(LossProgram):
         else:
             self.copt = None
         
-        c_session = self._init_session()
-        c_session['c_update_freq'] = c_freq
+        # Store c_freq for _init_session to use
+        self._c_freq = c_freq
         
-        # Pass primal-dual specific params
+        # Let base class create c_session via _init_session()
         return super().train(
             training_set, valid_set=valid_set, test_set=test_set,
             c_lr=c_lr, c_warmup_iters=c_warmup_iters,
@@ -544,7 +545,7 @@ class PrimalDualProgram(LossProgram):
             constraint_epochs=constraint_epochs,
             constraint_only=constraint_only,
             constraint_loss_scale=constraint_loss_scale,
-            c_session=c_session, **kwargs
+            **kwargs
         )
 
     def train_epoch(self, dataset, c_lr=0.05, c_warmup_iters=10,
