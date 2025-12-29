@@ -61,20 +61,22 @@ def program():
         arg2_node = datanode.relationLinks[rel_arg2.name][0]
         arg1_id = arg1_node.getAttribute('index').item()
         arg2_id = arg2_node.getAttribute('index').item()
+        device = getattr(datanode, 'current_device', 'cpu')
         if (arg1_id, arg2_id) in data:
-            return torch.tensor([0, 1])
+            return torch.tensor([0, 1], device=device)
         else:
-            return torch.tensor([1, 0])
+            return torch.tensor([1, 0], device=device)
     
     def read_left_of(*_, data, datanode):
         arg1_node = datanode.relationLinks[rel_arg1.name][0]
         arg2_node = datanode.relationLinks[rel_arg2.name][0]
         arg1_id = arg1_node.getAttribute('index').item()
         arg2_id = arg2_node.getAttribute('index').item()
+        device = getattr(datanode, 'current_device', 'cpu')
         if (arg1_id, arg2_id) in data:
-            return torch.tensor([0, 1])
+            return torch.tensor([0, 1], device=device)
         else:
-            return torch.tensor([1, 0])
+            return torch.tensor([1, 0], device=device)
 
     pair[right_of] = DataNodeReaderSensor(
         rel_arg1.reversed, rel_arg2.reversed,
@@ -271,3 +273,195 @@ def test_queryL_material_selection(program, dataset):
         
         print("\nqueryL material selection test PASSED!")
         print(f"Correctly identified object {EXPECTED_TARGET_OBJECT_ID} as '{EXPECTED_TARGET_MATERIAL}'")
+        
+
+# Add these tests at the end of test_main.py
+
+@pytest.fixture(scope="module")
+def program_with_labels():
+    """Program fixture with constraint label sensors for loss calculation."""
+    import torch
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateSensor
+    from domiknows.program import LearningBasedProgram
+    from domiknows.program.model.pytorch import PoiModel
+    from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
+    
+    from .graph import (
+        graph, image, object_node, image_contains_object, pair, rel_arg1, rel_arg2,
+        big, large, brown, cylinder, sphere, right_of, left_of, material, metal, rubber,
+        the_brown_cylinder, the_large_brown_sphere, the_target_object, the_material_answer
+    )
+    from .sensor import (
+        BigLearner, LargeLearner, BrownLearner, CylinderLearner, SphereLearner,
+        MetalLearner, RubberLearner
+    )
+
+    graph.detach()
+
+    # Image container
+    image['index'] = ReaderSensor(keyword='image')
+    
+    # Object sensors
+    object_node['index'] = ReaderSensor(keyword='objects')
+    object_node[image_contains_object] = EdgeSensor(
+        object_node['index'], image['index'],
+        relation=image_contains_object,
+        forward=lambda x, _: torch.ones_like(x).unsqueeze(-1)
+    )
+    
+    # Pair sensors
+    pair[rel_arg1.reversed, rel_arg2.reversed] = CompositionCandidateSensor(
+        object_node['index'],
+        relations=(rel_arg1.reversed, rel_arg2.reversed),
+        forward=lambda *_, **__: True
+    )
+
+    # Object property learners
+    object_node[big] = BigLearner('index')
+    object_node[large] = LargeLearner('index')
+    object_node[brown] = BrownLearner('index')
+    object_node[cylinder] = CylinderLearner('index')
+    object_node[sphere] = SphereLearner('index')
+    
+    # Material subclass learners
+    object_node[metal] = MetalLearner('index')
+    object_node[rubber] = RubberLearner('index')
+    
+    # Spatial relation sensors
+    def read_right_of(*_, data, datanode):
+        arg1_node = datanode.relationLinks[rel_arg1.name][0]
+        arg2_node = datanode.relationLinks[rel_arg2.name][0]
+        arg1_id = arg1_node.getAttribute('index').item()
+        arg2_id = arg2_node.getAttribute('index').item()
+        if (arg1_id, arg2_id) in data:
+            return torch.tensor([0, 1])
+        else:
+            return torch.tensor([1, 0])
+    
+    def read_left_of(*_, data, datanode):
+        arg1_node = datanode.relationLinks[rel_arg1.name][0]
+        arg2_node = datanode.relationLinks[rel_arg2.name][0]
+        arg1_id = arg1_node.getAttribute('index').item()
+        arg2_id = arg2_node.getAttribute('index').item()
+        if (arg1_id, arg2_id) in data:
+            return torch.tensor([0, 1])
+        else:
+            return torch.tensor([1, 0])
+
+    pair[right_of] = DataNodeReaderSensor(
+        rel_arg1.reversed, rel_arg2.reversed,
+        keyword='right_of',
+        forward=read_right_of
+    )
+    pair[left_of] = DataNodeReaderSensor(
+        rel_arg1.reversed, rel_arg2.reversed,
+        keyword='left_of',
+        forward=read_left_of
+    )
+
+    # Add constraint label sensors for loss calculation
+    graph.constraint[the_brown_cylinder] = ReaderSensor(
+        keyword='the_brown_cylinder_label', is_constraint=True, label=True
+    )
+    graph.constraint[the_large_brown_sphere] = ReaderSensor(
+        keyword='the_large_brown_sphere_label', is_constraint=True, label=True
+    )
+    graph.constraint[the_target_object] = ReaderSensor(
+        keyword='the_target_object_label', is_constraint=True, label=True
+    )
+    graph.constraint[the_material_answer] = ReaderSensor(
+        keyword='the_material_answer_label', is_constraint=True, label=True
+    )
+
+    # Force CPU to avoid device mismatch issues in loss calculation
+    return LearningBasedProgram(graph, PoiModel, poi=[image, object_node, pair], device='cpu')
+
+
+@pytest.fixture(scope="module")
+def dataset_with_labels():
+    """Dataset with constraint labels for loss calculation."""
+    from .reader import VisualQAReader
+    
+    class VisualQAReaderWithLabels(VisualQAReader):
+        def run(self):
+            for item in super().run():
+                # Add constraint labels (1.0 = constraint should be satisfied)
+                item['the_brown_cylinder_label'] = 1.0
+                item['the_large_brown_sphere_label'] = 1.0
+                item['the_target_object_label'] = 1.0
+                item['the_material_answer_label'] = 1.0
+                yield item
+    
+    return VisualQAReaderWithLabels().run()
+
+
+def test_iotaL_queryL_calculateLcLoss(program_with_labels, dataset_with_labels):
+    """Test calculateLcLoss (differentiable) for iotaL and queryL constraints."""
+    for datanode in program_with_labels.populate(dataset=dataset_with_labels, device='cpu'):
+        loss_dict = datanode.calculateLcLoss(tnorm='P', sample=False)
+        
+        print("\n=== calculateLcLoss (differentiable) ===")
+        for lc_name, lc_data in loss_dict.items():
+            loss_val = lc_data.get('loss')
+            if loss_val is not None:
+                loss_num = loss_val.item() if hasattr(loss_val, 'item') else loss_val
+                print(f"{lc_name}: loss = {loss_num:.4f}")
+            else:
+                print(f"{lc_name}: loss = None")
+        
+        assert len(loss_dict) > 0, "Expected loss values"
+
+
+def test_iotaL_queryL_calculateLcLoss_sampling(program_with_labels, dataset_with_labels):
+    """Test calculateLcLoss with sampling for iotaL and queryL constraints."""
+    for datanode in program_with_labels.populate(dataset=dataset_with_labels, device='cpu'):
+        loss_dict = datanode.calculateLcLoss(tnorm='P', sample=True, sampleSize=10)
+        
+        print("\n=== calculateLcLoss (sampling) ===")
+        for lc_name, lc_data in loss_dict.items():
+            loss_val = lc_data.get('loss')
+            if loss_val is not None:
+                if isinstance(loss_val, list):
+                    print(f"{lc_name}: loss = {loss_val}")
+                else:
+                    loss_num = loss_val.item() if hasattr(loss_val, 'item') else loss_val
+                    print(f"{lc_name}: loss = {loss_num:.4f}")
+            else:
+                print(f"{lc_name}: loss = None")
+        
+        assert len(loss_dict) > 0, "Expected loss values with sampling"
+        
+def test_iotaL_queryL_verifyResultsLC(program, dataset):
+    """Test verifyResultsLC for all constraints including iotaL and queryL."""
+    for datanode in program.populate(dataset=dataset):
+        results = datanode.verifyResultsLC(key="/local/argmax")
+        
+        print("\n=== verifyResultsLC ===")
+        for lc_name, (sat_count, total, sat_rate) in results.items():
+            print(f"{lc_name}: {sat_count}/{total} = {sat_rate:.2%}")
+        
+        assert len(results) > 0, "Expected verification results"
+
+
+def test_iotaL_verifySingleConstraint(program, dataset):
+    """Test verifySingleConstraint for iotaL constraints."""
+    from .graph import the_brown_cylinder, the_large_brown_sphere, the_target_object
+
+    for datanode in program.populate(dataset=dataset):
+        print("\n=== verifySingleConstraint for iotaL ===")
+        
+        for lc in [the_brown_cylinder, the_large_brown_sphere, the_target_object]:
+            sat_count, total, sat_rate = datanode.verifySingleConstraint(lc.name, key="/local/argmax")
+            print(f"{lc.name}: {sat_count}/{total} = {sat_rate:.2%}")
+
+
+def test_queryL_verifySingleConstraint(program, dataset):
+    """Test verifySingleConstraint for queryL constraint."""
+    from .graph import the_material_answer
+
+    for datanode in program.populate(dataset=dataset):
+        print("\n=== verifySingleConstraint for queryL ===")
+        
+        sat_count, total, sat_rate = datanode.verifySingleConstraint(the_material_answer.name, key="/local/argmax")
+        print(f"{the_material_answer.name}: {sat_count}/{total} = {sat_rate:.2%}")

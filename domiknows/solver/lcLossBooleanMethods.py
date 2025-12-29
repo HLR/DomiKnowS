@@ -1043,7 +1043,7 @@ class lcLossBooleanMethods(constraintsProcessor):
             else:
                 return selection
 
-def queryVar(self, _, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, _, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Differentiable query operator for multiclass attribute selection.
         

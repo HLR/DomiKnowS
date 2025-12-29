@@ -386,9 +386,3 @@ for data in program.populate(dataset):
     print(f"  Constraint should be satisfied: {constraint_satisfied}")
     print(f"  verifyResultsLC says: {data.verifyResultsLC(key='/local/argmax').get('LC2', {}).get('satisfied', 'N/A')}%")
 print(acc)
-
-"""
-Diagnostic script to debug verifyResultsLC for nested existsL(andL(...)) constraints.
-Add this to your test file to trace through what's happening.
-"""
-

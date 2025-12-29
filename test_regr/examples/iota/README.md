@@ -1,7 +1,7 @@
 # Visual QA iotaL and queryL Constraints Test
 
 ## Overview
-This test validates `iotaL` (definite description / unique selection) and `queryL` (multiclass attribute query) constraints for visual question answering using DomiKnows framework with ILP solver.
+This test validates `iotaL` (definite description / unique selection) and `queryL` (multiclass attribute query) constraints for visual question answering using DomiKnows framework across multiple execution pathways: ILP, verification, differentiable loss, and sample-based loss.
 
 ## Graph Structure
 - **image**: Container concept (scene/image)
@@ -68,34 +68,55 @@ Expected to return: **metal** (the material of object 3)
 
 ## Test Cases
 
-### `test_iotaL_target_object_selection`
+### ILP Inference Tests
+
+#### `test_iotaL_target_object_selection`
 Runs ILP inference and verifies that the correct objects are selected for each iotaL constraint:
 - Object 1 is identified as the brown cylinder
 - Object 2 is identified as the large brown sphere
 - Object 3 is identified as the big target object
 
-### `test_iotaL_spatial_relations`
+#### `test_iotaL_spatial_relations`
 Verifies that spatial relations are correctly evaluated:
 - Object 3 is right_of object 1 (brown cylinder)
 - Object 3 is left_of object 2 (large brown sphere)
 
-### `test_queryL_material_selection`
+#### `test_queryL_material_selection`
 Verifies that queryL correctly identifies the material of the target object:
 - Object 3 (target) has material **metal**
 - Object 4 (distractor) has material **rubber**
+
+### Verification Tests
+
+#### `test_iotaL_queryL_verifyResultsLC`
+Tests `verifyResultsLC(key="/local/argmax")` for all constraints including iotaL and queryL.
+
+#### `test_iotaL_verifySingleConstraint`
+Tests `verifySingleConstraint(lcName, key="/local/argmax")` for each iotaL constraint individually.
+
+#### `test_queryL_verifySingleConstraint`
+Tests `verifySingleConstraint(lcName, key="/local/argmax")` for the queryL constraint.
+
+### Loss Calculation Tests
+
+#### `test_iotaL_queryL_calculateLcLoss`
+Tests `calculateLcLoss(tnorm='P', sample=False)` - differentiable loss calculation for iotaL and queryL constraints. Requires constraint label sensors attached via `graph.constraint[lc]`.
+
+#### `test_iotaL_queryL_calculateLcLoss_sampling`
+Tests `calculateLcLoss(tnorm='P', sample=True, sampleSize=10)` - Gumbel-softmax sample-based loss calculation for iotaL and queryL constraints.
 
 ## Files
 - `graph.py` - Ontology with iotaL and queryL constraints
 - `reader.py` - Test data provider with material ground truth
 - `sensor.py` - Learners for object properties and material subclasses (MetalLearner, RubberLearner)
-- `test_main.py` - Pytest validation using ILP inference
+- `test_main.py` - Pytest validation across all execution pathways
 
 ## Running
 ```bash
-uv run putest test_main.py -v
+uv run pytest test_main.py -v
 ```
 
-Requires Gurobi solver license.
+Requires Gurobi solver license for ILP tests (marked with `@pytest.mark.gurobi`).
 
 ## Implementation Notes
 
@@ -106,8 +127,27 @@ Requires Gurobi solver license.
 
 ### queryL (Multiclass Attribute Query)
 - Queries which subclass an entity belongs to
-- Requires multiclass concept defined via either:
-  - `is_a` subclasses (e.g., `metal.is_a(material)`, `rubber.is_a(material)`)
-  - `EnumConcept` (e.g., `material = EnumConcept('material', values=['metal', 'rubber'])`)
+- Requires multiclass concept defined via subclasses (e.g., `metal.is_a(material)`, `rubber.is_a(material)`)
 - ILP: Creates result variables for each subclass with exactly-one constraint
-- Loss: Softmax distribution over subclasses with entropy-based loss
+- Loss: Softmax distribution over subclasses
+
+### Execution Pathways Tested
+| Pathway | Method | Description |
+|---------|--------|-------------|
+| ILP | `inferILPResults()` | Integer Linear Programming optimization |
+| Verification | `verifyResultsLC()`, `verifySingleConstraint()` | Discrete constraint satisfaction check |
+| Differentiable Loss | `calculateLcLoss(sample=False)` | Product t-norm based differentiable loss |
+| Sample-based Loss | `calculateLcLoss(sample=True)` | Gumbel-softmax sampling for loss |
+
+### Label Sensors for Loss Calculation
+Loss calculation requires label sensors attached to constraints:
+```python
+graph.constraint[the_brown_cylinder] = ReaderSensor(
+    keyword='the_brown_cylinder_label', 
+    is_constraint=True, 
+    label=True
+)
+```
+
+### Device Considerations
+Loss calculation tests use `device='cpu'` to avoid device mismatch issues in nested constraint evaluation.
