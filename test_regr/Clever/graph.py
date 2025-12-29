@@ -16,10 +16,10 @@ def create_graph(dataset, return_graph_text=False, include_query_questions=False
     Args:
         dataset: The CLEVR dataset
         return_graph_text: Whether to return the graph text
-        include_query_questions: Whether to include query-type questions (uses iotaL)
+        include_query_questions: Whether to include query-type questions (uses queryL with iotaL)
     """
     graph_text = """from domiknows.graph import Graph, Concept
-from domiknows.graph.logicalConstrain import ifL, andL, existsL, iotaL
+from domiknows.graph.logicalConstrain import ifL, andL, existsL, iotaL, queryL
 
 with Graph('image_graph') as graph:
 
@@ -27,11 +27,21 @@ with Graph('image_graph') as graph:
 \tobj = Concept(name='obj')
 \timage_object_contains, = image.contains(obj)\n\n"""
 
-    # Add attribute concepts (without "is_" prefix)
-    for attr, values in g_attribute_concepts.items():
-        for val in values:
-            graph_text += f"\t{val} = obj(name='{val}')\n"
-        graph_text += '\n'
+    if include_query_questions:
+        # Create parent attribute concepts and their subclasses for queryL
+        for attr, values in g_attribute_concepts.items():
+            # Create parent concept (e.g., material = obj(name='material'))
+            graph_text += f"\t{attr} = obj(name='{attr}')\n"
+            # Create subclasses (e.g., metal = material(name='metal'))
+            for val in values:
+                graph_text += f"\t{val} = {attr}(name='{val}')\n"
+            graph_text += '\n'
+    else:
+        # Original: flat attribute concepts (without parent hierarchy)
+        for attr, values in g_attribute_concepts.items():
+            for val in values:
+                graph_text += f"\t{val} = obj(name='{val}')\n"
+            graph_text += '\n'
 
     # Add relational concepts
     for attr, values in g_relational_concepts.items():
@@ -57,29 +67,31 @@ with Graph('image_graph') as graph:
         
         execution, query_type = create_execution_for_question(program, i)
         
-        #graph_text+="\n\t"+execution
-        #print(execution)
         if " or " in question_raw:
             print(f"Found 'or' in question {i}")
         
         executions.append(execution)
         query_types.append(query_type)
 
-    # print(graph_text)
-     
     local_vars = {}
     exec(graph_text, {}, local_vars)
-
-    #print("variables:")
-    #for name, value in local_vars.items():
-    #    print(f"{name} = {value!r}")
     
-    # Build attribute names dict - collect all attribute and relation predicates
+    # Build attribute names dict
     attribute_names_dict = {}
-    for attr, values in g_attribute_concepts.items():
-        for val in values:
-            if val in local_vars:
-                attribute_names_dict[val] = local_vars[val]
+    
+    if include_query_questions:
+        # Include parent concepts for queryL
+        for attr, values in g_attribute_concepts.items():
+            if attr in local_vars:
+                attribute_names_dict[attr] = local_vars[attr]
+            for val in values:
+                if val in local_vars:
+                    attribute_names_dict[val] = local_vars[val]
+    else:
+        for attr, values in g_attribute_concepts.items():
+            for val in values:
+                if val in local_vars:
+                    attribute_names_dict[val] = local_vars[val]
     
     for attr, values in g_relational_concepts.items():
         for val in values:
@@ -124,6 +136,6 @@ with Graph('image_graph') as graph:
 def create_graph_for_query_questions(dataset, return_graph_text=False):
     """
     Specialized graph creation for query-type questions only.
-    Uses iotaL for selecting unique objects.
+    Uses queryL with iotaL for selecting unique objects and querying attributes.
     """
     return create_graph(dataset, return_graph_text=return_graph_text, include_query_questions=True)
