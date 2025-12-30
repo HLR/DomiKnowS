@@ -75,10 +75,10 @@ with Graph('visual_qa') as graph:
         iotaL(
             andL(
                 big('z'),
-                right_of('r1', path=('z', rel_arg1.reversed)),
+                iotaL(andL(brown('x'), cylinder(path='x')))
                 andL(brown('x'), cylinder(path='x')),
                 left_of('r2', path=('z', rel_arg1.reversed)),
-                andL(large('y'), brown(path='y'), sphere(path='y'))
+                iotaL(andL(large('y'), brown(path='y'), sphere(path='y')))
             )
         )  # Entity selection from iotaL
     )
