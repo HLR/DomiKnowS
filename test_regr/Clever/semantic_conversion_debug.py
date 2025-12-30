@@ -140,6 +140,7 @@ logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser(description="Dummy Run of CLEVR")
 parser.add_argument("--logic_str", type=str, default="")
+parser.add_argument("--input_file", type=str, default="convert_CLEVR_program_two_relations.json")
 args = parser.parse_args()
 
 device = "cpu"
@@ -150,7 +151,7 @@ def filter_relation(property, arg1, arg2):
     return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
 
 
-with open("convert_CLEVR_program_manual_10_first_translation.json", 'rb') as file:
+with open(args.input_file, 'rb') as file:
     raw_data = json.load(file)[:]
     dataset = [data["input"] for data in raw_data]
 
