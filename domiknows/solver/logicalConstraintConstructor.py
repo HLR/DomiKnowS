@@ -421,8 +421,47 @@ class LogicalConstraintConstructor:
 
                 elif isinstance(e, (Concept, tuple)):
                     # Get dataNode candidates 
-                    dnsList, referedVariables = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate=integrate)
+                    result = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate=integrate)
+                    
+                    # Handle None result
+                    if result is None or result[0] is None:
+                        continue
+                    
+                    # Unpack result - now returns 3 values with expansion info
+                    dnsList, referedVariables, expansionInfo = result
+                    
                     lcVariablesDns[variableName] = dnsList
+                    
+                    # Apply expansion to lcVariables if expansion occurred
+                    if expansionInfo is not None:
+                        mapping = expansionInfo['mapping']
+                        expanded_vars = expansionInfo['expanded_vars']
+                        
+                        self.myLogger.info(f"Applying expansion to lcVariables for: {expanded_vars}")
+                        
+                        for var_name in expanded_vars:
+                            if var_name not in lcVariables:
+                                continue
+                            
+                            old_structure = lcVariables[var_name]
+                            if not old_structure:
+                                continue
+                            
+                            new_structure = []
+                            for orig_group_idx, item_idx in mapping:
+                                if orig_group_idx < len(old_structure):
+                                    old_group = old_structure[orig_group_idx]
+                                    if isinstance(old_group, list) and item_idx < len(old_group):
+                                        new_structure.append([old_group[item_idx]])
+                                    elif not isinstance(old_group, list):
+                                        new_structure.append([old_group])
+                                    else:
+                                        new_structure.append([None])
+                                else:
+                                    new_structure.append([None])
+                            
+                            lcVariables[var_name] = new_structure
+                            self.myLogger.info(f"  {var_name}: {len(old_structure)} → {len(new_structure)} entries")
                                 
                     if isinstance(lc, CandidateSelection):
                         continue

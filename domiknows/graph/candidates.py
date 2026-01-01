@@ -81,123 +81,240 @@ def findDatanodesForRootConcept(dn, rootConcept):
         
     return dns
     
-def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False):
+def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate=False):
+    """
+    Get candidates for a constraint variable.
+    
+    Returns:
+        tuple: (dnsList, referredVariableNames, expansionInfo)
+            - dnsList: List of candidate DataNode lists
+            - referredVariableNames: List of variable names referenced in path
+            - expansionInfo: None if no expansion, or dict with:
+                - 'mapping': list of (orig_group_idx, item_idx) tuples
+                - 'expanded_vars': list of variable names that were expanded
+    """
+    indent = "  " * 0
+    log = False
+    def _log(msg):
+        if not log:
+            return
+        if logger:
+            logger.info(f"{indent}[getEdgeDataNode] {msg}")
+        else:
+            print(f"{indent}[getEdgeDataNode] {msg}")
+            
     conceptName = e[0].name
-                        
+
+    def _dn_repr(d):
+        if d is None:
+            return "None"
+        return f"{d.getOntologyNode().name}#{d.getInstanceID()}"
+
+    def _dns_list_repr(dns_list):
+        if not dns_list:
+            return "[]"
+        parts = []
+        for i, group in enumerate(dns_list[:3]):
+            if group:
+                items = [_dn_repr(d) for d in group[:3]]
+                if len(group) > 3:
+                    items.append(f"...+{len(group)-3}")
+                parts.append(f"[{','.join(items)}]")
+            else:
+                parts.append("[]")
+        if len(dns_list) > 3:
+            parts.append(f"...+{len(dns_list)-3} groups")
+        return f"({len(dns_list)} groups): [{', '.join(parts)}]"
+
+    _log(f"=== getCandidates START for {conceptName}, variable={variable.name}, path={variable.v} ===")
+    _log(f"  Current lcVariablesDns keys: {list(lcVariablesDns.keys())}")
+    for k, v in lcVariablesDns.items():
+        _log(f"    {k}: {len(v)} groups, sizes={[len(g) for g in v[:5]]}{'...' if len(v) > 5 else ''}")
+
     # -- Collect dataNode for the logical constraint (path)
     referredVariableNames = []
-    
-    dnsList = [] # Stores lists of dataNodes for each corresponding dataNode 
+    expansionInfo = None  # Will be set if expansion occurs
+
+    dnsList = []  # Stores lists of dataNodes for each corresponding dataNode
     pathsCount = 0
-    if variable.v == None: # No path - just concept
+    if variable.v == None:  # No path - just concept
         if variable.name == None:
-            logger.error('The element %s of logical constraint %s has no name for variable'%(conceptName, lc.lcName))
-            return None
-        
+            logger.error('The element %s of logical constraint %s has no name for variable' % (conceptName, lc.lcName))
+            return None, None, None
+
         # Check if we already found this variable
         if variable.name in lcVariablesDns:
-            dnsList = lcVariablesDns[variable.name]  
+            dnsList = lcVariablesDns[variable.name]
+            _log(f"  No path, reusing existing variable '{variable.name}': {_dns_list_repr(dnsList)}")
         else:
             rootConcept = dn.findRootConceptOrRelation(conceptName)
             rootDns = findDatanodesForRootConcept(dn, rootConcept)
             dnsList = [[rDn] for rDn in rootDns]
-    else: # Path specified
+            _log(f"  No path, created fresh candidates: {_dns_list_repr(dnsList)}")
+    else:  # Path specified
         from domiknows.graph.logicalConstrain import eqL
         if not isinstance(variable.v, eqL):
             if len(variable.v) == 0:
-                logger.error('The element %s of logical constraint %s has empty part v of the variable'%(conceptName, lc.lcName))
-                return None
-            
+                logger.error('The element %s of logical constraint %s has empty part v of the variable' % (conceptName, lc.lcName))
+                return None, None, None
+
         # -- Prepare paths
         path = variable.v
         if not isinstance(path, tuple):
             if isinstance(path, str):
                 path = (path,)
-        
+
         if not isinstance(path, (tuple, eqL)):
             raise TypeError("Path must be a tuple or eqL")
-        
+
         paths = []
-        
+
         if isinstance(path, eqL):
             paths.append(path)
         elif isinstance(path[0], str) and len(path) == 1:
             paths.append(path)
         elif isinstance(path[0], str) and not isinstance(path[1], tuple):
             paths.append(path)
-        else: # If many paths
+        else:  # If many paths
             for i, vE in enumerate(path):
                 if i == 0 and isinstance(vE, str):
                     continue
-                
                 paths.append(vE)
-                
+
         pathsCount = len(paths)
+        logger.info(f"  Parsed {pathsCount} path(s): {paths}")
         eqLPaths = []
-        
-        # -- Process  paths
+
+        # -- Process paths
         dnsListForPaths = []
         eqLPaths = []
         for i, v in enumerate(paths):
             dnsListForPaths.append([])
-            
-            # Get name of the referred variable 
+
+            # Get name of the referred variable
             if isinstance(path, eqL):
                 referredVariableName = None
             else:
-                referredVariableName = v[0] 
-        
-            if referredVariableName not in lcVariablesDns: # Not yet defined - it has to be the current lc element dataNodes list
+                referredVariableName = v[0]
+
+            _log(f"  PATH {i}: referredVariableName='{referredVariableName}', path_spec={v}")
+
+            if referredVariableName not in lcVariablesDns:  # Not yet defined
                 rootConcept = dn.findRootConceptOrRelation(conceptName)
                 rootDns = findDatanodesForRootConcept(dn, rootConcept)
                 referredDns = [[rDn] for rDn in rootDns]
                 integrate = True
                 new_iterate = True
-            else: # Already defined in the logical constraint from the v part 
+                _log(f"    Variable '{referredVariableName}' NOT in lcVariablesDns, using root: {_dns_list_repr(referredDns)}")
+            else:  # Already defined in the logical constraint
                 new_iterate = False
-                referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
+                referredDns = lcVariablesDns[referredVariableName]
                 referredVariableNames.append(referredVariableName)
+                _log(f"    Variable '{referredVariableName}' found in lcVariablesDns: {_dns_list_repr(referredDns)}")
 
-            # Get variables from dataNodes selected  based on referredVariableName
-            for indexDn, listOfDataNodes in enumerate(referredDns):
-                eDns = [] 
+            # Check if expansion is needed: source has multiple items per group
+            needs_expansion = (
+                not new_iterate and
+                any(len(group) > 1 for group in referredDns if group)
+            )
+
+            if needs_expansion:   
+                _log(f"    *** EXPANSION MODE ACTIVATED *** (source has multi-item groups)")
                 
-                for currentReferredDataNode in listOfDataNodes:
-                    if currentReferredDataNode is None:
-                        continue
-                    
-                    # -- Get DataNodes for the edge defined by the path part of the v
-                    if isinstance(path, eqL):
-                        currentEDns = getEdgeDataNode(currentReferredDataNode, v, indexDn, lcVariablesDns)
-                        currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
-                        if currentEDnsNew and len(currentEDnsNew):
-                            eDns.extend(currentEDnsNew)
+                # Collect results per (group, item) to maintain tuple correspondence
+                expansion_results = []  # List of (orig_group_idx, item_idx, results)
+
+                for indexDn, listOfDataNodes in enumerate(referredDns):
+                    for itemIdx, currentReferredDataNode in enumerate(listOfDataNodes):
+                        if currentReferredDataNode is None:
+                            expansion_results.append((indexDn, itemIdx, [None]))
+                            continue
+
+                        if isinstance(path, eqL):
+                            currentEDns = getEdgeDataNode(currentReferredDataNode, v, indexDn, lcVariablesDns, logger)
                         else:
-                            pass
-                    else:
-                        currentEDns = getEdgeDataNode(currentReferredDataNode, v[1:], indexDn, lcVariablesDns) 
-                        # currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
+                            currentEDns = getEdgeDataNode(currentReferredDataNode, v[1:], indexDn, lcVariablesDns, logger)
+
                         if currentEDns is not None and len(currentEDns):
-                            eDns.extend(currentEDns)
-                        elif lc.__str__() != "fixedL":
-                            # Log info that there is no candidates for the path 
-                            vNames = [v if isinstance(v, str) else v.name for v in v[1:]] # collect names on the path
-                            logger.info('%s has no path %s requested by %s for concept %s'%(currentReferredDataNode, vNames, lc.lcName, conceptName))
-                                
-                if not eDns and not new_iterate:
-                    eDns = [None] # None - to keep track of candidates
+                            filtered = [ee for ee in currentEDns if ee is not None]
+                            expansion_results.append((indexDn, itemIdx, filtered if filtered else [None]))
+                        else:
+                            expansion_results.append((indexDn, itemIdx, [None]))
+
+                _log(f"    Expansion: {len(referredDns)} groups → {len(expansion_results)} expanded groups")
+
+                # Store expanded results for this path
+                for orig_group_idx, item_idx, results in expansion_results:
+                    dnsListForPaths[i].append(results)
+
+                # Build expansion mapping for caller to use on lcVariables
+                expansion_mapping = [(orig_group_idx, item_idx) for orig_group_idx, item_idx, _ in expansion_results]
+                expanded_var_names = list(lcVariablesDns.keys())
+                
+                # Expand all previously defined variables in lcVariablesDns
+                _log(f"    Expanding prior variables to match new structure...")
+                for var_name in expanded_var_names:
+                    old_structure = lcVariablesDns[var_name]
+                    old_total = sum(len(g) for g in old_structure)
+                    new_structure = []
+                    for orig_group_idx, item_idx in expansion_mapping:
+                        if orig_group_idx < len(old_structure):
+                            old_group = old_structure[orig_group_idx]
+                            if item_idx < len(old_group):
+                                new_structure.append([old_group[item_idx]])
+                            else:
+                                new_structure.append([None])
+                        else:
+                            new_structure.append([None])
+                    lcVariablesDns[var_name] = new_structure
+                    new_total = sum(len(g) for g in new_structure)
+                    _log(f"      {var_name}: {len(old_structure)} groups ({old_total} items) → {len(new_structure)} groups ({new_total} items)")
+
+                # Return expansion info for caller to apply to lcVariables
+                expansionInfo = {
+                    'mapping': expansion_mapping,
+                    'expanded_vars': expanded_var_names
+                }
+
+            else:
+                _log(f"    Standard mode (no expansion needed)")
+                _log(f"    Iterating over {len(referredDns)} groups (outer loop = group index)")
+                
+                for indexDn, listOfDataNodes in enumerate(referredDns):
+                    eDns = []
+
+                    for currentReferredDataNode in listOfDataNodes:
+                        if currentReferredDataNode is None:
+                            continue
+
+                        if isinstance(path, eqL):
+                            currentEDns = getEdgeDataNode(currentReferredDataNode, v, indexDn, lcVariablesDns, logger)
+                            currentEDnsNew = [currentEDn for currentEDn in currentEDns if currentEDn is not None]
+                            if currentEDnsNew and len(currentEDnsNew):
+                                eDns.extend(currentEDnsNew)
+                        else:
+                            currentEDns = getEdgeDataNode(currentReferredDataNode, v[1:], indexDn, lcVariablesDns, logger)
+                            if currentEDns is not None and len(currentEDns):
+                                eDns.extend(currentEDns)
+                            elif lc.__str__() != "fixedL":
+                                vNames = [vv if isinstance(vv, str) else vv.name for vv in v[1:]]
+                                _log('%s has no path %s requested by %s for concept %s' % (currentReferredDataNode, vNames, lc.lcName, conceptName))
+
+                    if not eDns and not new_iterate:
+                        eDns = [None]
+
+                    if not new_iterate:
+                        dnsListForPaths[i].append(eDns)
+                    elif len(eDns):
+                        dnsListForPaths[i].append(eDns)
                     
-                if not new_iterate:
-                    dnsListForPaths[i].append(eDns)
-                elif len(eDns):
-                    dnsListForPaths[i].append(eDns)
-                    
-            
+                    _log(f"      Group[{indexDn}] ACCUMULATED {len(eDns)} candidates (from {len(listOfDataNodes)} items)")
+
             if isinstance(v, eqL) or (isinstance(path, tuple) and any(isinstance(elem, eqL) for elem in v)):
                 eqLPaths.append(False)
             else:
                 eqLPaths.append(True)
-                
+
         # -- Compress candidates and print log about the path candidates
         for ip, dnsPathList in enumerate(dnsListForPaths):
             dnsPathListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsPathList]
@@ -205,60 +322,104 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate = False
                 dnsListForPaths[ip] = dnsPathListCompressed
             else:
                 pass
-            
-            if len(dnsListForPaths) > 1:
-                countValid = sum(1 for sublist in dnsListForPaths[ip] if sublist and any(elem is not None for elem in sublist))
-                if eqLPaths[ip]:
-                    logger.info('path %i involving eqL has collected %i candidates of which %i is not None %s'%(ip,len(dnsListForPaths[ip]), countValid, dnsListForPaths[ip]))
-                else:
-                    logger.info('path %i has collected %i candidates of which %i is not None %s'%(ip,len(dnsListForPaths[ip]), countValid, dnsListForPaths[ip]))
-            
-        # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
-        dnsList = [] # candidates to be returned
-        if pathsCount == 1: # Single path
+
+            total_items = sum(len(sublist) for sublist in dnsListForPaths[ip])
+            countValid = sum(1 for sublist in dnsListForPaths[ip] if sublist and any(elem is not None for elem in sublist))
+            _log(f"  PATH {ip} result: {len(dnsListForPaths[ip])} groups, {total_items} total items, {countValid} non-None groups")
+
+        # -- Select a single dns list or Combine the collected lists of dataNodes based on paths
+        dnsList = []  # candidates to be returned
+        if pathsCount == 1:  # Single path
             dnsList = dnsListForPaths[0]
         else:
-            # --- Assume Intersection - TODO: in future use lo if defined to determine if different operation 
+            # --- Assume Intersection
             noOfCandidatesSubsets = len(dnsListForPaths[0])
             for i in range(noOfCandidatesSubsets):
-                # Collect subsets with the same index from each path
                 try:
                     listsOfSubsetsForIndex = [dnsListForPaths[item][i] for item in range(pathsCount)]
                 except IndexError as ei:
                     continue
-                
-                # Calculate the intersection
+
                 se = intersection_of_lists(listsOfSubsetsForIndex)
                 dnsList.append(se)
-                
-    # Returns candidates  
-    dnsListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsList] # compress
+
+    # Returns candidates
+    dnsListCompressed = [[elem for elem in sublist if elem is not None] or [None] for sublist in dnsList]
     if len(dnsListCompressed) == len(dnsList):
         dnsList = dnsListCompressed
     else:
         pass
-    
+
     countValidC = sum(1 for sublist in dnsList if sublist and any(elem is not None for elem in sublist))
-    if pathsCount > 1:
-        logger.info('intersection of path resulted in %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
-    else:
-        logger.info('collected %i candidates for %s of which %i is not None - %s'%(len(dnsList),conceptName,countValidC,dnsList))
-  
-    return dnsList, referredVariableNames
+    total_candidates = sum(len(sublist) for sublist in dnsList)
+
+    _log(f"=== getCandidates END for {conceptName} ===")
+    _log(f"  RESULT: {len(dnsList)} groups, {total_candidates} total candidates, {countValidC} non-None groups")
+    _log(f"  Structure: {_dns_list_repr(dnsList)}")
+    
+    # Log final state of lcVariablesDns
+    _log(f"  Updated lcVariablesDns:")
+    for k, v in lcVariablesDns.items():
+        _log(f"    {k}: {len(v)} groups, sizes={[len(g) for g in v[:5]]}{'...' if len(v) > 5 else ''}")
+
+    if expansionInfo:
+        _log(f"  EXPANSION INFO: {len(expansionInfo['mapping'])} mappings, expanded vars: {expansionInfo['expanded_vars']}")
+
+    if total_candidates > 1000:
+        logger.warning(f"  ⚠️ CANDIDATE EXPLOSION: {total_candidates} candidates for {conceptName}!")
+
+    return dnsList, referredVariableNames, expansionInfo
 
 # Find DataNodes starting from the given DataNode following provided path
 #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
-def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
-    # Path is empty
+def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns, logger=None, depth=0):
+    """
+    Find DataNodes from the DataNodes collecting on the path.
+    Enhanced with diagnostic logging.
     
+    Args:
+        dn: Starting DataNode
+        path: Path specification (tuple or eqL)
+        currentIndexDN: Current index in the outer loop (group index)
+        lcVariablesDns: Dictionary of variable name -> list of DataNode lists
+        logger: Optional logger for diagnostics
+        depth: Recursion depth for indentation
+    """
+    indent = "  " * depth
+    log = False
+    def _log(msg):
+        if not log:
+            return
+        if logger:
+            logger.debug(f"{indent}[getEdgeDataNode] {msg}")
+        else:
+            print(f"{indent}[getEdgeDataNode] {msg}")
+    
+    def _dn_repr(d):
+        """Compact representation of DataNode"""
+        if d is None:
+            return "None"
+        return f"{d.getOntologyNode().name}#{d.getInstanceID()}"
+    
+    def _dns_repr(dns):
+        """Compact representation of DataNode list"""
+        if not dns:
+            return "[]"
+        return f"[{', '.join(_dn_repr(d) for d in dns[:5])}{'...' if len(dns) > 5 else ''}]({len(dns)})"
+    
+    # Path is empty
     if isinstance(path, eqL):
         path = [path]
     if len(path) == 0:
+        _log(f"Empty path, returning dn={_dn_repr(dn)}")
         return [dn]
+
+    _log(f"Processing path={path}, from dn={_dn_repr(dn)}, currentIndexDN={currentIndexDN}")
 
     # Path has single element
     if (not isinstance(path[0], eqL)) and len(path) == 1:
         relDns = dn.getDnsForRelation(path[0])
+        _log(f"Single element path '{path[0]}' -> {_dns_repr(relDns)}")
                 
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
@@ -266,8 +427,7 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
         return relDns
             
     # Path has at least 2 elements - will perform recursion
-
-    if isinstance(path[0], eqL): # check if eqL
+    if isinstance(path[0], eqL):
         if isinstance(path[0].e[0], tuple):
             path0 = path[0].e[0][0]
         else:
@@ -275,18 +435,23 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
     else:
         path0 = path[0]
 
+    _log(f"Multi-element path, first element path0={path0}")
+
     relDns = None         
     if dn.isRelation(path0):
-        relDns = dn.getDnsForRelation(path0)            
+        relDns = dn.getDnsForRelation(path0)
+        _log(f"path0 is relation, getDnsForRelation -> {_dns_repr(relDns)}")
     elif isinstance(path0, str):
         relDns = dn.getDnsForRelation(path0)
-    else: # if not relation then has to be attribute in eql
+        _log(f"path0 is string '{path0}', getDnsForRelation -> {_dns_repr(relDns)}")
+    else:
+        # Handle attribute in eqL
         path0Dns = relDns
         attributeName = path[0].e[1]
+        _log(f"path0 is eqL attribute check: {attributeName}")
         
         relDns = []
         if attributeName == "instanceID":
-            
             for pDns in path0Dns:
                 attributeValue = pDns.getInstanceID()
                 referredCandidateID = path[0].e[2]
@@ -300,15 +465,11 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
                             if dn not in relDns:
                                 relDns.append(dn)
                     
-                # Check if it is a valid relation link with not empty set of connected datanodes      
                 if relDns is None or len(relDns) == 0 or relDns[0] is None:
                     return [None]
                 else:
                     return relDns
         else:
-            relDns = []
-            attributeName = path[0].e[1]
-            
             attributeValue = dn.getAttribute(attributeName)
                 
             if torch.is_tensor(attributeValue) and attributeValue.ndimension() == 0:
@@ -317,20 +478,15 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
             requiredValue = path[0].e[2]
                 
             if attributeValue in requiredValue:
-                # return [dn]
                 relDns.append(dn)
-            elif (True in  requiredValue ) and attributeValue == 1:
-                # return [dn]
+            elif (True in requiredValue) and attributeValue == 1:
                 relDns.append(dn)
-            elif (False in  requiredValue ) and attributeValue == 0:
+            elif (False in requiredValue) and attributeValue == 0:
                 attributeValue = False
-            else:
-                # return [None]
-                # relDns.append(None)
-                pass
     
-    # Check if it is a valid relation link  with not empty set of connected datanodes      
+    # Check if it is a valid relation link
     if relDns is None or len(relDns) == 0 or relDns[0] is None:
+        _log(f"No valid relation links found, returning [None]")
         return [None]
         
     # if eqL then filter DataNode  
@@ -351,15 +507,19 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns):
                         _cDns.append(cDn) 
                 
         relDns = _cDns
+        _log(f"After eqL filter: {_dns_repr(relDns)}")
     
     # recursion
+    _log(f"Recursing through {len(relDns)} relation DataNodes with remaining path {path[1:]}")
     rDNS = []
     for cDn in relDns:
-        rDn = getEdgeDataNode(cDn, path[1:], currentIndexDN, lcVariablesDns)
+        rDn = getEdgeDataNode(cDn, path[1:], currentIndexDN, lcVariablesDns, logger, depth + 1)
         
         if rDn:
             rDNS.extend(rDn)
             
+    _log(f"Recursion result: {_dns_repr(rDNS)}")
+    
     if rDNS:
         return rDNS
     else:
