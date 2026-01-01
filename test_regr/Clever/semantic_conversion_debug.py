@@ -245,40 +245,21 @@ print("\n" + "="*60)
 print("VERIFY LC2 DEBUG")
 print("="*60)
 
-# Check LC2 properties
-lc2 = graph.logicalConstrains.get('LC2')
-if lc2:
-    print(f"LC2 found:")
-    print(f"  Type: {type(lc2).__name__}")
-    print(f"  Active: {lc2.active}")
-    print(f"  HeadLC: {lc2.headLC}")
-    print(f"  String: {lc2.strEs()}")
+# Check LC3 properties
+lc3 = graph.logicalConstrains.get('LC3')
+if lc3:
+    print(f"LC3 found:")
+    print(f"  Type: {type(lc3).__name__}")
+    print(f"  Active: {lc3.active}")
+    print(f"  HeadLC: {lc3.headLC}")
+    print(f"  String: {lc3 .strEs()}")
 else:
-    print("LC2 NOT FOUND in graph.logicalConstrains!")
+    print("LC3 NOT FOUND in graph.logicalConstrains!")
     print(f"Available constraints: {list(graph.logicalConstrains.keys())}")
 
 # Check what verifyResultsLC actually returns
 for i, datanode in enumerate(program.populate(dataset)):
     datanode.inferLocal(keys=["softmax", "argmax"])
-    
-    # Set all constraints active
-    for lc_name, lc in graph.logicalConstrains.items():
-        lc.active = True
-    
-    print(f"\nAll constraints set to active")
-    print(f"Calling verifyResultsLC...")
-    
-    verify_result = datanode.verifyResultsLC(key="/local/argmax")
-    
-    print(f"\nverifyResultsLC returned {len(verify_result)} constraints:")
-    for lc_name, result in verify_result.items():
-        print(f"  {lc_name}: satisfied={result.get('satisfied', 'N/A')}%")
-    
-    # Check if LC2 is in there
-    if 'LC2' in verify_result:
-        print(f"\nLC2 details: {verify_result['LC2']}")
-    else:
-        print(f"\nLC2 NOT in results!")
         
     # Check constraint labels
     find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
@@ -291,7 +272,7 @@ for i, datanode in enumerate(program.populate(dataset)):
     break
 
 index = 0
-for data in program.populate(dataset):
+for i, data in enumerate(program.populate(dataset)):
     brown_objs = [int(child.getAttribute(brown, 'argmax')) for child in data.getChildDataNodes()]
     print("expected brown objects", [1 if obj["color"] == "brown" else 0 for obj in raw_data[index]["scene"]])
     print("brown objects:", brown_objs)
