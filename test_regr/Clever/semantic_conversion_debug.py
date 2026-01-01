@@ -31,7 +31,7 @@ def debug_verify_nested_constraint(datanode, lc, key="/local/argmax"):
     
     Args:
         datanode: The populated datanode with predictions
-        lc: The logical constraint (e.g., LC2 which is existsL)
+        lc: The logical constraint (e.g., LC3 which is existsL)
         key: The key for accessing predictions
     """
     from collections import OrderedDict
@@ -385,5 +385,5 @@ for data in program.populate(dataset):
                 break
     
     print(f"  Constraint should be satisfied: {constraint_satisfied}")
-    print(f"  verifyResultsLC says: {data.verifyResultsLC(key='/local/argmax').get('LC2', {}).get('satisfied', 'N/A')}%")
+    print(f"  verifyResultsLC says: {data.verifyResultsLC(key='/local/argmax').get('LC3', {}).get('satisfied', 'N/A')}%")
 print(acc)
