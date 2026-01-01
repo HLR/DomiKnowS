@@ -129,9 +129,6 @@ def debug_verify_nested_constraint(datanode, lc, key="/local/argmax"):
         # Restore original function
         constraintConstructor.constructLogicalConstrains = original_construct
 
-
-
-
 def ckpt_path(lr, epoch_idx, load_epoch_tag, batch, tnorm, subset):
     return MODEL_DIR / f"program{lr}_{epoch_idx}_{load_epoch_tag}__{batch}_6000_{tnorm}_{subset}.pth"
 
@@ -304,8 +301,8 @@ for data in program.populate(dataset):
     index += 1
 
     if (index ==1):
-        lc2 = graph.logicalConstrains.get('LC2')
-        debug_verify_nested_constraint(datanode, lc2, key="/local/argmax")
+        lc3 = graph.logicalConstrains.get('LC3')
+        debug_verify_nested_constraint(datanode, lc3, key="/local/argmax")
 
     print("-" * 10)
     
