@@ -252,7 +252,7 @@ class LogicalConstrain(LcElement):
         return singleV
     
     # Collects setups of variables for logical methods calls for the created Logical Constraint - recursive method
-    def _collectVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
+    def _collectVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars=[]): 
         """
         Collects setups of variables for logical methods calls - recursive method.
         """
@@ -278,71 +278,99 @@ class LogicalConstrain(LcElement):
                         newV.append(newElement)
                     newLcVars.append(newV)
                     
-        elif len(cLcVariables) == 1:  # Single variable
+        elif cLcVariables is None or len(cLcVariables) == 0:
+            # No variables to add - just append None
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for lcVelement in lcV:
-                    newElemenet = lcVelement.copy()
-                    if cLcVariables is None:
-                        newElemenet.append(None)  
-                    else:
-                        if cLcVariables[0]:
-                            newElemenet.append(cLcVariables[0][0])
-                        else:
-                            newElemenet.append(None)
-                    newV.append(newElemenet)
-                                    
+                    newElement = lcVelement.copy()
+                    newElement.append(None)
+                    newV.append(newElement)
                 newLcVars.append(newV)
-                
+                    
+        elif len(cLcVariables) == 1:  # Single variable - broadcast to all
+            for indexLcV, lcV in enumerate(lcVars):
+                newV = []
+                for lcVelement in lcV:
+                    newElement = lcVelement.copy()
+                    if cLcVariables[0]:
+                        newElement.append(cLcVariables[0][0])
+                    else:
+                        newElement.append(None)
+                    newV.append(newElement)
+                newLcVars.append(newV)
+                                    
         else:  # Many ILP variables in the current set
-            # Check if this is a nested constraint result indexed by inner variable
-            # A nested constraint result has shape [N, 1] - N rows, each with 1 element
-            is_nested_constraint_result = (
-                cLcVariables is not None and 
-                len(cLcVariables) > 0 and
-                all(len(row) == 1 for row in cLcVariables if row)
+            # Check structure characteristics
+            num_lcVars_rows = len(lcVars)
+            num_cLc_rows = len(cLcVariables)
+            
+            # Is this a nested constraint result? (shape [N,1] - N rows, 1 element each)
+            is_nested_constraint_result = all(
+                len(row) == 1 for row in cLcVariables if row
             )
+            
+            # Primary alignment strategy - when row counts match, use row-based indexing
+            rows_match = (num_lcVars_rows == num_cLc_rows)
             
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for indexElement, lcVelement in enumerate(lcV):
-                    if cLcVariables is None:
-                        newLcVelement = lcVelement.copy()
+                    newLcVelement = lcVelement.copy()
+                    
+                    if indexLcV >= len(cLcVariables):
+                        # Out of bounds - append None
                         newLcVelement.append(None)
                         newV.append(newLcVelement)
-                    elif len(lcV) == len(cLcVariables[indexLcV]):
-                        # Lengths match - use position-based indexing
-                        cV = cLcVariables[indexLcV][indexElement]
-                        newLcVelement = lcVelement.copy()
+                        continue
+                    
+                    cLcRow = cLcVariables[indexLcV]
+                    
+                    if cLcRow is None or len(cLcRow) == 0:
+                        newLcVelement.append(None)
+                        newV.append(newLcVelement)
+                        
+                    elif len(lcV) == len(cLcRow):
+                        # Element counts match within row - use element-based indexing
+                        cV = cLcRow[indexElement] if indexElement < len(cLcRow) else None
                         newLcVelement.append(cV)
                         newV.append(newLcVelement)
+                        
+                    elif is_nested_constraint_result and rows_match:
+                        # Row counts match and nested result - use ROW-based alignment
+                        # This is the key fix: pair row i with row i, not mix indices
+                        cV = cLcRow[0] if cLcRow else None
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
+                    elif is_nested_constraint_result and indexElement < num_cLc_rows:
+                        # Rows don't match but nested result - use element-based lookup
+                        cV = cLcVariables[indexElement][0] if cLcVariables[indexElement] else None
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
+                    elif len(cLcRow) == 1:
+                        # Single element in row - broadcast to all elements
+                        cV = cLcRow[0]
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
                     else:
-                        # For nested constraint results with shape [N,1],
-                        # use the inner index (indexElement) instead of outer index (indexLcV)
-                        # This handles cases like existsL(andL(concept(b), relation(b,y), nestedLC(y)))
-                        # where nestedLC produces per-y results that should align with y, not b
-                        if is_nested_constraint_result and indexElement < len(cLcVariables):
-                            # Use indexElement (inner/y index) to look up the value
-                            cV = cLcVariables[indexElement][0]
-                            newLcVelement = lcVelement.copy()
-                            newLcVelement.append(cV)
-                            newV.append(newLcVelement)
-                        else:
-                            # Expand by iterating through values
-                            for cV in cLcVariables[indexLcV]:
-                                newLcVelement = lcVelement.copy()
-                                newLcVelement.append(cV)
-                                newV.append(newLcVelement)
-                                
+                        # Fallback: expand by iterating through all values in the row
+                        for cV in cLcRow:
+                            newLcVelement_copy = lcVelement.copy()
+                            newLcVelement_copy.append(cV)
+                            newV.append(newLcVelement_copy)
+                            
                 newLcVars.append(newV)                
                             
         if lcVariableNames:
-            # Recursive call - lcVars contains currently collected ILP variables setups
-            return self._collectVariableSetups(lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars)
+            # Recursive call
+            return self._collectVariableSetups(
+                lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars
+            )
         else:
-            # Return collected setups
             return newLcVars
-    
     
     # Helper to recursively flatten nested lists to scalar values
     def flatten_to_scalars(self, item):

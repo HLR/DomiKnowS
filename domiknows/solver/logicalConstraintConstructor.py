@@ -451,10 +451,24 @@ class LogicalConstraintConstructor:
                             for orig_group_idx, item_idx in mapping:
                                 if orig_group_idx < len(old_structure):
                                     old_group = old_structure[orig_group_idx]
-                                    if isinstance(old_group, list) and item_idx < len(old_group):
-                                        new_structure.append([old_group[item_idx]])
-                                    elif not isinstance(old_group, list):
-                                        new_structure.append([old_group])
+                                    if old_group:
+                                        # When replicating a variable during expansion,
+                                        # handle cases where source group size differs from expansion.
+                                        # If source group has only 1 item, replicate it.
+                                        # Otherwise try to use item_idx if in bounds.
+                                        if isinstance(old_group, list):
+                                            if len(old_group) == 1:
+                                                # Single item - replicate for all expanded positions
+                                                new_structure.append([old_group[0]])
+                                            elif item_idx < len(old_group):
+                                                # Item exists at this index - use it
+                                                new_structure.append([old_group[item_idx]])
+                                            else:
+                                                # Index out of bounds - replicate first item
+                                                new_structure.append([old_group[0]])
+                                        else:
+                                            # Not a list - wrap it
+                                            new_structure.append([old_group])
                                     else:
                                         new_structure.append([None])
                                 else:

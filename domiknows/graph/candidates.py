@@ -260,8 +260,21 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate=False):
                     for orig_group_idx, item_idx in expansion_mapping:
                         if orig_group_idx < len(old_structure):
                             old_group = old_structure[orig_group_idx]
-                            if item_idx < len(old_group):
-                                new_structure.append([old_group[item_idx]])
+                            if old_group:
+                                # When replicating a variable during expansion,
+                                # use the group's items based on their actual size.
+                                # If the source group has only 1 item (typical for 
+                                # concept variables like cities), replicate that item.
+                                # Only use item_idx if the source group has matching items.
+                                if len(old_group) == 1:
+                                    # Single item in group - replicate it for all expansions
+                                    new_structure.append([old_group[0]])
+                                elif item_idx < len(old_group):
+                                    # Multiple items that align with expansion - use item_idx
+                                    new_structure.append([old_group[item_idx]])
+                                else:
+                                    # item_idx out of bounds - replicate first item as fallback
+                                    new_structure.append([old_group[0]])
                             else:
                                 new_structure.append([None])
                         else:
