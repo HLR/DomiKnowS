@@ -265,22 +265,67 @@ class LogicalConstraintConstructor:
                 return 0
     
     def addLossTovDns(self, loss, vDns):
-        """Add loss tensor to vDns"""
+        """Add loss tensor to vDns.
+        
+        Handles tensors of different sizes that occur when processing
+        counting constraints (atLeastL, atMostL, exactL) wrapping sumL.
+        These constraints produce scalar results while nested element-wise
+        constraints produce multi-element tensors.
+        """
         if loss and vDns:
             vDnsList = [v[0] for v in vDns]
             
             updatedVDns = []
             try:
                 if len(vDnsList) > 1:
-                    tStack = torch.stack(vDnsList, dim=1)
+                    # Check if all tensors have the same size
+                    sizes = []
+                    for v in vDnsList:
+                        if torch.is_tensor(v):
+                            sizes.append(v.numel())
+                        else:
+                            sizes.append(1)
+                    
+                    if len(set(sizes)) > 1:
+                        # Mixed sizes - flatten and concatenate instead of stacking
+                        flat_tensors = []
+                        for v in vDnsList:
+                            if torch.is_tensor(v):
+                                flat_tensors.append(v.flatten())
+                            elif v is not None:
+                                flat_tensors.append(torch.tensor([v], 
+                                    device=self.current_device, 
+                                    dtype=torch.float64, 
+                                    requires_grad=True))
+                        if flat_tensors:
+                            tsqueezed = torch.cat(flat_tensors, dim=0)
+                        else:
+                            return vDns
+                    else:
+                        # Same sizes - use original stacking logic
+                        tStack = torch.stack(vDnsList, dim=1)
+                        tsqueezed = torch.squeeze(tStack, dim=0)
                 else:
                     tStack = vDnsList[0]
-                tsqueezed = torch.squeeze(tStack, dim=0)
+                    tsqueezed = torch.squeeze(tStack, dim=0) if torch.is_tensor(tStack) else tStack
 
-            except IndexError:
-                tsqueezed = torch.stack(vDnsList, dim=0)
+            except (IndexError, RuntimeError):
+                # Fallback: try to concatenate flattened tensors
+                flat_tensors = []
+                for v in vDnsList:
+                    if torch.is_tensor(v):
+                        flat_tensors.append(v.flatten())
+                    elif v is not None:
+                        flat_tensors.append(torch.tensor([v], 
+                            device=self.current_device, 
+                            dtype=torch.float64, 
+                            requires_grad=True))
+                if flat_tensors:
+                    tsqueezed = torch.cat(flat_tensors, dim=0)
+                else:
+                    return vDns
         
-            if not len(tsqueezed.shape):
+            if torch.is_tensor(tsqueezed) and not len(tsqueezed.shape):
                 tsqueezed = torch.unsqueeze(tsqueezed, 0)
                 
             tList = [tsqueezed]
