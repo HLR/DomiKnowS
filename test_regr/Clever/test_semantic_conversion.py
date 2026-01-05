@@ -1,24 +1,16 @@
-import sys
 import pytest
 import json
 import torch
-
-sys.path.append('../../../')
-sys.path.append('../../')
-sys.path.append('../')
-sys.path.append('./')
 
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, FunctionalReaderSensor
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from graph import create_graph
-from dataset import g_relational_concepts
-
+from .graph import create_graph
+from .dataset import g_relational_concepts
 
 device = "cpu"
-
 
 def filter_relation(property, arg1, arg2):
     return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
