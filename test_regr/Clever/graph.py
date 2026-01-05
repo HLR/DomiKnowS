@@ -1,6 +1,6 @@
 from .dataset import g_attribute_concepts, g_relational_concepts
 from pprint import pprint
-from execution import create_execution_for_question
+from .execution import create_execution_for_question
 import os
 
 

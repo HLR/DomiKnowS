@@ -1,4 +1,4 @@
-from dataset import g_relational_concepts, g_attribute_concepts
+from .dataset import g_relational_concepts, g_attribute_concepts
 
 
 def create_execution_existL(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):

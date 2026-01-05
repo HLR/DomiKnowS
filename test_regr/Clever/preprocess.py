@@ -5,7 +5,7 @@ sys.path.append('./')
 sys.path.append('../')
 
 import pickle, py7zr
-from dataset import make_dataset, default_image_transform
+from .dataset import make_dataset, default_image_transform
 import os.path as osp
 from pathlib import Path
 
