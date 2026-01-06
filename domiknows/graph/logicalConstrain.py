@@ -255,6 +255,14 @@ class LogicalConstrain(LcElement):
     def _collectVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars=[]): 
         """
         Collects setups of variables for logical methods calls - recursive method.
+        
+        Handles alignment of variables with different structures:
+        - Simple variables: [N] rows, 1 element each
+        - Relation variables: [N] rows, [M] elements each (e.g., front(b,y) has N rows for b, M elements for y)
+        - Nested constraint results: [M] rows, 1 element each (indexed by second variable)
+        
+        When combining relation[b][y] with nested_result[y], we need element-based lookup,
+        not row-based lookup. The element index within a row corresponds to the y variable.
         """
         # Get set of ILP variables lists for the current variable name
         cLcVariables = v[lcVariableName]
@@ -310,6 +318,13 @@ class LogicalConstrain(LcElement):
                 len(row) == 1 for row in cLcVariables if row
             )
             
+            # Check if accumulated vars have been expanded (have multiple elements per row)
+            # This happens when a relation variable was added (e.g., front(b,y) adds 6 elements per row)
+            accumulated_is_expanded = any(len(row) > 1 for row in lcVars if row)
+            
+            # Get max elements per row in accumulated vars for alignment detection
+            max_elements_per_row = max((len(row) for row in lcVars if row), default=1)
+            
             # Primary alignment strategy - when row counts match, use row-based indexing
             rows_match = (num_lcVars_rows == num_cLc_rows)
             
@@ -336,9 +351,18 @@ class LogicalConstrain(LcElement):
                         newLcVelement.append(cV)
                         newV.append(newLcVelement)
                         
+                    elif is_nested_constraint_result and accumulated_is_expanded and indexElement < num_cLc_rows:
+                        # When accumulated vars are expanded by a relation (e.g., front(b,y))
+                        # and we have a nested constraint result (e.g., inner_AND(y)),
+                        # use ELEMENT-INDEX-based lookup: element index corresponds to the y variable
+                        # So for accumulated row b, element y, we want nested_result[y], not nested_result[b]
+                        cV = cLcVariables[indexElement][0] if cLcVariables[indexElement] else None
+                        newLcVelement.append(cV)
+                        newV.append(newLcVelement)
+                        
                     elif is_nested_constraint_result and rows_match:
-                        # Row counts match and nested result - use ROW-based alignment
-                        # This is the key fix: pair row i with row i, not mix indices
+                        # Row counts match, not expanded - use ROW-based alignment
+                        # This is for cases where both variables are indexed by the same variable
                         cV = cLcRow[0] if cLcRow else None
                         newLcVelement.append(cV)
                         newV.append(newLcVelement)
@@ -371,7 +395,6 @@ class LogicalConstrain(LcElement):
             )
         else:
             return newLcVars
-    
     # Helper to recursively flatten nested lists to scalar values
     def flatten_to_scalars(self, item):
         """Recursively flatten nested lists to a flat list of scalar values."""

@@ -122,9 +122,9 @@ class TestSemanticConversionTwoRelations:
     def test_accuracy_is_valid(self, conversion_result):
         acc, _, _, _, _ = conversion_result
         if isinstance(acc, (int, float)):
-            assert 0 <= acc <= 1
+            assert acc == 1.0, f"Expected 100% accuracy, got {acc * 100}%"
         elif isinstance(acc, dict):
-            assert "accuracy" in acc or len(acc) > 0
+            assert acc.get("accuracy", 0) == 1.0, f"Expected 100% accuracy, got {acc}"
 
 
 class TestSemanticConversionSingleRelation:
@@ -141,6 +141,6 @@ class TestSemanticConversionSingleRelation:
     def test_accuracy_is_valid(self, conversion_result):
         acc, _, _, _, _ = conversion_result
         if isinstance(acc, (int, float)):
-            assert 0 <= acc <= 1
+            assert acc == 1.0, f"Expected 100% accuracy, got {acc * 100}%"
         elif isinstance(acc, dict):
-            assert "accuracy" in acc or len(acc) > 0
+            assert acc.get("accuracy", 0) == 1.0, f"Expected 100% accuracy, got {acc}"

@@ -12,7 +12,11 @@ from typing import List, Union, Optional, Tuple
 from PIL import Image
 import numpy as np
 from pathlib import Path
-from functional_2d import generate_intersection_map, generate_union_box
+
+try:
+    from .functional_2d import generate_intersection_map, generate_union_box
+except ImportError:
+    from functional_2d import generate_intersection_map, generate_union_box
 
 def meshgrid_single(tensor, dim=0):
     """

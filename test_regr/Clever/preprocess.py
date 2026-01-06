@@ -1,14 +1,12 @@
 import sys
-sys.path.append('../../../')
-sys.path.append('../../')
-sys.path.append('./')
-sys.path.append('../')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
 
 import pickle, py7zr
-from .dataset import make_dataset, default_image_transform
-import os.path as osp
-from pathlib import Path
-
+try:
+    from .dataset import make_dataset, default_image_transform
+except ImportError:
+    from dataset import make_dataset, default_image_transform
 
 def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
     """

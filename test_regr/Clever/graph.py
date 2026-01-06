@@ -1,8 +1,9 @@
-from .dataset import g_attribute_concepts, g_relational_concepts
-from pprint import pprint
-from .execution import create_execution_for_question
-import os
-
+try:
+    from .dataset import g_attribute_concepts, g_relational_concepts
+    from .execution import create_execution_for_question
+except ImportError:
+    from dataset import g_attribute_concepts, g_relational_concepts
+    from execution import create_execution_for_question
 
 # {'color': ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
 #  'material': ['rubber', 'metal'],

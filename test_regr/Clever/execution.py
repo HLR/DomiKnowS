@@ -1,5 +1,7 @@
-from .dataset import g_relational_concepts, g_attribute_concepts
-
+try:
+    from .dataset import g_relational_concepts
+except ImportError:
+    from dataset import g_relational_concepts
 
 def create_execution_existL(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):
     """Original existL execution creator for existence/count questions."""

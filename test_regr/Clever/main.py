@@ -19,10 +19,16 @@ from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
 
-from preprocess import preprocess_dataset, preprocess_folders_and_files
-from graph import create_graph
-from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
-from dataset import g_relational_concepts, g_attribute_concepts
+try:
+    from .preprocess import preprocess_dataset, preprocess_folders_and_files
+    from .graph import create_graph
+    from .modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+    from .dataset import g_relational_concepts, g_attribute_concepts
+except ImportError:
+    from preprocess import preprocess_dataset, preprocess_folders_and_files
+    from graph import create_graph
+    from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
+    from dataset import g_relational_concepts, g_attribute_concepts
 
 RUN_DIR = Path(__file__).parent.resolve()
 MODEL_DIR = RUN_DIR / "models"

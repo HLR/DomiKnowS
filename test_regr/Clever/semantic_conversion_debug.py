@@ -1,9 +1,7 @@
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
 
-sys.path.append('../../../')
-sys.path.append('../../')
-sys.path.append('../')
-sys.path.append('./')
 import json
 
 # export GRB_LICENSE_FILE=/full/path/to/gurobi.lic
@@ -31,7 +29,7 @@ def debug_verify_nested_constraint(datanode, lc, key="/local/argmax"):
     
     Args:
         datanode: The populated datanode with predictions
-        lc: The logical constraint (e.g., LC3 which is existsL)
+        lc: The logical constraint (e.g., LC2 which is existsL)
         key: The key for accessing predictions
     """
     from collections import OrderedDict
@@ -137,7 +135,7 @@ logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser(description="Dummy Run of CLEVR")
 parser.add_argument("--logic_str", type=str, default="")
-parser.add_argument("--input_file", type=str, default="convert_CLEVR_program_two_relations.json")
+parser.add_argument("--input_file", type=str, default="convert_CLEVR_program_manual_10_first_translation.json")
 args = parser.parse_args()
 
 device = "cpu"
@@ -245,16 +243,16 @@ print("\n" + "="*60)
 print("VERIFY LC2 DEBUG")
 print("="*60)
 
-# Check LC3 properties
-lc3 = graph.logicalConstrains.get('LC3')
-if lc3:
-    print(f"LC3 found:")
-    print(f"  Type: {type(lc3).__name__}")
-    print(f"  Active: {lc3.active}")
-    print(f"  HeadLC: {lc3.headLC}")
-    print(f"  String: {lc3 .strEs()}")
+# Check LC2 properties
+lcExist = graph.logicalConstrains.get('LC2')
+if lcExist:
+    print(f"LC2 found:")
+    print(f"  Type: {type(lcExist).__name__}")
+    print(f"  Active: {lcExist.active}")
+    print(f"  HeadLC: {lcExist.headLC}")
+    print(f"  String: {lcExist .strEs()}")
 else:
-    print("LC3 NOT FOUND in graph.logicalConstrains!")
+    print("LC2 NOT FOUND in graph.logicalConstrains!")
     print(f"Available constraints: {list(graph.logicalConstrains.keys())}")
 
 # Check what verifyResultsLC actually returns
@@ -282,8 +280,8 @@ for i, data in enumerate(program.populate(dataset)):
     index += 1
 
     if (index ==1):
-        lc3 = graph.logicalConstrains.get('LC3')
-        debug_verify_nested_constraint(datanode, lc3, key="/local/argmax")
+        lcExist = graph.logicalConstrains.get('LC2')
+        debug_verify_nested_constraint(datanode, lcExist, key="/local/argmax")
 
     print("-" * 10)
     
@@ -363,5 +361,5 @@ for i, data in enumerate(program.populate(dataset)):
                 break
     
     print(f"  Constraint should be satisfied: {constraint_satisfied}")
-    print(f"  verifyResultsLC says: {data.verifyResultsLC(key='/local/argmax').get('LC3', {}).get('satisfied', 'N/A')}%")
+    print(f"  verifyResultsLC says: {data.verifyResultsLC(key='/local/argmax').get('LC2', {}).get('satisfied', 'N/A')}%")
 print(acc)

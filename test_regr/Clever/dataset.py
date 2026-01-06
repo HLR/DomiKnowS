@@ -1,4 +1,3 @@
-import os
 import os.path as osp
 from typing import Optional, Union, Callable, Sequence, List, Dict, Any, Tuple, Type
 import pickle
