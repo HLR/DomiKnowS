@@ -1,6 +1,7 @@
 import pytest
 import json
 import torch
+from pathlib import Path
 
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, FunctionalReaderSensor
@@ -11,6 +12,8 @@ from .graph import create_graph
 from .dataset import g_relational_concepts
 
 device = "cpu"
+DATA_DIR = Path(__file__).parent
+
 
 def filter_relation(property, arg1, arg2):
     return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
@@ -27,7 +30,8 @@ class DummyLearner(torch.nn.Module):
 
 def run_semantic_conversion(input_file: str):
     """Run semantic conversion pipeline and return accuracy."""
-    with open(input_file, 'rb') as file:
+    file_path = DATA_DIR / input_file
+    with open(file_path, 'rb') as file:
         raw_data = json.load(file)[:]
         dataset = [data["input"] for data in raw_data]
 
