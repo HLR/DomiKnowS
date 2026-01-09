@@ -52,8 +52,11 @@ def program_declaration(dataset, device="cpu"):
             self.name = name
 
         def forward(self, input):
-            output = input
-            return torch.softmax(output, dim=-1)
+            # Input is binary label(s) with values 0 or 1
+            # Output must be [prob_negative, prob_positive] per instance
+            # Convert: label=1 -> [0, 1], label=0 -> [1, 0]
+            output = torch.stack([1 - input, input], dim=-1)
+            return output
 
     image["pil_image"] = FunctionalReaderSensor(keyword="pil_image", forward=lambda data: data)
     image["image_id"] = FunctionalReaderSensor(keyword='image_id', forward=lambda data: [data])
@@ -97,17 +100,17 @@ def program_declaration(dataset, device="cpu"):
     program = InferenceProgram(graph, SolverModel,
                                poi=poi,
                                device=device, tnorm="G",
-                               inferTypes=["argmax"])
+                               inferTypes=["local/argmax"])
 
     return dataset, attribute_names_dict, program
 
 
 def check_concept(program, original_dataset, domiknows_dataset, concept_name, concept_attribute, concept_domiknows):
-    for i, data in enumerate(program.populate(domiknows_dataset)):
-        domiknows_concept = [int(child.getAttribute(concept_domiknows, 'argmax')) for child in data.getChildDataNodes()]
-        predicted_concept = [1 if obj[concept_attribute] == concept_name else 0 for obj in original_dataset[i]["scene"]]
-        assert domiknows_concept == predicted_concept, f"Expected {concept_name} to be exactly same as ground-truth"
-
+        for i, data in enumerate(program.populate(domiknows_dataset)):
+            argmax_results = data.collectInferredResults(concept_domiknows, 'local/argmax')
+            domiknows_concept = [int(v[1]) for v in argmax_results.tolist()]
+            predicted_concept = [1 if obj[concept_attribute] == concept_name else 0 for obj in original_dataset[i]["scene"]]
+            assert domiknows_concept == predicted_concept, f"Expected {concept_name} to be exactly same as ground-truth"
 
 class TestArgmaxConceptInferenceProgram:
     """Tests for single-relation CLEVR program conversion."""
