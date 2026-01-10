@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import pickle, py7zr
+import os.path as osp
 try:
     from .dataset import make_dataset, default_image_transform
 except ImportError:
