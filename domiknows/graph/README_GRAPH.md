@@ -129,10 +129,10 @@ graph.visualize('my_graph', open_image=True)
 # Creates my_graph.png
 ```
 
-#### `compile_logic(data, logic_keyword='constraint', ...)`
+#### `compile_executable(data, logic_keyword='constraint', ...)`
 ```python
 # Compile string-based logical expressions into executable constraints
-dataset = graph.compile_logic(
+dataset = graph.compile_executable(
     data=[
         {'constraint': 'ifL(person(x), entity(x))', 'label': 1},
         {'constraint': 'andL(work_for(x, y), person(x))', 'label': 0}
@@ -919,7 +919,7 @@ data = [
 ]
 
 # Compile constraints
-logic_dataset = graph.compile_logic(
+logic_dataset = graph.compile_executable(
     data,
     logic_keyword='constraint',
     logic_label_keyword='label'
@@ -1152,7 +1152,7 @@ train_data = [
 ]
 
 # Compile constraints
-logic_dataset = graph.compile_logic(
+logic_dataset = graph.compile_executable(
     train_data,
     logic_keyword='constraint',
     logic_label_keyword='label',
@@ -1413,7 +1413,7 @@ concepts_with_age = [
 ### 8. Constraint Introspection
 ```python
 # Get all constraints
-for lc_name, lc in graph.logicalConstrains.items():
+for lc_name, lc in graph.allLogicalConstrains:
     print(f"Constraint: {lc_name}")
     print(f"  Type: {type(lc).__name__}")
     print(f"  Priority: {lc.p}")

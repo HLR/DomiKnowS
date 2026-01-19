@@ -44,7 +44,7 @@ class LossCalculator:
         
         # First pass: construct logical constraints and collect losses
         for graph in self.solver.myGraph:
-            for _, lc in graph.logicalConstrains.items():
+            for _, lc in graph.allLogicalConstrains:
                 startLC = perf_counter_ns()
                 
                 if not lc.headLC or not lc.active:

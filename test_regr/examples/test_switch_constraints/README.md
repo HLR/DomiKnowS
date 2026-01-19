@@ -11,7 +11,7 @@ Test suite for validating graph compilation and training with logical constraint
 - **Training**: Validates the training pipeline with InferenceProgram and SolverModel
 
 ### test_multiple_calls.py
-- **Multiple Dataset Compilation**: Tests compile_logic with multiple datasets of varying sizes
+- **Multiple Dataset Compilation**: Tests compile_executable with multiple datasets of varying sizes
 - **ReaderSensor Validation**: Verifies correct ReaderSensor keyword assignment and label mapping
 - **Sensor Count Verification**: Confirms total sensors added matches total samples across datasets
 - **DataNode Population**: Validates correct input values, label values, and active LC assignments

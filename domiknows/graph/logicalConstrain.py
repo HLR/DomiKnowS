@@ -1230,4 +1230,77 @@ class queryL(LogicalConstrain):
                 )
         
         
+# Add this class to logicalConstrain.py after the LogicalConstrain class definition
+
+class execute:
+    """
+    Wrapper for logical constraints that marks them as executable rather than standard constraints.
+    
+    When a LogicalConstrain is wrapped with execute(), it is moved from graph.logicalConstrains
+    to graph.executableLCs. This allows for different processing of executable constraints
+    vs standard logical constraints.
+    
+    Usage:
+        constraint1 = execute(andL(p1("x"), p2("y")))
         
+    The wrapped constraint will be accessible via graph.executableLCs instead of 
+    graph.logicalConstrains.
+    """
+    
+    def __init__(self, lc, name=None):
+        """
+        Initialize an executable constraint wrapper.
+        
+        Args:
+            lc: LogicalConstrain instance to wrap
+            name: Optional name for this executable constraint
+        """
+        if not isinstance(lc, LogicalConstrain):
+            raise TypeError(f"execute() requires a LogicalConstrain instance, got {type(lc).__name__}")
+        
+        self.innerLC = lc
+        self.graph = lc.graph
+        
+        # Remove from logicalConstrains (it was added there during LogicalConstrain.__init__)
+        if lc.lcName in self.graph.logicalConstrains:
+            del self.graph.logicalConstrains[lc.lcName]
+        
+        # Generate name for executable constraint
+        self.lcName = "ELC%i" % (len(self.graph.executableLCs))
+        
+        if name is not None:
+            self.name = name
+        else:
+            self.name = self.lcName
+        
+        # Update the wrapped constraint's name reference
+        self.innerLC.lcName = self.lcName
+        self.innerLC.name = self.name
+        
+        # Add to executableLCs
+        self.graph.executableLCs[self.lcName] = self
+        
+        # Copy relevant attributes from wrapped constraint
+        self.headLC = self.innerLC.headLC
+        self.active = self.innerLC.active
+        self.p = self.innerLC.p
+        self.e = self.innerLC.e
+        self.sampleEntries = self.innerLC.sampleEntries
+    
+    def __str__(self):
+        return self.lcName
+    
+    def __repr__(self):
+        return f"{self.lcName}(execute<{self.innerLC.__class__.__name__}>)"
+    
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain=False, integrate=False):
+        """Delegate to wrapped constraint's __call__ method."""
+        return self.innerLC(model, myConstraintVarProcessor, v, headConstrain, integrate)
+    
+    def strEs(self):
+        """Delegate to wrapped constraint's strEs method."""
+        return self.innerLC.strEs()
+    
+    def getLcConcepts(self):
+        """Delegate to wrapped constraint's getLcConcepts method."""
+        return self.innerLC.getLcConcepts()

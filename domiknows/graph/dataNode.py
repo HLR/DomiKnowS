@@ -1340,9 +1340,9 @@ class DataNode:
         return myilpOntSolver, _conceptsRelations
 
     def setActiveLCs(self):
-        # Try to get the datanode for the constraints concept
+        # Try to get the datanode for the executive LC concept
 
-        # If no builder or no constraint datanode then return 
+        # If no builder or no executive LC datanode then return 
         if not self.myBuilder:
             return
 
@@ -1355,19 +1355,19 @@ class DataNode:
 
         constraint_datanode = constraint_dn_search[0]
 
-        # Get the constraint labels
+        # Get the executive LC labels
         # read_labels will be of format: {'LC{n}/label': label_value}
         read_labels = constraint_datanode.getAttributes()
 
-        # Get active constraints based on given constraint labels
+        # Get active executive LCs based on given executive LC labels
         active_lc_names = set(
             x.split('/')[0] # TODO: parse this better?
             for x in read_labels
         )
 
-        # Set active/inactive constraints
+        # Set active/inactive executive LCs in the graph
         lc_no = 0
-        for lc_name, lc in self.graph.logicalConstrains.items():
+        for lc_name, lc in self.graph.executableLCs.items():
             assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
             lc_no += 1
             if lc_name in active_lc_names:
@@ -2173,6 +2173,12 @@ class DataNode:
             if lcName in graph.logicalConstrains:
                 lc = graph.logicalConstrains[lcName]
                 break
+        if lc is None:
+            for graph in myilpOntSolver.myGraph:
+                if lcName in graph.executableLCs:
+                    lc = graph.executableLCs[lcName]
+                    lc = lc.innerLC  # Get the inner logical constraint
+                    break
         
         if lc is None:
             _DataNode__Logger.error("Constraint %s not found" % (lcName))

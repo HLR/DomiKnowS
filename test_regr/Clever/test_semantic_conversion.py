@@ -31,7 +31,7 @@ class DummyLearner(torch.nn.Module):
 def run_semantic_conversion(input_file: str):
     """Run semantic conversion pipeline and return accuracy."""
     file_path = DATA_DIR / input_file
-    with open(file_path, 'rb') as file:
+    with open(file_path, 'r') as file:
         raw_data = json.load(file)[:]
         dataset = [data["input"] for data in raw_data]
 
@@ -94,7 +94,7 @@ def run_semantic_conversion(input_file: str):
                 f"{attr_name}_label", module=DummyLearner(attr_name), device=device
             )
 
-    dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
     poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
     program = InferenceProgram(

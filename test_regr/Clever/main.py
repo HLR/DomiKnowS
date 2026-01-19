@@ -206,7 +206,7 @@ for attr_name, attr_variable in attribute_names_dict.items():
         object[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(1024, 2).to(device), device=device)
 
 # Compile and create program
-dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
 poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
 program = InferenceProgram(graph, SolverModel, poi=poi, device=device, tnorm=args.tnorm)

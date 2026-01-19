@@ -166,7 +166,7 @@ if __name__ == '__main__':
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])])
 
-    dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
     program = InferenceProgram(graph, SolverModel,
                                poi=[scene, objects, is_cond1, is_cond2, relation_obj1_obj2, is_relation1, is_relation2,
