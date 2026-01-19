@@ -804,12 +804,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
-            dn.setActiveLCs() # Set active logical constraints in the data node if constraints datanote set
+            dn.setActiveLCs() # Set active executive LCs in the data node if executive LC datanode set
             _lcP = {}
             _lcP[100] = []
             pUsed = False
             for graph in self.myGraph:
-                for _, lc in graph.logicalConstrains.items():
+                for _, lc in graph.allLogicalConstrains:
                     if lc.headLC and lc.active: # Process only active and head lcs
                         if not ignorePinLCs:
                             lcP = lc.p

@@ -215,7 +215,7 @@ for attr_name, attr_variable in attribute_names_dict.items():
                                                                   forward=lambda data: torch.Tensor(data).to(device))
         object[attr_variable] = ModuleLearner(f"{attr_name}_label", module=DummyLearner(attr_name), device=device)
 
-dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
 poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
 program = InferenceProgram(graph, SolverModel,

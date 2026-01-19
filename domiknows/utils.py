@@ -79,91 +79,85 @@ def close_file_handlers(filename):
             # Continue even if we can't close a handler
             pass
         
+def close_all_file_handlers():
+    """
+    Close ALL file handlers across all loggers.
+    Call this before archiving log files at the end of a run.
+    """
+    loggers = [logging.getLogger()] + [logging.getLogger(name) 
+                                      for name in logging.root.manager.loggerDict]
+    
+    for logger in loggers:
+        if hasattr(logger, 'handlers'):
+            for handler in logger.handlers[:]:
+                if hasattr(handler, 'baseFilename'):
+                    try:
+                        handler.flush()
+                        handler.close()
+                        logger.removeHandler(handler)
+                    except Exception:
+                        pass
+    
+    logging.shutdown()
+    
 def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
-    if os.path.exists(logFilename):
-        # Check if file is empty - don't move empty files
-        if os.path.getsize(logFilename) == 0:
-            try:
-                os.remove(logFilename)
-                print(f"Removed empty log file: {logFilename}")
-            except OSError as e:
-                print(f"Warning: Could not remove empty log file {logFilename}: {e}")
-            return
+    """Move only the specific log file being replaced, not all files."""
+    if not os.path.exists(logFilename):
+        return
         
-        # Close any existing handlers for this file first
-        close_file_handlers(logFilename)
-        
-        # Create run timestamp for subfolder
-        run_timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-        
-        # Get log directory and create previous/run structure
-        log_dir = os.path.dirname(logFilename) or "."
-        previous_dir = os.path.join(log_dir, "previous")
-        run_dir = os.path.join(previous_dir, f"run_{run_timestamp}")
-        
-        # Create run subdirectory
-        pathlib.Path(run_dir).mkdir(parents=True, exist_ok=True)
-        
-        # Add retry mechanism for file operations
-        max_retries = 3
-        retry_delay = 0.1
-        
-        # Move all files from log directory to run subfolder
+    # Check if file is empty
+    if os.path.getsize(logFilename) == 0:
         try:
-            all_files = os.listdir(log_dir)
-            for file_item in all_files:
-                source_path = os.path.join(log_dir, file_item)
-                
-                # Skip directories and the previous directory itself
-                if os.path.isdir(source_path):
-                    continue
-                
-                # Move each file to the run directory
-                for attempt in range(max_retries):
-                    try:
-                        target_path = os.path.join(run_dir, file_item)
-                        os.rename(source_path, target_path)
-                        break
-                        
-                    except (OSError, PermissionError) as e:
-                        if attempt < max_retries - 1:
-                            time.sleep(retry_delay)
-                            retry_delay *= 2
-                            continue
-                        else:
-                            print(f"Warning: Could not move file {source_path}: {e}")
-                            break
-                            
-        except OSError as e:
-            print(f"Warning: Could not list directory {log_dir}: {e}")
-            return
-        
-        # Clean up old run directories - keep only 10
-        try:
-            if os.path.exists(previous_dir):
-                all_items = os.listdir(previous_dir)
-                run_dirs = []
-                
-                for item in all_items:
-                    item_path = os.path.join(previous_dir, item)
-                    if os.path.isdir(item_path) and item.startswith("run_"):
-                        run_dirs.append(item)
-                
-                # Sort by modification time (oldest first)
-                run_dirs.sort(key=lambda x: os.path.getmtime(os.path.join(previous_dir, x)))
-                
-                # Remove oldest run directories if exceeding backup count
-                while len(run_dirs) > logBackupCount:
-                    oldest_dir = os.path.join(previous_dir, run_dirs.pop(0))
-                    try:
-                        shutil.rmtree(oldest_dir)
-                        print(f"Removed old run directory: {oldest_dir}")
-                    except OSError as e:
-                        print(f"Warning: Could not remove old run directory {oldest_dir}: {e}")
-                        
+            os.remove(logFilename)
         except OSError:
-            # If directory operations fail, skip cleanup
             pass
+        return
+    
+    # Close handlers for THIS file only
+    close_file_handlers(logFilename)
+    
+    # Create backup directory structure
+    log_dir = os.path.dirname(logFilename) or "."
+    previous_dir = os.path.join(log_dir, "previous")
+    run_timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    run_dir = os.path.join(previous_dir, f"run_{run_timestamp}")
+    
+    pathlib.Path(run_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Move only THIS file with retries
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            target_path = os.path.join(run_dir, os.path.basename(logFilename))
+            shutil.move(logFilename, target_path)
+            break
+        except (OSError, PermissionError) as e:
+            if attempt < max_retries - 1:
+                time.sleep(0.1 * (2 ** attempt))
+            else:
+                print(f"Warning: Could not move {logFilename}: {e}")
+    
+    # Cleanup old run directories
+    _cleanup_old_run_dirs(previous_dir, logBackupCount)
+    
+def _cleanup_old_run_dirs(previous_dir, max_count):
+    """Remove oldest run directories exceeding max_count."""
+    try:
+        if not os.path.exists(previous_dir):
+            return
+        run_dirs = [d for d in os.listdir(previous_dir) 
+                    if os.path.isdir(os.path.join(previous_dir, d)) and d.startswith("run_")]
+        run_dirs.sort(key=lambda x: os.path.getmtime(os.path.join(previous_dir, x)))
+        
+        while len(run_dirs) > max_count:
+            oldest = os.path.join(previous_dir, run_dirs.pop(0))
+            try:
+                shutil.rmtree(oldest)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
                 
 # Global variables for error/warning logger
 _error_warning_logger_initialized = False

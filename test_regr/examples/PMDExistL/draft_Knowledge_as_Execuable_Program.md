@@ -58,12 +58,12 @@ date[i]['logic_str'] = ''existsL(blue('x'), ball(path=('x')))''
 date[i]['logic_label'] = [1]
 ```
 
-Then, you need to call ``graph.compile_logic`` to add the execution of each specific example, along with its corresponding label, into the DomiKnowS knowledge graph.
+Then, you need to call ``graph.compile_executable`` to add the execution of each specific example, along with its corresponding label, into the DomiKnowS knowledge graph.
 This process automatically integrates the defined knowledge as an executable query within the DomiKnowS program.
 An example of invoking this function is provided below.
 
 ```python
-dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
 ```
 
 

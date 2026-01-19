@@ -42,6 +42,9 @@ class LogicalConstraintConstructor:
     
     def valueToBeSkipped(self, x):
         """Check if value is NaN or Inf and should be skipped"""
+        # Detach tensor if needed to avoid autograd warnings
+        if isinstance(x, torch.Tensor):
+            x = x.detach().item()
         return math.isnan(x) or math.isinf(x)
     
     def getLabel(self, dn, conceptRelation):
@@ -190,7 +193,7 @@ class LogicalConstraintConstructor:
         from domiknows.graph import fixedL
         
         for graph in self.myGraph:
-            for _, lc in graph.logicalConstrains.items():
+            for _, lc in graph.allLogicalConstrains:
                 if not lc.headLC or not lc.active:
                     continue
                     

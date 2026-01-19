@@ -799,7 +799,7 @@ class ReaderSensor(ConstantSensor):
         - is_constraint: if set to True, allows for the keyword to be
             missing from data_items. If set to False, missing keywords will
             result in a KeyError being raised. This is used for setting labels
-            by e.g., domiknows.graph.Graph.compile_logic when we have many
+            by e.g., domiknows.graph.Graph.compile_executable when we have many
             properties (many logical expressions) that we need to load labels
             (and calculate loss) for, but not all at the same time. Set to
             False by default.

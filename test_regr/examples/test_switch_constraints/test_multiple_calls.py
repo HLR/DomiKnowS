@@ -44,7 +44,7 @@ def parameterized_dataset(seed: int, size: int):
     return data
 
 def test_compile_logic_variable_dsets(setup_graph, n_datasets: int = 3):
-    """Test compile_logic for multiple datasets incl. dataset transformation, model inference,
+    """Test compile_executable for multiple datasets incl. dataset transformation, model inference,
     and training."""
     graph, root, x, y = setup_graph
 
@@ -55,7 +55,7 @@ def test_compile_logic_variable_dsets(setup_graph, n_datasets: int = 3):
 
     # Compile & transform each of the logic datasets
     transformed_datasets = [
-        graph.compile_logic(
+        graph.compile_executable(
             dset,
             logic_keyword='logic_str',
             logic_label_keyword='logic_label',

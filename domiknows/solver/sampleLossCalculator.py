@@ -50,7 +50,7 @@ class SampleLossCalculator:
         
         # First pass: construct logical constraints and collect sample data
         for graph in self.solver.myGraph:
-            for _, lc in graph.logicalConstrains.items():
+            for _, lc in graph.allLogicalConstrains:
                 startLC = perf_counter_ns()
                 
                 if not lc.headLC or not lc.active:
@@ -431,7 +431,7 @@ class SampleLossCalculator:
     
     def isConceptFixed(self, conceptName):
         for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
+            for _, lc in graph.allLogicalConstrains: # loop trough lcs in the graph
                 if not lc.headLC or not lc.active: # Process only active and head lcs
                     continue
                     

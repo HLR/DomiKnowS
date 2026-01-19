@@ -62,9 +62,10 @@ class Graph(BaseGraphTree):
         self._relations = OrderedDict()
         self._batch = None
         self.cacheRootConcepts = {}
-        self.constraint = None
+        self.executableLCsLabels = {}
+        self._executableLCs = OrderedDict()
         self.varContext = None # None before calling `with graph...`, dictionary after
-
+        self.constraint = None  # Will hold the constraint concept
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
@@ -85,7 +86,7 @@ class Graph(BaseGraphTree):
                 self.constraint = constraint
 
         return self  # Return self (the current graph), not parent_obj
-
+    
     def get_constraint_concept(self):
         if self.constraint is None:
             raise ValueError('Constraint has not been defined yet, initialize the Graph by calling with Graph(...) first.')
@@ -1043,6 +1044,15 @@ class Graph(BaseGraphTree):
             dict: Dictionary of logical constraints.
         """
         return self._logicalConstrains
+    
+    @property
+    def executableLCs(self):
+        """Getter for the executable logical constraints.
+
+        Returns:
+            dict: Dictionary of executable logical constraints.
+        """
+        return self._executableLCs
 
     @property
     def logicalConstrainsRecursive(self):
@@ -1058,6 +1068,66 @@ class Graph(BaseGraphTree):
             if isinstance(node, Graph):
                 yield from node.logicalConstrains.items()
         yield from self.traversal_apply(func)
+        
+    @property
+    def executableLCsRecursive(self):
+        """Generator function that yields executable logical constraints recursively.
+
+        This method goes through all nodes and yields the executable logical constraints 
+        if the node is an instance of Graph.
+
+        Yields:
+            tuple: A tuple containing key-value pairs of executable logical constraints.
+        """
+        def func(node):
+            yield from node.executableLCs.items()
+        yield from self.traversal_apply(func)
+        
+    @property
+    def allLogicalConstrains(self):
+        """Generator function that yields all logical constraints.
+
+        This method yields both logical constraints and executable logical constraints.
+
+        Yields:
+            tuple: A tuple containing key-value pairs of all logical constraints.
+        """
+        yield from self.logicalConstrains.items()
+        for key, lc in self.executableLCs.items():
+            yield (key, lc.innerLC)
+        
+    @property
+    def allLogicalConstrainsRecursive(self):
+        """Generator function that yields all logical constraints recursively.
+
+        This method goes through all nodes and yields both logical constraints 
+        and executable logical constraints if the node is an instance of Graph.
+
+        Yields:
+            tuple: A tuple containing key-value pairs of all logical constraints.
+        """
+        def func(node):
+            if isinstance(node, Graph):
+                yield from node.allLogicalConstrains
+        yield from self.traversal_apply(func)   
+        
+    @property
+    def executableLCsLabels(self):
+        """Getter for the executable logical constraints labels.
+
+        Returns:
+            dict: Dictionary of executable logical constraints labels.
+        """
+        return self._executableLCsLabels
+    
+    @executableLCsLabels.setter
+    def executableLCsLabels(self, value):
+        """Sets the executable logical constraints labels.
+        
+        Args:
+            value: The value to set for executable logical constraints labels.
+        """
+        self._executableLCsLabels = value
 
     @property
     def relations(self):
@@ -1137,81 +1207,123 @@ class Graph(BaseGraphTree):
         local (str): The local identification of the ontology. Default is None.
     """
 
-    def compile_logic(
+    def compile_executable(
         self,
         data,
-        logic_keyword = 'constraint',
-        logic_label_keyword = 'label',
-        extra_namespace_values = {},
-        verbose = False
+        logic_keyword='constraint',
+        logic_label_keyword='label',
+        extra_namespace_values={},
+        verbose=False
     ):
-        '''
-        Takes a dataset containing keys `logic_keyword` and `logic_label_keyword` and
-        converts it to a LogicDataset and adds the expressions to the graph.
-        Using the LogicDataset during e.g., training lets you switch between these constraints.
-        data: and iterable of dicts containing the keys specified by `logic_keyword` and `logic_label_keyword`
-        extra_namespace_values: dict[str, Any], any values added to this dictionary get added to the namespace used when executing the logical expressions (the variable names are the keys).
-        '''
-        from .executable import LogicDataset, get_full_funcs
-        from ..sensor.pytorch.sensors import ReaderSensor
+        """
+        Takes a dataset containing logical constraint expressions and compiles them
+        as executable constraints. All constraints are wrapped with execute() and
+        stored in graph.executableLCs. Labels are stored in graph.executableLCsLabels.
+        
+        Args:
+            data: Iterable of dicts containing keys specified by logic_keyword and logic_label_keyword
+            logic_keyword: Key in data items containing constraint string expression
+            logic_label_keyword: Key in data items containing the label (True/False)
+            extra_namespace_values: Additional variables to add to evaluation namespace
+            verbose: If True, print debug information during compilation
+            
+        Returns:
+            List of executable constraint names (e.g., ['ELC0', 'ELC1', ...])
+        """
+        from .executable import get_full_funcs, LogicDataset
         import importlib
+        
         if self.varContext is None:
             print('Recorded variable context is None: make sure to initialize any Concepts you need in the graph first (by calling `with graph:`).')
         
-        lc_name_list = []
+        elc_name_list = []
         
-        # Check if context is already attached
+        # Ensure we're in graph context for constraint creation
         cls = type(self)
         needs_context = not cls._context or cls._context[-1] is not self
                 
         if needs_context:
             with self:
-                self._process_logic_data(
+                self._process_executable(
                     data, logic_keyword, logic_label_keyword, 
-                    extra_namespace_values, verbose, lc_name_list
+                    extra_namespace_values, verbose, elc_name_list
                 )
         else:
-            self._process_logic_data(
+            self._process_executable(
                 data, logic_keyword, logic_label_keyword, 
-                extra_namespace_values, verbose, lc_name_list
+                extra_namespace_values, verbose, elc_name_list
             )
     
         return LogicDataset(
-            data,
-            lc_name_list,
-            logic_keyword=logic_keyword,
-            logic_label_keyword=logic_label_keyword
-        )
+                data,
+                elc_name_list,
+                logic_keyword=logic_keyword,
+                logic_label_keyword=logic_label_keyword
+            )
 
-    def _process_logic_data(
+    def _process_executable(
             self, data, logic_keyword, logic_label_keyword, 
-            extra_namespace_values, verbose, lc_name_list
+            extra_namespace_values, verbose, elc_name_list
         ):
-        from .executable import LogicDataset, add_keyword, get_full_funcs
-        from ..sensor.pytorch.sensors import ReaderSensor
+        """
+        Internal method that processes each data item to create executable constraints.
+        
+        For each data item:
+        1. Reads the constraint string expression
+        2. Compiles and evaluates to create LogicalConstrain
+        3. Wraps with execute() if not already wrapped
+        4. Stores label in executableLCsLabels dictionary
+        
+        Args:
+            data: Iterable of data items
+            logic_keyword: Key for constraint expression in data items
+            logic_label_keyword: Key for label in data items  
+            extra_namespace_values: Additional namespace variables
+            verbose: Debug output flag
+            elc_name_list: List to accumulate created constraint names
+        """
+        from .executable import get_full_funcs, LogicDataset
+        from .logicalConstrain import execute
         import importlib
-        from .logicalConstrain import LogicalConstrain
+        from ..sensor.pytorch.sensors import ReaderSensor
         
         for i, data_item in enumerate(data):
+            # --- Step 1: Validate data item has required keys ---
             if logic_keyword not in data_item:
-                raise ValueError(f'Invalid data_item at index {i}: must contain keys {logic_keyword} and {logic_label_keyword} but instead just found: {data_item.keys()}')
+                raise ValueError(
+                    f'Invalid data_item at index {i}: must contain key {logic_keyword} '
+                    f'but instead just found: {data_item.keys()}'
+                )
+            
+            # --- Step 2: Extract the constraint string ---
             lc_string = data_item[logic_keyword]
             
+            # --- Step 3: Wrap with execute() if not already wrapped ---
+            # All constraints processed here must be executable constraints
+            if not lc_string.strip().startswith('execute('):
+                lc_string = f'execute({lc_string})'
+            
+            # --- Step 4: Convert to fully qualified names ---
+            # e.g., "execute(andL(...))" -> "domiknows.graph.logicalConstrain.execute(...)"
             lc_string_fmt = get_full_funcs(lc_string)
             
+            # --- Step 5: Build namespace for evaluation ---
+            # Includes domiknows module, graph variables, and any extra values
             target_namespace = {
                 'domiknows': importlib.import_module('domiknows'),
                 **(self.varContext or {}),
                 **(extra_namespace_values or {}),
-                'path': lambda *args: args,  # Add path as a helper if needed
+                'path': lambda *args: args,
             }
             
             if verbose:
-                print(f'executing {lc_string_fmt} in namespace {target_namespace}')
+                print(f'Compiling constraint {i}: {lc_string_fmt}')
             
+            # --- Step 6: Compile and evaluate the constraint expression ---
+            # This creates the execute wrapper object
             try:
-                code = compile(lc_string_fmt, f'<constraint_{i}>', 'eval')
-                c = eval(code, target_namespace)
+                code = compile(lc_string_fmt, f'<executable_{i}>', 'eval')
+                elc = eval(code, target_namespace)
             except NameError as e:
                 var_name = str(e).split("'")[1]
                 raise NameError(
@@ -1224,20 +1336,22 @@ class Graph(BaseGraphTree):
                     f"Failed to evaluate constraint '{lc_string_fmt}'. "
                     f"Error: {str(e)}"
                 ) from None
-        
-            if not isinstance(c, LogicalConstrain):
-                raise TypeError(
-                    f"expected {lc_string_fmt} (originally: {lc_string}) to compile to an instance of "
-                    f"LogicalConstrain, but instead got an object of type {type(c)}"
-                )
-
-            new_lc_name = str(c)
+            
+            # --- Step 7: Store label in executableLCsLabels ---
+            # Labels indicate expected satisfaction (True/False) for supervised training
+            if logic_label_keyword in data_item:
+                label = data_item[logic_label_keyword]
+                self.executableLCsLabels[elc.lcName] = label
+            
+            elc_name_list.append(elc.lcName)
+            
+            new_lc_name = str(elc)
+            
             constr_reader_key = LogicDataset.KEYWORD_FMT.format(lc_name=new_lc_name)
-            c.name = constr_reader_key
+            elc.name = constr_reader_key
 
-            self.constraint[c] = ReaderSensor(
+            self.constraint[elc] = ReaderSensor(
                 keyword=constr_reader_key,
                 is_constraint=True,
                 label=True
             )
-            lc_name_list.append(new_lc_name)

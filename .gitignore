@@ -266,3 +266,4 @@ test_regr/ConllQA/entities_*
 test_regr/ConllQA/result.txt
 test_regr/examples/conll04/sumL/*
 domiknows/graph/simplifiedLCSyntax/*
+test_regr/InferenceAPI/results.txt

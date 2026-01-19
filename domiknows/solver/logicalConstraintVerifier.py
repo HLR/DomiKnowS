@@ -186,7 +186,7 @@ class LogicalConstraintVerifier:
         lcVerifyResult = OrderedDict()
         
         for graph in self.solver.myGraph:
-            for _, lc in graph.logicalConstrains.items():
+            for _, lc in graph.allLogicalConstrains:
                 if not lc.headLC or not lc.active:
                     continue
                     

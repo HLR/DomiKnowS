@@ -259,7 +259,7 @@ class InferenceModel(LossModel):
         Initializes an instance of InferenceModel.
 
         :param graph: The initialized graph either containing the logical expressions to be executed
-            and/or called with `.compile_logic` to use the logical expressions in the dataset.
+            and/or called with `.compile_executable` to use the logical expressions in the dataset.
         :param tnorm: Sets the method used to perform the soft-logic translation of the logical expressions.
             Defaults to 'P' (Product).
         :param loss: Loss function to use for binary program outputs.
@@ -357,9 +357,7 @@ class InferenceModel(LossModel):
 
         constraint_datanode = constraint_dn_search[0]
         read_labels = constraint_datanode.getAttributes()
-        
-        datanode.setActiveLCs()
-        
+                
         constr_loss = datanode.calculateLcLoss(
             tnorm=self.tnorm,
             counting_tnorm=self.counting_tnorm, 
@@ -375,6 +373,12 @@ class InferenceModel(LossModel):
             lc = self.graph.logicalConstrains[lcName]
             lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
             
+            
+            lbl = read_labels[f'{lcName}/label'].float()
+            if lbl.dim() == 0:
+                lbl = lbl.unsqueeze(0)
+            lbl = lbl.squeeze()
+                
             from domiknows.graph.logicalConstrain import sumL
             is_counting_constraint = isinstance(lc, sumL)
             
@@ -383,21 +387,9 @@ class InferenceModel(LossModel):
                     constr_out = loss_dict['expectedCount']
                 else:
                     constr_out = loss_dict['conversionSigmoid']
-
-                constr_out = constr_out.float()
-                lbl = read_labels[f'{lcName}/label'].float()
-                if lbl.dim() == 0:
-                    lbl = lbl.unsqueeze(0)
-                lbl = lbl.squeeze()
-
-                constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
+                    constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
             else:
                 constr_out = loss_dict['conversionSigmoid']
-                lbl = read_labels[f'{lcName}/label'].float()
-                if lbl.dim() == 0:
-                    lbl = lbl.unsqueeze(0)
-                lbl = lbl.squeeze()
-
                 constraint_loss = self.loss_func(constr_out.float(), lbl)
 
             if MONITORING_AVAILABLE:

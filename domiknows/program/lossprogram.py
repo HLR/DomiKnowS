@@ -100,7 +100,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         constraint_labels_dict = find_constraints_label.getAttributes()
         active_lc_name = set(x.split('/')[0] for x in constraint_labels_dict)
 
-        for lc_name, lc in program.graph.logicalConstrains.items():
+        for lc_name, lc in program.graph.executableLCs.items():
             lc.active = lc_name in active_lc_name
 
         total += 1
@@ -112,10 +112,10 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             key = "/local/argmax"
 
         for lc_name in active_lc_name:
-            if lc_name not in program.graph.logicalConstrains:
+            if lc_name not in program.graph.executableLCs:
                 continue
             
-            lc = program.graph.logicalConstrains[lc_name]
+            lc = program.graph.executableLCs[lc_name]
             if not lc.active:
                 continue
             
@@ -123,7 +123,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             if label is None:
                 continue
             
-            is_counting = isinstance(lc, sumL)
+            is_counting = isinstance(lc.innerLC, sumL)
             
             if is_counting:
                 try:
@@ -850,7 +850,7 @@ class InferenceProgram(LossProgram):
         Initializes an InferenceProgram instance.
 
         :param graph: The initialized graph either containing the logical expressions to be executed
-            and/or called with `.compile_logic` to use the logical expressions in the dataset.
+            and/or called with `.compile_executable` to use the logical expressions in the dataset.
         :param Model: The class to use for the regular forward pass and
             supervised training (e.g., `SolverModel`).
         :param beta: The weight given to the CModel loss (in this case, the loss from the program

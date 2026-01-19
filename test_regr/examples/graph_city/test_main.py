@@ -28,7 +28,7 @@ def program():
     graph.detach()
 
     lcConcepts = {}
-    for _, lc in graph.logicalConstrains.items():
+    for _, lc in graph.allLogicalConstrains:
         if lc.headLC:  
             lcConcepts[lc.name] = lc.getLcConcepts()
             

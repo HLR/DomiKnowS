@@ -3,7 +3,7 @@ import logging, torch
 
 import numpy as np
 
-from domiknows.graph import Graph, Concept, Relation, andL, orL
+from domiknows.graph import Graph, Concept, Relation, andL, orL, execute
 from NER_utils import generate_dataset, reader_format
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import InferenceProgram, PrimalDualProgram
@@ -40,12 +40,12 @@ with Graph(name='global') as graph:
     # work_in = learnable (people1, location1)
     # cond1_check = (work1 and people1) and (work2 and people2)
     # Supervised from these two conditions
-    constarint1 = andL(andL(p1("x"), work_in1("z", path=('x', people_arg.reversed))),
-                       andL(p2("y"), work_in2("t", path=('y', people_arg.reversed))))
+    constarint1 = execute(andL(andL(p1("x"), work_in1("z", path=('x', people_arg.reversed))),
+                       andL(p2("y"), work_in2("t", path=('y', people_arg.reversed)))))
 
     # cond2_check = (work2 and people2) or (work3 and people3)
-    constarint2 = orL(andL(p2("x"), work_in2("z", path=('x', people_arg.reversed))),
-                      andL(p3("y"), work_in3("t", path=('y', people_arg.reversed))))
+    constarint2 = execute(orL(andL(p2("x"), work_in2("z", path=('x', people_arg.reversed))),
+                      andL(p3("y"), work_in3("t", path=('y', people_arg.reversed)))))
 
 # torch.manual_seed(4)
 N = 1000
@@ -113,7 +113,7 @@ pair[work_in2] = ModuleLearner(person["embedding2"], location["embedding2"], mod
 pair[work_in3] = ModuleLearner(person["embedding3"], location["embedding3"], module=work_in_model, device="cpu")
 program = InferenceProgram(graph, SolverModel, poi=[person, p1, p2, p3, location, pair, graph.constraint], device="cpu", tnorm='G')
 
-# print(list(program.model.parameters()))
+print([(name, param.shape) for name, param in program.model.named_parameters()])
 
 from tqdm import tqdm
 
@@ -172,7 +172,9 @@ print("Training Size :", N*4, file=output_file)
 print("Acc train before training:", program.evaluate_condition(train), file=output_file)
 print("Acc test before training:", program.evaluate_condition(test), file=output_file)
 # print(list(program.model.parameters()))
-program.train(train, Optim=lambda param: torch.optim.AdamW(param, 1e-3), train_epoch_num=30, c_lr=1e-4, c_warmup_iters=-1, device="cpu")
+train_epoch_num = 30
+print("Start Training - Epochs:", train_epoch_num, file=output_file)
+program.train(train, Optim=lambda param: torch.optim.AdamW(param, 1e-3), train_epoch_num=train_epoch_num, c_lr=1e-4, c_warmup_iters=-1, device="cpu")
 print("Acc train after training:", program.evaluate_condition(train), file=output_file)
 print("Acc test after training:", program.evaluate_condition(test), file=output_file)
 # print(list(program.model.parameters()))
