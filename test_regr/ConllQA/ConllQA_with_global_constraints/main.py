@@ -241,7 +241,7 @@ def program_declaration(train, args, device='auto'):
 
         return find
 
-    train_dataset = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
     program = InferenceProgram(graph, SolverModel,
                                poi=[phrase, sentence, word, people, organization, location, graph.constraint],
