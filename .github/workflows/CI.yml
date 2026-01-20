@@ -35,9 +35,9 @@ jobs:
 
       - name: Install spaCy model
         run: |
-          uv run python -m spacy download en_core_web_sm
-          uv run python -m spacy download en_core_web_lg
-          python -m spacy validate || true
+            .venv/bin/python -m spacy download en_core_web_sm
+            .venv/bin/python -m spacy download en_core_web_lg
+            .venv/bin/python -m spacy validate || true
 
       - name: set USE_SUBPROCESS true
         run: |
@@ -118,9 +118,9 @@ jobs:
 
       - name: Install spaCy model
         run: |
-          uv run python -m spacy download en_core_web_sm
-          uv run python -m spacy download en_core_web_lg
-          python -m spacy validate || true
+            .venv/bin/python -m spacy download en_core_web_sm
+            .venv/bin/python -m spacy download en_core_web_lg
+            .venv/bin/python -m spacy validate || true
 
       - name: set USE_SUBPROCESS true
         run: |
