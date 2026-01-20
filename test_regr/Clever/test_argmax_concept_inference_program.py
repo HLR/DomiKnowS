@@ -10,16 +10,14 @@ import json
 
 # export GRB_LICENSE_FILE=/full/path/to/gurobi.lic
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
-from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, ModuleSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, FunctionalReaderSensor, ModuleSensor
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from preprocess import preprocess_dataset, preprocess_folders_and_files
 from graph import create_graph
 from pathlib import Path
-from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
 from dataset import g_relational_concepts
-import argparse, torch, logging
+import torch
 
 from pathlib import Path
 
