@@ -52,19 +52,19 @@ jobs:
       - name: Check formatting (black)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run black --check .
+        run: uv run --no-sync black --check .
 
       - name: Check imports (isort)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run isort --profile black --check-only .
+        run: uv run --no-sync isort --profile black --check-only .
 
       - name: Type check (mypy)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true 
         run: |
           set +e
-          uv run mypy --install-types --non-interactive .
+          uv run --no-sync mypy --install-types --non-interactive .
 
       # --- Run CPU tests ---
       - name: Run CPU tests
@@ -135,19 +135,19 @@ jobs:
       - name: Check formatting (black)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run black --check .
+        run: uv run --no-sync black --check .
 
       - name: Check imports (isort)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run isort --profile black --check-only .
+        run: uv run --no-sync isort --profile black --check-only .
 
       - name: Type check (mypy)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true 
         run: |
           set +e
-          uv run mypy --install-types --non-interactive .
+          uv run --no-sync mypy --install-types --non-interactive .
 
       # --- Run GPU tests ---
       - name: Run GPU tests
