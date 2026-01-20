@@ -79,7 +79,7 @@ for subfolder in "${TEST_LIST[@]}"; do
     echo "   Command: uv run pytest -v -s --tb=short --no-header \"$test_path\""
     
     # Capture both stdout and stderr
-    test_output=$(uv run pytest -v -s --tb=short --no-header "$test_path" 2>&1)
+    test_output=$(uv run --no-sync pytest -v -s --tb=short --no-header "$test_path" 2>&1)
     test_exit_code=$?
     
     echo "   📊 Pytest exit code: $test_exit_code"
