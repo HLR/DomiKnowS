@@ -231,12 +231,12 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     # Add variable to objective
                     if Q is None:
-                        Q = currentProbability[1] * xNew
+                        Q = currentProbability[1].detach() * xNew
                     else:
-                        Q += currentProbability[1] * xNew       
+                        Q += currentProbability[1].detach() * xNew       
                             
                     if self.conceptIsBinary(currentConceptRelation): 
-                        Q += currentProbability[0] * xNotNew    
+                        Q += currentProbability[0].detach() * xNotNew    
                 
             if self.conceptIsMultiClass(currentConceptRelation):
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%(currentLabel))

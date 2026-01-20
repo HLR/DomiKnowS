@@ -14,12 +14,15 @@ from domiknows.sensor.pytorch.sensors import FunctionalSensor, FunctionalReaderS
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from graph import create_graph
 from pathlib import Path
-from dataset import g_relational_concepts
 import torch
 
-from pathlib import Path
+try:
+    from .graph import create_graph
+    from .dataset import g_relational_concepts
+except ImportError:  
+    from graph import create_graph
+    from dataset import g_relational_concepts
 
 RUN_DIR = Path(__file__).parent.resolve()
 MODEL_DIR = RUN_DIR / "models"
