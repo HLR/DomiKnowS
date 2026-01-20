@@ -61,24 +61,41 @@ class LossModel(torch.nn.Module):
         self.temperature = temperature
         self.hard_gumbel = hard_gumbel
         
-        self.constr = OrderedDict(graph.logicalConstrainsRecursive)
+        # Extract all logical constraints from the graph recursively
+        self.constr = OrderedDict(graph.allLogicalConstrainsRecursive)
         nconstr = len(self.constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
                           'PrimalDualModel will not generate any constraint loss.')
             
+        # Initialize lambda (Lagrange multipliers) as learnable parameters for Primal-Dual optimization
+        # Each constraint gets its own lambda value that balances its contribution to the total loss
         self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
+        
+        # Penalty terms (upper bounds) for lambda values, derived from constraint priorities
         self.lmbd_p = torch.empty(nconstr)
+        
+        # Mapping from constraint keys to their index positions in lambda tensors
         self.lmbd_index = {}
         
+        # Initialize penalty terms based on constraint priority values (p)
         for i, (key, lc) in enumerate(self.constr.items()):
             self.lmbd_index[key] = i
+            
+            # Convert percentage priority to probability (0-1 range)
             p = float(lc.p) / 100.
+            
+            # Avoid log(0) by capping probability just below 1
             if p == 1:
                 p = 0.999999999999999
+            
+            # Compute penalty term: -log(1-p) ensures higher priority constraints have higher penalties
             self.lmbd_p[i] = -np.log(1 - p)
             
+        # Initialize lambda values (default: all set to 1.0)
         self.reset_parameters()
+        
+        # Set up loss tracker for monitoring constraint losses during training
         self.loss = MacroAverageTracker(lambda x:x)
         
         self._setup_lossmodel_logger()
@@ -370,7 +387,7 @@ class InferenceModel(LossModel):
             if lcName not in self.constr:
                 continue
             
-            lc = self.graph.logicalConstrains[lcName]
+            lc = self.constr[lcName]
             lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
             
             
