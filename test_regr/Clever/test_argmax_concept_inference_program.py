@@ -118,7 +118,7 @@ class TestArgmaxConceptInferenceProgram:
 
     @pytest.fixture(scope="class")
     def create_program(self):
-        with open("convert_CLEVR_program_manual_10_first_translation.json", "rb") as f:
+        with open(RUN_DIR / "convert_CLEVR_program_manual_10_first_translation.json", "rb") as f:
             raw_data = json.load(f)[:]
             dataset = [data["input"] for data in raw_data]
 
