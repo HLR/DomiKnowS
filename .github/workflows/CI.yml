@@ -33,6 +33,11 @@ jobs:
         run: |
          uv sync --extra cpu --extra dev 
 
+       - name: Verify torch installation
+        run: |
+          .venv/bin/python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+          .venv/bin/pip show torch | grep -E "Name|Version|Location"
+
       - name: Install spaCy model
         run: |
             .venv/bin/python -m spacy download en_core_web_sm
