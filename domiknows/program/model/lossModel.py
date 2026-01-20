@@ -390,6 +390,8 @@ class InferenceModel(LossModel):
             lc = self.constr[lcName]
             lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
             
+            if f'{lcName}/label' not in read_labels:
+                continue
             
             lbl = read_labels[f'{lcName}/label'].float()
             if lbl.dim() == 0:

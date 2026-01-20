@@ -127,7 +127,7 @@ def test_compile_logic_variable_dsets(setup_graph, n_datasets: int = 3):
         rs = rs_found[0]
 
         assert keyword_to_lc_name[rs.keyword] == str(lc), 'Unexpected LC name'
-        assert keyword_to_parent_lc[rs.keyword] == type(lc).__name__, 'Unexpected LC class'
+        assert keyword_to_parent_lc[rs.keyword] == type(lc.innerLC).__name__, 'Unexpected LC class'
 
     # Initialize program
     program = InferenceProgram(
@@ -164,7 +164,7 @@ def test_compile_logic_variable_dsets(setup_graph, n_datasets: int = 3):
             
             # Get the active LCs
             active_LCs = []
-            for lc in graph.logicalConstrains.values():
+            for (key, lc) in graph.executableLCs.items():
                 if lc.active:
                     active_LCs.append(lc)
             
@@ -181,7 +181,7 @@ def test_compile_logic_variable_dsets(setup_graph, n_datasets: int = 3):
             assert torch.isclose(orig_sample['logic_label'].cpu(), found_lc_label.cpu())
             
             # Check correct active LC (only parent LC class is checked)
-            assert orig_sample['logic_str'].split('(')[0] == type(found_active_lc).__name__
+            assert orig_sample['logic_str'].split('(')[0] == type(found_active_lc.innerLC).__name__
 
     # Test that you can train w/o error
     for i, tr_dset in enumerate(transformed_datasets):
