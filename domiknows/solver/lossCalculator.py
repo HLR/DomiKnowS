@@ -42,6 +42,8 @@ class LossCalculator:
         lcCounter = 0
         lcLosses = {}
         
+        dn.setActiveLCs() # Set active executive LCs in the data node if executive LC datanode set
+
         # First pass: construct logical constraints and collect losses
         for graph in self.solver.myGraph:
             for _, lc in graph.allLogicalConstrains:

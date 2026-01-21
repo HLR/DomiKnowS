@@ -1365,6 +1365,9 @@ class DataNode:
             for x in read_labels
         )
 
+        no_active_lcs = len(active_lc_names)
+        _DataNode__Logger.info('Number of active executive LCs: %d'%(no_active_lcs))
+    
         # Set active/inactive executive LCs in the graph
         lc_no = 0
         for lc_name, lc in self.graph.executableLCs.items():
