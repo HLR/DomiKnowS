@@ -17,6 +17,15 @@ class SampleLossCalculator:
             solver: Reference to gurobiILPOntSolver instance
         """
         self.solver = solver
+        self.current_dtype = None
+    
+    def _get_dtype(self, dn=None):
+        """Get dtype from datanode or default to float32."""
+        if dn is not None and hasattr(dn, 'current_dtype') and dn.current_dtype is not None:
+            return dn.current_dtype
+        if self.current_dtype is not None:
+            return self.current_dtype
+        return torch.float32
         
     def calculateSampleLoss(self, dn, sampleSize, sampleGlobalLoss, conceptsRelations):
         """
@@ -40,6 +49,11 @@ class SampleLossCalculator:
         myBooleanMethods = self.solver.myLcLossSampleBooleanMethods
         myBooleanMethods.sampleSize = sampleSize
         myBooleanMethods.current_device = dn.current_device
+        
+        # Set dtype from datanode
+        dtype = self._get_dtype(dn)
+        myBooleanMethods.current_dtype = dtype
+        self.current_dtype = dtype
         
         self.solver.myLogger.info('Calculating sample loss with sample size: %i' % (p))
         self.solver.myLoggerTime.info('Calculating sample loss with sample size: %i' % (p))
@@ -94,7 +108,7 @@ class SampleLossCalculator:
                 current_lcLosses['elapsedInMsLC'] = elapsedInMsLC
         
         # Second pass: calculate successes
-        globalSuccesses = torch.ones(sampleSize, device=self.solver.current_device, dtype=torch.float64)
+        globalSuccesses = torch.ones(sampleSize, device=self.solver.current_device, dtype=dtype)
         
         for currentLcName in lcLosses:
             startLC = perf_counter_ns()
@@ -104,10 +118,10 @@ class SampleLossCalculator:
             sampleInfo = current_lcLosses['sampleInfo']
             
             successesList = []
-            lcSuccesses = torch.ones(sampleSize, device=self.solver.current_device, dtype=torch.float64)
+            lcSuccesses = torch.ones(sampleSize, device=self.solver.current_device, dtype=dtype)
             lcVariables = OrderedDict()
-            countSuccesses = torch.zeros(sampleSize, device=self.solver.current_device, dtype=torch.float64)
-            oneT = torch.ones(sampleSize, device=self.solver.current_device, dtype=torch.float64)
+            countSuccesses = torch.zeros(sampleSize, device=self.solver.current_device, dtype=dtype)
+            oneT = torch.ones(sampleSize, device=self.solver.current_device, dtype=dtype)
             
             # Prepare data
             if len(lossList) == 1:
@@ -240,9 +254,9 @@ class SampleLossCalculator:
                 
                 current_lcLosses['loss'].append(loss_val)
                 current_lcLosses['conversion'].append(1.0 - loss_val)
-                current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val, dtype=torch.float64)))
+                current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val, dtype=dtype)))
                 current_lcLosses['conversionClamp'].append(
-                    torch.clamp(torch.tensor(1.0 - loss_val, dtype=torch.float64), min=0.0, max=1.0))
+                    torch.clamp(torch.tensor(1.0 - loss_val, dtype=dtype), min=0.0, max=1.0))
                 
                 current_lcLosses['lossTensor'].append(lossTensor)
                 current_lcLosses['conversionTensor'].append(1.0 - lossTensor)
@@ -310,9 +324,9 @@ class SampleLossCalculator:
             lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
         else:
             if replace_mul:
-                lossTensor = torch.zeros(lcSuccesses.shape, dtype=torch.float64).to(self.solver.current_device)
+                lossTensor = torch.zeros(lcSuccesses.shape, dtype=self.current_dtype).to(self.solver.current_device)
             else:
-                lossTensor = torch.ones(lcSuccesses.shape, dtype=torch.float64).to(self.solver.current_device)
+                lossTensor = torch.ones(lcSuccesses.shape, dtype=self.current_dtype).to(self.solver.current_device)
             
         for i, v in enumerate(lcVariables):
             currentV = lcVariables[v]
@@ -321,7 +335,7 @@ class SampleLossCalculator:
                 P = currentV[0][:lcSampleSize]
             else:
                 P = currentV[0]
-            oneMinusP = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=torch.float64), P)
+            oneMinusP = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=self.current_dtype), P)
             
             if eliminateDuplicateSamples:
                 S = Vs[i, :]
@@ -331,7 +345,7 @@ class SampleLossCalculator:
             if isinstance(S, list):
                 continue
             
-            notS = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=torch.float64), S.float())
+            notS = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=self.current_dtype), S.float())
             
             pS = torch.mul(P, S)
             oneMinusPS = torch.mul(oneMinusP, notS)
@@ -409,11 +423,11 @@ class SampleLossCalculator:
                     if isFiexd != None:
                         if isFiexd == 1:
                             dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.ones(
-                                (productSize,), device=self.solver.current_device, dtype=torch.float64)
+                                (productSize,), device=self.solver.current_device, dtype=self.current_dtype)
                             continue
                         
                     dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.zeros(
-                        (productSize,), device=self.solver.current_device, dtype=torch.float64)
+                        (productSize,), device=self.solver.current_device, dtype=self.current_dtype)
              
         for j, p in enumerate(product(*productArgs, repeat=1)):
             index = 0

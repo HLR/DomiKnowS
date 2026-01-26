@@ -14,12 +14,19 @@ class lcLossBooleanMethods(constraintsProcessor):
         self.tnorm = 'P'
         self.counting_tnorm = None
         self.grad = True
+        self.current_dtype = None
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
         
         # Set up dedicated logger for count operations
         self._setup_count_logger(_ildConfig)
+        
+    def _get_dtype(self):
+        """Get current dtype, defaulting to float32 if not yet detected."""
+        if self.current_dtype is not None:
+            return self.current_dtype
+        return torch.float32
 
     def _setup_count_logger(self, config):
         """Set up dedicated logger for count operations."""
@@ -100,7 +107,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         varFixed = []  
         for v in var:
             if v == None or self._isTensor(v) == -100:
-                varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=torch.float64))
+                varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=self._get_dtype()))
             else:
                 # Ensure the tensor has gradient tracking
                 if torch.is_tensor(v) and not v.requires_grad:
@@ -116,7 +123,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         var, = self._fixVar((var,))
             
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         notSuccess = torch.sub(tOne, var)
 
         if onlyConstrains:
@@ -158,7 +165,7 @@ class lcLossBooleanMethods(constraintsProcessor):
             N = len(var)
             self.countLogger.debug(f"Number of variables N: {N}")
             
-            nTorch = torch.tensor([N], device=self.current_device, requires_grad=True, dtype=torch.float64)
+            nTorch = torch.tensor([N], device=self.current_device, requires_grad=True, dtype=self._get_dtype())
             varSum = torch.clone(var[0])
             for i, v in enumerate(var[1:], 1):
                 varSum.add_(v)
@@ -166,8 +173,8 @@ class lcLossBooleanMethods(constraintsProcessor):
             
             self.countLogger.debug(f"Final sum of variables: {varSum.item() if varSum.numel() == 1 else varSum}")
             
-            tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-            tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+            tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
 
             # max(varSum - N + 1, 0)
             intermediate = torch.add(torch.sub(varSum, nTorch), tOne)  # varSum - N + 1
@@ -228,7 +235,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         for v in var[1:]:
             varSum.add_(v)
         
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if self.tnorm =='L':
             orSuccess = torch.minimum(varSum, tOne) # min(varSum, 1)
         elif self.tnorm =='G':
@@ -256,7 +263,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         # nand(var) = not(and(var))
         nandSuccess = self.notVar(_, self.andVar(_, *var))
         
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if onlyConstrains:
             nandLoss = torch.sub(tOne, nandSuccess)
                         
@@ -306,7 +313,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         var1, var2 = self._fixVar((var1,var2))
         tSize = var1.size(dim=0)
-        tOneSize = torch.ones(tSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOneSize = torch.ones(tSize, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
 
         var1, var2 = self._fixVar((var1,var2))
         zeroInVar1 = 0 in var1
@@ -346,7 +353,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                     
                 ifSuccess = torch.stack(ifSuccessList, dim=0)     
                             
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if onlyConstrains:
             ifLoss = torch.sub(tOne, ifSuccess) # 1 - ifSuccess
             
@@ -362,7 +369,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         # nor(var) = not(or(var)
         norSucess = self.notVar(_, self.orVar(_, *var))
         
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if onlyConstrains:
             norLoss = torch.sub(1, norSucess)
             
@@ -377,7 +384,7 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         if len(var) == 0:
             # XOR of no variables is False
-            xorSuccess = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+            xorSuccess = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         elif len(var) == 1:
             # XOR of single variable is the variable itself
             var = self._fixVar(var)
@@ -390,14 +397,14 @@ class lcLossBooleanMethods(constraintsProcessor):
             for v in var[1:]:
                 if self.tnorm == 'L':  # Łukasiewicz
                     # XOR(a, b) = min(1, a + b) - max(0, a + b - 1)
-                    tOne = torch.ones_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                    tZero = torch.zeros_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                    tOne = torch.ones_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
+                    tZero = torch.zeros_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
                     sum_ab = torch.add(xorSuccess, v)
                     xorSuccess = torch.minimum(tOne, sum_ab) - torch.maximum(tZero, sum_ab - tOne)
                     
                 elif self.tnorm == 'G':  # Gödel
                     # XOR(a, b) = max(min(a, 1-b), min(1-a, b))
-                    tOne = torch.ones_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                    tOne = torch.ones_like(xorSuccess, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
                     not_a = torch.sub(tOne, xorSuccess)
                     not_b = torch.sub(tOne, v)
                     xorSuccess = torch.maximum(torch.minimum(xorSuccess, not_b), 
@@ -407,7 +414,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                     # XOR(a, b) = a*(1-b) + b*(1-a) = a + b - 2*a*b
                     xorSuccess = torch.add(xorSuccess, v) - 2 * torch.mul(xorSuccess, v)
         
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if onlyConstrains:
             xorLoss = torch.sub(tOne, xorSuccess)
             return xorLoss
@@ -421,18 +428,18 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         if len(var) == 0:
             # Equivalence of no variables is True (vacuous truth)
-            equivSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+            equivSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         elif len(var) == 1:
             # Equivalence of single variable is True (always equivalent to itself)
-            equivSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+            equivSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         else:
             # Multi-variable equivalence using t-norms: all variables have same truth value
             var = self._fixVar(var)
             
             if self.tnorm == 'L':  # Łukasiewicz
                 n = len(var)
-                tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
+                tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
                 
                 var_sum = torch.clone(var[0])
                 for v in var[1:]:
@@ -454,7 +461,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                     all_true = torch.minimum(all_true, v)
                 
                 # All false case: min(all 1-vars)
-                tOne = torch.ones_like(var[0], device=self.current_device, requires_grad=True, dtype=torch.float64)
+                tOne = torch.ones_like(var[0], device=self.current_device, requires_grad=True, dtype=self._get_dtype())
                 all_false = torch.sub(tOne, var[0])
                 for v in var[1:]:
                     all_false = torch.minimum(all_false, torch.sub(tOne, v))
@@ -469,7 +476,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                     all_true.mul_(v)
                 
                 # All false case: product(all 1-vars)
-                tOne = torch.ones_like(var[0], device=self.current_device, requires_grad=True, dtype=torch.float64)
+                tOne = torch.ones_like(var[0], device=self.current_device, requires_grad=True, dtype=self._get_dtype())
                 all_false = torch.sub(tOne, var[0])
                 for v in var[1:]:
                     all_false.mul_(torch.sub(tOne, v))
@@ -477,7 +484,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                 # OR: all_true + all_false - all_true * all_false
                 equivSuccess = all_true + all_false - torch.mul(all_true, all_false)
         
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if onlyConstrains:
             equivLoss = torch.sub(tOne, equivSuccess)
             return equivLoss
@@ -543,14 +550,14 @@ class lcLossBooleanMethods(constraintsProcessor):
                 self.countLogger.debug(f"Variable {i} is None, skipping")
                 continue
             tv = self._fixVar((v,))[0] if not isinstance(v, torch.Tensor) else v
-            tv = tv.to(device=self.current_device, dtype=torch.float64)
+            tv = tv.to(device=self.current_device, dtype=self._get_dtype())
             tv = torch.clamp(tv, 0.0, 1.0)
             self.countLogger.debug(f"Variable {i} after processing: {tv.item() if tv.numel() == 1 else tv}")
             vals.append(tv)
             
         if len(vals) == 0:
             self.countLogger.info("No valid variables found, using zero tensor")
-            t = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+            t = torch.zeros(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
         else:
             # If scalar -> keep as scalar; if vector/tensor -> flatten.
             parts = [x.reshape(()) if x.numel() == 1 else x.flatten() for x in vals]
@@ -617,8 +624,8 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         elif method == "L":  # Łukasiewicz
             self.countLogger.debug("Defining Łukasiewicz t-norm helper functions")
-            one = torch.tensor(1.0, device=self.current_device, dtype=torch.float64, requires_grad=True)
-            zero = torch.tensor(0.0, device=self.current_device, dtype=torch.float64, requires_grad=True)
+            one = torch.tensor(1.0, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            zero = torch.tensor(0.0, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
             exists_at_least_one = lambda t: 1 - torch.minimum(torch.sum(t), one)
             exists_at_least_s = lambda t, s: 1 - torch.maximum(
                 torch.sum(torch.sort(t, descending=True)[0][: max(min(s, n), 0)]) - (max(min(s, n), 0) - 1),
@@ -769,8 +776,8 @@ class lcLossBooleanMethods(constraintsProcessor):
         expr = sumA - sumB - diff
         self.countLogger.info(f"Expression (countA - countB - diff): {expr.item() if expr.numel() == 1 else expr}")
         
-        tZero = torch.zeros_like(expr, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        tOne  = torch.ones_like(expr, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tZero = torch.zeros_like(expr, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
+        tOne  = torch.ones_like(expr, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
 
         # Gödel logic
         if method == "G":
@@ -861,9 +868,9 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,_var))
         
-        fixedSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        fixedSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         
-        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         if onlyConstrains:
             fixedLoss = torch.sub(tOne,  fixedSuccess)
     
@@ -883,13 +890,13 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         # No variables → 0 (on correct device, with gradients)
         if len(var) == 0:
-            zero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+            zero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
             if self.ifLog:
                 self.myLogger.debug("%s called with empty var list, returning 0", logicMethodName)
             return zero
 
         # Start from 0 (scalar tensor) to accumulate the sum
-        sumResult = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        sumResult = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
 
         for i, v in enumerate(var):
             # If v is vector/matrix, sum over all its elements in a differentiable way
@@ -949,7 +956,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         # Concatenate all inputs into single tensor
         if len(var) == 0:
-            t = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+            t = torch.zeros(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
         elif len(var) == 1:
             t = var[0].flatten() if var[0].numel() > 1 else var[0].view(1)
         else:
@@ -968,7 +975,7 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.myLogger.debug(f"{logicMethodName} input tensor shape: {t.shape}, values: {t}")
         
         # -- Compute selection distribution based on t-norm
-        tOne = torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        tOne = torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
         
         if self.tnorm == 'G':  # Gödel - hard argmax
             # Non-differentiable hard selection
@@ -1091,8 +1098,8 @@ class lcLossBooleanMethods(constraintsProcessor):
         if num_subclasses == 0:
             self.countLogger.error(f"{logicMethodName} called with no subclasses")
             if onlyConstrains:
-                return torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
-            return torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+                return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            return torch.zeros(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
         
         # Log subclass info
         for j, (subclass, name, idx) in enumerate(subclasses):
@@ -1109,9 +1116,9 @@ class lcLossBooleanMethods(constraintsProcessor):
         if len(sel_vars_fixed) == 0:
             self.countLogger.warning(f"{logicMethodName} called with empty selection_vars after fixing")
             if onlyConstrains:
-                return torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+                return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
             # Return uniform distribution over subclasses
-            return torch.ones(num_subclasses, device=self.current_device, dtype=torch.float64, 
+            return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(), 
                             requires_grad=True) / num_subclasses
         
         # Concatenate selection vars into single tensor
@@ -1131,8 +1138,8 @@ class lcLossBooleanMethods(constraintsProcessor):
         self.countLogger.debug(f"Selection tensor values: {t}")
         
         # -- Compute subclass selection based on t-norm
-        tOne = torch.ones(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
-        tZero = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
+        tOne = torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+        tZero = torch.zeros(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
         
         # For query selection, we aggregate scores per subclass
         # If selection_vars are organized as [entity0_sub0, entity0_sub1, ..., entity1_sub0, ...]
@@ -1152,7 +1159,7 @@ class lcLossBooleanMethods(constraintsProcessor):
             # Fallback: use selection vars as-is, pad or truncate to num_subclasses
             if n_entities < num_subclasses:
                 padding = torch.zeros(num_subclasses - n_entities, device=self.current_device, 
-                                     dtype=torch.float64, requires_grad=True)
+                                     dtype=self._get_dtype(), requires_grad=True)
                 subclass_scores = torch.cat([t, padding])
             else:
                 subclass_scores = t[:num_subclasses]
@@ -1164,7 +1171,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         if self.tnorm == 'G':  # GÃ¶del - hard argmax
             self.countLogger.debug("Using GÃ¶del t-norm (hard argmax)")
             max_idx = torch.argmax(subclass_scores)
-            selection = torch.zeros(num_subclasses, device=self.current_device, dtype=torch.float64)
+            selection = torch.zeros(num_subclasses, device=self.current_device, dtype=self._get_dtype())
             selection[max_idx] = 1.0
             
             if onlyConstrains:

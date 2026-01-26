@@ -27,6 +27,41 @@ class LogicalConstraintConstructor:
         """
         self.myLogger = logger
         self.current_device = None
+        self.current_dtype = None
+        
+    def _get_dtype(self):
+        """Get current dtype, defaulting to float32 if not yet detected."""
+        if self.current_dtype is not None:
+            return self.current_dtype
+        return torch.float32  # Default to float32 (standard neural network output)
+    
+    def _detect_dtype_from_datanode(self, dn, xPkey):
+        """
+        Detect and set dtype from datanode.
+        
+        First checks if datanode has current_dtype attribute set (from builder).
+        If not, tries to detect from attribute values.
+        
+        Args:
+            dn: Datanode to detect dtype from
+            xPkey: Key for accessing predictions
+        """
+        # First try to use dtype from datanode if available
+        if hasattr(dn, 'current_dtype') and dn.current_dtype is not None:
+            self.current_dtype = dn.current_dtype
+            self.myLogger.info(f'Using dtype {self.current_dtype} from datanode')
+            return
+        
+        # Fallback: try to detect from attributes
+        if dn.getAttribute(xPkey) is not None:
+            attr_value = dn.getAttribute(xPkey)
+            if torch.is_tensor(attr_value):
+                self.current_dtype = attr_value.dtype
+                self.myLogger.info(f'Detected dtype {self.current_dtype} from datanode attribute')
+                return
+        
+        # If still not detected, keep None (will use default in _get_dtype)
+        self.myLogger.debug('Could not detect dtype from datanode, will use default')
         
     def getConcept(self, concept):
         return concept[0]
@@ -86,7 +121,11 @@ class LogicalConstraintConstructor:
         """
         if dn == None:
             raise Exception("No datanode provided")
-            
+        
+        # Detect dtype early from datanode before creating any tensors
+        if loss and self.current_dtype is None:
+            self._detect_dtype_from_datanode(dn, xPkey)
+                
         conceptName = e[0]
         
         sampleKey = '<' + conceptName + ">/sample" 
@@ -98,9 +137,9 @@ class LogicalConstraintConstructor:
                 if "xP" in xPkey:
                     return 1
                 elif loss:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                    tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
                 else:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=False, dtype=torch.float64)
+                    tOne = torch.ones(1, device=self.current_device, requires_grad=False, dtype=self._get_dtype())
                     
                 tOneSqueezed = torch.squeeze(tOne)
                 return tOneSqueezed
@@ -113,7 +152,7 @@ class LogicalConstraintConstructor:
                 xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
 
                 dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device=self.current_device)
-                xP = torch.ones(sampleSize, device=self.current_device, dtype=torch.float64)
+                xP = torch.ones(sampleSize, device=self.current_device, dtype=self._get_dtype())
                 
                 return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
         
@@ -138,12 +177,14 @@ class LogicalConstraintConstructor:
 
         if isFiexd != None:
             if isFiexd == 1:
-                vDn = torch.tensor(1.0, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                vDn = torch.tensor(1.0, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
             else:
-                vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         else:
             try:
                 vDn = dn.getAttribute(xPkey)[e[1]]
+                if torch.is_tensor(vDn):
+                    self.current_dtype = vDn.dtype
             except IndexError: 
                 vDn = None
     
@@ -162,9 +203,9 @@ class LogicalConstraintConstructor:
             usedSampleSize = dn.getAttributes()[sampleKey][-1][e[1]].shape[0]
         if isFiexd != None:  
             if isFiexd == 1:
-                xP = torch.ones(usedSampleSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                xP = torch.ones(usedSampleSize, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
             else:
-                xP = torch.zeros(usedSampleSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                xP = torch.zeros(usedSampleSize, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         else:
             xV = dn.getAttribute(xPkey)
             xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV.squeeze(0)))
@@ -298,7 +339,7 @@ class LogicalConstraintConstructor:
                             elif v is not None:
                                 flat_tensors.append(torch.tensor([v], 
                                     device=self.current_device, 
-                                    dtype=torch.float64, 
+                                    dtype=self._get_dtype(), 
                                     requires_grad=True))
                         if flat_tensors:
                             tsqueezed = torch.cat(flat_tensors, dim=0)
@@ -321,7 +362,7 @@ class LogicalConstraintConstructor:
                     elif v is not None:
                         flat_tensors.append(torch.tensor([v], 
                             device=self.current_device, 
-                            dtype=torch.float64, 
+                            dtype=self._get_dtype(), 
                             requires_grad=True))
                 if flat_tensors:
                     tsqueezed = torch.cat(flat_tensors, dim=0)
@@ -638,7 +679,7 @@ class LogicalConstraintConstructor:
                             if sample:
                                 vDns = [[torch.ones(p, device=self.current_device, requires_grad=False, dtype=torch.bool)] for _ in range(length_of_list)]
                             elif loss:
-                                vDns = [[torch.zeros(length_of_list, device=self.current_device, requires_grad=True, dtype=torch.float64)]]
+                                vDns = [[torch.zeros(length_of_list, device=self.current_device, requires_grad=True, dtype=self._get_dtype())]]
                                 vDns = self.addLossTovDns(loss, vDns)
                             else:
                                 vDns = [[1] for _ in range(length_of_list)]

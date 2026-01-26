@@ -10,9 +10,16 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
         self.grad = False
+        self.current_dtype = None
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
+    
+    def _get_dtype(self):
+        """Get current dtype, defaulting to float32 if not yet detected."""
+        if self.current_dtype is not None:
+            return self.current_dtype
+        return torch.float32
     
     # -- Consider None
     def ifNone(self, var): # Used in all except countVar
@@ -178,18 +185,18 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
                 fixedVar.append(v)
             else:
                 if limitOp == '>=':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
                 elif limitOp == '<=':
-                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device, dtype=torch.float64))
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
                 elif limitOp == '==':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
         # --
 
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
 
-        varSum = torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64)
+        varSum = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
         if fixedVar:
             varSum = fixedVar[0].clone()
 
@@ -253,7 +260,7 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         tensorsB = _to_tensor_list(varsB)
 
         # ---------- count “True” literals per sample --------------------------
-        countA = torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64)
+        countA = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
         for t in tensorsA:
             countA.add_(t)
 
@@ -298,7 +305,7 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         if self.ifNone(var):
             return None
         
-        sumResult = torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64)
+        sumResult = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
         for v in var:
             sumResult.add_(v)
         

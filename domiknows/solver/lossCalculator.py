@@ -34,7 +34,8 @@ class LossCalculator:
             myBooleanMethods.setCountingTNorm(counting_tnorm)
         
         myBooleanMethods.current_device = dn.current_device
-        
+        myBooleanMethods.current_dtype = self.solver.constraintConstructor.current_dtype
+
         self.solver.myLogger.info('Calculating loss')
         self.solver.myLoggerTime.info('Calculating loss')
         
@@ -92,7 +93,7 @@ class LossCalculator:
                     seperateTensorsUsed = True
                 
                 if seperateTensorsUsed:
-                    lossTensor = torch.zeros(len(lossList), device=self.solver.current_device, dtype=torch.float64)
+                    lossTensor = torch.zeros(len(lossList), device=self.solver.current_device, dtype=self.solver.constraintConstructor.current_dtype)
                     for i, l in enumerate(lossList):
                         lossTensor[i] = float("nan")
                         for entry in l:

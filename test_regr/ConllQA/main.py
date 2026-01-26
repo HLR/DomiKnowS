@@ -27,7 +27,7 @@ nlp = spacy.load('en_core_web_sm')  # English()
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 from transformers import BertTokenizerFast, BertModel
 
@@ -105,31 +105,26 @@ class BERT(torch.nn.Module):
         self.module = BertModel.from_pretrained(TRANSFORMER_MODEL)
         self.device = device
         self.module.to(self.device)
-        # to freeze BERT, uncomment the following
         for param in self.module.base_model.parameters():
             param.requires_grad = False
 
-    def forward(self, input):
-        # Ensure input is on the correct device
+    def forward(self, input):  # <-- This was incorrectly indented inside __init__
+        debug_tensor("BERT input", input)
         if input.device != self.device:
             input = input.to(self.device)
-        
+
         input = input.unsqueeze(0)
         _out = self.module(input)
 
         out, *_ = _out
 
-        if (isinstance(out, str)):  # Update for new transformers
+        if (isinstance(out, str)):
             out = _out.last_hidden_state
 
         assert out.shape[0] == 1
         out = out.squeeze(0)
+        debug_tensor("BERT output", out)
         return out
-    
-    def to(self, device):
-        """Override to method to update self.device"""
-        self.device = device
-        return super().to(device)
 
 
 class Classifier(torch.nn.Sequential):
@@ -137,6 +132,22 @@ class Classifier(torch.nn.Sequential):
         linear = torch.nn.Linear(in_features, 2)
         super().__init__(linear)
         self.to(device)
+        logging.debug(f"[DTYPE DEBUG] Classifier initialized: weight dtype={linear.weight.dtype}")
+
+    def forward(self, x):
+        debug_tensor("Classifier input", x)
+        result = super().forward(x)
+        debug_tensor("Classifier output", result)
+        return result
+
+
+def debug_tensor(name, tensor):
+    """Log tensor dtype, shape, and device for debugging."""
+    if isinstance(tensor, torch.Tensor):
+        logging.debug(f"[DTYPE DEBUG] {name}: dtype={tensor.dtype}, shape={tensor.shape}, device={tensor.device}")
+    else:
+        logging.debug(f"[DTYPE DEBUG] {name}: type={type(tensor)}")
+    return tensor
 
 def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
@@ -155,14 +166,22 @@ def program_declaration(train, args, device='auto'):
     def word2vec(text):
         texts = list(map(lambda x: ' '.join(x.split('/')), text))
         tokens_list = list(nlp.pipe(texts))
-        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), 
-                           dtype=torch.float32, device=device)
+        result = torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device=device)
+        debug_tensor("word2vec output", result)
+        return result
         
     phrase['w2v'] = FunctionalSensor('text', forward=word2vec)
 
     def merge_phrase(phrase_text):
-        return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)), 
-                                                    dtype=torch.float32, device=device)
+        ones = torch.ones((1, len(phrase_text)), device=device)  # was torch.device
+        debug_tensor("merge_phrase ones", ones)
+        return [' '.join(phrase_text)], ones
+    
+    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
+        phrase['text'], word['offset'],
+        relation=rel_phrase_contains_word.reversed,
+        forward=match_phrase
+    )
 
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
@@ -190,19 +209,22 @@ def program_declaration(train, args, device='auto'):
                     word_overlap.append(overlap(ph_offset, ph_offset + ph_len, word_s, word_e))
             ph_word_overlap.append(word_overlap)
             ph_offset += ph_len + 1
-        return torch.tensor(ph_word_overlap, dtype=torch.float32, device=device)
-
-    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'],
-                                                           relation=rel_phrase_contains_word.reversed,
-                                                           forward=match_phrase)
+        result = torch.tensor(ph_word_overlap, device=device)
+        debug_tensor("match_phrase output", result)
+        return result
 
     def phrase_bert(bert):
+        debug_tensor("phrase_bert input", bert)
         return bert
 
     phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
     
     def concat_features(bert, w2v):
-        return torch.cat((bert, w2v), dim=-1)
+        debug_tensor("concat_features bert input", bert)
+        debug_tensor("concat_features w2v input", w2v)
+        result = torch.cat((bert, w2v), dim=-1)
+        debug_tensor("concat_features output", result)
+        return result
     
     phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=concat_features)
 

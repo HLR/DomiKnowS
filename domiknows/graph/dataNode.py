@@ -107,6 +107,8 @@ class DataNode:
                 self.current_device = 'cuda:1'
             else:
                 self.current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                
+        self.current_dtype = torch.float32
 
         self.gurobiModel = None
 
@@ -2564,6 +2566,8 @@ class DataNodeBuilder(dict):
 
         if args:
             dict.__setitem__(self, "data_item", args[0])
+            
+        self.current_dtype = []
 
     @classmethod
     def clear(cls):
@@ -3624,6 +3628,10 @@ class DataNodeBuilder(dict):
             self.collectTime(start)
             return dict.__setitem__(self, _key, value)
 
+        # Store dtype if value is a torch tensor
+        if isinstance(value, torch.Tensor):
+            self.current_dtype.append(value.dtype)
+
         if len(skey) < 2:
             _DataNodeBuilder__Logger.error('The key %s has only two elements, needs at least three - abandon the update'%(key))
             self.collectTime(start)
@@ -4121,6 +4129,17 @@ class DataNodeBuilder(dict):
                 returnDn.current_device = 'cpu'
                 if torch.cuda.is_available():
                     returnDn.current_device = 'cuda'
+
+            # Set current_dtype if consistent in builder
+            if self.current_dtype:
+                if len(set(self.current_dtype)) == 1:
+                    # All dtypes are the same - set it on the root datanode
+                    returnDn.current_dtype = self.current_dtype[0]
+                    if not getProductionModeStatus():
+                        _DataNodeBuilder__Logger.info(f'Set current_dtype to {returnDn.current_dtype} on root dataNode')
+                else:
+                    # Dtypes are inconsistent - log warning
+                    _DataNodeBuilder__Logger.warning(f'Inconsistent dtypes in builder: {set(self.current_dtype)} - not setting current_dtype on root dataNode')
 
             if len(existingDns) != 1:
                 typesInDNs = {d.getOntologyNode().name for d in existingDns}
