@@ -1375,8 +1375,10 @@ class DataNode:
             lc_no += 1
             if lc_name in active_lc_names:
                 lc.active = True
+                lc.innerLC.active = True
             else:
                 lc.active = False
+                lc.innerLC.active = False
                 
         return read_labels
                 
