@@ -548,10 +548,6 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.countLogger.debug(f"Variable {i} after processing: {tv.item() if tv.numel() == 1 else tv}")
             vals.append(tv)
             
-        for i, v in enumerate(vals):
-            if v.numel() != 1:
-               self.countLogger.warning(f"Variable {i}: countVar expects scalar literals; got shape {tuple(v.shape)}: {v}")
-
         if len(vals) == 0:
             self.countLogger.info("No valid variables found, using zero tensor")
             t = torch.zeros(1, device=self.current_device, dtype=torch.float64, requires_grad=True)
