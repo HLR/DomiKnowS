@@ -155,12 +155,14 @@ def program_declaration(train, args, device='auto'):
     def word2vec(text):
         texts = list(map(lambda x: ' '.join(x.split('/')), text))
         tokens_list = list(nlp.pipe(texts))
-        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), device=device)
-
+        return torch.tensor(np.array([tokens.vector for tokens in tokens_list]), 
+                           dtype=torch.float32, device=device)
+        
     phrase['w2v'] = FunctionalSensor('text', forward=word2vec)
 
     def merge_phrase(phrase_text):
-        return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)), device=device)
+        return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)), 
+                                                    dtype=torch.float32, device=device)
 
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
@@ -183,14 +185,12 @@ def program_declaration(train, args, device='auto'):
             word_overlap = []
             for word_s, word_e in word_offset:
                 if word_e - word_s <= 0:
-                    # empty string / special tokens
                     word_overlap.append(False)
                 else:
-                    # other tokens, do compare offset
                     word_overlap.append(overlap(ph_offset, ph_offset + ph_len, word_s, word_e))
             ph_word_overlap.append(word_overlap)
             ph_offset += ph_len + 1
-        return torch.tensor(ph_word_overlap, device=device)
+        return torch.tensor(ph_word_overlap, dtype=torch.float32, device=device)
 
     phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'],
                                                            relation=rel_phrase_contains_word.reversed,
