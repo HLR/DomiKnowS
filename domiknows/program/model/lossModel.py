@@ -404,6 +404,7 @@ class InferenceModel(LossModel):
             if is_counting_constraint:
                 if 'expectedCount' in loss_dict and loss_dict['expectedCount'] is not None:
                     constr_out = loss_dict['expectedCount']
+                    constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
                 else:
                     constr_out = loss_dict['conversionSigmoid']
                     constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
