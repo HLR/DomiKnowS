@@ -94,7 +94,7 @@ class SampleLossCalculator:
                 current_lcLosses['elapsedInMsLC'] = elapsedInMsLC
         
         # Second pass: calculate successes
-        globalSuccesses = torch.ones(sampleSize, device=self.solver.current_device)
+        globalSuccesses = torch.ones(sampleSize, device=self.solver.current_device, dtype=torch.float64)
         
         for currentLcName in lcLosses:
             startLC = perf_counter_ns()
@@ -104,10 +104,10 @@ class SampleLossCalculator:
             sampleInfo = current_lcLosses['sampleInfo']
             
             successesList = []
-            lcSuccesses = torch.ones(sampleSize, device=self.solver.current_device)
+            lcSuccesses = torch.ones(sampleSize, device=self.solver.current_device, dtype=torch.float64)
             lcVariables = OrderedDict()
-            countSuccesses = torch.zeros(sampleSize, device=self.solver.current_device)
-            oneT = torch.ones(sampleSize, device=self.solver.current_device)
+            countSuccesses = torch.zeros(sampleSize, device=self.solver.current_device, dtype=torch.float64)
+            oneT = torch.ones(sampleSize, device=self.solver.current_device, dtype=torch.float64)
             
             # Prepare data
             if len(lossList) == 1:
@@ -240,9 +240,9 @@ class SampleLossCalculator:
                 
                 current_lcLosses['loss'].append(loss_val)
                 current_lcLosses['conversion'].append(1.0 - loss_val)
-                current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val)))
+                current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val, dtype=torch.float64)))
                 current_lcLosses['conversionClamp'].append(
-                    torch.clamp(torch.tensor(1.0 - loss_val), min=0.0, max=1.0))
+                    torch.clamp(torch.tensor(1.0 - loss_val, dtype=torch.float64), min=0.0, max=1.0))
                 
                 current_lcLosses['lossTensor'].append(lossTensor)
                 current_lcLosses['conversionTensor'].append(1.0 - lossTensor)
@@ -310,9 +310,9 @@ class SampleLossCalculator:
             lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
         else:
             if replace_mul:
-                lossTensor = torch.zeros(lcSuccesses.shape).to(self.solver.current_device)
+                lossTensor = torch.zeros(lcSuccesses.shape, dtype=torch.float64).to(self.solver.current_device)
             else:
-                lossTensor = torch.ones(lcSuccesses.shape).to(self.solver.current_device)
+                lossTensor = torch.ones(lcSuccesses.shape, dtype=torch.float64).to(self.solver.current_device)
             
         for i, v in enumerate(lcVariables):
             currentV = lcVariables[v]
@@ -321,7 +321,7 @@ class SampleLossCalculator:
                 P = currentV[0][:lcSampleSize]
             else:
                 P = currentV[0]
-            oneMinusP = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device), P)
+            oneMinusP = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=torch.float64), P)
             
             if eliminateDuplicateSamples:
                 S = Vs[i, :]
@@ -331,7 +331,7 @@ class SampleLossCalculator:
             if isinstance(S, list):
                 continue
             
-            notS = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device), S.float())
+            notS = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=torch.float64), S.float())
             
             pS = torch.mul(P, S)
             oneMinusPS = torch.mul(oneMinusP, notS)
@@ -409,11 +409,11 @@ class SampleLossCalculator:
                     if isFiexd != None:
                         if isFiexd == 1:
                             dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.ones(
-                                (productSize,), device=self.solver.current_device)
+                                (productSize,), device=self.solver.current_device, dtype=torch.float64)
                             continue
                         
                     dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.zeros(
-                        (productSize,), device=self.solver.current_device)
+                        (productSize,), device=self.solver.current_device, dtype=torch.float64)
              
         for j, p in enumerate(product(*productArgs, repeat=1)):
             index = 0

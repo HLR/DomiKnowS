@@ -92,7 +92,7 @@ class LossCalculator:
                     seperateTensorsUsed = True
                 
                 if seperateTensorsUsed:
-                    lossTensor = torch.zeros(len(lossList), device=self.solver.current_device)
+                    lossTensor = torch.zeros(len(lossList), device=self.solver.current_device, dtype=torch.float64)
                     for i, l in enumerate(lossList):
                         lossTensor[i] = float("nan")
                         for entry in l:

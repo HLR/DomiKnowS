@@ -100,7 +100,7 @@ class LogicalConstraintConstructor:
                 elif loss:
                     tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
                 else:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=False)
+                    tOne = torch.ones(1, device=self.current_device, requires_grad=False, dtype=torch.float64)
                     
                 tOneSqueezed = torch.squeeze(tOne)
                 return tOneSqueezed
@@ -113,7 +113,7 @@ class LogicalConstraintConstructor:
                 xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
 
                 dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device=self.current_device)
-                xP = torch.ones(sampleSize, device=self.current_device)
+                xP = torch.ones(sampleSize, device=self.current_device, dtype=torch.float64)
                 
                 return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
         
@@ -138,9 +138,9 @@ class LogicalConstraintConstructor:
 
         if isFiexd != None:
             if isFiexd == 1:
-                vDn = torch.tensor(1.0, device=self.current_device, requires_grad=True)
+                vDn = torch.tensor(1.0, device=self.current_device, requires_grad=True, dtype=torch.float64)
             else:
-                vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True)
+                vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True, dtype=torch.float64)
         else:
             try:
                 vDn = dn.getAttribute(xPkey)[e[1]]
@@ -162,9 +162,9 @@ class LogicalConstraintConstructor:
             usedSampleSize = dn.getAttributes()[sampleKey][-1][e[1]].shape[0]
         if isFiexd != None:  
             if isFiexd == 1:
-                xP = torch.ones(usedSampleSize, device=self.current_device, requires_grad=True)
+                xP = torch.ones(usedSampleSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
             else:
-                xP = torch.zeros(usedSampleSize, device=self.current_device, requires_grad=True)
+                xP = torch.zeros(usedSampleSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
         else:
             xV = dn.getAttribute(xPkey)
             xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV.squeeze(0)))

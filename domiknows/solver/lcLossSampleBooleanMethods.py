@@ -178,18 +178,18 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
                 fixedVar.append(v)
             else:
                 if limitOp == '>=':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64))
                 elif limitOp == '<=':
-                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device, dtype=torch.float64))
                 elif limitOp == '==':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64))
         # --
 
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
 
-        varSum = torch.zeros([self.sampleSize], device=self.current_device)
+        varSum = torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64)
         if fixedVar:
             varSum = fixedVar[0].clone()
 
@@ -253,7 +253,7 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         tensorsB = _to_tensor_list(varsB)
 
         # ---------- count “True” literals per sample --------------------------
-        countA = torch.zeros([self.sampleSize], device=self.current_device)
+        countA = torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64)
         for t in tensorsA:
             countA.add_(t)
 
@@ -298,7 +298,7 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         if self.ifNone(var):
             return None
         
-        sumResult = torch.zeros([self.sampleSize], device=self.current_device)
+        sumResult = torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.float64)
         for v in var:
             sumResult.add_(v)
         
