@@ -197,7 +197,7 @@ class LossModel(torch.nn.Module):
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
             globalLoss = constr_loss['globalLoss']
             self.loss['globalLoss'](globalLoss)
-            lmbd_loss = torch.tensor(globalLoss, dtype=torch.float32, requires_grad=True)
+            lmbd_loss = torch.tensor(globalLoss, dtype=torch.float64, requires_grad=True)
         else:
             for key, loss in constr_loss.items():
                 if key not in self.constr:
@@ -423,7 +423,7 @@ class InferenceModel(LossModel):
             losses.append(constraint_loss)
 
         if len(losses) == 0:
-            loss = torch.tensor(0.0, dtype=torch.float32, device=self.device, requires_grad=True)
+            loss = torch.tensor(0.0, dtype=torch.float64, device=self.device, requires_grad=True)
         else:
             loss = sum(losses)
             
