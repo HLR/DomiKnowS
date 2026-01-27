@@ -6,7 +6,13 @@ sys.path.append('.')
 sys.path.append('../../..')
 
 import argparse
-from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+
+#import logging
+#logging.basicConfig(level=logging.INFO)
+from domiknows import setProductionLogMode
+setProductionLogMode()
+
+from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, program
 from domiknows.program.callbackprogram import ProgramStorageCallback
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from domiknows.program.lossprogram import PrimalDualProgram, InferenceProgram
@@ -17,7 +23,7 @@ from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, Modu
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, \
     CompositionCandidateReaderSensor
-from domiknows import setProductionLogMode
+
 from reader import conll4_reader
 import numpy as np
 
@@ -26,12 +32,6 @@ import spacy
 # from spacy.lang.en import English
 nlp = spacy.load('en_core_web_sm')  # English()
 
-import logging
-
-logging.basicConfig(level=logging.INFO)
-setProductionLogMode()
-
-
 from transformers import BertTokenizerFast, BertModel
 
 TRANSFORMER_MODEL = 'bert-base-uncased'
@@ -39,42 +39,16 @@ TRANSFORMER_MODEL = 'bert-base-uncased'
 FEATURE_DIM = 768 + 96
 
 
-def find_data_file(filename, train_portion=None):
-    """Find data file by checking multiple possible locations"""
+def find_data_file(filename):
+    """Find data file in the same directory as this script."""
     current_dir = Path(__file__).parent
-
-    # First, check if extracted portion file exists
-    if train_portion:
-        extracted_filename = f"{train_portion}.json"
-        possible_extracted_paths = [
-            current_dir / extracted_filename,
-            current_dir / "data" / extracted_filename,
-            Path.cwd() / extracted_filename,
-            Path.cwd() / "data" / extracted_filename,
-        ]
-
-        for path in possible_extracted_paths:
-            if path.exists():
-                print(f"Using extracted data file: {path}")
-                return str(path)
-
-    # List of possible locations to check for main file
-    possible_paths = [
-        current_dir / filename,
-        current_dir / "data" / filename,
-        current_dir / ".." / filename,
-        current_dir / ".." / "data" / filename,
-        current_dir / ".." / ".." / filename,
-        current_dir / ".." / ".." / "data" / filename,
-        Path.cwd() / filename,
-        Path.cwd() / "data" / filename,
-    ]
-
-    for path in possible_paths:
-        if path.exists():
-            return str(path)
-
-    raise FileNotFoundError(f"Could not find {filename} in any of the expected locations: {possible_paths}")
+    data_path = current_dir / filename
+    
+    if data_path.exists():
+        print(f"Using data file: {data_path}")
+        return str(data_path)
+    
+    raise FileNotFoundError(f"Could not find {filename} in {current_dir}")
 
 
 class Tokenizer():
@@ -175,6 +149,27 @@ class Classifier(torch.nn.Sequential):
 
 _bert_model = None
 _models = {}
+
+class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
+    """InferenceProgram with callback support for gradual unfreezing."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Explicitly initialize all callback hooks (from CallbackProgram)
+        self.before_train = []
+        self.after_train = []
+        self.before_train_epoch = []
+        self.after_train_epoch = []
+        self.before_train_step = []
+        self.after_train_step = []
+        self.before_test = []
+        self.after_test = []
+        self.before_test_epoch = []
+        self.after_test_epoch = []
+        self.before_test_step = []
+        self.after_test_step = []
+    
 
 def program_declaration(train, args, device='auto'):
     global _models
@@ -295,9 +290,13 @@ def program_declaration(train, args, device='auto'):
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
-    program = InferenceProgram(graph, SolverModel,
-                               poi=[phrase, sentence, word, people, organization, location, graph.constraint],
-                               tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
+    program = InferenceProgramWithCallbacks(
+        graph, SolverModel,
+        poi=[phrase, sentence, word, people, organization, location, graph.constraint],
+        tnorm=args.counting_tnorm, 
+        inferTypes=['local/argmax'], 
+        device=device
+    )
     return program, train_dataset
 
     # def find_label(label_type):
@@ -353,7 +352,6 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
-    parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
@@ -409,7 +407,7 @@ def main(args):
     from graph import people, organization, location, other, o
 
     # Find the data file automatically (will use extracted file if exists)
-    data_file_path = find_data_file(args.data_path, args.train_portion)
+    data_file_path = find_data_file(args.data_path)
 
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 
@@ -418,53 +416,59 @@ def main(args):
 
     program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
 
-    unfreeze_callback = GradualUnfreezeCallback(
-        _bert_model,
-        unfreeze_every=args.unfreeze_every,  
-        layers_per_step=args.unfreeze_layers  
-    )
-    
     suffix = "_curriculum_learning" if args.load_previous else ""
     if not args.evaluate:
         if args.load_previous:
             program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
         
-        # Create optimizer with differential LR
-        optimizer = create_optimizer_with_differential_lr(
-            _models['bert'],
-            _models['classifiers'],
-            bert_lr=args.bert_lr,
-            classifier_lr=args.classifier_lr
-        )
-        
-        # Train with custom optimizer
-        for epoch in range(args.epochs):
-            # Gradually unfreeze BERT
-            layers_to_unfreeze = min((epoch + 1) * args.unfreeze_layers, 12)
+        # Setup gradual unfreezing callback
+        def unfreeze_callback():
+            epoch = program.epoch or 0
+            layers_to_unfreeze = min(epoch * args.unfreeze_layers, 12)
             _models['bert'].unfreeze_layers(layers_to_unfreeze)
-            
-            # Recreate optimizer to include newly unfrozen params
-            optimizer = create_optimizer_with_differential_lr(
+        
+        # Setup optimizer update callback (for differential LR)
+        def update_optimizer_callback():
+            program.opt = create_optimizer_with_differential_lr(
                 _models['bert'],
                 _models['classifiers'],
                 bert_lr=args.bert_lr,
                 classifier_lr=args.classifier_lr
             )
-            
-            program.train(dataset, Optim=lambda params: optimizer,
-                         train_epoch_num=1, c_lr=args.classifier_lr,
-                         batch_size=1, print_loss=False)
+        
+        # Register callbacks
+        program.after_train_epoch.append(unfreeze_callback)
+        program.after_train_epoch.append(update_optimizer_callback)
+        
+        # Train - callbacks fire automatically after each epoch
+        program.train(
+            dataset, 
+            Optim=lambda params: create_optimizer_with_differential_lr(
+                _models['bert'],
+                _models['classifiers'],
+                bert_lr=args.bert_lr,
+                classifier_lr=args.classifier_lr
+            ),
+            train_epoch_num=args.epochs,
+            c_lr=args.classifier_lr,
+            c_warmup_iters=-1,
+            batch_size=1,
+            print_loss=False
+        )
                 
-        program.save(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
+        program.save(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
     else:
-        program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
+        program.load(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
     train_acc = program.evaluate_condition(dataset, threshold=0.5)
     portion = "Training" if not args.evaluate else "Testing"
-    print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
+    print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}", file=output_f)
+    print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}")
     print(f"{portion} Acc: {train_acc}", file=output_f)
+    print(f"{portion} Acc: {train_acc}")
     print("#" * 40, file=output_f)
+    print("#" * 40)
 
     if args.checked_acc:
         print(f"<acc>{train_acc}</acc>")

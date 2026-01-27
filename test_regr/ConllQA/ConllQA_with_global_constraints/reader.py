@@ -43,7 +43,7 @@ def create_query(question, question_type):
             entity2 = ENTITIES_NAME[entity2]
             rel1 = RELATIONS_NAME[rel1]
             object_name = f"andL({entity1}('{chr(define_character)}'), {rel1}('{chr(define_character+1)}', path=('{chr(define_character)}', rel_pair_phrase1.reversed)), {entity2}('{chr(define_character+2)}', path=('{chr(define_character+1)}', rel_pair_phrase2)))"
-            print(object_name)
+            #print(object_name)
             define_character += 3
             all_obj.append(object_name)
         asked_entities += ",".join(all_obj)

@@ -199,6 +199,9 @@ def setup_error_warning_logger(log_dir='logs'):
             self._file_handler_created = False
             
         def emit(self, record):
+            # Skip if error/warning logging is disabled
+            if noErrorWarningLog:
+                return
             # Forward the record to the error/warning logger
             if record.levelno >= logging.WARNING:
                 # Create file handler on first warning/error
@@ -211,6 +214,10 @@ def setup_error_warning_logger(log_dir='logs'):
         def _create_file_handler(self):
             """Create the actual log file and handler when first warning/error occurs"""
             global _error_warning_log_dir, _error_warning_logger
+            
+            # Skip if error/warning logging is disabled
+            if noErrorWarningLog:
+                return
             
             # Create directory
             pathlib.Path(_error_warning_log_dir).mkdir(parents=True, exist_ok=True)
@@ -304,6 +311,18 @@ def setup_logger(config=None, default_filename='app.log'):
         logDir = config.get('log_dir', logDir)
         timestampBackupCount = config.get('timestamp_backup_count', timestampBackupCount)
     
+    # Create logger
+    logger = logging.getLogger(logName)
+    logger.handlers.clear()  # Clear existing handlers
+    logger.setLevel(logLevel)
+    
+    # Skip file handler creation in production mode
+    if productionMode:
+        # Add a null handler to prevent "No handlers" warnings
+        logger.addHandler(logging.NullHandler())
+        logger.propagate = False
+        return logger
+    
     # if logFilename is missing extension .log add it
     if not logFilename.endswith('.log'):
         logFilename += '.log'
@@ -323,11 +342,6 @@ def setup_logger(config=None, default_filename='app.log'):
     
     # Move existing log file with timestamp before creating new handler
     move_existing_logfile_with_timestamp(log_path, timestampBackupCount)
-    
-    # Create logger
-    logger = logging.getLogger(logName)
-    logger.handlers.clear()  # Clear existing handlers
-    logger.setLevel(logLevel)
     
     # Create file handler
     handler = RotatingFileHandler(
@@ -356,6 +370,7 @@ def setup_logger(config=None, default_filename='app.log'):
 
 noUseTimeLog = False
 myLoggerTime = None
+
 def getRegrTimer_logger(_config=None):
     global noUseTimeLog
     global myLoggerTime
@@ -376,13 +391,19 @@ def getRegrTimer_logger(_config=None):
 
 productionMode = False
 reuseModel = False
+noErrorWarningLog = False
+
 def setProductionLogMode(no_UseTimeLog = False, reuse_model=True, no_error_warning_log=False):
     global productionMode
     global reuseModel
     global noUseTimeLog
     global myLoggerTime
+    global noErrorWarningLog
+    
     productionMode = True
     reuseModel = reuse_model
+    noErrorWarningLog = no_error_warning_log
+    
     ilpOntSolverLog = logging.getLogger("ilpOntSolver")
     ilpOntSolverLog.addFilter(lambda record: False)
     dataNodeLog = logging.getLogger("dataNode")
