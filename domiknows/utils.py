@@ -376,7 +376,7 @@ def getRegrTimer_logger(_config=None):
 
 productionMode = False
 reuseModel = False
-def setProductionLogMode(no_UseTimeLog = False, reuse_model=True):
+def setProductionLogMode(no_UseTimeLog = False, reuse_model=True, no_error_warning_log=False):
     global productionMode
     global reuseModel
     global noUseTimeLog
@@ -389,6 +389,10 @@ def setProductionLogMode(no_UseTimeLog = False, reuse_model=True):
     dataNodeLog.addFilter(lambda record: False)
     dataNodeBuilderLog = logging.getLogger("dataNodeBuilder")
     dataNodeBuilderLog.addFilter(lambda record: False)
+    
+    if no_error_warning_log:
+        errorWarningLog = logging.getLogger("errorWarning")
+        errorWarningLog.addFilter(lambda record: False)
     
     noUseTimeLog = no_UseTimeLog
     if noUseTimeLog:

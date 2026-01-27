@@ -4132,14 +4132,18 @@ class DataNodeBuilder(dict):
 
             # Set current_dtype if consistent in builder
             if self.current_dtype:
-                if len(set(self.current_dtype)) == 1:
+                # filter out not floet dtypes
+                current_dtype_float = [dtype for dtype in self.current_dtype if 'float' in str(dtype)]
+                if len(set(current_dtype_float)) == 1:
                     # All dtypes are the same - set it on the root datanode
-                    returnDn.current_dtype = self.current_dtype[0]
+                    returnDn.current_dtype = current_dtype_float[0]
                     if not getProductionModeStatus():
                         _DataNodeBuilder__Logger.info(f'Set current_dtype to {returnDn.current_dtype} on root dataNode')
                 else:
-                    # Dtypes are inconsistent - log warning
-                    _DataNodeBuilder__Logger.warning(f'Inconsistent dtypes in builder: {set(self.current_dtype)} - not setting current_dtype on root dataNode')
+                    # Dtypes are inconsistent - log error
+                    _DataNodeBuilder__Logger.error(f'Inconsistent tensors dtypes in builder: {set(self.current_dtype)} - all dtypes of provided tensors have to be the same')
+                    # threw exception
+                    raise ValueError(f'Inconsistent tensors dtypes in builder: {set(self.current_dtype)}')
 
             if len(existingDns) != 1:
                 typesInDNs = {d.getOntologyNode().name for d in existingDns}

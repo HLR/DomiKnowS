@@ -17,6 +17,7 @@ from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, Modu
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, \
     CompositionCandidateReaderSensor
+from domiknows import setProductionLogMode
 from reader import conll4_reader
 import numpy as np
 
@@ -28,6 +29,8 @@ nlp = spacy.load('en_core_web_sm')  # English()
 import logging
 
 logging.basicConfig(level=logging.INFO)
+setProductionLogMode()
+
 
 from transformers import BertTokenizerFast, BertModel
 
@@ -105,31 +108,63 @@ class BERT(torch.nn.Module):
         self.module = BertModel.from_pretrained(TRANSFORMER_MODEL)
         self.device = device
         self.module.to(self.device)
-        # to freeze BERT, uncomment the following
-        for param in self.module.base_model.parameters():
+        
+        # Start fully frozen
+        self.freeze_all()
+        
+        # Track unfreezing state
+        self.unfrozen_layers = 0
+        self.total_layers = len(self.module.encoder.layer)  # Usually 12 for bert-base
+        self.step_count = 0
+    
+    def freeze_all(self):
+        """Freeze all BERT parameters."""
+        for param in self.module.parameters():
             param.requires_grad = False
-
+    
+    def unfreeze_layers(self, n_layers):
+        """Unfreeze the last n_layers of BERT encoder."""
+        if n_layers <= self.unfrozen_layers:
+            return  # Already unfrozen
+        
+        # Unfreeze from the end
+        for layer in self.module.encoder.layer[-n_layers:]:
+            for param in layer.parameters():
+                param.requires_grad = True
+        
+        # Unfreeze pooler when we start unfreezing
+        if self.unfrozen_layers == 0 and n_layers > 0:
+            for param in self.module.pooler.parameters():
+                param.requires_grad = True
+        
+        self.unfrozen_layers = n_layers
+        print(f"[BERT] Unfroze {n_layers}/{self.total_layers} layers")
+    
+    def step_unfreeze(self, unfreeze_every=500, layers_per_step=1):
+        """Call this every training step to gradually unfreeze."""
+        self.step_count += 1
+        
+        if self.step_count % unfreeze_every == 0:
+            new_layers = min(
+                self.unfrozen_layers + layers_per_step,
+                self.total_layers
+            )
+            self.unfreeze_layers(new_layers)
+    
     def forward(self, input):
-        # Ensure input is on the correct device
         if input.device != self.device:
             input = input.to(self.device)
-
+        
         input = input.unsqueeze(0)
         _out = self.module(input)
-
+        
         out, *_ = _out
-
-        if (isinstance(out, str)):  # Update for new transformers
+        if isinstance(out, str):
             out = _out.last_hidden_state
-
+        
         assert out.shape[0] == 1
         out = out.squeeze(0)
         return out
-
-    def to(self, device):
-        """Override to method to update self.device"""
-        self.device = device
-        return super().to(device)
 
 
 class Classifier(torch.nn.Sequential):
@@ -138,8 +173,13 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
         self.to(device)
 
+_bert_model = None
+_models = {}
 
 def program_declaration(train, args, device='auto'):
+    global _models
+    global _bert_model
+    
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
@@ -171,6 +211,8 @@ def program_declaration(train, args, device='auto'):
 
     # Create BERT with device parameter
     bert_model = BERT(device=device)
+    _bert_model = bert_model # Store globally for unfreezing during training
+    
     word['bert'] = ModuleSensor('ids', module=bert_model)
 
     def match_phrase(phrase, word_offset):
@@ -233,20 +275,36 @@ def program_declaration(train, args, device='auto'):
     pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
     pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
     pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    
+    classifiers = {
+        'people': Classifier(FEATURE_DIM, device=device),
+        'organization': Classifier(FEATURE_DIM, device=device),
+        'location': Classifier(FEATURE_DIM, device=device),
+        'other': Classifier(FEATURE_DIM, device=device),
+        'o': Classifier(FEATURE_DIM, device=device),
+        'work_for': Classifier(FEATURE_DIM * 2, device=device),
+        'located_in': Classifier(FEATURE_DIM * 2, device=device),
+        'live_in': Classifier(FEATURE_DIM * 2, device=device),
+        'orgbase_on': Classifier(FEATURE_DIM * 2, device=device),
+        'kill': Classifier(FEATURE_DIM * 2, device=device),
+    }
 
-    def find_label(label_type):
-        def find(data):
-            label = torch.tensor([item == label_type for item in data], device=device)
-            return label
+    _models['bert'] = bert_model
+    _models['classifiers'] = classifiers
 
-        return find
-
+    graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
     program = InferenceProgram(graph, SolverModel,
                                poi=[phrase, sentence, word, people, organization, location, graph.constraint],
                                tnorm=args.counting_tnorm, inferTypes=['local/argmax'], device=device)
     return program, train_dataset
+
+    # def find_label(label_type):
+    #    def find(data):
+    #        label = torch.tensor([item == label_type for item in data], device=device)
+    #        return label
+    #    return find
 
     # Normal Label
     # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
@@ -268,11 +326,35 @@ def program_declaration(train, args, device='auto'):
     # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
 
+def create_optimizer_with_differential_lr(bert_model, classifiers, 
+                                          bert_lr=2e-5, classifier_lr=1e-4):
+    """Create optimizer with different learning rates for BERT vs classifiers."""
+    
+    param_groups = [
+        # BERT parameters (lower LR)
+        {
+            'params': [p for p in bert_model.parameters() if p.requires_grad],
+            'lr': bert_lr,
+            'name': 'bert'
+        },
+        # Classifier parameters (higher LR)
+        {
+            'params': [p for name, clf in classifiers.items() 
+                        for p in clf.parameters() if p.requires_grad],
+            'lr': classifier_lr,
+            'name': 'classifiers'
+        }
+    ]
+    
+    # Remove empty param groups
+    param_groups = [g for g in param_groups if len(list(g['params'])) > 0]
+    
+    return torch.optim.Adam(param_groups)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
     parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
-    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
@@ -287,12 +369,42 @@ def parse_arguments():
                         help="Path to data file (can be relative or absolute)")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--unfreeze_every", type=int, default=500, 
+                        help="Unfreeze BERT layers every N steps")
+    parser.add_argument("--unfreeze_layers", type=int, default=2, 
+                        help="Number of BERT layers to unfreeze per step")
+    parser.add_argument("--bert_lr", type=float, default=2e-5, 
+                        help="Learning rate for BERT layers")
+    parser.add_argument("--classifier_lr", type=float, default=1e-4, 
+                        help="Learning rate for classifier heads")
+    # ...
     args = parser.parse_args()
 
     return args
 
 
+class GradualUnfreezeCallback:
+    """Callback to gradually unfreeze BERT during training."""
+    
+    def __init__(self, bert_model, unfreeze_every=500, layers_per_step=1):
+        self.bert_model = bert_model
+        self.unfreeze_every = unfreeze_every
+        self.layers_per_step = layers_per_step
+        self.step = 0
+    
+    def on_batch_end(self):
+        """Call after each batch."""
+        self.step += 1
+        if self.step % self.unfreeze_every == 0:
+            new_layers = min(
+                self.bert_model.unfrozen_layers + self.layers_per_step,
+                self.bert_model.total_layers
+            )
+            self.bert_model.unfreeze_layers(new_layers)
+            
 def main(args):
+    global _models
+    global _bert_model
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
@@ -306,12 +418,43 @@ def main(args):
 
     program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
 
+    unfreeze_callback = GradualUnfreezeCallback(
+        _bert_model,
+        unfreeze_every=args.unfreeze_every,  
+        layers_per_step=args.unfreeze_layers  
+    )
+    
     suffix = "_curriculum_learning" if args.load_previous else ""
     if not args.evaluate:
         if args.load_previous:
             program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
-        program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
-                      batch_size=1, print_loss=False)
+        
+        # Create optimizer with differential LR
+        optimizer = create_optimizer_with_differential_lr(
+            _models['bert'],
+            _models['classifiers'],
+            bert_lr=args.bert_lr,
+            classifier_lr=args.classifier_lr
+        )
+        
+        # Train with custom optimizer
+        for epoch in range(args.epochs):
+            # Gradually unfreeze BERT
+            layers_to_unfreeze = min((epoch + 1) * args.unfreeze_layers, 12)
+            _models['bert'].unfreeze_layers(layers_to_unfreeze)
+            
+            # Recreate optimizer to include newly unfrozen params
+            optimizer = create_optimizer_with_differential_lr(
+                _models['bert'],
+                _models['classifiers'],
+                bert_lr=args.bert_lr,
+                classifier_lr=args.classifier_lr
+            )
+            
+            program.train(dataset, Optim=lambda params: optimizer,
+                         train_epoch_num=1, c_lr=args.classifier_lr,
+                         batch_size=1, print_loss=False)
+                
         program.save(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
     else:
         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
