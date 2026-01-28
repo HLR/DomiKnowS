@@ -265,11 +265,11 @@ def program_declaration(train, args, device='auto'):
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
 
-    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
-    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
+    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
+    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
+    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
+    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
+    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
     
     classifiers = {
         'people': Classifier(FEATURE_DIM, device=device),
