@@ -1,17 +1,5 @@
 import sys
 import torch
-import traceback
-
-_orig_to = torch.Tensor.to
-
-def tracked_to(self, *args, **kwargs):
-    result = _orig_to(self, *args, **kwargs)
-    if self.device != result.device:
-        print(f"\n🔁 Tensor moved {self.device} → {result.device}")
-        traceback.print_stack(limit=6)
-    return result
-
-torch.Tensor.to = tracked_to
 from pathlib import Path
 
 sys.path.append('.')
@@ -429,6 +417,8 @@ def main(args):
 
     if args.train_size != -1:
         train = train[:args.train_size]
+    
+    suffix = "_curriculum_learning" if args.load_previous else ""
 
     program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
     
