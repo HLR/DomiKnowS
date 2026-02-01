@@ -2,27 +2,16 @@ import sys
 import torch
 import traceback
 
-_orig_tensor = torch.tensor
-_orig_zeros = torch.zeros
-_orig_ones = torch.ones
-_orig_empty = torch.empty
+_orig_to = torch.Tensor.to
 
-def _wrap(fn, name):
-    def wrapped(*args, **kwargs):
-        t = fn(*args, **kwargs)
-        if t.is_cuda:
-            return t
-        if torch.cuda.is_available():
-            print(f"\n⚠️ CPU tensor created: {name}")
-            traceback.print_stack(limit=8)
-        return t
-    return wrapped
+def tracked_to(self, *args, **kwargs):
+    result = _orig_to(self, *args, **kwargs)
+    if self.device != result.device:
+        print(f"\n🔁 Tensor moved {self.device} → {result.device}")
+        traceback.print_stack(limit=6)
+    return result
 
-torch.tensor = _wrap(_orig_tensor, "torch.tensor")
-torch.zeros  = _wrap(_orig_zeros,  "torch.zeros")
-torch.ones   = _wrap(_orig_ones,   "torch.ones")
-torch.empty  = _wrap(_orig_empty,  "torch.empty")
-
+torch.Tensor.to = tracked_to
 from pathlib import Path
 
 sys.path.append('.')
