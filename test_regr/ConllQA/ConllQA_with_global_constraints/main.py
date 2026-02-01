@@ -171,7 +171,6 @@ class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
         self.before_test_step = []
         self.after_test_step = []
     
-
 def program_declaration(train, args, device='cpu'):
     global _models
     global _bert_model
@@ -384,7 +383,57 @@ def parse_arguments():
 
     return args
 
-
+def log_training_config(args, models):
+    """Log all training configuration parameters."""
+    print("\n" + "=" * 60)
+    print("TRAINING CONFIGURATION")
+    print("=" * 60)
+    
+    # Data settings
+    print("\n[Data]")
+    print(f"  Data path:        {args.data_path}")
+    print(f"  Train portion:    {args.train_portion}")
+    print(f"  Train size:       {args.train_size if args.train_size != -1 else 'all'}")
+    
+    # Training settings
+    print("\n[Training]")
+    print(f"  Epochs:           {args.epochs}")
+    print(f"  Warmup epochs:    {args.warmup_epochs}")
+    print(f"  Batch size:       1")
+    print(f"  Device:           {args.device}")
+    
+    # Learning rates
+    print("\n[Learning Rates]")
+    print(f"  Classifier LR:    {args.classifier_lr}")
+    print(f"  BERT LR:          {args.bert_lr}")
+    
+    # BERT unfreezing
+    print("\n[BERT Unfreezing]")
+    print(f"  Unfreeze layers/epoch: {args.unfreeze_layers}")
+    print(f"  Total BERT layers:     {models['bert'].total_layers}")
+    print(f"  Initially frozen:      {models['bert'].unfrozen_layers == 0}")
+    
+    # Constraint settings
+    print("\n[Constraints]")
+    print(f"  Counting t-norm:  {args.counting_tnorm}")
+    
+    # Model info
+    print("\n[Model]")
+    bert_params = sum(p.numel() for p in models['bert'].parameters())
+    bert_trainable = sum(p.numel() for p in models['bert'].parameters() if p.requires_grad)
+    clf_params = sum(p.numel() for name, clf in models['classifiers'].items() for p in clf.parameters())
+    
+    print(f"  BERT params:      {bert_params:,} (trainable: {bert_trainable:,})")
+    print(f"  Classifier params: {clf_params:,}")
+    print(f"  Total params:     {bert_params + clf_params:,}")
+    
+    # Mode
+    print("\n[Mode]")
+    print(f"  Evaluate only:    {args.evaluate}")
+    print(f"  Load previous:    {args.load_previous}")
+    
+    print("\n" + "=" * 60 + "\n")
+    
 class GradualUnfreezeCallback:
     """Callback to gradually unfreeze BERT during training."""
     
@@ -414,6 +463,8 @@ def main(args):
     data_file_path = find_data_file(args.data_path)
 
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
+
+    log_training_config(args, _models)
 
     if args.train_size != -1:
         train = train[:args.train_size]
@@ -493,7 +544,6 @@ def main(args):
         assert train_acc > args.checked_acc
 
     return 0
-
 
 if __name__ == '__main__':
     args = parse_arguments()
