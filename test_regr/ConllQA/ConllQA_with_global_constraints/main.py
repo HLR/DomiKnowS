@@ -1,5 +1,28 @@
 import sys
 import torch
+import traceback
+
+_orig_tensor = torch.tensor
+_orig_zeros = torch.zeros
+_orig_ones = torch.ones
+_orig_empty = torch.empty
+
+def _wrap(fn, name):
+    def wrapped(*args, **kwargs):
+        t = fn(*args, **kwargs)
+        if t.is_cuda:
+            return t
+        if torch.cuda.is_available():
+            print(f"\n⚠️ CPU tensor created: {name}")
+            traceback.print_stack(limit=8)
+        return t
+    return wrapped
+
+torch.tensor = _wrap(_orig_tensor, "torch.tensor")
+torch.zeros  = _wrap(_orig_zeros,  "torch.zeros")
+torch.ones   = _wrap(_orig_ones,   "torch.ones")
+torch.empty  = _wrap(_orig_empty,  "torch.empty")
+
 from pathlib import Path
 
 sys.path.append('.')
@@ -66,7 +89,11 @@ class Tokenizer():
         offset = tokens['offset_mapping'].to(self.device)
 
         idx = mask.nonzero()[:, 0].unsqueeze(-1)
-        mapping = torch.zeros(idx.shape[0], idx.max() + 1, device=self.device)
+        mapping = torch.zeros(
+            idx.shape[0],
+            int(idx.max().item()) + 1,
+            device=self.device
+        )        
         mapping.scatter_(1, idx, 1)
 
         mask = mask.bool()
@@ -82,31 +109,27 @@ class BERT(torch.nn.Module):
         self.module = BertModel.from_pretrained(TRANSFORMER_MODEL)
         self.device = device
         self.module.to(self.device)
-        
-        # Start fully frozen
-        self.freeze_all()
-        
-        # Track unfreezing state
         self.unfrozen_layers = 0
-        self.total_layers = len(self.module.encoder.layer)  # Usually 12 for bert-base
-        self.step_count = 0
+        self.total_layers = len(self.module.encoder.layer)
+        
+        # Start frozen
+        self.freeze_all()
     
     def freeze_all(self):
         """Freeze all BERT parameters."""
         for param in self.module.parameters():
             param.requires_grad = False
-    
+        self.unfrozen_layers = 0
+        
     def unfreeze_layers(self, n_layers):
         """Unfreeze the last n_layers of BERT encoder."""
         if n_layers <= self.unfrozen_layers:
-            return  # Already unfrozen
+            return
         
-        # Unfreeze from the end
         for layer in self.module.encoder.layer[-n_layers:]:
             for param in layer.parameters():
                 param.requires_grad = True
         
-        # Unfreeze pooler when we start unfreezing
         if self.unfrozen_layers == 0 and n_layers > 0:
             for param in self.module.pooler.parameters():
                 param.requires_grad = True
@@ -126,8 +149,9 @@ class BERT(torch.nn.Module):
             self.unfreeze_layers(new_layers)
     
     def forward(self, input):
-        if input.device != self.device:
-            input = input.to(self.device)
+        if self.module.device != input.device:
+            self.module.to(input.device)
+            self.device = input.device
         
         input = input.unsqueeze(0)
         _out = self.module(input)
@@ -171,7 +195,7 @@ class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
         self.after_test_step = []
     
 
-def program_declaration(train, args, device='auto'):
+def program_declaration(train, args, device='cpu'):
     global _models
     global _bert_model
     
@@ -352,7 +376,7 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=6, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
@@ -366,15 +390,21 @@ def parse_arguments():
                         default="conllQA_with_global.json",
                         help="Path to data file (can be relative or absolute)")
     parser.add_argument("--device", type=str, default="cpu",
-                        help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+                        help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0')")
     parser.add_argument("--unfreeze_every", type=int, default=500, 
                         help="Unfreeze BERT layers every N steps")
     parser.add_argument("--unfreeze_layers", type=int, default=2, 
                         help="Number of BERT layers to unfreeze per step")
-    parser.add_argument("--bert_lr", type=float, default=2e-5, 
+    parser.add_argument("--warmup_epochs", type=int, default=2,
+                        help="Epochs to train with BERT frozen before unfreezing")
+    parser.add_argument("--bert_lr", type=float, default=1e-5,  # Lower!
                         help="Learning rate for BERT layers")
-    parser.add_argument("--classifier_lr", type=float, default=1e-4, 
+    parser.add_argument("--classifier_lr", type=float, default=1e-4,
                         help="Learning rate for classifier heads")
+    parser.add_argument("--unfreeze_layers", type=int, default=2,
+                        help="Layers to unfreeze per epoch after warmup")
+
+
     # ...
     args = parser.parse_args()
 
@@ -415,40 +445,50 @@ def main(args):
         train = train[:args.train_size]
 
     program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
-
-    suffix = "_curriculum_learning" if args.load_previous else ""
+    
     if not args.evaluate:
-        if args.load_previous:
-            program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
+        # Ensure BERT starts fully frozen
+        _models['bert'].freeze_all()
         
-        # Setup gradual unfreezing callback
+        # Setup gradual unfreezing callback WITH WARMUP
         def unfreeze_callback():
             epoch = program.epoch or 0
-            layers_to_unfreeze = min(epoch * args.unfreeze_layers, 12)
-            _models['bert'].unfreeze_layers(layers_to_unfreeze)
+            
+            # Don't unfreeze during warmup
+            if epoch <= args.warmup_epochs:
+                print(f"[Epoch {epoch}] Warmup - BERT frozen")
+                return
+            
+            # After warmup, gradually unfreeze
+            epochs_after_warmup = epoch - args.warmup_epochs
+            layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
+            
+            if layers_to_unfreeze > _models['bert'].unfrozen_layers:
+                _models['bert'].unfreeze_layers(layers_to_unfreeze)
+                
+                # IMPORTANT: Recreate optimizer with newly unfrozen params
+                program.opt = create_optimizer_with_differential_lr(
+                    _models['bert'],
+                    _models['classifiers'],
+                    bert_lr=args.bert_lr,
+                    classifier_lr=args.classifier_lr
+                )
+                print(f"[Epoch {epoch}] Unfroze {layers_to_unfreeze} layers, optimizer updated")
         
-        # Setup optimizer update callback (for differential LR)
-        def update_optimizer_callback():
-            program.opt = create_optimizer_with_differential_lr(
-                _models['bert'],
-                _models['classifiers'],
-                bert_lr=args.bert_lr,
-                classifier_lr=args.classifier_lr
-            )
+        # Register callback - fires BEFORE each epoch
+        program.before_train_epoch.append(unfreeze_callback)
         
-        # Register callbacks
-        program.after_train_epoch.append(unfreeze_callback)
-        program.after_train_epoch.append(update_optimizer_callback)
+        # Initial optimizer (BERT frozen, only classifiers train)
+        initial_optimizer = create_optimizer_with_differential_lr(
+            _models['bert'],
+            _models['classifiers'],
+            bert_lr=args.bert_lr,
+            classifier_lr=args.classifier_lr
+        )
         
-        # Train - callbacks fire automatically after each epoch
         program.train(
-            dataset, 
-            Optim=lambda params: create_optimizer_with_differential_lr(
-                _models['bert'],
-                _models['classifiers'],
-                bert_lr=args.bert_lr,
-                classifier_lr=args.classifier_lr
-            ),
+            dataset,
+            Optim=lambda params: initial_optimizer,
             train_epoch_num=args.epochs,
             c_lr=args.classifier_lr,
             c_warmup_iters=-1,
@@ -461,6 +501,8 @@ def main(args):
         program.load(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
+    print("BERT params device:",
+        next(_models['bert'].parameters()).device)
     train_acc = program.evaluate_condition(dataset, threshold=0.5)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}", file=output_f)
