@@ -401,9 +401,6 @@ def parse_arguments():
                         help="Learning rate for BERT layers")
     parser.add_argument("--classifier_lr", type=float, default=1e-4,
                         help="Learning rate for classifier heads")
-    parser.add_argument("--unfreeze_layers", type=int, default=2,
-                        help="Layers to unfreeze per epoch after warmup")
-
 
     # ...
     args = parser.parse_args()
