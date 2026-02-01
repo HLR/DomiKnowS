@@ -171,7 +171,7 @@ class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
         self.before_test_step = []
         self.after_test_step = []
     
-def program_declaration(train, args, device='cpu'):
+def program_declaration(train, dev, args, device='cpu'):
     global _models
     global _bert_model
     
@@ -289,6 +289,7 @@ def program_declaration(train, args, device='cpu'):
 
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label') if dev else None
 
     program = InferenceProgramWithCallbacks(
         graph, SolverModel,
@@ -297,7 +298,7 @@ def program_declaration(train, args, device='cpu'):
         inferTypes=['local/argmax'], 
         device=device
     )
-    return program, train_dataset
+    return program, train_dataset, dev_dataset
 
     # def find_label(label_type):
     #    def find(data):
@@ -383,7 +384,7 @@ def parse_arguments():
 
     return args
 
-def log_training_config(args, models):
+def log_training_config(args, models, train=None, dev=None, test=None):
     """Log all training configuration parameters."""
     print("\n" + "=" * 60)
     print("TRAINING CONFIGURATION")
@@ -394,6 +395,12 @@ def log_training_config(args, models):
     print(f"  Data path:        {args.data_path}")
     print(f"  Train portion:    {args.train_portion}")
     print(f"  Train size:       {args.train_size if args.train_size != -1 else 'all'}")
+    if train is not None:
+        print(f"  Train examples:   {len(train)} (for model training)")
+    if dev is not None:
+        print(f"  Dev examples:     {len(dev)} (validation set for hyperparameter tuning)")
+    if test is not None:
+        print(f"  Test examples:    {len(test)} (held-out set for final evaluation)")
     
     # Training settings
     print("\n[Training]")
@@ -464,18 +471,22 @@ def main(args):
 
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 
-    log_training_config(args, _models)
-
     if args.train_size != -1:
         train = train[:args.train_size]
     
     suffix = "_curriculum_learning" if args.load_previous else ""
 
-    program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
+    program, dataset, dev_dataset = program_declaration(train if not args.evaluate else test, dev, args, device=args.device)
+    
+    log_training_config(args, _models, train=train, dev=dev, test=test)
     
     if not args.evaluate:
         # Ensure BERT starts fully frozen
         _models['bert'].freeze_all()
+        
+        # Track best model based on dev performance
+        best_dev_acc = 0.0
+        best_epoch = 0
         
         # Setup gradual unfreezing callback WITH WARMUP
         def unfreeze_callback():
@@ -502,8 +513,30 @@ def main(args):
                 )
                 print(f"[Epoch {epoch}] Unfroze {layers_to_unfreeze} layers, optimizer updated")
         
-        # Register callback - fires BEFORE each epoch
+        # Setup dev evaluation callback - fires AFTER each epoch
+        def dev_eval_callback():
+            nonlocal best_dev_acc, best_epoch
+            epoch = program.epoch or 0
+            
+            if dev_dataset is not None:
+                print(f"\n[Epoch {epoch}] Evaluating on dev set...")
+                dev_acc = program.evaluate_condition(dev_dataset, threshold=0.5)
+                print(f"[Epoch {epoch}] Dev Accuracy: {dev_acc:.4f}")
+                
+                # Track best model
+                if dev_acc > best_dev_acc:
+                    best_dev_acc = dev_acc
+                    best_epoch = epoch
+                    # Save best model
+                    best_model_path = f"best_model_{args.train_portion}{suffix}.pth"
+                    program.save(best_model_path)
+                    print(f"[Epoch {epoch}] New best dev accuracy! Saved to {best_model_path}")
+                else:
+                    print(f"[Epoch {epoch}] Best dev accuracy: {best_dev_acc:.4f} (epoch {best_epoch})")
+        
+        # Register callbacks
         program.before_train_epoch.append(unfreeze_callback)
+        program.after_train_epoch.append(dev_eval_callback)
         
         # Initial optimizer (BERT frozen, only classifiers train)
         initial_optimizer = create_optimizer_with_differential_lr(
@@ -522,6 +555,13 @@ def main(args):
             batch_size=1,
             print_loss=False
         )
+        
+        # Print final best dev performance
+        if dev_dataset is not None:
+            print(f"\n{'='*60}")
+            print(f"Training completed!")
+            print(f"Best dev accuracy: {best_dev_acc:.4f} (epoch {best_epoch})")
+            print(f"{'='*60}\n")
                 
         program.save(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
     else:
