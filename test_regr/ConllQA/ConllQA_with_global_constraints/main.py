@@ -289,7 +289,7 @@ def program_declaration(train, dev, args, device='cpu'):
 
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
-    dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label') if dev else None
+    dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label') if dev is not None and len(dev) > 0 else None
 
     program = InferenceProgramWithCallbacks(
         graph, SolverModel,
