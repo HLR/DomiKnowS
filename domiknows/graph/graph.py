@@ -89,6 +89,172 @@ class Graph(BaseGraphTree):
 
         return self  # Return self (the current graph), not parent_obj
     
+    def _iter_all_lcs(self):
+        """Helper to iterate over all logical constraints including executable ones.
+        
+        Yields:
+            tuple: (lc_name, lc) pairs for both regular and executable logical constraints.
+        """
+        yield from self.logicalConstrains.items()
+        for key, elc in self.executableLCs.items():
+            yield (key, elc.innerLC)
+
+    def _populate_var_context(self, frame):
+        """Populate varContext from a given frame's local variables.
+        
+        This method captures local variables from the provided frame and updates
+        varContext and varNameReversedMap for Concept and Relation instances.
+        
+        Args:
+            frame: A Python frame object whose f_locals will be inspected.
+            
+        Side-effects:
+            - Initializes self.varContext if None
+            - Populates self.varContext with frame's local variables (only on first call)
+            - Sets var_name attribute on Concept/Relation instances
+            - Updates self.varNameReversedMap with name mappings
+        """
+        from . import Concept
+        from .relation import IsA, HasA
+        
+        first_population = self.varContext is None or not self.varContext
+        if first_population:
+            self.varContext = {}
+        
+        for var_name, var_value in frame.f_locals.items():
+            # Only update varContext on first population to preserve original graph variables
+            if first_population:
+                self.varContext[var_name] = var_value
+            
+            # Check if any of them are instances of the Concept class or Relation subclass
+            if isinstance(var_value, (Concept, HasA, IsA)):
+                # If they are, and their var_name attribute is not already set,
+                # set it to the name of the variable they are stored in.
+                if var_value.var_name is None:
+                    var_value.var_name = var_name
+                    self.varNameReversedMap[var_value.name] = var_value
+                    if isinstance(var_value, (HasA,)):
+                        var_value.reversed.var_name = var_name + ".reversed"
+                        self.varNameReversedMap[var_value.reversed.name] = var_value.reversed
+                        
+    def __exit__(self, exc_type, exc_value, traceback):
+        '''Handles the exiting logic for the context manager.
+    
+        This method performs clean-up operations like mapping variable names and 
+        validating logical constraints. It is automatically called when exiting the 
+        'with' block of the context manager.
+
+        Supports repeat calls - tracks which logical constraints have already been
+        processed to avoid reprocessing VarMaps. Also preserves varContext from the
+        first call to maintain original graph definition variables.
+    
+        Args:
+        exc_type (type): The type of the exception that caused the context manager to exit.
+        exc_value (Exception): The instance of the exception that caused the context manager to exit.
+        traceback (traceback): A traceback object encapsulating the call stack at the point 
+                               where the exception originally occurred.
+    
+        Side-effects:
+        Modifies internal state to include variable name mappings and validates logical constraints.
+        '''
+        super().__exit__(exc_type, exc_value, traceback)
+        
+        # Get the current frame and then go one level back
+        frame = inspect.currentframe().f_back
+        
+        # Populate varContext from the caller's frame
+        self._populate_var_context(frame)
+
+        # --- Process logical constraints variable syntax (only for unprocessed LCs)
+        for lc_name, lc in self._iter_all_lcs():
+            if not lc.active or not lc.headLC:
+                continue
+            
+            # Skip if this LC has already been processed
+            if lc_name in self._processed_lcs:
+                continue
+
+            # collect VarMaps - store info about lc variable syntax if used in this logical constraint
+            varMapsList = self.collectVarMaps(lc, [])
+            
+            # process variable syntax - translate it to the path syntax
+            if varMapsList:
+                self.handleVarsPath(lc, varMapsList[0])
+            
+            # Mark this LC as processed for VarMaps
+            self._processed_lcs.add(lc_name)
+                    
+        # --- Check if the logical constrains are correct ---
+        
+        lc_info = {}
+        LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])
+        
+        # --- Gather information about variables used and defined in the logical constrains and 
+        #     report errors if some of them are not defined and used or defined more than once
+        for lc_name, lc in self._iter_all_lcs():
+            if not lc.active or not lc.headLC:
+                continue
+                
+            # find variable defined in the logical constrain - report error if some of them are defined more than once
+            found_variables = self.find_lc_variable(lc, headLc=lc.name)
+
+            # find all variables used in the logical constrain - report error if some of them are not defined
+            # gather paths defined in the logical constrain per variable
+            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc.name)
+            
+            # save information about variables used and defined in the logical constrain
+            current_lc_info = LcInfo(found_variables, used_variables, lc.name)
+            lc_info[lc_name] = current_lc_info
+        
+        # --- Check if the paths defined in the logical constrains are correct
+        for lc_name, lc in self._iter_all_lcs():
+            if not lc.active or not lc.headLC:
+                continue
+            
+            # current logical constrain info and variables found and used in the current logical constrain
+            current_lc_info = lc_info[lc_name]
+            usedVariables = current_lc_info.usedVariables
+            foundVariables = current_lc_info.foundVariables
+            headLcName = current_lc_info.headLcName
+            
+            # loop over all variables used in the logical constrain
+            for variableName, pathInfos in usedVariables.items():
+                # get information about the variable in the found variables record
+                variableConcept = foundVariables[variableName][2][0]
+                
+                # get the root parent of the variable concept
+                variableConceptParent = self.findRootConceptOrRelation(variableConcept)
+                
+                # loop over all paths defined using the variable as starting point
+                for pathInfo in pathInfos:
+                    path = pathInfo[3]
+                    resultConcept = pathInfo[2]
+                    
+                    if isinstance(path[0], tuple): # this path is a combination of paths 
+                        for subpath in path: 
+                            if len(subpath) < 1:  
+                                continue  # skip this subpath it is empty
+                                
+                            self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
+                            
+                    else: # this path is a single path
+                        if len(path) < 1:
+                            continue # skip this path it is empty
+                            
+                        self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
+         
+        # --- Validate queryL constraints have proper multiclass concepts ---
+        for lc_name, lc in self._iter_all_lcs():
+            if not lc.active or not lc.headLC:
+                continue
+            
+            self.validate_queryL_constraints(lc, headLc=lc.name)
+   
+    @classmethod
+    def clear(cls):
+        super().clear()
+        cls.varNameReversedMap.clear()
+    
     def get_constraint_concept(self):
         if self.constraint is None:
             raise ValueError('Constraint has not been defined yet, initialize the Graph by calling with Graph(...) first.')
@@ -707,142 +873,6 @@ class Graph(BaseGraphTree):
             elif isinstance(e, tuple) and len(e) > 0 and isinstance(e[0], LogicalConstrain):
                 self.validate_queryL_constraints(e[0], headLc=headLc)
                 
-    def __exit__(self, exc_type, exc_value, traceback):
-        '''Handles the exiting logic for the context manager.
-    
-        This method performs clean-up operations like mapping variable names and 
-        validating logical constraints. It is automatically called when exiting the 
-        'with' block of the context manager.
-
-        Supports repeat calls - tracks which logical constraints have already been
-        processed to avoid reprocessing VarMaps. Also preserves varContext from the
-        first call to maintain original graph definition variables.
-    
-        Args:
-        exc_type (type): The type of the exception that caused the context manager to exit.
-        exc_value (Exception): The instance of the exception that caused the context manager to exit.
-        traceback (traceback): A traceback object encapsulating the call stack at the point 
-                               where the exception originally occurred.
-    
-        Side-effects:
-        Modifies internal state to include variable name mappings and validates logical constraints.
-        '''
-        super().__exit__(exc_type, exc_value, traceback)
-        
-        # Get the current frame and then go one level back
-        frame = inspect.currentframe().f_back
-
-        from . import Concept
-        from .relation import IsA, HasA
-    
-        # --- Iterate through all local variables in that frame
-        # Only capture varContext on first __exit__ call (when it's None)
-        # This preserves the original graph definition variables
-        first_exit = self.varContext is None
-        if first_exit:
-            self.varContext = {}
-        
-        for var_name, var_value in frame.f_locals.items():
-            # Only update varContext on first exit to preserve original graph variables
-            if first_exit:
-                self.varContext[var_name] = var_value
-            
-            # Check if any of them are instances of the Concept class or Relation subclass
-            if isinstance(var_value, (Concept, HasA, IsA)):
-                # If they are, and their var_name attribute is not already set,
-                # set it to the name of the variable they are stored in.
-                if var_value.var_name is None:
-                    var_value.var_name = var_name
-                    self.varNameReversedMap[var_value.name] = var_value
-                    if isinstance(var_value, (HasA,)):
-                        var_value.reversed.var_name = var_name + ".reversed"
-                        self.varNameReversedMap[var_value.reversed.name] = var_value.reversed
-
-        # --- Process logical constraints variable syntax (only for unprocessed LCs)
-        for lc_name, lc in self.logicalConstrains.items():
-            if not lc.active or not lc.headLC:
-                continue
-            
-            # Skip if this LC has already been processed
-            if lc_name in self._processed_lcs:
-                continue
-
-            # collect VarMaps - store info about lc variable syntax if used in this logical constraint
-            varMapsList = self.collectVarMaps(lc, [])
-            
-            # process variable syntax - translate it to the path syntax
-            if varMapsList:
-                self.handleVarsPath(lc, varMapsList[0])
-            
-            # Mark this LC as processed for VarMaps
-            self._processed_lcs.add(lc_name)
-                    
-        # --- Check if the logical constrains are correct ---
-        
-        lc_info = {}
-        LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])
-        
-        # --- Gather information about variables used and defined in the logical constrains and 
-        #     report errors if some of them are not defined and used or defined more than once
-        for lc_name, lc in self.logicalConstrains.items():
-            if not lc.active or not lc.headLC:
-                continue
-                
-            # find variable defined in the logical constrain - report error if some of them are defined more than once
-            found_variables = self.find_lc_variable(lc, headLc=lc.name)
-
-            # find all variables used in the logical constrain - report error if some of them are not defined
-            # gather paths defined in the logical constrain per variable
-            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc.name)
-            
-            # save information about variables used and defined in the logical constrain
-            current_lc_info = LcInfo(found_variables, used_variables, lc.name)
-            lc_info[lc_name] = current_lc_info
-        
-        # --- Check if the paths defined in the logical constrains are correct
-        for lc_name, lc in self.logicalConstrains.items():
-            if not lc.active or not lc.headLC:
-                continue
-            
-            # current logical constrain info and variables found and used in the current logical constrain
-            current_lc_info = lc_info[lc_name]
-            usedVariables = current_lc_info.usedVariables
-            foundVariables = current_lc_info.foundVariables
-            headLcName = current_lc_info.headLcName
-            
-            # loop over all variables used in the logical constrain
-            for variableName, pathInfos in usedVariables.items():
-                # get information about the variable in the found variables record
-                variableConcept = foundVariables[variableName][2][0]
-                
-                # get the root parent of the variable concept
-                variableConceptParent = self.findRootConceptOrRelation(variableConcept)
-                
-                # loop over all paths defined using the variable as starting point
-                for pathInfo in pathInfos:
-                    path = pathInfo[3]
-                    resultConcept = pathInfo[2]
-                    
-                    if isinstance(path[0], tuple): # this path is a combination of paths 
-                        for subpath in path: 
-                            if len(subpath) < 1:  
-                                continue  # skip this subpath it is empty
-                                
-                            self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
-                            
-                    else: # this path is a single path
-                        if len(path) < 1:
-                            continue # skip this path it is empty
-                            
-                        self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
-         
-        # --- Validate queryL constraints have proper multiclass concepts ---
-        for lc_name, lc in self.logicalConstrains.items():
-            if not lc.active or not lc.headLC:
-                continue
-            
-            self.validate_queryL_constraints(lc, headLc=lc.name)
-    
     @property
     def ontology(self):
         '''Gets the ontology associated with the object.
@@ -1248,9 +1278,6 @@ class Graph(BaseGraphTree):
         from .executable import get_full_funcs, LogicDataset
         import importlib
         
-        if self.varContext is None:
-            print('Recorded variable context is None: make sure to initialize any Concepts you need in the graph first (by calling `with graph:`).')
-        
         elc_name_list = []
         
         # Ensure we're in graph context for constraint creation
@@ -1301,6 +1328,11 @@ class Graph(BaseGraphTree):
         from .logicalConstrain import execute
         import importlib
         from ..sensor.pytorch.sensors import ReaderSensor
+        
+        # Ensure varContext is populated - go back 2 frames to reach the caller of compile_executable
+        if self.varContext is None or not self.varContext:
+            frame = inspect.currentframe().f_back.f_back
+            self._populate_var_context(frame)
         
         for i, data_item in enumerate(data):
             # --- Step 1: Validate data item has required keys ---
