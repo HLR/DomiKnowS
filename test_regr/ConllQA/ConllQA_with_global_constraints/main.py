@@ -624,8 +624,23 @@ def run_optuna_tuning(args, train, test, n_trials=20):
     return study
 
 
+def str2bool(v):
+    """Convert string to boolean for argparse."""
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
+
+
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Getting the arguments passed")
+    parser = argparse.ArgumentParser(
+        description="Getting the arguments passed",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--epochs", type=int, default=6, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
@@ -652,17 +667,16 @@ def parse_arguments():
     parser.add_argument("--classifier_lr", type=float, default=1e-4,
                         help="Learning rate for classifier heads")
     # Optuna arguments
-    parser.add_argument("--tune", type=bool, default=True,
-                        help="Run Optuna hyperparameter tuning")
+    parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False,
+                        help="Run Optuna hyperparameter tuning (default: true)")
     parser.add_argument("--n_trials", type=int, default=20,
                         help="Number of Optuna trials")
     # BERT freezing
-    parser.add_argument("--freeze_bert", type=bool, default=True,
-                        help="Keep BERT frozen throughout training (only train classifiers)")
+    parser.add_argument("--freeze_bert", type=str2bool, nargs='?', const=True, default=True,
+                        help="Keep BERT frozen throughout training (default: true)")
 
     args = parser.parse_args()
     return args
-
 
 def main(args):
     global _models
