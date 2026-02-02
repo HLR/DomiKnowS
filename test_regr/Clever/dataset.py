@@ -400,6 +400,7 @@ class CLEVRDatasetUnwrapped:
         feed_dict.image_index = metainfo.image_index
         feed_dict.image_filename = metainfo.image_filename
         feed_dict.image = None
+        pil_image = None
         
         if self.image_root and feed_dict.image_filename and \
            feed_dict.image_filename not in ["unknown_image.png", "error_invalid_scene.png", "error_dummy_scene.png"]:
@@ -426,7 +427,7 @@ class CLEVRDatasetUnwrapped:
         else: # No valid image, ensure 'objects' field matches 'objects_raw' (i.e., no transform applied)
             feed_dict.objects = feed_dict.objects_raw
 
-        feed_dict.pil_image = None
+        feed_dict.pil_image = pil_image
         feed_dict.question_index = metainfo.question_index
         feed_dict.question_raw = metainfo.question
         feed_dict.question_raw_tokenized = metainfo.question_tokenized
