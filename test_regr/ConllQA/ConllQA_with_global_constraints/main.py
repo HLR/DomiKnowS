@@ -146,12 +146,8 @@ class BERT(torch.nn.Module):
 
 class Classifier(torch.nn.Sequential):
     def __init__(self, in_features, device='cpu') -> None:
-        super().__init__(
-            torch.nn.Linear(in_features, 256),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(0.1),
-            torch.nn.Linear(256, 2)
-        )
+        linear = torch.nn.Linear(in_features, 2)
+        super().__init__(linear)
         self.to(device)
 
 class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
@@ -335,7 +331,7 @@ def program_declaration(train, dev, args, device='cpu'):
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
 
 def create_optimizer_with_differential_lr(bert_model, classifiers, 
-                                          bert_lr=2e-5, classifier_lr=1e-4):
+                                          bert_lr=2e-5, classifier_lr=1e-6):
     """Create optimizer with different learning rates for BERT vs classifiers."""
     
     param_groups = [
@@ -623,7 +619,6 @@ def run_optuna_tuning(args, train, test, n_trials=20):
     
     return study
 
-
 def str2bool(v):
     """Convert string to boolean for argparse."""
     if isinstance(v, bool):
@@ -634,7 +629,6 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
-
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
@@ -656,15 +650,9 @@ def parse_arguments():
                         help="Path to data file (can be relative or absolute)")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0')")
-    parser.add_argument("--unfreeze_every", type=int, default=500, 
-                        help="Unfreeze BERT layers every N steps")
-    parser.add_argument("--unfreeze_layers", type=int, default=2, 
-                        help="Number of BERT layers to unfreeze per step")
-    parser.add_argument("--warmup_epochs", type=int, default=2,
-                        help="Epochs to train with BERT frozen before unfreezing")
-    parser.add_argument("--bert_lr", type=float, default=1e-5,
-                        help="Learning rate for BERT layers")
-    parser.add_argument("--classifier_lr", type=float, default=1e-4,
+    
+    # Learning rate arguments
+    parser.add_argument("--classifier_lr", type=float, default=1e-6,
                         help="Learning rate for classifier heads")
     # Optuna arguments
     parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False,
@@ -674,6 +662,14 @@ def parse_arguments():
     # BERT freezing
     parser.add_argument("--freeze_bert", type=str2bool, nargs='?', const=True, default=True,
                         help="Keep BERT frozen throughout training (default: true)")
+    parser.add_argument("--warmup_epochs", type=int, default=2,
+                        help="Epochs to train with BERT frozen before unfreezing")
+    parser.add_argument("--unfreeze_every", type=int, default=500, 
+                        help="Unfreeze BERT layers every N steps")
+    parser.add_argument("--unfreeze_layers", type=int, default=2, 
+                        help="Number of BERT layers to unfreeze per step")
+    parser.add_argument("--bert_lr", type=float, default=1e-5,
+                        help="Learning rate for BERT layers (if not frozen)")
 
     args = parser.parse_args()
     return args
