@@ -34,7 +34,8 @@ logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser(description="Dummy Run of CLEVR")
 parser.add_argument("--logic_str", type=str, default="")
-parser.add_argument("--input_file", type=str, default="convert_CLEVR_program_two_relations.json")
+parser.add_argument("--input_file", type=str, default="convert_CLEVR_program_two_relations.json",
+                    choices=["convert_CLEVR_program_query_string.json", "convert_CLEVR_program_two_relations.json"])
 args = parser.parse_args()
 
 device = "cpu"
@@ -49,7 +50,7 @@ with open(args.input_file, 'rb') as file:
     raw_data = json.load(file)[:]
     dataset = [data["input"] for data in raw_data]
 
-results = create_graph(dataset)
+results = create_graph(dataset, include_query_questions=args.input_file == "convert_CLEVR_program_query_string.json")
 
 questions_executions = results[0]
 graph = results[1]
@@ -102,7 +103,9 @@ relaton_2_obj[obj1.reversed, obj2.reversed] = CompositionCandidateSensor(
 spatial_relations = g_relational_concepts.get("spatial_relation", [])
 
 for attr_name, attr_variable in attribute_names_dict.items():
-    if attr_name in spatial_relations:
+    if attr_name in ["color", "material", "size", "shape", "same_size", "same_color", "same_material", "same_shape"]:
+        continue
+    elif attr_name in spatial_relations:
         # scene, box, object_features
         relaton_2_obj[f"{attr_variable}_label"] = FunctionalReaderSensor(keyword=f"is_{attr_name}",
                                                                          forward=lambda data: torch.Tensor(data).to(
@@ -125,23 +128,23 @@ program = InferenceProgram(graph, SolverModel,
 acc = program.evaluate_condition(dataset)
 print(acc)
 
-print("-" * 100)
-
-print("Manually Check Concept")
-
-brown = attribute_names_dict["brown"]
-
-cylinder = attribute_names_dict["cylinder"]
-
-index = 0
-for data in program.populate(dataset):
-    brown_objs = [int(child.getAttribute(brown, 'argmax')) for child in data.getChildDataNodes()]
-    print("expected brown objects", [1 if obj["color"] == "brown" else 0 for obj in raw_data[index]["scene"]])
-    print("brown objects:", brown_objs)
-    cylinder_objs = [int(child.getAttribute(cylinder, 'argmax')) for child in data.getChildDataNodes()]
-    print("cylinder objects:", cylinder_objs)
-    print("expected cylinder objects", [1 if obj["shape"] == "cylinder" else 0 for obj in raw_data[index]["scene"]])
-    index += 1
-
-    print("-" * 10)
-print(acc)
+# print("-" * 100)
+#
+# print("Manually Check Concept")
+#
+# brown = attribute_names_dict["brown"]
+#
+# cylinder = attribute_names_dict["cylinder"]
+#
+# index = 0
+# for data in program.populate(dataset):
+#     brown_objs = [int(child.getAttribute(brown, 'argmax')) for child in data.getChildDataNodes()]
+#     print("expected brown objects", [1 if obj["color"] == "brown" else 0 for obj in raw_data[index]["scene"]])
+#     print("brown objects:", brown_objs)
+#     cylinder_objs = [int(child.getAttribute(cylinder, 'argmax')) for child in data.getChildDataNodes()]
+#     print("cylinder objects:", cylinder_objs)
+#     print("expected cylinder objects", [1 if obj["shape"] == "cylinder" else 0 for obj in raw_data[index]["scene"]])
+#     index += 1
+#
+#     print("-" * 10)
+# print(acc)

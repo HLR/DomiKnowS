@@ -141,7 +141,7 @@ def translate_left_domiknows(all_program, current_idx, first_initial, indent=0):
             raise ValueError(f"query expects 1 inputs at step {current_idx}")
         query_type = fn.split("_")[1]
         target_obj = translate_left_domiknows(all_program, ins[0], first_initial=True)
-        return f"queryL({query_type}, iota(andL({target_obj})))"
+        return f"queryL({query_type}, iotaL({target_obj}))"
 
     elif fn == "relate":
         if len(ins) != 1:
@@ -166,7 +166,7 @@ def translate_left_domiknows(all_program, current_idx, first_initial, indent=0):
         need_relation2 = True
         relation_val += 1
         next_obj = translate_left_domiknows(all_program, ins[0], first_initial=True)
-        return f"{str_path}, {next_obj}"
+        return f"{str_path}, {next_obj}", None
     else:
         raise NotImplementedError(f"Unsupported function '{fn}' at step {current_idx}")
 
