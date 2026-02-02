@@ -180,7 +180,7 @@ def program_declaration(train, dev, args, device='cpu'):
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_pair_phrase1, rel_pair_phrase2, \
         rel_sentence_contains_phrase
 
-    #graph.detach()
+    graph.detach()  # FIX: Uncomment this!
 
     # Set device for all Sensors
     TorchSensor.set_default_device(device)
@@ -205,7 +205,7 @@ def program_declaration(train, dev, args, device='cpu'):
 
     # Create BERT with device parameter
     bert_model = BERT(device=device)
-    _bert_model = bert_model # Store globally for unfreezing during training
+    _bert_model = bert_model
     
     word['bert'] = ModuleSensor('ids', module=bert_model)
 
@@ -220,10 +220,8 @@ def program_declaration(train, dev, args, device='cpu'):
             word_overlap = []
             for word_s, word_e in word_offset:
                 if word_e - word_s <= 0:
-                    # empty string / special tokens
                     word_overlap.append(False)
                 else:
-                    # other tokens, do compare offset
                     word_overlap.append(overlap(ph_offset, ph_offset + ph_len, word_s, word_e))
             ph_word_overlap.append(word_overlap)
             ph_offset += ph_len + 1
@@ -243,11 +241,26 @@ def program_declaration(train, dev, args, device='cpu'):
 
     phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=concat_features)
 
-    phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
-    phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
-    phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
-    phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
-    phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
+    # Create classifiers, then use them in ModuleLearners
+    classifiers = {
+        'people': Classifier(FEATURE_DIM, device=device),
+        'organization': Classifier(FEATURE_DIM, device=device),
+        'location': Classifier(FEATURE_DIM, device=device),
+        'other': Classifier(FEATURE_DIM, device=device),
+        'o': Classifier(FEATURE_DIM, device=device),
+        'work_for': Classifier(FEATURE_DIM * 2, device=device),
+        'located_in': Classifier(FEATURE_DIM * 2, device=device),
+        'live_in': Classifier(FEATURE_DIM * 2, device=device),
+        'orgbase_on': Classifier(FEATURE_DIM * 2, device=device),
+        'kill': Classifier(FEATURE_DIM * 2, device=device),
+    }
+
+    # Use the classifier instances from the dictionary
+    phrase[people] = ModuleLearner('emb', module=classifiers['people'])
+    phrase[organization] = ModuleLearner('emb', module=classifiers['organization'])
+    phrase[location] = ModuleLearner('emb', module=classifiers['location'])
+    phrase[other] = ModuleLearner('emb', module=classifiers['other'])
+    phrase[o] = ModuleLearner('emb', module=classifiers['o'])
 
     def filter_pairs(phrase_text, arg1, arg2, data):
         for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
@@ -264,24 +277,12 @@ def program_declaration(train, dev, args, device='cpu'):
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
 
-    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
-    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
-    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
-    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
-    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2, device=device))
-    
-    classifiers = {
-        'people': Classifier(FEATURE_DIM, device=device),
-        'organization': Classifier(FEATURE_DIM, device=device),
-        'location': Classifier(FEATURE_DIM, device=device),
-        'other': Classifier(FEATURE_DIM, device=device),
-        'o': Classifier(FEATURE_DIM, device=device),
-        'work_for': Classifier(FEATURE_DIM * 2, device=device),
-        'located_in': Classifier(FEATURE_DIM * 2, device=device),
-        'live_in': Classifier(FEATURE_DIM * 2, device=device),
-        'orgbase_on': Classifier(FEATURE_DIM * 2, device=device),
-        'kill': Classifier(FEATURE_DIM * 2, device=device),
-    }
+    # FIX: Use the SAME classifier instances from the dictionary
+    pair[work_for] = ModuleLearner('emb', module=classifiers['work_for'])
+    pair[located_in] = ModuleLearner('emb', module=classifiers['located_in'])
+    pair[live_in] = ModuleLearner('emb', module=classifiers['live_in'])
+    pair[orgbase_on] = ModuleLearner('emb', module=classifiers['orgbase_on'])
+    pair[kill] = ModuleLearner('emb', module=classifiers['kill'])
 
     _models['bert'] = bert_model
     _models['classifiers'] = classifiers
@@ -297,7 +298,6 @@ def program_declaration(train, dev, args, device='cpu'):
         device=device
     )
     
-    # Compile dev dataset after program is created (graph state is fully set up)
     dev_dataset = None
     if dev is not None and len(dev) > 0:
         dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label')
@@ -655,7 +655,7 @@ def parse_arguments():
     parser.add_argument("--classifier_lr", type=float, default=1e-6,
                         help="Learning rate for classifier heads")
     # Optuna arguments
-    parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=True,
+    parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False,
                         help="Run Optuna hyperparameter tuning (default: true)")
     parser.add_argument("--n_trials", type=int, default=20,
                         help="Number of Optuna trials")
@@ -711,11 +711,7 @@ def main(args):
         args.tune = False
         
         # Reset graph for final training
-        graph.detach()
-        graph.varContext = None
-        graph._processed_lcs = set()
-        graph._executableLCs.clear()
-        graph.executableLCsLabels.clear()
+        graph.clear()
     
     program, dataset, _ = program_declaration(
         train if not args.evaluate else test, 
