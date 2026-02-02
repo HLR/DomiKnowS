@@ -27,6 +27,7 @@ dependencies = [
     "transformers>=4.56.1",
     "colorama",
     "pillow>=11.3.0",
+    "optuna>=4.7.0",
 ]
 
 [project.optional-dependencies]

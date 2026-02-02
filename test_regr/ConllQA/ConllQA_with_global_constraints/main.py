@@ -2,6 +2,9 @@ import sys
 import torch
 from pathlib import Path
 
+import optuna
+from optuna.trial import TrialState
+
 sys.path.append('.')
 sys.path.append('../../..')
 
@@ -38,6 +41,8 @@ TRANSFORMER_MODEL = 'bert-base-uncased'
 
 FEATURE_DIM = 768 + 96
 
+_bert_model = None
+_models = {}
 
 def find_data_file(filename):
     """Find data file in the same directory as this script."""
@@ -49,7 +54,6 @@ def find_data_file(filename):
         return str(data_path)
     
     raise FileNotFoundError(f"Could not find {filename} in {current_dir}")
-
 
 class Tokenizer():
     def __init__(self, device='cpu') -> None:
@@ -78,7 +82,6 @@ class Tokenizer():
         offset = torch.stack((offset[:, :, 0].masked_select(mask), offset[:, :, 1].masked_select(mask)), dim=-1)
         tokens = self.tokenizer.convert_ids_to_tokens(ids)
         return mapping, ids, offset, tokens
-
 
 class BERT(torch.nn.Module):
     def __init__(self, device='cpu'):
@@ -141,15 +144,15 @@ class BERT(torch.nn.Module):
         out = out.squeeze(0)
         return out
 
-
 class Classifier(torch.nn.Sequential):
     def __init__(self, in_features, device='cpu') -> None:
-        linear = torch.nn.Linear(in_features, 2)
-        super().__init__(linear)
+        super().__init__(
+            torch.nn.Linear(in_features, 256),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.1),
+            torch.nn.Linear(256, 2)
+        )
         self.to(device)
-
-_bert_model = None
-_models = {}
 
 class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
     """InferenceProgram with callback support for gradual unfreezing."""
@@ -356,6 +359,273 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
     
     return torch.optim.Adam(param_groups)
 
+def log_training_config(args, models=None, train=None, dev=None, test=None):
+    """Log all training configuration parameters."""
+    print("\n" + "=" * 60)
+    if args.tune:
+        print("OPTUNA HYPERPARAMETER TUNING CONFIGURATION")
+    else:
+        print("TRAINING CONFIGURATION")
+    print("=" * 60)
+    
+    # Data settings
+    print("\n[Data]")
+    print(f"  Data path:        {args.data_path}")
+    print(f"  Train portion:    {args.train_portion}")
+    print(f"  Train size:       {args.train_size if args.train_size != -1 else 'all'}")
+    if train is not None:
+        print(f"  Train examples:   {len(train)}")
+    if dev is not None:
+        print(f"  Dev examples:     {len(dev)}")
+    if test is not None:
+        print(f"  Test examples:    {len(test)}")
+    
+    # Optuna settings (show first if tuning)
+    if args.tune:
+        print("\n[Optuna Tuning]")
+        print(f"  Number of trials:     {args.n_trials}")
+        print(f"  Epochs per trial:     {args.epochs}")
+        print(f"  Freeze BERT:          {args.freeze_bert}")
+        if args.freeze_bert:
+            print("  Tuning params:        classifier_lr only")
+        else:
+            print("  Tuning params:        classifier_lr, bert_lr, warmup_epochs, unfreeze_layers")
+    
+    # Training settings
+    print("\n[Training]")
+    print(f"  Epochs:           {args.epochs}")
+    if not args.freeze_bert:
+        print(f"  Warmup epochs:    {args.warmup_epochs}")
+    print(f"  Batch size:       1")
+    print(f"  Device:           {args.device}")
+    
+    # Learning rates (only show if not tuning, since they'll be searched)
+    if not args.tune:
+        print("\n[Learning Rates]")
+        print(f"  Classifier LR:    {args.classifier_lr}")
+        if not args.freeze_bert:
+            print(f"  BERT LR:          {args.bert_lr}")
+    
+    # BERT settings
+    if args.freeze_bert:
+        print("\n[BERT]")
+        print("  Mode:             Frozen (feature extraction only)")
+    else:
+        print("\n[BERT Unfreezing]")
+        if not args.tune:
+            print(f"  Unfreeze layers/epoch: {args.unfreeze_layers}")
+        if models is not None:
+            print(f"  Total BERT layers:     {models['bert'].total_layers}")
+            print(f"  Initially frozen:      {models['bert'].unfrozen_layers == 0}")
+    
+    # Constraint settings
+    print("\n[Constraints]")
+    print(f"  Counting t-norm:  {args.counting_tnorm}")
+    
+    # Model info
+    print("\n[Model]")
+    if models is not None:
+        bert_params = sum(p.numel() for p in models['bert'].parameters())
+        bert_trainable = sum(p.numel() for p in models['bert'].parameters() if p.requires_grad)
+        clf_params = sum(p.numel() for name, clf in models['classifiers'].items() for p in clf.parameters())
+        
+        print(f"  BERT params:      {bert_params:,} (trainable: {bert_trainable:,})")
+        print(f"  Classifier params: {clf_params:,}")
+        print(f"  Total params:     {bert_params + clf_params:,}")
+    else:
+        # Estimate params before model creation
+        bert_params_est = 110_000_000  # BERT base ~110M
+        # 5 entity classifiers: (864*256 + 256) + (256*2 + 2) = 221,698 each
+        # 5 relation classifiers: (1728*256 + 256) + (256*2 + 2) = 443,138 each
+        entity_clf_params = 5 * ((FEATURE_DIM * 256 + 256) + (256 * 2 + 2))
+        relation_clf_params = 5 * ((FEATURE_DIM * 2 * 256 + 256) + (256 * 2 + 2))
+        clf_params_est = entity_clf_params + relation_clf_params
+        
+        print(f"  BERT params:      ~{bert_params_est:,} (trainable: {'0' if args.freeze_bert else 'varies'})")
+        print(f"  Classifier params: ~{clf_params_est:,}")
+        print(f"  Total params:     ~{bert_params_est + clf_params_est:,}")
+    
+    # Mode
+    print("\n[Mode]")
+    print(f"  Evaluate only:    {args.evaluate}")
+    print(f"  Load previous:    {args.load_previous}")
+    
+    print("\n" + "=" * 60 + "\n")
+
+    
+class GradualUnfreezeCallback:
+    """Callback to gradually unfreeze BERT during training."""
+    
+    def __init__(self, bert_model, unfreeze_every=500, layers_per_step=1):
+        self.bert_model = bert_model
+        self.unfreeze_every = unfreeze_every
+        self.layers_per_step = layers_per_step
+        self.step = 0
+    
+    def on_batch_end(self):
+        """Call after each batch."""
+        self.step += 1
+        if self.step % self.unfreeze_every == 0:
+            new_layers = min(
+                self.bert_model.unfrozen_layers + self.layers_per_step,
+                self.bert_model.total_layers
+            )
+            self.bert_model.unfreeze_layers(new_layers)
+            
+def create_objective(args, train, test):
+    """Create Optuna objective function for hyperparameter tuning."""
+    
+    def objective(trial: optuna.Trial) -> float:
+        global _models, _bert_model
+        
+        # Sample hyperparameters
+        classifier_lr = trial.suggest_float('classifier_lr', 1e-5, 1e-3, log=True)
+        
+        if args.freeze_bert:
+            # BERT frozen - don't tune BERT-related params
+            bert_lr = 0.0
+            warmup_epochs = args.epochs  # Always frozen
+            unfreeze_layers = 0
+        else:
+            bert_lr = trial.suggest_float('bert_lr', 1e-6, 1e-4, log=True)
+            warmup_epochs = trial.suggest_int('warmup_epochs', 0, 3)
+            unfreeze_layers = trial.suggest_int('unfreeze_layers', 1, 4)
+        
+        # Override args with trial values
+        args.classifier_lr = classifier_lr
+        args.bert_lr = bert_lr
+        args.warmup_epochs = warmup_epochs
+        args.unfreeze_layers = unfreeze_layers
+        
+        # Re-import graph to get fresh state
+        from graph import graph
+        graph.detach()
+        
+        program, dataset, _ = program_declaration(train, None, args, device=args.device)
+        
+        # Ensure BERT starts fully frozen
+        _models['bert'].freeze_all()
+        
+        # Setup gradual unfreezing callback
+        def unfreeze_callback():
+            epoch = program.epoch or 0
+            
+            if epoch <= args.warmup_epochs:
+                return
+            
+            epochs_after_warmup = epoch - args.warmup_epochs
+            layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
+            
+            if layers_to_unfreeze > _models['bert'].unfrozen_layers:
+                _models['bert'].unfreeze_layers(layers_to_unfreeze)
+                program.opt = create_optimizer_with_differential_lr(
+                    _models['bert'],
+                    _models['classifiers'],
+                    bert_lr=args.bert_lr,
+                    classifier_lr=args.classifier_lr
+                )
+        
+        # Pruning callback - report intermediate values
+        def pruning_callback():
+            epoch = program.epoch or 0
+            if epoch > 0:
+                # Quick evaluation on subset for pruning decisions
+                intermediate_acc = program.evaluate_condition(dataset, threshold=0.5)
+                trial.report(intermediate_acc, epoch)
+                
+                if trial.should_prune():
+                    raise optuna.TrialPruned()
+        
+        program.before_train_epoch.append(unfreeze_callback)
+        program.after_train_epoch.append(pruning_callback)
+        
+        initial_optimizer = create_optimizer_with_differential_lr(
+            _models['bert'],
+            _models['classifiers'],
+            bert_lr=0.0 if args.freeze_bert else args.bert_lr,
+            classifier_lr=args.classifier_lr
+        )
+        
+        try:
+            program.train(
+                dataset,
+                Optim=lambda params: initial_optimizer,
+                train_epoch_num=args.epochs,
+                c_lr=args.classifier_lr,
+                c_warmup_iters=-1,
+                batch_size=1,
+                print_loss=False
+            )
+        except optuna.TrialPruned:
+            raise
+        
+        # Evaluate on test set
+        test_program, test_dataset, _ = program_declaration(test, None, args, device=args.device)
+        test_acc = test_program.evaluate_condition(test_dataset, threshold=0.5)
+        
+        return test_acc
+    
+    return objective
+
+
+def run_optuna_tuning(args, train, test, n_trials=20):
+    """Run Optuna hyperparameter tuning."""
+    
+    # Create study with pruner
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1)
+    study = optuna.create_study(
+        direction='maximize',
+        pruner=pruner,
+        study_name=f'conll_tuning_{args.train_portion}'
+    )
+    
+    objective = create_objective(args, train, test)
+    
+    study.optimize(
+        objective,
+        n_trials=n_trials,
+        timeout=None,
+        show_progress_bar=True
+    )
+    
+    # Print results
+    print("\n" + "=" * 60)
+    print("OPTUNA HYPERPARAMETER TUNING RESULTS")
+    print("=" * 60)
+    
+    print(f"\nNumber of finished trials: {len(study.trials)}")
+    
+    pruned_trials = [t for t in study.trials if t.state == TrialState.PRUNED]
+    complete_trials = [t for t in study.trials if t.state == TrialState.COMPLETE]
+    
+    print(f"  Pruned trials: {len(pruned_trials)}")
+    print(f"  Complete trials: {len(complete_trials)}")
+    
+    print("\nBest trial:")
+    trial = study.best_trial
+    print(f"  Value (Test Accuracy): {trial.value:.4f}")
+    print("  Params:")
+    for key, value in trial.params.items():
+        print(f"    {key}: {value}")
+    
+    # Save study results
+    results_file = f"optuna_results_{args.train_portion}.txt"
+    with open(results_file, 'w') as f:
+        f.write("OPTUNA HYPERPARAMETER TUNING RESULTS\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Best Test Accuracy: {trial.value:.4f}\n\n")
+        f.write("Best Hyperparameters:\n")
+        for key, value in trial.params.items():
+            f.write(f"  {key}: {value}\n")
+        f.write("\n\nAll Trials:\n")
+        for t in study.trials:
+            f.write(f"  Trial {t.number}: {t.value} - {t.params} - {t.state}\n")
+    
+    print(f"\nResults saved to {results_file}")
+    
+    return study
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
     parser.add_argument("--epochs", type=int, default=6, help="Number of epochs")
@@ -379,101 +649,30 @@ def parse_arguments():
                         help="Number of BERT layers to unfreeze per step")
     parser.add_argument("--warmup_epochs", type=int, default=2,
                         help="Epochs to train with BERT frozen before unfreezing")
-    parser.add_argument("--bert_lr", type=float, default=1e-5,  # Lower!
+    parser.add_argument("--bert_lr", type=float, default=1e-5,
                         help="Learning rate for BERT layers")
     parser.add_argument("--classifier_lr", type=float, default=1e-4,
                         help="Learning rate for classifier heads")
+    # Optuna arguments
+    parser.add_argument("--tune", type=bool, default=True,
+                        help="Run Optuna hyperparameter tuning")
+    parser.add_argument("--n_trials", type=int, default=20,
+                        help="Number of Optuna trials")
+    # BERT freezing
+    parser.add_argument("--freeze_bert", type=bool, default=True,
+                        help="Keep BERT frozen throughout training (only train classifiers)")
 
-    # ...
     args = parser.parse_args()
-
     return args
 
-def log_training_config(args, models, train=None, dev=None, test=None):
-    """Log all training configuration parameters."""
-    print("\n" + "=" * 60)
-    print("TRAINING CONFIGURATION")
-    print("=" * 60)
-    
-    # Data settings
-    print("\n[Data]")
-    print(f"  Data path:        {args.data_path}")
-    print(f"  Train portion:    {args.train_portion}")
-    print(f"  Train size:       {args.train_size if args.train_size != -1 else 'all'}")
-    if train is not None:
-        print(f"  Train examples:   {len(train)} (for model training)")
-    if dev is not None:
-        print(f"  Dev examples:     {len(dev)} (validation set for hyperparameter tuning)")
-    if test is not None:
-        print(f"  Test examples:    {len(test)} (held-out set for final evaluation)")
-    
-    # Training settings
-    print("\n[Training]")
-    print(f"  Epochs:           {args.epochs}")
-    print(f"  Warmup epochs:    {args.warmup_epochs}")
-    print(f"  Batch size:       1")
-    print(f"  Device:           {args.device}")
-    
-    # Learning rates
-    print("\n[Learning Rates]")
-    print(f"  Classifier LR:    {args.classifier_lr}")
-    print(f"  BERT LR:          {args.bert_lr}")
-    
-    # BERT unfreezing
-    print("\n[BERT Unfreezing]")
-    print(f"  Unfreeze layers/epoch: {args.unfreeze_layers}")
-    print(f"  Total BERT layers:     {models['bert'].total_layers}")
-    print(f"  Initially frozen:      {models['bert'].unfrozen_layers == 0}")
-    
-    # Constraint settings
-    print("\n[Constraints]")
-    print(f"  Counting t-norm:  {args.counting_tnorm}")
-    
-    # Model info
-    print("\n[Model]")
-    bert_params = sum(p.numel() for p in models['bert'].parameters())
-    bert_trainable = sum(p.numel() for p in models['bert'].parameters() if p.requires_grad)
-    clf_params = sum(p.numel() for name, clf in models['classifiers'].items() for p in clf.parameters())
-    
-    print(f"  BERT params:      {bert_params:,} (trainable: {bert_trainable:,})")
-    print(f"  Classifier params: {clf_params:,}")
-    print(f"  Total params:     {bert_params + clf_params:,}")
-    
-    # Mode
-    print("\n[Mode]")
-    print(f"  Evaluate only:    {args.evaluate}")
-    print(f"  Load previous:    {args.load_previous}")
-    
-    print("\n" + "=" * 60 + "\n")
-    
-class GradualUnfreezeCallback:
-    """Callback to gradually unfreeze BERT during training."""
-    
-    def __init__(self, bert_model, unfreeze_every=500, layers_per_step=1):
-        self.bert_model = bert_model
-        self.unfreeze_every = unfreeze_every
-        self.layers_per_step = layers_per_step
-        self.step = 0
-    
-    def on_batch_end(self):
-        """Call after each batch."""
-        self.step += 1
-        if self.step % self.unfreeze_every == 0:
-            new_layers = min(
-                self.bert_model.unfrozen_layers + self.layers_per_step,
-                self.bert_model.total_layers
-            )
-            self.bert_model.unfreeze_layers(new_layers)
-            
+
 def main(args):
     global _models
     global _bert_model
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
-    # Find the data file automatically (will use extracted file if exists)
     data_file_path = find_data_file(args.data_path)
-
     train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
 
     if args.train_size != -1:
@@ -481,73 +680,70 @@ def main(args):
     
     suffix = "_curriculum_learning" if args.load_previous else ""
 
-    program, dataset, dev_dataset = program_declaration(train if not args.evaluate else test, dev if not args.evaluate else [], args, device=args.device)
+    # Optuna tuning mode
+    if args.tune:
+        # Log config before tuning starts
+        log_training_config(args, models=None, train=train, dev=dev, test=test)
+        
+        study = run_optuna_tuning(args, train, test, n_trials=args.n_trials)
+        
+        # Update args with best params for final training
+        print("\n" + "=" * 60)
+        print("TRAINING FINAL MODEL WITH BEST HYPERPARAMETERS")
+        print("=" * 60)
+        
+        best_params = study.best_trial.params
+        args.classifier_lr = best_params['classifier_lr']
+        if not args.freeze_bert:
+            args.bert_lr = best_params['bert_lr']
+            args.warmup_epochs = best_params['warmup_epochs']
+            args.unfreeze_layers = best_params['unfreeze_layers']
+        
+        # Disable tuning flag for final training log
+        args.tune = False
     
-    log_training_config(args, _models, train=train, dev=dev, test=test)
+    program, dataset, _ = program_declaration(
+        train if not args.evaluate else test, 
+        None,  # No dev set needed
+        args, 
+        device=args.device
+    )
+    
+    # Log config for actual training (with model info now available)
+    log_training_config(args, _models, train=train, dev=None, test=test)
     
     if not args.evaluate:
-        # Ensure BERT starts fully frozen
         _models['bert'].freeze_all()
         
-        # Track best model based on dev performance
-        best_dev_acc = 0.0
-        best_epoch = 0
-        
-        # Setup gradual unfreezing callback WITH WARMUP
-        def unfreeze_callback():
-            epoch = program.epoch or 0
-            
-            # Don't unfreeze during warmup
-            if epoch <= args.warmup_epochs:
-                print(f"[Epoch {epoch}] Warmup - BERT frozen")
-                return
-            
-            # After warmup, gradually unfreeze
-            epochs_after_warmup = epoch - args.warmup_epochs
-            layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
-            
-            if layers_to_unfreeze > _models['bert'].unfrozen_layers:
-                _models['bert'].unfreeze_layers(layers_to_unfreeze)
+        if args.freeze_bert:
+            print("[Training] BERT frozen throughout training (--freeze_bert)")
+        else:
+            def unfreeze_callback():
+                epoch = program.epoch or 0
                 
-                # IMPORTANT: Recreate optimizer with newly unfrozen params
-                program.opt = create_optimizer_with_differential_lr(
-                    _models['bert'],
-                    _models['classifiers'],
-                    bert_lr=args.bert_lr,
-                    classifier_lr=args.classifier_lr
-                )
-                print(f"[Epoch {epoch}] Unfroze {layers_to_unfreeze} layers, optimizer updated")
-        
-        # Setup dev evaluation callback - fires AFTER each epoch
-        def dev_eval_callback():
-            nonlocal best_dev_acc, best_epoch
-            epoch = program.epoch or 0
-            
-            if dev_dataset is not None:
-                print(f"\n[Epoch {epoch}] Evaluating on dev set...")
-                dev_acc = program.evaluate_condition(dev_dataset, threshold=0.5)
-                print(f"[Epoch {epoch}] Dev Accuracy: {dev_acc:.4f}")
+                if epoch <= args.warmup_epochs:
+                    print(f"[Epoch {epoch}] Warmup - BERT frozen")
+                    return
                 
-                # Track best model
-                if dev_acc > best_dev_acc:
-                    best_dev_acc = dev_acc
-                    best_epoch = epoch
-                    # Save best model
-                    best_model_path = f"best_model_{args.train_portion}{suffix}.pth"
-                    program.save(best_model_path)
-                    print(f"[Epoch {epoch}] New best dev accuracy! Saved to {best_model_path}")
-                else:
-                    print(f"[Epoch {epoch}] Best dev accuracy: {best_dev_acc:.4f} (epoch {best_epoch})")
+                epochs_after_warmup = epoch - args.warmup_epochs
+                layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
+                
+                if layers_to_unfreeze > _models['bert'].unfrozen_layers:
+                    _models['bert'].unfreeze_layers(layers_to_unfreeze)
+                    program.opt = create_optimizer_with_differential_lr(
+                        _models['bert'],
+                        _models['classifiers'],
+                        bert_lr=args.bert_lr,
+                        classifier_lr=args.classifier_lr
+                    )
+                    print(f"[Epoch {epoch}] Unfroze {layers_to_unfreeze} layers, optimizer updated")
+            
+            program.before_train_epoch.append(unfreeze_callback)
         
-        # Register callbacks
-        program.before_train_epoch.append(unfreeze_callback)
-        program.after_train_epoch.append(dev_eval_callback)
-        
-        # Initial optimizer (BERT frozen, only classifiers train)
         initial_optimizer = create_optimizer_with_differential_lr(
             _models['bert'],
             _models['classifiers'],
-            bert_lr=args.bert_lr,
+            bert_lr=0.0 if args.freeze_bert else args.bert_lr,
             classifier_lr=args.classifier_lr
         )
         
@@ -560,21 +756,13 @@ def main(args):
             batch_size=1,
             print_loss=False
         )
-        
-        # Print final best dev performance
-        if dev_dataset is not None:
-            print(f"\n{'='*60}")
-            print(f"Training completed!")
-            print(f"Best dev accuracy: {best_dev_acc:.4f} (epoch {best_epoch})")
-            print(f"{'='*60}\n")
                 
         program.save(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
     else:
         program.load(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
-    print("BERT params device:",
-        next(_models['bert'].parameters()).device)
+    print("BERT params device:", next(_models['bert'].parameters()).device)
     train_acc = program.evaluate_condition(dataset, threshold=0.5)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}", file=output_f)
