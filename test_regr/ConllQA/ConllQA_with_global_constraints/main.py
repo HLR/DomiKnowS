@@ -451,8 +451,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None):
     print(f"  Load previous:    {args.load_previous}")
     
     print("\n" + "=" * 60 + "\n")
-
-    
+   
 class GradualUnfreezeCallback:
     """Callback to gradually unfreeze BERT during training."""
     
@@ -497,56 +496,51 @@ def create_objective(args, train, test):
         args.warmup_epochs = warmup_epochs
         args.unfreeze_layers = unfreeze_layers
         
-        # Re-import graph to get fresh state
-        from graph import graph
-        graph.detach()
-        
-        program, dataset, _ = program_declaration(train, None, args, device=args.device)
-        
-        # Ensure BERT starts fully frozen
-        _models['bert'].freeze_all()
-        
-        # Setup gradual unfreezing callback
-        def unfreeze_callback():
-            epoch = program.epoch or 0
-            
-            if epoch <= args.warmup_epochs:
-                return
-            
-            epochs_after_warmup = epoch - args.warmup_epochs
-            layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
-            
-            if layers_to_unfreeze > _models['bert'].unfrozen_layers:
-                _models['bert'].unfreeze_layers(layers_to_unfreeze)
-                program.opt = create_optimizer_with_differential_lr(
-                    _models['bert'],
-                    _models['classifiers'],
-                    bert_lr=args.bert_lr,
-                    classifier_lr=args.classifier_lr
-                )
-        
-        # Pruning callback - report intermediate values
-        def pruning_callback():
-            epoch = program.epoch or 0
-            if epoch > 0:
-                # Quick evaluation on subset for pruning decisions
-                intermediate_acc = program.evaluate_condition(dataset, threshold=0.5)
-                trial.report(intermediate_acc, epoch)
-                
-                if trial.should_prune():
-                    raise optuna.TrialPruned()
-        
-        program.before_train_epoch.append(unfreeze_callback)
-        program.after_train_epoch.append(pruning_callback)
-        
-        initial_optimizer = create_optimizer_with_differential_lr(
-            _models['bert'],
-            _models['classifiers'],
-            bert_lr=0.0 if args.freeze_bert else args.bert_lr,
-            classifier_lr=args.classifier_lr
-        )
-        
         try:
+            # Fully reset graph state for each trial
+            from graph import graph
+            graph.detach()
+            
+            # Reset graph internal state that persists across detach()
+            graph.varContext = None
+            graph._processed_lcs = set()
+            graph._executableLCs.clear()
+            graph.executableLCsLabels.clear()
+            
+            program, dataset, _ = program_declaration(train, None, args, device=args.device)
+            
+            # Ensure BERT starts fully frozen
+            _models['bert'].freeze_all()
+            
+            # Setup gradual unfreezing callback (skip if BERT frozen)
+            if not args.freeze_bert:
+                def unfreeze_callback():
+                    epoch = program.epoch or 0
+                    
+                    if epoch <= args.warmup_epochs:
+                        return
+                    
+                    epochs_after_warmup = epoch - args.warmup_epochs
+                    layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
+                    
+                    if layers_to_unfreeze > _models['bert'].unfrozen_layers:
+                        _models['bert'].unfreeze_layers(layers_to_unfreeze)
+                        program.opt = create_optimizer_with_differential_lr(
+                            _models['bert'],
+                            _models['classifiers'],
+                            bert_lr=args.bert_lr,
+                            classifier_lr=args.classifier_lr
+                        )
+                
+                program.before_train_epoch.append(unfreeze_callback)
+            
+            initial_optimizer = create_optimizer_with_differential_lr(
+                _models['bert'],
+                _models['classifiers'],
+                bert_lr=0.0 if args.freeze_bert else args.bert_lr,
+                classifier_lr=args.classifier_lr
+            )
+            
             program.train(
                 dataset,
                 Optim=lambda params: initial_optimizer,
@@ -556,17 +550,21 @@ def create_objective(args, train, test):
                 batch_size=1,
                 print_loss=False
             )
+            
+            # Evaluate on training set (constraint satisfaction accuracy)
+            train_acc = program.evaluate_condition(dataset, threshold=0.5)
+            
+            return train_acc
+            
         except optuna.TrialPruned:
             raise
-        
-        # Evaluate on test set
-        test_program, test_dataset, _ = program_declaration(test, None, args, device=args.device)
-        test_acc = test_program.evaluate_condition(test_dataset, threshold=0.5)
-        
-        return test_acc
+        except Exception as e:
+            print(f"[Trial {trial.number}] Failed with error: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0.0  # Return worst score on failure
     
     return objective
-
 
 def run_optuna_tuning(args, train, test, n_trials=20):
     """Run Optuna hyperparameter tuning."""
@@ -701,6 +699,13 @@ def main(args):
         
         # Disable tuning flag for final training log
         args.tune = False
+        
+        # Reset graph for final training
+        graph.detach()
+        graph.varContext = None
+        graph._processed_lcs = set()
+        graph._executableLCs.clear()
+        graph.executableLCsLabels.clear()
     
     program, dataset, _ = program_declaration(
         train if not args.evaluate else test, 
