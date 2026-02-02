@@ -66,6 +66,8 @@ class Graph(BaseGraphTree):
         self._executableLCs = OrderedDict()
         self.varContext = None # None before calling `with graph...`, dictionary after
         self.constraint = None  # Will hold the constraint concept
+        self._processed_lcs = set()  # Track which LCs have been processed
+
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
@@ -712,7 +714,9 @@ class Graph(BaseGraphTree):
         validating logical constraints. It is automatically called when exiting the 
         'with' block of the context manager.
 
-        Needs to allow for repeat calls.
+        Supports repeat calls - tracks which logical constraints have already been
+        processed to avoid reprocessing VarMaps. Also preserves varContext from the
+        first call to maintain original graph definition variables.
     
         Args:
         exc_type (type): The type of the exception that caused the context manager to exit.
@@ -724,9 +728,6 @@ class Graph(BaseGraphTree):
         Modifies internal state to include variable name mappings and validates logical constraints.
         '''
         super().__exit__(exc_type, exc_value, traceback)
-            
-        #image_name = "./image" + self.name
-        #self.visualize(image_name, open_image=True)
         
         # Get the current frame and then go one level back
         frame = inspect.currentframe().f_back
@@ -735,9 +736,17 @@ class Graph(BaseGraphTree):
         from .relation import IsA, HasA
     
         # --- Iterate through all local variables in that frame
-        self.varContext = {} # used for logical expression compilation
+        # Only capture varContext on first __exit__ call (when it's None)
+        # This preserves the original graph definition variables
+        first_exit = self.varContext is None
+        if first_exit:
+            self.varContext = {}
+        
         for var_name, var_value in frame.f_locals.items():
-            self.varContext[var_name] = var_value
+            # Only update varContext on first exit to preserve original graph variables
+            if first_exit:
+                self.varContext[var_name] = var_value
+            
             # Check if any of them are instances of the Concept class or Relation subclass
             if isinstance(var_value, (Concept, HasA, IsA)):
                 # If they are, and their var_name attribute is not already set,
@@ -749,9 +758,13 @@ class Graph(BaseGraphTree):
                         var_value.reversed.var_name = var_name + ".reversed"
                         self.varNameReversedMap[var_value.reversed.name] = var_value.reversed
 
-        # --- Process logical constraints variable syntax
+        # --- Process logical constraints variable syntax (only for unprocessed LCs)
         for lc_name, lc in self.logicalConstrains.items():
             if not lc.active or not lc.headLC:
+                continue
+            
+            # Skip if this LC has already been processed
+            if lc_name in self._processed_lcs:
                 continue
 
             # collect VarMaps - store info about lc variable syntax if used in this logical constraint
@@ -760,6 +773,9 @@ class Graph(BaseGraphTree):
             # process variable syntax - translate it to the path syntax
             if varMapsList:
                 self.handleVarsPath(lc, varMapsList[0])
+            
+            # Mark this LC as processed for VarMaps
+            self._processed_lcs.add(lc_name)
                     
         # --- Check if the logical constrains are correct ---
         
@@ -798,7 +814,6 @@ class Graph(BaseGraphTree):
             for variableName, pathInfos in usedVariables.items():
                 # get information about the variable in the found variables record
                 variableConcept = foundVariables[variableName][2][0]
-                #variableConceptWhat = variableConcept.what()
                 
                 # get the root parent of the variable concept
                 variableConceptParent = self.findRootConceptOrRelation(variableConcept)
@@ -826,8 +841,8 @@ class Graph(BaseGraphTree):
             if not lc.active or not lc.headLC:
                 continue
             
-            self.validate_queryL_constraints(lc, headLc=lc.name)  
-                        
+            self.validate_queryL_constraints(lc, headLc=lc.name)
+    
     @property
     def ontology(self):
         '''Gets the ontology associated with the object.

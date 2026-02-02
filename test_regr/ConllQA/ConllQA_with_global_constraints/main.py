@@ -289,7 +289,6 @@ def program_declaration(train, dev, args, device='cpu'):
 
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
-    dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label') if dev is not None and len(dev) > 0 else None
 
     program = InferenceProgramWithCallbacks(
         graph, SolverModel,
@@ -298,6 +297,12 @@ def program_declaration(train, dev, args, device='cpu'):
         inferTypes=['local/argmax'], 
         device=device
     )
+    
+    # Compile dev dataset after program is created (graph state is fully set up)
+    dev_dataset = None
+    if dev is not None and len(dev) > 0:
+        dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    
     return program, train_dataset, dev_dataset
 
     # def find_label(label_type):
@@ -476,7 +481,7 @@ def main(args):
     
     suffix = "_curriculum_learning" if args.load_previous else ""
 
-    program, dataset, dev_dataset = program_declaration(train if not args.evaluate else test, dev, args, device=args.device)
+    program, dataset, dev_dataset = program_declaration(train if not args.evaluate else test, dev if not args.evaluate else [], args, device=args.device)
     
     log_training_config(args, _models, train=train, dev=dev, test=test)
     
