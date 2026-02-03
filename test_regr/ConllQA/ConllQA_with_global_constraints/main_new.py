@@ -1,5 +1,3 @@
-import io
-import re
 import sys
 import torch
 import os
@@ -340,36 +338,24 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
                                           device=None):
     """Create optimizer with different learning rates for BERT vs classifiers."""
     
-    target_device = torch.device(device) if device else None
-    
-    # Ensure all models are on the specified device before collecting params
-    if target_device is not None:
-        bert_model.to(target_device)
+    if device is not None:
+        bert_model.to(device)
         for clf in classifiers.values():
-            clf.to(target_device)
+            clf.to(device)
     
     param_groups = []
     
-    # BERT parameters (lower LR)
     bert_params = [p for p in bert_model.parameters() if p.requires_grad]
     if bert_params:
-        param_groups.append({
-            'params': bert_params,
-            'lr': bert_lr,
-        })
+        param_groups.append({'params': bert_params, 'lr': bert_lr})
     
-    # Classifier parameters (higher LR)
     clf_params = [p for clf in classifiers.values() 
                   for p in clf.parameters() if p.requires_grad]
     if clf_params:
-        param_groups.append({
-            'params': clf_params,
-            'lr': classifier_lr,
-        })
+        param_groups.append({'params': clf_params, 'lr': classifier_lr})
     
     if not param_groups:
-        # No trainable parameters - create minimal optimizer with dummy on correct device
-        dummy_device = target_device if target_device else torch.device('cpu')
+        dummy_device = device if device else 'cpu'
         dummy = torch.nn.Parameter(torch.zeros(1, device=dummy_device))
         return torch.optim.Adam([dummy], lr=classifier_lr)
     
@@ -378,29 +364,23 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
 def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_lr=1e-6, device=None):
     """Create optimizer factory that properly handles framework params."""
     
-    target_device = torch.device(device) if device else None
-    
-    # Ensure models are on correct device
-    if target_device is not None:
-        bert_model.to(target_device)
+    if device is not None:
+        bert_model.to(device)
         for clf in classifiers.values():
-            clf.to(target_device)
+            clf.to(device)
     
-    # Build lookup of param id -> source (for learning rate assignment)
     bert_param_ids = {id(p) for p in bert_model.parameters()}
     clf_param_ids = {id(p) for clf in classifiers.values() for p in clf.parameters()}
     
     def factory(params):
-        # Convert generator to list FIRST to avoid exhausting it
+        # Convert generator to list to avoid exhausting it
         params_list = list(params) if params is not None else []
         
-        # If params is empty, use our own param collection
         if not params_list:
             return create_optimizer_with_differential_lr(
                 bert_model, classifiers, bert_lr, classifier_lr, device
             )
         
-        # Group the framework's params by learning rates
         bert_group = []
         clf_group = []
         other_group = []
@@ -408,13 +388,6 @@ def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_l
         for p in params_list:
             if not p.requires_grad:
                 continue
-            
-            # Move param to target device if mismatched (defensive)
-            if target_device is not None and p.device != target_device:
-                p.data = p.data.to(target_device)
-                if p.grad is not None:
-                    p.grad = p.grad.to(target_device)
-            
             if id(p) in bert_param_ids:
                 bert_group.append(p)
             elif id(p) in clf_param_ids:
@@ -428,7 +401,6 @@ def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_l
         if clf_group:
             param_groups.append({'params': clf_group, 'lr': classifier_lr})
         if other_group:
-            # Framework params we don't recognize get classifier LR
             param_groups.append({'params': other_group, 'lr': classifier_lr})
         
         if not param_groups:
@@ -552,34 +524,29 @@ class GradualUnfreezeCallback:
             )
             self.bert_model.unfreeze_layers(new_layers)
 
-def evaluate_with_counting_metrics(program, dataset, threshold=0.5):
+def evaluate_with_counting_metrics(program, dataset, threshold=0.5, device=None):
     """Evaluate and capture both boolean and counting metrics."""
     
-    # Capture stdout to parse the printed metrics
-    old_stdout = sys.stdout
-    sys.stdout = captured_output = io.StringIO()
+    eval_device = device if device else "cpu"
+    train_eval = program.evaluate_condition(dataset, device=eval_device, threshold=threshold, return_dict=True)
     
-    try:
-        result = program.evaluate_condition(dataset, threshold=threshold)
-    finally:
-        sys.stdout = old_stdout
+    bool_acc = train_eval.get('boolean_accuracy', 0.0)
+    if bool_acc is not None:
+        bool_acc = bool_acc / 100.0  # Convert from percentage
+    else:
+        bool_acc = 0.0
     
-    output = captured_output.getvalue()
-    print(output)  # Still print it for visibility
+    counting_mae = train_eval.get('counting_mae', float('inf'))
+    if counting_mae is None:
+        counting_mae = float('inf')
     
-    # Parse metrics from output
-    bool_match = re.search(r'Boolean accuracy:\s*([\d.]+)%', output)
-    bool_acc = float(bool_match.group(1)) / 100.0 if bool_match else 0.0
-    
-    # "Counting MAE
-    mae_match = re.search(r'Counting MAE:\s*([\d.]+)', output)
-    counting_mae = float(mae_match.group(1)) if mae_match else float('inf')
-    
-    count_acc_match = re.search(r'Accuracy \(±0\.5\):\s*([\d.]+)%', output)
-    counting_acc = float(count_acc_match.group(1)) / 100.0 if count_acc_match else 0.0
+    counting_acc = train_eval.get('counting_accuracy', 0.0)
+    if counting_acc is not None:
+        counting_acc = counting_acc / 100.0  # Convert from percentage
+    else:
+        counting_acc = 0.0
     
     return bool_acc, counting_mae, counting_acc
-
 
 def create_objective(args, train, test):
     """Create Optuna objective function optimizing for counting constraints."""
@@ -676,7 +643,7 @@ def create_objective(args, train, test):
             )
             
             print(f"  [Trial {trial.number}] Evaluating...")
-            bool_acc, counting_mae, counting_acc = evaluate_with_counting_metrics(program, dataset)
+            bool_acc, counting_mae, counting_acc = evaluate_with_counting_metrics(program, dataset, device=args.device)
             
             # OBJECTIVE: Focus on counting performance
             # Option 1: Pure counting accuracy
@@ -840,16 +807,9 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
-def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, min_samples=50, seed=42):
-    """Create callback to log training metrics after each epoch.
+def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, min_samples=50, seed=42, device=None):
+    """Create callback to log training metrics after each epoch."""
     
-    Args:
-        eval_fraction: Fraction of dataset to evaluate (0.2 = 20%)
-        min_samples: Minimum number of samples to evaluate
-        seed: Random seed for reproducible subset selection
-    """
-    
-    # Create fixed evaluation subset for consistent comparisons
     random.seed(seed)
     dataset_list = list(dataset)
     n_total = len(dataset_list)
@@ -865,15 +825,13 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
         'epoch': [],
         'train_acc': [],
         'clf_grad_norm': [],
-        'accumulated_grad_norm': [],  # NEW: Track actual training gradients
+        'accumulated_grad_norm': [],
     }
     
-    # NEW: Accumulate gradient norms during training
     accumulated_grad_norm = [0.0]
     grad_count = [0]
     
     def capture_gradients_before_step():
-        """Call this BEFORE optimizer.step() to capture actual gradients."""
         total_norm = 0.0
         for name, clf in models['classifiers'].items():
             for p in clf.parameters():
@@ -881,24 +839,28 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
                     total_norm += p.grad.data.norm(2).item() ** 2
         total_norm = total_norm ** 0.5
         
-        if total_norm > 0:  # Only count non-zero gradients
+        if total_norm > 0:
             accumulated_grad_norm[0] += total_norm
             grad_count[0] += 1
     
     def log_epoch_metrics():
         epoch = program.epoch or 0
         
-        # Fast evaluation on subset
-        train_acc = program.evaluate_condition(eval_subset, threshold=0.5)
+        # CRITICAL: Pass device to evaluate_condition
+        eval_device = device if device else "cpu"
+        train_eval = program.evaluate_condition(eval_subset, device=eval_device, threshold=0.5)
         
-        # Use accumulated gradient norm from training (actual gradients)
+        if isinstance(train_eval, dict):
+            train_acc = train_eval.get('primary_metric', 0.0) / 100.0
+        else:
+            train_acc = train_eval
+        
         avg_grad_norm = accumulated_grad_norm[0] / max(grad_count[0], 1)
         
         metrics_history['epoch'].append(epoch)
         metrics_history['train_acc'].append(train_acc)
         metrics_history['accumulated_grad_norm'].append(avg_grad_norm)
         
-        # Reset accumulators for next epoch
         accumulated_grad_norm[0] = 0.0
         grad_count[0] = 0
         
@@ -911,7 +873,6 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
         
         print(f"[Epoch {epoch}] Acc: {train_acc:.4f}{acc_change} | AvgGradNorm: {avg_grad_norm:.6f} | BERT: {bert_status}")
         
-        # Warnings
         if avg_grad_norm < 1e-7 and epoch > 1:
             print(f"  ⚠️  Gradients near zero - check t-norm choice!")
         if len(metrics_history['train_acc']) >= 2 and train_acc < metrics_history['train_acc'][-2] - 0.02:
@@ -977,7 +938,8 @@ def main(args):
             program, dataset, _models,
             eval_fraction=0.1,
             min_samples=50,
-            seed=42
+            seed=42,
+            device=args.device
         )
         program.after_train_epoch.append(log_epoch_metrics)
         
@@ -1058,7 +1020,7 @@ def main(args):
 
     output_f = open("result.txt", 'a')
     print("BERT params device:", next(_models['bert'].parameters()).device)
-    train_eval = program.evaluate_condition(dataset, threshold=0.5, return_dict= True)
+    train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
     train_acc = train_eval['accuracy']
     train_bool_acc = train_eval['boolean_accuracy']
     train_counting_mae = train_eval['counting_mae']

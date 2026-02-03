@@ -223,7 +223,7 @@ program = InferenceProgram(graph, SolverModel,
                            device=device, tnorm="G",
                            inferTypes=["argmax"])
 
-acc = program.evaluate_condition(dataset)
+acc = program.evaluate_condition(dataset, device=device)
 print(acc)
 
 print("-" * 100)

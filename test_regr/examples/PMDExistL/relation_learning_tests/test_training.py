@@ -184,7 +184,7 @@ class TestTraining:
         assert program is not None
         
         # Test evaluation works
-        acc = program.evaluate_condition(train)
+        acc = program.evaluate_condition(train, device='cpu')
         assert isinstance(acc, (int, float))
         assert 0 <= acc <= 100
 

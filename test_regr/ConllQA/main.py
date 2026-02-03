@@ -336,7 +336,7 @@ def main(args):
         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
 
     output_f = open("result.txt", 'a')
-    train_acc = program.evaluate_condition(dataset, threshold=0.5)
+    train_acc = program.evaluate_condition(dataset, threshold=0.5, device=args.device)
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"{portion} Acc: {train_acc}", file=output_f)

@@ -104,7 +104,7 @@ def run_semantic_conversion(input_file: str):
         inferTypes=["argmax"]
     )
 
-    acc = program.evaluate_condition(dataset)
+    acc = program.evaluate_condition(dataset, device=device)
     return acc, program, dataset, raw_data, attribute_names_dict
 
 
