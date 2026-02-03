@@ -482,11 +482,10 @@ def evaluate_with_counting_metrics(program, dataset, threshold=0.5):
     print(output)  # Still print it for visibility
     
     # Parse metrics from output
-    # "Boolean accuracy: 70.24% (59/84)"
     bool_match = re.search(r'Boolean accuracy:\s*([\d.]+)%', output)
     bool_acc = float(bool_match.group(1)) / 100.0 if bool_match else 0.0
     
-    # "Counting MAE: 9.449, Accuracy (±0.5): 4.31%"
+    # "Counting MAE
     mae_match = re.search(r'Counting MAE:\s*([\d.]+)', output)
     counting_mae = float(mae_match.group(1)) if mae_match else float('inf')
     
@@ -939,12 +938,22 @@ def main(args):
 
     output_f = open("result.txt", 'a')
     print("BERT params device:", next(_models['bert'].parameters()).device)
-    train_acc = program.evaluate_condition(dataset, threshold=0.5)
+    train_eval = program.evaluate_condition(dataset, threshold=0.5, return_dict= True)
+    train_acc = train_eval['accuracy']
+    train_bool_acc = train_eval['boolean_accuracy']
+    train_counting_mae = train_eval['counting_mae']
+    train_counting_acc = train_eval['counting_accuracy']
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}")
     print(f"{portion} Acc: {train_acc}", file=output_f)
     print(f"{portion} Acc: {train_acc}")
+    print(f"{portion} Boolean Acc: {train_bool_acc}", file=output_f)
+    print(f"{portion} Boolean Acc: {train_bool_acc}")
+    print(f"{portion} Counting MAE: {train_counting_mae}", file=output_f)
+    print(f"{portion} Counting MAE: {train_counting_mae}")
+    print(f"{portion} Counting Acc: {train_counting_acc}", file=output_f)
+    print(f"{portion} Counting Acc: {train_counting_acc}")
     print("#" * 40, file=output_f)
     print("#" * 40)
 
