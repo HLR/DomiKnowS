@@ -1,9 +1,11 @@
+import os
 import sys
 import torch
 from pathlib import Path
 
 import optuna
 from optuna.trial import TrialState
+import random
 
 sys.path.append('.')
 sys.path.append('../../..')
@@ -15,17 +17,12 @@ import argparse
 from domiknows import setProductionLogMode
 setProductionLogMode()
 
-from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, program
-from domiknows.program.callbackprogram import ProgramStorageCallback
-from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from domiknows.program.lossprogram import PrimalDualProgram, InferenceProgram
-from domiknows.program.model.pytorch import SolverModel, SolverModelDictLoss
-from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
-from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, \
-    FunctionalReaderSensor, TorchSensor, cache, TorchCache
+from domiknows.program import CallbackProgram
+from domiknows.program.lossprogram import InferenceProgram
+from domiknows.program.model.pytorch import SolverModel
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, TorchSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
-from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, \
-    CompositionCandidateReaderSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
 
 from reader import conll4_reader
 import numpy as np
@@ -473,31 +470,40 @@ def create_objective(args, train, test):
     def objective(trial: optuna.Trial) -> float:
         global _models, _bert_model
         
+        os.environ["TQDM_DISABLE"] = "1"
+        
         # Sample hyperparameters
         classifier_lr = trial.suggest_float('classifier_lr', 1e-5, 1e-3, log=True)
         
         if args.freeze_bert:
-            # BERT frozen - don't tune BERT-related params
             bert_lr = 0.0
-            warmup_epochs = args.epochs  # Always frozen
+            warmup_epochs = args.epochs
             unfreeze_layers = 0
         else:
             bert_lr = trial.suggest_float('bert_lr', 1e-6, 1e-4, log=True)
             warmup_epochs = trial.suggest_int('warmup_epochs', 0, 3)
             unfreeze_layers = trial.suggest_int('unfreeze_layers', 1, 4)
         
-        # Override args with trial values
+        # LOG: Trial start
+        print(f"\n{'='*60}")
+        print(f"TRIAL {trial.number} STARTED")
+        print(f"{'='*60}")
+        print(f"  classifier_lr: {classifier_lr:.2e}")
+        if not args.freeze_bert:
+            print(f"  bert_lr:       {bert_lr:.2e}")
+            print(f"  warmup_epochs: {warmup_epochs}")
+            print(f"  unfreeze_layers: {unfreeze_layers}")
+        print(f"{'='*60}")
+        
         args.classifier_lr = classifier_lr
         args.bert_lr = bert_lr
         args.warmup_epochs = warmup_epochs
         args.unfreeze_layers = unfreeze_layers
         
         try:
-            # Fully reset graph state for each trial
             from graph import graph
             graph.detach()
             
-            # Reset graph internal state that persists across detach()
             graph.varContext = None
             graph._processed_lcs = set()
             graph._executableLCs.clear()
@@ -505,20 +511,23 @@ def create_objective(args, train, test):
             
             program, dataset, _ = program_declaration(train, None, args, device=args.device)
             
-            # Ensure BERT starts fully frozen
             _models['bert'].freeze_all()
             
-            # Setup gradual unfreezing callback (skip if BERT frozen)
+            # Add epoch logging callback
+            epoch_count = [0]  # Use list to allow modification in closure
+            def epoch_callback():
+                epoch_count[0] += 1
+                print(f"  [Trial {trial.number}] Epoch {epoch_count[0]}/{args.epochs} complete")
+            
+            program.after_train_epoch.append(epoch_callback)
+            
             if not args.freeze_bert:
                 def unfreeze_callback():
                     epoch = program.epoch or 0
-                    
                     if epoch <= args.warmup_epochs:
                         return
-                    
                     epochs_after_warmup = epoch - args.warmup_epochs
                     layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
-                    
                     if layers_to_unfreeze > _models['bert'].unfrozen_layers:
                         _models['bert'].unfreeze_layers(layers_to_unfreeze)
                         program.opt = create_optimizer_with_differential_lr(
@@ -527,7 +536,6 @@ def create_objective(args, train, test):
                             bert_lr=args.bert_lr,
                             classifier_lr=args.classifier_lr
                         )
-                
                 program.before_train_epoch.append(unfreeze_callback)
             
             initial_optimizer = create_optimizer_with_differential_lr(
@@ -536,6 +544,8 @@ def create_objective(args, train, test):
                 bert_lr=0.0 if args.freeze_bert else args.bert_lr,
                 classifier_lr=args.classifier_lr
             )
+            
+            print(f"  [Trial {trial.number}] Training started...")
             
             program.train(
                 dataset,
@@ -547,39 +557,53 @@ def create_objective(args, train, test):
                 print_loss=False
             )
             
-            # Evaluate on training set (constraint satisfaction accuracy)
+            print(f"  [Trial {trial.number}] Evaluating...")
             train_acc = program.evaluate_condition(dataset, threshold=0.5)
+            
+            # LOG: Trial result
+            print(f"\n  [Trial {trial.number}] RESULT: {train_acc:.4f} ({train_acc*100:.2f}%)")
+            print(f"{'='*60}\n")
             
             return train_acc
             
         except optuna.TrialPruned:
             raise
         except Exception as e:
-            print(f"[Trial {trial.number}] Failed with error: {e}")
+            print(f"\n  [Trial {trial.number}] FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return 0.0  # Return worst score on failure
+            return 0.0
+        finally:
+            os.environ["TQDM_DISABLE"] = "0"
     
     return objective
 
 def run_optuna_tuning(args, train, test, n_trials=20):
     """Run Optuna hyperparameter tuning."""
     
-    # Create study with pruner
-    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1)
+    # Use smaller subset for faster tuning
+    tune_train = train
+    if args.tune_train_size > 0 and len(train) > args.tune_train_size:
+        import random
+        random.seed(42)
+        tune_train = random.sample(train, args.tune_train_size)
+        print(f"[Optuna] Using {len(tune_train)}/{len(train)} samples for tuning")
+    
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=1)
     study = optuna.create_study(
         direction='maximize',
         pruner=pruner,
         study_name=f'conll_tuning_{args.train_portion}'
     )
     
-    objective = create_objective(args, train, test)
+    # Pass tune_train instead of train
+    objective = create_objective(args, tune_train, test)
     
     study.optimize(
         objective,
         n_trials=n_trials,
         timeout=None,
-        show_progress_bar=True
+        show_progress_bar=False  # We have our own logging now
     )
     
     # Print results
@@ -670,9 +694,78 @@ def parse_arguments():
                         help="Number of BERT layers to unfreeze per step")
     parser.add_argument("--bert_lr", type=float, default=1e-5,
                         help="Learning rate for BERT layers (if not frozen)")
+    
+    # Evaluation settings
+    parser.add_argument("--eval_fraction", type=float, default=0.2,
+                    help="Fraction of data for epoch evaluation (0.2 = 20%)")
 
     args = parser.parse_args()
     return args
+
+def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, min_samples=50, seed=42):
+    """Create callback to log training metrics after each epoch.
+    
+    Args:
+        eval_fraction: Fraction of dataset to evaluate (0.2 = 20%)
+        min_samples: Minimum number of samples to evaluate
+        seed: Random seed for reproducible subset selection
+    """
+    
+    # Create fixed evaluation subset for consistent comparisons
+    random.seed(seed)
+    dataset_list = list(dataset)
+    n_total = len(dataset_list)
+    n_eval = max(min_samples, int(n_total * eval_fraction))
+    n_eval = min(n_eval, n_total)  # Don't exceed dataset size
+    
+    eval_indices = sorted(random.sample(range(n_total), n_eval))
+    eval_subset = [dataset_list[i] for i in eval_indices]
+    
+    print(f"[Eval] Using {n_eval}/{n_total} samples ({100*n_eval/n_total:.1f}%) for epoch evaluation")
+    
+    metrics_history = {
+        'epoch': [],
+        'train_acc': [],
+        'clf_grad_norm': [],
+    }
+    
+    def log_epoch_metrics():
+        epoch = program.epoch or 0
+        
+        # Fast evaluation on subset
+        train_acc = program.evaluate_condition(eval_subset, threshold=0.5)
+        
+        # Calculate classifier gradient norms
+        clf_grad_norm = 0.0
+        for name, clf in models['classifiers'].items():
+            for p in clf.parameters():
+                if p.grad is not None:
+                    clf_grad_norm += p.grad.data.norm(2).item() ** 2
+        clf_grad_norm = clf_grad_norm ** 0.5
+        
+        metrics_history['epoch'].append(epoch)
+        metrics_history['train_acc'].append(train_acc)
+        metrics_history['clf_grad_norm'].append(clf_grad_norm)
+        
+        bert_status = f"frozen" if models['bert'].unfrozen_layers == 0 else f"{models['bert'].unfrozen_layers}L unfrozen"
+        
+        # Compact single-line output
+        acc_change = ""
+        if len(metrics_history['train_acc']) >= 2:
+            delta = train_acc - metrics_history['train_acc'][-2]
+            acc_change = f" (Δ{delta:+.3f})"
+        
+        print(f"[Epoch {epoch}] Acc: {train_acc:.4f}{acc_change} | GradNorm: {clf_grad_norm:.4f} | BERT: {bert_status}")
+        
+        # Warnings only
+        if clf_grad_norm < 1e-7:
+            print(f"  ⚠️  Gradients near zero!")
+        if len(metrics_history['train_acc']) >= 2 and train_acc < metrics_history['train_acc'][-2] - 0.02:
+            print(f"  ⚠️  Accuracy dropped!")
+        
+        return metrics_history
+    
+    return log_epoch_metrics, metrics_history, eval_subset
 
 def main(args):
     global _models
@@ -690,12 +783,10 @@ def main(args):
 
     # Optuna tuning mode
     if args.tune:
-        # Log config before tuning starts
         log_training_config(args, models=None, train=train, dev=dev, test=test)
         
         study = run_optuna_tuning(args, train, test, n_trials=args.n_trials)
         
-        # Update args with best params for final training
         print("\n" + "=" * 60)
         print("TRAINING FINAL MODEL WITH BEST HYPERPARAMETERS")
         print("=" * 60)
@@ -707,24 +798,31 @@ def main(args):
             args.warmup_epochs = best_params['warmup_epochs']
             args.unfreeze_layers = best_params['unfreeze_layers']
         
-        # Disable tuning flag for final training log
         args.tune = False
         
-        # Reset graph for final training
-        graph.clear()
+        graph.detach()
+        graph.varContext = None
+        graph._processed_lcs = set()
+        graph._executableLCs.clear()
+        graph.executableLCsLabels.clear()
     
     program, dataset, _ = program_declaration(
         train if not args.evaluate else test, 
-        None,  # No dev set needed
+        None,
         args, 
         device=args.device
     )
     
-    # Log config for actual training (with model info now available)
     log_training_config(args, _models, train=train, dev=None, test=test)
     
     if not args.evaluate:
         _models['bert'].freeze_all()
+        
+        # Create epoch logging callback
+        log_epoch_metrics, metrics_history = create_epoch_logging_callback(
+            program, dataset, _models
+        )
+        program.after_train_epoch.append(log_epoch_metrics)
         
         if args.freeze_bert:
             print("[Training] BERT frozen throughout training (--freeze_bert)")
@@ -767,6 +865,24 @@ def main(args):
             batch_size=1,
             print_loss=False
         )
+        
+        # Print final training summary
+        print("\n" + "=" * 60)
+        print("TRAINING COMPLETE - SUMMARY")
+        print("=" * 60)
+        if len(metrics_history['epoch']) > 0:
+            print(f"  Initial Accuracy: {metrics_history['train_acc'][0]:.4f}")
+            print(f"  Final Accuracy:   {metrics_history['train_acc'][-1]:.4f}")
+            print(f"  Total Improvement: {metrics_history['train_acc'][-1] - metrics_history['train_acc'][0]:+.4f}")
+            
+            # Check for proper learning
+            if metrics_history['train_acc'][-1] > metrics_history['train_acc'][0] + 0.05:
+                print("  ✅ Model is learning well!")
+            elif metrics_history['train_acc'][-1] > metrics_history['train_acc'][0]:
+                print("  ⚠️  Model is learning slowly - consider more epochs or higher LR")
+            else:
+                print("  ❌ Model is NOT learning - check LR, data, or architecture")
+        print("=" * 60 + "\n")
                 
         program.save(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
     else:
