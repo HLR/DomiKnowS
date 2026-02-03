@@ -340,11 +340,13 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
                                           device=None):
     """Create optimizer with different learning rates for BERT vs classifiers."""
     
+    target_device = torch.device(device) if device else None
+    
     # Ensure all models are on the specified device before collecting params
-    if device is not None:
-        bert_model.to(device)
+    if target_device is not None:
+        bert_model.to(target_device)
         for clf in classifiers.values():
-            clf.to(device)
+            clf.to(target_device)
     
     param_groups = []
     
@@ -366,54 +368,70 @@ def create_optimizer_with_differential_lr(bert_model, classifiers,
         })
     
     if not param_groups:
-        # No trainable parameters - create minimal optimizer
-        # Use a dummy param on the correct device
-        dummy_device = device if device else 'cpu'
+        # No trainable parameters - create minimal optimizer with dummy on correct device
+        dummy_device = target_device if target_device else torch.device('cpu')
         dummy = torch.nn.Parameter(torch.zeros(1, device=dummy_device))
         return torch.optim.Adam([dummy], lr=classifier_lr)
     
     return torch.optim.Adam(param_groups)
 
-
 def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_lr=1e-6, device=None):
     """Create optimizer factory that properly handles framework params."""
     
-    # Ensure models are on correct device
-    if device is not None:
-        bert_model.to(device)
-        for clf in classifiers.values():
-            clf.to(device)
+    target_device = torch.device(device) if device else None
     
-    # Build lookup of param id -> learning rate
+    # Ensure models are on correct device
+    if target_device is not None:
+        bert_model.to(target_device)
+        for clf in classifiers.values():
+            clf.to(target_device)
+    
+    # Build lookup of param id -> source (for learning rate assignment)
     bert_param_ids = {id(p) for p in bert_model.parameters()}
+    clf_param_ids = {id(p) for clf in classifiers.values() for p in clf.parameters()}
     
     def factory(params):
-        # If params is empty or None, use our own param collection
-        if params is None or (hasattr(params, '__len__') and len(list(params)) == 0):
+        # Convert generator to list FIRST to avoid exhausting it
+        params_list = list(params) if params is not None else []
+        
+        # If params is empty, use our own param collection
+        if not params_list:
             return create_optimizer_with_differential_lr(
                 bert_model, classifiers, bert_lr, classifier_lr, device
             )
         
-        # Otherwise, group the framework's params by our learning rates
+        # Group the framework's params by learning rates
         bert_group = []
         clf_group = []
+        other_group = []
         
-        for p in params:
+        for p in params_list:
             if not p.requires_grad:
                 continue
+            
+            # Move param to target device if mismatched (defensive)
+            if target_device is not None and p.device != target_device:
+                p.data = p.data.to(target_device)
+                if p.grad is not None:
+                    p.grad = p.grad.to(target_device)
+            
             if id(p) in bert_param_ids:
                 bert_group.append(p)
-            else:
+            elif id(p) in clf_param_ids:
                 clf_group.append(p)
+            else:
+                other_group.append(p)
         
         param_groups = []
         if bert_group and bert_lr > 0:
             param_groups.append({'params': bert_group, 'lr': bert_lr})
         if clf_group:
             param_groups.append({'params': clf_group, 'lr': classifier_lr})
+        if other_group:
+            # Framework params we don't recognize get classifier LR
+            param_groups.append({'params': other_group, 'lr': classifier_lr})
         
         if not param_groups:
-            # Fallback: use our own collection
             return create_optimizer_with_differential_lr(
                 bert_model, classifiers, bert_lr, classifier_lr, device
             )
