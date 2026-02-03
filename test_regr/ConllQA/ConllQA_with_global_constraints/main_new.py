@@ -19,7 +19,7 @@ import argparse
 from domiknows import setProductionLogMode
 setProductionLogMode()
 
-from domiknows.program import CallbackProgram
+from domiknows.program import CallbackProgram, program
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, TorchSensor
@@ -127,8 +127,14 @@ class BERT(torch.nn.Module):
             )
             self.unfreeze_layers(new_layers)
     
+    def _get_model_device(self):
+        """Get the device of the model parameters."""
+        return next(self.module.parameters()).device
+    
     def forward(self, input):
-        if self.module.device != input.device:
+        # Check if input is on a different device than model
+        model_device = self._get_model_device()
+        if model_device != input.device:
             self.module.to(input.device)
             self.device = input.device
         
@@ -330,29 +336,91 @@ def program_declaration(train, dev, args, device='cpu'):
     #                                     keyword='relation', forward=find_relation('Kill'), label=True)
 
 def create_optimizer_with_differential_lr(bert_model, classifiers, 
-                                          bert_lr=2e-5, classifier_lr=1e-6):
+                                          bert_lr=2e-5, classifier_lr=1e-6,
+                                          device=None):
     """Create optimizer with different learning rates for BERT vs classifiers."""
     
-    param_groups = [
-        # BERT parameters (lower LR)
-        {
-            'params': [p for p in bert_model.parameters() if p.requires_grad],
-            'lr': bert_lr,
-            'name': 'bert'
-        },
-        # Classifier parameters (higher LR)
-        {
-            'params': [p for name, clf in classifiers.items() 
-                        for p in clf.parameters() if p.requires_grad],
-            'lr': classifier_lr,
-            'name': 'classifiers'
-        }
-    ]
+    # Ensure all models are on the specified device before collecting params
+    if device is not None:
+        bert_model.to(device)
+        for clf in classifiers.values():
+            clf.to(device)
     
-    # Remove empty param groups
-    param_groups = [g for g in param_groups if len(list(g['params'])) > 0]
+    param_groups = []
+    
+    # BERT parameters (lower LR)
+    bert_params = [p for p in bert_model.parameters() if p.requires_grad]
+    if bert_params:
+        param_groups.append({
+            'params': bert_params,
+            'lr': bert_lr,
+        })
+    
+    # Classifier parameters (higher LR)
+    clf_params = [p for clf in classifiers.values() 
+                  for p in clf.parameters() if p.requires_grad]
+    if clf_params:
+        param_groups.append({
+            'params': clf_params,
+            'lr': classifier_lr,
+        })
+    
+    if not param_groups:
+        # No trainable parameters - create minimal optimizer
+        # Use a dummy param on the correct device
+        dummy_device = device if device else 'cpu'
+        dummy = torch.nn.Parameter(torch.zeros(1, device=dummy_device))
+        return torch.optim.Adam([dummy], lr=classifier_lr)
     
     return torch.optim.Adam(param_groups)
+
+
+def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_lr=1e-6, device=None):
+    """Create optimizer factory that properly handles framework params."""
+    
+    # Ensure models are on correct device
+    if device is not None:
+        bert_model.to(device)
+        for clf in classifiers.values():
+            clf.to(device)
+    
+    # Build lookup of param id -> learning rate
+    bert_param_ids = {id(p) for p in bert_model.parameters()}
+    
+    def factory(params):
+        # If params is empty or None, use our own param collection
+        if params is None or (hasattr(params, '__len__') and len(list(params)) == 0):
+            return create_optimizer_with_differential_lr(
+                bert_model, classifiers, bert_lr, classifier_lr, device
+            )
+        
+        # Otherwise, group the framework's params by our learning rates
+        bert_group = []
+        clf_group = []
+        
+        for p in params:
+            if not p.requires_grad:
+                continue
+            if id(p) in bert_param_ids:
+                bert_group.append(p)
+            else:
+                clf_group.append(p)
+        
+        param_groups = []
+        if bert_group and bert_lr > 0:
+            param_groups.append({'params': bert_group, 'lr': bert_lr})
+        if clf_group:
+            param_groups.append({'params': clf_group, 'lr': classifier_lr})
+        
+        if not param_groups:
+            # Fallback: use our own collection
+            return create_optimizer_with_differential_lr(
+                bert_model, classifiers, bert_lr, classifier_lr, device
+            )
+        
+        return torch.optim.Adam(param_groups)
+    
+    return factory
 
 def log_training_config(args, models=None, train=None, dev=None, test=None):
     """Log all training configuration parameters."""
@@ -552,33 +620,36 @@ def create_objective(args, train, test):
             
             if not args.freeze_bert:
                 def unfreeze_callback():
-                    epoch = program.epoch or 0
-                    if epoch <= args.warmup_epochs:
-                        return
-                    epochs_after_warmup = epoch - args.warmup_epochs
-                    layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
-                    if layers_to_unfreeze > _models['bert'].unfrozen_layers:
-                        _models['bert'].unfreeze_layers(layers_to_unfreeze)
-                        program.opt = create_optimizer_with_differential_lr(
-                            _models['bert'],
-                            _models['classifiers'],
-                            bert_lr=args.bert_lr,
-                            classifier_lr=args.classifier_lr
-                        )
+                        epoch = program.epoch or 0
+                        if epoch <= args.warmup_epochs:
+                            return
+                        epochs_after_warmup = epoch - args.warmup_epochs
+                        layers_to_unfreeze = min(epochs_after_warmup * args.unfreeze_layers, 12)
+                        if layers_to_unfreeze > _models['bert'].unfrozen_layers:
+                            _models['bert'].unfreeze_layers(layers_to_unfreeze)
+                            program.opt = create_optimizer_with_differential_lr(
+                                _models['bert'],
+                                _models['classifiers'],
+                                bert_lr=args.bert_lr,
+                                classifier_lr=args.classifier_lr,
+                                device=args.device  # ADD THIS
+                            )
                 program.before_train_epoch.append(unfreeze_callback)
+
             
-            initial_optimizer = create_optimizer_with_differential_lr(
+            initial_optimizer_factory = create_optimizer_factory(
                 _models['bert'],
                 _models['classifiers'],
                 bert_lr=0.0 if args.freeze_bert else args.bert_lr,
-                classifier_lr=args.classifier_lr
+                classifier_lr=args.classifier_lr,
+                device=args.device
             )
             
             print(f"  [Trial {trial.number}] Training started...")
             
             program.train(
                 dataset,
-                Optim=lambda params: initial_optimizer,
+                Optim=initial_optimizer_factory,
                 train_epoch_num=args.epochs,
                 c_lr=args.classifier_lr,
                 c_warmup_iters=-1,
@@ -710,8 +781,10 @@ def parse_arguments():
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN",
                         help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
-    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G",
-                        help="The tnorm method to use for the counting constraints")
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="L", 
+                        help="The tnorm method to use for counting constraints. "
+                             "Use 'P' (Product) or 'L' (Łukasiewicz) for better gradient flow. "
+                             "Avoid 'G' (Gödel) as it has sparse gradients.")
     parser.add_argument("--data_path", type=str,
                         default="conllQA_with_global.json",
                         help="Path to data file (can be relative or absolute)")
@@ -763,7 +836,7 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
     dataset_list = list(dataset)
     n_total = len(dataset_list)
     n_eval = max(min_samples, int(n_total * eval_fraction))
-    n_eval = min(n_eval, n_total)  # Don't exceed dataset size
+    n_eval = min(n_eval, n_total)
     
     eval_indices = sorted(random.sample(range(n_total), n_eval))
     eval_subset = [dataset_list[i] for i in eval_indices]
@@ -774,7 +847,25 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
         'epoch': [],
         'train_acc': [],
         'clf_grad_norm': [],
+        'accumulated_grad_norm': [],  # NEW: Track actual training gradients
     }
+    
+    # NEW: Accumulate gradient norms during training
+    accumulated_grad_norm = [0.0]
+    grad_count = [0]
+    
+    def capture_gradients_before_step():
+        """Call this BEFORE optimizer.step() to capture actual gradients."""
+        total_norm = 0.0
+        for name, clf in models['classifiers'].items():
+            for p in clf.parameters():
+                if p.grad is not None:
+                    total_norm += p.grad.data.norm(2).item() ** 2
+        total_norm = total_norm ** 0.5
+        
+        if total_norm > 0:  # Only count non-zero gradients
+            accumulated_grad_norm[0] += total_norm
+            grad_count[0] += 1
     
     def log_epoch_metrics():
         epoch = program.epoch or 0
@@ -782,37 +873,35 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
         # Fast evaluation on subset
         train_acc = program.evaluate_condition(eval_subset, threshold=0.5)
         
-        # Calculate classifier gradient norms
-        clf_grad_norm = 0.0
-        for name, clf in models['classifiers'].items():
-            for p in clf.parameters():
-                if p.grad is not None:
-                    clf_grad_norm += p.grad.data.norm(2).item() ** 2
-        clf_grad_norm = clf_grad_norm ** 0.5
+        # Use accumulated gradient norm from training (actual gradients)
+        avg_grad_norm = accumulated_grad_norm[0] / max(grad_count[0], 1)
         
         metrics_history['epoch'].append(epoch)
         metrics_history['train_acc'].append(train_acc)
-        metrics_history['clf_grad_norm'].append(clf_grad_norm)
+        metrics_history['accumulated_grad_norm'].append(avg_grad_norm)
+        
+        # Reset accumulators for next epoch
+        accumulated_grad_norm[0] = 0.0
+        grad_count[0] = 0
         
         bert_status = f"frozen" if models['bert'].unfrozen_layers == 0 else f"{models['bert'].unfrozen_layers}L unfrozen"
         
-        # Compact single-line output
         acc_change = ""
         if len(metrics_history['train_acc']) >= 2:
             delta = train_acc - metrics_history['train_acc'][-2]
             acc_change = f" (Δ{delta:+.3f})"
         
-        print(f"[Epoch {epoch}] Acc: {train_acc:.4f}{acc_change} | GradNorm: {clf_grad_norm:.4f} | BERT: {bert_status}")
+        print(f"[Epoch {epoch}] Acc: {train_acc:.4f}{acc_change} | AvgGradNorm: {avg_grad_norm:.6f} | BERT: {bert_status}")
         
-        # Warnings only
-        if clf_grad_norm < 1e-7:
-            print(f"  ⚠️  Gradients near zero!")
+        # Warnings
+        if avg_grad_norm < 1e-7 and epoch > 1:
+            print(f"  ⚠️  Gradients near zero - check t-norm choice!")
         if len(metrics_history['train_acc']) >= 2 and train_acc < metrics_history['train_acc'][-2] - 0.02:
             print(f"  ⚠️  Accuracy dropped!")
         
         return metrics_history
     
-    return log_epoch_metrics, metrics_history, eval_subset
+    return log_epoch_metrics, metrics_history, eval_subset, capture_gradients_before_step
 
 def main(args):
     global _models
@@ -865,8 +954,8 @@ def main(args):
     if not args.evaluate:
         _models['bert'].freeze_all()
         
-        # Create epoch logging callback
-        log_epoch_metrics, metrics_history, eval_subset = create_epoch_logging_callback(
+        # Get gradient capture callback
+        log_epoch_metrics, metrics_history, eval_subset, capture_gradients = create_epoch_logging_callback(
             program, dataset, _models,
             eval_fraction=0.1,
             min_samples=50,
@@ -874,6 +963,8 @@ def main(args):
         )
         program.after_train_epoch.append(log_epoch_metrics)
         
+        # Add gradient capture to training step callback
+        program.after_train_step.append(lambda _: capture_gradients())        
         if args.freeze_bert:
             print("[Training] BERT frozen throughout training (--freeze_bert)")
         else:
@@ -893,22 +984,29 @@ def main(args):
                         _models['bert'],
                         _models['classifiers'],
                         bert_lr=args.bert_lr,
-                        classifier_lr=args.classifier_lr
+                        classifier_lr=args.classifier_lr,
+                        device=args.device
                     )
                     print(f"[Epoch {epoch}] Unfroze {layers_to_unfreeze} layers, optimizer updated")
             
             program.before_train_epoch.append(unfreeze_callback)
         
-        initial_optimizer = create_optimizer_with_differential_lr(
+        initial_optimizer_factory = create_optimizer_factory(
             _models['bert'],
             _models['classifiers'],
             bert_lr=0.0 if args.freeze_bert else args.bert_lr,
-            classifier_lr=args.classifier_lr
+            classifier_lr=args.classifier_lr,
+            device=args.device
         )
+        
+        # Print t-norm info
+        print(f"\n[T-norm] Using '{args.counting_tnorm}' for counting constraints")
+        if args.counting_tnorm == 'G':
+            print("  ⚠️  WARNING: Gödel t-norm has sparse gradients - consider using 'P' or 'L'")
         
         program.train(
             dataset,
-            Optim=lambda params: initial_optimizer,
+            Optim=initial_optimizer_factory,
             train_epoch_num=args.epochs,
             c_lr=args.classifier_lr,
             c_warmup_iters=-1,
@@ -925,7 +1023,9 @@ def main(args):
             print(f"  Final Accuracy:   {metrics_history['train_acc'][-1]:.4f}")
             print(f"  Total Improvement: {metrics_history['train_acc'][-1] - metrics_history['train_acc'][0]:+.4f}")
             
-            # Check for proper learning
+            avg_grad = sum(metrics_history['accumulated_grad_norm']) / max(len(metrics_history['accumulated_grad_norm']), 1)
+            print(f"  Average Gradient Norm: {avg_grad:.6f}")
+            
             if metrics_history['train_acc'][-1] > metrics_history['train_acc'][0] + 0.05:
                 print("  ✅ Model is learning well!")
             elif metrics_history['train_acc'][-1] > metrics_history['train_acc'][0]:

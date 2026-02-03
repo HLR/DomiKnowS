@@ -43,7 +43,6 @@ def create_query(question, question_type):
             entity2 = ENTITIES_NAME[entity2]
             rel1 = RELATIONS_NAME[rel1]
             object_name = f"andL({entity1}('{chr(define_character)}'), {rel1}('{chr(define_character+1)}', path=('{chr(define_character)}', rel_pair_phrase1.reversed)), {entity2}('{chr(define_character+2)}', path=('{chr(define_character+1)}', rel_pair_phrase2)))"
-            #print(object_name)
             define_character += 3
             all_obj.append(object_name)
         asked_entities += ",".join(all_obj)
@@ -84,6 +83,10 @@ def conll4_reader(data_path, dataset_portion):
         # Assume it's already an extracted file containing only the portion data directly
         dataset = full_data
         print(f"Using direct portion data from: {data_path}")
+
+    # Track which ASKING_TYPEs have been logged
+    logged_asking_types = set()
+    print("\n=== Example Queries by ASKING_TYPE ===")
 
     train = []
     test = []
@@ -147,6 +150,16 @@ def conll4_reader(data_path, dataset_portion):
             # if asked_number == 0 or asked_number == len(tokens):
             #     continue
 
+            # Log example queries for each ASKING_TYPE (only once per type)
+            asking_type = data["qa_questions"][0]["count_ask"]
+            if asking_type not in logged_asking_types:
+                logged_asking_types.add(asking_type)
+                print(f"\n{asking_type} ({ASKING_TYPE[asking_type]}):")
+                print(f"  Question: {data['qa_questions'][0].get('question', 'N/A')}")
+                print(f"  Query: {str_query}")
+                print(f"  Label: {label_query}")
+                print(f"  Question Type: {data['question_type']}")
+
             current_portion.append({
                 "tokens": tokens,
                 "label": label,
@@ -162,8 +175,16 @@ def conll4_reader(data_path, dataset_portion):
             dev = copy.deepcopy(current_portion)
         else:
             test = copy.deepcopy(current_portion)
+    
+    print(f"\n=== Query Logging Summary ===")
+    print(f"Logged ASKING_TYPEs: {', '.join(sorted(logged_asking_types))}")
+    missing_types = set(ASKING_TYPE.keys()) - logged_asking_types
+    if missing_types:
+        print(f"Missing ASKING_TYPEs: {', '.join(sorted(missing_types))}")
+    print("=" * 35 + "\n")
+    
     return train, dev, test
 
 
 if __name__ == '__main__':
-    conll4_reader("conllQA2.json", "entities_with_relation")
+    conll4_reader("conllQA_with_global.json", "entities_with_relation")
