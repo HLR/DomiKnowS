@@ -743,7 +743,7 @@ def parse_arguments():
     
     # Evaluation settings
     parser.add_argument("--eval_fraction", type=float, default=0.2,
-                    help="Fraction of data for epoch evaluation (0.2 = 20%)")
+                    help="Fraction of data for epoch evaluation (0.2 = 20%%)")
     
 
     args = parser.parse_args()
