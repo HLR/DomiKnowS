@@ -688,12 +688,14 @@ def str2bool(v):
     """Convert string to boolean for argparse."""
     if isinstance(v, bool):
         return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    if v is None:
         return False
-    else:
-        raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
+    if isinstance(v, str):
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+    raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
