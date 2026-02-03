@@ -1,4 +1,5 @@
-import os
+import io
+import re
 import sys
 import torch
 from pathlib import Path
@@ -463,17 +464,47 @@ class GradualUnfreezeCallback:
                 self.bert_model.total_layers
             )
             self.bert_model.unfreeze_layers(new_layers)
-            
+
+def evaluate_with_counting_metrics(program, dataset, threshold=0.5):
+    """Evaluate and capture both boolean and counting metrics."""
+    
+    # Capture stdout to parse the printed metrics
+    old_stdout = sys.stdout
+    sys.stdout = captured_output = io.StringIO()
+    
+    try:
+        result = program.evaluate_condition(dataset, threshold=threshold)
+    finally:
+        sys.stdout = old_stdout
+    
+    output = captured_output.getvalue()
+    print(output)  # Still print it for visibility
+    
+    # Parse metrics from output
+    # "Boolean accuracy: 70.24% (59/84)"
+    bool_match = re.search(r'Boolean accuracy:\s*([\d.]+)%', output)
+    bool_acc = float(bool_match.group(1)) / 100.0 if bool_match else 0.0
+    
+    # "Counting MAE: 9.449, Accuracy (±0.5): 4.31%"
+    mae_match = re.search(r'Counting MAE:\s*([\d.]+)', output)
+    counting_mae = float(mae_match.group(1)) if mae_match else float('inf')
+    
+    count_acc_match = re.search(r'Accuracy \(±0\.5\):\s*([\d.]+)%', output)
+    counting_acc = float(count_acc_match.group(1)) / 100.0 if count_acc_match else 0.0
+    
+    return bool_acc, counting_mae, counting_acc
+
+
 def create_objective(args, train, test):
-    """Create Optuna objective function for hyperparameter tuning."""
+    """Create Optuna objective function optimizing for counting constraints."""
     
     def objective(trial: optuna.Trial) -> float:
         global _models, _bert_model
         
         os.environ["TQDM_DISABLE"] = "1"
         
-        # Sample hyperparameters
-        classifier_lr = trial.suggest_float('classifier_lr', 1e-5, 1e-3, log=True)
+        # Higher LR range - counting constraints often need stronger signal
+        classifier_lr = trial.suggest_float('classifier_lr', 1e-4, 5e-3, log=True)
         
         if args.freeze_bert:
             bert_lr = 0.0
@@ -484,7 +515,6 @@ def create_objective(args, train, test):
             warmup_epochs = trial.suggest_int('warmup_epochs', 0, 3)
             unfreeze_layers = trial.suggest_int('unfreeze_layers', 1, 4)
         
-        # LOG: Trial start
         print(f"\n{'='*60}")
         print(f"TRIAL {trial.number} STARTED")
         print(f"{'='*60}")
@@ -513,8 +543,7 @@ def create_objective(args, train, test):
             
             _models['bert'].freeze_all()
             
-            # Add epoch logging callback
-            epoch_count = [0]  # Use list to allow modification in closure
+            epoch_count = [0]
             def epoch_callback():
                 epoch_count[0] += 1
                 print(f"  [Trial {trial.number}] Epoch {epoch_count[0]}/{args.epochs} complete")
@@ -558,13 +587,25 @@ def create_objective(args, train, test):
             )
             
             print(f"  [Trial {trial.number}] Evaluating...")
-            train_acc = program.evaluate_condition(dataset, threshold=0.5)
+            bool_acc, counting_mae, counting_acc = evaluate_with_counting_metrics(program, dataset)
             
-            # LOG: Trial result
-            print(f"\n  [Trial {trial.number}] RESULT: {train_acc:.4f} ({train_acc*100:.2f}%)")
+            # OBJECTIVE: Focus on counting performance
+            # Option 1: Pure counting accuracy
+            objective_value = counting_acc
+            
+            # Option 2: Negative MAE (minimize MAE = maximize negative MAE)
+            # objective_value = -counting_mae
+            
+            # Option 3: Combined (uncomment to use)
+            # objective_value = 0.3 * bool_acc + 0.7 * counting_acc
+            
+            print(f"\n  [Trial {trial.number}] SUMMARY:")
+            print(f"    Boolean Acc:    {bool_acc*100:.2f}%")
+            print(f"    Counting MAE:   {counting_mae:.3f}")
+            print(f"    Counting Acc:   {counting_acc*100:.2f}%  <-- OPTIMIZING THIS")
             print(f"{'='*60}\n")
             
-            return train_acc
+            return objective_value
             
         except optuna.TrialPruned:
             raise
@@ -823,8 +864,11 @@ def main(args):
         _models['bert'].freeze_all()
         
         # Create epoch logging callback
-        log_epoch_metrics, metrics_history = create_epoch_logging_callback(
-            program, dataset, _models
+        log_epoch_metrics, metrics_history, eval_subset = create_epoch_logging_callback(
+            program, dataset, _models,
+            eval_fraction=0.1,
+            min_samples=50,
+            seed=42
         )
         program.after_train_epoch.append(log_epoch_metrics)
         
