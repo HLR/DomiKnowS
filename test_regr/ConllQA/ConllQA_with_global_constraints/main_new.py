@@ -683,6 +683,9 @@ def parse_arguments():
                         help="Run Optuna hyperparameter tuning (default: true)")
     parser.add_argument("--n_trials", type=int, default=20,
                         help="Number of Optuna trials")
+    parser.add_argument("--tune_train_size", type=int, default=200,
+                    help="Number of samples to use during tuning (smaller = faster)")
+
     # BERT freezing
     parser.add_argument("--freeze_bert", type=str2bool, nargs='?', const=True, default=True,
                         help="Keep BERT frozen throughout training (default: true)")
@@ -698,6 +701,7 @@ def parse_arguments():
     # Evaluation settings
     parser.add_argument("--eval_fraction", type=float, default=0.2,
                     help="Fraction of data for epoch evaluation (0.2 = 20%)")
+    
 
     args = parser.parse_args()
     return args
