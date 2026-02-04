@@ -825,8 +825,8 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
         
         self._increment_epoch()
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=True)
+    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
+        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
 
 #=============================================================================
 # Inference Program
