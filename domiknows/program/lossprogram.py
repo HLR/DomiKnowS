@@ -916,8 +916,8 @@ class InferenceProgram(LossProgram):
 
         c_session['iter'] = iter_count
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=False)
+    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
+        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
 
 #=============================================================================
 # Gumbel Inference Program 
@@ -985,8 +985,8 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
         c_session['iter'] = iter_count
         self._increment_epoch()
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=True)
+    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
+        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
 
 #=============================================================================
 # Sample Loss Program
