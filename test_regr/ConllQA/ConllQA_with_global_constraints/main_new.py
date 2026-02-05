@@ -1023,7 +1023,7 @@ def main(args):
     train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
     train_acc = train_eval['accuracy']
     train_bool_acc = train_eval['boolean_accuracy']
-    train_counting_mae = train_eval['counting_mae']
+    train_counting_mae = float('inf') if train_eval['counting_mae'] is None else train_eval['counting_mae']
     train_counting_acc = train_eval['counting_accuracy']
     portion = "Training" if not args.evaluate else "Testing"
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}", file=output_f)

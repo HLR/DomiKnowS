@@ -196,6 +196,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         results['boolean_accuracy'] = None
 
     if counting_errors:
+        # mean absolute error, root mean square error, accuracy within 0.5
         mae = np.mean(counting_errors)
         rmse = np.sqrt(np.mean([e**2 for e in counting_errors]))
         within_half = sum(1 for e in counting_errors if e <= 0.5)
@@ -221,8 +222,10 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         results['primary_metric'] = results['boolean_accuracy']
     else:
         results['primary_metric'] = 0.0
+        
+    results['accuracy'] = results['primary_metric']/100.0
 
-    return results if return_dict else results['primary_metric'] / 100.0
+    return results if return_dict else results['accuracy']
 
 ################################################################################
 # LossProgram Base Class
