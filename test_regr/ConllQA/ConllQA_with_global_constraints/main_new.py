@@ -899,10 +899,11 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
     return log_epoch_metrics, metrics_history, eval_subset, capture_gradients_before_step
 
 def create_adaptive_training_callback(program, models, args):
-    """Create callback with constraint-type grouping for executable constraints."""
+    """Create callback that tracks per-constraint-type metrics and applies t-norm switching."""
     
     adapt_interval = getattr(args, 'tnorm_adaptation_interval', 10)
     warmup = getattr(args, 'tnorm_warmup_steps', 5)
+    auto_apply = getattr(args, 'adaptive_tnorm', False)
     
     adaptive_tracker = AdaptiveTNormLossCalculator(
         solver=None,
@@ -910,41 +911,16 @@ def create_adaptive_training_callback(program, models, args):
         adaptation_interval=adapt_interval,
         warmup_steps=warmup,
         selection_strategy=getattr(args, 'tnorm_strategy', 'gradient_weighted'),
+        auto_apply=auto_apply,
+        min_observations=20,
     )
     
     step_counter = [0]
     
-    # Track by CONSTRAINT TYPE (not individual constraint)
-    # This aggregates all atMostAL constraints together, etc.
-    type_metrics = {
-        'atMostAL': {'losses': [], 'grads': [], 'by_tnorm': {t: [] for t in ["L", "P", "SP", "G"]}},
-        'atLeastAL': {'losses': [], 'grads': [], 'by_tnorm': {t: [] for t in ["L", "P", "SP", "G"]}},
-        'exactAL': {'losses': [], 'grads': [], 'by_tnorm': {t: [] for t in ["L", "P", "SP", "G"]}},
-        'sumL': {'losses': [], 'grads': [], 'by_tnorm': {t: [] for t in ["L", "P", "SP", "G"]}},
-        'other': {'losses': [], 'grads': [], 'by_tnorm': {t: [] for t in ["L", "P", "SP", "G"]}},
-    }
-    
-    def get_constraint_type(lc) -> str:
-        """Extract constraint type from LC object."""
-        if lc is None:
-            return 'other'
-        type_name = type(lc).__name__
-        # Handle both direct type and wrapped executable constraints
-        if hasattr(lc, 'innerLC'):
-            type_name = type(lc.innerLC).__name__
-        
-        for known_type in ['atMostAL', 'atLeastAL', 'exactAL', 'sumL', 'atMostL', 'atLeastL', 'exactL']:
-            if known_type in type_name:
-                # Normalize to AL versions for grouping
-                if type_name in ['atMostL', 'atMostAL']:
-                    return 'atMostAL'
-                elif type_name in ['atLeastL', 'atLeastAL']:
-                    return 'atLeastAL'
-                elif type_name in ['exactL', 'exactAL']:
-                    return 'exactAL'
-                elif type_name == 'sumL':
-                    return 'sumL'
-        return 'other'
+    def get_constraint_type_from_lc(lc) -> str:
+        """Extract constraint type from LC object using the shared helper."""
+        from domiknows.solver.adaptiveTNormLossCalculator import get_constraint_type
+        return get_constraint_type(lc)
     
     def on_step_end(output):
         """Track metrics grouped by constraint type."""
@@ -964,7 +940,7 @@ def create_adaptive_training_callback(program, models, args):
             current_tnorm = getattr(args, 'counting_tnorm', 'L')
             losses = datanode.calculateLcLoss(tnorm=current_tnorm)
             
-            # Compute gradient norm once
+            # Compute classifier gradient norm once
             grad_norm = 0.0
             for clf in models['classifiers'].values():
                 for p in clf.parameters():
@@ -974,8 +950,6 @@ def create_adaptive_training_callback(program, models, args):
             
             for lc_name, loss_dict in losses.items():
                 lc = loss_dict.get('lc')
-                ctype = get_constraint_type(lc)
-                
                 loss_tensor = loss_dict.get('loss')
                 if loss_tensor is None:
                     continue
@@ -985,20 +959,8 @@ def create_adaptive_training_callback(program, models, args):
                 else:
                     loss_val = float(loss_tensor) if loss_tensor is not None else 0.0
                 
-                # Track by TYPE (aggregated)
-                if ctype in type_metrics:
-                    type_metrics[ctype]['losses'].append(loss_val)
-                    type_metrics[ctype]['grads'].append(grad_norm)
-                    type_metrics[ctype]['by_tnorm'][current_tnorm].append(loss_val)
-                
-                # Also track individual for detailed view
-                adaptive_tracker.constraint_metrics[lc_name].constraint_type = ctype
-                if lc and hasattr(lc, 'strEs'):
-                    try:
-                        adaptive_tracker.constraint_metrics[lc_name].constraint_formula = lc.strEs()
-                    except:
-                        pass
-                adaptive_tracker.constraint_metrics[lc_name].add_observation(loss_val, grad_norm, current_tnorm)
+                # Record into adaptive tracker (handles both per-type and per-constraint)
+                adaptive_tracker.record_observation(lc_name, lc, loss_val, grad_norm, current_tnorm)
             
             # Compare t-norms at interval
             if step_counter[0] % adapt_interval == 0 and step_counter[0] >= warmup:
@@ -1009,19 +971,11 @@ def create_adaptive_training_callback(program, models, args):
                         tnorm_losses = datanode.calculateLcLoss(tnorm=tnorm)
                         for lc_name, loss_dict in tnorm_losses.items():
                             lc = loss_dict.get('lc')
-                            ctype = get_constraint_type(lc)
-                            
                             loss_tensor = loss_dict.get('loss')
                             if loss_tensor is not None and torch.is_tensor(loss_tensor):
                                 loss_val = loss_tensor.item() if loss_tensor.numel() == 1 else loss_tensor.mean().item()
-                                
-                                # Track by TYPE
-                                if ctype in type_metrics:
-                                    type_metrics[ctype]['by_tnorm'][tnorm].append(loss_val)
-                                
-                                # Track individual
-                                adaptive_tracker.constraint_metrics[lc_name].loss_by_tnorm[tnorm].append(loss_val)
-                    except:
+                                adaptive_tracker.record_tnorm_comparison(lc_name, lc, tnorm, loss_val)
+                    except Exception:
                         pass
                 
         except Exception as e:
@@ -1029,78 +983,8 @@ def create_adaptive_training_callback(program, models, args):
                 print(f"[Adaptive] Step {step_counter[0]} error: {e}")
     
     def on_epoch_end():
-        """Print summary grouped by constraint type."""
-        adaptive_tracker.epoch_count += 1
-        
-        print(f"\n[Epoch {adaptive_tracker.epoch_count}] Adaptive T-Norm Analysis")
-        print("=" * 75)
-        
-        # Summary by CONSTRAINT TYPE (most useful for learning)
-        print("\n📊 AGGREGATED BY CONSTRAINT TYPE (what the model actually learns):")
-        print("-" * 75)
-        print(f"{'Type':<12} {'Count':>6} {'AvgLoss':>8} {'AvgGrad':>8} │ {'L':>7} {'P':>7} {'SP':>7} {'G':>7} │ Best")
-        print("-" * 75)
-        
-        recommendations = {}
-        for ctype, data in type_metrics.items():
-            if not data['losses']:
-                continue
-            
-            count = len(data['losses'])
-            avg_loss = np.mean(data['losses'][-50:])  # Last 50 observations
-            avg_grad = np.mean(data['grads'][-50:]) if data['grads'] else 0
-            
-            # Find best t-norm for this type
-            best_tnorm = "L"
-            best_loss = float('inf')
-            tnorm_avgs = {}
-            
-            for tnorm in ["L", "P", "SP", "G"]:
-                tnorm_losses = data['by_tnorm'][tnorm]
-                if tnorm_losses:
-                    avg = np.mean(tnorm_losses[-20:])
-                    tnorm_avgs[tnorm] = avg
-                    if avg < best_loss:
-                        best_loss = avg
-                        best_tnorm = tnorm
-                else:
-                    tnorm_avgs[tnorm] = None
-            
-            recommendations[ctype] = best_tnorm
-            
-            # Format t-norm columns
-            tnorm_strs = []
-            for tnorm in ["L", "P", "SP", "G"]:
-                if tnorm_avgs[tnorm] is not None:
-                    marker = "✓" if tnorm == best_tnorm else " "
-                    tnorm_strs.append(f"{tnorm_avgs[tnorm]:>6.3f}{marker}")
-                else:
-                    tnorm_strs.append(f"{'---':>7}")
-            
-            print(f"{ctype:<12} {count:>6} {avg_loss:>8.4f} {avg_grad:>8.2f} │ {' '.join(tnorm_strs)} │ {best_tnorm}")
-        
-        print("-" * 75)
-        
-        # Count global vs executable
-        global_count = sum(1 for m in adaptive_tracker.constraint_metrics.values() 
-                          if m.constraint_type and len(m.losses) > 1)
-        exec_count = sum(1 for m in adaptive_tracker.constraint_metrics.values() 
-                        if m.constraint_type and len(m.losses) == 1)
-        
-        print(f"\n📈 CONSTRAINT COVERAGE:")
-        print(f"   Global constraints (seen every sample): {global_count}")
-        print(f"   Executable constraints (seen once):     {exec_count}")
-        
-        if exec_count > global_count * 2:
-            print(f"   ⚠️  Many per-example constraints - consider more epochs for stable learning")
-        
-        # Recommendations
-        print(f"\n💡 RECOMMENDATIONS:")
-        for ctype, tnorm in recommendations.items():
-            if type_metrics[ctype]['losses']:
-                print(f"   {ctype}: Use t-norm '{tnorm}'")
-        
-        print("\n" + "=" * 75)
+        """Print summary, compute recommendations, optionally apply t-norm switches."""
+        adaptive_tracker.on_epoch_end(apply=auto_apply)
     
     return on_step_end, on_epoch_end, adaptive_tracker
 
@@ -1168,22 +1052,15 @@ def main(args):
         # Add gradient capture to training step callback
         program.after_train_step.append(lambda _: capture_gradients())
         
-        # Initialize adaptive t-norm if enabled
-        if args.adaptive_tnorm:
-            _adaptive_tnorm = AdaptiveTNormLossCalculator(
-                solver=program.model.solver,
-                tnorms=["L", "P", "G", "SP"],
-                adaptation_interval=args.tnorm_adaptation_interval,
-                warmup_steps=args.tnorm_warmup_steps,
-                selection_strategy=args.tnorm_strategy
-            )
-            program.after_train_epoch.append(lambda: _adaptive_tnorm.on_epoch_end())
-            print(f"[Adaptive T-Norm] Enabled with strategy '{args.tnorm_strategy}'")
-        
-        # Add adaptive training callback for t-norm selection for tracking tnrom performance and gradient health
+        # Adaptive t-norm tracking + optional auto-switching
         on_step, on_epoch, tracker = create_adaptive_training_callback(program, _models, args)
         program.after_train_step.append(on_step)
         program.after_train_epoch.append(on_epoch)
+        
+        if args.adaptive_tnorm:
+            print(f"[Adaptive T-Norm] Enabled with strategy '{args.tnorm_strategy}', auto-apply=True")
+        else:
+            print(f"[Adaptive T-Norm] Tracking only (use --adaptive_tnorm to enable auto-switching)")
         
         if args.freeze_bert:
             print("[Training] BERT frozen throughout training (--freeze_bert)")
