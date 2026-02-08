@@ -80,6 +80,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     
     boolean_correct = 0
     boolean_total = 0
+    counting_total = 0  
     counting_errors = []
     counting_predictions = []
     counting_labels = []
@@ -157,6 +158,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                     counting_errors.append(error)
                     counting_predictions.append(predicted_count)
                     counting_labels.append(expected_count)
+                counting_total += 1
             else:
                 try:
                     verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
@@ -178,6 +180,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         'counting_predictions': counting_predictions,
         'counting_labels': counting_labels,
         'counting_errors': counting_errors,
+        'counting_total': counting_total
     }
 
     if total == 0:
@@ -212,9 +215,9 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
     # Primary metric
     if results['counting_accuracy'] is not None and results['boolean_accuracy'] is not None:
-        total_constraints = boolean_total + len(counting_errors)
+        total_constraints = boolean_total + counting_total
         boolean_weight = boolean_total / total_constraints
-        counting_weight = len(counting_errors) / total_constraints
+        counting_weight = counting_total / total_constraints
         results['primary_metric'] = boolean_weight * results['boolean_accuracy'] + counting_weight * results['counting_accuracy']
     elif results['counting_accuracy'] is not None:
         results['primary_metric'] = results['counting_accuracy']
@@ -222,7 +225,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         results['primary_metric'] = results['boolean_accuracy']
     else:
         results['primary_metric'] = 0.0
-        
+            
     results['accuracy'] = results['primary_metric']/100.0
 
     return results if return_dict else results['accuracy']

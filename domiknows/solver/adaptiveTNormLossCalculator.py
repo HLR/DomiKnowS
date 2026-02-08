@@ -485,3 +485,83 @@ class AdaptiveTNormLossCalculator:
             except Exception:
                 pass
         return comparison
+    
+    def export_detailed_stats_to_csv(self, filename='adaptive_tnorm_details.csv'):
+        """
+        Export detailed per-constraint statistics to CSV file.
+        
+        This includes per-ELC (executable constraint) metrics rather than just
+        per-type summaries, which could be thousands of entries.
+        
+        CSV Columns:
+        - constraint_name: ELC name or LC type name
+        - constraint_type: LC type (e.g., 'sumL', 'andL')
+        - total_observations: Number of times this constraint was observed
+        - current_tnorm: Currently recommended t-norm
+        - avg_loss: Average loss across all observations
+        - avg_gradient: Average gradient norm
+        - L_loss: Average loss with Łukasiewicz t-norm
+        - P_loss: Average loss with Product t-norm
+        - SP_loss: Average loss with Schweizer-Sklar t-norm
+        - G_loss: Average loss with Gödel t-norm
+        - best_tnorm: T-norm with lowest average loss
+        """
+        import csv
+        
+        rows = []
+        
+        # Export per-constraint stats from self.constraint_metrics
+        for constraint_name, metrics in self.constraint_metrics.items():
+            if len(metrics.losses) == 0:
+                continue
+            
+            row = {
+                'constraint_name': constraint_name,
+                'constraint_type': metrics.constraint_type or 'unknown',
+                'total_observations': len(metrics.losses),
+                'current_tnorm': metrics.current_tnorm,
+                'avg_loss': metrics.avg_loss,
+                'avg_gradient': metrics.avg_gradient,
+            }
+            
+            # Add per-tnorm losses
+            for tnorm in self.tnorms:
+                tnorm_losses = metrics.loss_by_tnorm.get(tnorm, [])
+                if tnorm_losses:
+                    row[f'{tnorm}_loss'] = np.mean(tnorm_losses)
+                    row[f'{tnorm}_observations'] = len(tnorm_losses)
+                else:
+                    row[f'{tnorm}_loss'] = None
+                    row[f'{tnorm}_observations'] = 0
+            
+            # Determine best t-norm
+            best_tnorm, best_loss = metrics.get_best_tnorm()
+            row['best_tnorm'] = best_tnorm
+            row['loss_trend'] = metrics.loss_trend
+            row['gradient_health'] = metrics.gradient_health
+            
+            rows.append(row)
+        
+        if not rows:
+            # Don't print message here - let caller handle it
+            raise ValueError(f"No data to export to {filename}")
+        
+        # Write CSV
+        fieldnames = ['constraint_name', 'constraint_type', 'total_observations', 
+                    'current_tnorm', 'avg_loss', 'avg_gradient']
+        
+        # Add t-norm specific columns
+        for tnorm in self.tnorms:
+            fieldnames.extend([f'{tnorm}_loss', f'{tnorm}_observations'])
+        fieldnames.extend(['best_tnorm', 'loss_trend', 'gradient_health'])
+        
+        try:
+            with open(filename, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+        except Exception as e:
+            raise IOError(f"Failed to write CSV file {filename}: {e}")
+        
+        # Return success indicator
+        return len(rows)

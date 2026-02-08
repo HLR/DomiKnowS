@@ -954,19 +954,52 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
     def log_epoch_metrics():
         epoch = program.epoch or 0
         
+        print(f"\n[Epoch {epoch}] Starting evaluation...")
+        
         eval_device = device if device else "cpu"
-        train_eval = program.evaluate_condition(eval_subset, device=eval_device, threshold=0.5, return_dict=True)
         
+        try:
+            train_eval = program.evaluate_condition(eval_subset, device=eval_device, threshold=0.5, return_dict=True)
+            print(f"[Epoch {epoch}] Evaluation complete")
+        except Exception as e:
+            print(f"[Epoch {epoch}] ERROR during evaluation: {e}")
+            import traceback
+            traceback.print_exc()
+            return metrics_history
+        
+        # DEBUG: Print raw values from evaluate_condition
+        print(f"\n[DEBUG] Raw eval results:")
+        print(f"  accuracy: {train_eval.get('accuracy')}")
+        print(f"  primary_metric: {train_eval.get('primary_metric')}")
+        print(f"  boolean_accuracy: {train_eval.get('boolean_accuracy')}")
+        print(f"  boolean_correct: {train_eval.get('boolean_correct')}")
+        print(f"  boolean_total: {train_eval.get('boolean_total')}")
+        print(f"  counting_accuracy: {train_eval.get('counting_accuracy')}")
+        print(f"  counting_total: {train_eval.get('counting_total')}")
+        print(f"  counting_errors length: {len(train_eval.get('counting_errors', []))}")
+        
+        # Calculate weights manually for verification
+        bool_tot = train_eval.get('boolean_total', 0)
+        count_tot = train_eval.get('counting_total', 0)
+        if bool_tot + count_tot > 0:
+            bool_weight = bool_tot / (bool_tot + count_tot)
+            count_weight = count_tot / (bool_tot + count_tot)
+            bool_acc_val = train_eval.get('boolean_accuracy', 0) or 0
+            count_acc_val = train_eval.get('counting_accuracy', 0) or 0
+            manual_primary = bool_weight * bool_acc_val + count_weight * count_acc_val
+            print(f"  [VERIFY] boolean_weight: {bool_weight:.4f}, counting_weight: {count_weight:.4f}")
+            print(f"  [VERIFY] manual primary_metric: {manual_primary:.2f}%")
+        
+        # 'accuracy' is already 0-1 range (divided by 100 in framework)
         overall_acc = train_eval.get('accuracy', 0.0)
-        if overall_acc is not None:
-            overall_acc = overall_acc / 100.0
-        else:
+        if overall_acc is None:
             overall_acc = 0.0
-        
-        bool_acc = train_eval.get('boolean_accuracy', 0.0)
-        if bool_acc is not None:
-            bool_acc = bool_acc / 100.0
         else:
+            overall_acc = overall_acc * 100.0  # Convert to percentage for display
+        
+        # 'boolean_accuracy' and 'counting_accuracy' are still percentages (0-100)
+        bool_acc = train_eval.get('boolean_accuracy', 0.0)
+        if bool_acc is None:
             bool_acc = 0.0
         
         counting_mae = train_eval.get('counting_mae', float('inf'))
@@ -974,9 +1007,7 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
             counting_mae = float('inf')
         
         counting_acc = train_eval.get('counting_accuracy', 0.0)
-        if counting_acc is not None:
-            counting_acc = counting_acc / 100.0
-        else:
+        if counting_acc is None:
             counting_acc = 0.0
         
         avg_grad_norm = accumulated_grad_norm[0] / max(grad_count[0], 1)
@@ -1033,6 +1064,7 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
             if counting_acc < metrics_history['counting_acc'][-2] - 0.02:
                 print(f"  ⚠️  Counting accuracy dropped!")
         
+        print(f"[Epoch {epoch}] Logging complete\n")
         return metrics_history
     
     return log_epoch_metrics, metrics_history, eval_subset, capture_gradients_before_step
@@ -1087,7 +1119,7 @@ def main(args):
     if not args.evaluate:
         _models['bert'].freeze_all()
         
-        # Use args.eval_fraction
+        # MODIFIED: Use args.eval_fraction
         log_epoch_metrics, metrics_history, eval_subset, capture_gradients = create_epoch_logging_callback(
             program, dataset, _models,
             eval_fraction=args.eval_fraction,
@@ -1153,28 +1185,28 @@ def main(args):
             print_loss=False
         )
         
-        # Final summary
+        # NEW: Comprehensive final summary
         print("\n" + "=" * 60)
         print("TRAINING COMPLETE - COMPREHENSIVE SUMMARY")
         print("=" * 60)
         
         if len(metrics_history['epoch']) > 0:
-            # Overall metrics
+            # Overall metrics (convert from 0-100 percentage since we multiplied by 100 in callback)
             print("\n[Overall Metrics]")
-            print(f"  Initial Accuracy:      {metrics_history['overall_acc'][0]:.4f}")
-            print(f"  Final Accuracy:        {metrics_history['overall_acc'][-1]:.4f}")
-            print(f"  Total Improvement:     {metrics_history['overall_acc'][-1] - metrics_history['overall_acc'][0]:+.4f}")
+            print(f"  Initial Accuracy:      {metrics_history['overall_acc'][0]:.2f}%")
+            print(f"  Final Accuracy:        {metrics_history['overall_acc'][-1]:.2f}%")
+            print(f"  Total Improvement:     {metrics_history['overall_acc'][-1] - metrics_history['overall_acc'][0]:+.2f}%")
             
-            # Boolean vs Counting breakdown
+            # Boolean vs Counting breakdown (already percentages)
             print("\n[Boolean Constraints]")
-            print(f"  Initial Boolean Acc:   {metrics_history['bool_acc'][0]:.4f}")
-            print(f"  Final Boolean Acc:     {metrics_history['bool_acc'][-1]:.4f}")
-            print(f"  Boolean Improvement:   {metrics_history['bool_acc'][-1] - metrics_history['bool_acc'][0]:+.4f}")
+            print(f"  Initial Boolean Acc:   {metrics_history['bool_acc'][0]:.2f}%")
+            print(f"  Final Boolean Acc:     {metrics_history['bool_acc'][-1]:.2f}%")
+            print(f"  Boolean Improvement:   {metrics_history['bool_acc'][-1] - metrics_history['bool_acc'][0]:+.2f}%")
             
             print("\n[Counting Constraints]")
-            print(f"  Initial Counting Acc:  {metrics_history['counting_acc'][0]:.4f}")
-            print(f"  Final Counting Acc:    {metrics_history['counting_acc'][-1]:.4f}")
-            print(f"  Counting Improvement:  {metrics_history['counting_acc'][-1] - metrics_history['counting_acc'][0]:+.4f}")
+            print(f"  Initial Counting Acc:  {metrics_history['counting_acc'][0]:.2f}%")
+            print(f"  Final Counting Acc:    {metrics_history['counting_acc'][-1]:.2f}%")
+            print(f"  Counting Improvement:  {metrics_history['counting_acc'][-1] - metrics_history['counting_acc'][0]:+.2f}%")
             
             if metrics_history['counting_mae'][-1] != float('inf'):
                 print(f"  Final Counting MAE:    {metrics_history['counting_mae'][-1]:.3f}")
@@ -1211,19 +1243,38 @@ def main(args):
                 print("\n[Adaptive T-Norm Analysis]")
                 stats = tracker.get_summary_stats()
                 
-                # Coverage
+                # Export detailed per-ELC stats to CSV FIRST
+                csv_filename = f"adaptive_tnorm_details_{args.train_portion}_epoch{args.epochs}.csv"
+                csv_exported = False
+                num_exported = 0
+                if hasattr(tracker, 'export_detailed_stats_to_csv'):
+                    try:
+                        num_exported = tracker.export_detailed_stats_to_csv(csv_filename)
+                        csv_exported = True
+                    except ValueError as e:
+                        # No data to export - this is expected early in training
+                        pass
+                    except Exception as e:
+                        print(f"  Error exporting CSV: {e}")
+                
+                if csv_exported:
+                    print(f"  Detailed constraint stats exported to: {csv_filename} ({num_exported} records)")
+                else:
+                    print(f"  No per-constraint stats to export yet (early in training)")
+                
+                # Coverage (only if available)
                 if 'total_global_types' in stats:
-                    print(f"  Total Global Constraint Types: {stats['total_global_types']}")
+                    print(f"\n  Total Global Constraint Types: {stats['total_global_types']}")
                 if 'total_executable_constraints' in stats:
                     print(f"  Total Executable Constraints:   {stats['total_executable_constraints']}")
                 
-                # Final recommendations per type
+                # Final recommendations per TYPE only (not individual ELCs)
                 if 'final_recommendations_by_type' in stats and stats['final_recommendations_by_type']:
                     print("\n  Final T-Norm Recommendations by Type:")
                     for ctype, tnorm in stats['final_recommendations_by_type'].items():
                         print(f"    {ctype:20s} -> {tnorm}")
                 
-                # Recommendation history
+                # Recommendation history (type level only)
                 if 'recommendation_history' in stats and stats['recommendation_history']:
                     print("\n  Recommendation History (when changes occurred):")
                     for epoch, changes in stats['recommendation_history'].items():
@@ -1237,16 +1288,58 @@ def main(args):
                     for ctype, tnorm in stats['active_tnorm_config'].items():
                         print(f"    {ctype:20s} -> {tnorm}")
                 
-                # Fallback: print whatever stats are available
-                if not any(key in stats for key in ['total_global_types', 'final_recommendations_by_type', 'recommendation_history']):
-                    print("\n  Available stats:")
+                # Summary: Show only LC (type-level) stats, suppress ELC (instance-level)
+                has_standard_keys = any(key in stats for key in ['total_global_types', 'final_recommendations_by_type', 'recommendation_history'])
+                
+                if not has_standard_keys and stats:
+                    print("\n  Constraint Type Summary:")
+                    
+                    # Separate LC (constraint types) from ELC (executable instances)
+                    lc_stats = {}
+                    elc_count = 0
+                    
                     for key, value in stats.items():
-                        if isinstance(value, dict) and value:
-                            print(f"    {key}:")
-                            for k, v in value.items():
-                                print(f"      {k}: {v}")
-                        else:
-                            print(f"    {key}: {value}")
+                        # Skip non-dict values
+                        if not isinstance(value, dict):
+                            continue
+                        
+                        # LC keys are constraint types (e.g., LC0, LC1, LC2)
+                        if key.startswith('LC') and not key.startswith('LC_'):
+                            lc_stats[key] = value
+                        # ELC keys are executable constraint instances
+                        elif key.startswith('ELC'):
+                            elc_count += 1
+                    
+                    # Print LC type-level stats
+                    if lc_stats:
+                        for lc_name in sorted(lc_stats.keys(), key=lambda x: int(x[2:]) if x[2:].isdigit() else 0):
+                            lc_data = lc_stats[lc_name]
+                            ctype = lc_data.get('constraint_type', 'unknown')
+                            obs = lc_data.get('observations', 0)
+                            avg_loss = lc_data.get('avg_loss', 0.0)
+                            tnorm = lc_data.get('current_tnorm', 'N/A')
+                            grad_health = lc_data.get('gradient_health', 'unknown')
+                            
+                            # Add warning emoji for problematic gradients
+                            health_icon = ""
+                            if grad_health == 'vanishing':
+                                health_icon = " ⚠️"
+                            elif grad_health == 'exploding':
+                                health_icon = " 🔥"
+                            
+                            print(f"    {lc_name} ({ctype:12s}): {obs:3d} obs, loss={avg_loss:.4f}, tnorm={tnorm}{health_icon}")
+                    
+                    # Show ELC instance count
+                    if elc_count > 0:
+                        csv_ref = f"see {csv_filename}" if csv_exported else "CSV export available"
+                        print(f"\n    [{elc_count} executable constraint instances - {csv_ref}]")
+                    
+                    # If no stats at all
+                    if not lc_stats and elc_count == 0:
+                        print("    No constraint statistics collected yet")
+                        print("    (Stats are collected during training steps)")
+                elif not stats:
+                    print("\n  No statistics available yet")
         
         print("=" * 60 + "\n")
                 
