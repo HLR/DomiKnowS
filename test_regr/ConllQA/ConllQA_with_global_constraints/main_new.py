@@ -472,15 +472,16 @@ def log_training_config(args, models=None, train=None, dev=None, test=None):
         if models is not None:
             print(f"  Total BERT layers:     {models['bert'].total_layers}")
             print(f"  Initially frozen:      {models['bert'].unfrozen_layers == 0}")
-    
+            
     # Constraint settings
     print("\n[Constraints]")
-    print(f"  Counting t-norm:  {args.counting_tnorm}")
     if args.adaptive_tnorm:
-        print(f"  Adaptive t-norm:  Enabled")
+        print(f"  T-Norm adaptation: Enabled")
         print(f"    Strategy:       {args.tnorm_strategy}")
         print(f"    Adapt interval: {args.tnorm_adaptation_interval} steps")
         print(f"    Warmup steps:   {args.tnorm_warmup_steps}")
+    else:
+        print(f"  Counting t-norm:  {args.counting_tnorm}")
     
     # Model info
     print("\n[Model]")
@@ -765,6 +766,7 @@ def parse_arguments():
         description="Getting the arguments passed",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    
     parser.add_argument("--epochs", type=int, default=6, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
@@ -773,9 +775,7 @@ def parse_arguments():
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN",
                         help="Training subset")
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
-    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="L", 
-                        help="The tnorm method to use for counting constraints. "
-                             "G = Gödel, P = Product, L = Łukasiewicz, SP = Schweizer-Sklar")
+    
     parser.add_argument("--data_path", type=str,
                         default="conllQA_with_global.json",
                         help="Path to data file (can be relative or absolute)")
@@ -783,7 +783,7 @@ def parse_arguments():
                         help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0')")
     
     # Learning rate arguments
-    parser.add_argument("--classifier_lr", type=float, default=5e-4,
+    parser.add_argument("--classifier_lr", type=float, default=1e-06,
                         help="Learning rate for classifier heads")
     # Optuna arguments
     parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False,
@@ -809,6 +809,10 @@ def parse_arguments():
     parser.add_argument("--eval_fraction", type=float, default=0.2,
                     help="Fraction of data for epoch evaluation (0.2 = 20%%)")
     
+    # Counting t-norm settings
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="L", 
+                        help="The tnorm method to use for counting constraints. "
+                             "G = Gödel, P = Product, L = Łukasiewicz, SP = Schweizer-Sklar")
     # Adaptive t-norm settings
     parser.add_argument("--adaptive_tnorm", type=str2bool, nargs='?', const=True, default=False,
                         help="Enable adaptive t-norm selection per constraint")
@@ -822,81 +826,6 @@ def parse_arguments():
 
     args = parser.parse_args()
     return args
-
-def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, min_samples=50, seed=42, device=None):
-    """Create callback to log training metrics after each epoch."""
-    
-    random.seed(seed)
-    dataset_list = list(dataset)
-    n_total = len(dataset_list)
-    n_eval = max(min_samples, int(n_total * eval_fraction))
-    n_eval = min(n_eval, n_total)
-    
-    eval_indices = sorted(random.sample(range(n_total), n_eval))
-    eval_subset = [dataset_list[i] for i in eval_indices]
-    
-    print(f"[Eval] Using {n_eval}/{n_total} samples ({100*n_eval/n_total:.1f}%) for epoch evaluation")
-    
-    metrics_history = {
-        'epoch': [],
-        'train_acc': [],
-        'clf_grad_norm': [],
-        'accumulated_grad_norm': [],
-    }
-    
-    accumulated_grad_norm = [0.0]
-    grad_count = [0]
-    
-    def capture_gradients_before_step():
-        total_norm = 0.0
-        for name, clf in models['classifiers'].items():
-            for p in clf.parameters():
-                if p.grad is not None:
-                    total_norm += p.grad.data.norm(2).item() ** 2
-        total_norm = total_norm ** 0.5
-        
-        if total_norm > 0:
-            accumulated_grad_norm[0] += total_norm
-            grad_count[0] += 1
-    
-    def log_epoch_metrics():
-        epoch = program.epoch or 0
-        
-        # CRITICAL: Pass device to evaluate_condition
-        eval_device = device if device else "cpu"
-        train_eval = program.evaluate_condition(eval_subset, device=eval_device, threshold=0.5)
-        
-        if isinstance(train_eval, dict):
-            train_acc = train_eval.get('primary_metric', 0.0) / 100.0
-        else:
-            train_acc = train_eval
-        
-        avg_grad_norm = accumulated_grad_norm[0] / max(grad_count[0], 1)
-        
-        metrics_history['epoch'].append(epoch)
-        metrics_history['train_acc'].append(train_acc)
-        metrics_history['accumulated_grad_norm'].append(avg_grad_norm)
-        
-        accumulated_grad_norm[0] = 0.0
-        grad_count[0] = 0
-        
-        bert_status = f"frozen" if models['bert'].unfrozen_layers == 0 else f"{models['bert'].unfrozen_layers}L unfrozen"
-        
-        acc_change = ""
-        if len(metrics_history['train_acc']) >= 2:
-            delta = train_acc - metrics_history['train_acc'][-2]
-            acc_change = f" (Δ{delta:+.3f})"
-        
-        print(f"[Epoch {epoch}] Acc: {train_acc:.4f}{acc_change} | AvgGradNorm: {avg_grad_norm:.6f} | BERT: {bert_status}")
-        
-        if avg_grad_norm < 1e-7 and epoch > 1:
-            print(f"  ⚠️  Gradients near zero - check t-norm choice!")
-        if len(metrics_history['train_acc']) >= 2 and train_acc < metrics_history['train_acc'][-2] - 0.02:
-            print(f"  ⚠️  Accuracy dropped!")
-        
-        return metrics_history
-    
-    return log_epoch_metrics, metrics_history, eval_subset, capture_gradients_before_step
 
 def create_adaptive_training_callback(program, models, args):
     """Create callback that tracks per-constraint-type metrics and applies t-norm switching."""
@@ -916,11 +845,6 @@ def create_adaptive_training_callback(program, models, args):
     )
     
     step_counter = [0]
-    
-    def get_constraint_type_from_lc(lc) -> str:
-        """Extract constraint type from LC object using the shared helper."""
-        from domiknows.solver.adaptiveTNormLossCalculator import get_constraint_type
-        return get_constraint_type(lc)
     
     def on_step_end(output):
         """Track metrics grouped by constraint type."""
@@ -988,6 +912,131 @@ def create_adaptive_training_callback(program, models, args):
     
     return on_step_end, on_epoch_end, adaptive_tracker
 
+def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, min_samples=50, seed=42, device=None):
+    """Create callback to log comprehensive training metrics after each epoch."""
+    
+    random.seed(seed)
+    dataset_list = list(dataset)
+    n_total = len(dataset_list)
+    n_eval = max(min_samples, int(n_total * eval_fraction))
+    n_eval = min(n_eval, n_total)
+    
+    eval_indices = sorted(random.sample(range(n_total), n_eval))
+    eval_subset = [dataset_list[i] for i in eval_indices]
+    
+    print(f"[Eval] Using {n_eval}/{n_total} samples ({100*n_eval/n_total:.1f}%) for epoch evaluation")
+    
+    metrics_history = {
+        'epoch': [],
+        'overall_acc': [],
+        'bool_acc': [],
+        'counting_mae': [],
+        'counting_acc': [],
+        'clf_grad_norm': [],
+        'accumulated_grad_norm': [],
+    }
+    
+    accumulated_grad_norm = [0.0]
+    grad_count = [0]
+    
+    def capture_gradients_before_step():
+        total_norm = 0.0
+        for name, clf in models['classifiers'].items():
+            for p in clf.parameters():
+                if p.grad is not None:
+                    total_norm += p.grad.data.norm(2).item() ** 2
+        total_norm = total_norm ** 0.5
+        
+        if total_norm > 0:
+            accumulated_grad_norm[0] += total_norm
+            grad_count[0] += 1
+    
+    def log_epoch_metrics():
+        epoch = program.epoch or 0
+        
+        eval_device = device if device else "cpu"
+        train_eval = program.evaluate_condition(eval_subset, device=eval_device, threshold=0.5, return_dict=True)
+        
+        overall_acc = train_eval.get('accuracy', 0.0)
+        if overall_acc is not None:
+            overall_acc = overall_acc / 100.0
+        else:
+            overall_acc = 0.0
+        
+        bool_acc = train_eval.get('boolean_accuracy', 0.0)
+        if bool_acc is not None:
+            bool_acc = bool_acc / 100.0
+        else:
+            bool_acc = 0.0
+        
+        counting_mae = train_eval.get('counting_mae', float('inf'))
+        if counting_mae is None:
+            counting_mae = float('inf')
+        
+        counting_acc = train_eval.get('counting_accuracy', 0.0)
+        if counting_acc is not None:
+            counting_acc = counting_acc / 100.0
+        else:
+            counting_acc = 0.0
+        
+        avg_grad_norm = accumulated_grad_norm[0] / max(grad_count[0], 1)
+        
+        metrics_history['epoch'].append(epoch)
+        metrics_history['overall_acc'].append(overall_acc)
+        metrics_history['bool_acc'].append(bool_acc)
+        metrics_history['counting_mae'].append(counting_mae)
+        metrics_history['counting_acc'].append(counting_acc)
+        metrics_history['accumulated_grad_norm'].append(avg_grad_norm)
+        
+        accumulated_grad_norm[0] = 0.0
+        grad_count[0] = 0
+        
+        bert_status = f"frozen" if models['bert'].unfrozen_layers == 0 else f"{models['bert'].unfrozen_layers}L unfrozen"
+        
+        # Calculate deltas
+        overall_delta = ""
+        bool_delta = ""
+        counting_delta = ""
+        mae_delta = ""
+        
+        if len(metrics_history['overall_acc']) >= 2:
+            overall_change = overall_acc - metrics_history['overall_acc'][-2]
+            overall_delta = f" (Δ{overall_change:+.3f})"
+            
+            bool_change = bool_acc - metrics_history['bool_acc'][-2]
+            bool_delta = f" (Δ{bool_change:+.3f})"
+            
+            counting_change = counting_acc - metrics_history['counting_acc'][-2]
+            counting_delta = f" (Δ{counting_change:+.3f})"
+            
+            if counting_mae != float('inf') and metrics_history['counting_mae'][-2] != float('inf'):
+                mae_change = counting_mae - metrics_history['counting_mae'][-2]
+                mae_delta = f" (Δ{mae_change:+.3f})"
+        
+        print(f"\n[Epoch {epoch}] Metrics:")
+        print(f"  Overall Acc:    {overall_acc:.4f}{overall_delta}")
+        print(f"  Boolean Acc:    {bool_acc:.4f}{bool_delta}")
+        print(f"  Counting Acc:   {counting_acc:.4f}{counting_delta}")
+        mae_str = f"{counting_mae:.3f}" if counting_mae != float('inf') else "N/A"
+        print(f"  Counting MAE:   {mae_str}{mae_delta}")
+        print(f"  AvgGradNorm:    {avg_grad_norm:.6f}")
+        print(f"  BERT:           {bert_status}")
+        
+        # Warnings
+        if avg_grad_norm < 1e-7 and epoch > 1:
+            print(f"  ⚠️  Gradients near zero - check t-norm choice!")
+        if len(metrics_history['overall_acc']) >= 2:
+            if overall_acc < metrics_history['overall_acc'][-2] - 0.02:
+                print(f"  ⚠️  Overall accuracy dropped!")
+            if bool_acc < metrics_history['bool_acc'][-2] - 0.02:
+                print(f"  ⚠️  Boolean accuracy dropped!")
+            if counting_acc < metrics_history['counting_acc'][-2] - 0.02:
+                print(f"  ⚠️  Counting accuracy dropped!")
+        
+        return metrics_history
+    
+    return log_epoch_metrics, metrics_history, eval_subset, capture_gradients_before_step
+
 def main(args):
     global _models
     global _bert_model
@@ -1002,7 +1051,6 @@ def main(args):
     
     suffix = "_curriculum_learning" if args.load_previous else ""
 
-    # Optuna tuning mode
     if args.tune:
         log_training_config(args, models=None, train=train, dev=dev, test=test)
         
@@ -1039,20 +1087,18 @@ def main(args):
     if not args.evaluate:
         _models['bert'].freeze_all()
         
-        # Get gradient capture callback
+        # Use args.eval_fraction
         log_epoch_metrics, metrics_history, eval_subset, capture_gradients = create_epoch_logging_callback(
             program, dataset, _models,
-            eval_fraction=0.1,
+            eval_fraction=args.eval_fraction,
             min_samples=50,
             seed=42,
             device=args.device
         )
         program.after_train_epoch.append(log_epoch_metrics)
         
-        # Add gradient capture to training step callback
         program.after_train_step.append(lambda _: capture_gradients())
         
-        # Adaptive t-norm tracking + optional auto-switching
         on_step, on_epoch, tracker = create_adaptive_training_callback(program, _models, args)
         program.after_train_step.append(on_step)
         program.after_train_epoch.append(on_epoch)
@@ -1061,6 +1107,7 @@ def main(args):
             print(f"[Adaptive T-Norm] Enabled with strategy '{args.tnorm_strategy}', auto-apply=True")
         else:
             print(f"[Adaptive T-Norm] Tracking only (use --adaptive_tnorm to enable auto-switching)")
+            print(f"\n[T-norm] Using '{args.counting_tnorm}' for counting constraints")
         
         if args.freeze_bert:
             print("[Training] BERT frozen throughout training (--freeze_bert)")
@@ -1096,11 +1143,6 @@ def main(args):
             device=args.device
         )
         
-        # Print t-norm info
-        print(f"\n[T-norm] Using '{args.counting_tnorm}' for counting constraints")
-        if args.counting_tnorm == 'G':
-            print("  ⚠️  WARNING: Gödel t-norm has sparse gradients - consider using 'P' or 'L'")
-        
         program.train(
             dataset,
             Optim=initial_optimizer_factory,
@@ -1111,24 +1153,101 @@ def main(args):
             print_loss=False
         )
         
-        # Print final training summary
+        # Final summary
         print("\n" + "=" * 60)
-        print("TRAINING COMPLETE - SUMMARY")
+        print("TRAINING COMPLETE - COMPREHENSIVE SUMMARY")
         print("=" * 60)
+        
         if len(metrics_history['epoch']) > 0:
-            print(f"  Initial Accuracy: {metrics_history['train_acc'][0]:.4f}")
-            print(f"  Final Accuracy:   {metrics_history['train_acc'][-1]:.4f}")
-            print(f"  Total Improvement: {metrics_history['train_acc'][-1] - metrics_history['train_acc'][0]:+.4f}")
+            # Overall metrics
+            print("\n[Overall Metrics]")
+            print(f"  Initial Accuracy:      {metrics_history['overall_acc'][0]:.4f}")
+            print(f"  Final Accuracy:        {metrics_history['overall_acc'][-1]:.4f}")
+            print(f"  Total Improvement:     {metrics_history['overall_acc'][-1] - metrics_history['overall_acc'][0]:+.4f}")
             
+            # Boolean vs Counting breakdown
+            print("\n[Boolean Constraints]")
+            print(f"  Initial Boolean Acc:   {metrics_history['bool_acc'][0]:.4f}")
+            print(f"  Final Boolean Acc:     {metrics_history['bool_acc'][-1]:.4f}")
+            print(f"  Boolean Improvement:   {metrics_history['bool_acc'][-1] - metrics_history['bool_acc'][0]:+.4f}")
+            
+            print("\n[Counting Constraints]")
+            print(f"  Initial Counting Acc:  {metrics_history['counting_acc'][0]:.4f}")
+            print(f"  Final Counting Acc:    {metrics_history['counting_acc'][-1]:.4f}")
+            print(f"  Counting Improvement:  {metrics_history['counting_acc'][-1] - metrics_history['counting_acc'][0]:+.4f}")
+            
+            if metrics_history['counting_mae'][-1] != float('inf'):
+                print(f"  Final Counting MAE:    {metrics_history['counting_mae'][-1]:.3f}")
+                if metrics_history['counting_mae'][0] != float('inf'):
+                    mae_change = metrics_history['counting_mae'][-1] - metrics_history['counting_mae'][0]
+                    print(f"  MAE Change:            {mae_change:+.3f}")
+            
+            # Gradient analysis
             avg_grad = sum(metrics_history['accumulated_grad_norm']) / max(len(metrics_history['accumulated_grad_norm']), 1)
+            print(f"\n[Gradient Analysis]")
             print(f"  Average Gradient Norm: {avg_grad:.6f}")
             
-            if metrics_history['train_acc'][-1] > metrics_history['train_acc'][0] + 0.05:
+            # Learning assessment
+            print("\n[Learning Assessment]")
+            overall_improvement = metrics_history['overall_acc'][-1] - metrics_history['overall_acc'][0]
+            bool_improvement = metrics_history['bool_acc'][-1] - metrics_history['bool_acc'][0]
+            counting_improvement = metrics_history['counting_acc'][-1] - metrics_history['counting_acc'][0]
+            
+            if overall_improvement > 0.05:
                 print("  ✅ Model is learning well!")
-            elif metrics_history['train_acc'][-1] > metrics_history['train_acc'][0]:
+            elif overall_improvement > 0:
                 print("  ⚠️  Model is learning slowly - consider more epochs or higher LR")
             else:
                 print("  ❌ Model is NOT learning - check LR, data, or architecture")
+            
+            # Boolean vs counting comparison
+            if bool_improvement > counting_improvement + 0.1:
+                print("  ⚠️  Counting constraints underperforming - check t-norm selection")
+            elif counting_improvement > bool_improvement + 0.1:
+                print("  ⚠️  Boolean constraints underperforming")
+            
+            # Adaptive t-norm summary
+            if hasattr(tracker, 'get_summary_stats'):
+                print("\n[Adaptive T-Norm Analysis]")
+                stats = tracker.get_summary_stats()
+                
+                # Coverage
+                if 'total_global_types' in stats:
+                    print(f"  Total Global Constraint Types: {stats['total_global_types']}")
+                if 'total_executable_constraints' in stats:
+                    print(f"  Total Executable Constraints:   {stats['total_executable_constraints']}")
+                
+                # Final recommendations per type
+                if 'final_recommendations_by_type' in stats and stats['final_recommendations_by_type']:
+                    print("\n  Final T-Norm Recommendations by Type:")
+                    for ctype, tnorm in stats['final_recommendations_by_type'].items():
+                        print(f"    {ctype:20s} -> {tnorm}")
+                
+                # Recommendation history
+                if 'recommendation_history' in stats and stats['recommendation_history']:
+                    print("\n  Recommendation History (when changes occurred):")
+                    for epoch, changes in stats['recommendation_history'].items():
+                        print(f"    Epoch {epoch}:")
+                        for ctype, tnorm in changes.items():
+                            print(f"      {ctype:18s} -> {tnorm}")
+                
+                # Currently active t-norms (if auto-apply enabled)
+                if args.adaptive_tnorm and 'active_tnorm_config' in stats and stats['active_tnorm_config']:
+                    print("\n  Currently Active T-Norms (LossCalculator.TNORM_CONFIG):")
+                    for ctype, tnorm in stats['active_tnorm_config'].items():
+                        print(f"    {ctype:20s} -> {tnorm}")
+                
+                # Fallback: print whatever stats are available
+                if not any(key in stats for key in ['total_global_types', 'final_recommendations_by_type', 'recommendation_history']):
+                    print("\n  Available stats:")
+                    for key, value in stats.items():
+                        if isinstance(value, dict) and value:
+                            print(f"    {key}:")
+                            for k, v in value.items():
+                                print(f"      {k}: {v}")
+                        else:
+                            print(f"    {key}: {value}")
+        
         print("=" * 60 + "\n")
                 
         program.save(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
@@ -1155,9 +1274,6 @@ def main(args):
     print(f"{portion} Counting Acc: {train_counting_acc}")
     print("#" * 40, file=output_f)
     print("#" * 40)
-    
-    #print(tracker.get_summary_stats())
-
 
     if args.checked_acc:
         print(f"<acc>{train_acc}</acc>")
