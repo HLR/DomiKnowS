@@ -269,3 +269,4 @@ domiknows/graph/simplifiedLCSyntax/*
 test_regr/InferenceAPI/results.txt
 test_regr/ConllQA/ConllQA_with_global_constraints/result.txt
 test_regr/ConllQA/ConllQA_with_global_constraints/*.pth
+test_regr/ConllQA/ConllQA_with_global_constraints/adaptive_tnorm_details_entities_with_relation_epoch3.csv

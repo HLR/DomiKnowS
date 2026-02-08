@@ -1069,6 +1069,219 @@ def create_epoch_logging_callback(program, dataset, models, eval_fraction=0.2, m
     
     return log_epoch_metrics, metrics_history, eval_subset, capture_gradients_before_step
 
+def create_gradient_flow_diagnostic_callback(program, models, check_every=100):
+    """
+    Diagnostic callback to check if gradients are flowing from sumL constraints
+    back to entity classifiers.
+    
+    Checks:
+    1. Are sumL losses being computed?
+    2. Do sumL losses have gradients attached?
+    3. Are classifier parameters receiving gradients from sumL?
+    4. What's the magnitude of gradients from sumL vs other constraints?
+    """
+    
+    step_counter = [0]
+    sumL_stats = {
+        'total_losses': [],
+        'has_grad': [],
+        'clf_grad_magnitudes': [],
+        'constraint_type_grads': {'sumL': [], 'other': []}
+    }
+    
+    def check_gradient_flow(output):
+        """Check gradient flow after loss computation but before optimizer step."""
+        step_counter[0] += 1
+        
+        # Only check periodically to avoid overhead
+        if step_counter[0] % check_every != 0:
+            return
+        
+        print(f"\n[Gradient Flow Check - Step {step_counter[0]}]")
+        print("=" * 60)
+        
+        # Extract datanode from output
+        datanode = None
+        if isinstance(output, (tuple, list)):
+            for item in output:
+                if item is not None and hasattr(item, 'calculateLcLoss'):
+                    datanode = item
+                    break
+        
+        if datanode is None:
+            print("  ⚠️  No datanode found in output")
+            return
+        
+        # Calculate losses with gradient retention
+        try:
+            losses = datanode.calculateLcLoss(
+                tnorm=getattr(program.graph, 'tnorm', 'L'),
+                counting_tnorm=getattr(program.graph, 'counting_tnorm', None)
+            )
+        except Exception as e:
+            print(f"  ⚠️  Failed to calculate losses: {e}")
+            return
+        
+        # Analyze each constraint
+        sumL_count = 0
+        other_count = 0
+        sumL_total_loss = 0.0
+        other_total_loss = 0.0
+        
+        for lc_name, loss_dict in losses.items():
+            lc = loss_dict.get('lc')
+            loss_tensor = loss_dict.get('loss')
+            
+            if loss_tensor is None:
+                continue
+            
+            # Determine if this is a sumL constraint
+            is_sumL = False
+            if lc and hasattr(lc, 'innerLC'):
+                from domiknows.graph.logicalConstrain import sumL
+                is_sumL = isinstance(lc.innerLC, sumL)
+            
+            if not torch.is_tensor(loss_tensor):
+                continue
+            
+            loss_val = loss_tensor.item() if loss_tensor.numel() == 1 else loss_tensor.mean().item()
+            
+            if is_sumL:
+                sumL_count += 1
+                sumL_total_loss += loss_val
+                sumL_stats['total_losses'].append(loss_val)
+                sumL_stats['has_grad'].append(loss_tensor.requires_grad)
+                
+                # Check if gradient can be computed
+                if loss_tensor.requires_grad:
+                    print(f"  ✓ {lc_name}: sumL loss={loss_val:.4f}, requires_grad=True")
+                else:
+                    print(f"  ✗ {lc_name}: sumL loss={loss_val:.4f}, requires_grad=FALSE")
+            else:
+                other_count += 1
+                other_total_loss += loss_val
+        
+        # Check classifier gradients
+        print(f"\n  Constraint Summary:")
+        print(f"    sumL constraints:   {sumL_count} (avg loss: {sumL_total_loss/max(sumL_count,1):.4f})")
+        print(f"    Other constraints:  {other_count} (avg loss: {other_total_loss/max(other_count,1):.4f})")
+        
+        # Check if classifiers have gradients
+        print(f"\n  Classifier Gradient Status:")
+        total_grad_norm = 0.0
+        has_any_grad = False
+        
+        for clf_name, clf in models['classifiers'].items():
+            clf_grad_norm = 0.0
+            param_count = 0
+            grad_count = 0
+            
+            for param in clf.parameters():
+                param_count += 1
+                if param.grad is not None:
+                    grad_count += 1
+                    clf_grad_norm += param.grad.norm().item() ** 2
+                    has_any_grad = True
+            
+            clf_grad_norm = clf_grad_norm ** 0.5
+            total_grad_norm += clf_grad_norm
+            
+            if clf_grad_norm > 0:
+                print(f"    {clf_name:15s}: grad_norm={clf_grad_norm:8.4f} ({grad_count}/{param_count} params)")
+            else:
+                print(f"    {clf_name:15s}: NO GRADIENTS ({grad_count}/{param_count} params)")
+        
+        if not has_any_grad:
+            print(f"\n  ❌ CRITICAL: No classifier parameters have gradients!")
+            print(f"     This means gradients are NOT flowing from constraints to classifiers.")
+        else:
+            print(f"\n  Total classifier grad norm: {total_grad_norm:.4f}")
+        
+        # Try to isolate sumL gradient contribution
+        if sumL_count > 0:
+            print(f"\n  Attempting to isolate sumL gradient contribution...")
+            
+            # Zero out classifier gradients
+            for clf in models['classifiers'].values():
+                clf.zero_grad()
+            
+            # Compute only sumL losses and backprop
+            sumL_loss_sum = 0.0
+            for lc_name, loss_dict in losses.items():
+                lc = loss_dict.get('lc')
+                if lc and hasattr(lc, 'innerLC'):
+                    from domiknows.graph.logicalConstrain import sumL
+                    if isinstance(lc.innerLC, sumL):
+                        loss_tensor = loss_dict.get('loss')
+                        if loss_tensor is not None and torch.is_tensor(loss_tensor):
+                            sumL_loss_sum += loss_tensor
+            
+            if sumL_loss_sum != 0.0 and torch.is_tensor(sumL_loss_sum):
+                try:
+                    sumL_loss_sum.backward(retain_graph=True)
+                    
+                    sumL_grad_norm = 0.0
+                    for clf in models['classifiers'].values():
+                        for param in clf.parameters():
+                            if param.grad is not None:
+                                sumL_grad_norm += param.grad.norm().item() ** 2
+                    sumL_grad_norm = sumL_grad_norm ** 0.5
+                    
+                    if sumL_grad_norm > 0:
+                        print(f"    ✓ sumL contributes grad_norm={sumL_grad_norm:.4f} to classifiers")
+                        sumL_stats['clf_grad_magnitudes'].append(sumL_grad_norm)
+                    else:
+                        print(f"    ✗ sumL does NOT contribute gradients to classifiers")
+                        print(f"       Possible causes:")
+                        print(f"       - Using argmax predictions (non-differentiable)")
+                        print(f"       - Gradients blocked somewhere in computational graph")
+                        print(f"       - sumL implemented without gradient flow")
+                    
+                    # Clear gradients again
+                    for clf in models['classifiers'].values():
+                        clf.zero_grad()
+                        
+                except Exception as e:
+                    print(f"    ✗ Failed to backprop through sumL: {e}")
+            else:
+                print(f"    ⚠️  No sumL losses to backprop")
+        
+        print("=" * 60 + "\n")
+    
+    def print_summary():
+        """Print summary statistics at end of epoch."""
+        if not sumL_stats['total_losses']:
+            print("\n[Gradient Flow Summary] No sumL constraints observed")
+            return
+        
+        print("\n[Gradient Flow Summary - Epoch Complete]")
+        print("=" * 60)
+        print(f"  sumL Observations:     {len(sumL_stats['total_losses'])}")
+        print(f"  Avg sumL Loss:         {sum(sumL_stats['total_losses'])/len(sumL_stats['total_losses']):.4f}")
+        
+        grad_enabled = sum(sumL_stats['has_grad'])
+        print(f"  sumL with requires_grad: {grad_enabled}/{len(sumL_stats['has_grad'])}")
+        
+        if sumL_stats['clf_grad_magnitudes']:
+            avg_grad = sum(sumL_stats['clf_grad_magnitudes']) / len(sumL_stats['clf_grad_magnitudes'])
+            print(f"  Avg sumL→Classifier Gradient: {avg_grad:.4f}")
+            
+            if avg_grad < 1e-6:
+                print(f"  ⚠️  Gradients are VANISHING - sumL not learning!")
+            elif avg_grad > 1000:
+                print(f"  ⚠️  Gradients are EXPLODING - may need clipping!")
+        else:
+            print(f"  ❌ No gradient flow detected from sumL to classifiers")
+        
+        print("=" * 60 + "\n")
+        
+        # Reset for next epoch
+        sumL_stats['total_losses'].clear()
+        sumL_stats['has_grad'].clear()
+        sumL_stats['clf_grad_magnitudes'].clear()
+    
+    return check_gradient_flow, print_summary
+
 def main(args):
     global _models
     global _bert_model
@@ -1083,6 +1296,7 @@ def main(args):
     
     suffix = "_curriculum_learning" if args.load_previous else ""
 
+    # -- Initialize models and graph
     if args.tune:
         log_training_config(args, models=None, train=train, dev=dev, test=test)
         
@@ -1119,7 +1333,7 @@ def main(args):
     if not args.evaluate:
         _models['bert'].freeze_all()
         
-        # MODIFIED: Use args.eval_fraction
+        # -- Add epoch logging callback
         log_epoch_metrics, metrics_history, eval_subset, capture_gradients = create_epoch_logging_callback(
             program, dataset, _models,
             eval_fraction=args.eval_fraction,
@@ -1128,9 +1342,9 @@ def main(args):
             device=args.device
         )
         program.after_train_epoch.append(log_epoch_metrics)
-        
         program.after_train_step.append(lambda _: capture_gradients())
         
+        # -- Add adaptive t-norm callback
         on_step, on_epoch, tracker = create_adaptive_training_callback(program, _models, args)
         program.after_train_step.append(on_step)
         program.after_train_epoch.append(on_epoch)
@@ -1140,10 +1354,18 @@ def main(args):
         else:
             print(f"[Adaptive T-Norm] Tracking only (use --adaptive_tnorm to enable auto-switching)")
             print(f"\n[T-norm] Using '{args.counting_tnorm}' for counting constraints")
+            
+        # -- Add gradient flow diagnostic
+        check_gradient_flow, print_gradient_summary = create_gradient_flow_diagnostic_callback(
+            program, _models, check_every=500  # Check every 500 steps
+        )
+        program.after_train_step.append(check_gradient_flow)
+        program.after_train_epoch.append(lambda: print_gradient_summary())
         
         if args.freeze_bert:
             print("[Training] BERT frozen throughout training (--freeze_bert)")
         else:
+            # -- Add dynamic unfreezing callback
             def unfreeze_callback():
                 epoch = program.epoch or 0
                 
@@ -1165,8 +1387,10 @@ def main(args):
                     )
                     print(f"[Epoch {epoch}] Unfroze {layers_to_unfreeze} layers, optimizer updated")
             
+            #  - Add unfreeze callback at the start of each epoch after warmup 
             program.before_train_epoch.append(unfreeze_callback)
         
+        # -- Initial optimizer setup (will be updated if unfreezing occurs)
         initial_optimizer_factory = create_optimizer_factory(
             _models['bert'],
             _models['classifiers'],
@@ -1175,6 +1399,7 @@ def main(args):
             device=args.device
         )
         
+        # -- Start training
         program.train(
             dataset,
             Optim=initial_optimizer_factory,
@@ -1185,7 +1410,7 @@ def main(args):
             print_loss=False
         )
         
-        # NEW: Comprehensive final summary
+        # -- Comprehensive final epochs summary
         print("\n" + "=" * 60)
         print("TRAINING COMPLETE - COMPREHENSIVE SUMMARY")
         print("=" * 60)
@@ -1347,6 +1572,7 @@ def main(args):
     else:
         program.load(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
 
+    # Final evaluation on training or test set (depending on --evaluate flag)
     output_f = open("result.txt", 'a')
     print("BERT params device:", next(_models['bert'].parameters()).device)
     train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
