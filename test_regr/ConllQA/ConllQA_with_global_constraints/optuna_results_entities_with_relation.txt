@@ -1,0 +1,30 @@
+OPTUNA HYPERPARAMETER TUNING RESULTS
+============================================================
+
+Best Test Accuracy: 0.0000
+
+Best Hyperparameters:
+  classifier_lr: 0.0024212987928576638
+
+
+All Trials:
+  Trial 0: 0.0 - {'classifier_lr': 0.0024212987928576638} - TrialState.COMPLETE
+  Trial 1: 0.0 - {'classifier_lr': 0.0038322427473623574} - TrialState.COMPLETE
+  Trial 2: 0.0 - {'classifier_lr': 0.00010007440508810975} - TrialState.COMPLETE
+  Trial 3: 0.0 - {'classifier_lr': 0.00014047083686354386} - TrialState.COMPLETE
+  Trial 4: 0.0 - {'classifier_lr': 0.0001697525103711428} - TrialState.COMPLETE
+  Trial 5: 0.0 - {'classifier_lr': 0.0007017847435551873} - TrialState.COMPLETE
+  Trial 6: 0.0 - {'classifier_lr': 0.0010242209174500627} - TrialState.COMPLETE
+  Trial 7: 0.0 - {'classifier_lr': 0.0002144407892408903} - TrialState.COMPLETE
+  Trial 8: 0.0 - {'classifier_lr': 0.00013184587504349427} - TrialState.COMPLETE
+  Trial 9: 0.0 - {'classifier_lr': 0.0012745089537064553} - TrialState.COMPLETE
+  Trial 10: 0.0 - {'classifier_lr': 0.0040563373529652795} - TrialState.COMPLETE
+  Trial 11: 0.0 - {'classifier_lr': 0.004757109808671605} - TrialState.COMPLETE
+  Trial 12: 0.0 - {'classifier_lr': 0.0021862690003233085} - TrialState.COMPLETE
+  Trial 13: 0.0 - {'classifier_lr': 0.00241708388958953} - TrialState.COMPLETE
+  Trial 14: 0.0 - {'classifier_lr': 0.000507494156182088} - TrialState.COMPLETE
+  Trial 15: 0.0 - {'classifier_lr': 0.0025903667902377765} - TrialState.COMPLETE
+  Trial 16: 0.0 - {'classifier_lr': 0.0014739457765795961} - TrialState.COMPLETE
+  Trial 17: 0.0 - {'classifier_lr': 0.00036219192266170966} - TrialState.COMPLETE
+  Trial 18: 0.0 - {'classifier_lr': 0.002757797703850199} - TrialState.COMPLETE
+  Trial 19: 0.0 - {'classifier_lr': 0.003477975640938813} - TrialState.COMPLETE
