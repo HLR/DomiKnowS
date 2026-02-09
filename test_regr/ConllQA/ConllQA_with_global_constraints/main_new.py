@@ -17,8 +17,8 @@ import argparse
 from domiknows import setProductionLogMode
 setProductionLogMode()
 
-from domiknows.program import CallbackProgram, program
-from domiknows.program.lossprogram import InferenceProgram
+from domiknows.program import CallbackProgram
+from domiknows.program.lossprogram import InferenceProgram, GumbelInferenceProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, TorchSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
@@ -154,7 +154,7 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
         self.to(device)
 
-class InferenceProgramWithCallbacks(CallbackProgram, InferenceProgram):
+class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
     """InferenceProgram with callback support for gradual unfreezing."""
     
     def __init__(self, *args, **kwargs):
@@ -300,7 +300,14 @@ def program_declaration(train, dev, args, device='cpu'):
         poi=[phrase, sentence, word, people, organization, location, graph.constraint],
         tnorm=args.counting_tnorm, 
         inferTypes=['local/argmax'], 
-        device=device
+        device=device,
+        # Gumbel-specific parameters
+        use_gumbel=True,               # Enable Gumbel-Softmax
+        initial_temp=args.gumbel_temp_start,  # Start with higher temperature (softer)
+        final_temp=args.gumbel_temp_end,      # End with lower temperature (sharper)
+        anneal_start_epoch=args.gumbel_anneal_start,
+        anneal_epochs=args.epochs - args.gumbel_anneal_start,  # Anneal over remaining epochs
+        hard_gumbel=args.hard_gumbel,  # Use hard Gumbel (straight-through estimator)
     )
     
     dev_dataset = None
@@ -783,7 +790,7 @@ def parse_arguments():
                         help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0')")
     
     # Learning rate arguments
-    parser.add_argument("--classifier_lr", type=float, default=1e-06,
+    parser.add_argument("--classifier_lr", type=float, default=1e-3,
                         help="Learning rate for classifier heads")
     # Optuna arguments
     parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False,
@@ -823,6 +830,22 @@ def parse_arguments():
     parser.add_argument("--tnorm_strategy", type=str, default="gradient_weighted",
                         choices=["gradient_weighted", "loss_based", "rotating"],
                         help="Strategy for selecting t-norms")
+    
+    # Counting schedule    
+    parser.add_argument("--use_counting_schedule", type=str2bool, nargs='?', const=True, default=False,
+                        help="Gradually introduce counting constraints during training")
+    parser.add_argument("--counting_warmup_epochs", type=int, default=4,
+                        help="Epochs before introducing counting (default: half of total epochs)")
+    
+    # Gumbel-Softmax settings
+    parser.add_argument("--gumbel_temp_start", type=float, default=5.0,
+                        help="Initial Gumbel temperature (higher = softer, better gradients)")
+    parser.add_argument("--gumbel_temp_end", type=float, default=0.5,
+                        help="Final Gumbel temperature (lower = sharper, more discrete)")
+    parser.add_argument("--gumbel_anneal_start", type=int, default=0,
+                        help="Epoch to start annealing temperature")
+    parser.add_argument("--hard_gumbel", type=str2bool, nargs='?', const=True, default=True,
+                        help="Use hard Gumbel (straight-through estimator) - recommended for counting")
 
     args = parser.parse_args()
     return args
@@ -1282,6 +1305,133 @@ def create_gradient_flow_diagnostic_callback(program, models, check_every=100):
     
     return check_gradient_flow, print_summary
 
+def create_counting_weight_schedule(total_epochs, warmup_epochs=None):
+    """
+    Create a schedule that gradually introduces counting constraints.
+    
+    Epochs 1-warmup: counting_weight = 0.0 (boolean only)
+    Epochs warmup+1 to end: counting_weight ramps from 0.01 to 1.0
+    """
+    if warmup_epochs is None:
+        warmup_epochs = total_epochs // 2
+    
+    def get_counting_weight(epoch):
+        if epoch <= warmup_epochs:
+            return 0.0
+        else:
+            # Linear ramp from 0.01 to 0.1 over remaining epochs
+            progress = (epoch - warmup_epochs) / (total_epochs - warmup_epochs)
+            return 0.01 + progress * 0.09  # Max weight = 0.1 (10% of boolean)
+    
+    return get_counting_weight
+
+def create_adaptive_loss_weighting_callback(program, total_epochs, args):
+    """
+    Apply adaptive weighting to counting vs boolean constraints.
+    """
+    from domiknows.graph.logicalConstrain import sumL
+    
+    get_counting_weight = create_counting_weight_schedule(
+        total_epochs, 
+        warmup_epochs=args.counting_warmup_epochs
+    )
+    
+    def apply_loss_weights(output):
+        """Reweight losses based on constraint type and training progress."""
+        epoch = program.epoch or 1
+        counting_weight = get_counting_weight(epoch)
+        
+        datanode = None
+        if isinstance(output, (tuple, list)):
+            for item in output:
+                if item is not None and hasattr(item, 'calculateLcLoss'):
+                    datanode = item
+                    break
+        
+        if datanode is None:
+            return
+        
+        # Get all losses
+        all_losses = datanode.calculateLcLoss(
+            tnorm=getattr(program.graph, 'tnorm', 'L'),
+            counting_tnorm=getattr(program.graph, 'counting_tnorm', None)
+        )
+        
+        weighted_loss = 0.0
+        boolean_loss_sum = 0.0
+        counting_loss_sum = 0.0
+        
+        for lc_name, loss_dict in all_losses.items():
+            lc = loss_dict.get('lc')
+            loss_tensor = loss_dict.get('loss')
+            
+            if loss_tensor is None or not torch.is_tensor(loss_tensor):
+                continue
+            
+            # Check if counting constraint
+            is_counting = False
+            if lc and hasattr(lc, 'innerLC'):
+                is_counting = isinstance(lc.innerLC, sumL)
+            
+            loss_val = loss_tensor if loss_tensor.numel() == 1 else loss_tensor.mean()
+            
+            if is_counting:
+                # Apply reduced weight to counting
+                weighted_loss += counting_weight * loss_val
+                counting_loss_sum += loss_val
+            else:
+                # Full weight for boolean
+                weighted_loss += loss_val
+                boolean_loss_sum += loss_val
+        
+        # Log every 100 steps
+        if not hasattr(program, '_loss_weight_step'):
+            program._loss_weight_step = 0
+        program._loss_weight_step += 1
+        
+        if program._loss_weight_step % 500 == 0:
+            print(f"\n[Epoch {epoch}] Loss Weighting:")
+            print(f"  Counting weight: {counting_weight:.3f}")
+            print(f"  Boolean loss:    {boolean_loss_sum.item() if torch.is_tensor(boolean_loss_sum) else 0:.4f}")
+            print(f"  Counting loss:   {counting_loss_sum.item() if torch.is_tensor(counting_loss_sum) else 0:.4f}")
+            print(f"  Weighted total:  {weighted_loss.item() if torch.is_tensor(weighted_loss) else 0:.4f}\n")
+        
+        return weighted_loss
+    
+    def print_schedule():
+        """Print the counting weight schedule at start of training."""
+        print("\n[Counting Weight Schedule]")
+        print("=" * 60)
+        for epoch in range(1, total_epochs + 1):
+            weight = get_counting_weight(epoch)
+            status = "Boolean Only" if weight == 0 else f"Counting Weight: {weight:.3f}"
+            print(f"  Epoch {epoch:2d}: {status}")
+        print("=" * 60 + "\n")
+    
+    return apply_loss_weights, print_schedule
+
+def create_gumbel_monitoring_callback(program):
+    """Monitor Gumbel temperature and sampling behavior."""
+    
+    def log_gumbel_status():
+        epoch = program.epoch or 0
+        
+        if hasattr(program, 'current_temp'):
+            temp = program.current_temp
+            print(f"  [Gumbel] Temperature: {temp:.4f}", end="")
+            
+            if temp > 1.0:
+                print(" (soft - gradients flow well)")
+            elif temp > 0.5:
+                print(" (medium - balancing gradients and discreteness)")
+            else:
+                print(" (sharp - approaching discrete predictions)")
+        
+        if hasattr(program, 'hard_gumbel') and program.hard_gumbel:
+            print(f"  [Gumbel] Using hard (straight-through) mode")
+    
+    return log_gumbel_status
+
 def main(args):
     global _models
     global _bert_model
@@ -1399,6 +1549,21 @@ def main(args):
             device=args.device
         )
         
+        # -- Add Gumbel monitoring callback
+        gumbel_monitor = create_gumbel_monitoring_callback(program)
+        program.after_train_epoch.append(gumbel_monitor)
+            
+        # -- Add adaptive loss weighting callback
+        if args.use_counting_schedule:
+            apply_loss_weights, print_schedule = create_adaptive_loss_weighting_callback(
+                program, args.epochs, args
+            )
+            
+            print_schedule()
+            
+            # Add callback
+            program.after_train_step.append(apply_loss_weights)
+            
         # -- Start training
         program.train(
             dataset,
@@ -1410,33 +1575,44 @@ def main(args):
             print_loss=False
         )
         
-        # -- Comprehensive final epochs summary
-        print("\n" + "=" * 60)
-        print("TRAINING COMPLETE - COMPREHENSIVE SUMMARY")
-        print("=" * 60)
+        # Run final evaluation on FULL dataset (not just subset)
+        print("\n[Running final evaluation on full dataset...]")
+        train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
         
         if len(metrics_history['epoch']) > 0:
-            # Overall metrics (convert from 0-100 percentage since we multiplied by 100 in callback)
-            print("\n[Overall Metrics]")
-            print(f"  Initial Accuracy:      {metrics_history['overall_acc'][0]:.2f}%")
-            print(f"  Final Accuracy:        {metrics_history['overall_acc'][-1]:.2f}%")
-            print(f"  Total Improvement:     {metrics_history['overall_acc'][-1] - metrics_history['overall_acc'][0]:+.2f}%")
+            # Use metrics from FULL dataset evaluation, not subset
+            initial_overall = metrics_history['overall_acc'][0]
+            initial_bool = metrics_history['bool_acc'][0]
+            initial_counting = metrics_history['counting_acc'][0]
+            initial_mae = metrics_history['counting_mae'][0]
             
-            # Boolean vs Counting breakdown (already percentages)
+            # Use final_eval instead of last epoch's subset metrics
+            final_overall = train_eval.get('accuracy', 0.0) * 100.0
+            final_bool = train_eval.get('boolean_accuracy', 0.0) or 0.0
+            final_counting = train_eval.get('counting_accuracy', 0.0) or 0.0
+            final_mae = train_eval.get('counting_mae', float('inf')) or float('inf')
+            
+            # Overall metrics
+            print("\n[Overall Metrics]")
+            print(f"  Initial Accuracy:      {initial_overall:.2f}%")
+            print(f"  Final Accuracy:        {final_overall:.2f}%")
+            print(f"  Total Improvement:     {final_overall - initial_overall:+.2f}%")
+            
+            # Boolean vs Counting breakdown
             print("\n[Boolean Constraints]")
-            print(f"  Initial Boolean Acc:   {metrics_history['bool_acc'][0]:.2f}%")
-            print(f"  Final Boolean Acc:     {metrics_history['bool_acc'][-1]:.2f}%")
-            print(f"  Boolean Improvement:   {metrics_history['bool_acc'][-1] - metrics_history['bool_acc'][0]:+.2f}%")
+            print(f"  Initial Boolean Acc:   {initial_bool:.2f}%")
+            print(f"  Final Boolean Acc:     {final_bool:.2f}%")
+            print(f"  Boolean Improvement:   {final_bool - initial_bool:+.2f}%")
             
             print("\n[Counting Constraints]")
-            print(f"  Initial Counting Acc:  {metrics_history['counting_acc'][0]:.2f}%")
-            print(f"  Final Counting Acc:    {metrics_history['counting_acc'][-1]:.2f}%")
-            print(f"  Counting Improvement:  {metrics_history['counting_acc'][-1] - metrics_history['counting_acc'][0]:+.2f}%")
+            print(f"  Initial Counting Acc:  {initial_counting:.2f}%")
+            print(f"  Final Counting Acc:    {final_counting:.2f}%")
+            print(f"  Counting Improvement:  {final_counting - initial_counting:+.2f}%")
             
-            if metrics_history['counting_mae'][-1] != float('inf'):
-                print(f"  Final Counting MAE:    {metrics_history['counting_mae'][-1]:.3f}")
-                if metrics_history['counting_mae'][0] != float('inf'):
-                    mae_change = metrics_history['counting_mae'][-1] - metrics_history['counting_mae'][0]
+            if final_mae != float('inf'):
+                print(f"  Final Counting MAE:    {final_mae:.3f}")
+                if initial_mae != float('inf'):
+                    mae_change = final_mae - initial_mae
                     print(f"  MAE Change:            {mae_change:+.3f}")
             
             # Gradient analysis
@@ -1446,9 +1622,9 @@ def main(args):
             
             # Learning assessment
             print("\n[Learning Assessment]")
-            overall_improvement = metrics_history['overall_acc'][-1] - metrics_history['overall_acc'][0]
-            bool_improvement = metrics_history['bool_acc'][-1] - metrics_history['bool_acc'][0]
-            counting_improvement = metrics_history['counting_acc'][-1] - metrics_history['counting_acc'][0]
+            overall_improvement = final_overall - initial_overall
+            bool_improvement = final_bool - initial_bool
+            counting_improvement = final_counting - initial_counting
             
             if overall_improvement > 0.05:
                 print("  ✅ Model is learning well!")
@@ -1572,10 +1748,9 @@ def main(args):
     else:
         program.load(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
 
-    # Final evaluation on training or test set (depending on --evaluate flag)
+    # Print final evaluation results to console and result file
     output_f = open("result.txt", 'a')
     print("BERT params device:", next(_models['bert'].parameters()).device)
-    train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
     train_acc = train_eval['accuracy']
     train_bool_acc = train_eval['boolean_accuracy']
     train_counting_mae = float('inf') if train_eval['counting_mae'] is None else train_eval['counting_mae']
