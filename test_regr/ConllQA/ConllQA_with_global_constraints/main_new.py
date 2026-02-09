@@ -405,6 +405,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None):
     print(f"  Data path:        {args.data_path}")
     print(f"  Train portion:    {args.train_portion}")
     print(f"  Train size:       {args.train_size if args.train_size != -1 else 'all'}")
+    print(f"  Asking type filter: {args.asking_type if args.asking_type else 'None (all types)'}")
     if train is not None:
         print(f"  Train examples:   {len(train)}")
     if dev is not None:
@@ -449,16 +450,74 @@ def log_training_config(args, models=None, train=None, dev=None, test=None):
         if models is not None:
             print(f"  Total BERT layers:     {models['bert'].total_layers}")
             print(f"  Initially frozen:      {models['bert'].unfrozen_layers == 0}")
-            
+    
+    # Gumbel-Softmax settings
+    print("\n[Gumbel-Softmax]")
+    if args.use_gumbel:
+        print(f"  Enabled:          Yes")
+        print(f"  Initial temp:     {args.gumbel_temp_start}")
+        print(f"  Final temp:       {args.gumbel_temp_end}")
+        print(f"  Anneal start:     Epoch {args.gumbel_anneal_start}")
+        print(f"  Hard Gumbel:      {args.hard_gumbel} {'(straight-through estimator)' if args.hard_gumbel else ''}")
+    else:
+        print(f"  Enabled:          No")
+    
     # Constraint settings
     print("\n[Constraints]")
     if args.adaptive_tnorm:
-        print(f"  T-Norm adaptation: Enabled")
+        print(f"  T-Norm adaptation: Enabled (auto-apply)")
         print(f"    Strategy:       {args.tnorm_strategy}")
         print(f"    Adapt interval: {args.tnorm_adaptation_interval} steps")
         print(f"    Warmup steps:   {args.tnorm_warmup_steps}")
+        print(f"    Available tnorms: L, P, SP, G")
     else:
-        print(f"  Counting t-norm:  {args.counting_tnorm}")
+        print(f"  T-Norm adaptation: Tracking only (no auto-switch)")
+        print(f"    Strategy:       {args.tnorm_strategy}")
+        print(f"    Adapt interval: {args.tnorm_adaptation_interval} steps")
+        print(f"    Warmup steps:   {args.tnorm_warmup_steps}")
+    print(f"  Counting t-norm:  {args.counting_tnorm} (initial)")
+    
+    # Counting schedule settings
+    print("\n[Counting Schedule]")
+    if args.use_counting_schedule:
+        print(f"  Enabled:          Yes")
+        print(f"  Warmup epochs:    {args.counting_warmup_epochs}")
+        print(f"  Strategy:         Boolean-only warmup, then gradual counting introduction")
+        print(f"    Epochs 1-{args.counting_warmup_epochs}: counting_weight = 0.0 (boolean only)")
+        print(f"    Epochs {args.counting_warmup_epochs+1}-{args.epochs}: counting_weight ramps 0.01→0.1")
+    else:
+        print(f"  Enabled:          No (counting constraints active from epoch 1)")
+    
+    # Callback plugins summary
+    print("\n[Active Callbacks]")
+    print(f"  Epoch Logging:")
+    print(f"    Eval fraction:    {args.eval_fraction} ({int(args.eval_fraction*100)}% of data)")
+    print(f"    Min samples:      50")
+    print(f"    Metrics tracked:  overall_acc, bool_acc, counting_acc, counting_mae, grad_norm")
+    
+    print(f"  Adaptive T-Norm:")
+    print(f"    Mode:             {'Auto-apply' if args.adaptive_tnorm else 'Track-only'}")
+    print(f"    Per-step:         Record losses and gradients by constraint type")
+    print(f"    Per-epoch:        Compute recommendations, {'apply' if args.adaptive_tnorm else 'log only'}")
+    
+    print(f"  Gradient Flow Diagnostic:")
+    print(f"    Check interval:   Every 500 steps")
+    print(f"    Monitors:         sumL gradient flow, classifier grad norms")
+    print(f"    Reports:          Per-step diagnostics, per-epoch summary")
+    
+    if args.use_gumbel:
+        print(f"  Gumbel Monitoring:")
+        print(f"    Per-epoch:        Log current temperature and mode")
+    
+    if args.use_counting_schedule:
+        print(f"  Counting Weight Schedule:")
+        print(f"    Per-step:         Apply adaptive loss weighting")
+        print(f"    Per-epoch:        Log weight changes")
+    
+    if not args.freeze_bert:
+        print(f"  BERT Unfreezing:")
+        print(f"    Per-epoch:        Unfreeze {args.unfreeze_layers} layers after warmup")
+        print(f"    Optimizer update: Recreate with differential LR when unfreezing")
     
     # Model info
     print("\n[Model]")
@@ -487,9 +546,15 @@ def log_training_config(args, models=None, train=None, dev=None, test=None):
     print("\n[Mode]")
     print(f"  Evaluate only:    {args.evaluate}")
     print(f"  Load previous:    {args.load_previous}")
+    if args.load_previous:
+        print(f"    Previous portion: {args.previous_portion}")
+        if args.previous_file:
+            print(f"    Previous file:    {args.previous_file}")
+        else:
+            print(f"    Previous file:    training_{args.epochs}_lr_{args.classifier_lr}_{args.previous_portion}.pth")
     
     print("\n" + "=" * 60 + "\n")
-   
+    
 # -- callback plugins 
 def create_optimizer_with_differential_lr(bert_model, classifiers, 
                                           bert_lr=2e-5, classifier_lr=1e-6,
@@ -1394,7 +1459,7 @@ def main(args):
     from graph import people, organization, location, other, o
 
     data_file_path = find_data_file(args.data_path)
-    train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion)
+    train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion, asking_type=args.asking_type)
 
     if args.train_size != -1:
         train = train[:args.train_size]

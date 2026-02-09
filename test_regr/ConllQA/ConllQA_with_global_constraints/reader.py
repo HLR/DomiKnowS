@@ -74,6 +74,7 @@ def conll4_reader(data_path, dataset_portion, asking_type=None):
         if asking_type not in valid_types:
             raise ValueError(f"Invalid asking_type '{asking_type}'. Must be one of: {valid_types}")
         print(f"Filtering for asking_type: '{asking_type}' ({ASKING_TYPE[asking_type]})")
+        
     
     with open(data_path, 'r') as f:
         full_data = json.load(f)["data"]
