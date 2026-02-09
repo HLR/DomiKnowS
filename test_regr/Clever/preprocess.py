@@ -41,6 +41,10 @@ def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation')
             ds.filter_relational_type()
         elif q_type == 'counting':
             ds.filter_atmostlatleastlequal()
+        elif q_type == 'complex_relation':
+            ds.filter_complex_relation()
+        elif q_type == 'counting':
+            ds.filter_counting()
         
         return ds
 

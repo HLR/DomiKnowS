@@ -564,6 +564,38 @@ class CLEVRDatasetFilterableView:
                 return False        
         return self.filter(filt, f'filter-one-left-or-right')
 
+    def filter_complex_relation(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions with multiple `spatial relation` operation in their program, excluding those with 'query', 'same_', 'than', or 'count' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same_" in program_str or "than" in program_str or "count" in program_str:
+                return False
+            return True
+        return self.filter(filt, f'filter-complex-relations')
+
+    def filter_counting(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions with multiple `spatial relation` operation in their program, excluding those with 'query', 'same_', 'than', or 'count' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same_" in program_str:
+                return False
+            if "equal" in program_str and "equal_integer" not in program_str:
+                return False
+            if "count" in program_str or "greater_than" in program_str or "less_than" in program_str:
+                return True
+            return False
+        return self.filter(filt, f'filter-counting-questions')
+
     def filter_only_query(self, *args) -> 'CLEVRDatasetFilterableView':
         """
         Filter to only include questions that are simple attribute queries without any relational operations, excluding those with 'query' operations.
