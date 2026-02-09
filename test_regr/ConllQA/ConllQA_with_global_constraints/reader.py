@@ -67,7 +67,14 @@ def create_query(question, question_type):
     return str_query, label, asked_number
 
 
-def conll4_reader(data_path, dataset_portion):
+def conll4_reader(data_path, dataset_portion, asking_type=None):
+    # Validate asking_type if provided
+    if asking_type is not None:
+        valid_types = list(ASKING_TYPE.keys())
+        if asking_type not in valid_types:
+            raise ValueError(f"Invalid asking_type '{asking_type}'. Must be one of: {valid_types}")
+        print(f"Filtering for asking_type: '{asking_type}' ({ASKING_TYPE[asking_type]})")
+    
     with open(data_path, 'r') as f:
         full_data = json.load(f)["data"]
 
@@ -150,11 +157,17 @@ def conll4_reader(data_path, dataset_portion):
             # if asked_number == 0 or asked_number == len(tokens):
             #     continue
 
+            # Get the asking type from the question
+            question_asking_type = data["qa_questions"][0]["count_ask"]
+            
+            # Filter by asking_type if specified
+            if asking_type is not None and question_asking_type != asking_type:
+                continue
+
             # Log example queries for each ASKING_TYPE (only once per type)
-            asking_type = data["qa_questions"][0]["count_ask"]
-            if asking_type not in logged_asking_types:
-                logged_asking_types.add(asking_type)
-                print(f"\n{asking_type} ({ASKING_TYPE[asking_type]}):")
+            if question_asking_type not in logged_asking_types:
+                logged_asking_types.add(question_asking_type)
+                print(f"\n{question_asking_type} ({ASKING_TYPE[question_asking_type]}):")
                 print(f"  Question: {data['qa_questions'][0].get('question', 'N/A')}")
                 print(f"  Query: {str_query}")
                 print(f"  Label: {label_query}")

@@ -42,6 +42,7 @@ FEATURE_DIM = 768 + 96
 _bert_model = None
 _models = {}
 
+# Locate data file in the same directory as this script
 def find_data_file(filename):
     """Find data file in the same directory as this script."""
     current_dir = Path(__file__).parent
@@ -52,6 +53,80 @@ def find_data_file(filename):
         return str(data_path)
     
     raise FileNotFoundError(f"Could not find {filename} in {current_dir}")
+
+def str2bool(v):
+    """Convert string to boolean for argparse."""
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    if isinstance(v, str):
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+    raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Getting the arguments passed",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    parser.add_argument("--epochs", type=int, default=6, help="Number of epochs")
+    parser.add_argument("--evaluate", action='store_true', help="Only run evaluation on the test set  needs to be set to true if --load_previous is set")
+    parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
+    parser.add_argument("--train_portion", type=str, default="entities_with_relation", help="Training subset")
+    parser.add_argument("--asking_type", type=str, help="ASKING_TYPE to filter for (e.g. counting, atMost, Exactly, AtLeast, ATLeast)")
+    parser.add_argument("--load_previous", action='store_true', help="Whether to load a previous model")
+    parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Previous Training subset to load (if --load_previous is set)")
+    parser.add_argument("--previous_file", type=str, default="", help="File to load previous model from (if --load_previous is set)")
+    
+    parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
+    
+    parser.add_argument("--data_path", type=str, default="conllQA_with_global.json", help="Path to data file (can be relative or absolute)")
+    parser.add_argument("--device", type=str, default="cpu", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0')")
+    
+    # Learning rate arguments default: classifier_lr=1e-3
+    parser.add_argument("--classifier_lr", type=float, default=1e-3, help="Learning rate for classifier heads")
+    
+    # Optuna arguments default OFF (can be enabled to perform hyperparameter tuning using Optuna, which may help find better learning rates and training schedules for improved model performance)
+    parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False, help="Run Optuna hyperparameter tuning (default: true)")
+    parser.add_argument("--n_trials", type=int, default=20, help="Number of Optuna trials")
+    parser.add_argument("--tune_train_size", type=int, default=200, help="Number of samples to use during tuning (smaller = faster)")
+
+    # BERT freezing  defualt Frozen (can be set to false to enable gradual unfreezing during training)
+    parser.add_argument("--freeze_bert", type=str2bool, nargs='?', const=True, default=True, help="Keep BERT frozen throughout training (default: true)")
+    parser.add_argument("--warmup_epochs", type=int, default=2, help="Epochs to train with BERT frozen before unfreezing")
+    parser.add_argument("--unfreeze_every", type=int, default=500, help="Unfreeze BERT layers every N steps")
+    parser.add_argument("--unfreeze_layers", type=int, default=2,  help="Number of BERT layers to unfreeze per step")
+    parser.add_argument("--bert_lr", type=float, default=1e-5, help="Learning rate for BERT layers (if not frozen)")
+    
+    # Evaluation settings default: evaluate on 20% of training data each epoch (for faster feedback during tuning, can be set to 0 to disable)
+    parser.add_argument("--eval_fraction", type=float, default=0.2, help="Fraction of data for epoch evaluation (0.2 = 20%%)")
+    
+    # Counting t-norm settings default "L" (for Product t-norm, which is often effective for counting constraints, but can be set to "G", "P", or "SP" to test other t-norms)
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="L", help="The tnorm method to use for counting constraints.")
+    
+    # Adaptive t-norm settings default OFF (can be enabled to allow the program to automatically select the best t-norm for each constraint type during training, which may improve performance by tailoring the loss calculation to the specific characteristics of each constraint type)
+    parser.add_argument("--adaptive_tnorm", type=str2bool, nargs='?', const=True, default=False, help="Enable adaptive t-norm selection per constraint")
+    parser.add_argument("--tnorm_adaptation_interval", type=int, default=10, help="Steps between t-norm comparison (set lower for small datasets)")
+    parser.add_argument("--tnorm_warmup_steps", type=int, default=5, help="Steps before adaptive t-norm selection begins")
+    parser.add_argument("--tnorm_strategy", type=str, default="gradient_weighted", choices=["gradient_weighted", "loss_based", "rotating"], help="Strategy for selecting t-norms")
+    
+    # Counting schedule defaulr OFF (can be enabled to gradually introduce counting constraints during training, which may help with convergence and
+    parser.add_argument("--use_counting_schedule", type=str2bool, nargs='?', const=True, default=False, help="Gradually introduce counting constraints during training")
+    parser.add_argument("--counting_warmup_epochs", type=int, default=4, help="Epochs before introducing counting (default: half of total epochs)")
+    
+    # Gumbel-Softmax settings default OFF (can be enabled to use Gumbel-Softmax relaxation for counting constraints, which may improve training stability and convergence on counting tasks by providing smoother gradients compared to hard argmax)
+    parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, help="Use Gumbel-Softmax for counting constraints")
+    parser.add_argument("--gumbel_temp_start", type=float, default=5.0, help="Initial Gumbel temperature (higher = softer, better gradients)")
+    parser.add_argument("--gumbel_temp_end", type=float, default=0.5, help="Final Gumbel temperature (lower = sharper, more discrete)")
+    parser.add_argument("--gumbel_anneal_start", type=int, default=0, help="Epoch to start annealing temperature")
+    parser.add_argument("--hard_gumbel", type=str2bool, nargs='?', const=True, default=True, help="Use hard Gumbel (straight-through estimator) - recommended for counting")
+
+    args = parser.parse_args()
+    return args
 
 class Tokenizer():
     def __init__(self, device='cpu') -> None:
@@ -302,7 +377,7 @@ def program_declaration(train, dev, args, device='cpu'):
         inferTypes=['local/argmax'], 
         device=device,
         # Gumbel-specific parameters
-        use_gumbel=True,               # Enable Gumbel-Softmax
+        use_gumbel=args.use_gumbel,           # Enable Gumbel-Softmax
         initial_temp=args.gumbel_temp_start,  # Start with higher temperature (softer)
         final_temp=args.gumbel_temp_end,      # End with lower temperature (sharper)
         anneal_start_epoch=args.gumbel_anneal_start,
@@ -315,111 +390,6 @@ def program_declaration(train, dev, args, device='cpu'):
         dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label')
     
     return program, train_dataset, dev_dataset
-
-    # def find_label(label_type):
-    #    def find(data):
-    #        label = torch.tensor([item == label_type for item in data], device=device)
-    #        return label
-    #    return find
-
-    # Normal Label
-    # phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
-    # phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
-    # phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
-    # phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
-    # phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
-
-    # Below Code is for relation
-
-    # pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                         keyword='relation', forward=find_relation('Work_For'), label=True)
-    # pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                           keyword='relation', forward=find_relation('Located_In'), label=True)
-    # pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                        keyword='relation', forward=find_relation('Live_In'), label=True)
-    # pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                           keyword='relation', forward=find_relation('OrgBased_In'), label=True)
-    # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed],
-    #                                     keyword='relation', forward=find_relation('Kill'), label=True)
-
-def create_optimizer_with_differential_lr(bert_model, classifiers, 
-                                          bert_lr=2e-5, classifier_lr=1e-6,
-                                          device=None):
-    """Create optimizer with different learning rates for BERT vs classifiers."""
-    
-    if device is not None:
-        bert_model.to(device)
-        for clf in classifiers.values():
-            clf.to(device)
-    
-    param_groups = []
-    
-    bert_params = [p for p in bert_model.parameters() if p.requires_grad]
-    if bert_params:
-        param_groups.append({'params': bert_params, 'lr': bert_lr})
-    
-    clf_params = [p for clf in classifiers.values() 
-                  for p in clf.parameters() if p.requires_grad]
-    if clf_params:
-        param_groups.append({'params': clf_params, 'lr': classifier_lr})
-    
-    if not param_groups:
-        dummy_device = device if device else 'cpu'
-        dummy = torch.nn.Parameter(torch.zeros(1, device=dummy_device))
-        return torch.optim.Adam([dummy], lr=classifier_lr)
-    
-    return torch.optim.Adam(param_groups)
-
-def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_lr=1e-6, device=None):
-    """Create optimizer factory that properly handles framework params."""
-    
-    if device is not None:
-        bert_model.to(device)
-        for clf in classifiers.values():
-            clf.to(device)
-    
-    bert_param_ids = {id(p) for p in bert_model.parameters()}
-    clf_param_ids = {id(p) for clf in classifiers.values() for p in clf.parameters()}
-    
-    def factory(params):
-        # Convert generator to list to avoid exhausting it
-        params_list = list(params) if params is not None else []
-        
-        if not params_list:
-            return create_optimizer_with_differential_lr(
-                bert_model, classifiers, bert_lr, classifier_lr, device
-            )
-        
-        bert_group = []
-        clf_group = []
-        other_group = []
-        
-        for p in params_list:
-            if not p.requires_grad:
-                continue
-            if id(p) in bert_param_ids:
-                bert_group.append(p)
-            elif id(p) in clf_param_ids:
-                clf_group.append(p)
-            else:
-                other_group.append(p)
-        
-        param_groups = []
-        if bert_group and bert_lr > 0:
-            param_groups.append({'params': bert_group, 'lr': bert_lr})
-        if clf_group:
-            param_groups.append({'params': clf_group, 'lr': classifier_lr})
-        if other_group:
-            param_groups.append({'params': other_group, 'lr': classifier_lr})
-        
-        if not param_groups:
-            return create_optimizer_with_differential_lr(
-                bert_model, classifiers, bert_lr, classifier_lr, device
-            )
-        
-        return torch.optim.Adam(param_groups)
-    
-    return factory
 
 def log_training_config(args, models=None, train=None, dev=None, test=None):
     """Log all training configuration parameters."""
@@ -520,6 +490,86 @@ def log_training_config(args, models=None, train=None, dev=None, test=None):
     
     print("\n" + "=" * 60 + "\n")
    
+# -- callback plugins 
+def create_optimizer_with_differential_lr(bert_model, classifiers, 
+                                          bert_lr=2e-5, classifier_lr=1e-6,
+                                          device=None):
+    """Create optimizer with different learning rates for BERT vs classifiers."""
+    
+    if device is not None:
+        bert_model.to(device)
+        for clf in classifiers.values():
+            clf.to(device)
+    
+    param_groups = []
+    
+    bert_params = [p for p in bert_model.parameters() if p.requires_grad]
+    if bert_params:
+        param_groups.append({'params': bert_params, 'lr': bert_lr})
+    
+    clf_params = [p for clf in classifiers.values() 
+                  for p in clf.parameters() if p.requires_grad]
+    if clf_params:
+        param_groups.append({'params': clf_params, 'lr': classifier_lr})
+    
+    if not param_groups:
+        dummy_device = device if device else 'cpu'
+        dummy = torch.nn.Parameter(torch.zeros(1, device=dummy_device))
+        return torch.optim.Adam([dummy], lr=classifier_lr)
+    
+    return torch.optim.Adam(param_groups)
+
+def create_optimizer_factory(bert_model, classifiers, bert_lr=2e-5, classifier_lr=1e-6, device=None):
+    """Create optimizer factory that properly handles framework params."""
+    
+    if device is not None:
+        bert_model.to(device)
+        for clf in classifiers.values():
+            clf.to(device)
+    
+    bert_param_ids = {id(p) for p in bert_model.parameters()}
+    clf_param_ids = {id(p) for clf in classifiers.values() for p in clf.parameters()}
+    
+    def factory(params):
+        # Convert generator to list to avoid exhausting it
+        params_list = list(params) if params is not None else []
+        
+        if not params_list:
+            return create_optimizer_with_differential_lr(
+                bert_model, classifiers, bert_lr, classifier_lr, device
+            )
+        
+        bert_group = []
+        clf_group = []
+        other_group = []
+        
+        for p in params_list:
+            if not p.requires_grad:
+                continue
+            if id(p) in bert_param_ids:
+                bert_group.append(p)
+            elif id(p) in clf_param_ids:
+                clf_group.append(p)
+            else:
+                other_group.append(p)
+        
+        param_groups = []
+        if bert_group and bert_lr > 0:
+            param_groups.append({'params': bert_group, 'lr': bert_lr})
+        if clf_group:
+            param_groups.append({'params': clf_group, 'lr': classifier_lr})
+        if other_group:
+            param_groups.append({'params': other_group, 'lr': classifier_lr})
+        
+        if not param_groups:
+            return create_optimizer_with_differential_lr(
+                bert_model, classifiers, bert_lr, classifier_lr, device
+            )
+        
+        return torch.optim.Adam(param_groups)
+    
+    return factory
+
 class GradualUnfreezeCallback:
     """Callback to gradually unfreeze BERT during training."""
     
@@ -754,101 +804,6 @@ def run_optuna_tuning(args, train, test, n_trials=20):
     print(f"\nResults saved to {results_file}")
     
     return study
-
-def str2bool(v):
-    """Convert string to boolean for argparse."""
-    if isinstance(v, bool):
-        return v
-    if v is None:
-        return False
-    if isinstance(v, str):
-        if v.lower() in ('yes', 'true', 't', 'y', '1'):
-            return True
-        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-            return False
-    raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Getting the arguments passed",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    
-    parser.add_argument("--epochs", type=int, default=6, help="Number of epochs")
-    parser.add_argument("--evaluate", action='store_true')
-    parser.add_argument("--load_previous", action='store_true')
-    parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
-    parser.add_argument("--train_portion", type=str, default="entities_with_relation", help="Training subset")
-    parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN",
-                        help="Training subset")
-    parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
-    
-    parser.add_argument("--data_path", type=str,
-                        default="conllQA_with_global.json",
-                        help="Path to data file (can be relative or absolute)")
-    parser.add_argument("--device", type=str, default="cpu",
-                        help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0')")
-    
-    # Learning rate arguments
-    parser.add_argument("--classifier_lr", type=float, default=1e-3,
-                        help="Learning rate for classifier heads")
-    # Optuna arguments
-    parser.add_argument("--tune", type=str2bool, nargs='?', const=True, default=False,
-                        help="Run Optuna hyperparameter tuning (default: true)")
-    parser.add_argument("--n_trials", type=int, default=20,
-                        help="Number of Optuna trials")
-    parser.add_argument("--tune_train_size", type=int, default=200,
-                    help="Number of samples to use during tuning (smaller = faster)")
-
-    # BERT freezing
-    parser.add_argument("--freeze_bert", type=str2bool, nargs='?', const=True, default=True,
-                        help="Keep BERT frozen throughout training (default: true)")
-    parser.add_argument("--warmup_epochs", type=int, default=2,
-                        help="Epochs to train with BERT frozen before unfreezing")
-    parser.add_argument("--unfreeze_every", type=int, default=500, 
-                        help="Unfreeze BERT layers every N steps")
-    parser.add_argument("--unfreeze_layers", type=int, default=2, 
-                        help="Number of BERT layers to unfreeze per step")
-    parser.add_argument("--bert_lr", type=float, default=1e-5,
-                        help="Learning rate for BERT layers (if not frozen)")
-    
-    # Evaluation settings
-    parser.add_argument("--eval_fraction", type=float, default=0.2,
-                    help="Fraction of data for epoch evaluation (0.2 = 20%%)")
-    
-    # Counting t-norm settings
-    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="L", 
-                        help="The tnorm method to use for counting constraints. "
-                             "G = Gödel, P = Product, L = Łukasiewicz, SP = Schweizer-Sklar")
-    # Adaptive t-norm settings
-    parser.add_argument("--adaptive_tnorm", type=str2bool, nargs='?', const=True, default=False,
-                        help="Enable adaptive t-norm selection per constraint")
-    parser.add_argument("--tnorm_adaptation_interval", type=int, default=10,  
-                        help="Steps between t-norm comparison (set lower for small datasets)")
-    parser.add_argument("--tnorm_warmup_steps", type=int, default=5, 
-                        help="Steps before adaptive t-norm selection begins")
-    parser.add_argument("--tnorm_strategy", type=str, default="gradient_weighted",
-                        choices=["gradient_weighted", "loss_based", "rotating"],
-                        help="Strategy for selecting t-norms")
-    
-    # Counting schedule    
-    parser.add_argument("--use_counting_schedule", type=str2bool, nargs='?', const=True, default=False,
-                        help="Gradually introduce counting constraints during training")
-    parser.add_argument("--counting_warmup_epochs", type=int, default=4,
-                        help="Epochs before introducing counting (default: half of total epochs)")
-    
-    # Gumbel-Softmax settings
-    parser.add_argument("--gumbel_temp_start", type=float, default=5.0,
-                        help="Initial Gumbel temperature (higher = softer, better gradients)")
-    parser.add_argument("--gumbel_temp_end", type=float, default=0.5,
-                        help="Final Gumbel temperature (lower = sharper, more discrete)")
-    parser.add_argument("--gumbel_anneal_start", type=int, default=0,
-                        help="Epoch to start annealing temperature")
-    parser.add_argument("--hard_gumbel", type=str2bool, nargs='?', const=True, default=True,
-                        help="Use hard Gumbel (straight-through estimator) - recommended for counting")
-
-    args = parser.parse_args()
-    return args
 
 def create_adaptive_training_callback(program, models, args):
     """Create callback that tracks per-constraint-type metrics and applies t-norm switching."""
@@ -1480,6 +1435,7 @@ def main(args):
     
     log_training_config(args, _models, train=train, dev=None, test=test)
     
+    train_eval = None
     if not args.evaluate:
         _models['bert'].freeze_all()
         
@@ -1564,6 +1520,15 @@ def main(args):
             # Add callback
             program.after_train_step.append(apply_loss_weights)
             
+        # -- Load previous checkpoint if resuming training
+        if args.load_previous:
+            if args.previous_file != "":
+                checkpoint_path = args.previous_file
+            else:                
+                checkpoint_path = f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth"   
+            
+            program.load(checkpoint_path)
+            
         # -- Start training
         program.train(
             dataset,
@@ -1575,7 +1540,7 @@ def main(args):
             print_loss=False
         )
         
-        # Run final evaluation on FULL dataset (not just subset)
+        # Run final evaluation on FULL dataset
         print("\n[Running final evaluation on full dataset...]")
         train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
         
@@ -1744,9 +1709,12 @@ def main(args):
         
         print("=" * 60 + "\n")
                 
+        #-- Save final model checkpoint
         program.save(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
     else:
+        #-- Evaluation mode: Load specified checkpoint and evaluate on test set
         program.load(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}.pth")
+        train_eval = program.evaluate_condition(dataset, device=args.device, threshold=0.5, return_dict=True)
 
     # Print final evaluation results to console and result file
     output_f = open("result.txt", 'a')
@@ -1756,6 +1724,7 @@ def main(args):
     train_counting_mae = float('inf') if train_eval['counting_mae'] is None else train_eval['counting_mae']
     train_counting_acc = train_eval['counting_accuracy']
     portion = "Training" if not args.evaluate else "Testing"
+    
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}", file=output_f)
     print(f"training_{args.epochs}_lr_{args.classifier_lr}_{args.train_portion}{suffix}")
     print(f"{portion} Acc: {train_acc}", file=output_f)
@@ -1769,6 +1738,7 @@ def main(args):
     print("#" * 40, file=output_f)
     print("#" * 40)
 
+    # -- Check if accuracy meets threshold (if specified)
     if args.checked_acc:
         print(f"<acc>{train_acc}</acc>")
         assert train_acc > args.checked_acc
