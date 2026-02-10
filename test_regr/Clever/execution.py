@@ -223,7 +223,7 @@ def create_execution_for_question(program, question_index, question_type=None):
     op_type = last_op.get('type', last_op.get('function', ''))
     if op_type.startswith('query_'):
         return create_execution_queryL(program, question_index), None
-    return translate_left_domiknows(program, len(program) - 1, first_initial=True), None
+    return translate_left_domiknows(program, len(program) - 1, first_initial=True)[0], None
 
 
     # elif op_type == 'exist':
