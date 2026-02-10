@@ -201,15 +201,17 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     if counting_errors:
         # mean absolute error, root mean square error, accuracy within 0.5
         mae = np.mean(counting_errors)
+        # root mean square error
         rmse = np.sqrt(np.mean([e**2 for e in counting_errors]))
+        
         within_half = sum(1 for e in counting_errors if e <= 0.5)
-        accuracy = (within_half / len(counting_errors)) * 100
+        counting_accuracy = (within_half / len(counting_errors)) * 100
         
         results['counting_mae'] = mae
         results['counting_rmse'] = rmse
-        results['counting_accuracy'] = accuracy
+        results['counting_accuracy'] = counting_accuracy
         
-        print(f"Counting MAE: {mae:.3f}, Accuracy (±0.5): {accuracy:.2f}%")
+        print(f"Counting MAE: {mae:.3f}, Accuracy (±0.5): {counting_accuracy:.2f}%")
     else:
         results['counting_mae'] = results['counting_rmse'] = results['counting_accuracy'] = None
 

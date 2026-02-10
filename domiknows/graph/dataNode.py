@@ -2196,6 +2196,101 @@ class DataNode:
         
         return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key)
    
+    def _prepareLcLossContext(self, tnorm='P', counting_tnorm=None):
+        """
+        Prepare shared context for calculating individual LC losses.
+        
+        Performs expensive setup once: creates full datanode, gets ILP solver,
+        runs inferLocal, sets active LCs, and initializes the LossCalculator.
+        
+        Returns:
+            dict with keys: 'solver', 'lossCalculator', 'lc_map'
+                - solver: the ILP solver instance
+                - lossCalculator: initialized LossCalculator ready for single-LC calls
+                - lc_map: dict mapping lcName -> lc object (from all graphs)
+        """
+        self.myBuilder.createFullDataNode(self)
+
+        myilpOntSolver, _ = self.getILPSolver(
+            conceptsRelations=self.collectConceptsAndRelations()
+        )
+        myilpOntSolver.current_device = self.current_device
+        self.inferLocal()
+
+        myBooleanMethods = myilpOntSolver.myLcLossBooleanMethods
+        myBooleanMethods.current_device = self.current_device
+        myBooleanMethods.current_dtype = myilpOntSolver.constraintConstructor.current_dtype
+
+        self.setActiveLCs()
+
+        lossCalculator = LossCalculator(myilpOntSolver)
+
+        # Build lookup: lcName -> lc for all graphs
+        lc_map = {}
+        for graph in myilpOntSolver.myGraph:
+            for _, lc in graph.logicalConstrains.items():
+                lc_map[lc.lcName] = lc
+            for name, elc in graph.executableLCs.items():
+                if name not in lc_map and hasattr(elc, 'innerLC'):
+                    lc_map[name] = elc.innerLC
+
+        return {
+            'solver': myilpOntSolver,
+            'lossCalculator': lossCalculator,
+            'lc_map': lc_map,
+        }
+
+    def calculateSingleLcLoss(self, lcName, tnorm='P', counting_tnorm=None,
+                              _context=None):
+        """
+        Calculate loss for a single logical constraint by name.
+
+        Parameters:
+        - lcName: str
+            The name of the logical constraint to calculate loss for.
+        - tnorm: str, optional
+            Fallback t-norm for unknown constraint types. Default is 'P'.
+        - counting_tnorm: str, optional
+            If provided, override t-norm for counting constraints. Default is None.
+        - _context: dict, optional
+            Pre-built context from _prepareLcLossContext(). If None, context is
+            created on the fly (expensive if called in a loop).
+
+        Returns:
+        - dict: Loss info dictionary for the constraint with keys:
+            'lc', 'tnorm_used', 'constraint_type', 'lossList',
+            'loss', 'conversionSigmoid', 'expectedCount' (counting only),
+            'elapsedInMsLC'
+
+        Raises:
+        - DataNodeError: When the constraint is not found.
+        """
+        if _context is None:
+            _context = self._prepareLcLossContext(tnorm, counting_tnorm)
+
+        lc_map = _context['lc_map']
+        lossCalculator = _context['lossCalculator']
+
+        lc = lc_map.get(lcName)
+        if lc is None:
+            _DataNode__Logger.error("Constraint %s not found" % (lcName))
+            raise DataNode.DataNodeError("Constraint %s not found" % (lcName))
+
+        result = lossCalculator.calculate_single_lc_loss(
+            lc, self, "/local/softmax", tnorm, counting_tnorm
+        )
+
+        if result is None:
+            _DataNode__Logger.warning(
+                "Constraint %s was skipped (inactive or fixed)" % (lcName)
+            )
+            return {
+                'lc': lc, 'loss': None, 'conversionSigmoid': None,
+                'elapsedInMsLC': 0.0
+            }
+
+        return result
+    
     def calculateLcLoss(self, tnorm='P',counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.

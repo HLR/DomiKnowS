@@ -329,19 +329,6 @@ class InferenceModel(LossModel):
             self.inferenceLogger.info("=== InferenceModel Operations Logger Initialized ===")
 
     def forward(self, builder, build=None, use_gumbel=None, temperature=None, hard_gumbel=None):
-        """
-        Performs a forward pass using a DataNodeBuilder.
-
-        Loss is calculated using the predicted program execution output and the ground-truth value
-        of the program execution output (read from the DataNode).
-        
-        The losses are summed over each program (specifically, the head of each logical expression).
-        Separate loss functions are used for binary program outputs versus counting outputs.
-
-        :param builder: Instance of DataNodeBuilder.
-        :returns: tuple of the loss (from the program execution), the DataNode instance,
-            and the DataNodeBuilder instance.
-        """
         use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
         temperature = temperature if temperature is not None else self.temperature
         hard_gumbel = hard_gumbel if hard_gumbel is not None else self.hard_gumbel
@@ -361,7 +348,6 @@ class InferenceModel(LossModel):
         builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
 
-        # Apply Gumbel-Softmax using datanode's method
         if use_gumbel:
             self.inferenceLogger.info(f"Applying Gumbel-Softmax: temp={temperature}, hard={hard_gumbel}")
             datanode.inferLocal(keys=("softmax",))
@@ -375,25 +361,33 @@ class InferenceModel(LossModel):
 
         constraint_datanode = constraint_dn_search[0]
         read_labels = constraint_datanode.getAttributes()
-                
-        constr_loss = datanode.calculateLcLoss(
+
+        # Prepare shared context once for all constraints
+        lc_context = datanode._prepareLcLossContext(
             tnorm=self.tnorm,
-            counting_tnorm=self.counting_tnorm, 
-            sample=self.sample, 
-            sampleSize=self.sampleSize
+            counting_tnorm=self.counting_tnorm,
         )
 
         losses = []
-        for i, (lcName, loss_dict) in enumerate(constr_loss.items()):
-            if lcName not in self.constr:
-                continue
-            
-            lc = self.constr[lcName]
-            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-            
+        for lcName, lc in self.constr.items():
             if f'{lcName}/label' not in read_labels:
                 continue
             
+            if not lc.active:
+                continue
+
+            loss_dict = datanode.calculateSingleLcLoss(
+                lcName,
+                tnorm=self.tnorm,
+                counting_tnorm=self.counting_tnorm,
+                _context=lc_context,
+            )
+
+            if loss_dict.get('loss') is None:
+                continue
+
+            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
+
             lbl = read_labels[f'{lcName}/label'].float()
             if lbl.dim() == 0:
                 lbl = lbl.unsqueeze(0)
@@ -405,10 +399,9 @@ class InferenceModel(LossModel):
             if is_counting_constraint:
                 if 'expectedCount' in loss_dict and loss_dict['expectedCount'] is not None:
                     constr_out = loss_dict['expectedCount']
-                    constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
                 else:
                     constr_out = loss_dict['conversionSigmoid']
-                    constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
+                constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
             else:
                 constr_out = loss_dict['conversionSigmoid']
                 constraint_loss = self.loss_func(constr_out.float(), lbl)
@@ -434,7 +427,7 @@ class InferenceModel(LossModel):
         
         self.inferenceLogger.info(f"Total loss: {loss.item()}")
         return loss, datanode, builder
- 
+    
 class SampleLossModel(LossModel):
     """
     Class used to train from the constraint loss, calculated using sampling.

@@ -58,6 +58,17 @@ def _get_constraint_type(lc) -> str:
     return type(lc).__name__
 
 
+def _collect_tensors(obj):
+    """Recursively collect tensors from nested lists/tuples."""
+    tensors = []
+    if torch.is_tensor(obj):
+        tensors.append(obj)
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            tensors.extend(_collect_tensors(item))
+    return tensors
+
+
 class LossCalculator:
     """
     Loss calculator with per-constraint t-norm selection.
@@ -103,7 +114,106 @@ class LossCalculator:
             return counting_tnorm
         
         return self.tnorm_config.get(ctype, self.tnorm_config.get('default', fallback))
-    
+
+    def _compute_loss_tensor(self, lossList):
+        """
+        Reduce a lossList (from constructLogicalConstrains) into a single loss tensor.
+        
+        Args:
+            lossList: Nested list of tensors from constraint construction
+            
+        Returns:
+            Single loss tensor or None
+        """
+        if not lossList or not lossList[0]:
+            return None
+
+        separate_tensors = (
+            torch.is_tensor(lossList[0][0])
+            and (lossList[0][0].dim() == 0
+                 or (lossList[0][0].dim() == 1 and lossList[0][0].shape[0] == 1))
+        )
+
+        if separate_tensors:
+            tensors = []
+            for lossItem in lossList:
+                for item in lossItem:
+                    if torch.is_tensor(item):
+                        tensors.append(item)
+            return torch.stack(tensors).mean() if tensors else None
+
+        candidate = lossList[0][0]
+        if torch.is_tensor(candidate):
+            return candidate
+
+        tensors = _collect_tensors(candidate)
+        return torch.stack(tensors).mean() if tensors else None
+
+    def calculate_single_lc_loss(self, lc, dn, key, tnorm, counting_tnorm):
+        """
+        Calculate loss for a single logical constraint.
+        
+        Args:
+            lc: The logical constraint
+            dn: Data node
+            key: Softmax key
+            tnorm: Fallback t-norm
+            counting_tnorm: Override t-norm for counting constraints (or None)
+            
+        Returns:
+            Dict with loss info for this constraint, or None if constraint should be skipped
+        """
+        if not lc.headLC or not lc.active:
+            return None
+
+        if type(lc) is fixedL:
+            return None
+
+        start = perf_counter_ns()
+
+        myBooleanMethods = self.solver.myLcLossBooleanMethods
+        result = {'lc': lc}
+
+        # Select optimal t-norm
+        selected_tnorm = self._get_tnorm_for_constraint(lc, tnorm, counting_tnorm)
+        constraint_type = _get_constraint_type(lc)
+        result['tnorm_used'] = selected_tnorm
+        result['constraint_type'] = constraint_type
+
+        myBooleanMethods.setTNorm(selected_tnorm)
+
+        is_counting = constraint_type in [
+            'sumL', 'atLeastL', 'atLeastAL', 'atMostL', 'atMostAL', 'exactL', 'exactAL'
+        ]
+        if is_counting:
+            myBooleanMethods.setCountingTNorm(selected_tnorm)
+
+        self.solver.myLogger.info(f'Processing {lc} with t-norm {selected_tnorm}')
+
+        # Construct constraint
+        self.solver.constraintConstructor.current_device = self.solver.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        
+        lossList = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, myBooleanMethods, None, dn, 0,
+            key=key, headLC=True, loss=True, sample=False)
+        
+        result['lossList'] = lossList
+
+        # Reduce to single tensor
+        lossTensor = self._compute_loss_tensor(lossList)
+        result['loss'] = lossTensor
+
+        if lossTensor is not None:
+            result['conversionSigmoid'] = 1.0 - lossTensor
+            if isinstance(lc, sumL) or (hasattr(lc, 'innerLC') and isinstance(lc.innerLC, sumL)):
+                result['expectedCount'] = lossTensor
+        else:
+            result['conversionSigmoid'] = None
+
+        result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
+        return result
+
     def calculateLoss(self, dn, tnorm='L', counting_tnorm=None):
         """
         Calculate loss with per-constraint optimal t-norm selection.
@@ -122,109 +232,16 @@ class LossCalculator:
 
         self.solver.myLogger.info('Calculating loss with per-constraint t-norms')
         self.solver.myLoggerTime.info('Calculating loss with per-constraint t-norms')
-        
+
         key = "/local/softmax"
         lcLosses = {}
-        
+
         dn.setActiveLCs()
 
-        # First pass: construct logical constraints with per-constraint t-norms
         for graph in self.solver.myGraph:
             for _, lc in graph.allLogicalConstrains:
-                startLC = perf_counter_ns()
-                
-                if not lc.headLC or not lc.active:
-                    continue
-                
-                if type(lc) is fixedL:
-                    continue
-                
-                lcName = lc.lcName
-                lcLosses[lcName] = {}
-                current_lcLosses = lcLosses[lcName]
-                
-                current_lcLosses['lc'] = lc
-                
-                # Select optimal t-norm for this constraint
-                selected_tnorm = self._get_tnorm_for_constraint(lc, tnorm, counting_tnorm)
-                current_lcLosses['tnorm_used'] = selected_tnorm
-                current_lcLosses['constraint_type'] = _get_constraint_type(lc)
-                
-                # Set t-norm for this constraint
-                myBooleanMethods.setTNorm(selected_tnorm)
-                
-                # Also set counting t-norm if this is a counting constraint
-                is_counting = current_lcLosses['constraint_type'] in [
-                    'sumL', 'atLeastL', 'atLeastAL', 'atMostL', 'atMostAL', 'exactL', 'exactAL'
-                ]
-                if is_counting:
-                    myBooleanMethods.setCountingTNorm(selected_tnorm)
-                
-                self.solver.myLogger.info(f'Processing {lc} with t-norm {selected_tnorm}')
-                # Construct constraint
-                self.solver.constraintConstructor.current_device = self.solver.current_device
-                self.solver.constraintConstructor.myGraph = self.solver.myGraph
-                lossList = self.solver.constraintConstructor.constructLogicalConstrains(
-                    lc, myBooleanMethods, None, dn, 0, 
-                    key=key, headLC=True, loss=True, sample=False)
-                current_lcLosses['lossList'] = lossList
-                
-                endLC = perf_counter_ns()
-                current_lcLosses['elapsedInMsLC'] = (endLC - startLC) / 1000000
-        
-        # Second pass: calculate final loss values
-        for currentLcName in lcLosses:
-            startLC = perf_counter_ns()
-            
-            current_lcLosses = lcLosses[currentLcName]
-            lossList = current_lcLosses['lossList']
-            lossTensor = None
-            
-            seperateTensorsUsed = False
-            if lossList and lossList[0]:
-                if torch.is_tensor(lossList[0][0]) and (len(lossList[0][0].shape) == 0 or 
-                                                        len(lossList[0][0].shape) == 1 and lossList[0][0].shape[0] == 1):
-                    seperateTensorsUsed = True
-                
-                if seperateTensorsUsed:
-                    tensors = []
-                    for lossItem in lossList:
-                        for item in lossItem:
-                            if torch.is_tensor(item):
-                                tensors.append(item)
-                    if tensors:
-                        lossTensor = torch.stack(tensors).mean()
-                else:
-                    # Handle case where lossList[0][0] might be a list or other structure
-                    candidate = lossList[0][0]
-                    if torch.is_tensor(candidate):
-                        lossTensor = candidate
-                    elif isinstance(candidate, (list, tuple)):
-                        # Flatten and collect tensors
-                        tensors = []
-                        def collect_tensors(obj):
-                            if torch.is_tensor(obj):
-                                tensors.append(obj)
-                            elif isinstance(obj, (list, tuple)):
-                                for item in obj:
-                                    collect_tensors(item)
-                        collect_tensors(candidate)
-                        if tensors:
-                            lossTensor = torch.stack(tensors).mean()
-            
-            current_lcLosses['loss'] = lossTensor
-            
-            if lossTensor is not None:
-                current_lcLosses['conversionSigmoid'] = 1.0 - lossTensor
-                
-                # For counting constraints, also compute expected count
-                lc = current_lcLosses.get('lc')
-                if isinstance(lc, sumL) or (hasattr(lc, 'innerLC') and isinstance(lc.innerLC, sumL)):
-                    current_lcLosses['expectedCount'] = lossTensor  # Already represents count
-            else:
-                current_lcLosses['conversionSigmoid'] = None
-            
-            endLC = perf_counter_ns()
-            current_lcLosses['elapsedInMsLC'] = current_lcLosses.get('elapsedInMsLC', 0) + (endLC - startLC) / 1000000
-        
+                result = self.calculate_single_lc_loss(lc, dn, key, tnorm, counting_tnorm)
+                if result is not None:
+                    lcLosses[lc.lcName] = result
+
         return lcLosses
