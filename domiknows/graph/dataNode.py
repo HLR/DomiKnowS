@@ -4,6 +4,8 @@ from time import perf_counter, perf_counter_ns
 import re
 from itertools import count
 
+from domiknows.graph.logicalConstrain import sumL
+
 from .dataNodeConfig import dnConfig
 
 from ordered_set import OrderedSet
@@ -1240,6 +1242,97 @@ class DataNode:
 
         return None
 
+    # ----------------- Active Executable LC methods
+    
+    def getExecutableConstraintLabels(self):
+        """Get all active executable constraint labels from the constraint datanode.
+        
+        Finds the constraint concept's datanode via the builder and returns
+        its attributes dict (format: {'LC{n}/label': label_value, ...}).
+        
+        Returns:
+            dict: Executable constraint labels dict, or empty dict if no constraint datanode found.
+            
+        Raises:
+            ValueError: If multiple constraint datanodes are found.
+        """
+        if not self.myBuilder:
+            return {}
+
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
+        
+        if len(constraint_dn_search) == 0:
+            return {}
+        elif len(constraint_dn_search) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_concept.name}) '
+                f'found: {len(constraint_dn_search)}, expected one.'
+            )
+
+        return constraint_dn_search[0].getAttributes()
+
+    def getExecutableConstraintLabel(self, lcName):
+        """Get the label for a specific active executable constraint.
+        
+        Args:
+            lcName (str): Name of the executable constraint (e.g. 'LC0').
+            
+        Returns:
+            torch.Tensor or None: The label tensor if found, None otherwise.
+        """
+        labels = self.getExecutableConstraintLabels()
+        key = f'{lcName}/label'
+        label = labels.get(key, None)
+        if label is not None:
+            if label.dim() == 0:
+                label = label.unsqueeze(0)
+            label = label.squeeze()
+            
+        return label
+    
+    def getActiveExecutableConstraintNames(self):
+        """Get the set of active executable constraint names from constraint labels.
+        
+        Parses the constraint labels dict keys (format 'LC{n}/label') to extract
+        the executable constraint names (e.g. 'LC0', 'LC1').
+        
+        Returns:
+            set: Set of active executable constraint name strings.
+        """
+        read_labels = self.getExecutableConstraintLabels()
+        return set(x.split('/')[0] for x in read_labels)
+    
+    def setActiveExecutableLCs(self):
+        # If no builder or no executive LC datanode then return
+        if not self.myBuilder:
+            return
+
+        read_labels = self.getExecutableConstraintLabels()
+        if not read_labels:
+            return
+
+        active_lc_names = self.getActiveExecutableConstraintNames()
+
+        no_active_lcs = len(active_lc_names)
+        _DataNode__Logger.info('Number of active executive LCs: %d' % (no_active_lcs))
+
+        # Set active/inactive executive LCs in the graph
+        lc_no = 0
+        for lc_name, lc in self.graph.executableLCs.items():
+            assert lc_name == str(lc)  # TODO: where does lc_name come from? is it == str(lc)?
+            lc_no += 1
+            if lc_name in active_lc_names:
+                lc.active = True
+                lc.innerLC.active = True
+            else:
+                lc.active = False
+                lc.innerLC.active = False
+
+        return read_labels
+                
+    #----------------- Solver methods
+
     # cache
     collectedConceptsAndRelations = None
 
@@ -1340,51 +1433,6 @@ class DataNode:
             raise DataNode.DataNodeError("ILPSolver not initialized")
 
         return myilpOntSolver, _conceptsRelations
-
-    def setActiveLCs(self):
-        # Try to get the datanode for the executive LC concept
-
-        # If no builder or no executive LC datanode then return 
-        if not self.myBuilder:
-            return
-
-        constraint_concept = self.graph.get_constraint_concept()
-        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
-        if len(constraint_dn_search) == 0:
-           return 
-        elif len(constraint_dn_search) > 1:
-            raise ValueError(f'Multiple constraint datanodes (for concept {constraint_concept.name}) found: found {len(constraint_dn_search)}, expected one.')
-
-        constraint_datanode = constraint_dn_search[0]
-
-        # Get the executive LC labels
-        # read_labels will be of format: {'LC{n}/label': label_value}
-        read_labels = constraint_datanode.getAttributes()
-
-        # Get active executive LCs based on given executive LC labels
-        active_lc_names = set(
-            x.split('/')[0] # TODO: parse this better?
-            for x in read_labels
-        )
-
-        no_active_lcs = len(active_lc_names)
-        _DataNode__Logger.info('Number of active executive LCs: %d'%(no_active_lcs))
-    
-        # Set active/inactive executive LCs in the graph
-        lc_no = 0
-        for lc_name, lc in self.graph.executableLCs.items():
-            assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
-            lc_no += 1
-            if lc_name in active_lc_names:
-                lc.active = True
-                lc.innerLC.active = True
-            else:
-                lc.active = False
-                lc.innerLC.active = False
-                
-        return read_labels
-                
-    #----------------- Solver methods
 
     def collectInferredResults(self, concept, inferKey):
         """Collect inferred results based on the given concept and inference key.
@@ -2132,7 +2180,7 @@ class DataNode:
 
         return verifyResult
 
-    def verifySingleConstraint(self, lcName, key="/local/argmax"):
+    def verifySingleConstraint(self, lcName, key="/local/argmax", label = None):
         """
         Verify a single logical constraint against model predictions.
         
@@ -2194,7 +2242,7 @@ class DataNode:
         myBooleanMethods = myilpOntSolver.booleanMethodsCalculator
         myBooleanMethods.current_device = self.current_device
         
-        return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key)
+        return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key, label=label)
    
     def _prepareLcLossContext(self, tnorm='P', counting_tnorm=None):
         """
@@ -2221,7 +2269,7 @@ class DataNode:
         myBooleanMethods.current_device = self.current_device
         myBooleanMethods.current_dtype = myilpOntSolver.constraintConstructor.current_dtype
 
-        self.setActiveLCs()
+        self.setActiveExecutableLCs()
 
         lossCalculator = LossCalculator(myilpOntSolver)
 
@@ -2240,8 +2288,7 @@ class DataNode:
             'lc_map': lc_map,
         }
 
-    def calculateSingleLcLoss(self, lcName, tnorm='P', counting_tnorm=None,
-                              _context=None):
+    def calculateSingleLcLoss(self, lcName, tnorm='P', counting_tnorm=None, _context=None, label=None):
         """
         Calculate loss for a single logical constraint by name.
 
@@ -2255,11 +2302,12 @@ class DataNode:
         - _context: dict, optional
             Pre-built context from _prepareLcLossContext(). If None, context is
             created on the fly (expensive if called in a loop).
+        - labels: dict, optional
 
         Returns:
         - dict: Loss info dictionary for the constraint with keys:
             'lc', 'tnorm_used', 'constraint_type', 'lossList',
-            'loss', 'conversionSigmoid', 'expectedCount' (counting only),
+            'loss', 'conversionSigmoid', 'expectedCount' (counting only),   
             'elapsedInMsLC'
 
         Raises:
@@ -2275,10 +2323,8 @@ class DataNode:
         if lc is None:
             _DataNode__Logger.error("Constraint %s not found" % (lcName))
             raise DataNode.DataNodeError("Constraint %s not found" % (lcName))
-
-        result = lossCalculator.calculate_single_lc_loss(
-            lc, self, "/local/softmax", tnorm, counting_tnorm
-        )
+        
+        result = lossCalculator.calculate_single_lc_loss( lc, self, "/local/softmax", tnorm, counting_tnorm, label=label)
 
         if result is None:
             _DataNode__Logger.warning(

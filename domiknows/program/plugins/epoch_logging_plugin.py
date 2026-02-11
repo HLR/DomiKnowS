@@ -72,7 +72,6 @@ class EpochLoggingPlugin:
             'epoch': [],
             'overall_acc': [],
             'bool_acc': [],
-            'counting_mae': [],
             'counting_acc': [],
             'clf_grad_norm': [],
             'accumulated_grad_norm': [],
@@ -81,9 +80,6 @@ class EpochLoggingPlugin:
         # Register callbacks
         program.after_train_epoch.append(self._log_epoch_metrics)
         program.after_train_step.append(lambda _: self._capture_gradients())
-        
-        print(f"[Eval] Using {len(self.eval_subset)}/{len(list(dataset))} samples "
-              f"({100*len(self.eval_subset)/len(list(dataset)):.1f}%) for epoch evaluation")
     
     def _create_eval_subset(self, dataset, eval_fraction=0.2, min_samples=50, seed=42):
         """Create evaluation subset from dataset."""
@@ -140,10 +136,6 @@ class EpochLoggingPlugin:
         if bool_acc is None:
             bool_acc = 0.0
         
-        counting_mae = train_eval.get('counting_mae', float('inf'))
-        if counting_mae is None:
-            counting_mae = float('inf')
-        
         counting_acc = train_eval.get('counting_accuracy', 0.0)
         if counting_acc is None:
             counting_acc = 0.0
@@ -154,7 +146,6 @@ class EpochLoggingPlugin:
         self.metrics_history['epoch'].append(epoch)
         self.metrics_history['overall_acc'].append(overall_acc)
         self.metrics_history['bool_acc'].append(bool_acc)
-        self.metrics_history['counting_mae'].append(counting_mae)
         self.metrics_history['counting_acc'].append(counting_acc)
         self.metrics_history['accumulated_grad_norm'].append(avg_grad_norm)
         
@@ -166,7 +157,6 @@ class EpochLoggingPlugin:
         overall_delta = ""
         bool_delta = ""
         counting_delta = ""
-        mae_delta = ""
         
         if len(self.metrics_history['overall_acc']) >= 2:
             overall_change = overall_acc - self.metrics_history['overall_acc'][-2]
@@ -178,10 +168,6 @@ class EpochLoggingPlugin:
             counting_change = counting_acc - self.metrics_history['counting_acc'][-2]
             counting_delta = f" (Δ{counting_change:+.3f})"
             
-            if counting_mae != float('inf') and self.metrics_history['counting_mae'][-2] != float('inf'):
-                mae_change = counting_mae - self.metrics_history['counting_mae'][-2]
-                mae_delta = f" (Δ{mae_change:+.3f})"
-        
         # Print metrics
         bert_status = f"frozen" if self.models['bert'].unfrozen_layers == 0 else f"{self.models['bert'].unfrozen_layers}L unfrozen"
         
@@ -189,8 +175,6 @@ class EpochLoggingPlugin:
         print(f"  Overall Acc:    {overall_acc:.4f}{overall_delta}")
         print(f"  Boolean Acc:    {bool_acc:.4f}{bool_delta}")
         print(f"  Counting Acc:   {counting_acc:.4f}{counting_delta}")
-        mae_str = f"{counting_mae:.3f}" if counting_mae != float('inf') else "N/A"
-        print(f"  Counting MAE:   {mae_str}{mae_delta}")
         print(f"  AvgGradNorm:    {avg_grad_norm:.6f}")
         print(f"  BERT:           {bert_status}")
         
@@ -213,7 +197,7 @@ class EpochLoggingPlugin:
         print(f"  Epoch Logging:")
         print(f"    Eval fraction:    {args.eval_fraction} ({int(args.eval_fraction*100)}% of data)")
         print(f"    Min samples:      {args.eval_min_samples}")
-        print(f"    Metrics tracked:  overall_acc, bool_acc, counting_acc, counting_mae, grad_norm")
+        print(f"    Metrics tracked:  overall_acc, bool_acc, counting_acc, grad_norm")
     
     def final_display(self, final_eval=None):
         """Display final summary and learning assessment."""
@@ -224,19 +208,16 @@ class EpochLoggingPlugin:
         initial_overall = self.metrics_history['overall_acc'][0]
         initial_bool = self.metrics_history['bool_acc'][0]
         initial_counting = self.metrics_history['counting_acc'][0]
-        initial_mae = self.metrics_history['counting_mae'][0]
         
         # Use final_eval if provided, otherwise use last epoch
         if final_eval:
             final_overall = final_eval.get('accuracy', 0.0) * 100.0
             final_bool = final_eval.get('boolean_accuracy', 0.0) or 0.0
             final_counting = final_eval.get('counting_accuracy', 0.0) or 0.0
-            final_mae = final_eval.get('counting_mae', float('inf')) or float('inf')
         else:
             final_overall = self.metrics_history['overall_acc'][-1]
             final_bool = self.metrics_history['bool_acc'][-1]
             final_counting = self.metrics_history['counting_acc'][-1]
-            final_mae = self.metrics_history['counting_mae'][-1]
         
         # Overall metrics
         print("\n[Overall Metrics]")
@@ -254,12 +235,7 @@ class EpochLoggingPlugin:
         print(f"  Initial Counting Acc:  {initial_counting:.2f}%")
         print(f"  Final Counting Acc:    {final_counting:.2f}%")
         print(f"  Counting Improvement:  {final_counting - initial_counting:+.2f}%")
-        
-        if final_mae != float('inf'):
-            print(f"  Final Counting MAE:    {final_mae:.3f}")
-            if initial_mae != float('inf'):
-                mae_change = final_mae - initial_mae
-                print(f"  MAE Change:            {mae_change:+.3f}")
+
         
         # Gradient analysis
         avg_grad = sum(self.metrics_history['accumulated_grad_norm']) / max(len(self.metrics_history['accumulated_grad_norm']), 1)

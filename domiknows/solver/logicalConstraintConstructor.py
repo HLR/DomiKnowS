@@ -6,6 +6,7 @@ from domiknows.graph.concept import Concept, EnumConcept
 from domiknows.graph import LcElement, LogicalConstrain, V
 from domiknows.graph import CandidateSelection
 from domiknows.graph.candidates import getCandidates
+from domiknows.graph.logicalConstrain import sumL
 
 
 class LogicalConstraintConstructor:
@@ -419,7 +420,7 @@ class LogicalConstraintConstructor:
     
     def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key=None, 
                                    lcVariablesDns=None, lcVariables=None, headLC=False, 
-                                   loss=False, sample=False, vNo=None, verify=False):
+                                   loss=False, sample=False, vNo=None, verify=False, label=None):
         """
         Construct logical constraints by processing concepts and variables.
         
@@ -437,6 +438,7 @@ class LogicalConstraintConstructor:
             sample: Whether generating samples
             vNo: Variable numbering counter [concept_counter, lc_counter]
             verify: Whether verifying constraints
+            labels: Optional labels for the constraint
             
         Returns:
             For sample=True: (result, sampleInfo, lcVariablesSet, lcVariables)
@@ -669,7 +671,7 @@ class LogicalConstraintConstructor:
                         lcVariablesDnsNew = self.constructLogicalConstrains(
                             e, booleanProcessor, m, dn, p, key=key, 
                             lcVariablesDns=lcVariablesDns, lcVariables=lcVariables, 
-                            headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify)
+                            headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify, label=label)
                          
                         lcVariablesDns = lcVariablesDnsNew
                         vDns = None
@@ -702,8 +704,6 @@ class LogicalConstraintConstructor:
                                 headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify)
                             
                             # Ensure vDns has the correct structure
-                            # Nested constraints return [[result1, result2, ...], [result3, ...], ...]
-                            # but we need [[result1], [result2], [result3], ...] for proper counting
                             if verify and not loss and not sample:
                                 # Flatten the nested structure for counting
                                 flattened_vDns = []
@@ -748,9 +748,9 @@ class LogicalConstraintConstructor:
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
         elif sample:
             lcVariablesSet[lc] = useLcVariables
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate), sampleInfo, lcVariablesSet, lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), sampleInfo, lcVariablesSet, lcVariables
         elif verify and headLC:
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate), lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         else:
             if loss:
                 slpitT = False
@@ -770,4 +770,4 @@ class LogicalConstraintConstructor:
                         for s in lcVSplitted:
                             useLcVariables[v].append([s]) 
                     
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate), lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables

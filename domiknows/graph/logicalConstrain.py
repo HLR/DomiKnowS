@@ -677,7 +677,7 @@ class LogicalConstrain(LcElement):
             model.update()
         return zVars
     
-    def createSummation(self, model, myConstraintVarProcessor, v, headConstrain, integrate, logicMethodName="SUMMATION"):
+    def createSummation(self, model, myConstraintVarProcessor, v, headConstrain, integrate, label=None, logicMethodName="SUMMATION"):
         """
         Build summation constraints for sumL.
         
@@ -712,7 +712,7 @@ class LogicalConstrain(LcElement):
             if len(all_values) == 0:
                 zVars.append([0])
             else:
-                S = myConstraintVarProcessor.summationVar(model, *all_values)
+                S = myConstraintVarProcessor.summationVar(model, *all_values, onlyConstrains = headConstrain, label=label)
                 zVars.append([S])
         else:
             # Element-wise per-row sums
@@ -744,7 +744,7 @@ class LogicalConstrain(LcElement):
                 if len(row) == 0:
                     zVars.append([0])
                 else:
-                    S = myConstraintVarProcessor.summationVar(model, *row)
+                    S = myConstraintVarProcessor.summationVar(model, *row, onlyConstrains = headConstrain)
                     zVars.append([S])
 
         if model is not None:
@@ -1080,9 +1080,9 @@ class sumL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False):
+    def __call__(self, model, myConstraintVarProcessor, v, headConstrain = False, integrate = False, label=None):
         with torch.set_grad_enabled(myConstraintVarProcessor.grad): 
-            return self.createSummation(model, myConstraintVarProcessor, v, headConstrain, integrate, logicMethodName='Summation')
+            return self.createSummation(model, myConstraintVarProcessor, v, headConstrain, integrate, label=label, logicMethodName='Summation')
         
 #----------------- Definite Description
 class iotaL(LogicalConstrain):

@@ -1,4 +1,5 @@
 import logging
+from unittest import result
 import torch
 import numpy as np
 
@@ -80,10 +81,10 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     
     boolean_correct = 0
     boolean_total = 0
+    
+    counting_correct = 0
     counting_total = 0  
-    counting_errors = []
-    counting_predictions = []
-    counting_labels = []
+   
     total = 0
 
     for datanode in tqdm(
@@ -93,13 +94,11 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         position=0,
         leave=True
     ):
-        find_constraints_label = datanode.myBuilder.findDataNodesInBuilder(select=datanode.graph.constraint)
-        if len(find_constraints_label) < 1:
-            program.logger.error("No Constraint Labels found")
+        constraint_labels_dict = datanode.getExecutableConstraintLabels()
+        if not constraint_labels_dict:
             continue
-        find_constraints_label = find_constraints_label[0]
-        constraint_labels_dict = find_constraints_label.getAttributes()
-        active_lc_name = set(x.split('/')[0] for x in constraint_labels_dict)
+
+        active_lc_name = datanode.getActiveExecutableConstraintNames()
 
         for lc_name, lc in program.graph.executableLCs.items():
             lc.active = lc_name in active_lc_name
@@ -115,12 +114,12 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         for lc_name in active_lc_name:
             if lc_name not in program.graph.executableLCs:
                 continue
-            
+
             lc = program.graph.executableLCs[lc_name]
             if not lc.active:
                 continue
-            
-            label = constraint_labels_dict.get(f'{lc_name}/label')
+
+            label = datanode.getExecutableConstraintLabel(lc_name)
             if label is None:
                 continue
             
@@ -128,36 +127,16 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             
             if is_counting:
                 try:
-                    verify_result = datanode.verifySingleConstraint(lc_name, key=key)
+                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
                 except Exception as e:
                     program.logger.warning(f"Failed to verify constraint {lc_name}: {e}")
                     continue
                 
-                constr_loss = datanode.calculateLcLoss(
-                    tnorm=getattr(program.graph, 'tnorm', 'P'),
-                    counting_tnorm=getattr(program.graph, 'counting_tnorm', None),
-                    sample=False, sampleSize=0
-                )
+                is_satisfied = verify_result["satisfied"] == 100.0
+                expected_satisfied = 1
                 
-                if lc_name in constr_loss:
-                    lc_loss_dict = constr_loss[lc_name]
-                    
-                    if 'expectedCount' in lc_loss_dict and lc_loss_dict['expectedCount'] is not None:
-                        predicted_count = lc_loss_dict['expectedCount']
-                    elif 'conversionSigmoid' in lc_loss_dict:
-                        predicted_count = lc_loss_dict['conversionSigmoid']
-                    else:
-                        continue
-                    
-                    if torch.is_tensor(predicted_count):
-                        predicted_count = predicted_count.item()
-                    
-                    expected_count = label.item() if torch.is_tensor(label) else float(label)
-                    error = abs(predicted_count - expected_count)
-                    
-                    counting_errors.append(error)
-                    counting_predictions.append(predicted_count)
-                    counting_labels.append(expected_count)
+                if is_satisfied == expected_satisfied:
+                    counting_correct += 1
                 counting_total += 1
             else:
                 try:
@@ -177,17 +156,14 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     results = {
         'boolean_correct': boolean_correct,
         'boolean_total': boolean_total,
-        'counting_predictions': counting_predictions,
-        'counting_labels': counting_labels,
-        'counting_errors': counting_errors,
+        'counting_correct': counting_correct, 
         'counting_total': counting_total
     }
 
     if total == 0:
         program.logger.error("No Valid Constraint found for this dataset.")
         results.update({
-            'boolean_accuracy': 0.0, 'counting_mae': float('inf'),
-            'counting_rmse': float('inf'), 'counting_accuracy': 0.0,
+            'boolean_accuracy': 0.0, 'counting_accuracy': 0.0,
             'primary_metric': 0.0
         })
         return results if return_dict else 0.0
@@ -198,38 +174,29 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     else:
         results['boolean_accuracy'] = None
 
-    if counting_errors:
-        # mean absolute error, root mean square error, accuracy within 0.5
-        mae = np.mean(counting_errors)
-        # root mean square error
-        rmse = np.sqrt(np.mean([e**2 for e in counting_errors]))
-        
-        within_half = sum(1 for e in counting_errors if e <= 0.5)
-        counting_accuracy = (within_half / len(counting_errors)) * 100
-        
-        results['counting_mae'] = mae
-        results['counting_rmse'] = rmse
+    if counting_total > 0:
+        counting_accuracy = (counting_correct / counting_total) * 100
         results['counting_accuracy'] = counting_accuracy
-        
-        print(f"Counting MAE: {mae:.3f}, Accuracy (±0.5): {counting_accuracy:.2f}%")
+        print(f"Counting accuracy: {counting_accuracy:.2f}% ({counting_correct}/{counting_total})")
     else:
-        results['counting_mae'] = results['counting_rmse'] = results['counting_accuracy'] = None
+        results['counting_accuracy'] = None
 
     # Primary metric
     if results['counting_accuracy'] is not None and results['boolean_accuracy'] is not None:
         total_constraints = boolean_total + counting_total
         boolean_weight = boolean_total / total_constraints
         counting_weight = counting_total / total_constraints
-        results['primary_metric'] = boolean_weight * results['boolean_accuracy'] + counting_weight * results['counting_accuracy']
+        results['accuracy'] = boolean_weight * results['boolean_accuracy'] + counting_weight * results['counting_accuracy']
     elif results['counting_accuracy'] is not None:
-        results['primary_metric'] = results['counting_accuracy']
+        results['accuracy'] = results['counting_accuracy']
     elif results['boolean_accuracy'] is not None:
-        results['primary_metric'] = results['boolean_accuracy']
+        results['accuracy'] = results['boolean_accuracy']
     else:
-        results['primary_metric'] = 0.0
+        results['accuracy'] = 0.0
+        
+    results["boolean_total"] = boolean_total
+    results["counting_total"] = counting_total   
             
-    results['accuracy'] = results['primary_metric']/100.0
-
     return results if return_dict else results['accuracy']
 
 ################################################################################

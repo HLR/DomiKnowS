@@ -8,6 +8,7 @@ import torch
 from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
 from domiknows import setup_logger, getProductionModeStatus
+from domiknows.graph.logicalConstrain import sumL
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
@@ -296,7 +297,6 @@ class InferenceModel(LossModel):
         :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
         be trained and evaluated. It can take the following values:, defaults to auto (optional)
         """
-        self.constraint_concept = graph.get_constraint_concept()
         self.graph = graph
 
         super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, 
@@ -347,22 +347,19 @@ class InferenceModel(LossModel):
         
         builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
+        dtype = getattr(datanode, 'current_dtype', torch.float32)
 
         if use_gumbel:
             self.inferenceLogger.info(f"Applying Gumbel-Softmax: temp={temperature}, hard={hard_gumbel}")
             datanode.inferLocal(keys=("softmax",))
             datanode.inferGumbelLocal(temperature=temperature, hard=hard_gumbel)
 
-        constraint_dn_search = builder.findDataNodesInBuilder(select=self.constraint_concept.name)
-        if len(constraint_dn_search) == 0:
-            raise ValueError(f'Constraint datanode (for concept {self.constraint_concept.name}) not found.')
-        elif len(constraint_dn_search) > 1:
-            raise ValueError(f'Multiple constraint datanodes found: {len(constraint_dn_search)}, expected one.')
+        # read executable constraint labels from datanode
+        read_labels = datanode.getExecutableConstraintLabels()
+        if len(read_labels) == 0:
+            raise ValueError('No active executable constraint labels found in datanode.')
 
-        constraint_datanode = constraint_dn_search[0]
-        read_labels = constraint_datanode.getAttributes()
-
-        # Prepare shared context once for all constraints
+        # Prepare shared context for loss calculation
         lc_context = datanode._prepareLcLossContext(
             tnorm=self.tnorm,
             counting_tnorm=self.counting_tnorm,
@@ -376,44 +373,36 @@ class InferenceModel(LossModel):
             if not lc.active:
                 continue
 
+            # Use datanode method to get the label
+            lbl = datanode.getExecutableConstraintLabel(lcName).float()
+            
             loss_dict = datanode.calculateSingleLcLoss(
                 lcName,
                 tnorm=self.tnorm,
                 counting_tnorm=self.counting_tnorm,
-                _context=lc_context,
+                _context=lc_context
             )
 
             if loss_dict.get('loss') is None:
                 continue
-
-            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-
-            lbl = read_labels[f'{lcName}/label'].float()
-            if lbl.dim() == 0:
-                lbl = lbl.unsqueeze(0)
-            lbl = lbl.squeeze()
                 
-            from domiknows.graph.logicalConstrain import sumL
-            is_counting_constraint = isinstance(lc, sumL)
-            
-            if is_counting_constraint:
-                if 'expectedCount' in loss_dict and loss_dict['expectedCount'] is not None:
-                    constr_out = loss_dict['expectedCount']
-                else:
-                    constr_out = loss_dict['conversionSigmoid']
-                constraint_loss = torch.nn.functional.mse_loss(constr_out, lbl)
-            else:
-                constr_out = loss_dict['conversionSigmoid']
-                constraint_loss = self.loss_func(constr_out.float(), lbl)
-
             if MONITORING_AVAILABLE:
+                lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
                 log_single_lc(
                     constraint_name=lcName,
                     loss_dict=loss_dict,
                     label_tensor=lbl,
                     lc_formulation=lcRepr
                 )
-            
+                
+            if isinstance(lc, sumL):
+                lbl = torch.tensor(1.0, dtype=dtype, device=self.device, requires_grad=True)
+                
+            constr_out = loss_dict['conversionSigmoid']
+            if torch.equal(constr_out, lbl):
+                print(f"Constraint {lcName}: loss={constr_out}, label={lbl}")
+            constraint_loss = self.loss_func(constr_out.float(), lbl)
+
             losses.append(constraint_loss)
 
         if len(losses) == 0:

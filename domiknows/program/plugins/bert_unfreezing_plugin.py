@@ -37,14 +37,10 @@ class BERTUnfreezingPlugin:
         
         # Check if unfreezing is disabled
         if getattr(args, 'freeze_bert', True):
-            print("[BERT Unfreezing] Skipped (BERT frozen throughout training)")
             return
         
         # Register callbacks
         program.before_train_epoch.append(self._unfreeze_callback)
-        
-        print(f"[BERT Unfreezing] Enabled (warmup: {args.warmup_epochs} epochs, "
-              f"layers/epoch: {args.unfreeze_layers})")
     
     def _unfreeze_callback(self):
         """Gradually unfreeze BERT layers and update optimizer."""

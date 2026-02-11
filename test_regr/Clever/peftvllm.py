@@ -682,7 +682,7 @@ class InternVLSharedHF(nn.Module):
         img = img.resize((self.input_size, self.input_size), resample=Image.BICUBIC)
         return img
 
-    def forward(self, image, bounding_boxes, labels=None):
+    def forward(self, image, bounding_boxes, label=None):
         """
         Exactly like your vLLM InternVLShared:
           image: [something] (you used image=image[0]) — we support both.
@@ -1139,7 +1139,7 @@ if __name__ == "__main__":
 
         # Training-style call (optional)
         labels = torch.tensor([1, 1], dtype=torch.long, device=device)  # pretend both are "No"
-        probs2, loss = m(dummy, boxes, labels=labels)
+        probs2, loss = m(dummy, boxes, label=label)
         print("loss:", loss.item())
         loss.backward()
         print("backward ok")

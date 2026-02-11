@@ -804,7 +804,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
-            dn.setActiveLCs() # Set active executive LCs in the data node if executive LC datanode set
+            dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
             _lcP = {}
             _lcP[100] = []
             pUsed = False

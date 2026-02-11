@@ -62,7 +62,7 @@ class SampleLossCalculator:
         lcCounter = 0
         lcLosses = {}
         
-        dn.setActiveLCs() # Set active executive LCs in the data node if executive LC datanode set
+        dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
 
         # First pass: construct logical constraints and collect sample data
         for graph in self.solver.myGraph:

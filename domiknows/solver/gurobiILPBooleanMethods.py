@@ -815,7 +815,7 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
         if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,1))
         return 1
     
-    def summationVar(self, m, *var, onlyConstrains=False, logicMethodName="SUMMATION"):
+    def summationVar(self, m, *var, onlyConstrains=False, label=None, logicMethodName="SUMMATION"):
         """
         Returns a linear expression that sums all provided binary variables.
         

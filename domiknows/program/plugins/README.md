@@ -78,7 +78,6 @@ Logs comprehensive training metrics after each epoch.
 
 **Features:**
 - Overall, boolean, and counting constraint accuracy
-- Counting MAE (Mean Absolute Error)
 - Gradient norm tracking
 - Learning progress assessment
 - Performance delta calculations
@@ -96,7 +95,6 @@ Logs comprehensive training metrics after each epoch.
   Overall Acc:    65.23 (Δ+2.15)
   Boolean Acc:    67.50 (Δ+1.80)
   Counting Acc:   58.30 (Δ+3.20)
-  Counting MAE:   1.45 (Δ-0.15)
   AvgGradNorm:    0.000234
   BERT:           4L unfrozen
 ```

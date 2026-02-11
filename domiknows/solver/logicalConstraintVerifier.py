@@ -39,7 +39,7 @@ class LogicalConstraintVerifier:
         """
         self.solver = solver
     
-    def verifySingleConstraint(self, lc, myBooleanMethods, dn, key="/argmax"):
+    def verifySingleConstraint(self, lc, myBooleanMethods, dn, key="/argmax", label=None):
         """
         Verify a single logical constraint against model predictions.
         
@@ -53,7 +53,7 @@ class LogicalConstraintVerifier:
             dn: Data node containing the predictions to verify
             key: Attribute key for accessing predictions in datanodes.
                  Default: "/argmax" for discrete predicted labels
-            
+            label: Optional label for constraint verification (used for counting constraints)
         Returns:
             dict: Verification result for the constraint with structure:
                 {
@@ -76,7 +76,7 @@ class LogicalConstraintVerifier:
         self.solver.constraintConstructor.current_device = dn.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
         verifyList, lcVariables = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, myBooleanMethods, m, dn, p, key=key, headLC=True, verify=True)
+            lc, myBooleanMethods, m, dn, p, key=key, headLC=True, verify=True, label=label)
         result['verifyList'] = verifyList
         
         verifyListLen = 0

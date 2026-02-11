@@ -66,10 +66,14 @@ class AdaptiveTNormPlugin:
         self.models = models
         self.args = args
         
-        adapt_interval = getattr(args, 'tnorm_adaptation_interval', 10)
-        warmup = getattr(args, 'tnorm_warmup_steps', 5)
+        # Safely get values with None handling
+        adapt_interval = getattr(args, 'tnorm_adaptation_interval', None)
+        adapt_interval = int(adapt_interval) if adapt_interval is not None else 10
+        warmup = getattr(args, 'tnorm_warmup_steps', None)
+        warmup = int(warmup) if warmup is not None else 5
         auto_apply = getattr(args, 'adaptive_tnorm', False)
-        min_obs = getattr(args, 'tnorm_min_observations', 20)
+        min_obs = getattr(args, 'tnorm_min_observations', None)
+        min_obs = int(min_obs) if min_obs is not None else 20
         
         self.tracker = AdaptiveTNormLossCalculator(
             solver=None,
@@ -84,11 +88,6 @@ class AdaptiveTNormPlugin:
         # Register callbacks
         program.after_train_step.append(self._on_step_end)
         program.after_train_epoch.append(self._on_epoch_end)
-        
-        if auto_apply:
-            print(f"[Adaptive T-Norm] Enabled with strategy '{args.tnorm_strategy}', auto-apply=True")
-        else:
-            print(f"[Adaptive T-Norm] Tracking only (use --adaptive_tnorm to enable auto-switching)")
     
     def _on_step_end(self, output):
         """Track metrics grouped by constraint type."""
@@ -131,8 +130,10 @@ class AdaptiveTNormPlugin:
                 self.tracker.record_observation(lc_name, lc, loss_val, grad_norm, current_tnorm)
             
             # Compare t-norms at interval
-            adapt_interval = getattr(self.args, 'tnorm_adaptation_interval', 10)
-            warmup = getattr(self.args, 'tnorm_warmup_steps', 5)
+            adapt_interval = getattr(self.args, 'tnorm_adaptation_interval', None)
+            adapt_interval = int(adapt_interval) if adapt_interval is not None else 10
+            warmup = getattr(self.args, 'tnorm_warmup_steps', None)
+            warmup = int(warmup) if warmup is not None else 5
             
             if self.step_counter[0] % adapt_interval == 0 and self.step_counter[0] >= warmup:
                 for tnorm in self.tracker.tnorms:

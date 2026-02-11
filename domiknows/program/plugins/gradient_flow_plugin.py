@@ -47,9 +47,7 @@ class GradientFlowPlugin:
         # Register callbacks
         program.after_train_step.append(self._check_gradient_flow)
         program.after_train_epoch.append(self._print_summary)
-        
-        print(f"[Gradient Flow] Diagnostic enabled (check every {self.check_every} steps)")
-    
+            
     def _check_gradient_flow(self, output):
         """Check gradient flow after loss computation but before optimizer step."""
         self.step_counter[0] += 1
@@ -75,7 +73,7 @@ class GradientFlowPlugin:
         
         # Calculate losses
         try:
-            losses = datanode.calculateLcLoss(
+             losses = datanode.calculateLcLoss(
                 tnorm=getattr(self.program.graph, 'tnorm', 'L'),
                 counting_tnorm=getattr(self.program.graph, 'counting_tnorm', None)
             )
@@ -89,7 +87,7 @@ class GradientFlowPlugin:
         sumL_total_loss = 0.0
         other_total_loss = 0.0
         
-        for lc_name, loss_dict in losses.items():
+        for lc_name, loss_dict in losses:
             lc = loss_dict.get('lc')
             loss_tensor = loss_dict.get('loss')
             

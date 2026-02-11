@@ -283,12 +283,12 @@ class booleanMethodsCalculator(constraintsProcessor):
         
         return fixedSuccess
     
-    def summationVar(self, _, *var, onlyConstrains=False, logicMethodName="SUMMATION"):
+    def summationVar(self, m, *var, onlyConstrains=False, label=None, logicMethodName="SUMMATION"):
         """
         Sums up a list of binary literals to an integer literal.
         
         Parameters:
-        - _: Model (ignored, kept for signature compatibility)
+        - m: Model context (not used in this method, but included for signature compatibility)
         - *var: Variable number of binary literals (int, bool, torch.Tensor, or None)
         - onlyConstrains: Not used for summation (kept for signature consistency)
         - logicMethodName: Name for logging purposes
@@ -296,6 +296,9 @@ class booleanMethodsCalculator(constraintsProcessor):
         Returns:
         - Integer sum of all truthy values
         """
+        if onlyConstrains:
+            return self.countVar(m, *var, onlyConstrains=onlyConstrains, limitOp=">=", limit=label, logicMethodName=logicMethodName)
+        
         varSum = 0
         for v in var:
             if v is None:

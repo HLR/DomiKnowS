@@ -89,7 +89,6 @@ def conll4_reader(data_path, dataset_portion):
     else:
         # Assume it's already an extracted file containing only the portion data directly
         dataset = full_data
-        print(f"Using direct portion data from: {data_path}")
 
     train = []
     test = []

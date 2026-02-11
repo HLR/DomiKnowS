@@ -25,6 +25,14 @@ with Graph('global') as graph:
     emergencyService = city(name='emergencyService')
     groceryShop = city(name='groceryShop')
     
+    
+     # Example 1: Simple sumL - Total emergency + grocery services MUST equal 14
+    # Using exactL to enforce equality between sum and constant
+    exactL(
+        sumL(emergencyService, groceryShop),
+        14  # Must equal exactly 14
+    )
+    
     # Fire station composition constraints
     exactAL(mainFirestation, 1)                    # Exactly 1 main firestation
     atLeastAL(ancillaryFirestation, 2)             # At least 2 ancillary firestations
@@ -48,12 +56,7 @@ with Graph('global') as graph:
     lessEqL(groceryShop, city)                     # Grocery shops ≤ total cities
 
 
-    # Example 1: Simple sumL - Total emergency + grocery services MUST equal 14
-    # Using exactL to enforce equality between sum and constant
-    exactL(
-        sumL(emergencyService, groceryShop),
-        14  # Must equal exactly 14
-    )
+   
     
     # Example 2: sumL in comparison - Total emergency services + firestations should be at least 8
     atLeastL(

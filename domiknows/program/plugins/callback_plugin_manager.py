@@ -165,7 +165,7 @@ def create_standard_plugin_manager():
     manager.register(EpochLoggingPlugin(), 'EpochLogging')
     manager.register(AdaptiveTNormPlugin(), 'AdaptiveTNorm')
     manager.register(GradientFlowPlugin(), 'GradientFlow')
-    manager.register(CountingSchedulePlugin(), 'CountingSchedule')
+    #anager.register(CountingSchedulePlugin(), 'CountingSchedule')
     manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
     manager.register(BERTUnfreezingPlugin(), 'BERTUnfreezing')
     

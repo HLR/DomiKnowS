@@ -31,7 +31,6 @@ class GumbelMonitoringPlugin:
         
         # Check if Gumbel is enabled
         if not getattr(args, 'use_gumbel', False):
-            print("[Gumbel Monitoring] Skipped (Gumbel-Softmax not enabled)")
             return
         
         # Register callbacks

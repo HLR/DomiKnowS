@@ -53,7 +53,6 @@ def find_data_file(filename):
     data_path = current_dir / filename
     
     if data_path.exists():
-        print(f"Using data file: {data_path}")
         return str(data_path)
     
     raise FileNotFoundError(f"Could not find {filename} in {current_dir}")
@@ -81,7 +80,7 @@ def parse_arguments():
     parser.add_argument("--evaluate", action='store_true', help="Only run evaluation on the test set")
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
     parser.add_argument("--train_portion", type=str, default="entities_with_relation", help="Training subset")
-    parser.add_argument("--asking_type", type=str, help="ASKING_TYPE to filter for")
+    parser.add_argument("--asking_type", type=str, default="counting", help="ASKING_TYPE to filter for")
     parser.add_argument("--load_previous", action='store_true', help="Whether to load a previous model")
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Previous Training subset to load")
     parser.add_argument("--previous_file", type=str, default="", help="File to load previous model from")
@@ -500,17 +499,13 @@ def evaluate_with_counting_metrics(program, dataset, threshold=0.5, device=None)
     else:
         bool_acc = 0.0
     
-    counting_mae = train_eval.get('counting_mae', float('inf'))
-    if counting_mae is None:
-        counting_mae = float('inf')
-    
     counting_acc = train_eval.get('counting_accuracy', 0.0)
     if counting_acc is not None:
         counting_acc = counting_acc / 100.0  # Convert from percentage
     else:
         counting_acc = 0.0
     
-    return bool_acc, counting_mae, counting_acc
+    return bool_acc, counting_acc
 
 def create_objective(args, train, test, plugin_manager=None):
     """Create Optuna objective function optimizing for counting constraints."""
@@ -607,21 +602,17 @@ def create_objective(args, train, test, plugin_manager=None):
             )
             
             print(f"  [Trial {trial.number}] Evaluating...")
-            bool_acc, counting_mae, counting_acc = evaluate_with_counting_metrics(program, dataset, device=args.device)
+            bool_acc, counting_acc = evaluate_with_counting_metrics(program, dataset, device=args.device)
             
             # OBJECTIVE: Focus on counting performance
             # Option 1: Pure counting accuracy
             objective_value = counting_acc
-            
-            # Option 2: Negative MAE (minimize MAE = maximize negative MAE)
-            # objective_value = -counting_mae
             
             # Option 3: Combined (uncomment to use)
             # objective_value = 0.3 * bool_acc + 0.7 * counting_acc
             
             print(f"\n  [Trial {trial.number}] SUMMARY:")
             print(f"    Boolean Acc:    {bool_acc*100:.2f}%")
-            print(f"    Counting MAE:   {counting_mae:.3f}")
             print(f"    Counting Acc:   {counting_acc*100:.2f}%  <-- OPTIMIZING THIS")
             print(f"{'='*60}\n")
             
@@ -799,18 +790,11 @@ def main(args):
                 if loaded_counting_acc is None:
                     loaded_counting_acc = 0.0
                 
-                loaded_counting_mae = checkpoint_eval.get('counting_mae', float('inf'))
-                if loaded_counting_mae is None:
-                    loaded_counting_mae = float('inf')
                 
                 print(f"\n[Checkpoint] Loaded Model Performance:")
                 print(f"  Overall Accuracy:    {loaded_acc:.2f}%")
                 print(f"  Boolean Accuracy:    {loaded_bool_acc:.2f}%")
                 print(f"  Counting Accuracy:   {loaded_counting_acc:.2f}%")
-                if loaded_counting_mae != float('inf'):
-                    print(f"  Counting MAE:        {loaded_counting_mae:.3f}")
-                else:
-                    print(f"  Counting MAE:        N/A")
                 print(f"\n[Checkpoint] Continuing training from this checkpoint...\n")
                 
             except Exception as e:
@@ -878,7 +862,6 @@ def main(args):
     print("BERT params device:", next(_models['bert'].parameters()).device)
     train_acc = train_eval['accuracy']
     train_bool_acc = train_eval['boolean_accuracy']
-    train_counting_mae = float('inf') if train_eval['counting_mae'] is None else train_eval['counting_mae']
     train_counting_acc = train_eval['counting_accuracy']
     portion = "Training" if not args.evaluate else "Testing"
     
@@ -888,8 +871,6 @@ def main(args):
     print(f"{portion} Acc: {train_acc}")
     print(f"{portion} Boolean Acc: {train_bool_acc}", file=output_f)
     print(f"{portion} Boolean Acc: {train_bool_acc}")
-    print(f"{portion} Counting MAE: {train_counting_mae}", file=output_f)
-    print(f"{portion} Counting MAE: {train_counting_mae}")
     print(f"{portion} Counting Acc: {train_counting_acc}", file=output_f)
     print(f"{portion} Counting Acc: {train_counting_acc}")
     print("#" * 40, file=output_f)

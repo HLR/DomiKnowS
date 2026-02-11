@@ -66,10 +66,6 @@ on_step, on_epoch, tracker = create_adaptive_training_callback(program, _models,
 program.after_train_step.append(on_step)
 program.after_train_epoch.append(on_epoch)
 
-if args.adaptive_tnorm:
-    print("[Adaptive T-Norm] Enabled with auto-apply")
-else:
-    print("[Adaptive T-Norm] Tracking only")
 ```
 
 There is no separate `_adaptive_tnorm` instance — `create_adaptive_training_callback` handles everything.

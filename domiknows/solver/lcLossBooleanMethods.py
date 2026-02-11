@@ -878,12 +878,16 @@ class lcLossBooleanMethods(constraintsProcessor):
         else:
             return fixedSuccess
         
-    def summationVar(self, m, *_var, onlyConstrains=False, logicMethodName="SUMMATION"):
+    def summationVar(self, m, *_var, onlyConstrains=False, label=None, logicMethodName="SUMMATION"):
         """
         Returns a differentiable scalar tensor equal to the arithmetic sum of all inputs.
         """
         if self.ifLog:
             self.myLogger.debug("%s called with %d variables", logicMethodName, len(_var))
+            
+        if onlyConstrains:
+            self.myLogger.debug("%s called with onlyConstrains=True, delegating to countVar with limitOp=='==', limit=label", logicMethodName)
+            return self.countVar(m, *_var, onlyConstrains=True, limitOp="==", limit=label, logicMethodName=f"{logicMethodName}")
 
         # Normalize inputs: None / plain numbers → 0-tensors on the right device
         var = self._fixVar(_var)

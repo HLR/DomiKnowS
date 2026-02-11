@@ -213,7 +213,7 @@ class constraintsProcessor(object, metaclass=abc.ABCMeta):
     # ------------------------------------------------------------------
     # Summation
     # ------------------------------------------------------------------
-    def summationVar(self, m, *_var):
+    def summationVar(self, m, *_var, label=None):
         "Sums up a list of binary literals to an integer literal."
         
     # ------------------------------------------------------------------

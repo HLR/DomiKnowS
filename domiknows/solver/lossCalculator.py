@@ -149,7 +149,7 @@ class LossCalculator:
         tensors = _collect_tensors(candidate)
         return torch.stack(tensors).mean() if tensors else None
 
-    def calculate_single_lc_loss(self, lc, dn, key, tnorm, counting_tnorm):
+    def calculate_single_lc_loss(self, lc, dn, key, tnorm, counting_tnorm, label=None):
         """
         Calculate loss for a single logical constraint.
         
@@ -159,7 +159,7 @@ class LossCalculator:
             key: Softmax key
             tnorm: Fallback t-norm
             counting_tnorm: Override t-norm for counting constraints (or None)
-            
+            label: Optional label for the sumL constraint
         Returns:
             Dict with loss info for this constraint, or None if constraint should be skipped
         """
@@ -185,18 +185,26 @@ class LossCalculator:
         is_counting = constraint_type in [
             'sumL', 'atLeastL', 'atLeastAL', 'atMostL', 'atMostAL', 'exactL', 'exactAL'
         ]
-        if is_counting:
+        if isinstance(lc, sumL) and label is None:
             myBooleanMethods.setCountingTNorm(selected_tnorm)
-
+            if label is None:
+                # Use datanode method to get the label
+                label = dn.getExecutableConstraintLabel(lc.lcName).float()
+                if label is None:
+                    return None
+        
         self.solver.myLogger.info(f'Processing {lc} with t-norm {selected_tnorm}')
 
         # Construct constraint
         self.solver.constraintConstructor.current_device = self.solver.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
         
-        lossList = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, myBooleanMethods, None, dn, 0,
-            key=key, headLC=True, loss=True, sample=False)
+        if isinstance(lc, sumL) and label is None:
+             result = None
+        else:
+            lossList = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, myBooleanMethods, None, dn, 0,
+                key=key, headLC=True, loss=True, sample=False, **({'label': int(label)} if label is not None else {}))
         
         result['lossList'] = lossList
 
@@ -236,11 +244,11 @@ class LossCalculator:
         key = "/local/softmax"
         lcLosses = {}
 
-        dn.setActiveLCs()
+        dn.setActiveExecutableLCs()
 
         for graph in self.solver.myGraph:
             for _, lc in graph.allLogicalConstrains:
-                result = self.calculate_single_lc_loss(lc, dn, key, tnorm, counting_tnorm)
+                result = self.calculate_single_lc_loss(lc, dn, key, tnorm, counting_tnorm, label=None)
                 if result is not None:
                     lcLosses[lc.lcName] = result
 
