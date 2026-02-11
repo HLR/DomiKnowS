@@ -80,7 +80,7 @@ def parse_arguments():
     parser.add_argument("--evaluate", action='store_true', help="Only run evaluation on the test set")
     parser.add_argument("--train_size", type=int, default=-1, help="Number of training sample")
     parser.add_argument("--train_portion", type=str, default="entities_with_relation", help="Training subset")
-    parser.add_argument("--asking_type", type=str, default="counting", help="ASKING_TYPE to filter for")
+    parser.add_argument("--asking_type", type=str, help="ASKING_TYPE to filter for")
     parser.add_argument("--load_previous", action='store_true', help="Whether to load a previous model")
     parser.add_argument("--previous_portion", type=str, default="entities_only_with_1_things_YN", help="Previous Training subset to load")
     parser.add_argument("--previous_file", type=str, default="", help="File to load previous model from")
