@@ -73,7 +73,7 @@ class GradientFlowPlugin:
         
         # Calculate losses
         try:
-             losses = datanode.calculateLcLoss(
+            losses = datanode.calculateLcLoss(
                 tnorm=getattr(self.program.graph, 'tnorm', 'L'),
                 counting_tnorm=getattr(self.program.graph, 'counting_tnorm', None)
             )
@@ -87,7 +87,7 @@ class GradientFlowPlugin:
         sumL_total_loss = 0.0
         other_total_loss = 0.0
         
-        for lc_name, loss_dict in losses:
+        for lc_name, loss_dict in losses.items():
             lc = loss_dict.get('lc')
             loss_tensor = loss_dict.get('loss')
             
