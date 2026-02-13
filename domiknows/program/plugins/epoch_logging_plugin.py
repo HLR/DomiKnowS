@@ -129,8 +129,7 @@ class EpochLoggingPlugin:
         overall_acc = train_eval.get('accuracy', 0.0)
         if overall_acc is None:
             overall_acc = 0.0
-        else:
-            overall_acc = overall_acc * 100.0  # Convert to percentage
+        # Already a percentage from evaluate_condition
         
         bool_acc = train_eval.get('boolean_accuracy', 0.0)
         if bool_acc is None:
@@ -188,9 +187,7 @@ class EpochLoggingPlugin:
                 print(f"  ⚠️  Boolean accuracy dropped!")
             if counting_acc < self.metrics_history['counting_acc'][-2] - 0.02:
                 print(f"  ⚠️  Counting accuracy dropped!")
-        
-        print(f"[Epoch {epoch}] Logging complete\n")
-    
+            
     @staticmethod
     def log_config(args):
         """Log plugin configuration."""
@@ -211,7 +208,7 @@ class EpochLoggingPlugin:
         
         # Use final_eval if provided, otherwise use last epoch
         if final_eval:
-            final_overall = final_eval.get('accuracy', 0.0) * 100.0
+            final_overall = final_eval.get('accuracy', 0.0)  # Already a percentage
             final_bool = final_eval.get('boolean_accuracy', 0.0) or 0.0
             final_counting = final_eval.get('counting_accuracy', 0.0) or 0.0
         else:

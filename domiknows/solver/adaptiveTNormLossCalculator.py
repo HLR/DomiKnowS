@@ -118,6 +118,8 @@ class EpochTypeMetrics:
     losses: List[float] = field(default_factory=list)
     grads: List[float] = field(default_factory=list)
     by_tnorm: Dict[str, List[float]] = field(default_factory=lambda: {t: [] for t in ["L", "P", "SP", "G"]})
+    global_count: int = 0  # Count of global constraint instances
+    executable_count: int = 0  # Count of executable constraint instances
 
 
 class AdaptiveTNormLossCalculator:
@@ -189,6 +191,7 @@ class AdaptiveTNormLossCalculator:
     def record_observation(self, lc_name: str, lc, loss_val: float, grad_norm: float, tnorm: str):
         """Record a single constraint observation during training."""
         ctype = get_constraint_type(lc)
+        is_global = is_global_constraint(lc_name)
 
         # Individual constraint tracking
         metrics = self.constraint_metrics[lc_name]
@@ -200,12 +203,20 @@ class AdaptiveTNormLossCalculator:
         epoch_m.losses.append(loss_val)
         epoch_m.grads.append(grad_norm)
         epoch_m.by_tnorm[tnorm].append(loss_val)
+        if is_global:
+            epoch_m.global_count += 1
+        else:
+            epoch_m.executable_count += 1
 
         # Cumulative type tracking
         cum_m = self._get_or_create_cumulative_metrics(ctype)
         cum_m.losses.append(loss_val)
         cum_m.grads.append(grad_norm)
         cum_m.by_tnorm[tnorm].append(loss_val)
+        if is_global:
+            cum_m.global_count += 1
+        else:
+            cum_m.executable_count += 1
 
     def record_tnorm_comparison(self, lc_name: str, lc, tnorm: str, loss_val: float):
         """Record an alternative t-norm loss for comparison."""
@@ -248,6 +259,55 @@ class AdaptiveTNormLossCalculator:
             recommendations[ctype] = best_tnorm
 
         return recommendations
+
+    def get_detailed_recommendations(self, use_cumulative: bool = True) -> Dict[str, Dict]:
+        """Get detailed scoring information for each constraint type."""
+        source = self._cumulative_type_metrics if use_cumulative else self._epoch_type_metrics
+        details = {}
+
+        for ctype, data in source.items():
+            if len(data.losses) < self.min_observations:
+                continue
+
+            tnorm_details = {}
+            for tnorm in self.tnorms:
+                tnorm_losses = data.by_tnorm.get(tnorm, [])
+                if len(tnorm_losses) < max(5, self.min_observations // 4):
+                    continue
+
+                recent_losses = tnorm_losses[-20:]
+                avg_loss = np.mean(recent_losses)
+                
+                # Calculate trend
+                trend = 0.0
+                if len(recent_losses) >= 4:
+                    first_half = np.mean(recent_losses[:len(recent_losses)//2])
+                    second_half = np.mean(recent_losses[len(recent_losses)//2:])
+                    trend = first_half - second_half
+                
+                # Get gradient info
+                grad_status = "healthy"
+                if self.selection_strategy == "gradient_weighted" and data.grads:
+                    recent_grads = data.grads[-20:]
+                    avg_grad = np.mean(recent_grads)
+                    if avg_grad < 1e-6:
+                        grad_status = "vanishing"
+                    elif avg_grad > 100:
+                        grad_status = "exploding"
+                
+                score = self._score_tnorm(tnorm_losses, data.grads)
+                
+                tnorm_details[tnorm] = {
+                    'loss': avg_loss,
+                    'trend': trend,
+                    'grad_status': grad_status,
+                    'score': score,
+                    'observations': len(tnorm_losses)
+                }
+            
+            details[ctype] = tnorm_details
+        
+        return details
 
     def _score_tnorm(self, losses: List[float], grads: List[float]) -> float:
         """Score a t-norm. Higher = better."""
@@ -321,13 +381,13 @@ class AdaptiveTNormLossCalculator:
         should_apply = apply if apply is not None else self.auto_apply
 
         print(f"\n[Epoch {self.epoch_count}] Adaptive T-Norm Analysis")
-        print("=" * 75)
+        print("=" * 95)
 
         # --- Aggregated by constraint type ---
         print("\n📊 AGGREGATED BY CONSTRAINT TYPE (what the model actually learns):")
-        print("-" * 75)
-        print(f"{'Type':<12} {'Count':>6} {'AvgLoss':>8} {'AvgGrad':>8} │ {'L':>7} {'P':>7} {'SP':>7} {'G':>7} │ Best")
-        print("-" * 75)
+        print("-" * 95)
+        print(f"{'Type':<12} {'Count':>6} {'Global':>7} {'Exec':>7} {'AvgLoss':>8} {'AvgGrad':>8} │ {'L':>7} {'P':>7} {'SP':>7} {'G':>7} │ Best")
+        print("-" * 95)
 
         recommendations = self.get_recommendations(use_cumulative=True)
 
@@ -337,6 +397,8 @@ class AdaptiveTNormLossCalculator:
                 continue
 
             count = len(data.losses)
+            global_cnt = data.global_count
+            exec_cnt = data.executable_count
             avg_loss = np.mean(data.losses)
             avg_grad = np.mean(data.grads) if data.grads else 0
 
@@ -352,9 +414,9 @@ class AdaptiveTNormLossCalculator:
                 else:
                     tnorm_strs.append(f"{'---':>7}")
 
-            print(f"{ctype:<12} {count:>6} {avg_loss:>8.4f} {avg_grad:>8.2f} │ {' '.join(tnorm_strs)} │ {best_tnorm}")
+            print(f"{ctype:<12} {count:>6} {global_cnt:>7} {exec_cnt:>7} {avg_loss:>8.4f} {avg_grad:>8.2f} │ {' '.join(tnorm_strs)} │ {best_tnorm}")
 
-        print("-" * 75)
+        print("-" * 95)
 
         # --- Constraint coverage ---
         global_count, exec_count = self.get_constraint_coverage()
@@ -363,13 +425,40 @@ class AdaptiveTNormLossCalculator:
         print(f"   Executable constraints (per-sample): {exec_count}")
 
         # --- Recommendations ---
-        print(f"\n💡 RECOMMENDATIONS:")
+        print(f"\n💡 RECOMMENDATIONS (strategy: {self.selection_strategy}):")
+        detailed_info = self.get_detailed_recommendations(use_cumulative=True)
+        
         for ctype in sorted(recommendations.keys()):
             if ctype in self._epoch_type_metrics and self._epoch_type_metrics[ctype].losses:
                 tnorm = recommendations[ctype]
                 current = self.active_tnorms.get(ctype, '?')
                 changed = " ← SWITCH" if current != tnorm and current != '?' else ""
                 print(f"   {ctype}: Use t-norm '{tnorm}'{changed}")
+                
+                # Add explanation if we have detailed info
+                if ctype in detailed_info:
+                    details = detailed_info[ctype]
+                    if tnorm in details:
+                        chosen = details[tnorm]
+                        
+                        # Find the t-norm with lowest loss
+                        lowest_loss_tnorm = min(details.keys(), key=lambda t: details[t]['loss'])
+                        lowest_loss = details[lowest_loss_tnorm]['loss']
+                        
+                        # If chosen t-norm is not the one with lowest loss, explain why
+                        if tnorm != lowest_loss_tnorm and abs(chosen['loss'] - lowest_loss) > 0.001:
+                            reasons = []
+                            if chosen['trend'] > 0.01:
+                                reasons.append(f"improving trend ({chosen['trend']:+.4f})")
+                            if details[lowest_loss_tnorm]['grad_status'] != "healthy":
+                                reasons.append(f"{lowest_loss_tnorm} has {details[lowest_loss_tnorm]['grad_status']} gradients")
+                            if chosen['grad_status'] == "healthy" and details[lowest_loss_tnorm]['grad_status'] != "healthy":
+                                reasons.append("healthier gradients")
+                            
+                            if reasons:
+                                print(f"      → Chosen over {lowest_loss_tnorm} (loss {lowest_loss:.4f}) due to: {', '.join(reasons)}")
+                        elif tnorm != lowest_loss_tnorm:
+                            print(f"      → Similar loss to best ({lowest_loss_tnorm}: {lowest_loss:.4f})")
 
         # --- Apply ---
         if should_apply and self.epoch_count > 1:
@@ -385,7 +474,7 @@ class AdaptiveTNormLossCalculator:
 
         self.recommendation_history.append(recommendations)
 
-        print("\n" + "=" * 75)
+        print("\n" + "=" * 95)
 
         # Reset per-epoch metrics
         self._epoch_type_metrics.clear()

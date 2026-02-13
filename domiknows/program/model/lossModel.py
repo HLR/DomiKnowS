@@ -395,12 +395,13 @@ class InferenceModel(LossModel):
                     lc_formulation=lcRepr
                 )
                 
-            if isinstance(lc, sumL):
+            is_sumL = isinstance(lc, sumL)
+            if is_sumL:
                 lbl = torch.tensor(1.0, dtype=dtype, device=self.device, requires_grad=True)
                 
             constr_out = loss_dict['conversionSigmoid']
-            if torch.equal(constr_out, lbl):
-                print(f"Constraint {lcName}: loss={constr_out}, label={lbl}")
+            #if torch.equal(constr_out, lbl):
+            #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
             constraint_loss = self.loss_func(constr_out.float(), lbl)
 
             losses.append(constraint_loss)

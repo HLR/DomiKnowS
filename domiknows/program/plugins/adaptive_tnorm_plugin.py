@@ -212,9 +212,41 @@ class AdaptiveTNormPlugin:
         
         # Final recommendations per TYPE only
         if 'final_recommendations_by_type' in stats and stats['final_recommendations_by_type']:
-            print("\n  Final T-Norm Recommendations by Type:")
+            print(f"\n  Final T-Norm Recommendations by Type (strategy: {getattr(self.args, 'tnorm_strategy', 'gradient_weighted')}):")
+            
+            # Get detailed explanations for final recommendations
+            detailed_info = {}
+            if hasattr(self.tracker, 'get_detailed_recommendations'):
+                try:
+                    detailed_info = self.tracker.get_detailed_recommendations(use_cumulative=True)
+                except:
+                    pass
+            
             for ctype, tnorm in stats['final_recommendations_by_type'].items():
                 print(f"    {ctype:20s} -> {tnorm}")
+                
+                # Add explanation if available
+                if ctype in detailed_info:
+                    details = detailed_info[ctype]
+                    if tnorm in details:
+                        chosen = details[tnorm]
+                        
+                        # Find the t-norm with lowest loss
+                        lowest_loss_tnorm = min(details.keys(), key=lambda t: details[t]['loss'])
+                        lowest_loss = details[lowest_loss_tnorm]['loss']
+                        
+                        # If chosen t-norm is not the one with lowest loss, explain why
+                        if tnorm != lowest_loss_tnorm and abs(chosen['loss'] - lowest_loss) > 0.001:
+                            reasons = []
+                            if chosen['trend'] > 0.01:
+                                reasons.append(f"improving trend ({chosen['trend']:+.4f})")
+                            if details[lowest_loss_tnorm]['grad_status'] != "healthy":
+                                reasons.append(f"{lowest_loss_tnorm} has {details[lowest_loss_tnorm]['grad_status']} gradients")
+                            if chosen['grad_status'] == "healthy" and details[lowest_loss_tnorm]['grad_status'] != "healthy":
+                                reasons.append("healthier gradients")
+                            
+                            if reasons:
+                                print(f"       ↳ Chosen over {lowest_loss_tnorm} (loss {lowest_loss:.4f}) due to: {', '.join(reasons)}")
         
         # Recommendation history
         if 'recommendation_history' in stats and stats['recommendation_history']:

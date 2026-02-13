@@ -771,3 +771,57 @@ class LogicalConstraintConstructor:
                             useLcVariables[v].append([s]) 
                     
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
+        
+    def getConceptsFromLogicalConstrain(self, lc, concept_names=None):
+        """
+        Extract all concept names used in a logical constraint.
+        
+        This method recursively traverses the logical constraint structure
+        to find all concepts (including those in nested constraints).
+        
+        Args:
+            lc: Logical constraint to extract concepts from
+            concept_names: Set to accumulate concept names (used for recursion)
+            
+        Returns:
+            List of unique concept names used in the constraint
+        """
+        # Track if this is the top-level call
+        is_top_level = (concept_names is None)
+        
+        if concept_names is None:
+            concept_names = set()
+        
+        if lc is None:
+            return list(concept_names) if is_top_level else concept_names
+        
+        # Process all elements in the constraint
+        if hasattr(lc, 'e') and lc.e:
+            for e in lc.e:
+                # Skip variables
+                if isinstance(e, V):
+                    continue
+                
+                # Handle Concept or tuple (concept, label, index)
+                if isinstance(e, Concept):
+                    concept_names.add(e.name)
+                elif isinstance(e, tuple) and len(e) > 0:
+                    if isinstance(e[0], Concept):
+                        concept_names.add(e[0].name)
+                    elif isinstance(e[0], CandidateSelection):
+                        # CandidateSelection might reference concepts
+                        self.getConceptsFromLogicalConstrain(e[0], concept_names)
+                
+                # Handle nested logical constraints
+                if isinstance(e, LogicalConstrain):
+                    self.getConceptsFromLogicalConstrain(e, concept_names)
+                elif isinstance(e, CandidateSelection):
+                    self.getConceptsFromLogicalConstrain(e, concept_names)
+        
+        # Also check innerLC attribute (common in constraint wrappers)
+        if hasattr(lc, 'innerLC') and lc.innerLC is not None:
+            self.getConceptsFromLogicalConstrain(lc.innerLC, concept_names)
+        
+        # Only convert to list at top level
+        return list(concept_names) if is_top_level else concept_names
+    
