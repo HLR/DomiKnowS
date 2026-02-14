@@ -879,7 +879,7 @@ class InferenceProgram(LossProgram):
                 else:
                     loss = mloss
             
-            if loss:
+            if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
                 if self.opt is not None:
                     self.opt.step()
@@ -947,8 +947,9 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
                 else:
                     loss = mloss
             
-            if loss:
+            if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
+            
                 if self.opt is not None:
                     self.opt.step()
                 if self.copt is not None:
