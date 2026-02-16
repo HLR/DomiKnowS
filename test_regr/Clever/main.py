@@ -232,42 +232,6 @@ if __name__ == "__main__":
 
             gt_spatial = dataset[i].get('relation_spatial_relation', None)
 
-            # Diagnostic for first instance
-            if i == 0:
-                print(f"\n=== ORACLE DIAGNOSTIC (instance 0) ===")
-                print(f"  n_objects (from all_objects) = {n}")
-                objs_raw = dataset[i].get('objects_raw', None)
-                print(f"  objects_raw type: {type(objs_raw).__name__}, len: {len(objs_raw) if objs_raw is not None else 'N/A'}")
-                if objs_raw is not None and hasattr(objs_raw, '__len__'):
-                    print(f"  objects_raw shape: {objs_raw.shape if hasattr(objs_raw, 'shape') else len(objs_raw)}")
-                print(f"  all_objects keys: {list(all_objs[0].keys()) if all_objs else 'EMPTY'}")
-                if all_objs:
-                    for oi, obj in enumerate(all_objs):
-                        print(f"    obj{oi}: color={obj.get('color')}, shape={obj.get('shape')}, size={obj.get('size')}, material={obj.get('material')}")
-                print(f"  relation_spatial_relation present: {gt_spatial is not None}")
-                if gt_spatial is not None:
-                    import numpy as np
-                    gt_arr = np.array(gt_spatial)
-                    print(f"  gt_spatial shape: {gt_arr.shape}")
-                    print(f"  gt_spatial dtype: {gt_arr.dtype}")
-                    print(f"  gt_spatial non-zero count: {np.count_nonzero(gt_arr)}")
-                    print(f"  gt_spatial sum per column: {gt_arr.sum(axis=0)}")
-                    for s_idx, s_name in enumerate(spatial_list):
-                        col = gt_arr[:, s_idx]
-                        print(f"    {s_name}: {int(col.sum())} True pairs out of {n*n}")
-                        for src in range(n):
-                            row = []
-                            for dst in range(n):
-                                row.append('Y' if col[src*n+dst] > 0.5 else 'N')
-                            print(f"      obj{src}: {row}")
-                else:
-                    print(f"  WARNING: relation_spatial_relation is None!")
-                    all_keys = list(dataset[i].keys())
-                    print(f"  Available data dict keys: {all_keys}")
-                print(f"  question: {dataset[i].get('question_raw', 'N/A')}")
-                print(f"  answer: {dataset[i].get('answer', 'N/A')}")
-                print(f"=== END DIAGNOSTIC ===\n")
-
             if gt_spatial is not None:
                 # gt_spatial[j*n+i, col] = 1.0 means "obj_j has relation col to obj_i"
                 # But execution.py places SOURCE at obj1 and RESULT at obj2,
