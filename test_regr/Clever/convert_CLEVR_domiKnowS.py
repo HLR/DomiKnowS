@@ -7,9 +7,7 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     """
     Supports the common CLEVR-like operators:
       scene, filter_color, filter_material, filter_shape, filter_size,
-      union, intersect (optional), count
-
-    Assumption: these "set" values correspond to a condition over a single object variable `x`.
+      union, intersect (optional), count.
     """
 
     # Each step i produces either:
@@ -32,9 +30,6 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     ins = step.get("inputs", [])
     vins = step.get("value_inputs", [])
     if fn == "scene":
-        # "all objects" -> True condition (neutral for AND).
-        # We'll represent as a special predicate TRUE and remove it later by simplification
-        # OR simply use an empty AND identity; easiest: use pred "__true__" and drop in render.
         var_name = chr(var + 97)
         if not first_initial:
             return f"obj(path=('{var_name}'))", 0
@@ -184,9 +179,61 @@ if __name__ == "__main__":
     #                                            first_initial=True))
     #     break
 
-    program = [{'inputs': [], 'function': 'scene', 'value_inputs': []},
-               {'inputs': [0], 'function': 'filter_size', 'value_inputs': ['large']},
-               {'inputs': [1], 'function': 'exist', 'value_inputs': []}]
+    program = [
+        {
+            "inputs": [],
+            "function": "scene",
+            "value_inputs": []
+        },
+        {
+            "inputs": [
+                0
+            ],
+            "function": "filter_shape",
+            "value_inputs": [
+                "cube"
+            ]
+        },
+        {
+            "inputs": [
+                1
+            ],
+            "function": "unique",
+            "value_inputs": []
+        },
+        {
+            "inputs": [
+                2
+            ],
+            "function": "relate",
+            "value_inputs": [
+                "front"
+            ]
+        },
+        {
+            "inputs": [
+                3
+            ],
+            "function": "unique",
+            "value_inputs": []
+        },
+        {
+            "inputs": [
+                4
+            ],
+            "function": "relate",
+            "value_inputs": [
+                "left"
+            ]
+        },
+        {
+            "inputs": [
+                5
+            ],
+            "function": "exist",
+            "value_inputs": []
+        }
+    ]
     print(translate_left_domiknows(program, len(program) - 1, first_initial=True))
     # for result in results:
     #     str_op = translate_left_steps_to_your_dsl(result["program"])
