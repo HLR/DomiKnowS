@@ -700,10 +700,14 @@ class InternVLSharedHF(nn.Module):
         images, questions = [], []
 
         if self.relation == 2:
-            # all ordered pairs (box1, box2)
+            # execution.py places SOURCE at obj1 and RESULT at obj2, so
+            # left(pair) = True means "obj2 is left of obj1".
+            # box1 = obj1 (source), box2 = obj2 (result).
+            # Color obj2 red and obj1 green so the question asks the
+            # correct direction: "Is obj2(red) {attr} of obj1(green)?"
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
-                    img = self._draw_and_resize(base, [box1, box2], ["red", "green"])
+                    img = self._draw_and_resize(base, [box1, box2], ["green", "red"])
                     q = f"Is the object in the red bounding box {self.attr} of the object in the green bounding box? answer with only Yes or No."
                     images.append(img)
                     questions.append(q)
