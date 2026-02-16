@@ -20,7 +20,7 @@ from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, Fun
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-from internVLvLLM import InternVLShared as InternVL
+# InternVL import is deferred to after arg parsing to avoid loading vllm when not needed
 #from peftvllm import InternVLSharedHF as InternVL
 
 try:
@@ -41,6 +41,60 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 def ckpt_path(lr, epoch_idx, load_epoch_tag, batch, tnorm, subset, q_type="relation"):
     return MODEL_DIR / f"program_{q_type}_{lr}_{epoch_idx}_{load_epoch_tag}__{batch}_6000_{tnorm}_{subset}.pth"
+
+
+class OracleModule(torch.nn.Module):
+    """Oracle module that returns ground truth predictions from the dataset for debugging."""
+
+    def __init__(self, attr_name, relation, device='cpu'):
+        super().__init__()
+        self.attr_name = attr_name
+        self.relation = relation
+        self.device = device
+
+        self.is_spatial = attr_name in g_relational_concepts.get("spatial_relation", [])
+        self.is_same = attr_name.startswith("same_")
+
+        if self.is_spatial:
+            spatial_list = g_relational_concepts["spatial_relation"]
+            self.spatial_index = spatial_list.index(attr_name)
+        elif self.is_same:
+            self.category = attr_name[5:]  # "same_color" -> "color"
+        else:
+            self.category = None
+            for cat, values in g_attribute_concepts.items():
+                if attr_name in values:
+                    self.category = cat
+                    break
+
+    def forward(self, data, bounding_boxes):
+        n = len(bounding_boxes)
+        yes = torch.tensor([1.0, 0.0], device=self.device)
+        no = torch.tensor([0.0, 1.0], device=self.device)
+        results = []
+
+        if self.is_spatial:
+            # data = gt_spatial_relation tensor, shape (n*n, num_spatial_concepts)
+            for pair_idx in range(n * n):
+                is_true = data[pair_idx, self.spatial_index].item() > 0.5
+                results.append(yes.clone() if is_true else no.clone())
+        elif self.is_same:
+            # data = all_objects list
+            for i in range(n):
+                for j in range(n):
+                    same = data[i].get(self.category) == data[j].get(self.category)
+                    results.append(yes.clone() if same else no.clone())
+        elif self.category is not None:
+            # data = all_objects list, simple attribute check
+            for obj in data[:n]:
+                is_true = obj.get(self.category, '') == self.attr_name
+                results.append(yes.clone() if is_true else no.clone())
+        else:
+            # Category-level attribute (e.g., "color") - return neutral prediction
+            for _ in range(n):
+                results.append(torch.tensor([0.5, 0.5], device=self.device))
+
+        return results
 
 
 logging.basicConfig(level=logging.INFO)
@@ -116,9 +170,14 @@ if __name__ == "__main__":
                              "  counting      - counting question including greater, lesser, and count")
 
     parser.add_argument("--use-vlm", default=False, action="store_true", help="use InternVL for predictions")
+    parser.add_argument("--oracle-mode", action="store_true",
+                        help="Use ground truth answers instead of VLM/ResNet for debugging")
     parser.add_argument("--infer-only", action="store_true", help="Skip training, only evaluate a the model as is")
 
     args = parser.parse_args()
+
+    if args.use_vlm and not args.oracle_mode:
+        from internVLvLLM import InternVLShared as InternVL
 
     CACHE_DIR = preprocess_folders_and_files(args.dummy)
     NUM_INSTANCES = 20
@@ -188,7 +247,7 @@ if __name__ == "__main__":
     object["properties"] = ReaderSensor(keyword="all_objects")
     object["image_id"] = FunctionalSensor(image["image_id"], "bounding_boxes",
                                           forward=lambda data, data2: data * len(data2))
-    if not args.use_vlm:
+    if not args.use_vlm and not args.oracle_mode:
         resnet_model = ResnetLEFT(device=device)
         image["emb"] = ModuleSensor("image_id", "pil_image", module=resnet_model, device=device)
 
@@ -207,7 +266,7 @@ if __name__ == "__main__":
         object['image_id'],
         relations=(obj1.reversed, obj2.reversed),
         forward=filter_relation)
-    if not args.use_vlm:
+    if not args.use_vlm and not args.oracle_mode:
         object_relation_extraction = LEFTRelationEMB(input_size=256, output_size=1024, device=device)
         relaton_2_obj["emb"] = ModuleLearner(image["emb"], object["bounding_boxes"], object["feature_emb"],
                                              module=object_relation_extraction, device=device)
@@ -215,8 +274,26 @@ if __name__ == "__main__":
     # Set up learners for attributes and relations
     spatial_relations = g_relational_concepts.get("spatial_relation", [])
 
+    if args.oracle_mode:
+        image["gt_spatial_relation"] = FunctionalReaderSensor(
+            keyword="relation_spatial_relation",
+            forward=lambda data: torch.tensor(data, dtype=torch.float32).to(device))
+
     for attr_name, attr_variable in attribute_names_dict.items():
-        if not args.use_vlm:
+        if args.oracle_mode:
+            if attr_name in spatial_relations:
+                relaton_2_obj[attr_variable] = ModuleLearner(
+                    image["gt_spatial_relation"], object["bounding_boxes"],
+                    module=OracleModule(attr_name, relation=2, device=device), device=device)
+            elif attr_name.startswith("same_"):
+                relaton_2_obj[attr_variable] = ModuleLearner(
+                    object["properties"], object["bounding_boxes"],
+                    module=OracleModule(attr_name, relation=2, device=device), device=device)
+            else:
+                object[attr_variable] = ModuleLearner(
+                    object["properties"], object["bounding_boxes"],
+                    module=OracleModule(attr_name, relation=1, device=device), device=device)
+        elif not args.use_vlm:
             if attr_name in spatial_relations:
                 relaton_2_obj[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(1024, 2).to(device),
                                                              device=device)
