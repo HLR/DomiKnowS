@@ -269,13 +269,18 @@ if __name__ == "__main__":
                 print(f"=== END DIAGNOSTIC ===\n")
 
             if gt_spatial is not None:
+                # gt_spatial[j*n+i, col] = 1.0 means "obj_j has relation col to obj_i"
+                # But execution.py places SOURCE at obj1 and RESULT at obj2,
+                # so left(pair) = True should mean "obj2 is left of obj1".
+                # We must transpose: oracle[src*n+dst] = gt_spatial[dst*n+src]
                 for s_idx, s_name in enumerate(spatial_list):
                     oracle_data = []
-                    for pair_idx in range(n * n):
-                        if gt_spatial[pair_idx][s_idx] > 0.5:
-                            oracle_data.append([0, 100])
-                        else:
-                            oracle_data.append([100, 0])
+                    for src in range(n):
+                        for dst in range(n):
+                            if gt_spatial[dst * n + src][s_idx] > 0.5:
+                                oracle_data.append([0, 100])
+                            else:
+                                oracle_data.append([100, 0])
                     dataset[i][f"oracle_is_{s_name}"] = oracle_data
 
             for attr in ['size', 'color', 'material', 'shape']:
