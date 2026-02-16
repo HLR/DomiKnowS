@@ -37,13 +37,13 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
         # OR simply use an empty AND identity; easiest: use pred "__true__" and drop in render.
         var_name = chr(var + 97)
         if not first_initial:
-            return f"obj(path=('{var_name}'))", 1
+            return f"obj(path=('{var_name}'))", 0
         suffix = ""
         var += 1
         if need_relation2:
             suffix = f", path=('rel{relation_val - 1}', obj2)"
             need_relation2 = False
-        return f"obj('{var_name}'{suffix})", 1
+        return f"obj('{var_name}'{suffix})", 0
 
     elif fn.startswith("filter_"):
         if len(ins) != 1 or len(vins) != 1:
@@ -64,7 +64,7 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
             init_str = f"{attr_value}(path=('{var_name}'))"
 
         filter_str, depth_ins = translate_left_domiknows(all_program, ins[0], first_initial=False, apply_sum=apply_sum)
-        if depth_ins == 1:
+        if depth_ins == 0:
             filter_str = ""
 
         return (f"{init_str}, {filter_str}", depth_ins + 1) if filter_str != "" else (f"{init_str}", 1)
