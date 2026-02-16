@@ -69,8 +69,8 @@ class OracleModule(torch.nn.Module):
 
     def forward(self, data, bounding_boxes):
         n = len(bounding_boxes)
-        yes = torch.tensor([1.0, 0.0], device=self.device)
-        no = torch.tensor([0.0, 1.0], device=self.device)
+        yes = torch.tensor([0.0, 1.0], device=self.device)
+        no = torch.tensor([1.0, 0.0], device=self.device)
         results = []
 
         if self.is_spatial:
