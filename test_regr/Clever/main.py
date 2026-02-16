@@ -234,9 +234,10 @@ if __name__ == "__main__":
             dataset[i]["query_type"] = None
 
     # Print sample
-    print(f"\nSample question: {dataset[0].get('question_raw', '')}")
-    print(f"Sample answer: {dataset[0].get('answer', '')}")
-    print(f"Sample execution:\n{questions_executions[0]}")
+    for i in range(min(3, len(dataset))):
+        print(f"\nSample question: {dataset[i].get('question_raw', '')}")
+        print(f"Sample answer: {dataset[i].get('answer', '')}")
+        print(f"Sample execution:\n{questions_executions[i]}")
 
     # Set up sensors
     image["pil_image"] = FunctionalReaderSensor(keyword="pil_image", forward=lambda data: [data])
