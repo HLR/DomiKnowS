@@ -44,28 +44,17 @@ def ckpt_path(lr, epoch_idx, load_epoch_tag, batch, tnorm, subset, q_type="relat
 
 
 class OracleModule(torch.nn.Module):
-    """Oracle module that returns ground truth predictions from the dataset for debugging."""
+    """Oracle module for object-level attributes. Returns ground truth from all_objects."""
 
     def __init__(self, attr_name, relation, device='cpu'):
         super().__init__()
         self.attr_name = attr_name
-        self.relation = relation
         self.device = device
-
-        self.is_spatial = attr_name in g_relational_concepts.get("spatial_relation", [])
-        self.is_same = attr_name.startswith("same_")
-
-        if self.is_spatial:
-            spatial_list = g_relational_concepts["spatial_relation"]
-            self.spatial_index = spatial_list.index(attr_name)
-        elif self.is_same:
-            self.category = attr_name[5:]  # "same_color" -> "color"
-        else:
-            self.category = None
-            for cat, values in g_attribute_concepts.items():
-                if attr_name in values:
-                    self.category = cat
-                    break
+        self.category = None
+        for cat, values in g_attribute_concepts.items():
+            if attr_name in values:
+                self.category = cat
+                break
 
     def forward(self, data, bounding_boxes):
         n = len(bounding_boxes)
@@ -73,28 +62,23 @@ class OracleModule(torch.nn.Module):
         no = torch.tensor([1.0, 0.0], device=self.device)
         results = []
 
-        if self.is_spatial:
-            # data = gt_spatial_relation tensor, shape (n*n, num_spatial_concepts)
-            for pair_idx in range(n * n):
-                is_true = data[pair_idx, self.spatial_index].item() > 0.5
-                results.append(yes.clone() if is_true else no.clone())
-        elif self.is_same:
-            # data = all_objects list
-            for i in range(n):
-                for j in range(n):
-                    same = data[i].get(self.category) == data[j].get(self.category)
-                    results.append(yes.clone() if same else no.clone())
-        elif self.category is not None:
-            # data = all_objects list, simple attribute check
+        if self.category is not None:
             for obj in data[:n]:
                 is_true = obj.get(self.category, '') == self.attr_name
                 results.append(yes.clone() if is_true else no.clone())
         else:
-            # Category-level attribute (e.g., "color") - return neutral prediction
             for _ in range(n):
                 results.append(torch.tensor([0.5, 0.5], device=self.device))
 
         return results
+
+
+class OracleDummyLearner(torch.nn.Module):
+    """Passthrough learner that applies softmax to pre-computed oracle logits.
+    Used with same-concept reader sensors (mirrors semantic_conversion.py DummyLearner)."""
+
+    def forward(self, input):
+        return torch.softmax(input, dim=-1)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -239,6 +223,34 @@ if __name__ == "__main__":
         print(f"Sample answer: {dataset[i].get('answer', '')}")
         print(f"Sample execution:\n{questions_executions[i]}")
 
+    # Pre-compute oracle ground truth and inject into data dict
+    if args.oracle_mode:
+        spatial_list = g_relational_concepts.get("spatial_relation", [])
+        for i in range(len(dataset)):
+            all_objs = dataset[i].get('all_objects', [])
+            n = len(all_objs)
+
+            gt_spatial = dataset[i].get('relation_spatial_relation', None)
+            if gt_spatial is not None:
+                for s_idx, s_name in enumerate(spatial_list):
+                    oracle_data = []
+                    for pair_idx in range(n * n):
+                        if gt_spatial[pair_idx][s_idx] > 0.5:
+                            oracle_data.append([0, 100])
+                        else:
+                            oracle_data.append([100, 0])
+                    dataset[i][f"oracle_is_{s_name}"] = oracle_data
+
+            for attr in ['size', 'color', 'material', 'shape']:
+                oracle_data = []
+                for obj_i in range(n):
+                    for obj_j in range(n):
+                        if all_objs[obj_i].get(attr) == all_objs[obj_j].get(attr):
+                            oracle_data.append([0, 100])
+                        else:
+                            oracle_data.append([100, 0])
+                dataset[i][f"oracle_is_same_{attr}"] = oracle_data
+
     # Set up sensors
     image["pil_image"] = FunctionalReaderSensor(keyword="pil_image", forward=lambda data: [data])
     image["image_id"] = FunctionalReaderSensor(keyword='image_index', forward=lambda data: [data])
@@ -275,21 +287,20 @@ if __name__ == "__main__":
     # Set up learners for attributes and relations
     spatial_relations = g_relational_concepts.get("spatial_relation", [])
 
-    if args.oracle_mode:
-        image["gt_spatial_relation"] = FunctionalReaderSensor(
-            keyword="relation_spatial_relation",
-            forward=lambda data: torch.tensor(data, dtype=torch.float32).to(device))
-
     for attr_name, attr_variable in attribute_names_dict.items():
         if args.oracle_mode:
             if attr_name in spatial_relations:
+                relaton_2_obj[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                    keyword=f"oracle_is_{attr_name}",
+                    forward=lambda data: torch.Tensor(data).to(device))
                 relaton_2_obj[attr_variable] = ModuleLearner(
-                    image["gt_spatial_relation"], object["bounding_boxes"],
-                    module=OracleModule(attr_name, relation=2, device=device), device=device)
+                    f"{attr_name}_label", module=OracleDummyLearner(), device=device)
             elif attr_name.startswith("same_"):
+                relaton_2_obj[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                    keyword=f"oracle_is_{attr_name}",
+                    forward=lambda data: torch.Tensor(data).to(device))
                 relaton_2_obj[attr_variable] = ModuleLearner(
-                    object["properties"], object["bounding_boxes"],
-                    module=OracleModule(attr_name, relation=2, device=device), device=device)
+                    f"{attr_name}_label", module=OracleDummyLearner(), device=device)
             else:
                 object[attr_variable] = ModuleLearner(
                     object["properties"], object["bounding_boxes"],
