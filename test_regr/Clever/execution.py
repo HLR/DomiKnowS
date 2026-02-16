@@ -3,6 +3,8 @@ try:
 except ImportError:
     from dataset import g_relational_concepts
 
+from convert_CLEVR_domiKnowS import translate_left_domiknows
+
 def create_execution_existL(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):
     """Original existL execution creator for existence/count questions."""
     values = [v for step in program for v in step.get("value_inputs", [])]
@@ -217,24 +219,28 @@ def create_execution_for_question(program, question_index, question_type=None):
     """
     if not program:
         return 'existsL(obj("prop"))\n', None
-    
+
     last_op = program[-1]
     op_type = last_op.get('type', last_op.get('function', ''))
     
-    if op_type.startswith('query_'):
-        return create_execution_queryL(program, question_index)
+    # if op_type.startswith('query_'):
+    #     return create_execution_queryL(program, question_index)
+    # else:
+    #     print(program)
+    conversion_program = translate_left_domiknows(program, len(program) - 1, first_initial=True)[0]
+    return conversion_program, None
     
-    elif op_type == 'exist':
-        return create_execution_existL(program, question_index), None
-    
-    elif op_type == 'count':
-        return create_execution_existL(program, question_index), None
-    
-    elif op_type in ['equal_integer', 'less_than', 'greater_than']:
-        return create_execution_existL(program, question_index), None
-    
-    elif op_type.startswith('equal_'):
-        return create_execution_existL(program, question_index), None
-    
-    else:
-        return create_execution_existL(program, question_index), None
+    # elif op_type == 'exist':
+    #     return create_execution_existL(program, question_index), None
+    #
+    # elif op_type == 'count':
+    #     return create_execution_existL(program, question_index), None
+    #
+    # elif op_type in ['equal_integer', 'less_than', 'greater_than']:
+    #     return create_execution_existL(program, question_index), None
+    #
+    # elif op_type.startswith('equal_'):
+    #     return create_execution_existL(program, question_index), None
+    #
+    # else:
+    #     return create_execution_existL(program, question_index), None
