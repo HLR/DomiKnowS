@@ -1,5 +1,5 @@
 import sys, os
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('../')
@@ -121,7 +121,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     CACHE_DIR = preprocess_folders_and_files(args.dummy)
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     NUM_INSTANCES = 10
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
