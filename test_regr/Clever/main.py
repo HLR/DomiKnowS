@@ -96,7 +96,7 @@ if __name__ == "__main__":
                         help="Skip training, only evaluate a saved checkpoint")
 
     parser.add_argument("--dummy", action="store_true",
-                        help="Use lightweight dummy mode with 10 instances for testing")
+                        help="Use lightweight dummy mode with 20 instances for testing")
 
     parser.add_argument("--tnorm", choices=["G", "P", "L"], default="G",
                         help="T-norm for fuzzy logic: G=Gödel, P=Product, L=Łukasiewicz (default: G)")
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     CACHE_DIR = preprocess_folders_and_files(args.dummy)
-    NUM_INSTANCES = 10
+    NUM_INSTANCES = 20
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
 

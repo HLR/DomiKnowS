@@ -49,11 +49,10 @@ def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation')
         return ds
 
     dataset = []
-    cache_suffix = f"_{question_type}" if question_type != 'relation' else ""
-    
+
     if args.dummy:
         for idx in range(NUM_INSTANCES):
-            cache_file = CACHE_DIR / f"instance_{idx}{cache_suffix}.pkl"
+            cache_file = CACHE_DIR / f"data{idx + 1}_{question_type}.pkl"
 
             if cache_file.exists():
                 with cache_file.open("rb") as f:
@@ -64,14 +63,14 @@ def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation')
                 ds = build_dataset(question_type)
                 dataset_len = len(ds) if hasattr(ds, '__len__') else NUM_INSTANCES
                 for idx_ in range(min(NUM_INSTANCES, dataset_len)):
-                    cache_file_ = CACHE_DIR / f"instance_{idx_}{cache_suffix}.pkl"
+                    cache_file_ = CACHE_DIR / f"data{idx_ + 1}_{question_type}.pkl"
                     with cache_file_.open("wb") as f:
                         pickle.dump(ds[idx_], f, protocol=pickle.HIGHEST_PROTOCOL)
                         print(f"cached to {cache_file_}")
                 dataset = [ds[i] for i in range(min(NUM_INSTANCES, dataset_len))]
                 break
     else:
-        cache_file = CACHE_DIR / f"dataset{cache_suffix}.pkl"
+        cache_file = CACHE_DIR / f"dataset_{question_type}.pkl"
         if cache_file.exists():
             with cache_file.open("rb") as f:
                 dataset = pickle.load(f)
