@@ -1,16 +1,13 @@
 import sys
 import torch
+import torch.nn as nn
 import os
 from pathlib import Path
 
 import optuna
 from optuna.trial import TrialState
-import random
 
 from domiknows.program.plugins.bert_unfreezing_plugin import create_optimizer_factory, create_optimizer_with_differential_lr
-
-sys.path.append('.')
-sys.path.append('../../..')
 
 import argparse
 
@@ -20,12 +17,11 @@ from domiknows import setProductionLogMode
 setProductionLogMode()
 
 from domiknows.program import CallbackProgram
-from domiknows.program.lossprogram import InferenceProgram, GumbelInferenceProgram
-from domiknows.program.model.pytorch import SolverModel
+from domiknows.program.lossprogram import GumbelInferenceProgram
+from domiknows.program.model.pytorch import PoiModel
 from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, TorchSensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
-from domiknows.solver.adaptiveTNormLossCalculator import AdaptiveTNormLossCalculator
 
 from domiknows.program.plugins.callback_plugin_manager import create_standard_plugin_manager
 
@@ -102,7 +98,9 @@ def parse_arguments():
     parser.add_argument("--bert_lr", type=float, default=1e-5, help="Learning rate for BERT layers")
     
     # Counting t-norm settings
-    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="L", help="T-norm for counting constraints")
+    parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
+                        default="L",
+                        help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, 'auto' = adaptive during training")
     
     # Gumbel-Softmax settings
     parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, help="Use Gumbel-Softmax for counting")
@@ -221,11 +219,45 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
         self.to(device)
 
+
 class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
-    """InferenceProgram with callback support for gradual unfreezing."""
+    """InferenceProgram with callback support and proper loss dict handling."""
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def default_after_train_step(self, output=None):
+        """Override to do nothing - GumbelInferenceProgram already handles backward."""
+        # GumbelInferenceProgram.train_epoch already calls loss.backward() and opt.step()
+        # So we don't need to do it again here
+        pass
+    
+    def __init__(self, graph, Model, loss=None, **kwargs):
+        """
+        Initialize with proper handling of loss parameter.
+        
+        Args:
+            graph: Knowledge graph
+            Model: Model class (e.g., PoiModel, SolverModel)
+            loss: Either a dict (for PoiModel) or callable (for other models)
+            **kwargs: Additional arguments
+        """
+        # Separate loss parameter handling based on model type
+        if loss is not None and isinstance(loss, dict):
+            # For PoiModel with dict loss, we need to handle initialization carefully
+            # Don't pass 'loss' to parent __init__ (it will go to InferenceModel)
+            # Instead, initialize normally then set model.loss afterward
+            
+            # Initialize parent classes without dict loss
+            super().__init__(graph, Model, **kwargs)
+            
+            # Now set the model's loss to the dict after initialization
+            if hasattr(self, 'model') and self.model is not None:
+                self.model.loss = loss
+        else:
+            # Standard initialization for non-dict loss
+            super().__init__(graph, Model, loss=loss, **kwargs)
+        
+        # Ensure callback lists are properly initialized
+        # This prevents the parent's default_after_train_step from being added twice
+        self.after_train_step = [self.default_after_train_step]
         
         # Explicitly initialize all callback hooks (from CallbackProgram)
         self.before_train = []
@@ -233,7 +265,6 @@ class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
         self.before_train_epoch = []
         self.after_train_epoch = []
         self.before_train_step = []
-        self.after_train_step = []
         self.before_test = []
         self.after_test = []
         self.before_test_epoch = []
@@ -333,10 +364,33 @@ def program_declaration(train, dev, args, device='cpu'):
     phrase[location] = ModuleLearner('emb', module=classifiers['location'])
     phrase[other] = ModuleLearner('emb', module=classifiers['other'])
     phrase[o] = ModuleLearner('emb', module=classifiers['o'])
+    
+    # Create per-property binary label sensors so that find_poi() can pair
+    # each classifier (ModuleLearner) with its label on the SAME property.
+    # Each classifier outputs 2-class logits (yes/no), so each label is binary.
+    #
+    # Strategy: read entity_labels list (multi-class indices) into a ReaderSensor,
+    # then derive per-type binary labels via FunctionalSensor.
+    # Entity type index mapping (must match reader.py):
+    # people=0, organization=1, location=2, other=3, o=4
+    phrase['entity_labels'] = ReaderSensor(keyword='entity_labels')
+
+    def _make_binary_entity_fn(target_class_idx):
+        """Return a forward fn that maps multi-class labels → binary (is-target)."""
+        def _fn(labels):
+            t = torch.tensor(labels, dtype=torch.long) if not isinstance(labels, torch.Tensor) else labels.long()
+            return (t == target_class_idx).long()
+        return _fn
+
+    phrase[people]       = FunctionalSensor('entity_labels', forward=_make_binary_entity_fn(0), label=True)
+    phrase[organization] = FunctionalSensor('entity_labels', forward=_make_binary_entity_fn(1), label=True)
+    phrase[location]     = FunctionalSensor('entity_labels', forward=_make_binary_entity_fn(2), label=True)
+    phrase[other]        = FunctionalSensor('entity_labels', forward=_make_binary_entity_fn(3), label=True)
+    phrase[o]            = FunctionalSensor('entity_labels', forward=_make_binary_entity_fn(4), label=True)
 
     def filter_pairs(phrase_text, arg1, arg2, data):
-        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
-            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+        for rel in data:
+            if arg1.instanceID == rel['head'] and arg2.instanceID == rel['tail']:
                 return True
         return False
 
@@ -355,16 +409,113 @@ def program_declaration(train, dev, args, device='cpu'):
     pair[live_in] = ModuleLearner('emb', module=classifiers['live_in'])
     pair[orgbase_on] = ModuleLearner('emb', module=classifiers['orgbase_on'])
     pair[kill] = ModuleLearner('emb', module=classifiers['kill'])
+    
+    # Relation label sensors using FunctionalSensor with mapping tensors.
+    # After CompositionCandidateReaderSensor runs, the mapping tensors
+    # pair[rel_pair_phrase1.reversed] (N_pairs, N_phrases) and
+    # pair[rel_pair_phrase2.reversed] (N_pairs, N_phrases) tell us which
+    # phrase each pair connects. We use these to look up relation labels.
+    #
+    # NOTE: pair[work_for] = FunctionalSensor(...) → self.concept = pair
+    # (Property.sup = the concept owning the property, i.e. pair),
+    # so string/Relation predecessors resolve against pair and would work.
+    # We pass Property objects explicitly for clarity.
+    #
+    # Relation type index mapping (must match reader.py):
+    # work_for=0, located_in=1, live_in=2, orgbase_on=3, kill=4
+    sentence['relation_labels'] = ReaderSensor(keyword='relation_labels')
+
+    # Grab Property object references.
+    # These will be passed directly to FunctionalSensor as predecessors.
+    _prop_arg1_map = pair[rel_pair_phrase1.reversed]   # Property holding (N_pairs, N_phrases) mapping
+    _prop_arg2_map = pair[rel_pair_phrase2.reversed]   # Property holding (N_pairs, N_phrases) mapping
+    _prop_rel_labels = sentence['relation_labels']     # Property holding dict (on sentence, not pair)
+
+    def _make_binary_relation_fn(target_rel_idx):
+        """Return a forward fn that maps relation_labels → binary labels per pair.
+
+        Uses mapping tensors (from CompositionCandidateReaderSensor) to find
+        (head_phrase_idx, tail_phrase_idx) for each pair, then looks up the
+        relation label in the relation_labels dict.
+        """
+        def _fn(arg1_mapping, arg2_mapping, rel_labels):
+            # arg1_mapping: (N_pairs, N_phrases) one-hot mapping for arg1
+            # arg2_mapping: (N_pairs, N_phrases) one-hot mapping for arg2
+            # rel_labels: dict {(head_phrase_idx, tail_phrase_idx): class_index}
+            n_pairs = arg1_mapping.shape[0]
+            labels = torch.zeros(n_pairs, dtype=torch.long, device=arg1_mapping.device)
+            # Extract head/tail phrase indices from one-hot mapping
+            head_indices = arg1_mapping.argmax(dim=1)  # (N_pairs,)
+            tail_indices = arg2_mapping.argmax(dim=1)  # (N_pairs,)
+            for k in range(n_pairs):
+                h = head_indices[k].item()
+                t = tail_indices[k].item()
+                rel_class = rel_labels.get((h, t), -1)
+                if rel_class == target_rel_idx:
+                    labels[k] = 1
+            return labels
+        return _fn
+
+    # Pass Property objects directly (not strings/Relations) to bypass concept lookup
+    pair[work_for]    = FunctionalSensor(_prop_arg1_map, _prop_arg2_map, _prop_rel_labels,
+                                         forward=_make_binary_relation_fn(0), label=True)
+    pair[located_in]  = FunctionalSensor(_prop_arg1_map, _prop_arg2_map, _prop_rel_labels,
+                                         forward=_make_binary_relation_fn(1), label=True)
+    pair[live_in]     = FunctionalSensor(_prop_arg1_map, _prop_arg2_map, _prop_rel_labels,
+                                         forward=_make_binary_relation_fn(2), label=True)
+    pair[orgbase_on]  = FunctionalSensor(_prop_arg1_map, _prop_arg2_map, _prop_rel_labels,
+                                         forward=_make_binary_relation_fn(3), label=True)
+    pair[kill]        = FunctionalSensor(_prop_arg1_map, _prop_arg2_map, _prop_rel_labels,
+                                         forward=_make_binary_relation_fn(4), label=True)
 
     _models['bert'] = bert_model
     _models['classifiers'] = classifiers
 
+    # Build loss_dict keyed by (output_sensor, target_sensor) — the actual sensor
+    # objects that find_poi() discovers.  PoiModel.poi_loss calls
+    #   self.loss[output_sensor, target_sensor](logit, labels, mask)
+    # so we wrap CrossEntropyLoss to accept the extra `mask` argument.
+    class MaskedCrossEntropyLoss(nn.Module):
+        """CrossEntropyLoss wrapper that accepts (logit, labels, mask)."""
+        def __init__(self):
+            super().__init__()
+            self.ce = nn.CrossEntropyLoss(reduction='none')
+        def forward(self, logit, labels, mask=None):
+            # logit: (N, 2)  labels: (N,) with values 0 or 1
+            labels = labels.long()
+            per_sample = self.ce(logit, labels)
+            if mask is not None and mask.any():
+                per_sample = per_sample * mask.float()
+                return per_sample.sum() / mask.float().sum().clamp(min=1)
+            return per_sample.mean()
+
+    # find_poi() will discover (output_sensor, target_sensor) pairs automatically;
+    # we just need the loss_dict to return a loss for any (output, target) key.
+    # Use a defaultdict so every pair discovered by find_poi() gets a loss.
+    from collections import defaultdict
+
+    class _LossFactory(dict):
+        """dict subclass that auto-creates MaskedCrossEntropyLoss for any key.
+        __bool__ returns True so `if not self.loss:` in PoiModel.poi_loss
+        doesn't short-circuit when the dict is initially empty."""
+        def __missing__(self, key):
+            val = MaskedCrossEntropyLoss()
+            self[key] = val
+            return val
+        def __bool__(self):
+            return True  # always truthy — losses will be created on demand
+
+    loss_dict = _LossFactory()
+
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
+    # Use PoiModel with supervised loss (loss_dict) + constraint loss (via InferenceProgram)
+    # The custom InferenceProgramWithCallbacks properly handles dict-based loss
     program = InferenceProgramWithCallbacks(
-        graph, SolverModel,
-        poi=[phrase, sentence, word, people, organization, location, graph.constraint],
+        graph, PoiModel,
+        loss=loss_dict,
+        poi=[phrase, sentence, word, pair, people, organization, location, graph.constraint],
         tnorm=args.counting_tnorm, 
         inferTypes=['local/argmax'], 
         device=device,
@@ -380,6 +531,12 @@ def program_declaration(train, dev, args, device='cpu'):
     dev_dataset = None
     if dev is not None and len(dev) > 0:
         dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    
+    # Supervised learning:
+    # - Binary label sensors are on the SAME property as each classifier so find_poi()
+    #   discovers (output_sensor, target_sensor) pairs automatically.
+    # - loss_dict maps those pairs to MaskedCrossEntropyLoss (handles mask arg).
+    # - Training computes: total_loss = supervised_loss + beta * constraint_loss
     
     return program, train_dataset, dev_dataset
 

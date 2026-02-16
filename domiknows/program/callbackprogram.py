@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..utils import consume, entuple
 from .model.base import Mode
 from .program import LearningBasedProgram
-
+import torch
 
 class ProgramStorageCallback():
     def __init__(self, program, fn) -> None:
@@ -29,8 +29,9 @@ class CallbackProgram(LearningBasedProgram):
 
     def default_after_train_step(self, output=None):
         loss, *_ = output
-        if self.opt and loss:
+        if self.opt and torch.is_tensor(loss) and loss.requires_grad:
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
             self.opt.step()
 
     def __init__(self, *args, **kwargs):

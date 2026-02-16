@@ -279,7 +279,6 @@ Differentiable logic using t-norms for gradient-based learning.
 ```python
 processor = lcLossBooleanMethods()
 processor.setTNorm('P')  # Product t-norm
-processor.setCountingTNorm('L')  # Different for counting
 
 # Differentiable AND
 success = processor.andVar(None, var1, var2)  # Returns tensor
@@ -550,7 +549,6 @@ optional_lc.p = 50
 ```python
 # Use Product for main logic, Łukasiewicz for counts
 processor.setTNorm('P')
-processor.setCountingTNorm('L')
 ```
 
 ---
@@ -677,9 +675,6 @@ processor = lcLossBooleanMethods()
 
 # Main logic: Product
 processor.setTNorm('P')
-
-# Counting: Łukasiewicz  
-processor.setCountingTNorm('L')
 
 # Automatically applies appropriate t-norm per operation
 ```

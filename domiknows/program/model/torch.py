@@ -29,9 +29,9 @@ class BaseModel(torch.nn.Module):
         self.mode_ = mode
 
     def reset(self):
-        if self.loss is not None:
+        if self.loss is not None and hasattr(self.loss, 'reset'):
             self.loss.reset()
-        if self.metric is not None:
+        if self.metric is not None and hasattr(self.metric, 'reset'):
             self.metric.reset()
 
     def move(self, value, device=None):
@@ -71,16 +71,16 @@ class TorchModel(BaseModel):
     def find_poi(self):
         for prop in self.graph.traversal_apply(all_properties):
             for sensor1, sensor2 in combinations(prop.find(self.BaseSensor), r=2):
-                if sensor1.target:
+                if getattr(sensor1, 'label', False):
                     target_sensor = sensor1
                     output_sensor = sensor2
-                elif sensor2.target:
+                elif getattr(sensor2, 'label', False):
                     target_sensor = sensor2
                     output_sensor = sensor1
                 else:
                     # TODO: should different learners get closer?
                     continue
-                if output_sensor.target:
+                if getattr(output_sensor, 'label', False):
                     # two targets, skip
                     continue
                 yield prop, output_sensor, target_sensor

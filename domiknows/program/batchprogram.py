@@ -2,6 +2,8 @@ from itertools import cycle, repeat
 from typing import Callable, List
 from dataclasses import dataclass
 
+import torch
+
 from ..utils import consume, entuple
 from .model.base import Mode
 from .program import LearningBasedProgram
@@ -19,7 +21,7 @@ class BatchProgram(LearningBasedProgram):
         self.opt.zero_grad()
         for index, data_item in enumerate(dataset):
             loss, metric, *output = self.model(data_item)
-            if self.opt and loss:
+            if self.opt and torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
                 if index % self.batch_size == self.batch_size - 1:
                     self.opt.step()

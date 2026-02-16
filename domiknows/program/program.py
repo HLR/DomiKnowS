@@ -213,8 +213,9 @@ class LearningBasedProgram():
                 self.opt.zero_grad()
                 
             loss, metric, *output = self.model(data_item)
-            if self.opt and loss:
+            if self.opt and torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
                 self.opt.step()
                 
             yield (loss, metric, *output[:1])

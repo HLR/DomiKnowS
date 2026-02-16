@@ -110,20 +110,17 @@ def conll4_reader(data_path, dataset_portion, asking_type=None):
                 rel_text = relation['type']
                 all_pos_relations[head][tail] = rel_text
 
-            relation = []
-            for i in range(len(entities)):
-                for j in range(len(entities)):
-                    if all_pos_relations[i][j] == "":
-                        continue
-                    cur_rel = (all_pos_relations[i][j], i, j)
-                    relation.append(cur_rel)
-
+            # Build tokens/labels first so entity_to_phrase_idx is populated
+            # before the relation loop uses it.
             index = 0
             label = []
             tokens = []
-            for entity in entities:
-                label.extend(['O'] * (entity['start'] - index))
+            entity_to_phrase_idx = {}  # map entity array index → phrase list index
+            for ent_idx, entity in enumerate(entities):
+                num_o_before = entity['start'] - index
+                label.extend(['O'] * num_o_before)
                 tokens.extend(data["tokens"][index: entity['start']])
+                entity_to_phrase_idx[ent_idx] = len(tokens)  # phrase idx for this entity
                 index = entity['end']
                 label.append(entity['type'])
                 tokens.append("/".join(data['tokens'][entity['start']: entity['end']]))
@@ -133,16 +130,30 @@ def conll4_reader(data_path, dataset_portion, asking_type=None):
                 label.extend(['O'] * (len(data['tokens']) - index))
                 tokens.extend(data['tokens'][index:])
 
-            # Process relations if they exist
+            relation = []
+            for i in range(len(entities)):
+                for j in range(len(entities)):
+                    if all_pos_relations[i][j] == "":
+                        continue
+                    # Use phrase indices so filter_pairs can match DataNode instanceIDs
+                    phrase_i = entity_to_phrase_idx.get(i, i)
+                    phrase_j = entity_to_phrase_idx.get(j, j)
+                    cur_rel = (all_pos_relations[i][j], phrase_i, phrase_j)
+                    relation.append(cur_rel)
+
+            # Build relation data for CompositionCandidateReaderSensor's filter_pairs.
+            # Must be a list of dicts with 'head'/'tail' keys (phrase indices).
             relation_labels = []
             if relations:
                 for rel in relations:
-                    head_idx = rel['head']
-                    tail_idx = rel['tail']
+                    head_ent_idx = rel['head']
+                    tail_ent_idx = rel['tail']
                     rel_type = rel['type']
+                    h = entity_to_phrase_idx.get(head_ent_idx, head_ent_idx)
+                    t = entity_to_phrase_idx.get(tail_ent_idx, tail_ent_idx)
                     relation_labels.append({
-                        'head': head_idx,
-                        'tail': tail_idx,
+                        'head': h,
+                        'tail': t,
                         'type': rel_type
                     })
 
@@ -172,14 +183,68 @@ def conll4_reader(data_path, dataset_portion, asking_type=None):
                 print(f"  Label: {label_query}")
                 print(f"  Question Type: {data['question_type']}")
 
-            current_portion.append({
+            # Generate structured entity labels as lists (one per phrase)
+            # Convert entity labels to class indices: people=0, organization=1, location=2, other=3, o=4
+            entity_type_mapping = {
+                'Peop': 0,  # people
+                'Org': 1,   # organization
+                'Loc': 2,   # location
+                'Other': 3, # other
+                'O': 4      # o (no entity)
+            }
+            
+            entity_class_labels = []
+            for entity_label in label:
+                if entity_label in entity_type_mapping:
+                    entity_class_labels.append(entity_type_mapping[entity_label])
+                else:
+                    # Default to 'other' for unknown types
+                    entity_class_labels.append(3)
+            
+            # Generate structured relation labels as a dictionary
+            # Key: (head_idx, tail_idx), Value: relation_class_index
+            # Relation mapping: work_for=0, located_in=1, live_in=2, orgbase_on=3, kill=4
+            relation_type_mapping = {
+                'work_for': 0,
+                'located_in': 1,
+                'live_in': 2,
+                'orgbase_on': 3,
+                'kill': 4
+            }
+            
+            relation_class_labels = {}
+            for rel_info in relation:
+                rel_type, head_phrase_idx, tail_phrase_idx = rel_info
+                rel_name = RELATIONS_NAME.get(rel_type, None)
+                if rel_name and rel_name in relation_type_mapping:
+                    # Keys are phrase indices (matching DataNode instanceIDs)
+                    relation_class_labels[(head_phrase_idx, tail_phrase_idx)] = relation_type_mapping[rel_name]
+
+            # Create individual label fields for each phrase (phrase_0_entity_label, phrase_1_entity_label, etc.)
+            data_item = {
                 "tokens": tokens,
                 "label": label,
-                "relations": relation_labels,  # Add relations to output
+                "relations": relation_labels,
                 "relation": relation,
                 "logic_str": str_query,
-                "logic_label": label_query
-            })
+                "logic_label": label_query,
+                # Add structured labels for supervised learning
+                "entity_labels": entity_class_labels,  # List of class indices, one per phrase
+                "relation_labels": relation_class_labels  # Dict: (head, tail) -> class_index
+            }
+            
+            # Add individual entity label fields: phrase_0_entity_label, phrase_1_entity_label, etc.
+            for phrase_idx, entity_class in enumerate(entity_class_labels):
+                data_item[f"phrase_{phrase_idx}_entity_label"] = entity_class
+            
+            # Add individual relation label fields: pair_0_0_relation_label, pair_0_1_relation_label, etc.
+            # Use a counter for pair indices to make them sequential
+            pair_idx = 0
+            for (head_idx, tail_idx), relation_class in relation_class_labels.items():
+                data_item[f"pair_{head_idx}_{tail_idx}_relation_label"] = relation_class
+                pair_idx += 1
+            
+            current_portion.append(data_item)
 
         if portion == "train":
             train = copy.deepcopy(current_portion)

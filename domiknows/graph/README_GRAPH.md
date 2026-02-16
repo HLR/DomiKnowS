@@ -677,7 +677,223 @@ fixedL(person(V.x))
 # Sum of variables (for numeric constraints)
 sumL(salary(V.x))
 ```
+### Definite Description & Query Constraints
 
+These constraints go beyond boolean satisfaction — they **select entities** and **query attributes**, enabling question-answering style reasoning within the constraint framework.
+
+#### `iotaL` - Definite Description (Select THE Unique Entity)
+
+Based on Russell's theory of definite descriptions: ιx.φ(x) denotes "the unique x such that φ(x)".
+
+Unlike `existsL` which returns a boolean (does any entity satisfy?), `iotaL` **returns the entity itself** — a selection distribution over entities that can be composed with other constraints.
+
+```python
+from domiknows.graph import iotaL, andL, existsL, eqL, V
+
+# Select THE sphere in the scene (assuming exactly one)
+iotaL(sphere(V.x))
+
+# Select THE person who works for Microsoft
+iotaL(person(V.x), path=(V.x, work_for, eqL(organization, 'name', 'Microsoft')))
+
+# Nest inside other constraints:
+# "Is there something left of THE blue sphere?"
+existsL(left(V.x, iotaL(andL(blue(V.y), sphere(V.y)))))
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `*e` | elements | — | Constraint elements defining the selection condition |
+| `p` | int | 100 | Priority (0–100) |
+| `temperature` | float | 1.0 | Softmax temperature for differentiable selection (lower = harder) |
+| `active` | bool | True | Enable/disable |
+| `sampleEntries` | bool | False | Use sampling for large groundings |
+| `name` | str | None | Constraint name (auto-generated if None) |
+
+**Behavior across execution modes:**
+
+| Mode | `onlyConstrains=True` | `onlyConstrains=False` |
+|------|----------------------|----------------------|
+| **ILP** | Adds uniqueness constraints to model | Returns binary selection variables `[s₀, …, sₙ]` |
+| **Loss** | Returns scalar loss tensor | Returns entity distribution tensor `[N]` via softmax |
+| **Sample** | Returns boolean violation tensor | Returns tensor of selected entity indices |
+| **Verify** | Returns `1` if valid, `0` if violated | Returns index of selected entity, or `-1` if invalid |
+
+**Presuppositions enforced:**
+
+1. **Existence** — at least one entity must satisfy the condition (Σ cᵢ ≥ 1)
+2. **Uniqueness** — exactly one entity is selected (Σ sᵢ = 1, sᵢ ≤ cᵢ)
+
+#### `queryL` - Query Multiclass Attribute of Selected Entity
+
+Given a multiclass concept (parent with subclasses via `is_a`, or `EnumConcept`) and an entity selection (typically from `iotaL`), returns which subclass the selected entity belongs to.
+
+This is the constraint-level equivalent of asking *"What is the \<attribute\> of THE \<entity\>?"*
+
+```python
+from domiknows.graph import Concept, EnumConcept, queryL, iotaL, andL
+
+# --- Setup: define a multiclass concept via is_a ---
+material = Concept('material')
+metal = Concept('metal')
+rubber = Concept('rubber')
+metal.is_a(material)
+rubber.is_a(material)
+
+# Query: "What material is THE big sphere?"
+answer = queryL(
+    material,
+    iotaL(andL(big(V.x), sphere(V.x)))
+)
+
+# --- Or with EnumConcept ---
+color = EnumConcept('color', values=['red', 'green', 'blue'])
+
+# Query: "What color is THE small cube?"
+answer = queryL(
+    color,
+    iotaL(andL(small(V.x), cube(V.x)))
+)
+```
+
+**First argument requirements** — the concept passed to `queryL` must be one of:
+
+1. A `Concept` that has subclasses defined via `is_a()` relationships.
+2. An `EnumConcept` with explicit values.
+
+The graph validates this at context-exit time and raises a clear error otherwise:
+
+```
+queryL constraint in LC3 has concept 'material' without subclasses.
+The concept used in queryL must be a multiclass concept with subclasses defined via is_a().
+Example: metal.is_a(material), rubber.is_a(material)
+Alternatively, use EnumConcept: material = EnumConcept('material', values=['value1', 'value2'])
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `concept` | Concept/EnumConcept | — | The multiclass concept to query (first positional arg) |
+| `*e` | elements | — | Entity selection constraint (typically `iotaL(…)`) |
+| `p` | int | 100 | Priority |
+| `temperature` | float | 1.0 | Softmax temperature |
+| `active` | bool | True | Enable/disable |
+
+**Composing `iotaL` + `queryL` for VQA-style reasoning:**
+
+```python
+# "What shape is the large red object?"
+queryL(
+    shape,
+    iotaL(andL(large(V.x), red(V.x)))
+)
+
+# "What is left of the blue cylinder?"
+queryL(
+    object_type,
+    iotaL(left(V.x, iotaL(andL(blue(V.y), cylinder(V.y)))))
+)
+```
+
+---
+
+### Executable Constraints
+
+Executable constraints are dynamically compiled from string expressions at runtime, enabling data-driven or per-sample constraint definitions. They are stored separately from standard logical constraints and support constraint-aware training where different samples may have different active constraints.
+
+#### `execute` - Mark a Constraint as Executable
+
+Wrapping any `LogicalConstrain` with `execute()` moves it from `graph.logicalConstrains` to `graph.executableLCs`. This separation allows the training loop to process executable constraints differently — for example, switching which constraint is active per data item.
+
+```python
+from domiknows.graph import execute, andL, ifL
+
+# Manually wrap a constraint
+with graph:
+    constraint1 = execute(andL(person(V.x), entity(V.x)))
+    # Now in graph.executableLCs as "ELC0", NOT in graph.logicalConstrains
+```
+
+Executable constraints are named `ELC0`, `ELC1`, etc., and delegate all operations (ILP, loss, verification) to their wrapped inner constraint.
+
+#### `graph.compile_executable()` - Compile Constraints from Data
+
+The primary way to create executable constraints is from a dataset of string expressions. Each data item contains a constraint string and a label indicating whether it should be satisfied (`True`) or violated (`False`).
+
+```python
+data = [
+    {'constraint': 'ifL(person(x), entity(x))', 'label': True},
+    {'constraint': 'andL(work_for(x, y), person(x))', 'label': False},
+]
+
+# Compile into executable constraints and get a LogicDataset
+logic_dataset = graph.compile_executable(
+    data,
+    logic_keyword='constraint',
+    logic_label_keyword='label',
+    extra_namespace_values={},  # additional variables for eval namespace
+    verbose=False
+)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data` | iterable of dicts | — | Each dict must contain keys for the constraint expression and label |
+| `logic_keyword` | str | `'constraint'` | Key in data items containing the constraint string |
+| `logic_label_keyword` | str | `'label'` | Key in data items containing the expected label |
+| `extra_namespace_values` | dict | `{}` | Additional variables available during `eval()` |
+| `verbose` | bool | `False` | Print debug information during compilation |
+
+**Returns:** a `LogicDataset` wrapping the original data with constraint metadata.
+
+**What happens during compilation:**
+
+1. Each constraint string is auto-wrapped with `execute()` if not already.
+2. Constraint function names are resolved to fully qualified paths (e.g., `andL` → `domiknows.graph.logicalConstrain.andL`).
+3. The expression is compiled and evaluated in a namespace containing the graph's concepts, relations, and variables.
+4. The resulting executable constraint is stored in `graph.executableLCs`.
+5. Labels are stored in `graph.executableLCsLabels`.
+
+#### `LogicDataset` - Dataset Wrapper for Constraint-Aware Training
+
+`LogicDataset` wraps the original dataset and adds per-item metadata for constraint switching during training. When iterated, each item includes additional keys that tell the model which executable constraint is currently active.
+
+```python
+from domiknows.graph.executable import LogicDataset
+
+for item in logic_dataset:
+    # Original data keys still present
+    # Plus constraint metadata:
+    #   _constraint_<ELC_NAME>: label (True/False)
+    #   _constraint_curr_lc_name: name of the active constraint
+    #   _constraint_do_switch: flag indicating constraint switching
+    pass
+```
+
+This integrates with the model's `inference()` method (in `PoiModel` / `SolverModel`), which checks for `LogicDataset.curr_lc_key` and skips non-active executable constraints during forward passes.
+
+**Typical training workflow:**
+
+```python
+with Graph('vqa') as graph:
+    # ... define concepts and relations ...
+    pass
+
+# Compile constraints from data
+logic_dataset = graph.compile_executable(qa_data)
+
+# Use in training — model automatically handles constraint switching
+for epoch in range(num_epochs):
+    for batch in DataLoader(logic_dataset):
+        loss = model(batch)
+        loss.backward()
+        optimizer.step()
+```
 ---
 
 ## Variable Syntax

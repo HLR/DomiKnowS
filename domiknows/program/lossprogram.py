@@ -881,6 +881,12 @@ class InferenceProgram(LossProgram):
             
             if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+
                 if self.opt is not None:
                     self.opt.step()
                 if self.copt is not None:
@@ -949,7 +955,12 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
             
             if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
-            
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+
                 if self.opt is not None:
                     self.opt.step()
                 if self.copt is not None:
@@ -1023,12 +1034,18 @@ class SampleLossProgram(LossProgram):
                 if loss != loss:  # NaN check
                     raise Exception("Calculated loss is nan")
             
-            if self.opt is not None and loss:
+            if self.opt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+
                 self.opt.step()
                 iter_count += 1
             
-            if self.copt is not None and loss:
+            if self.copt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 self.copt.step()
             
             yield (loss, metric, *output[:1])
@@ -1090,8 +1107,14 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
                 if loss != loss:
                     raise Exception("Calculated loss is nan")
             
-            if self.opt is not None and loss:
+            if self.opt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+
                 self.opt.step()
                 iter_count += 1
             

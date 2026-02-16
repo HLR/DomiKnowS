@@ -73,21 +73,6 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         self.tnorm = tnorm
 
-    def setCountingTNorm(self, tnorm='L'):
-        if tnorm =='L':
-            if self.ifLog: self.myLogger.info("Using Lukasiewicz t-norms Formulation")
-        elif tnorm =='G':
-            if self.ifLog: self.myLogger.info("Using Godel t-norms Formulation")
-        elif tnorm =='P':
-            if self.ifLog: self.myLogger.info("Using Product t-norms Formulation")
-        elif tnorm =='SP':
-            if self.ifLog: self.myLogger.info("Using Simplified Product t-norms Formulation")
-        #elif tnorm =='LSE':
-        #    if self.ifLog: self.myLogger.info("Using Log Sum Exp Formulation")
-        else:
-            raise Exception('Unknown type of t-norms formulation - %s'%(tnorm))
-
-        self.counting_tnorm = tnorm
         
     def _isTensor(self, v):
         if v is None:
@@ -130,7 +115,6 @@ class lcLossBooleanMethods(constraintsProcessor):
             notLoss = torch.sub(tOne, notSuccess)
             return notLoss
         else:            
-            return notSuccess
             return notSuccess
         
     def andVar(self, _, *var, onlyConstrains = False):
