@@ -20,8 +20,8 @@ from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, Fun
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
-# from internVLvLLM import InternVLShared as InternVL
-from peftvllm import InternVLSharedHF as InternVL
+from internVLvLLM import InternVLShared as InternVL
+#from peftvllm import InternVLSharedHF as InternVL
 
 try:
     from .preprocess import preprocess_dataset, preprocess_folders_and_files
@@ -226,7 +226,7 @@ if __name__ == "__main__":
             else:
                 object[attr_variable] = ModuleLearner("emb", module=torch.nn.Linear(1024, 2).to(device), device=device)
         else:
-            MODEL_PATH = "OpenGVLab/InternVL3_5-1B"
+            MODEL_PATH = "OpenGVLab/InternVL3_5-8B"
             if attr_name in spatial_relations:
                 relaton_2_obj[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
                                                              module=InternVL(model_path=MODEL_PATH, device=device,
