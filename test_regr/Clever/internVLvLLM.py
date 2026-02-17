@@ -434,11 +434,10 @@ class InternVLShared(torch.nn.Module):
         
         # --- Existing Logic to prepare Images and Questions ---
         if self.relation == 2:
-            # execution.py places SOURCE at obj1 and RESULT at obj2, so
-            # left(pair) = True means "obj2 is left of obj1".
-            # box1 = obj1 (source), box2 = obj2 (result).
-            # We color obj2 red and obj1 green so the question asks the
-            # correct direction: "Is obj2(red) {attr} of obj1(green)?"
+            # The formula (from convert_CLEVR_domiKnowS) places RESULT at obj1
+            # and SOURCE at obj2, so left(pair) = True means "obj1 is left of obj2".
+            # box1 = obj1 (result, red), box2 = obj2 (source, green).
+            # Question asks "Is obj1(red) {attr} of obj2(green)?" which matches directly.
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
                     img_copy = image.copy()
@@ -450,8 +449,8 @@ class InternVLShared(torch.nn.Module):
                         img_copy = F.to_pil_image(img_copy)
                     
                     draw = ImageDraw.Draw(img_copy)
-                    draw.rectangle(box1.tolist(), outline="green", width=3)
-                    draw.rectangle(box2.tolist(), outline="red", width=3)
+                    draw.rectangle(box1.tolist(), outline="red", width=3)
+                    draw.rectangle(box2.tolist(), outline="green", width=3)
                     images.append(img_copy)
                     questions.append(f"Is the object in the red bounding box {self.attr} of the object in the green bounding box? answer with only Yes or No.")
         else:
