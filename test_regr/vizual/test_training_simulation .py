@@ -12,10 +12,6 @@ import pytest
 import torch
 import torch.nn as nn
 
-sys.path.append(".")
-sys.path.append("../..")
-
-
 # =====================================================================
 # Trainable learners — small linear heads with ground-truth bias
 # =====================================================================
@@ -118,7 +114,7 @@ def program_trainable():
     from domiknows.program.model.pytorch import PoiModel
     from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
-    from .graph import (
+    from graph import (
         graph, image, object_node, image_contains_object,
         pair, rel_arg1, rel_arg2,
         small, large, red, green, blue,

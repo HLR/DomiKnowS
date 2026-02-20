@@ -403,7 +403,7 @@ def program_declaration(train, dev, args, device='cpu'):
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
 
-    # FIX: Use the SAME classifier instances from the dictionary
+    # Use the SAME classifier instances from the dictionary
     pair[work_for] = ModuleLearner('emb', module=classifiers['work_for'])
     pair[located_in] = ModuleLearner('emb', module=classifiers['located_in'])
     pair[live_in] = ModuleLearner('emb', module=classifiers['live_in'])

@@ -85,15 +85,15 @@ class SampleLossCalculator:
                 
                 self.solver.constraintConstructor.current_device = dn.current_device
                 self.solver.constraintConstructor.myGraph = self.solver.myGraph
-                lossList, sampleInfo, inputLc, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+                lossTensor, sampleInfo, inputLc, _ = self.solver.constraintConstructor.constructLogicalConstrains(
                     lc, myBooleanMethods, None, dn, p, key=key, headLC=True, loss=True, sample=True)
                 
-                current_lcLosses['lossList'] = lossList
+                current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['sampleInfo'] = sampleInfo
                 current_lcLosses['input'] = inputLc
                 current_lcLosses['lossRate'] = []
                 
-                for li in lossList:
+                for li in lossTensor:
                     liList = []
                     for l in li:
                         if l is not None:
@@ -114,7 +114,7 @@ class SampleLossCalculator:
             startLC = perf_counter_ns()
             
             current_lcLosses = lcLosses[currentLcName]
-            lossList = current_lcLosses['lossList']
+            lossTensor = current_lcLosses['lossTensor']
             sampleInfo = current_lcLosses['sampleInfo']
             
             successesList = []
@@ -124,8 +124,8 @@ class SampleLossCalculator:
             oneT = torch.ones(sampleSize, device=self.solver.current_device, dtype=dtype)
             
             # Prepare data
-            if len(lossList) == 1:
-                for currentFailures in lossList[0]:
+            if len(lossTensor) == 1:
+                for currentFailures in lossTensor[0]:
                     if currentFailures is None:
                         successesList.append(None)
                         continue
@@ -147,7 +147,7 @@ class SampleLossCalculator:
                             if c[2] not in lcVariables:
                                 lcVariables[c[2]] = c
             else:
-                for i, l in enumerate(lossList):
+                for i, l in enumerate(lossTensor):
                     for currentFailures in l:
                         if currentFailures is None:
                             successesList.append(None)
@@ -189,7 +189,7 @@ class SampleLossCalculator:
             startLC = perf_counter_ns()
             
             current_lcLosses = lcLosses[currentLcName]
-            lossList = current_lcLosses['lossList']
+            lossTensor = current_lcLosses['lossTensor']
             successesList = current_lcLosses['successesList']
             lcSuccesses = current_lcLosses['lcSuccesses']
             lcVariables = current_lcLosses['lcVariables']
@@ -217,7 +217,7 @@ class SampleLossCalculator:
             if lc and lc.sampleEntries:
                 current_lcLosses['lcSuccesses'] = successesList
                 
-                for i, l in enumerate(lossList):
+                for i, l in enumerate(lossTensor):
                     currentLcVariables = OrderedDict()
                     for k in sampleInfo.keys():
                         for c in sampleInfo[k][i]:
@@ -270,13 +270,13 @@ class SampleLossCalculator:
             
             if lc and lc.sampleEntries:
                 self.solver.myLoggerTime.info('Processing time for %s with %i entries and %i variables is: %ims' %
-                                    (currentLcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
+                                    (currentLcName, len(lossTensor), len(lcVariables), current_lcLosses['elapsedInMsLC']))
             elif eliminateDuplicateSamples:
                 self.solver.myLoggerTime.info('Processing time for %s with %i entries, %i variables and %i unique samples is: %ims' %
-                                    (currentLcName, len(lossList), len(lcVariables), lcSampleSize, current_lcLosses['elapsedInMsLC']))
+                                    (currentLcName, len(lossTensor), len(lcVariables), lcSampleSize, current_lcLosses['elapsedInMsLC']))
             else:
                 self.solver.myLoggerTime.info('Processing time for %s with %i entries and %i variables is: %ims' %
-                                    (currentLcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
+                                    (currentLcName, len(lossTensor), len(lcVariables), current_lcLosses['elapsedInMsLC']))
         
         self.solver.myLogger.info('')
         self.solver.myLogger.info('Processed %i logical constraints' % (lcCounter))

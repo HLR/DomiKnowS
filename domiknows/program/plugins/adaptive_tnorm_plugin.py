@@ -100,7 +100,7 @@ class AdaptiveTNormPlugin:
 
         # Create selector matching the mode
         if mode == "auto":
-            self.selector = self.tracker.create_selector()
+            self.selector = TNormSelector(tnorm_arg="auto", tracker=self.tracker)
         else:
             # specific or default — tracker still monitors but selector is fixed
             self.selector = TNormSelector(tnorm_arg=tnorm_arg)

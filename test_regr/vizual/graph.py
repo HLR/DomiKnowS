@@ -17,8 +17,8 @@ Spatial:
 Answer: metal
 """
 
-from domiknows.graph.visual.visual_reasoning_graph import build_visual_reasoning_graph
-from domiknows.graph.visual.visual_constraints import apply_all_constraints
+from visual_reasoning_graph import build_visual_reasoning_graph
+from visual_constraints import apply_all_constraints
 
 from domiknows.graph.logicalConstrain import iotaL, andL, queryL
 
@@ -61,6 +61,7 @@ with graph:
     apply_all_constraints(ctx)
 
     # ── 3. Task-specific query constraints ───────────────────────────
+
     # Step 1: THE small blue cube
     the_small_blue_cube = iotaL(
         andL(small('x'), blue(path='x'), cube(path='x')),

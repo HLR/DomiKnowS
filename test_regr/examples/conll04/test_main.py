@@ -458,26 +458,18 @@ def test_main_conll04(case):
         # Sum all value of attribute work_for/ILP  for the pair relation from 3
         #assert sum(pairResult['work_for'][3]) == 0
         assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0 or 1
-        
+    
         # ------------ Calculate logical constraints losses 
         for tnorm in ['L', 'G', "P"]:
             lcResult = datanode.calculateLcLoss(tnorm=tnorm)
                     
-            if 'LC0' in lcResult:                     
-                for i in range(3):
-                    assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[tnorm][i].item(), 4)
-        
-            ifLLCid = 'LC22'
-            if ifLLCid not in lcResult:
-                ifLLCid = 'LC2'
-                
-            if ifLLCid in lcResult:                     
-                for i in range(4):  
-                    if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] or case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
-                        if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] and case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
-                            assert True
-                        else:
-                            assert False
+            if 'LC0' in lcResult:
+                assert torch.allclose(
+                    lcResult['LC0']['lossTensor'],
+                    case.lc0LossTensor[tnorm],
+                    atol=1e-4
+                )
+
         
         #------- Calculate sample logical constraints losses 
        

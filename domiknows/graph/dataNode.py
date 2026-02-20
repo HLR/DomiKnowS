@@ -2306,7 +2306,7 @@ class DataNode:
 
         Returns:
         - dict: Loss info dictionary for the constraint with keys:
-            'lc', 'tnorm_used', 'constraint_type', 'lossList',
+            'lc', 'tnorm_used', 'constraint_type', 'lossTensor',
             'loss', 'conversionSigmoid', 'expectedCount' (counting only),   
             'elapsedInMsLC'
 

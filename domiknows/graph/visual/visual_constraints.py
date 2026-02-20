@@ -8,6 +8,8 @@ All constraints are parameterised by concept references from ctx —
 they never hard-code specific attribute values so the library works
 for any scene-understanding task.
 
+Uses the simplified string-variable syntax (not V-based paths).
+
 Usage:
     from visual_reasoning_graph import build_visual_reasoning_graph
     from visual_constraints import apply_all_constraints
@@ -17,7 +19,7 @@ Usage:
         apply_all_constraints(ctx)
 """
 
-from domiknows.graph import V, ifL, andL, nandL, notL, equivalenceL
+from domiknows.graph import ifL, andL, nandL, notL, equivalenceL
 
 
 # ======================================================================
@@ -50,9 +52,10 @@ def apply_inverse_constraints(ctx, *, p: int = 95):
         r2 = ctx.get(r2_name)
         if r1 is None or r2 is None:
             continue
+        # Simplified variable syntax: string names for pair variables
         equivalenceL(
-            r1(V.pair),
-            r2(V.pair),
+            r1('p'),
+            r2(path='p'),
             p=p,
             name=f"inverse_{r1_name}_{r2_name}",
         )
@@ -70,8 +73,8 @@ def apply_mutex_constraints(ctx, *, p: int = 100):
         if r1 is None or r2 is None:
             continue
         nandL(
-            r1(V.pair),
-            r2(V.pair),
+            r1('p'),
+            r2(path='p'),
             p=p,
             name=f"mutex_{r1_name}_{r2_name}",
         )
@@ -92,13 +95,20 @@ def apply_transitive_constraints(ctx, *, relations=None, p: int = 70):
         Defaults to left_of, right_of, above, below.
     """
     relations = relations or ["left_of", "right_of", "above", "below"]
+    rel_arg1 = ctx["rel_arg1"]
+
     for rel_name in relations:
         rel = ctx.get(rel_name)
         if rel is None:
             continue
+        # R(a,b) ∧ R(b,c) ⇒ R(a,c)
+        # Using simplified variable syntax with relation path navigation
         ifL(
-            andL(rel(V.ab), rel(V.bc)),
-            rel(V.ac),
+            andL(
+                rel('ab'),
+                rel('bc'),
+            ),
+            rel('ac'),
             p=p,
             name=f"transitive_{rel_name}",
         )
@@ -129,8 +139,8 @@ def apply_nand_combos(
         if ca is None or cb is None:
             continue
         nandL(
-            ca(V.x),
-            cb(V.x),
+            ca('x'),
+            cb(path='x'),
             p=p,
             name=f"{tag}_{val_a}_{val_b}",
         )
@@ -163,7 +173,7 @@ def apply_all_constraints(
             tag="implausible_shape_size",
         )
     if implausible_color_material:
-        # material is EnumConcept, so build a dict from its values
+        # material is EnumConcept — build a dict from its enum values
         mat = ctx["material"]
         mat_dict = {v: getattr(mat, v) for v in mat.enum}
         apply_nand_combos(

@@ -32,7 +32,7 @@ class GradientFlowPlugin:
         parser.add_argument(
             "--gradient_check_interval",
             type=int,
-            default=100,
+            default=1000,
             help="Steps between gradient flow diagnostic checks"
         )
     
@@ -48,7 +48,7 @@ class GradientFlowPlugin:
         self.program = program
         self.models = models
         self.args = args
-        self.check_every = getattr(args, 'gradient_check_interval', 500)
+        self.check_every = getattr(args, 'gradient_check_interval', 1000)
         
         # Register callbacks
         program.after_train_step.append(self._check_gradient_flow)

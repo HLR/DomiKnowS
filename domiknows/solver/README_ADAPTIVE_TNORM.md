@@ -262,7 +262,7 @@ tracker = AdaptiveTNormLossCalculator(
     auto_apply=True,
     min_observations=20,
 )
-selector = tracker.create_selector()
+selector = TNormSelector(tnorm_arg="auto", tracker=tracker)
 # selector.select(lc) reads from tracker.active_tnorms
 ```
 

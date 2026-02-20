@@ -9,10 +9,6 @@ for the generic constraint library.
 import sys
 import pytest
 
-sys.path.append(".")
-sys.path.append("../..")
-
-
 # =====================================================================
 # Fixtures
 # =====================================================================
@@ -28,14 +24,14 @@ def program():
     from domiknows.program.model.pytorch import PoiModel
     from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
-    from .graph import (
+    from graph import (
         graph, image, object_node, image_contains_object,
         pair, rel_arg1, rel_arg2,
         small, large, red, green, blue,
         cube, sphere, cylinder,
         right_of, left_of, material,
     )
-    from .sensor import (
+    from sensor import (
         SmallLearner, LargeLearner,
         RedLearner, GreenLearner, BlueLearner,
         CubeLearner, SphereLearner, CylinderLearner,
@@ -119,7 +115,7 @@ EXPECTED_DISTRACTOR_MATERIAL = "rubber"
 @pytest.mark.gurobi
 def test_iotaL_target_object_selection(program, dataset):
     """ILP should select object 2 as THE large red sphere right of the small blue cube."""
-    from .graph import (
+    from graph import (
         object_node, small, large, red, green, blue,
         cube, sphere, cylinder, right_of, left_of, material,
     )
@@ -165,7 +161,7 @@ def test_iotaL_target_object_selection(program, dataset):
 @pytest.mark.gurobi
 def test_queryL_material_selection(program, dataset):
     """queryL should identify object 2 as metal."""
-    from .graph import (
+    from graph import (
         object_node, small, large, red, green, blue,
         cube, sphere, cylinder, right_of, left_of, material,
     )
@@ -199,7 +195,7 @@ def test_queryL_material_selection(program, dataset):
 @pytest.mark.gurobi
 def test_spatial_relations(program, dataset):
     """Verify right_of(2,1) is asserted by ILP."""
-    from .graph import (
+    from graph import (
         object_node, pair, rel_arg1, rel_arg2,
         small, large, red, green, blue,
         cube, sphere, cylinder, right_of, left_of, material,
@@ -242,7 +238,7 @@ def test_verifyResultsLC(program, dataset):
 
 def test_verifySingleConstraint_iotaL(program, dataset):
     """Verify each iotaL constraint individually."""
-    from .graph import the_small_blue_cube, the_target_object
+    from graph import the_small_blue_cube, the_target_object
 
     for datanode in program.populate(dataset=dataset):
         for lc in [the_small_blue_cube, the_target_object]:
@@ -254,7 +250,7 @@ def test_verifySingleConstraint_iotaL(program, dataset):
 
 def test_verifySingleConstraint_queryL(program, dataset):
     """Verify queryL constraint individually."""
-    from .graph import the_material_answer
+    from graph import the_material_answer
 
     for datanode in program.populate(dataset=dataset):
         sat, total, rate = datanode.verifySingleConstraint(
@@ -279,7 +275,7 @@ def program_with_labels():
     from domiknows.program.model.pytorch import PoiModel
     from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
-    from .graph import (
+    from graph import (
         graph, image, object_node, image_contains_object,
         pair, rel_arg1, rel_arg2,
         small, large, red, green, blue,

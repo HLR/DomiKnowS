@@ -42,30 +42,35 @@ class LossCalculator:
         self.solver = solver
         self._external_selector = tnorm_selector
 
-    def _compute_loss_tensor(self, lossList):
-        if not lossList or not lossList[0]:
+    def _normalize_loss_list(self, lossTensor):
+        """
+        Normalize arbitrary nested lossTensor into a clean 1D tensor.
+
+        Always returns:
+            - 1D tensor (if any values exist)
+            - None (if empty)
+        """
+
+        if lossTensor is None:
             return None
 
-        separate_tensors = (
-            torch.is_tensor(lossList[0][0])
-            and (lossList[0][0].dim() == 0
-                 or (lossList[0][0].dim() == 1 and lossList[0][0].shape[0] == 1))
-        )
+        # Collect every tensor recursively
+        tensors = _collect_tensors(lossTensor)
 
-        if separate_tensors:
-            tensors = []
-            for lossItem in lossList:
-                for item in lossItem:
-                    if torch.is_tensor(item):
-                        tensors.append(item)
-            return torch.stack(tensors).mean() if tensors else None
+        if not tensors:
+            return None
 
-        candidate = lossList[0][0]
-        if torch.is_tensor(candidate):
-            return candidate
+        normalized = []
 
-        tensors = _collect_tensors(candidate)
-        return torch.stack(tensors).mean() if tensors else None
+        for t in tensors:
+            if t.dim() == 0:
+                # scalar tensor
+                normalized.append(t)
+            else:
+                # flatten vector or higher-dim tensor
+                normalized.extend(t.reshape(-1))
+
+        return torch.stack(normalized)
 
     def calculate_single_lc_loss(self, lc, dn, key, tnorm='L', counting_tnorm=None, label=None):
         """
@@ -110,14 +115,20 @@ class LossCalculator:
         if isinstance(lc, sumL) and label is None:
             result = None
         else:
-            lossList = self.solver.constraintConstructor.constructLogicalConstrains(
+            lossTensor = self.solver.constraintConstructor.constructLogicalConstrains(
                 lc, myBooleanMethods, None, dn, 0,
                 key=key, headLC=True, loss=True, sample=False,
                 **({'label': int(label)} if label is not None else {}))
 
-        result['lossList'] = lossList
+        normalized = self._normalize_loss_list(lossTensor)
+        result['lossTensor'] = normalized
 
-        lossTensor = self._compute_loss_tensor(lossList)
+        if normalized is None:
+            lossTensor = None
+        else:
+            # define "loss" as mean of per-element losses
+            lossTensor = normalized.mean()
+
         result['loss'] = lossTensor
 
         if lossTensor is not None:
