@@ -104,8 +104,9 @@ def run_semantic_conversion(input_file: str):
         inferTypes=["argmax"]
     )
 
+    # Evaluate the program on the dataset returning the accuracy as a percentage
     acc = program.evaluate_condition(dataset, device=device)
-    return acc, program, dataset, raw_data, attribute_names_dict
+    return acc
 
 
 class TestSemanticConversionTwoRelations:
@@ -116,15 +117,14 @@ class TestSemanticConversionTwoRelations:
         return run_semantic_conversion("convert_CLEVR_program_two_relations.json")
 
     def test_evaluation_completes(self, conversion_result):
-        acc, _, _, _, _ = conversion_result
-        assert acc is not None
+        assert conversion_result is not None
 
     def test_accuracy_is_valid(self, conversion_result):
-        acc, _, _, _, _ = conversion_result
+        acc = conversion_result
         if isinstance(acc, (int, float)):
-            assert acc == 1.0, f"Expected 100% accuracy, got {acc * 100}%"
+            assert acc == 100.0, f"Expected 100% accuracy, got {acc}%"
         elif isinstance(acc, dict):
-            assert acc.get("accuracy", 0) == 1.0, f"Expected 100% accuracy, got {acc}"
+            assert acc.get("accuracy", 0) == 100.0, f"Expected 100% accuracy, got {acc}"
 
 
 class TestSemanticConversionSingleRelation:
@@ -135,12 +135,11 @@ class TestSemanticConversionSingleRelation:
         return run_semantic_conversion("convert_CLEVR_program_manual_10_first_translation.json")
 
     def test_evaluation_completes(self, conversion_result):
-        acc, _, _, _, _ = conversion_result
-        assert acc is not None
+        assert conversion_result is not None
 
     def test_accuracy_is_valid(self, conversion_result):
-        acc, _, _, _, _ = conversion_result
+        acc = conversion_result
         if isinstance(acc, (int, float)):
-            assert acc == 1.0, f"Expected 100% accuracy, got {acc * 100}%"
+            assert acc == 100.0, f"Expected 100% accuracy, got {acc}%"
         elif isinstance(acc, dict):
-            assert acc.get("accuracy", 0) == 1.0, f"Expected 100% accuracy, got {acc}"
+            assert acc.get("accuracy", 0) == 100.0, f"Expected 100% accuracy, got {acc}"
