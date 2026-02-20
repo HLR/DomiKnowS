@@ -3,7 +3,10 @@ try:
 except ImportError:
     from dataset import g_relational_concepts
 
-from convert_CLEVR_domiKnowS import translate_left_domiknows
+try:
+    from .convert_CLEVR_domiKnowS import translate_left_domiknows
+except ImportError:
+    from convert_CLEVR_domiKnowS import translate_left_domiknows
 
 def create_execution_existL(program, question_index, parent_img="img", property_prefix="prop", indent="\t"):
     """Original existL execution creator for existence/count questions."""
