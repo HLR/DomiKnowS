@@ -428,8 +428,14 @@ def program_declaration(train, dev, args, device='cpu'):
     # Note: For VQA with complex relational constraints, SolverModel works better
     # than PoiModel because it doesn't require supervised labels for all classifiers
     poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
+    
+    # Define loss function for constraint model
+    from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+    loss_func = PRF1Tracker
+    
     program = InferenceProgramWithCallbacks(
         graph, SolverModel,
+        loss=loss_func,
         poi=poi,
         device=device,
         tnorm=args.tnorm,
