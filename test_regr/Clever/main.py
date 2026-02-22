@@ -130,20 +130,11 @@ class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
         Args:
             graph: Knowledge graph
             Model: Model class (e.g., PoiModel, SolverModel)
-            loss: Either a dict (for PoiModel) or callable (for other models)
+            loss: Loss function (optional, primarily for PoiModel)
             **kwargs: Additional arguments
         """
-        # Separate loss parameter handling based on model type
-        if loss is not None and isinstance(loss, dict):
-            # For PoiModel with dict loss, initialize normally then set model.loss
-            super().__init__(graph, Model, **kwargs)
-            
-            # Now set the model's loss to the dict after initialization
-            if hasattr(self, 'model') and self.model is not None:
-                self.model.loss = loss
-        else:
-            # Standard initialization for non-dict loss
-            super().__init__(graph, Model, loss=loss, **kwargs)
+        # Standard initialization
+        super().__init__(graph, Model, loss=loss, **kwargs)
         
         # Initialize all callback hooks
         self.after_train_step = [self.default_after_train_step]
@@ -433,18 +424,15 @@ def program_declaration(train, dev, args, device='cpu'):
     train_dataset = graph.compile_executable(dataset, logic_keyword='logic_str', 
                                              logic_label_keyword='logic_label')
 
-    # Create supervised loss dict for PoiModel
-    loss_dict = _LossFactory()
-
-    # Create program with PoiModel for supervised learning
+    # Create program with SolverModel (constraint-only learning)
+    # Note: For VQA with complex relational constraints, SolverModel works better
+    # than PoiModel because it doesn't require supervised labels for all classifiers
     poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
     program = InferenceProgramWithCallbacks(
-        graph, PoiModel,
-        loss=loss_dict,
+        graph, SolverModel,
         poi=poi,
         device=device,
         tnorm=args.tnorm,
-        inferTypes=['local/argmax'],
         use_gumbel=args.use_gumbel,
         initial_temp=args.gumbel_temp_start,
         final_temp=args.gumbel_temp_end,
