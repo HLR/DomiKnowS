@@ -1,5 +1,5 @@
 import sys, os
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('../')
@@ -240,8 +240,21 @@ Examples:
     parser.add_argument("--hard_gumbel", type=str2bool, nargs='?', const=True, default=True, 
                         help="Use hard Gumbel")
 
-    # Register callback plugin arguments
-    plugin_manager = create_standard_plugin_manager()
+    # Register callback plugin arguments (exclude BERT unfreezing)
+    from domiknows.program.plugins.callback_plugin_manager import CallbackPluginManager
+    from domiknows.program.plugins.epoch_logging_plugin import EpochLoggingPlugin
+    from domiknows.program.plugins.adaptive_tnorm_plugin import AdaptiveTNormPlugin
+    from domiknows.program.plugins.gradient_flow_plugin import GradientFlowPlugin
+    from domiknows.program.plugins.counting_schedule_plugin import CountingSchedulePlugin
+    from domiknows.program.plugins.gumbel_monitoring_plugin import GumbelMonitoringPlugin
+    
+    plugin_manager = CallbackPluginManager()
+    plugin_manager.register(EpochLoggingPlugin(), 'EpochLogging')
+    plugin_manager.register(AdaptiveTNormPlugin(), 'AdaptiveTNorm')
+    plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
+    plugin_manager.register(CountingSchedulePlugin(), 'CountingSchedule')
+    plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
+    
     plugin_manager.add_arguments_to_parser(parser)
     
     args = parser.parse_args()
@@ -526,8 +539,20 @@ def main(args):
             print(f"\nSample question: {dataset[i].get('question_raw', '')}")
             print(f"Sample answer: {dataset[i].get('answer', '')}")
 
-    # Create plugin manager
-    plugin_manager = create_standard_plugin_manager()
+    # Create plugin manager (without BERT unfreezing)
+    from domiknows.program.plugins.callback_plugin_manager import CallbackPluginManager
+    from domiknows.program.plugins.epoch_logging_plugin import EpochLoggingPlugin
+    from domiknows.program.plugins.adaptive_tnorm_plugin import AdaptiveTNormPlugin
+    from domiknows.program.plugins.gradient_flow_plugin import GradientFlowPlugin
+    from domiknows.program.plugins.counting_schedule_plugin import CountingSchedulePlugin
+    from domiknows.program.plugins.gumbel_monitoring_plugin import GumbelMonitoringPlugin
+    
+    plugin_manager = CallbackPluginManager()
+    plugin_manager.register(EpochLoggingPlugin(), 'EpochLogging')
+    plugin_manager.register(AdaptiveTNormPlugin(), 'AdaptiveTNorm')
+    plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
+    plugin_manager.register(CountingSchedulePlugin(), 'CountingSchedule')
+    plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
     
     # Create program
     program, train_dataset, dev_dataset = program_declaration(
@@ -553,25 +578,16 @@ def main(args):
             print(f"Accuracy: {acc * 100:.2f}%", file=f)
     else:
         if not args.eval_only:
-            # Configure plugins
+            # Configure plugins (no BERT-specific optimizer factory needed)
             if not args.oracle_mode and not args.use_vlm:
-                initial_optimizer_factory = create_optimizer_factory(
-                    None,  # No BERT model
-                    _models['classifiers'],
-                    bert_lr=0.0,
-                    classifier_lr=args.lr,
-                    device=device
-                )
-                
                 plugin_manager.configure_all(
                     program=program,
                     models=_models,
                     args=args,
-                    dataset=train_dataset,
-                    optimizer_factory=create_optimizer_with_differential_lr
+                    dataset=train_dataset
                 )
                 
-                Optim = initial_optimizer_factory
+                Optim = torch.optim.Adam
             else:
                 Optim = torch.optim.Adam
             
