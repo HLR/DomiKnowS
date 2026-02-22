@@ -9,9 +9,12 @@ from pathlib import Path
 import argparse, torch, logging
 
 try:
-    from monitor.constraint_monitor import enable_monitoring
+    from monitor.constraint_monitor import (# type: ignore 
+        next_step,enable_monitoring, start_new_epoch
+    )
     MONITORING_AVAILABLE = True
-    enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
+    #enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
+    enable_monitoring(port=8080, slave_mode=False)  # Master mode with web server
 except ImportError:
     MONITORING_AVAILABLE = False
 
@@ -141,8 +144,12 @@ class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
         self.before_train = []
         self.after_train = []
         self.before_train_epoch = []
+        if MONITORING_AVAILABLE:
+            self.before_train_epoch.append(start_new_epoch)
         self.after_train_epoch = []
         self.before_train_step = []
+        if MONITORING_AVAILABLE:
+            self.before_train_step.append(next_step)
         self.before_test = []
         self.after_test = []
         self.before_test_epoch = []

@@ -12,7 +12,7 @@ from domiknows.graph.logicalConstrain import sumL
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
-       next_step, log_single_lc, log_memory
+        log_single_lc, log_memory
     )
     MONITORING_AVAILABLE = True
 except ImportError:
@@ -336,9 +336,6 @@ class InferenceModel(LossModel):
         self.inferenceLogger.info("=== InferenceModel Forward Operation Started ===")
         self.inferenceLogger.info(f"Gumbel settings: use={use_gumbel}, temp={temperature}, hard={hard_gumbel}")
         
-        if MONITORING_AVAILABLE:
-            next_step()
-            
         if build is None:
             build = self.build
             
