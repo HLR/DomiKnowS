@@ -68,7 +68,7 @@ class GradientFlowPlugin:
             return []
         
         try:
-            return self.constraint_constructor.getConceptsFromLogicalConstrain(lc)
+            return self.constraint_constructor.getConceptsFromLogicalConstraint(lc)
         except Exception as e:
             # Log error and return empty list
             if hasattr(self, 'program') and hasattr(self.program, 'myLogger'):

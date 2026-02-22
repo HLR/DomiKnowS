@@ -1229,9 +1229,6 @@ class queryL(LogicalConstrain):
                     logicMethodName=str(self),
                 )
         
-        
-# Add this class to logicalConstrain.py after the LogicalConstrain class definition
-
 class execute:
     """
     Wrapper for logical constraints that marks them as executable rather than standard constraints.

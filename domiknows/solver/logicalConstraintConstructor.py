@@ -772,7 +772,7 @@ class LogicalConstraintConstructor:
                     
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         
-    def getConceptsFromLogicalConstrain(self, lc, concept_names=None):
+    def getConceptsFromLogicalConstraint(self, lc, concept_names=None):
         """
         Extract all concept names used in a logical constraint.
         
@@ -810,17 +810,17 @@ class LogicalConstraintConstructor:
                         concept_names.add(e[0].name)
                     elif isinstance(e[0], CandidateSelection):
                         # CandidateSelection might reference concepts
-                        self.getConceptsFromLogicalConstrain(e[0], concept_names)
+                        self.getConceptsFromLogicalConstraint(e[0], concept_names)
                 
                 # Handle nested logical constraints
                 if isinstance(e, LogicalConstrain):
-                    self.getConceptsFromLogicalConstrain(e, concept_names)
+                    self.getConceptsFromLogicalConstraint(e, concept_names)
                 elif isinstance(e, CandidateSelection):
-                    self.getConceptsFromLogicalConstrain(e, concept_names)
+                    self.getConceptsFromLogicalConstraint(e, concept_names)
         
         # Also check innerLC attribute (common in constraint wrappers)
         if hasattr(lc, 'innerLC') and lc.innerLC is not None:
-            self.getConceptsFromLogicalConstrain(lc.innerLC, concept_names)
+            self.getConceptsFromLogicalConstraint(lc.innerLC, concept_names)
         
         # Only convert to list at top level
         return list(concept_names) if is_top_level else concept_names

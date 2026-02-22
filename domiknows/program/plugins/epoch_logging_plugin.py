@@ -168,14 +168,19 @@ class EpochLoggingPlugin:
             counting_delta = f" (Δ{counting_change:+.3f})"
             
         # Print metrics
-        bert_status = f"frozen" if self.models['bert'].unfrozen_layers == 0 else f"{self.models['bert'].unfrozen_layers}L unfrozen"
-        
+        bert_status = None
+        if self.models and 'bert' in self.models:
+            bert_model = self.models['bert']
+            if hasattr(bert_model, 'unfrozen_layers'):
+                bert_status = f"frozen" if bert_model.unfrozen_layers == 0 else f"{bert_model.unfrozen_layers}L unfrozen"     
+                   
         print(f"\n[Epoch {epoch}] Metrics:")
         print(f"  Overall Acc:    {overall_acc:.4f}{overall_delta}")
         print(f"  Boolean Acc:    {bool_acc:.4f}{bool_delta}")
         print(f"  Counting Acc:   {counting_acc:.4f}{counting_delta}")
         print(f"  AvgGradNorm:    {avg_grad_norm:.6f}")
-        print(f"  BERT:           {bert_status}")
+        if bert_status:
+            print(f"  BERT:           {bert_status}")
         
         # Warnings
         if avg_grad_norm < 1e-7 and epoch > 1:
