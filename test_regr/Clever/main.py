@@ -424,14 +424,11 @@ def program_declaration(train, dev, args, device='cpu'):
     train_dataset = graph.compile_executable(dataset, logic_keyword='logic_str', 
                                              logic_label_keyword='logic_label')
 
-    # Create program with SolverModel (constraint-only learning)
-    # Note: For VQA with complex relational constraints, SolverModel works better
-    # than PoiModel because it doesn't require supervised labels for all classifiers
     poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
     
-    # Define loss function for constraint model
-    from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
-    loss_func = PRF1Tracker
+    # Use BCELoss for constraint satisfaction
+    import torch.nn as nn
+    loss_func = nn.BCELoss
     
     program = InferenceProgramWithCallbacks(
         graph, SolverModel,
