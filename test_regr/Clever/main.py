@@ -1,5 +1,6 @@
 import sys, os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# Note: CUDA_VISIBLE_DEVICES can be set via environment variable before running
+# e.g., CUDA_VISIBLE_DEVICES=1 python main.py
 sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('../')
@@ -254,6 +255,7 @@ Examples:
     plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
     plugin_manager.register(CountingSchedulePlugin(), 'CountingSchedule')
     plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
+    # NOTE: BERT unfreezing plugin excluded - no BERT model in VQA task
     
     plugin_manager.add_arguments_to_parser(parser)
     
