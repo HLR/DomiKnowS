@@ -472,8 +472,15 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     print(f"  Oracle mode:      {args.oracle_mode}")
     print(f"  Use VLM:          {args.use_vlm}")
     if models and not args.oracle_mode and not args.use_vlm:
-        total_params = sum(p.numel() for name, model in models.items() 
-                          for p in model.parameters())
+        total_params = 0
+        for name, model in models.items():
+            if name == 'classifiers':
+                # classifiers is a dict of individual classifiers
+                for clf_name, clf in model.items():
+                    total_params += sum(p.numel() for p in clf.parameters())
+            else:
+                # Other models are nn.Module instances
+                total_params += sum(p.numel() for p in model.parameters())
         print(f"  Total params:     {total_params:,}")
     
     print("\n[Constraints]")
