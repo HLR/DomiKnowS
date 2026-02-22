@@ -17,9 +17,8 @@ Spatial:
 Answer: metal
 """
 
-from visual_reasoning_graph import build_visual_reasoning_graph
-from visual_constraints import apply_all_constraints
-
+from domiknows.graph.visual.visual_reasoning_graph import build_visual_reasoning_graph
+from domiknows.graph.visual.visual_constraints import apply_all_constraints
 from domiknows.graph.logicalConstrain import iotaL, andL, queryL
 
 # ── 1. Build generic graph ───────────────────────────────────────────
