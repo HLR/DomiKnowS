@@ -45,7 +45,7 @@ MUTEX_PAIRS = [
 # §1  Spatial: inverse relations
 # ======================================================================
 
-def apply_inverse_constraints(ctx, *, p: int = 95):
+def apply_inverse_constraints(ctx, *, p: int = 100):
     """R(A,B) ↔ R_inv(B,A) for every inverse pair present in ctx."""
     for r1_name, r2_name in INVERSE_PAIRS:
         r1 = ctx.get(r1_name)

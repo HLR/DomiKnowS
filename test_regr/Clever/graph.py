@@ -5,7 +5,7 @@ except ImportError:
     from dataset import g_attribute_concepts, g_relational_concepts
     from execution import create_execution_for_question
 
-from domiknows.graph.visual.visual_constraints import apply_all_constraints
+from domiknows.graph.visual.visual_constraints import apply_all_constraints, apply_mutex_constraints, apply_inverse_constraints
 
 # {'color': ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
 #  'material': ['rubber', 'metal'],
@@ -114,12 +114,14 @@ with Graph('image_graph') as graph:
         ctx = _build_constraint_context(local_vars, attribute_names_dict)
         
         with local_vars["graph"]:
+            apply_mutex_constraints(ctx)
+            apply_inverse_constraints(ctx)
             # Apply generic spatial and plausibility constraints
-            apply_all_constraints(
-                ctx,
-                implausible_shape_size=None,  # Can be customized per dataset
-                implausible_color_material=None,
-            )
+            #apply_all_constraints(
+            #    ctx,
+            #    implausible_shape_size=None,  # Can be customized per dataset
+            #    implausible_color_material=None,
+            #)
 
     if return_graph_text:
         return (
