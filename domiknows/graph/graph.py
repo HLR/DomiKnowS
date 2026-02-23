@@ -88,16 +88,6 @@ class Graph(BaseGraphTree):
                 self.constraint = constraint
 
         return self  # Return self (the current graph), not parent_obj
-    
-    def _iter_all_lcs(self):
-        """Helper to iterate over all logical constraints including executable ones.
-        
-        Yields:
-            tuple: (lc_name, lc) pairs for both regular and executable logical constraints.
-        """
-        yield from self.logicalConstrains.items()
-        for key, elc in self.executableLCs.items():
-            yield (key, elc.innerLC)
 
     def _populate_var_context(self, frame):
         """Populate varContext from a given frame's local variables.
@@ -165,91 +155,10 @@ class Graph(BaseGraphTree):
         # Populate varContext from the caller's frame
         self._populate_var_context(frame)
 
-        # --- Process logical constraints variable syntax (only for unprocessed LCs)
-        for lc_name, lc in self._iter_all_lcs():
-            if not lc.active or not lc.headLC:
-                continue
-            
-            # Skip if this LC has already been processed
-            if lc_name in self._processed_lcs:
-                continue
-
-            # collect VarMaps - store info about lc variable syntax if used in this logical constraint
-            varMapsList = self.collectVarMaps(lc, [])
-            
-            # process variable syntax - translate it to the path syntax
-            if varMapsList:
-                self.handleVarsPath(lc, varMapsList[0])
-            
-            # Mark this LC as processed for VarMaps
-            self._processed_lcs.add(lc_name)
-                    
-        # --- Check if the logical constrains are correct ---
-        
-        lc_info = {}
-        LcInfo = namedtuple('CurrentLcInfo', ['foundVariables', 'usedVariables', 'headLcName'])
-        
-        # --- Gather information about variables used and defined in the logical constrains and 
-        #     report errors if some of them are not defined and used or defined more than once
-        for lc_name, lc in self._iter_all_lcs():
-            if not lc.active or not lc.headLC:
-                continue
-                
-            # find variable defined in the logical constrain - report error if some of them are defined more than once
-            found_variables = self.find_lc_variable(lc, headLc=lc.name)
-
-            # find all variables used in the logical constrain - report error if some of them are not defined
-            # gather paths defined in the logical constrain per variable
-            used_variables = self.check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc.name)
-            
-            # save information about variables used and defined in the logical constrain
-            current_lc_info = LcInfo(found_variables, used_variables, lc.name)
-            lc_info[lc_name] = current_lc_info
-        
-        # --- Check if the paths defined in the logical constrains are correct
-        for lc_name, lc in self._iter_all_lcs():
-            if not lc.active or not lc.headLC:
-                continue
-            
-            # current logical constrain info and variables found and used in the current logical constrain
-            current_lc_info = lc_info[lc_name]
-            usedVariables = current_lc_info.usedVariables
-            foundVariables = current_lc_info.foundVariables
-            headLcName = current_lc_info.headLcName
-            
-            # loop over all variables used in the logical constrain
-            for variableName, pathInfos in usedVariables.items():
-                # get information about the variable in the found variables record
-                variableConcept = foundVariables[variableName][2][0]
-                
-                # get the root parent of the variable concept
-                variableConceptParent = self.findRootConceptOrRelation(variableConcept)
-                
-                # loop over all paths defined using the variable as starting point
-                for pathInfo in pathInfos:
-                    path = pathInfo[3]
-                    resultConcept = pathInfo[2]
-                    
-                    if isinstance(path[0], tuple): # this path is a combination of paths 
-                        for subpath in path: 
-                            if len(subpath) < 1:  
-                                continue  # skip this subpath it is empty
-                                
-                            self.check_path(subpath, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
-                            
-                    else: # this path is a single path
-                        if len(path) < 1:
-                            continue # skip this path it is empty
-                            
-                        self.check_path(path, resultConcept, variableConceptParent, headLcName, foundVariables, variableName)
-         
-        # --- Validate queryL constraints have proper multiclass concepts ---
-        for lc_name, lc in self._iter_all_lcs():
-            if not lc.active or not lc.headLC:
-                continue
-            
-            self.validate_queryL_constraints(lc, headLc=lc.name)
-   
+        from .lcUtils import checkLcCorrectness
+        # Validate logical constraints
+        checkLcCorrectness(self)
+       
     @classmethod
     def clear(cls):
         super().clear()
@@ -262,9 +171,50 @@ class Graph(BaseGraphTree):
         return self.constraint
       
     def findRootConceptOrRelation(self, relationConcept):
+        """Find the root concept or relation in the hierarchy.
+        
+        Returns the top-level concept/relation that has no parent (is_a) relations.
+        Results are cached in self.cacheRootConcepts.
+        
+        Args:
+            relationConcept: A concept or relation object to find the root for.
+            
+        Returns:
+            The root concept/relation object. Should NOT return a string.
+            
+        Note:
+            ISSUE TRACKING: This method should always return an object, never a string.
+            If string is returned, it indicates:
+            1. Input relationConcept was a string (caller error)
+            2. Cache contains strings (data corruption)
+            Both cases should be investigated.
+        """
+        # Type check: warn if input is a string (input should be concept/relation object)
+        if isinstance(relationConcept, str):
+            import warnings
+            warnings.warn(
+                f"findRootConceptOrRelation() received a string '{relationConcept}' instead of a concept/relation object. "
+                f"This will cause .name attribute error in caller. Check caller context.",
+                RuntimeWarning,
+                stacklevel=2
+            )
+        
         # If the result is already in cache, return it
         if relationConcept in self.cacheRootConcepts:
-            return self.cacheRootConcepts[relationConcept]
+            cached_result = self.cacheRootConcepts[relationConcept]
+            # ISSUE TRACKING: Validate cache doesn't contain strings
+            if isinstance(cached_result, str):
+                import warnings
+                warnings.warn(
+                    f"Cache contains string '{cached_result}' for key {relationConcept}. "
+                    f"Cache corruption detected. Clearing and recomputing.",
+                    RuntimeWarning,
+                    stacklevel=2
+                )
+                # Clear corrupted cache entry and recompute
+                del self.cacheRootConcepts[relationConcept]
+            else:
+                return cached_result
 
         try:
             isAs = relationConcept.is_a()
@@ -277,8 +227,16 @@ class Graph(BaseGraphTree):
             # Recursive call, but result is cached if previously computed
             root = self.findRootConceptOrRelation(parentRelationConcept)
             
-            # Store result in cache
-            self.cacheRootConcepts[relationConcept] = root
+            # Store result in cache (validate it's not a string)
+            if isinstance(root, str):
+                import warnings
+                warnings.warn(
+                    f"Recursive call returned string '{root}'. This should not happen.",
+                    RuntimeWarning,
+                    stacklevel=2
+                )
+            else:
+                self.cacheRootConcepts[relationConcept] = root
             return root
 
         # If the provided concept or relation is root (has no parents)
@@ -288,31 +246,138 @@ class Graph(BaseGraphTree):
         return relationConcept
     
     def findConcept(self, conceptName):
-        '''Finds the root concept or relation for a given concept or relation.
-    
-        This method performs a recursive search to identify the root concept or relation.
-        If a result has been previously computed, it retrieves the result from cache to avoid redundant computation.
+        '''Finds a concept by name in the graph hierarchy.
+
+        This method searches for a concept in the following order:
+        1. Current graph's direct concepts
+        2. All subgraphs (recursive)
+        3. Supergraph (parent) if it exists
+        4. Sibling graphs (other subgraphs of the parent)
         
         Args:
-        relationConcept (Any): The concept or relation for which the root is to be found. The type depends on the implementation.
-    
+            conceptName (str): The name of the concept to find.
+
         Returns:
-        Any: The root concept or relation.
-    
-        Raises:
-        AttributeError, TypeError: If the attribute 'is_a' is not available or if the type is incorrect.
+            Concept: The concept if found, None otherwise.
         '''
-        subGraph_keys = [key for key in self.subgraphs]
-        for subGraphKey in subGraph_keys:
+        # 1. Check current graph's direct concepts
+        if conceptName in self._concepts:
+            return self._concepts[conceptName]
+        
+        # 2. Check subgraphs recursively
+        for subGraphKey in self.subgraphs:
             subGraph = self.subgraphs[subGraphKey]
-           
-            for conceptNameItem in subGraph.concepts:
-                if conceptName == conceptNameItem:
-                    concept = subGraph.concepts[conceptNameItem]
-                   
-                    return concept
             
-        return None 
+            if conceptName in subGraph.concepts:
+                return subGraph.concepts[conceptName]
+            
+            # Recursive search in nested subgraphs
+            found = subGraph.findConcept(conceptName)
+            if found is not None:
+                return found
+        
+        # 3. Check supergraph (parent graph)
+        if self.sup is not None and isinstance(self.sup, Graph):
+            if conceptName in self.sup._concepts:
+                return self.sup._concepts[conceptName]
+        
+        # 4. Check sibling graphs (other subgraphs of parent)
+        if self.sup is not None and isinstance(self.sup, Graph):
+            for siblingKey in self.sup.subgraphs:
+                sibling = self.sup.subgraphs[siblingKey]
+                # Skip self
+                if sibling is self:
+                    continue
+                
+                if conceptName in sibling.concepts:
+                    return sibling.concepts[conceptName]
+                
+                # Check sibling's subgraphs
+                found = sibling.findConcept(conceptName)
+                if found is not None:
+                    return found
+        
+        return None
+    
+    def collectAllConcepts(self, include_subgraphs=True, include_supergraph=True, include_siblings=True):
+        '''Collects and returns all concepts from the graph hierarchy.
+        
+        This method collects concepts from:
+        1. Current graph's direct concepts
+        2. All subgraphs (if include_subgraphs=True)
+        3. Supergraph/parent (if include_supergraph=True)
+        4. Sibling graphs (if include_siblings=True)
+        
+        Args:
+            include_subgraphs (bool): Whether to include concepts from subgraphs. Defaults to True.
+            include_supergraph (bool): Whether to include concepts from parent graph. Defaults to True.
+            include_siblings (bool): Whether to include concepts from sibling graphs. Defaults to True.
+        
+        Returns:
+            OrderedDict: Dictionary mapping concept names to concept objects.
+                        Note: If duplicate names exist, later entries overwrite earlier ones.
+        '''
+        collected = OrderedDict()
+        
+        # 1. Collect from current graph
+        collected.update(self._concepts)
+        
+        # 2. Collect from subgraphs recursively
+        if include_subgraphs:
+            for subGraphKey in self.subgraphs:
+                subGraph = self.subgraphs[subGraphKey]
+                # Recursive collection from subgraphs
+                sub_concepts = subGraph.collectAllConcepts(
+                    include_subgraphs=True,
+                    include_supergraph=False,  # Don't go back up
+                    include_siblings=False     # Don't go sideways
+                )
+                collected.update(sub_concepts)
+        
+        # 3. Collect from supergraph (parent)
+        if include_supergraph and self.sup is not None and isinstance(self.sup, Graph):
+            collected.update(self.sup._concepts)
+        
+        # 4. Collect from sibling graphs
+        if include_siblings and self.sup is not None and isinstance(self.sup, Graph):
+            for siblingKey in self.sup.subgraphs:
+                sibling = self.sup.subgraphs[siblingKey]
+                # Skip self
+                if sibling is self:
+                    continue
+                
+                # Collect sibling's concepts
+                collected.update(sibling.concepts)
+                
+                # Collect from sibling's subgraphs
+                sibling_sub_concepts = sibling.collectAllConcepts(
+                    include_subgraphs=True,
+                    include_supergraph=False,  # Don't go back up
+                    include_siblings=False     # Don't go sideways
+                )
+                collected.update(sibling_sub_concepts)
+        
+        return collected
+    
+    def getAllConceptNames(self, include_subgraphs=True, include_supergraph=True, include_siblings=True):
+        '''Returns a list of all concept names in the graph hierarchy.
+        
+        This is a convenience method that returns just the names from collectAllConcepts().
+        
+        Args:
+            include_subgraphs (bool): Whether to include concepts from subgraphs. Defaults to True.
+            include_supergraph (bool): Whether to include concepts from parent graph. Defaults to True.
+            include_siblings (bool): Whether to include concepts from sibling graphs. Defaults to True.
+        
+        Returns:
+            list: List of concept names (strings).
+        '''
+        all_concepts = self.collectAllConcepts(
+            include_subgraphs=include_subgraphs,
+            include_supergraph=include_supergraph,
+            include_siblings=include_siblings
+        )
+        return list(all_concepts.keys())
 
     def findConceptInfo(self, concept):
         '''Finds and returns various information related to a given concept.
@@ -362,517 +427,6 @@ class Graph(BaseGraphTree):
             
         return conceptInfo
         
-    # find all variables defined in the logical constrain and report error if some of them are defined more than once
-    def find_lc_variable(self, lc, found_variables=None, headLc=None):
-        '''Finds all variables defined in a logical constraint and reports errors for duplicates.
-    
-        This method traverses through the elements of a logical constraint to find all the variables 
-        that have been defined. It checks for incorrect cardinality definitions, multiple definitions of the 
-        same variable, and variables that are not associated with any concept among other things.
-        
-        Args:
-        lc (LogicalConstrain): The logical constraint to be processed.
-        found_variables (dict, optional): Dictionary to store found variables. The key is the variable name, 
-                                          and the value is a tuple containing the logical constraint, variable name, 
-                                          and the concept associated with the variable.
-                                          Defaults to None.
-        headLc (str, optional): The name of the parent logical constraint. Defaults to None.
-        
-        Returns:
-        dict: A dictionary containing all found variables.
-        
-        Raises:
-        Exception: If there are issues with the variable definitions or cardinality.
-        '''
-        if lc.cardinalityException:
-            if lc.name != headLc:
-                exceptionStr1 = f"{lc.typeName} {headLc} has incorrect cardinality definition in nested {lc} logical operator- " 
-            else:
-                exceptionStr1 = f"{lc.typeName} {headLc} has incorrect cardinality definition - "
-            
-            exceptionStr2 = f"integer {lc.cardinalityException} has to be last element in the same Logical operator for counting or existing logical operators!"
-            raise Exception(f"{exceptionStr1} {exceptionStr2}")
-
-        if found_variables is None:
-            found_variables = {}
-
-        from domiknows.graph import V, LogicalConstrain, LcElement
-
-        e_before = None
-        for e in lc.e:
-            # checking if element is a variable
-            if isinstance(e, V) and e and e.name:
-                variable_name = e.name
-                if e_before:
-                    if variable_name in found_variables:
-                        exceptionStr1 = f"In logical constraint {headLc} {lc} variable {variable_name} associated with concept {e_before[1]} already defined "
-                        exceptionStr2 = f"in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}"
-                        raise Exception(exceptionStr1 + exceptionStr2)
-            
-                    variable_info = (lc, variable_name, e_before)
-                    found_variables[variable_name] = variable_info
-                else:
-                    exceptionStr = f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept"
-                    raise Exception(exceptionStr)
-                
-            # checking for extra variable:
-            elif e and isinstance(e, tuple) and e[0] == 'extraV':
-                predicate = lc.e[0][1]
-                exceptionStr1 = f"Logical constraint {headLc} {lc}: Each predicate can only have one new variable definition. For the predicate {predicate}, you have used both {e[1]} and {e[2]} as new variables."
-                exceptionStr2 = f"Either wrap both under on variable, if you intended to initialize {e[1]} based on another value, then the second argument should be a path=(...)."
-                raise Exception(f"{exceptionStr1} {exceptionStr2}")
-            # checking if element is a tuple 
-            elif isinstance(e, tuple) and e and isinstance(e[0], LcElement) and not isinstance(e[0], LogicalConstrain):
-                self.find_lc_variable(e[0], found_variables=found_variables, headLc=headLc)
-                current_lc_element = e[0]
-                current_lc_element_concepts = [c for c in current_lc_element.e if isinstance(c, tuple) and not isinstance(c, V)]
-
-                if len(current_lc_element_concepts) != len(e[1]):
-                    raise Exception(f"Logical constraint {headLc} {lc} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
-
-                if len(e) >= 2 and isinstance(e[1], tuple):
-                    for v in e[1]:
-                        if not isinstance(v, str):
-                            raise Exception(f"Logical constraint {headLc} {lc} has incorrect definition of combination {e} - all variables should be strings")
-
-                    for index, v in enumerate(e[1]):
-                        variable_name = v
-                        variable_info = (lc, variable_name, current_lc_element_concepts[index])
-                        found_variables[variable_name] = variable_info
-
-            # Checking if element is a LogicalConstrain
-            elif isinstance(e, LogicalConstrain):
-                self.find_lc_variable(e, found_variables=found_variables, headLc=headLc)
-
-            e_before = e
-
-        return found_variables
-
-    def check_if_all_used_variables_are_defined(self, lc, found_variables, used_variables=None, headLc=None):
-        '''Checks if all variables used in a logical constraint are properly defined.
-    
-        This method traverses through the elements of a logical constraint to identify all the variables 
-        that are used but not defined. It also handles variable names in different types of paths.
-        
-        Args:
-        lc (LogicalConstrain): The logical constraint to be processed.
-        found_variables (dict): Dictionary containing all variables that have been defined.
-                                The key is the variable name and the value is a tuple containing information
-                                about the variable.
-        used_variables (dict, optional): Dictionary to store variables that are used. The key is the variable name,
-                                         and the value is a list of tuples, each containing the logical constraint,
-                                         variable name, the type of the element that uses it, and the path to the variable.
-                                         Defaults to None.
-        headLc (str, optional): The name of the parent logical constraint. Defaults to None.
-        
-        Returns:
-        dict: A dictionary containing all used variables.
-        
-        Raises:
-        Exception: If there are variables that are used but not defined, or if there are errors in the path definitions.
-        '''
-        from .logicalConstrain import eqL
-        
-        if used_variables is None:
-            used_variables = {}
-
-        from domiknows.graph import V, LogicalConstrain
-
-        def handle_variable_name(lc_variable_name, lcPath):
-            if lc_variable_name not in found_variables:
-                raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
-
-            if lc_variable_name not in used_variables:
-                used_variables[lc_variable_name] = []
-
-            lcElementType = lc.e[i-1]
-            variable_info = (lc, lc_variable_name, lcElementType, lcPath)
-            used_variables[lc_variable_name].append(variable_info)
-
-        for i, e in enumerate(lc.e):
-            if isinstance(e, V) and e.v: # has path
-                if isinstance(e.v, eqL):
-                    continue
-                elif isinstance(e.v, str):
-                    handle_variable_name(e.v, e.v)
-                elif isinstance(e, tuple):
-                    if isinstance(e.v[0], str): # single path
-                        handle_variable_name(e.v[0], e.v)
-                    elif isinstance(e.v[0], tuple): # path union
-                        for t in e.v:
-                            if isinstance(t[0], str):
-                                handle_variable_name(t[0], t)
-                            else:
-                                raise Exception(f"Path {t} found in {headLc} {lc} is not correct")
-                    else:
-                        raise Exception(f"Path {e} found in {headLc} {lc} is not correct")
-                else:
-                    raise Exception(f"Path {e} found in {headLc} {lc} is not correct")
-            elif isinstance(e, LogicalConstrain):
-                self.check_if_all_used_variables_are_defined(e, found_variables, used_variables=used_variables, headLc=headLc)
-
-        return used_variables
-
-    def getPathStr(self, path):
-        '''Converts a path of concepts and relations to a string representation.
-    
-        This method iterates over a given path, which can include instances of the Relation and Concept classes,
-        and constructs a string representation of the path.
-        
-        Args:
-        path (list): A list of path elements which can be instances of Relation or Concept classes.
-                     The first element in the list is not processed, and the list should be non-empty.
-        
-        Returns:
-        str: A string representation of the path, excluding the first element.
-        '''
-        from .concept import Concept
-        from .relation import Relation
-        pathStr = ""
-        for pathElement in path[1:]:
-            if isinstance(pathElement, (Relation,)):
-                if pathElement.var_name:
-                    pathStr += pathElement.var_name + " "
-                else:
-                    pathStr += pathElement.name + " "
-            elif isinstance(pathElement, (Concept,)):
-                pathStr += pathElement.var_name + " "
-            else:
-                pathStr += str(pathElement)
-               
-        return pathStr.strip()
-                
-    def check_path(self, path, resultConcept, variableConceptParent, lc_name, foundVariables, variableName):
-        '''Checks the validity of a path in terms of relations and concepts.
-    
-        This function checks the validity of a given path, including ensuring that each relation
-        or concept in the path has the correct type. It raises exceptions with informative error messages 
-        if the path is not valid.
-    
-        Args:
-        path (list): The path to check, starting from the source concept.
-        resultConcept (tuple): The expected end concept of the path.
-        variableConceptParent (Concept): The parent concept for the source of the path.
-        lc_name (str): The name of the logical constraint where the path is defined.
-        foundVariables (dict): Dictionary of found variables in the scope.
-        variableName (str): The name of the variable being checked.
-    
-        Raises:
-        Exception: Various types of exceptions are raised for different kinds of path invalidity.
-        '''
-        from .relation import IsA, HasA, Relation
-        from .logicalConstrain import eqL
-        from .concept import Concept
-        
-        requiredLeftConcept = variableConceptParent.name # path element has to be relation with this type to the left
-        requiredEndOfPathConcept = resultConcept[1] # path has to result in this concept
-        requiredEndOfPathConceptRoot =  self.findRootConceptOrRelation(resultConcept[0]).name  
-        expectedRightConcept =  None
-        lastPathElement = False
-        pathStr = self.getPathStr(path)
-        pathVariable = path[0]
-        pathPart = path[0]
-            
-        if len(path) == 1:
-            if requiredLeftConcept == requiredEndOfPathConceptRoot:
-                return
-            else:
-                exceptionStr1 = f"The variable {pathVariable}, defined in the path for {lc_name} is not valid. The concept of {pathVariable} is a of type {requiredLeftConcept},"
-                exceptionStr2 = f"but the required concept by the logical constraint element is {requiredEndOfPathConceptRoot}."
-                exceptionStr3 = f"The variable used inside the path should match its type with {requiredEndOfPathConceptRoot}."
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
-            
-        for pathIndex, pathElement in enumerate(path[1:], start=1):   
-            if isinstance(pathElement, (eqL,)):
-                continue
-            if isinstance(pathElement, (str,)): # It is a string check if we have corresponding relation in the graph
-                if pathElement in self.varNameReversedMap:
-                    pathElement = self.varNameReversedMap[pathElement]
-                else:
-                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
-                    exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
-                    exceptionStr3 = f"but the used variable {pathElement} is a string which is not a valid name of a graph relationship."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2}")
-                
-            if pathIndex < len(path) - 1:
-                expectedRightConcept = pathElement.dst.name
-                expectedRightConceptRoot = expectedRightConcept
-            else:
-                expectedRightConcept = requiredEndOfPathConcept
-                lastPathElement = True
-                expectedRightConceptRoot = requiredEndOfPathConceptRoot                
-            
-            if isinstance(pathElement, (HasA, IsA, Relation)):
-                pathElementSrc = pathElement.src.name
-                pathElementDst = pathElement.dst.name
-                pathElementVarName = pathElement.var_name if pathElement.var_name else ""
-
-                # Check if there is a problem with reversed usage of the current path element - it has to be possible to reverse the order to fix it
-                if requiredLeftConcept == pathElementDst and expectedRightConceptRoot == pathElementSrc:                    
-                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid"
-                    exceptionStr2 = f"The relation {pathElementVarName} is from a {pathElementSrc} to a {pathElementDst}, but you have used it from a {pathElementDst} to a {pathElementSrc}."
-                    if not pathElement.is_reversed:
-                        exceptionStr3 = f"You can change '{pathElement.var_name}' to '{pathElement.var_name}.reversed' to go from {pathElementDst} to the {pathElementSrc}, which is what is required here."
-                    else:
-                        exceptionStr3 = f"You can change  '{pathElement.var_name}.reversed' to '{pathElement.var_name}' to go from {pathElementSrc} to the {pathElementDst}, which is what is required here."
-                        f"You can use without the .reversed property to change the direction."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
-                # Check if the current path element is correctly connected to the left (source) - has matching type
-                elif requiredLeftConcept != pathElementSrc:
-                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
-                    exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
-                    exceptionStr3 = f"but the used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
-                # Check if the current path element is correctly connected to the right (destination) - has matching type
-                elif expectedRightConceptRoot != pathElementDst: 
-                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
-                    if lastPathElement: # if this is the last element it has to match the concept in which this path is embedded
-                        exceptionStr2 = f"The required destination type after {pathPart} is a {expectedRightConcept}."
-                    else: # if this it intermediary path element that if is expected that it will match next path element source type
-                        exceptionStr2 = f"The expected destination type after {pathPart} is a {expectedRightConcept}."
-                    exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
-                
-                # Move along the path with the requiredLeftConcept and pathVariable
-                requiredLeftConcept = pathElementDst
-                pathPart += " " + pathElementVarName
-            else:
-                if isinstance(pathElement, (Concept,)):
-                    exceptionStr1 = f"You have used the notion {expectedRightConcept}(path=('{pathVariable}', {pathStr})) which is incorrect."
-                    exceptionStr2 = f"{pathElement} is a concept and cannot be used as part of the path."
-                    exceptionStr3 = f"- If you meant that '{pathVariable}' should be of type {expectedRightConcept}: {expectedRightConcept}(path=('{pathVariable}'))"
-                    exceptionStr4 = f"- If you meant another entity 'y' should be of type {expectedRightConcept} which is somehow related to '{pathVariable}': {expectedRightConcept}(path=('x', edge1, edge2, ...))"
-                    exceptionStr5 = f"where edge1, edge2, ... are relations that connect '{pathVariable}' to 'y'."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4} {exceptionStr5}")
-                else: # all other types not allowed in path
-                    pathElementType = type(pathElement)
-                    exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
-                    exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2}")
-
-    def are_keys_new(self, given_dict, dict_list):
-        """
-        Check if all keys in 'given_dict' are not present in any dictionary within 'dict_list'.
-
-        This method iterates over each key in 'given_dict' and checks if it exists in any of the dictionaries
-        contained within 'dict_list'. If a key from 'given_dict' is found in any dictionary in 'dict_list',
-        the method returns False, indicating that not all keys are new. Otherwise, it returns True,
-        indicating all keys in 'given_dict' are new (i.e., not present in any dictionary in 'dict_list').
-
-        Parameters:
-        given_dict (dict): A dictionary whose keys are to be checked.
-        dict_list (list of dict): A list of dictionaries against which the keys of 'given_dict' are to be checked.
-
-        Returns:
-        bool: True if all keys in 'given_dict' are new, False otherwise.
-        """
-        for key in given_dict:
-            for d in dict_list:
-                if key in d:
-                    return False
-        return True
-
-    def collectVarMaps(self, lc, varMapsList):
-        """
-        Collects variable mappings (VarMaps) from a logical constraint (lc) and updates the list of collected VarMaps.
-    
-        This method recursively traverses the elements of the logical constraint 'lc' to identify and process VarMaps.
-        It differentiates between the definition of new variables and the usage of existing ones. For new variables, 
-        it clones the current VarMap, adds the name of the logical constraint, and appends it to 'varMapsList'. For 
-        existing variables, it updates the path variable in the current VarMap to match the one used in their 
-        definition. The method modifies 'lc' by removing VarMaps that define new variables.
-    
-        Parameters:
-        lc (LogicalConstrain): The logical constraint from which VarMaps are to be collected.
-        varMapsList (list): A list that accumulates VarMaps. This list collects only the definitions of variables.
-    
-        Returns:
-        list: The updated list of variable mappings (VarMaps) after processing 'lc'.
-        
-        Note:
-        - The method assumes the existence of specific types and structures within 'lc', such as 'VarMaps' tuples.
-        - The method is recursive and alters the structure of 'lc' by removing defining VarMaps.
-        """
-        from domiknows.graph import LogicalConstrain
-        import copy
-        
-        newE = []
-        # collect VarMaps from lc
-        for e in lc.e:
-            if isinstance(e, LogicalConstrain):
-                self.collectVarMaps(e, varMapsList) # recursive
-                newE.append(e)
-            # check if VarMap
-            elif isinstance(e, tuple) and e[0] == 'VarMaps':
-                currentVarMap = e[1]
-                
-                # check if variables in the current VarMap are new, have not been found already
-                # If they are new it means it it their definition in the lc
-                if self.are_keys_new(currentVarMap, varMapsList):
-                    cloned_CurrentVarMaps = copy.deepcopy(currentVarMap)
-                    # add info about the lc to varMap  - this is the lc in which this variables are defined
-                    cloned_CurrentVarMaps["lcName"] = lc.name 
-                    
-                    # Add this VarMaps to the collected VarMapss in the varMapsList
-                    # This list collect only definition of variables 
-                    # The current varMap will be removed from the current lc
-                    varMapsList.append(cloned_CurrentVarMaps)
-                else:
-                    # variables in VarMaps are already found 
-                    # It means that this is the usage of these variables in the lc
-                    for variableName in currentVarMap:
-                        # Find previous definition in varMapsList of the variable in the current VarMap
-                        definedVaribleList = [d.get(variableName, None) for d in varMapsList]
-                        
-                        if definedVaribleList:
-                            definedVarible = definedVaribleList[0]
-                            variable = currentVarMap[variableName]
-                        
-                            # Update the path variable in the current varMap to the one used in variable definition
-                            if isinstance(variable, tuple) and len(variable) > 1 and isinstance(variable[1], tuple):
-                                new_inner_tuple = (definedVarible[1][0],) + variable[1][1:]
-                                variable = (variable[0], new_inner_tuple) + variable[2:]
-                                currentVarMap[variableName] = variable
-
-                    # keep this varMap in the lc - it will be used when processing the lc variable syntax
-                    newE.append(e)
-            else:
-                # it is not varMap - keep it in lc
-                newE.append(e)
-              
-        lc.e = newE # Update logical constraint element - defining VarMaps are removed
-        return varMapsList
-                   
-    def handleVarsPath(self, lc, varMaps):
-        """
-        Processes and updates the variable paths in a logical constraint (lc) based on the mappings provided in varMaps.
-    
-        This method iterates through the elements of 'lc' and performs various transformations based on the type
-        of each element and the presence of variable mappings in 'varMaps'. The method handles nested logical 
-        constraints recursively, updates variables already in V form, and modifies variable paths using mappings 
-        from 'varMaps'. Additionally, it removes all 'VarMaps' elements from 'lc'.
-    
-        Parameters:
-        lc (LogicalConstrain): The logical constraint to be processed.
-        varMaps (dict): A dictionary containing mappings of variable names to their respective V instances or paths.
-    
-        Note:
-        - The method assumes a specific structure of 'lc' and 'varMaps', with 'lc' containing elements like 
-          LogicalConstrain, V, Concept, and tuples with 'VarMaps'.
-        - It employs a flag 'needsVariableUpdate' to track if the next element requires variable path updates.
-        - The method is recursive for nested logical constraints and alters the structure of 'lc'.
-        """
-
-        from domiknows.graph import V, LogicalConstrain, Concept
-        
-        # process logical constraint variable syntax is used - translate it to the path V syntax of logical constraints 
-        newE = []
-        needsVariableUpdate = False # flag set by lc element concept if VarMap is present in the current lc
-        for i, e in enumerate(lc.e):
-            if isinstance(e, LogicalConstrain):
-                self.handleVarsPath(e, varMaps) # recursive
-            elif isinstance(e, V) and e.name in varMaps: # check if the current lc element is already in the V  form and its name is in varMaps
-                # this is the variable syntax for a single variable usage
-                # replace the V with the mapping for this found in varMap
-                e = varMaps[e.name]
-            elif needsVariableUpdate: # ths flag was set by the previous lc element
-                usedVarMap = lc.e[i+1][1] # get varMaps to use
-                usedVarMapIt= iter(usedVarMap.items())
-                firstUsedV = next(usedVarMapIt)[1][1]
-                secondUsedV = next(usedVarMapIt)[1][1]
-
-                # create new paths based on variables from varMaps
-                firstNewPath = firstUsedV + (firstUsedV[1].reversed,)
-                secondNewPath = secondUsedV + (secondUsedV[1].reversed,)
-                
-                path = (firstNewPath, secondNewPath)  
-                
-                updated_e = V(name="", v=path)
-                e = updated_e
-                needsVariableUpdate = False
-            elif isinstance(e, tuple) and isinstance(e[0], Concept) and len(lc.e) > i+2:
-                if isinstance(lc.e[i+2], tuple) and lc.e[i+2][0] == 'VarMaps':
-                    # set the flag if the next element needs to be updated because the variable syntax is used
-                    needsVariableUpdate = True
-            
-            if isinstance(e, tuple) and e[0] == 'VarMaps':
-                pass # removed all VarMaps from lc
-            else:
-                newE.append(e)
-                    
-        lc.e = newE #Update logical constraint element - all VarMaps are removed
-    
-    def validate_queryL_constraints(self, lc, headLc=None):
-        """
-        Validates queryL constraints to ensure they have a proper multiclass concept.
-        
-        A queryL constraint requires its first argument (the concept) to be either:
-        1. An EnumConcept with explicit values
-        2. A Concept that has subclasses defined via is_a() relationships
-        
-        This method recursively checks all queryL constraints within a logical constraint,
-        including nested ones.
-        
-        Args:
-            lc (LogicalConstrain): The logical constraint to validate.
-            headLc (str, optional): The name of the parent logical constraint for error messages.
-                                Defaults to None.
-        
-        Raises:
-            Exception: If a queryL constraint has a concept without subclasses.
-        """
-        from .logicalConstrain import queryL, LogicalConstrain
-        from .concept import EnumConcept, Concept
-        
-        if headLc is None:
-            headLc = lc.name
-        
-        # Check if this constraint itself is a queryL
-        if isinstance(lc, queryL):
-            concept = lc.concept
-            concept_name = concept.name if hasattr(concept, 'name') else str(concept)
-            
-            # Check if it's an EnumConcept
-            if isinstance(concept, EnumConcept):
-                if not hasattr(concept, 'enum') or not concept.enum:
-                    exceptionStr1 = f"queryL constraint in {headLc} has invalid EnumConcept '{concept_name}'."
-                    exceptionStr2 = f"EnumConcept must have non-empty 'enum' values defined."
-                    raise Exception(f"{exceptionStr1} {exceptionStr2}")
-                # Valid EnumConcept
-                return
-            
-            # Check if it's a regular Concept with is_a subclasses
-            if isinstance(concept, Concept):
-                # Check for incoming is_a relations (subclasses pointing to this concept)
-                has_subclasses = False
-                
-                if hasattr(concept, '_in') and 'is_a' in concept._in:
-                    is_a_relations = concept._in.get('is_a', [])
-                    if is_a_relations and len(is_a_relations) > 0:
-                        has_subclasses = True
-                
-                if not has_subclasses:
-                    exceptionStr1 = f"queryL constraint in {headLc} has concept '{concept_name}' without subclasses."
-                    exceptionStr2 = f"The concept used in queryL must be a multiclass concept with subclasses defined via is_a()."
-                    exceptionStr3 = f"Example: metal.is_a({concept_name}), rubber.is_a({concept_name})"
-                    exceptionStr4 = f"Alternatively, use EnumConcept: {concept_name} = EnumConcept('{concept_name}', values=['value1', 'value2'])"
-                    raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4}")
-                
-                # Valid - concept has subclasses
-                return
-            
-            # Neither EnumConcept nor Concept
-            exceptionStr1 = f"queryL constraint in {headLc} has invalid concept type: {type(concept)}."
-            exceptionStr2 = f"The first argument to queryL must be a Concept with is_a subclasses or an EnumConcept."
-            raise Exception(f"{exceptionStr1} {exceptionStr2}")
-        
-        # Recursively check nested logical constraints
-        for e in lc.e:
-            if isinstance(e, LogicalConstrain):
-                self.validate_queryL_constraints(e, headLc=headLc)
-            elif isinstance(e, tuple) and len(e) > 0 and isinstance(e[0], LogicalConstrain):
-                self.validate_queryL_constraints(e[0], headLc=headLc)
-                
     @property
     def ontology(self):
         '''Gets the ontology associated with the object.

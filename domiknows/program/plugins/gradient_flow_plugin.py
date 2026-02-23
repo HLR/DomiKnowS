@@ -8,7 +8,7 @@ Diagnostic callback to check if gradients are flowing from constraints
 import torch
 import logging
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
-
+from domiknows.graph.lcUtils import getConceptsFromLogicalConstraint 
 
 class GradientFlowPlugin:
     """Plugin for diagnosing gradient flow from constraints to classifiers."""
@@ -68,7 +68,7 @@ class GradientFlowPlugin:
             return []
         
         try:
-            return self.constraint_constructor.getConceptsFromLogicalConstraint(lc)
+            return getConceptsFromLogicalConstraint(lc)
         except Exception as e:
             # Log error and return empty list
             if hasattr(self, 'program') and hasattr(self.program, 'myLogger'):
