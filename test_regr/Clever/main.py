@@ -175,7 +175,7 @@ def str2bool(v):
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Logic-guided VQA training / evaluation using DomiKnows framework",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         epilog="""
 Examples:
   # Dummy mode test with existsL (default)
