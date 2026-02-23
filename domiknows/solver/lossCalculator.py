@@ -70,6 +70,9 @@ class LossCalculator:
                 # flatten vector or higher-dim tensor
                 normalized.extend(t.reshape(-1))
 
+        if not normalized:
+            return None
+
         return torch.stack(normalized)
 
     def calculate_single_lc_loss(self, lc, dn, key, tnorm='L', counting_tnorm=None, label=None):

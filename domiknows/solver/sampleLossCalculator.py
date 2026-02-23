@@ -287,6 +287,10 @@ class SampleLossCalculator:
     def _eliminateDuplicateSamples(self, lcVariables, sampleSize):
         """Eliminate duplicate samples from variable samples."""
         variablesSamples = [lcVariables[v][1] for v in lcVariables]
+        
+        if not variablesSamples:
+            return sampleSize, None, None
+        
         variablesSamplesT = torch.stack(variablesSamples)
         
         uniqueSampleIndex = OrderedDict()
@@ -317,10 +321,12 @@ class SampleLossCalculator:
                                        eliminateDuplicateSamples, replace_mul=False):
         """Calculate sample loss for a specific variable."""
         lcSampleSize = sampleSize
+        indices = None
+        Vs = None
         if eliminateDuplicateSamples:
             lcSampleSize, indices, Vs = self._eliminateDuplicateSamples(lcVariables, sampleSize)
 
-        if eliminateDuplicateSamples: 
+        if eliminateDuplicateSamples and indices is not None: 
             lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
         else:
             if replace_mul:
@@ -337,7 +343,7 @@ class SampleLossCalculator:
                 P = currentV[0]
             oneMinusP = torch.sub(torch.ones(lcSampleSize, device=self.solver.current_device, dtype=self.current_dtype), P)
             
-            if eliminateDuplicateSamples:
+            if eliminateDuplicateSamples and Vs is not None:
                 S = Vs[i, :]
             else:
                 S = currentV[1]
