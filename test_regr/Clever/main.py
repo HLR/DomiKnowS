@@ -175,7 +175,7 @@ def str2bool(v):
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Logic-guided VQA training / evaluation using DomiKnows framework",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
         epilog="""
 Examples:
   # Dummy mode test with existsL (default)
@@ -244,16 +244,13 @@ Examples:
     from domiknows.program.plugins.epoch_logging_plugin import EpochLoggingPlugin
     from domiknows.program.plugins.adaptive_tnorm_plugin import AdaptiveTNormPlugin
     from domiknows.program.plugins.gradient_flow_plugin import GradientFlowPlugin
-    from domiknows.program.plugins.counting_schedule_plugin import CountingSchedulePlugin
     from domiknows.program.plugins.gumbel_monitoring_plugin import GumbelMonitoringPlugin
     
     plugin_manager = CallbackPluginManager()
     plugin_manager.register(EpochLoggingPlugin(), 'EpochLogging')
     plugin_manager.register(AdaptiveTNormPlugin(), 'AdaptiveTNorm')
     plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
-    plugin_manager.register(CountingSchedulePlugin(), 'CountingSchedule')
     plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
-    # NOTE: BERT unfreezing plugin excluded - no BERT model in VQA task
     
     plugin_manager.add_arguments_to_parser(parser)
     
