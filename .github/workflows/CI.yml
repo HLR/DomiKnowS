@@ -88,7 +88,8 @@ jobs:
             'solver'
             'namedTree'
             'examples/iota'
-            'Clever'
+            'Clever',
+            'vizual'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"
