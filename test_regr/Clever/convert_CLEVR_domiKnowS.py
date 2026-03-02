@@ -30,11 +30,12 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     ins = step.get("inputs", [])
     vins = step.get("value_inputs", [])
     if fn == "scene":
-        var_name = chr(var + 97)
         if not first_initial:
+            var_name = chr(var + 96)
             return f"obj(path=('{var_name}'))", 0
         suffix = ""
         var += 1
+        var_name = chr(var + 96)
         if need_relation2:
             suffix = f", path=('rel{relation_val - 1}', obj2)"
             need_relation2 = False
