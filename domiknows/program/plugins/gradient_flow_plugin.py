@@ -5,6 +5,16 @@ Diagnostic callback to check if gradients are flowing from constraints
 back to entity classifiers. Distinguishes between:
   - ELC (Executable Logical Constraints) - from graph.executableLCs
   - LC  (Logical Constraints)            - from graph.logicalConstrains
+
+Key design notes:
+  - The after_train_step callback runs AFTER the main training backward pass,
+    so the original computation graph is freed. The plugin calls calculateLcLoss
+    to build a FRESH graph, then uses torch.autograd.grad() (not .backward())
+    to probe gradient flow without consuming the graph.
+  - The "Classifier Gradient Status" section reports .grad from the TRAINING
+    backward pass (what the optimizer actually used).
+  - The "Isolating [kind] gradient contribution" section probes whether the
+    fresh constraint losses CAN flow to classifiers (diagnostic, not training).
 """
 
 import torch
@@ -54,27 +64,36 @@ class GradientFlowPlugin:
         """
         Determine whether a constraint is an ELC or LC.
 
-        ELCs live in graph.executableLCs and have an `innerLC` attribute.
-        LCs live in graph.logicalConstrains.
+        Detection strategy (in order):
+          1. Name prefix: ELC names start with 'ELC' (e.g. ELC0, ELC999)
+          2. innerLC attribute on the lc object
+          3. Cross-check against graph registries
 
         Returns:
             'ELC' | 'LC'
         """
+        # 1. Name-based detection — most reliable since _prepareLcLossContext
+        #    may unwrap ELCs before we see them
+        if lc_name.startswith('ELC'):
+            return 'ELC'
+
         lc = loss_dict.get('lc')
         if lc is None:
             return 'LC'
 
-        # Direct check: does the object have innerLC (i.e. it's an execute() wrapper)?
+        # 2. Direct check: does the object have innerLC (execute() wrapper)?
         if hasattr(lc, 'innerLC'):
             return 'ELC'
 
-        # Cross-check against graph registries via the solver graphs
+        # 3. Cross-check against graph registries
         try:
-            for graph in self.program.graph.myGraph if hasattr(self.program, 'graph') else []:
-                if lc_name in graph.executableLCs:
-                    return 'ELC'
-                if lc_name in graph.logicalConstrains:
-                    return 'LC'
+            graphs = getattr(self.program.graph, 'myGraph', None)
+            if graphs:
+                for graph in graphs:
+                    if hasattr(graph, 'executableLCs') and lc_name in graph.executableLCs:
+                        return 'ELC'
+                    if hasattr(graph, 'logicalConstrains') and lc_name in graph.logicalConstrains:
+                        return 'LC'
         except Exception:
             pass
 
@@ -136,17 +155,18 @@ class GradientFlowPlugin:
         return list(set(classifiers))
 
     # ------------------------------------------------------------------
-    # Gradient isolation via torch.autograd.grad (graph-safe)
+    # Gradient probing via torch.autograd.grad (graph-safe)
     # ------------------------------------------------------------------
 
-    def _isolate_gradient_contribution(self, kind_label, constraint_info):
+    def _probe_gradient_flow(self, kind_label, constraint_info):
         """
-        Compute gradient norm from a subset of constraint losses to classifier
-        parameters using torch.autograd.grad().
+        Probe whether gradient CAN flow from a subset of constraint losses
+        to classifier parameters.
 
-        Unlike .backward(), autograd.grad() does not accumulate into .grad
-        attributes and — with retain_graph=True — does not free the graph,
-        so it can be called multiple times on the same computation graph.
+        Uses torch.autograd.grad() on the FRESH loss tensors produced by
+        calculateLcLoss (not the training graph). This tells us whether the
+        constraint→classifier gradient path exists in the computation graph,
+        independent of what the training backward pass did.
         """
         subset_tensors = [
             info['loss_tensor']
@@ -156,7 +176,7 @@ class GradientFlowPlugin:
         if not subset_tensors:
             return
 
-        print(f"\n  Isolating [{kind_label}] gradient contribution...")
+        print(f"\n  Probing [{kind_label}] gradient path to classifiers...")
 
         kind_loss_sum = sum(subset_tensors)
 
@@ -169,7 +189,7 @@ class GradientFlowPlugin:
         ]
 
         if not clf_params:
-            print(f"    ✗ [{kind_label}] no classifier parameters require grad")
+            print(f"    ✗ No classifier parameters require grad")
             return
 
         try:
@@ -179,6 +199,8 @@ class GradientFlowPlugin:
                 retain_graph=True,
                 allow_unused=True,
             )
+
+            connected_params = sum(1 for g in grads if g is not None)
             kind_grad_norm = sum(
                 g.norm().item() ** 2
                 for g in grads
@@ -186,20 +208,33 @@ class GradientFlowPlugin:
             ) ** 0.5
 
             if kind_grad_norm > 0:
-                print(f"    ✓ [{kind_label}] contributes grad_norm={kind_grad_norm:.4f} to classifiers")
+                print(f"    ✓ [{kind_label}] gradient FLOWS to classifiers: "
+                      f"norm={kind_grad_norm:.6f} ({connected_params}/{len(clf_params)} params connected)")
                 self.stats['clf_grad_magnitudes'].append(kind_grad_norm)
+            elif connected_params > 0:
+                print(f"    ⚠️  [{kind_label}] params connected ({connected_params}/{len(clf_params)}) "
+                      f"but gradient norm is 0 (possible vanishing gradient)")
+                self.stats['clf_grad_magnitudes'].append(0.0)
             else:
-                print(f"    ✗ [{kind_label}] does NOT contribute gradients to classifiers")
+                print(f"    ✗ [{kind_label}] NO gradient path to any classifier parameter")
+                print(f"        This means the constraint loss computation graph is DISCONNECTED")
+                print(f"        from the classifier forward pass. Check that:")
+                print(f"        - Classifier outputs feed into DataNode attributes")
+                print(f"        - calculateLcLoss reads from /local/softmax which traces to classifiers")
+                print(f"        - No .detach() or .data breaks the chain")
 
         except RuntimeError as e:
             err_msg = str(e)
             if "backward through the graph a second time" in err_msg:
-                print(f"    ⚠️  [{kind_label}] graph already freed by training backward pass")
-                print(f"        (This is expected — gradient isolation is best-effort)")
+                print(f"    ⚠️  [{kind_label}] graph already freed (best-effort diagnostic)")
+            elif "One of the differentiated Tensors" in err_msg:
+                print(f"    ✗ [{kind_label}] loss tensors not connected to classifier params")
+                print(f"        The constraint losses are computed on a graph that doesn't")
+                print(f"        include the classifier parameters in its ancestry.")
             else:
-                print(f"    ✗ Failed to compute grads for [{kind_label}]: {e}")
+                print(f"    ✗ [{kind_label}] autograd.grad failed: {e}")
         except Exception as e:
-            print(f"    ✗ Failed to compute grads for [{kind_label}]: {e}")
+            print(f"    ✗ [{kind_label}] unexpected error: {e}")
 
     # ------------------------------------------------------------------
     # Main diagnostic callback
@@ -294,8 +329,8 @@ class GradientFlowPlugin:
         print(f"    ELC (Executable): {elc_count:3d}  avg loss: {elc_total_loss/max(elc_count,1):.4f}")
         print(f"    LC  (Logical):    {lc_count:3d}  avg loss: {lc_total_loss/max(lc_count,1):.4f}")
 
-        # Classifier gradient status
-        print(f"\n  Classifier Gradient Status:")
+        # Classifier gradient status (from TRAINING backward pass)
+        print(f"\n  Classifier Gradient Status (from training backward pass):")
         total_grad_norm = 0.0
         has_any_grad = False
         clf_grad_info = {}
@@ -388,15 +423,16 @@ class GradientFlowPlugin:
                 print(f"    • {clf_name:15s} ({grad_status})")
 
         if not has_any_grad:
-            print(f"\n  ❌ CRITICAL: No classifier parameters have gradients!")
+            print(f"\n  ❌ CRITICAL: No classifier parameters have gradients from training!")
+            print(f"     This means the training loss does not flow through classifiers.")
+            print(f"     Check that the model's loss function uses classifier outputs.")
         else:
-            print(f"\n  Total classifier grad norm: {total_grad_norm:.4f}")
+            print(f"\n  Total classifier grad norm (training): {total_grad_norm:.4f}")
 
-        # Isolate gradient contribution per kind (ELC and LC separately)
-        # Uses torch.autograd.grad() instead of .backward() to avoid
-        # "graph already freed" errors from the training backward pass.
+        # Probe gradient connectivity on the FRESH constraint graph
+        # This tests whether gradient COULD flow, independent of training
         for kind_label in ('ELC', 'LC'):
-            self._isolate_gradient_contribution(kind_label, constraint_info)
+            self._probe_gradient_flow(kind_label, constraint_info)
 
         print("=" * 60 + "\n")
 
