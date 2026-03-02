@@ -129,11 +129,77 @@ class GradientFlowPlugin:
                 for clf_name in self.models['classifiers'].keys():
                     concept_lower = concept.lower().replace('_', '').replace('-', '')
                     clf_lower = (clf_name.lower()
-                                 .replace('_', '').replace('-', '')
+                       .replace('_', '').replace('-', '')
                                  .replace('classifier', ''))
                     if concept_lower in clf_lower or clf_lower in concept_lower:
                         classifiers.append(clf_name)
         return list(set(classifiers))
+
+    # ------------------------------------------------------------------
+    # Gradient isolation via torch.autograd.grad (graph-safe)
+    # ------------------------------------------------------------------
+
+    def _isolate_gradient_contribution(self, kind_label, constraint_info):
+        """
+        Compute gradient norm from a subset of constraint losses to classifier
+        parameters using torch.autograd.grad().
+
+        Unlike .backward(), autograd.grad() does not accumulate into .grad
+        attributes and — with retain_graph=True — does not free the graph,
+        so it can be called multiple times on the same computation graph.
+        """
+        subset_tensors = [
+            info['loss_tensor']
+            for info in constraint_info.values()
+            if info['kind'] == kind_label and info['loss_tensor'].requires_grad
+        ]
+        if not subset_tensors:
+            return
+
+        print(f"\n  Isolating [{kind_label}] gradient contribution...")
+
+        kind_loss_sum = sum(subset_tensors)
+
+        # Collect all classifier parameters that require gradients
+        clf_params = [
+            param
+            for clf in self.models['classifiers'].values()
+            for param in clf.parameters()
+            if param.requires_grad
+        ]
+
+        if not clf_params:
+            print(f"    ✗ [{kind_label}] no classifier parameters require grad")
+            return
+
+        try:
+            grads = torch.autograd.grad(
+                kind_loss_sum,
+                clf_params,
+                retain_graph=True,
+                allow_unused=True,
+            )
+            kind_grad_norm = sum(
+                g.norm().item() ** 2
+                for g in grads
+                if g is not None
+            ) ** 0.5
+
+            if kind_grad_norm > 0:
+                print(f"    ✓ [{kind_label}] contributes grad_norm={kind_grad_norm:.4f} to classifiers")
+                self.stats['clf_grad_magnitudes'].append(kind_grad_norm)
+            else:
+                print(f"    ✗ [{kind_label}] does NOT contribute gradients to classifiers")
+
+        except RuntimeError as e:
+            err_msg = str(e)
+            if "backward through the graph a second time" in err_msg:
+                print(f"    ⚠️  [{kind_label}] graph already freed by training backward pass")
+                print(f"        (This is expected — gradient isolation is best-effort)")
+            else:
+                print(f"    ✗ Failed to compute grads for [{kind_label}]: {e}")
+        except Exception as e:
+            print(f"    ✗ Failed to compute grads for [{kind_label}]: {e}")
 
     # ------------------------------------------------------------------
     # Main diagnostic callback
@@ -159,7 +225,7 @@ class GradientFlowPlugin:
             print("  ⚠️  No datanode found in output")
             return
 
-        # Calculate losses
+        # Calculate losses — this builds a FRESH computation graph
         try:
             losses = datanode.calculateLcLoss(
                 tnorm=getattr(self.program.graph, 'tnorm', 'L'),
@@ -279,6 +345,7 @@ class GradientFlowPlugin:
                 print(f"        Concepts: {concepts}")
                 print(f"        Could not map to any known classifier")
                 print(f"        Available classifiers: {list(self.models['classifiers'].keys())}")
+
                 continue
 
             referenced_classifiers.update(expected_classifiers)
@@ -326,39 +393,10 @@ class GradientFlowPlugin:
             print(f"\n  Total classifier grad norm: {total_grad_norm:.4f}")
 
         # Isolate gradient contribution per kind (ELC and LC separately)
+        # Uses torch.autograd.grad() instead of .backward() to avoid
+        # "graph already freed" errors from the training backward pass.
         for kind_label in ('ELC', 'LC'):
-            subset_tensors = [
-                info['loss_tensor']
-                for info in constraint_info.values()
-                if info['kind'] == kind_label and info['loss_tensor'].requires_grad
-            ]
-            if not subset_tensors:
-                continue
-
-            print(f"\n  Isolating [{kind_label}] gradient contribution...")
-            for clf in self.models['classifiers'].values():
-                clf.zero_grad()
-
-            kind_loss_sum = sum(subset_tensors)
-            try:
-                kind_loss_sum.backward(retain_graph=True)
-                kind_grad_norm = sum(
-                    param.grad.norm().item() ** 2
-                    for clf in self.models['classifiers'].values()
-                    for param in clf.parameters()
-                    if param.grad is not None
-                ) ** 0.5
-
-                if kind_grad_norm > 0:
-                    print(f"    ✓ [{kind_label}] contributes grad_norm={kind_grad_norm:.4f} to classifiers")
-                    self.stats['clf_grad_magnitudes'].append(kind_grad_norm)
-                else:
-                    print(f"    ✗ [{kind_label}] does NOT contribute gradients to classifiers")
-
-                for clf in self.models['classifiers'].values():
-                    clf.zero_grad()
-            except Exception as e:
-                print(f"    ✗ Failed to backprop through [{kind_label}]: {e}")
+            self._isolate_gradient_contribution(kind_label, constraint_info)
 
         print("=" * 60 + "\n")
 
