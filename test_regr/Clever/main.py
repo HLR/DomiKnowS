@@ -10,11 +10,12 @@ import argparse, torch, logging
 
 try:
     from monitor.constraint_monitor import (# type: ignore 
-        next_step,enable_monitoring, start_new_epoch
+        next_step,enable_monitoring, start_new_epoch, finish_experiment, disable_monitoring
     )
     MONITORING_AVAILABLE = True
-    #enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
-    enable_monitoring(port=8080, slave_mode=False)  # Master mode with web server
+    if '--help' not in sys.argv and '-h' not in sys.argv:
+        enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
+        #enable_monitoring(port=8080, slave_mode=False)  # Master mode with web server
 except ImportError:
     MONITORING_AVAILABLE = False
 
@@ -636,6 +637,10 @@ def main(args):
                     print(f"Accuracy: {acc * 100:.2f}%", file=f)
             else:
                 print(f"Checkpoint not found: {save_file}")
+    
+    if MONITORING_AVAILABLE:
+        finish_experiment(label="run_1")
+        disable_monitoring()
 
     return 0
 
