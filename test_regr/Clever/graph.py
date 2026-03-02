@@ -115,7 +115,7 @@ with Graph('image_graph') as graph:
         
         with local_vars["graph"]:
             apply_opposite_constraints(ctx)
-            apply_inverse_constraints(ctx)
+            #apply_inverse_constraints(ctx)
             # Apply generic spatial and plausibility constraints
             #apply_all_constraints(
             #    ctx,
