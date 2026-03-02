@@ -31,8 +31,7 @@ from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, ModuleSensor
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
-from domiknows.program.plugins.callback_plugin_manager import create_standard_plugin_manager
-from domiknows.program.plugins.bert_unfreezing_plugin import create_optimizer_factory, create_optimizer_with_differential_lr
+from domiknows.program.plugins.grad_chain_diagnostic import GradChainDiagnostic
 
 try:
     from .preprocess import preprocess_dataset, preprocess_folders_and_files
@@ -603,6 +602,10 @@ def main(args):
                 if previous_save.exists():
                     program.load(previous_save)
 
+            # Install gradient chain diagnostic
+            diagnostic = GradChainDiagnostic(program, _models['classifiers'])
+            diagnostic.install()
+            
             # Training loop
             for i in range(args.epochs):
                 print(f"Training epoch {i + 1}/{args.epochs}")
