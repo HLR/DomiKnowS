@@ -10,9 +10,8 @@ Usage:
     graph, ctx = build_visual_reasoning_graph()
 """
 
-from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation, equivalenceL, notL
 from domiknows.graph.concept import EnumConcept
-from domiknows.graph.relation import disjoint
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +109,6 @@ def build_visual_reasoning_graph(
         below     = pair(name="below")
         in_front  = pair(name="in_front_of")
         behind_of = pair(name="behind")
-
-        # Mutual exclusion among opposite relations is handled by constraints
 
     # ------------------------------------------------------------------
     # Collect everything into a context dict

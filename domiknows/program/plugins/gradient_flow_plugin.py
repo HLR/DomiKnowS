@@ -2,93 +2,111 @@
 Gradient Flow Diagnostic Callback Plugin
 
 Diagnostic callback to check if gradients are flowing from constraints
-(especially sumL) back to entity classifiers.
+back to entity classifiers. Distinguishes between:
+  - ELC (Executable Logical Constraints) - from graph.executableLCs
+  - LC  (Logical Constraints)            - from graph.logicalConstrains
 """
 
 import torch
 import logging
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
-from domiknows.graph.lcUtils import getConceptsFromLogicalConstraint 
+from domiknows.graph.lcUtils import getConceptsFromLogicalConstraint
+
 
 class GradientFlowPlugin:
     """Plugin for diagnosing gradient flow from constraints to classifiers."""
-    
+
     def __init__(self):
         self.step_counter = [0]
-        self.sumL_stats = {
+        self.stats = {
             'total_losses': [],
             'has_grad': [],
             'clf_grad_magnitudes': [],
-            'constraint_type_grads': {'sumL': [], 'other': []},
-            'constraint_clf_alignment': []  # Track if correct classifiers learned
+            'constraint_type_grads': {'ELC': [], 'LC': []},
+            'constraint_clf_alignment': [],
         }
-        # Create logger and constraint constructor for concept extraction
         logger = logging.getLogger(__name__)
         self.constraint_constructor = LogicalConstraintConstructor(logger)
-    
+
     @staticmethod
     def add_arguments(parser):
-        """Add plugin-specific arguments to argument parser."""
         parser.add_argument(
             "--gradient_check_interval",
             type=int,
             default=1000,
             help="Steps between gradient flow diagnostic checks"
         )
-    
+
     def configure(self, program, models, args):
-        """
-        Configure the plugin and register callbacks.
-        
-        Args:
-            program: CallbackProgram instance
-            models: Dict with 'bert' and 'classifiers' keys
-            args: Parsed arguments
-        """
         self.program = program
         self.models = models
         self.args = args
         self.check_every = getattr(args, 'gradient_check_interval', 1000)
-        
-        # Register callbacks
+
         program.after_train_step.append(self._check_gradient_flow)
         program.after_train_epoch.append(self._print_summary)
-    
-    def _extract_concepts_from_constraint(self, lc):
+
+    # ------------------------------------------------------------------
+    # Constraint kind detection
+    # ------------------------------------------------------------------
+
+    def _get_constraint_kind(self, lc_name, loss_dict):
         """
-        Extract concept names mentioned in a logical constraint.
-        
-        Args:
-            lc: Logical constraint object
-            
+        Determine whether a constraint is an ELC or LC.
+
+        ELCs live in graph.executableLCs and have an `innerLC` attribute.
+        LCs live in graph.logicalConstrains.
+
         Returns:
-            List of concept names (strings)
+            'ELC' | 'LC'
         """
+        lc = loss_dict.get('lc')
         if lc is None:
-            return []
-        
+            return 'LC'
+
+        # Direct check: does the object have innerLC (i.e. it's an execute() wrapper)?
+        if hasattr(lc, 'innerLC'):
+            return 'ELC'
+
+        # Cross-check against graph registries via the solver graphs
         try:
-            return getConceptsFromLogicalConstraint(lc)
+            for graph in self.program.graph.myGraph if hasattr(self.program, 'graph') else []:
+                if lc_name in graph.executableLCs:
+                    return 'ELC'
+                if lc_name in graph.logicalConstrains:
+                    return 'LC'
+        except Exception:
+            pass
+
+        return 'LC'
+
+    def _unwrap_lc(self, lc):
+        """Return the inner logical constraint, unwrapping ELC if needed."""
+        if lc is not None and hasattr(lc, 'innerLC'):
+            return lc.innerLC
+        return lc
+
+    # ------------------------------------------------------------------
+    # Concept extraction & classifier mapping
+    # ------------------------------------------------------------------
+
+    def _extract_concepts_from_constraint(self, lc):
+        try:
+            return getConceptsFromLogicalConstraint(self._unwrap_lc(lc))
         except Exception as e:
-            # Log error and return empty list
             if hasattr(self, 'program') and hasattr(self.program, 'myLogger'):
-                self.program.myLogger.warning(f"Failed to extract concepts from {lc.__class__.__name__}: {e}")
+                self.program.myLogger.warning(
+                    f"Failed to extract concepts from {lc.__class__.__name__}: {e}"
+                )
             return []
-    
+
     def _debug_constraint_structure(self, lc):
-        """Get debug information about constraint structure."""
         if lc is None:
             return "None"
-        
         info_parts = []
-        
-        # Show main attributes
         if hasattr(lc, '__class__'):
             info_parts.append(f"class={lc.__class__.__name__}")
-        
-        # Check for common attributes
-        attrs_to_check = ['concept', 'concepts', 'head', 'body', 'args', 'name', 'innerLC']
-        for attr in attrs_to_check:
+        for attr in ['concept', 'concepts', 'head', 'body', 'args', 'name', 'innerLC']:
             if hasattr(lc, attr):
                 val = getattr(lc, attr)
                 if val is not None:
@@ -98,51 +116,37 @@ class GradientFlowPlugin:
                         info_parts.append(f"{attr}=[{len(val)} items]")
                     elif isinstance(val, str):
                         info_parts.append(f"{attr}='{val}'")
-        
         return ", ".join(info_parts) if info_parts else "no recognizable structure"
-    
+
     def _map_concepts_to_classifiers(self, concepts):
-        """
-        Map concept names to classifier names.
-        
-        Args:
-            concepts: List of concept names
-            
-        Returns:
-            List of classifier names
-        """
         classifiers = []
-        
         if not concepts:
             return classifiers
-        
-        # Try direct name matching
         for concept in concepts:
-            # Exact match
             if concept in self.models['classifiers']:
                 classifiers.append(concept)
             else:
-                # Try fuzzy matching (e.g., "EntityType" -> "entity_type_classifier")
                 for clf_name in self.models['classifiers'].keys():
                     concept_lower = concept.lower().replace('_', '').replace('-', '')
-                    clf_lower = clf_name.lower().replace('_', '').replace('-', '').replace('classifier', '')
-                    
+                    clf_lower = (clf_name.lower()
+                                 .replace('_', '').replace('-', '')
+                                 .replace('classifier', ''))
                     if concept_lower in clf_lower or clf_lower in concept_lower:
                         classifiers.append(clf_name)
-        
         return list(set(classifiers))
-            
+
+    # ------------------------------------------------------------------
+    # Main diagnostic callback
+    # ------------------------------------------------------------------
+
     def _check_gradient_flow(self, output):
-        """Check gradient flow after loss computation but before optimizer step."""
         self.step_counter[0] += 1
-        
-        # Only check periodically
         if self.step_counter[0] % self.check_every != 0:
             return
-        
+
         print(f"\n[Gradient Flow Check - Step {self.step_counter[0]}]")
         print("=" * 60)
-        
+
         # Extract datanode
         datanode = None
         if isinstance(output, (tuple, list)):
@@ -150,11 +154,11 @@ class GradientFlowPlugin:
                 if item is not None and hasattr(item, 'calculateLcLoss'):
                     datanode = item
                     break
-        
+
         if datanode is None:
             print("  ⚠️  No datanode found in output")
             return
-        
+
         # Calculate losses
         try:
             losses = datanode.calculateLcLoss(
@@ -164,143 +168,122 @@ class GradientFlowPlugin:
         except Exception as e:
             print(f"  ⚠️  Failed to calculate losses: {e}")
             return
-        
-        # Analyze each constraint with concept-to-classifier mapping
-        sumL_count = 0
-        other_count = 0
-        sumL_total_loss = 0.0
-        other_total_loss = 0.0
-        constraint_concept_map = {}
-        constraint_info = {}  # Store full info for all constraints
-        
+
+        # Collect constraint info, grouped by kind
+        elc_count = 0
+        lc_count = 0
+        elc_total_loss = 0.0
+        lc_total_loss = 0.0
+        constraint_info = {}
+
         for lc_name, loss_dict in losses.items():
             lc = loss_dict.get('lc')
             loss_tensor = loss_dict.get('loss')
-            
-            if loss_tensor is None:
+
+            if loss_tensor is None or not torch.is_tensor(loss_tensor):
                 continue
-            
-            # Check if sumL constraint
-            is_sumL = False
-            constraint_type = 'unknown'
-            if lc and hasattr(lc, 'innerLC'):
-                from domiknows.graph.logicalConstrain import sumL
-                is_sumL = isinstance(lc.innerLC, sumL)
-                constraint_type = type(lc.innerLC).__name__ if lc.innerLC else 'unknown'
-            elif lc:
-                constraint_type = type(lc).__name__
-            
-            if not torch.is_tensor(loss_tensor):
-                continue
-            
+
+            kind = self._get_constraint_kind(lc_name, loss_dict)
+            inner_lc = self._unwrap_lc(lc)
+            constraint_type = type(inner_lc).__name__ if inner_lc else 'unknown'
             loss_val = loss_tensor.item() if loss_tensor.numel() == 1 else loss_tensor.mean().item()
-            
-            # Extract concepts mentioned in this constraint
             involved_concepts = self._extract_concepts_from_constraint(lc)
-            constraint_concept_map[lc_name] = involved_concepts
-            
-            # Store full constraint info
+
             constraint_info[lc_name] = {
+                'kind': kind,
                 'concepts': involved_concepts,
                 'type': constraint_type,
-                'is_sumL': is_sumL,
                 'loss': loss_val,
                 'requires_grad': loss_tensor.requires_grad,
-                'lc': lc
+                'lc': lc,
+                'loss_tensor': loss_tensor,
             }
-            
-            if is_sumL:
-                sumL_count += 1
-                sumL_total_loss += loss_val
-                self.sumL_stats['total_losses'].append(loss_val)
-                self.sumL_stats['has_grad'].append(loss_tensor.requires_grad)
-                
-                concept_str = ', '.join(involved_concepts) if involved_concepts else 'unknown'
-                if loss_tensor.requires_grad:
-                    print(f"  ✓ {lc_name}: sumL loss={loss_val:.4f}, requires_grad=True")
-                    print(f"      Concepts: [{concept_str}]")
-                else:
-                    print(f"  ✗ {lc_name}: sumL loss={loss_val:.4f}, requires_grad=FALSE")
-                    print(f"      Concepts: [{concept_str}]")
+
+            self.stats['total_losses'].append(loss_val)
+            self.stats['has_grad'].append(loss_tensor.requires_grad)
+            self.stats['constraint_type_grads'][kind].append(loss_val)
+
+            if kind == 'ELC':
+                elc_count += 1
+                elc_total_loss += loss_val
             else:
-                other_count += 1
-                other_total_loss += loss_val
-        
-        # Constraint summary
+                lc_count += 1
+                lc_total_loss += loss_val
+
+        # Print per-constraint summary (ELCs first, then LCs)
+        for kind_label in ('ELC', 'LC'):
+            subset = {n: i for n, i in constraint_info.items() if i['kind'] == kind_label}
+            if not subset:
+                continue
+            print(f"\n  [{kind_label}] Constraints ({len(subset)}):")
+            for lc_name, info in subset.items():
+                concept_str = ', '.join(info['concepts']) if info['concepts'] else 'unknown'
+                grad_icon = '✓' if info['requires_grad'] else '✗'
+                grad_label = 'requires_grad=True' if info['requires_grad'] else 'requires_grad=FALSE'
+                print(f"    {grad_icon} {lc_name} ({info['type']}): loss={info['loss']:.4f}, {grad_label}")
+                print(f"        Concepts: [{concept_str}]")
+
+        # Overall summary
         print(f"\n  Constraint Summary:")
-        print(f"    sumL constraints:   {sumL_count} (avg loss: {sumL_total_loss/max(sumL_count,1):.4f})")
-        print(f"    Other constraints:  {other_count} (avg loss: {other_total_loss/max(other_count,1):.4f})")
-        
-        # Check classifier gradients with concept mapping
+        print(f"    ELC (Executable): {elc_count:3d}  avg loss: {elc_total_loss/max(elc_count,1):.4f}")
+        print(f"    LC  (Logical):    {lc_count:3d}  avg loss: {lc_total_loss/max(lc_count,1):.4f}")
+
+        # Classifier gradient status
         print(f"\n  Classifier Gradient Status:")
         total_grad_norm = 0.0
         has_any_grad = False
         clf_grad_info = {}
-        
+
         for clf_name, clf in self.models['classifiers'].items():
             clf_grad_norm = 0.0
             param_count = 0
             grad_count = 0
-            
             for param in clf.parameters():
                 param_count += 1
                 if param.grad is not None:
                     grad_count += 1
                     clf_grad_norm += param.grad.norm().item() ** 2
                     has_any_grad = True
-            
             clf_grad_norm = clf_grad_norm ** 0.5
             total_grad_norm += clf_grad_norm
-            clf_grad_info[clf_name] = {'grad_norm': clf_grad_norm, 'grad_count': grad_count, 'param_count': param_count}
-            
+            clf_grad_info[clf_name] = {
+                'grad_norm': clf_grad_norm,
+                'grad_count': grad_count,
+                'param_count': param_count,
+            }
             if clf_grad_norm > 0:
                 print(f"    {clf_name:15s}: grad_norm={clf_grad_norm:8.4f} ({grad_count}/{param_count} params)")
             else:
                 print(f"    {clf_name:15s}: NO GRADIENTS ({grad_count}/{param_count} params)")
-        
-        # Analyze constraint-classifier alignment
+
+        # Constraint → Classifier alignment
         print(f"\n  Constraint → Classifier Learning Analysis:")
-        
-        if not constraint_info:
-            print(f"    ⚠️  No constraints found to analyze")
-        
-        # Track which classifiers are referenced by constraints
         referenced_classifiers = set()
-        
+
         for lc_name, info in constraint_info.items():
             concepts = info['concepts']
+            kind = info['kind']
             constraint_type = info['type']
-            
-            # Show constraint even if no concepts extracted
+
             if not concepts:
-                print(f"    ⚠️  {lc_name} ({constraint_type}):")
-                print(f"      No concepts extracted (loss={info['loss']:.4f})")
-                print(f"      Constraint type: {constraint_type}")
-                
-                # Try to get more info about the constraint
-                lc = info['lc']
-                debug_info = self._debug_constraint_structure(lc)
+                print(f"    ⚠️  [{kind}] {lc_name} ({constraint_type}): no concepts extracted "
+                      f"(loss={info['loss']:.4f})")
+                debug_info = self._debug_constraint_structure(info['lc'])
                 if debug_info:
-                    print(f"      Structure: {debug_info}")
+                    print(f"        Structure: {debug_info}")
                 continue
-                
-            # Match concepts to classifiers
+
             expected_classifiers = self._map_concepts_to_classifiers(concepts)
-            
             if not expected_classifiers:
-                print(f"    ⚠️  {lc_name} ({constraint_type}):")
-                print(f"      Concepts: {concepts}")
-                print(f"      Could not map to any known classifier")
-                print(f"      Available classifiers: {list(self.models['classifiers'].keys())}")
+                print(f"    ⚠️  [{kind}] {lc_name} ({constraint_type}):")
+                print(f"        Concepts: {concepts}")
+                print(f"        Could not map to any known classifier")
+                print(f"        Available classifiers: {list(self.models['classifiers'].keys())}")
                 continue
-            
-            # Track referenced classifiers
+
             referenced_classifiers.update(expected_classifiers)
-            
-            # Check if expected classifiers have gradients
             learning_clfs = []
             not_learning_clfs = []
-            
             for clf_name in expected_classifiers:
                 if clf_name in clf_grad_info:
                     if clf_grad_info[clf_name]['grad_norm'] > 0:
@@ -309,167 +292,156 @@ class GradientFlowPlugin:
                         not_learning_clfs.append(f"{clf_name}(✗)")
                 else:
                     not_learning_clfs.append(f"{clf_name}(not found)")
-            
-            status = "✓" if not_learning_clfs == [] else "✗"
-            print(f"    {status} {lc_name} ({constraint_type}):")
-            print(f"      Concepts: {concepts}")
+
+            status = "✓" if not not_learning_clfs else "✗"
+            print(f"    {status} [{kind}] {lc_name} ({constraint_type}):")
+            print(f"        Concepts: {concepts}")
             if learning_clfs:
-                print(f"      Learning:     {', '.join(learning_clfs)}")
+                print(f"        Learning:     {', '.join(learning_clfs)}")
             if not_learning_clfs:
-                print(f"      NOT Learning: {', '.join(not_learning_clfs)}")
-            
-            # Track alignment statistics
+                print(f"        NOT Learning: {', '.join(not_learning_clfs)}")
+
             alignment_ratio = len(learning_clfs) / len(expected_classifiers) if expected_classifiers else 0
-            self.sumL_stats['constraint_clf_alignment'].append({
+            self.stats['constraint_clf_alignment'].append({
                 'constraint': lc_name,
+                'kind': kind,
                 'concepts': concepts,
                 'expected_clfs': expected_classifiers,
-                'learning_clfs': [clf.split('(')[0] for clf in learning_clfs],
-                'alignment_ratio': alignment_ratio
+                'learning_clfs': [c.split('(')[0] for c in learning_clfs],
+                'alignment_ratio': alignment_ratio,
             })
-        
-        # Show unreferenced classifiers
+
         unreferenced_clfs = set(self.models['classifiers'].keys()) - referenced_classifiers
         if unreferenced_clfs:
             print(f"\n  Classifiers Not Referenced by Any Constraint:")
             for clf_name in sorted(unreferenced_clfs):
-                grad_status = "has gradients" if clf_grad_info.get(clf_name, {}).get('grad_norm', 0) > 0 else "no gradients"
-                print(f"    • {clf_name:15s} ({grad_status}) - not expected to learn from constraints")
-        
+                grad_status = ("has gradients"
+                               if clf_grad_info.get(clf_name, {}).get('grad_norm', 0) > 0
+                               else "no gradients")
+                print(f"    • {clf_name:15s} ({grad_status})")
+
         if not has_any_grad:
             print(f"\n  ❌ CRITICAL: No classifier parameters have gradients!")
-            print(f"     This means gradients are NOT flowing from constraints to classifiers.")
         else:
             print(f"\n  Total classifier grad norm: {total_grad_norm:.4f}")
-        
-        # Try to isolate sumL gradient contribution
-        if sumL_count > 0:
-            print(f"\n  Attempting to isolate sumL gradient contribution...")
-            
-            # Zero out classifier gradients
+
+        # Isolate gradient contribution per kind (ELC and LC separately)
+        for kind_label in ('ELC', 'LC'):
+            subset_tensors = [
+                info['loss_tensor']
+                for info in constraint_info.values()
+                if info['kind'] == kind_label and info['loss_tensor'].requires_grad
+            ]
+            if not subset_tensors:
+                continue
+
+            print(f"\n  Isolating [{kind_label}] gradient contribution...")
             for clf in self.models['classifiers'].values():
                 clf.zero_grad()
-            
-            # Compute only sumL losses and backprop
-            sumL_loss_sum = 0.0
-            for lc_name, loss_dict in losses.items():
-                lc = loss_dict.get('lc')
-                if lc and hasattr(lc, 'innerLC'):
-                    from domiknows.graph.logicalConstrain import sumL
-                    if isinstance(lc.innerLC, sumL):
-                        loss_tensor = loss_dict.get('loss')
-                        if loss_tensor is not None and torch.is_tensor(loss_tensor):
-                            sumL_loss_sum += loss_tensor
-            
-            if sumL_loss_sum != 0.0 and torch.is_tensor(sumL_loss_sum):
-                try:
-                    sumL_loss_sum.backward(retain_graph=True)
-                    
-                    sumL_grad_norm = 0.0
-                    for clf in self.models['classifiers'].values():
-                        for param in clf.parameters():
-                            if param.grad is not None:
-                                sumL_grad_norm += param.grad.norm().item() ** 2
-                    sumL_grad_norm = sumL_grad_norm ** 0.5
-                    
-                    if sumL_grad_norm > 0:
-                        print(f"    ✓ sumL contributes grad_norm={sumL_grad_norm:.4f} to classifiers")
-                        self.sumL_stats['clf_grad_magnitudes'].append(sumL_grad_norm)
-                    else:
-                        print(f"    ✗ sumL does NOT contribute gradients to classifiers")
-                        print(f"       Possible causes:")
-                        print(f"       - Using argmax predictions (non-differentiable)")
-                        print(f"       - Gradients blocked somewhere in computational graph")
-                        print(f"       - sumL implemented without gradient flow")
-                    
-                    # Clear gradients
-                    for clf in self.models['classifiers'].values():
-                        clf.zero_grad()
-                        
-                except Exception as e:
-                    print(f"    ✗ Failed to backprop through sumL: {e}")
-            else:
-                print(f"    ⚠️  No sumL losses to backprop")
-        
+
+            kind_loss_sum = sum(subset_tensors)
+            try:
+                kind_loss_sum.backward(retain_graph=True)
+                kind_grad_norm = sum(
+                    param.grad.norm().item() ** 2
+                    for clf in self.models['classifiers'].values()
+                    for param in clf.parameters()
+                    if param.grad is not None
+                ) ** 0.5
+
+                if kind_grad_norm > 0:
+                    print(f"    ✓ [{kind_label}] contributes grad_norm={kind_grad_norm:.4f} to classifiers")
+                    self.stats['clf_grad_magnitudes'].append(kind_grad_norm)
+                else:
+                    print(f"    ✗ [{kind_label}] does NOT contribute gradients to classifiers")
+
+                for clf in self.models['classifiers'].values():
+                    clf.zero_grad()
+            except Exception as e:
+                print(f"    ✗ Failed to backprop through [{kind_label}]: {e}")
+
         print("=" * 60 + "\n")
-    
+
+    # ------------------------------------------------------------------
+    # Epoch summary
+    # ------------------------------------------------------------------
+
     def _print_summary(self):
-        """Print summary statistics at end of epoch."""
-        if not self.sumL_stats['total_losses']:
-            print("\n[Gradient Flow Summary] No sumL constraints observed")
+        if not self.stats['total_losses']:
+            print("\n[Gradient Flow Summary] No constraints observed")
             return
-        
+
         print("\n[Gradient Flow Summary - Epoch Complete]")
         print("=" * 60)
-        print(f"  sumL Observations:     {len(self.sumL_stats['total_losses'])}")
-        print(f"  Avg sumL Loss:         {sum(self.sumL_stats['total_losses'])/len(self.sumL_stats['total_losses']):.4f}")
-        
-        grad_enabled = sum(self.sumL_stats['has_grad'])
-        print(f"  sumL with requires_grad: {grad_enabled}/{len(self.sumL_stats['has_grad'])}")
-        
-        if self.sumL_stats['clf_grad_magnitudes']:
-            avg_grad = sum(self.sumL_stats['clf_grad_magnitudes']) / len(self.sumL_stats['clf_grad_magnitudes'])
-            print(f"  Avg sumL→Classifier Gradient: {avg_grad:.4f}")
-            
+        print(f"  Total Observations:    {len(self.stats['total_losses'])}")
+        print(f"  Avg Loss:              {sum(self.stats['total_losses'])/len(self.stats['total_losses']):.4f}")
+
+        for kind_label in ('ELC', 'LC'):
+            vals = self.stats['constraint_type_grads'][kind_label]
+            if vals:
+                print(f"  [{kind_label}] observations: {len(vals):4d}  avg loss: {sum(vals)/len(vals):.4f}")
+
+        grad_enabled = sum(self.stats['has_grad'])
+        print(f"  Constraints with requires_grad: {grad_enabled}/{len(self.stats['has_grad'])}")
+
+        if self.stats['clf_grad_magnitudes']:
+            avg_grad = sum(self.stats['clf_grad_magnitudes']) / len(self.stats['clf_grad_magnitudes'])
+            print(f"  Avg →Classifier Gradient: {avg_grad:.4f}")
             if avg_grad < 1e-6:
-                print(f"  ⚠️  Gradients are VANISHING - sumL not learning!")
+                print(f"  ⚠️  Gradients are VANISHING!")
             elif avg_grad > 1000:
                 print(f"  ⚠️  Gradients are EXPLODING - may need clipping!")
         else:
-            print(f"  ❌ No gradient flow detected from sumL to classifiers")
-        
-        # Constraint-classifier alignment summary
-        if self.sumL_stats['constraint_clf_alignment']:
+            print(f"  ❌ No gradient flow detected to classifiers")
+
+        if self.stats['constraint_clf_alignment']:
             print(f"\n  Constraint-Classifier Alignment:")
-            total_alignments = len(self.sumL_stats['constraint_clf_alignment'])
-            perfect_alignments = sum(1 for a in self.sumL_stats['constraint_clf_alignment'] if a['alignment_ratio'] == 1.0)
-            partial_alignments = sum(1 for a in self.sumL_stats['constraint_clf_alignment'] if 0 < a['alignment_ratio'] < 1.0)
-            no_alignments = sum(1 for a in self.sumL_stats['constraint_clf_alignment'] if a['alignment_ratio'] == 0)
-            
-            print(f"    Perfect (all clfs learning):  {perfect_alignments}/{total_alignments}")
-            print(f"    Partial (some clfs learning): {partial_alignments}/{total_alignments}")
-            print(f"    None (no clfs learning):      {no_alignments}/{total_alignments}")
-            
-            if no_alignments > 0:
-                print(f"\n    ⚠️  Constraints with NO classifier learning:")
-                for alignment in self.sumL_stats['constraint_clf_alignment']:
-                    if alignment['alignment_ratio'] == 0:
-                        print(f"      - {alignment['constraint']}: expects {alignment['expected_clfs']}")
-        
+            total = len(self.stats['constraint_clf_alignment'])
+            perfect = sum(1 for a in self.stats['constraint_clf_alignment'] if a['alignment_ratio'] == 1.0)
+            partial = sum(1 for a in self.stats['constraint_clf_alignment'] if 0 < a['alignment_ratio'] < 1.0)
+            none_ = sum(1 for a in self.stats['constraint_clf_alignment'] if a['alignment_ratio'] == 0)
+            print(f"    Perfect: {perfect}/{total}  Partial: {partial}/{total}  None: {none_}/{total}")
+
+            if none_ > 0:
+                print(f"    ⚠️  Constraints with NO classifier learning:")
+                for a in self.stats['constraint_clf_alignment']:
+                    if a['alignment_ratio'] == 0:
+                        print(f"      - [{a['kind']}] {a['constraint']}: expects {a['expected_clfs']}")
+
         print("=" * 60 + "\n")
-        
+
         # Reset for next epoch
-        self.sumL_stats['total_losses'].clear()
-        self.sumL_stats['has_grad'].clear()
-        self.sumL_stats['clf_grad_magnitudes'].clear()
-        self.sumL_stats['constraint_clf_alignment'].clear()
-    
+        self.stats['total_losses'].clear()
+        self.stats['has_grad'].clear()
+        self.stats['clf_grad_magnitudes'].clear()
+        self.stats['constraint_type_grads']['ELC'].clear()
+        self.stats['constraint_type_grads']['LC'].clear()
+        self.stats['constraint_clf_alignment'].clear()
+
+    # ------------------------------------------------------------------
+    # Misc
+    # ------------------------------------------------------------------
+
     @staticmethod
     def log_config(args):
-        """Log plugin configuration."""
         print(f"  Gradient Flow Diagnostic:")
-        print(f"    Check interval:   Every {args.gradient_check_interval} steps")
-        print(f"    Monitors:         sumL gradient flow, classifier grad norms")
-        print(f"    Reports:          Per-step diagnostics, per-epoch summary")
-    
+        print(f"    Check interval: Every {args.gradient_check_interval} steps")
+        print(f"    Monitors:       ELC/LC gradient flow, classifier grad norms")
+        print(f"    Reports:        Per-step diagnostics, per-epoch summary")
+
     def final_display(self):
-        """Display final gradient flow summary."""
-        if not self.sumL_stats['total_losses']:
+        if not self.stats['total_losses']:
             return
-        
+
         print("\n[Gradient Flow Final Summary]")
         print("=" * 60)
-        
-        total_checks = len(self.sumL_stats['total_losses'])
-        avg_loss = sum(self.sumL_stats['total_losses']) / total_checks
-        grad_success_rate = sum(self.sumL_stats['has_grad']) / total_checks * 100
-        
+        total_checks = len(self.stats['total_losses'])
+        avg_loss = sum(self.stats['total_losses']) / total_checks
+        grad_success_rate = sum(self.stats['has_grad']) / total_checks * 100
         print(f"  Total Checks:          {total_checks}")
-        print(f"  Avg sumL Loss:         {avg_loss:.4f}")
+        print(f"  Avg Loss:              {avg_loss:.4f}")
         print(f"  Gradient Success Rate: {grad_success_rate:.1f}%")
-        
-        if self.sumL_stats['clf_grad_magnitudes']:
-            avg_contrib = sum(self.sumL_stats['clf_grad_magnitudes']) / len(self.sumL_stats['clf_grad_magnitudes'])
+        if self.stats['clf_grad_magnitudes']:
+            avg_contrib = sum(self.stats['clf_grad_magnitudes']) / len(self.stats['clf_grad_magnitudes'])
             print(f"  Avg Gradient Contribution: {avg_contrib:.4f}")
-        
         print("=" * 60)

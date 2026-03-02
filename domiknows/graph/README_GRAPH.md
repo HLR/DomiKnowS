@@ -134,8 +134,8 @@ graph.visualize('my_graph', open_image=True)
 # Compile string-based logical expressions into executable constraints
 dataset = graph.compile_executable(
     data=[
-        {'constraint': 'ifL(person(x), entity(x))', 'label': 1},
-        {'constraint': 'andL(work_for(x, y), person(x))', 'label': 0}
+        {'constraint': 'ifL(person("x"), entity("x"))', 'label': 1},
+        {'constraint': 'andL(work_for("x", "y"), person("x"))', 'label': 0}
     ],
     extra_namespace_values={'custom_var': value}
 )
@@ -216,12 +216,11 @@ employee = person()  # Auto-named
 # 2. Create named subclass  
 manager = person(name='manager')
 
-# 3. Use in logical constraint with variable
-from domiknows.graph import V
-person(V.x)  # Variable x of type person
+# 3. Use in logical constraint with string variable
+person('x')  # Variable named 'x' of type person
 
-# 4. Use with path
-person(V.x, path=(V.x, work_for, organization))
+# 4. Use with path (string-based)
+person('x', path=('x', work_for, organization))
 ```
 
 **Relation Access:**
@@ -290,7 +289,7 @@ color.get_index('red')    # 0
 color.get_value(1)        # 'green'
 
 # Use in constraints
-color.red(V.x)  # Variable x with color=red
+color.red('x')  # Variable 'x' with color=red
 ```
 
 ---
@@ -401,7 +400,7 @@ class LogicalConstrain(LcElement):
     def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
         """
         Args:
-            *e: Constraint elements (concepts, relations, variables)
+            *e: Constraint elements (concepts with string variables, relations)
             p: Priority (0-100, higher = more important)
             active: Enable/disable constraint
             sampleEntries: Use sampling for large groundings
@@ -412,11 +411,28 @@ class LogicalConstrain(LcElement):
 **Constraint Elements:**
 
 Constraints are built from:
-1. **Concepts**: `person`, `organization`
-2. **Relations**: `work_for`, `is_a`
-3. **Variables**: `V(name='x')`, `V(name='y', v=path)`
+1. **Concepts with string variables**: `person('x')`, `organization('y')`
+2. **Relations with string variables**: `work_for('x', 'y')`
+3. **Path expressions**: `person('x', path=('x', rel_name))`
 4. **Nested Constraints**: Other `LogicalConstrain` instances
 5. **Cardinality**: Trailing integer for counting
+
+### Variable Syntax
+
+Variables are plain strings passed as positional arguments to concept/relation calls. For single-variable concepts use one string; for binary relations (defined with `has_a`) use two strings.
+
+```python
+# Single variable
+person('x')           # concept 'person' with variable named 'x'
+entity('x')           # same variable 'x' — refers to same candidate
+
+# Binary relation variable (work_for has_a person, organization)
+work_for('x', 'y')    # 'x' → arg1 (person), 'y' → arg2 (organization)
+
+# Path from variable to related concept
+organization('y', path=('x', rel_pair_word2.name))
+# 'y' is the org reached from 'x' via rel_pair_word2
+```
 
 ### Logical Operators
 
@@ -427,7 +443,7 @@ Constraints are built from:
 from domiknows.graph import notL
 
 # ¬person(x)
-notL(person(V.x))
+notL(person('x'))
 ```
 
 #### Binary/N-ary Operators
@@ -437,58 +453,58 @@ notL(person(V.x))
 from domiknows.graph import andL
 
 # person(x) ∧ organization(y)
-andL(person(V.x), organization(V.y))
+andL(person('x'), organization('y'))
 
 # Can nest
-andL(person(V.x), orL(student(V.x), employee(V.x)))
+andL(person('x'), orL(student('x'), employee('x')))
 ```
 
 ##### `orL` - Disjunction
 ```python
 # person(x) ∨ organization(x)
-orL(person(V.x), organization(V.x))
+orL(person('x'), organization('x'))
 ```
 
 ##### `nandL` - NAND
 ```python
 # ¬(person(x) ∧ organization(x))
-nandL(person(V.x), organization(V.x))
+nandL(person('x'), organization('x'))
 ```
 
 ##### `norL` - NOR
 ```python
 # ¬(person(x) ∨ organization(x))
-norL(person(V.x), organization(V.x))
+norL(person('x'), organization('x'))
 ```
 
 ##### `xorL` - Exclusive OR
 ```python
 # person(x) ⊕ organization(x)
-xorL(person(V.x), organization(V.x))
+xorL(person('x'), organization('x'))
 ```
 
 ##### `ifL` - Implication
 ```python
 # person(x) → entity(x)
-ifL(person(V.x), entity(V.x))
+ifL(person('x'), entity('x'))
 
 # work_for(x,y) → person(x) ∧ organization(y)
 ifL(
-    work_for(V.pair),
-    andL(person(V.pair[0]), organization(V.pair[1]))
+    work_for('x', 'y'),
+    andL(person('x'), organization('y'))
 )
 ```
 
 ##### `equivalenceL` - Bi-conditional
 ```python
 # person(x) ↔ entity(x)
-equivalenceL(person(V.x), entity(V.x))
+equivalenceL(person('x'), entity('x'))
 ```
 
 ##### `forAllL` - Universal Quantifier
 ```python
 # ∀x: person(x) → entity(x)
-forAllL(person(V.x), entity(V.x))
+forAllL(person('x'), entity('x'))
 # Currently implemented as ifL
 ```
 
@@ -499,29 +515,29 @@ forAllL(person(V.x), entity(V.x))
 ##### `existsL` - Exists (≥1)
 ```python
 # ∃x: person(x)
-existsL(person(V.x))
-# Equivalent to: atLeastL(person(V.x), 1)
+existsL(person('x'))
+# Equivalent to: atLeastL(person('x'), 1)
 ```
 
 ##### `atLeastL` - At Least K
 ```python
 # At least 2 persons
-atLeastL(person(V.x), 2)
+atLeastL(person('x'), 2)
 
 # At least 3 tokens per sentence
-atLeastL(token(V.t), 3)
+atLeastL(token('t'), 3)
 ```
 
 ##### `atMostL` - At Most K
 ```python
 # At most 1 CEO per company
-atMostL(ceo(V.x, path=(V.x, work_for, V.y)), 1)
+atMostL(ceo('x', path=('x', work_for, 'y')), 1)
 ```
 
 ##### `exactL` - Exactly K
 ```python
 # Exactly 3 directors
-exactL(director(V.x), 3)
+exactL(director('x'), 3)
 ```
 
 #### Global (Accumulated) Counting
@@ -531,25 +547,25 @@ For batch-level constraints:
 ##### `existsAL` - Global Exists
 ```python
 # At least 1 person across all instances
-existsAL(person(V.x))
+existsAL(person('x'))
 ```
 
 ##### `atLeastAL` - Global At Least
 ```python
 # At least 10 persons total
-atLeastAL(person(V.x), 10)
+atLeastAL(person('x'), 10)
 ```
 
 ##### `atMostAL` - Global At Most
 ```python
 # At most 100 organizations total
-atMostAL(organization(V.x), 100)
+atMostAL(organization('x'), 100)
 ```
 
 ##### `exactAL` - Global Exactly
 ```python
 # Exactly 5 managers total
-exactAL(manager(V.x), 5)
+exactAL(manager('x'), 5)
 ```
 
 #### Comparative Counting
@@ -559,97 +575,79 @@ Compare counts between two variable sets:
 ##### `greaterL` - Count Greater
 ```python
 # count(person) > count(organization)
-greaterL(person(V.x), organization(V.y))
+greaterL(person('x'), organization('y'))
 
 # With offset: count(person) > count(organization) + 5
-greaterL(person(V.x), organization(V.y), 5)
+greaterL(person('x'), organization('y'), 5)
 ```
 
 ##### `greaterEqL` - Count Greater or Equal
 ```python
 # count(employee) ≥ count(manager)
-greaterEqL(employee(V.x), manager(V.y))
+greaterEqL(employee('x'), manager('y'))
 ```
 
 ##### `lessL` - Count Less
 ```python
 # count(manager) < count(employee)
-lessL(manager(V.x), employee(V.y))
+lessL(manager('x'), employee('y'))
 ```
 
 ##### `lessEqL` - Count Less or Equal
 ```python
 # count(intern) ≤ count(employee)
-lessEqL(intern(V.x), employee(V.y))
+lessEqL(intern('x'), employee('y'))
 ```
 
 ##### `equalCountsL` - Equal Counts
 ```python
 # count(input) == count(output)
-equalCountsL(input(V.x), output(V.y))
+equalCountsL(input('x'), output('y'))
 ```
 
 ##### `notEqualCountsL` - Unequal Counts
 ```python
 # count(success) ≠ count(failure)
-notEqualCountsL(success(V.x), failure(V.y))
+notEqualCountsL(success('x'), failure('y'))
 ```
 
 ### Path Expressions
 
-#### Variable with Path: `V(name, v=path)`
+Paths are expressed as tuples of strings (variable names) interleaved with relation names or relation objects. The first element is the source variable name; subsequent elements are relations or concept filters.
 
 ```python
-from domiknows.graph import V
+# concept reached from variable 'x' via relation rel_name
+organization('y', path=('x', rel_name))
 
-# Simple variable
-V.x  # or V(name='x')
+# Multi-hop path: x → rel1 → intermediate → rel2 → destination
+manager('m', path=('x', rel_reports_to.name, 'y', rel_manages.name))
 
-# Variable with path
-V(name='y', v=(V.x, work_for))
-# y is related to x via work_for
+# Reversed relation in path
+person('x', path=('y', rel_work_for.reversed.name))
 
-# Path union (multiple paths)
-V(name='z', v=((V.x, rel1), (V.x, rel2)))
+# Path union (multiple paths to the same variable)
+organization('y', path=(('x', rel_work_for.name), ('x', rel_volunteer_at.name)))
 
-# Path with filter
-from domiknows.graph import eqL
-V(name='y', v=(V.x, work_for, eqL(organization, 'instanceID', 'ORG-1')))
+# Path with equality filter
+person('x', path=('x', rel_work_for.name, eqL(organization, 'name', 'Anthropic')))
 ```
 
-**Path Examples:**
-
-```python
-# Person who works for an organization
-ifL(
-    person(V.x),
-    organization(V.y, path=(V.x, work_for))
-)
-
-# Manager of a person's manager
-ifL(
-    employee(V.x),
-    manager(V.z, path=(V.x, reports_to, V.y, reports_to))
-)
-
-# Reversed relations in paths
-ifL(
-    organization(V.y),
-    person(V.x, path=(V.y, work_for.reversed))
-)
-```
+**Key rules:**
+- String items in a path are variable names (they must be defined earlier in the constraint)
+- Relation items are the relation name string or the relation object
+- A path must start from an already-defined variable name
 
 ### Constraint Priority (`p`)
 
 ```python
 # Critical (always enforced if possible)
-critical = ifL(person(V.x), entity(V.x), p=100)
+critical = ifL(person('x'), entity('x'), p=100)
 
 # Important
-important = atLeastL(employee(V.x), 1, p=80)
+important = atLeastL(employee('x'), 1, p=80)
 
 # Optional
-optional = exactL(manager(V.x), 3, p=50)
+optional = exactL(manager('x'), 3, p=50)
 
 # Solver satisfies highest priority first
 # Falls back to lower if infeasible
@@ -663,20 +661,21 @@ optional = exactL(manager(V.x), 3, p=50)
 eqL(organization, 'instanceID', 'ORG-1')
 
 # Used in paths
-person(V.x, path=(V.x, work_for, eqL(organization, 'name', 'Anthropic')))
+person('x', path=('x', rel_work_for.name, eqL(organization, 'name', 'Anthropic')))
 ```
 
 #### `fixedL` - Fix to Ground Truth
 ```python
 # Fix variables to known values (for debugging/testing)
-fixedL(person(V.x))
+fixedL(person('x'))
 ```
 
 #### `sumL` - Summation
 ```python
 # Sum of variables (for numeric constraints)
-sumL(salary(V.x))
+sumL(salary('x'))
 ```
+
 ### Definite Description & Query Constraints
 
 These constraints go beyond boolean satisfaction — they **select entities** and **query attributes**, enabling question-answering style reasoning within the constraint framework.
@@ -688,17 +687,17 @@ Based on Russell's theory of definite descriptions: ιx.φ(x) denotes "the uniqu
 Unlike `existsL` which returns a boolean (does any entity satisfy?), `iotaL` **returns the entity itself** — a selection distribution over entities that can be composed with other constraints.
 
 ```python
-from domiknows.graph import iotaL, andL, existsL, eqL, V
+from domiknows.graph import iotaL, andL, existsL, eqL
 
 # Select THE sphere in the scene (assuming exactly one)
-iotaL(sphere(V.x))
+iotaL(sphere('x'))
 
 # Select THE person who works for Microsoft
-iotaL(person(V.x), path=(V.x, work_for, eqL(organization, 'name', 'Microsoft')))
+iotaL(person('x', path=('x', rel_work_for.name, eqL(organization, 'name', 'Microsoft'))))
 
 # Nest inside other constraints:
 # "Is there something left of THE blue sphere?"
-existsL(left(V.x, iotaL(andL(blue(V.y), sphere(V.y)))))
+existsL(left('x', iotaL(andL(blue('y'), sphere('y')))))
 ```
 
 **Parameters:**
@@ -745,7 +744,7 @@ rubber.is_a(material)
 # Query: "What material is THE big sphere?"
 answer = queryL(
     material,
-    iotaL(andL(big(V.x), sphere(V.x)))
+    iotaL(andL(big('x'), sphere('x')))
 )
 
 # --- Or with EnumConcept ---
@@ -754,7 +753,7 @@ color = EnumConcept('color', values=['red', 'green', 'blue'])
 # Query: "What color is THE small cube?"
 answer = queryL(
     color,
-    iotaL(andL(small(V.x), cube(V.x)))
+    iotaL(andL(small('x'), cube('x')))
 )
 ```
 
@@ -788,13 +787,13 @@ Alternatively, use EnumConcept: material = EnumConcept('material', values=['valu
 # "What shape is the large red object?"
 queryL(
     shape,
-    iotaL(andL(large(V.x), red(V.x)))
+    iotaL(andL(large('x'), red('x')))
 )
 
 # "What is left of the blue cylinder?"
 queryL(
     object_type,
-    iotaL(left(V.x, iotaL(andL(blue(V.y), cylinder(V.y)))))
+    iotaL(left('x', iotaL(andL(blue('y'), cylinder('y')))))
 )
 ```
 
@@ -813,7 +812,7 @@ from domiknows.graph import execute, andL, ifL
 
 # Manually wrap a constraint
 with graph:
-    constraint1 = execute(andL(person(V.x), entity(V.x)))
+    constraint1 = execute(andL(person('x'), entity('x')))
     # Now in graph.executableLCs as "ELC0", NOT in graph.logicalConstrains
 ```
 
@@ -825,8 +824,8 @@ The primary way to create executable constraints is from a dataset of string exp
 
 ```python
 data = [
-    {'constraint': 'ifL(person(x), entity(x))', 'label': True},
-    {'constraint': 'andL(work_for(x, y), person(x))', 'label': False},
+    {'constraint': 'ifL(person("x"), entity("x"))', 'label': True},
+    {'constraint': 'andL(work_for("x", "y"), person("x"))', 'label': False},
 ]
 
 # Compile into executable constraints and get a LogicDataset
@@ -894,79 +893,46 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 ```
+
 ---
 
 ## Variable Syntax
 
-### Standard Path Syntax
+### Path-Based Syntax (Recommended)
+
+Variables are plain strings. The first time a string is used without a `path=` argument it **defines** that variable (iterates over all candidates of that concept). Subsequent uses with `path=` **navigate** from an already-defined variable via a relation.
 
 ```python
-from domiknows.graph import V, ifL, andL
+from domiknows.graph import ifL, andL
 
 # Basic: person who works for organization
 ifL(
-    person(V.x),
-    organization(V.y, path=(V.x, work_for))
+    work_for('x', 'y'),          # defines 'x' (person arg) and 'y' (org arg)
+    andL(person('x'), organization('y'))
 )
 
-# Multiple hops: employee -> manager -> department
+# Equivalent longer form with explicit paths:
 ifL(
-    employee(V.x),
-    department(V.d, path=(V.x, reports_to, V.m, belongs_to))
-)
-```
-
-### Simplified Variable Syntax (VarMaps)
-
-For complex constraints, use variable mapping:
-
-```python
-# Instead of explicit paths:
-ifL(
-    work_for(V.pair),
+    work_for('pair'),
     andL(
-        person(V.pair[0]),
-        organization(V.pair[1])
+        person('x', path=('pair', rel_pair_word1.name)),
+        organization('y', path=('pair', rel_pair_word2.name))
     )
 )
 
-# Use simplified syntax:
+# Multiple hops: employee -> reports_to -> manager -> belongs_to -> department
 ifL(
-    work_for(x, y),  # x, y are strings (variable names)
-    andL(person(x), organization(y))
+    employee('x'),
+    department('d', path=('x', rel_reports_to.name, 'm', rel_belongs_to.name))
 )
-
-# Automatically translated to path syntax on graph.__exit__
 ```
 
 **How It Works:**
 
-1. String arguments create VarMaps internally
-2. On graph context exit, VarMaps are processed
-3. Converted to standard path syntax
-4. Original variables validated and connected
-
-**Example:**
-
-```python
-with graph:
-    # Define relation
-    work_for = Concept('work_for')
-    work_for.has_a(person, organization)
-    
-    # Use simplified syntax
-    ifL(work_for(x, y), andL(person(x), organization(y)))
-    
-# After exit:
-# Internally becomes:
-# ifL(
-#     work_for(V.pair),
-#     andL(
-#         person(V(name='x', v=(V.pair, work_for, person))),
-#         organization(V(name='y', v=(V.pair, work_for, organization)))
-#     )
-# )
-```
+1. String arguments in concept/relation calls create VarMaps internally.
+2. On graph context exit, VarMaps are processed.
+3. They are converted to the internal path representation.
+4. Original variable connections are validated.
 
 ---
 
@@ -996,38 +962,32 @@ equiv_class = person1.get_equal_concepts(transitive=True)
 
 #### `is_equal_to(other_concept)`
 ```python
-# Check direct equality
 if person1.is_equal_to(person2):
     print("Directly equal")
 ```
 
 #### `is_equal_to_transitive(other_concept)`
 ```python
-# Check transitive equality
 if person1.is_equal_to_transitive(person3):
     print("In same equivalence class")
 ```
 
 #### `get_equivalence_class()`
 ```python
-# Get all transitively equal concepts
 equiv_class = person1.get_equivalence_class()
 # Returns: [person1, person2, person3, ...]
 ```
 
 #### `get_canonical_concept()`
 ```python
-# Get representative of equivalence class (alphabetically first)
 canonical = person1.get_canonical_concept()
 ```
 
 #### `merge_equal_concepts(property_merge_strategy='first')`
 ```python
-# Merge properties from equal concepts
 merged = person1.merge_equal_concepts(
     property_merge_strategy='all'  # 'first', 'last', 'all'
 )
-# Returns: Dict of merged properties
 ```
 
 ---
@@ -1057,16 +1017,14 @@ person['age'].attach(ReaderSensor(keyword='age_value'))
 
 #### `find(*sensor_tests)`
 ```python
-# Find sensors matching criteria
 sensors = person['age'].find(
-    ReaderSensor,  # Filter by type
-    lambda s: s.keyword == 'age_value'  # Custom test
+    ReaderSensor,
+    lambda s: s.keyword == 'age_value'
 )
 ```
 
 #### `__call__(data_item)`
 ```python
-# Get property value from data
 value = person['age'](data_item)
 ```
 
@@ -1080,26 +1038,18 @@ Hierarchical data management for experiments.
 ```python
 from domiknows.graph import Trial
 
-# Create trial
 trial = Trial(name='experiment_1')
 
 with trial:
-    # Data stored in trial context
     trial['key'] = value
     
-    # Nested trial
     sub_trial = Trial(name='sub_experiment')
     with sub_trial:
-        # Inherits parent data
         parent_value = sub_trial['key']  # From trial
-        
-        # Override in child
         sub_trial['key'] = new_value
 
-# Access data
 trial['key']  # Returns value
 
-# Iterate
 for key, value in trial.items():
     print(f"{key}: {value}")
 ```
@@ -1120,28 +1070,25 @@ Wrapper for datasets with executable logical constraints.
 ```python
 from domiknows.graph.executable import LogicDataset
 
-# Create dataset with constraints
 data = [
     {
-        'constraint': 'ifL(person(x), entity(x))',
+        'constraint': 'ifL(person("x"), entity("x"))',
         'label': 1,
         'text': 'John is a person'
     },
     {
-        'constraint': 'andL(work_for(x,y), person(x))',
+        'constraint': 'andL(work_for("x", "y"), person("x"))',
         'label': 0,
         'text': 'Works at Anthropic'
     }
 ]
 
-# Compile constraints
 logic_dataset = graph.compile_executable(
     data,
     logic_keyword='constraint',
     logic_label_keyword='label'
 )
 
-# Use in training
 for item in logic_dataset:
     # item contains:
     # - Original data
@@ -1151,17 +1098,10 @@ for item in logic_dataset:
     pass
 ```
 
-**Key Features:**
-- Compiles string constraints to executable objects
-- Adds constraint metadata to data items
-- Enables constraint-aware training
-- Supports multiple constraints per dataset
-
 **Utility Functions:**
 
 #### `add_keyword(expr_str, kwarg_name, kwarg_value)`
 ```python
-# Add keyword argument to expression
 expr = "andL(x, y)"
 new_expr = add_keyword(expr, 'name', 'my_constraint')
 # Returns: "andL(x, y, name='my_constraint')"
@@ -1169,7 +1109,6 @@ new_expr = add_keyword(expr, 'name', 'my_constraint')
 
 #### `get_full_funcs(expr_str)`
 ```python
-# Convert to fully qualified names
 expr = "andL(x, y)"
 full_expr = get_full_funcs(expr)
 # Returns: "domiknows.graph.logicalConstrain.andL(x, y)"
@@ -1213,39 +1152,23 @@ class BaseGraphTree(AutoNamed, NamedTree):
 
 #### `traversal_apply(func, filter_fn, order='pre', first='depth')`
 ```python
-# Traverse graph and apply function
 results = graph.traversal_apply(
     lambda node: node if isinstance(node, Concept) else None,
     filter_fn=lambda x: x is not None,
-    order='pre',    # 'pre' or 'post'
-    first='depth'   # 'depth' or 'breadth'
+    order='pre',
+    first='depth'
 )
 ```
 
 #### Query Methods
 ```python
-# Get nested element
 sub = graph.get_sub('subgraph', 'concept', 'property')
-# Equivalent to: graph['subgraph']['concept']['property']
-
-# Set nested element
 graph.set_sub('subgraph', 'concept', sub=new_concept)
-
-# Delete nested element
 graph.del_sub('subgraph', 'concept')
 ```
 
 ### `BaseGraphShallowTree`
-Flat graph structure (no nesting).
-
-Used for `Property` - properties cannot contain sub-properties.
-
-```python
-class Property(BaseGraphShallowTree):
-    # No __enter__/__exit__
-    # No nested queries
-    pass
-```
+Flat graph structure — used for `Property` (properties cannot contain sub-properties).
 
 ---
 
@@ -1257,19 +1180,15 @@ class Property(BaseGraphShallowTree):
 from domiknows.graph import Graph, Concept
 
 with Graph('knowledge_graph') as graph:
-    # Define concepts
     entity = Concept('entity')
     person = Concept('person')
     organization = Concept('organization')
     
-    # Create hierarchy
     person.is_a(entity)
     organization.is_a(entity)
     
-    # Disjoint concepts
     person.not_a(organization)
     
-    # Compositional concepts
     work_for = Concept('work_for')
     work_for.has_a(person, organization)
 ```
@@ -1277,23 +1196,20 @@ with Graph('knowledge_graph') as graph:
 ### 2. Logical Constraints
 
 ```python
-from domiknows.graph import V, ifL, andL, atLeastL
+from domiknows.graph import ifL, andL, atLeastL
 
 with graph:
     # Type constraints
-    ifL(person(V.x), entity(V.x))
+    ifL(person('x'), entity('x'))
     
-    # Domain/range constraints
+    # Domain/range constraints for binary relation
     ifL(
-        work_for(V.pair),
-        andL(
-            person(V.pair[0]),
-            organization(V.pair[1])
-        )
+        work_for('x', 'y'),
+        andL(person('x'), organization('y'))
     )
     
     # Counting constraints
-    atLeastL(employee(V.x), 1, p=80)
+    atLeastL(employee('x'), 1, p=80)
 ```
 
 ### 3. Path-Based Constraints
@@ -1301,17 +1217,17 @@ with graph:
 ```python
 # Person who works for an organization must have a role
 ifL(
-    person(V.x),
+    person('x'),
     atLeastL(
-        role(V.r, path=(V.x, work_for, V.y, has_role)),
+        role('r', path=('x', rel_work_for.name, 'y', rel_has_role.name)),
         1
     )
 )
 
 # Manager's manager must be executive
 ifL(
-    manager(V.x),
-    executive(V.z, path=(V.x, reports_to, V.y, reports_to))
+    manager('x'),
+    executive('z', path=('x', rel_reports_to.name, 'y', rel_reports_to.name))
 )
 ```
 
@@ -1320,16 +1236,14 @@ ifL(
 ```python
 from domiknows.graph import EnumConcept
 
-# Define enum
 sentiment = EnumConcept('sentiment', values=['positive', 'negative', 'neutral'])
 
-# Use in constraints
 ifL(
-    review(V.x),
+    review('x'),
     orL(
-        sentiment.positive(V.x),
-        sentiment.negative(V.x),
-        sentiment.neutral(V.x)
+        sentiment.positive('x'),
+        sentiment.negative('x'),
+        sentiment.neutral('x')
     )
 )
 ```
@@ -1341,33 +1255,26 @@ from domiknows.graph import Property
 from domiknows.sensor.pytorch.sensors import ReaderSensor
 
 with person:
-    # Define property
     age = Property('age')
-    
-    # Attach sensor
     age.attach(ReaderSensor(
         keyword='age_value',
         dtype=torch.float
     ))
 
-# Later: read property
 age_value = person['age'](data_item)
 ```
 
 ### 6. Compiled Logic Dataset
 
 ```python
-# Define data with string constraints
 train_data = [
     {
         'text': 'John works at Anthropic',
-        'constraint': 'ifL(work_for(x, y), andL(person(x), organization(y)))',
+        'constraint': 'ifL(work_for("x", "y"), andL(person("x"), organization("y")))',
         'label': 1
     },
-    # ... more examples
 ]
 
-# Compile constraints
 logic_dataset = graph.compile_executable(
     train_data,
     logic_keyword='constraint',
@@ -1375,7 +1282,6 @@ logic_dataset = graph.compile_executable(
     extra_namespace_values={'custom_var': value}
 )
 
-# Train with constraint loss
 for batch in DataLoader(logic_dataset):
     # Constraint label in batch['_constraint_LC0']
     # Active constraint in batch['_constraint_curr_lc_name']
@@ -1387,95 +1293,66 @@ for batch in DataLoader(logic_dataset):
 ```python
 from domiknows.graph.equality_mixin import apply_equality_mixin
 
-# Enable equality support
 apply_equality_mixin(Concept)
 
 with graph:
-    # Define equal concepts
     person1 = Concept('person1')
     person2 = Concept('person2')
     person3 = Concept('person3')
     
     person1.equal(person2)
     person2.equal(person3)
-# Now person1, person2, person3 are in the same equivalence class
+# person1, person2, person3 are in the same equivalence class
 ```
 
-# Define### 8. Graph Visualization
+### 8. Graph Visualization
 ```python
-# Create visualization
 graph.visualize('output/knowledge_graph', open_image=True)
 # Generates: output/knowledge_graph.png
-
-# Shows:
-# - Concepts as nodes
-# - Relations as edges with labels
-# - Subgraphs as clusters
 ```
 
 ### 9. Hierarchical Trials
 ```python
 from domiknows.graph import Trial
 
-# Main experiment
 experiment = Trial(name='main_experiment')
 
 with experiment:
     experiment['hyperparams'] = {'lr': 0.001, 'batch_size': 32}
     experiment['results'] = []
     
-    # Sub-experiments
     for fold in range(5):
         fold_trial = Trial(name=f'fold_{fold}')
         with fold_trial:
-            # Inherits hyperparams
             lr = fold_trial['hyperparams']['lr']
-            
-            # Add fold-specific data
             fold_trial['fold_results'] = train_fold(fold, lr)
-            
-            # Accumulate results
             experiment['results'].append(fold_trial['fold_results'])
 
-# Access results
 all_results = experiment['results']
 ```
 
 ### 10. Complex Path Constraints
 ```python
-# Employee must report to someone in same department
-ifL(
-    employee(V.x),
-    atLeastL(
-        manager(V.m, path=(
-            V.x,
-            reports_to,
-            eqL(department, 'id', V.x.department_id)
-        )),
-        1
-    )
-)
-
 # Path union: person connected via work_for OR volunteer_at
 ifL(
-    person(V.x),
-    organization(V.y, path=(
-        (V.x, work_for),
-        (V.x, volunteer_at)
+    person('x'),
+    organization('y', path=(
+        ('x', rel_work_for.name),
+        ('x', rel_volunteer_at.name)
     ))
 )
 
 # Complex nested path
 ifL(
-    project(V.p),
+    project('p'),
     atLeastL(
-        person(V.x, path=(
-            V.p,
-            managed_by,
-            V.m,
-            reports_to,
-            V.exec,
-            has_authority_over
+        person('x', path=(
+            'p',
+            rel_managed_by.name,
+            'm',
+            rel_reports_to.name,
+            'exec',
+            rel_has_authority_over.name
         )),
         1
     )
@@ -1494,11 +1371,8 @@ with graph:
     
     # This will be validated:
     ifL(
-        work_for(V.pair),
-        andL(
-            person(V.x, path=(V.pair, work_for)),  # Checked!
-            organization(V.y, path=(V.pair, work_for))  # Checked!
-        )
+        work_for('x', 'y'),
+        andL(person('x'), organization('y'))
     )
 
 # If validation fails, detailed error message:
@@ -1536,34 +1410,23 @@ with graph:
 
 ### 2. Batch Concepts
 ```python
-# Mark batch-level concept
 sentence = Concept('sentence', batch=True)
 token = Concept('token')
-
 sentence.contains(token)
 
-# Graph tracks batch concept
 graph.batch  # Returns: sentence
 ```
 
 ### 3. Constraint Priority Strategies
 ```python
-# Critical infrastructure constraints (p=100)
-ifL(person(V.x), entity(V.x), p=100)
+PRIORITY_CRITICAL = 100
+PRIORITY_HIGH = 80
+PRIORITY_MEDIUM = 60
+PRIORITY_LOW = 40
+PRIORITY_HINT = 20
 
-# Domain knowledge (p=80-90)
-ifL(work_for(V.pair), andL(person(V.pair[0]), org(V.pair[1])), p=90)
-
-# Statistical preferences (p=50-70)
-atLeastL(employee(V.x), 1, p=60)
-
-# Soft preferences (p=10-40)
-exactL(manager(V.x), 3, p=30)
-
-# Solver satisfies in priority order:
-# 1. All p=100 constraints if possible
-# 2. Fall back to p=90 if p=100 infeasible
-# 3. Continue until feasible solution found
+ifL(person('x'), entity('x'), p=PRIORITY_CRITICAL)
+atLeastL(employee('x'), 1, p=PRIORITY_MEDIUM)
 ```
 
 ### 4. Model Reuse
@@ -1573,91 +1436,50 @@ graph = Graph('kg', reuse_model=True)
 # First inference builds complete ILP model
 solver.calculateILPSelection(datanode1, *concepts)
 
-# Subsequent calls reuse model structure
-# Only updates objective coefficients
-solver.calculateILPSelection(datanode2, *concepts)  # 10x faster!
+# Subsequent calls reuse model structure (~10x faster)
+solver.calculateILPSelection(datanode2, *concepts)
 ```
 
-### 5. Custom Concept Suggestions
+### 5. Graph Queries
 ```python
-class MyConcept(Concept):
-    @classmethod
-    def suggest_name(cls):
-        # Custom name generation
-        return f"custom_{cls.__name__}"
-
-# Auto-named as "custom_MyConcept-0", "custom_MyConcept-1", etc.
-```
-
-### 6. Namespace Localization
-```python
-# Separate namespaces for different concept hierarchies
-@Concept.localize_namespace
-class DomainSpecificConcept(Concept):
-    pass
-
-# Separate name counters and object storage
-# Prevents name conflicts between domains
-```
-
-### 7. Graph Queries
-```python
-# Find all concepts
 concepts = list(graph.traversal_apply(
     lambda node: node if isinstance(node, Concept) else None,
     filter_fn=lambda x: x is not None
 ))
 
-# Find root concepts
 root_concepts = [
     c for c in concepts 
     if not c._out.get('is_a') and not c._in.get('contains')
 ]
 
-# Find all relations of type HasA
 has_a_relations = []
 for concept in concepts:
     has_a_relations.extend(concept.has_a())
 
-# Find concepts with specific property
-concepts_with_age = [
-    c for c in concepts
-    if 'age' in c
-]
+concepts_with_age = [c for c in concepts if 'age' in c]
 ```
 
-### 8. Constraint Introspection
+### 6. Constraint Introspection
 ```python
-# Get all constraints
 for lc_name, lc in graph.allLogicalConstrains:
     print(f"Constraint: {lc_name}")
     print(f"  Type: {type(lc).__name__}")
     print(f"  Priority: {lc.p}")
     print(f"  Active: {lc.active}")
     print(f"  Elements: {lc.strEs()}")
-    
-    # Get concepts used in constraint
     concepts_used = lc.getLcConcepts()
     print(f"  Concepts: {concepts_used}")
 ```
 
-### 9. Dynamic Constraint Activation
+### 7. Dynamic Constraint Activation
 ```python
-# Disable constraint temporarily
-constraint.active = False
-
-# Re-enable
-constraint.active = True
-
-# Useful for:
-# - Ablation studies
-# - Debugging
-# - Progressive constraint introduction
+constraint.active = False  # Disable
+constraint.active = True   # Re-enable
+# Useful for ablation studies, debugging, curriculum learning
 ```
 
-### 10. Graph Merging
+### 8. Graph Merging
 ```python
-# Create subgraphs
 with Graph('main') as main_graph:
     with Graph('domain1') as sub1:
         person = Concept('person')
@@ -1665,11 +1487,9 @@ with Graph('main') as main_graph:
     with Graph('domain2') as sub2:
         organization = Concept('organization')
     
-    # Access from main graph
     person_concept = main_graph['domain1']['person']
     org_concept = main_graph['domain2']['organization']
     
-    # Create cross-domain relation
     work_for = Concept('work_for')
     work_for.has_a(person_concept, org_concept)
 ```
@@ -1682,34 +1502,26 @@ with Graph('main') as main_graph:
 
 #### 1. Undefined Variable in Constraint
 ```python
-# Error: Variable 'y' not defined before use
+# Wrong: 'y' used in path before being defined
 with graph:
     person = Concept('person')
-    
-    # Wrong: y used before definition
-    ifL(person(V.y, path=(V.x, work_for)), organization(V.x))
+    ifL(person('y', path=('x', rel_work_for.name)), organization('x'))
 
 # Error message:
-# "Variable y found in LC0 is not defined. You should first use y 
+# "Variable y found in LC0 is not defined. You should first use y
 #  without putting it in a path to define it."
 
-# Fix: Define y first
-ifL(andL(person(V.y), organization(V.x, path=(V.y, work_for))))
+# Fix: define 'y' first (no path)
+ifL(andL(person('y'), organization('x', path=('y', rel_work_for.name))))
 ```
 
-#### 2. Invalid Path Type
+#### 2. Invalid Path Direction
 ```python
-# Error: Wrong source type in path
+# Wrong: work_for goes person→org, not org→person
 with graph:
-    person = Concept('person')
-    organization = Concept('organization')
-    work_for = Concept('work_for')
-    work_for.has_a(person, organization)
-    
-    # Wrong: work_for goes from person to org, not org to person
     ifL(
-        organization(V.y),
-        person(V.x, path=(V.y, work_for))
+        organization('y'),
+        person('x', path=('y', rel_work_for.name))
     )
 
 # Error message:
@@ -1717,66 +1529,42 @@ with graph:
 #  used it from organization to person. You can change 'work_for' to
 #  'work_for.reversed' to go from organization to person."
 
-# Fix: Use reversed relation
+# Fix:
 ifL(
-    organization(V.y),
-    person(V.x, path=(V.y, work_for.reversed))
+    organization('y'),
+    person('x', path=('y', rel_work_for.reversed.name))
 )
 ```
 
 #### 3. Concept Not in Graph
 ```python
-# Error: Concept defined outside graph context
-person = Concept('person')  # Wrong: outside with graph:
+# Wrong: defined outside graph context
+person = Concept('person')
 
 with graph:
-    organization = Concept('organization')
     work_for = Concept('work_for')
     work_for.has_a(person, organization)  # Error!
 
-# Error message:
-# "Logical Element is incorrect - no graph found"
-
-# Fix: Define inside graph context
+# Fix: define inside graph context
 with graph:
     person = Concept('person')
-    organization = Concept('organization')
     work_for = Concept('work_for')
     work_for.has_a(person, organization)
 ```
 
 #### 4. Invalid Relation Cardinality
 ```python
-# Error: Contains requires exactly 1 destination
-sentence = Concept('sentence')
-token = Concept('token')
-word = Concept('word')
+sentence.contains(token, word)  # Error! Contains requires exactly 1 dst
 
-sentence.contains(token, word)  # Error!
-
-# Error message:
-# "The Contains relationship defined from sentence concept to concepts
-#  token, word is not valid. The contains relationship can only be 
-#  between one source and one destination concepts."
-
-# Fix: One destination only
+# Fix:
 sentence.contains(token)
 ```
 
 #### 5. HasA with Too Few Destinations
 ```python
-# Error: HasA requires ≥2 destinations
-work_for = Concept('work_for')
-person = Concept('person')
+work_for.has_a(person)  # Error! HasA requires ≥2 destinations
 
-work_for.has_a(person)  # Error!
-
-# Error message:
-# "The HasA relationship defined from work_for concept to concepts person
-#  is not valid. The HasA relationship must be between one source and at
-#  least two destination concepts."
-
-# Fix: At least 2 destinations
+# Fix:
 work_for.has_a(person, organization)
 ```
 
@@ -1785,66 +1573,42 @@ work_for.has_a(person, organization)
 #### 1. Logging
 ```python
 import logging
-
-# Enable detailed logging
 from domiknows.graph import ilpConfig
+
 ilpConfig['log_level'] = logging.DEBUG
 ilpConfig['ifLog'] = True
-
 # Logs to: logs/ilpOntSolver.log
 ```
 
 #### 2. Constraint String Representation
 ```python
-# Get human-readable constraint
-print(constraint.strEs())
-# Output: "[person(x), entity(x)]"
-
-# Get constraint name
-print(constraint.name)
-# Output: "LC0"
-
-# Get constraint repr
-print(repr(constraint))
-# Output: "LC0(ifL)"
+print(constraint.strEs())   # "[person(x), entity(x)]"
+print(constraint.name)      # "LC0"
+print(repr(constraint))     # "LC0(ifL)"
 ```
 
 #### 3. Graph Visualization
 ```python
-# Generate graph diagram
 graph.visualize('debug/graph', open_image=True)
-
-# Inspect:
-# - All concepts
-# - All relations with labels
-# - Subgraph structure
 ```
 
 #### 4. Concept Information
 ```python
-# Get detailed concept info
 info = graph.findConceptInfo(person)
-
 print(f"Concept: {info['concept'].name}")
 print(f"Is relation: {info['relation']}")
 print(f"Has_a relations: {info['has_a']}")
-print(f"Relation attributes: {info['relationAttrs']}")
-print(f"Contains: {info['contains']}")
-print(f"Contained in: {info['containedIn']}")
-print(f"Is_a parents: {info['is_a']}")
 print(f"Is root: {info['root']}")
 ```
 
 #### 5. Variable Tracking
 ```python
-# After graph context exit, check captured variables
 print(graph.varNameReversedMap)
-# Shows: {'person': <Concept>, 'work_for': <Relation>, ...}
+# {'person': <Concept>, 'work_for': <Relation>, ...}
 
-# Check concept variable names
-print(person.var_name)  # 'person'
-print(work_for.var_name)  # 'work_for'
-print(work_for.reversed.var_name)  # 'work_for.reversed'
+print(person.var_name)            # 'person'
+print(work_for.var_name)          # 'work_for'
+print(work_for.reversed.var_name) # 'work_for.reversed'
 ```
 
 ---
@@ -1853,69 +1617,38 @@ print(work_for.reversed.var_name)  # 'work_for.reversed'
 
 ### 1. Memory Management
 ```python
-# Clear caches periodically
 Concept.clear()  # Clears name counters and object storage
-Trial.clear()    # Clears trial trees and releases memory
+Trial.clear()    # Clears trial trees
 
-# For long-running processes:
 for epoch in range(100):
     train(...)
     if epoch % 10 == 0:
-        Trial.clear()  # Free trial data
+        Trial.clear()
 ```
 
 ### 2. Constraint Complexity
 ```python
 # Simple constraint (fast)
-ifL(person(V.x), entity(V.x))
+ifL(person('x'), entity('x'))
 
-# Complex constraint (slower - multiple paths)
-ifL(
-    person(V.x),
-    atLeastL(
-        manager(V.m, path=(
-            V.x, reports_to, V.y, reports_to, V.z, manages
-        )),
-        1
-    )
-)
-
-# Optimization: Break into multiple simpler constraints
-ifL(person(V.x), employee(V.x))
-ifL(employee(V.x), entity(V.x))
+# Break complex multi-hop constraints into simpler ones
+ifL(person('x'), employee('x'))
+ifL(employee('x'), entity('x'))
 ```
 
 ### 3. Model Reuse
 ```python
-# Enable model caching
 graph = Graph('kg', reuse_model=True)
 
-# First call: ~1s (builds model)
-solver.calculateILPSelection(batch1, *concepts)
-
-# Subsequent calls: ~0.1s (reuses model)
+# First call ~1s (builds model); subsequent calls ~0.1s (reuses model)
 for batch in batches:
     solver.calculateILPSelection(batch, *concepts)
 ```
 
-### 4. Lazy Evaluation
+### 4. Constraint Sampling
 ```python
-# Concepts and relations are created lazily
-with graph:
-    # Only creates when accessed
-    person = Concept('person')
-    
-    # Relation created only when called
-    person.has_a(...)
-```
-
-### 5. Constraint Sampling
-```python
-# For large constraint groundings
 large_constraint.sampleEntries = True
-
-# Solver automatically samples instead of full grounding
-# Trades accuracy for speed
+# Solver samples instead of full grounding — trades accuracy for speed
 ```
 
 ---
@@ -1930,11 +1663,9 @@ with graph:
     person = Concept('person')
     
     with person:
-        # Reader sensor
         age = Property('age')
         age.attach(ReaderSensor(keyword='age_value'))
         
-        # Functional sensor
         adult = Property('adult')
         adult.attach(FunctionalSensor(
             formula=lambda age: age >= 18,
@@ -1946,15 +1677,8 @@ with graph:
 ```python
 from domiknows.graph import DataNode
 
-# Create DataNode from graph
-with graph:
-    person = Concept('person')
-    organization = Concept('organization')
-
-# Bind data to graph
 root = DataNode(graph=graph)
 
-# Add instances
 person_dn = DataNode(ontologyNode=person, parent=root)
 person_dn['age'] = 25
 person_dn['name'] = 'Alice'
@@ -1967,16 +1691,10 @@ org_dn['name'] = 'Anthropic'
 ```python
 from domiknows.solver import ilpOntSolverFactory
 
-# Create solver from graph
 solver = ilpOntSolverFactory.getOntSolverInstance(graph)
 
-# ILP inference
 solver.calculateILPSelection(datanode, person, organization)
-
-# Constraint loss
 lcLosses = solver.calculateLcLoss(datanode, tnorm='P')
-
-# Verification
 results = solver.verifyResultsLC(datanode)
 ```
 
@@ -1984,16 +1702,12 @@ results = solver.verifyResultsLC(datanode)
 ```python
 from domiknows.model import SampleLossModel
 
-# Create model with graph
 model = SampleLossModel(
     graph=graph,
     sensors=[person['age'], person['name']]
 )
 
-# Forward pass
 outputs = model(batch)
-
-# Constraint loss automatically computed
 loss = model.get_constraint_loss(batch)
 ```
 
@@ -2003,7 +1717,6 @@ loss = model.get_constraint_loss(batch)
 
 ### 1. Graph Organization
 ```python
-# Use hierarchical subgraphs for modularity
 with Graph('main') as main:
     with Graph('entities') as entities:
         person = Concept('person')
@@ -2019,77 +1732,46 @@ with Graph('main') as main:
 
 ### 2. Constraint Naming
 ```python
-# Name important constraints for debugging
 critical_constraint = ifL(
-    person(V.x),
-    entity(V.x),
+    person('x'),
+    entity('x'),
     name='person_is_entity'
 )
-
-# Easier to identify in logs and verification results
 ```
 
 ### 3. Priority Assignment
 ```python
-# Use consistent priority levels
-PRIORITY_CRITICAL = 100   # Must be satisfied
-PRIORITY_HIGH = 80        # Important domain knowledge
-PRIORITY_MEDIUM = 60      # Typical constraints
-PRIORITY_LOW = 40         # Preferences
-PRIORITY_HINT = 20        # Weak suggestions
+PRIORITY_CRITICAL = 100
+PRIORITY_HIGH = 80
+PRIORITY_MEDIUM = 60
+PRIORITY_LOW = 40
+PRIORITY_HINT = 20
 
-ifL(person(V.x), entity(V.x), p=PRIORITY_CRITICAL)
-atLeastL(employee(V.x), 1, p=PRIORITY_MEDIUM)
+ifL(person('x'), entity('x'), p=PRIORITY_CRITICAL)
+atLeastL(employee('x'), 1, p=PRIORITY_MEDIUM)
 ```
 
 ### 4. Variable Naming
 ```python
-# Use descriptive variable names
+# Descriptive names are clearer
 ifL(
-    employee(V.emp),
-    manager(V.mgr, path=(V.emp, reports_to))
-)
-
-# Better than:
-ifL(
-    employee(V.x),
-    manager(V.y, path=(V.x, reports_to))
+    employee('emp'),
+    manager('mgr', path=('emp', rel_reports_to.name))
 )
 ```
 
 ### 5. Path Clarity
 ```python
-# Document complex paths
+# Document complex paths with a comment
 ifL(
-    project(V.proj),
-    # Path: project -> managed_by -> manager -> reports_to -> executive
-    executive(V.exec, path=(V.proj, managed_by, V.mgr, reports_to))
+    project('proj'),
+    # path: project → managed_by → manager → reports_to → executive
+    executive('exec', path=('proj', rel_managed_by.name, 'mgr', rel_reports_to.name))
 )
 ```
 
-### 6. Testing Constraints
+### 6. Error Recovery
 ```python
-# Test constraints incrementally
-with graph:
-    person = Concept('person')
-    entity = Concept('entity')
-    
-    # Test simple constraint first
-    ifL(person(V.x), entity(V.x))
-
-# Verify before adding more
-solver = ilpOntSolverFactory.getOntSolverInstance(graph)
-results = solver.verifyResultsLC(test_data)
-
-# Then add more complex constraints
-with graph:
-    organization = Concept('organization')
-    person.not_a(organization)
-```
-
-### 7. Error Recovery
-```python
-# Wrap constraint creation in try-except
 with graph:
     try:
         person = Concept('person')
@@ -2097,7 +1779,6 @@ with graph:
         work_for.has_a(person, organization)
     except Exception as e:
         print(f"Error creating graph: {e}")
-        # Clean up if needed
         Concept.clear()
         raise
 ```
@@ -2108,36 +1789,32 @@ with graph:
 
 ### Breaking Changes
 
-1. **Constraint syntax**: `V.name` instead of `V('name')`
-2. **Path syntax**: `V(name='x', v=path)` instead of older formats
+1. **Constraint variable syntax**: use plain strings `'x'` instead of `V.x` or `V('x')`
+2. **Path syntax**: `path=('x', rel_name)` tuples with strings instead of `V`-based paths
 3. **Equal relation**: Now requires `equality_mixin.py` to be applied
-4. **Comparative counting**: New constraint types (greaterL, lessL, etc.)
+4. **Comparative counting**: New constraint types (`greaterL`, `lessL`, etc.)
 
 ### Migration Steps
 ```python
-# Old code (v1.x):
-from domiknows.graph import V, ifL
-ifL(person(V('x')), entity(V('x')))
-
-# New code (v2.x):
+# Old code (V syntax — internal/legacy only):
 from domiknows.graph import V, ifL
 ifL(person(V.x), entity(V.x))
-# or
-ifL(person(V(name='x')), entity(V(name='x')))
+
+# New code (path syntax):
+ifL(person('x'), entity('x'))
 ```
 ```python
 # Old path syntax:
-person(V('x'), path=[V('x'), work_for])
+person(V.x, path=(V.x, work_for))
 
 # New path syntax:
-person(V.x, path=(V.x, work_for))
+person('x', path=('x', rel_work_for.name))
 ```
 ```python
-# Enable equality (new requirement):
+# Enable equality (still required):
 from domiknows.graph.equality_mixin import apply_equality_mixin
 apply_equality_mixin(Concept)
 
-# Now equality works:
 person1.equal(person2)
 ```
 
@@ -2149,7 +1826,6 @@ person1.equal(person2)
 - **Solvers**: See `domiknows/solver/README.md` for constraint solving
 - **Sensors**: See `domiknows/sensor/README.md` for data binding
 - **Models**: See `domiknows/program/README.md` for neural-symbolic models
-- **Examples**: See `examples/` directory for complete applications
 
 ---
 
@@ -2164,104 +1840,82 @@ person1.equal(person2)
 
 ## Example: Complete Application
 ```python
-from domiknows.graph import Graph, Concept, V, ifL, andL, atLeastL
+from domiknows.graph import Graph, Concept, ifL, andL, atLeastL
 from domiknows.solver import ilpOntSolverFactory
 
 # 1. Create knowledge graph
 with Graph('nlp_knowledge') as graph:
-    # Define concepts
     entity = Concept('entity')
     person = Concept('person')
     organization = Concept('organization')
     location = Concept('location')
     
-    # Create hierarchy
     person.is_a(entity)
     organization.is_a(entity)
     location.is_a(entity)
     
-    # Disjoint concepts
     person.not_a(organization)
     person.not_a(location)
     organization.not_a(location)
     
-    # Relations
     work_for = Concept('work_for')
-    work_for.has_a(person, organization)
+    (rel_wf_person, rel_wf_org) = work_for.has_a(person, organization)
     
     located_in = Concept('located_in')
-    located_in.has_a(organization, location)
+    (rel_li_org, rel_li_loc) = located_in.has_a(organization, location)
     
-    # Logical constraints
-    # 1. Type constraints (auto-generated by is_a)
-    
-    # 2. Domain/range constraints
+    # Domain/range constraints
     ifL(
-        work_for(V.pair),
-        andL(person(V.pair[0]), organization(V.pair[1])),
+        work_for('x', 'y'),
+        andL(person('x'), organization('y')),
         p=100
     )
     
-    # 3. Transitivity: if person works for org in location, 
-    #    person is in location
+    # Transitivity: person works_for org → org located_in loc → person located_in loc
     ifL(
-        andL(
-            work_for(V.x, V.y),
-            located_in(V.y, V.z)
-        ),
-        located_in(V.x, V.z),
+        andL(work_for('x', 'y'), located_in('y', 'z')),
+        located_in('x', 'z'),
         p=80
     )
     
-    # 4. At least one person per organization
+    # At least one person per organization
     ifL(
-        organization(V.y),
-        atLeastL(person(V.x, path=(V.x, work_for, V.y)), 1),
+        organization('y'),
+        atLeastL(person('x', path=('x', rel_wf_person.name, 'y')), 1),
         p=60
     )
 
 # 2. Create solver
 solver = ilpOntSolverFactory.getOntSolverInstance(graph)
 
-# 3. Use in training
+# 3. Training
 for batch in train_loader:
-    # Forward pass
     predictions = model(batch)
     
-    # Compute constraint loss
     lcLosses = solver.calculateLcLoss(
         batch,
-        tnorm='P',  # Product t-norm
-        counting_tnorm='L'  # Łukasiewicz for counting
+        tnorm='P',
+        counting_tnorm='L'
     )
     
-    # Aggregate losses
     data_loss = criterion(predictions, labels)
     constraint_loss = sum(lc['loss'] for lc in lcLosses.values())
-    
     total_loss = data_loss + 0.5 * constraint_loss
     total_loss.backward()
     optimizer.step()
 
-# 4. Use in inference
+# 4. Inference
 for batch in test_loader:
     predictions = model(batch)
-    
-    # Apply ILP inference
     solver.calculateILPSelection(
         batch,
         person, organization, location, work_for, located_in
     )
-    
-    # Extract results
     person_predictions = batch['person']['ILP']
     work_for_predictions = batch['work_for']['ILP']
 
-# 5. Verify constraints
+# 5. Verification
 verification = solver.verifyResultsLC(test_batch, key='/ILP')
-
 for lc_name, results in verification.items():
     print(f"{lc_name}: {results['satisfied']:.2f}% satisfied")
 ```
-
----

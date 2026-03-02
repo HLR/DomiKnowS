@@ -210,8 +210,6 @@ Examples:
                         help="Skip training, only evaluate a saved checkpoint")
     parser.add_argument("--dummy", action="store_true",
                         help="Use lightweight dummy mode with 20 instances for testing")
-    parser.add_argument("--tnorm", choices=["G", "P", "L"], default="G",
-                        help="T-norm for fuzzy logic: G=Gödel, P=Product, L=Łukasiewicz (default: G)")
     parser.add_argument("--load_previous_save", action="store_true",
                         help="Load checkpoint from previous subset/epoch before training")
     parser.add_argument("--question-type",
@@ -226,6 +224,11 @@ Examples:
                         help="Skip training, only evaluate a the model as is")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to use for computation (default: cuda if available)")
+    
+    # t-norm settings
+    parser.add_argument("--tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
+                        default="default",
+                        help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, 'auto' = adaptive during training")
     
     # Gumbel-Softmax settings
     parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, 

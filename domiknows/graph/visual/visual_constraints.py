@@ -21,101 +21,85 @@ Usage:
 
 from domiknows.graph import ifL, andL, nandL, notL, equivalenceL
 
-
 # ======================================================================
-# Configuration tables
+# §0  Spatial: opposite (reverse) relations  A ↔ ¬B
+# In English we say "A is left of B" ↔ "B is not left of A" (i.e. "B is right of A").
 # ======================================================================
 
-# (relation_name, inverse_name)
-INVERSE_PAIRS = [
+OPPOSITE_PAIRS = [
     ("left_of",     "right_of"),
     ("above",       "below"),
     ("in_front_of", "behind"),
 ]
 
-# Cannot both be true for same ordered pair (A,B)
-MUTEX_PAIRS = [
-    ("left_of",  "right_of"),
-    ("above",    "below"),
-    ("in_front_of", "behind"),
-]
+def apply_opposite_constraints(ctx, *, pairs=None):
+    """R(A,B) ↔ ¬R_opp(A,B) for every opposite pair present in ctx."""
+    pairs = pairs or [
+        (ctx.get(r1), ctx.get(r2)) for r1, r2 in OPPOSITE_PAIRS
+    ]
+    for r1, r2 in pairs:
+        if r1 is None or r2 is None:
+            continue
+        equivalenceL(
+            r1('a', 'b'),
+            notL(r2('a', 'b')),
+            name=f"rev_{r1.name}_{r2.name}",
+        )
 
 
 # ======================================================================
 # §1  Spatial: inverse relations
+# In English we say "A is left of B" ↔ "B is right of A".
 # ======================================================================
 
-def apply_inverse_constraints(ctx, *, p: int = 100):
+def apply_inverse_constraints(ctx, *, pairs=None):
     """R(A,B) ↔ R_inv(B,A) for every inverse pair present in ctx."""
-    for r1_name, r2_name in INVERSE_PAIRS:
-        r1 = ctx.get(r1_name)
-        r2 = ctx.get(r2_name)
+    pairs = pairs or [
+        (ctx.get(r1), ctx.get(r2)) for r1, r2 in OPPOSITE_PAIRS
+    ]
+    for r1, r2 in pairs:
         if r1 is None or r2 is None:
             continue
-        # Simplified variable syntax: string names for pair variables
+        # r1(a,b) ↔ r2(b,a): same variables, reversed argument order
         equivalenceL(
-            r1('p'),
-            r2(path='p'),
-            p=p,
-            name=f"inverse_{r1_name}_{r2_name}",
+            r1('a', 'b'),
+            r2('b', 'a'),
+            name=f"inverse_{r1.name}_{r2.name}",
         )
 
-
 # ======================================================================
-# §2  Spatial: mutual exclusion
-# ======================================================================
-
-def apply_mutex_constraints(ctx, *, p: int = 100):
-    """¬(R(A,B) ∧ R_opp(A,B)) for opposite relation pairs."""
-    for r1_name, r2_name in MUTEX_PAIRS:
-        r1 = ctx.get(r1_name)
-        r2 = ctx.get(r2_name)
-        if r1 is None or r2 is None:
-            continue
-        nandL(
-            r1('p'),
-            r2(path='p'),
-            p=p,
-            name=f"mutex_{r1_name}_{r2_name}",
-        )
-
-
-# ======================================================================
-# §3  Spatial: transitivity (soft)
+# §2  Spatial: transitivity (soft)
+# In English we say "A is left of B" ∧ "B is left of C" ⇒ "A is left of C".
 # ======================================================================
 
-def apply_transitive_constraints(ctx, *, relations=None, p: int = 70):
+def apply_transitive_constraints(ctx, *, relations=None):
     """
-    R(A,B) ∧ R(B,C) ⇒ R(A,C)  — soft, lower priority.
+    R(A,B) ∧ R(B,C) ⇒ R(A,C).
 
     Parameters
     ----------
-    relations : list[str] | None
-        Which spatial relation names to make transitive.
+    relations : list | None
+        Which spatial relations to make transitive.
         Defaults to left_of, right_of, above, below.
     """
-    relations = relations or ["left_of", "right_of", "above", "below"]
-    rel_arg1 = ctx["rel_arg1"]
-
-    for rel_name in relations:
-        rel = ctx.get(rel_name)
+    relations = relations or [
+        ctx["left_of"], ctx["right_of"], ctx["above"], ctx["below"]
+    ]
+    for rel in relations:
         if rel is None:
             continue
-        # R(a,b) ∧ R(b,c) ⇒ R(a,c)
-        # Using simplified variable syntax with relation path navigation
         ifL(
             andL(
-                rel('ab'),
-                rel('bc'),
+                rel('a', 'b'),
+                rel('b', 'c'),
             ),
-            rel('ac'),
-            p=p,
-            name=f"transitive_{rel_name}",
+            rel('a', 'c'),
+            name=f"transitive_{rel.name}",
         )
 
-
 # ======================================================================
-# §4  Cross-attribute plausibility (soft world knowledge)
+# §3  Cross-attribute plausibility (soft world knowledge)
+# In English we say "A is a small and elephant" is implausible, so "small(x) ∧ elephant(x)" ⇒ False.
 # ======================================================================
 
 def apply_nand_combos(
@@ -123,7 +107,6 @@ def apply_nand_combos(
     concept_dict_b: dict,
     implausible: list[tuple[str, str]],
     *,
-    p: int = 60,
     tag: str = "implausible",
 ):
     """
@@ -140,14 +123,13 @@ def apply_nand_combos(
             continue
         nandL(
             ca('x'),
-            cb(path='x'),
-            p=p,
+            cb('x'),
             name=f"{tag}_{val_a}_{val_b}",
         )
 
 
 # ======================================================================
-# §5  Convenience: apply all generic constraints
+# §4  Convenience: apply all generic constraints
 # ======================================================================
 
 def apply_all_constraints(
@@ -161,8 +143,8 @@ def apply_all_constraints(
     returned by `build_visual_reasoning_graph`.
     """
     # --- Spatial ---
+    apply_opposite_constraints(ctx)
     apply_inverse_constraints(ctx)
-    apply_mutex_constraints(ctx)
     apply_transitive_constraints(ctx)
 
     # --- Optional domain-specific plausibility ---
