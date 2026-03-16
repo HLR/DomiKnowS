@@ -272,3 +272,6 @@ test_regr/ConllQA/ConllQA_with_global_constraints/*.pth
 test_regr/ConllQA/ConllQA_with_global_constraints/adaptive_tnorm_details_entities_with_relation_epoch*.csv
 training_1_lr_0.001_entities_with_relation.pth
 result.txt
+domiknows/graph/graph_gen/config_openai.yaml
+domiknows/.claude/*
+domiknows/graph/graph_gen/test_graph.py

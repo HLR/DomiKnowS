@@ -413,7 +413,7 @@ class LogicalConstrain(LcElement):
 Constraints are built from:
 1. **Concepts with string variables**: `person('x')`, `organization('y')`
 2. **Relations with string variables**: `work_for('x', 'y')`
-3. **Path expressions**: `person('x', path=('x', rel_name))`
+3. **Path expressions**: `person('y', path=('x', rel_name))`
 4. **Nested Constraints**: Other `LogicalConstrain` instances
 5. **Cardinality**: Trailing integer for counting
 

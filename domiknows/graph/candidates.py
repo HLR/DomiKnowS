@@ -1,7 +1,7 @@
 from functools import reduce
 from collections import OrderedDict
 
-from domiknows.graph import LcElement
+from domiknows.graph import LcElement, V
 from domiknows.graph.logicalConstrain import eqL
 
 import torch
@@ -80,6 +80,123 @@ def findDatanodesForRootConcept(dn, rootConcept):
         dn.myBuilder["DataNodesConcepts"][concept_name] = dns
         
     return dns
+
+def getDatanoteForVariable(dn, e, variable, lcVariablesDns, lc, logger, _log, _dns_list_repr, conceptName, variableName=None, referredVariableNames=None):
+    dnsList = []
+    new_iterate = True
+    integrate = False
+
+    lookupName = variableName if variableName is not None else variable.name
+
+    # Check if we already found this variable
+    if lookupName in lcVariablesDns:
+        dnsList = lcVariablesDns[lookupName]
+        new_iterate = False
+        if referredVariableNames is not None:
+            referredVariableNames.append(lookupName)
+        _log(f"  No path, reusing existing variable '{lookupName}': {_dns_list_repr(dnsList)}")
+    else:
+        if variable is None or variable.relVarInfo == None:
+            rootConcept = dn.findRootConceptOrRelation(conceptName)
+            rootDns = findDatanodesForRootConcept(dn, rootConcept)
+            dnsList = [[rDn] for rDn in rootDns]
+            integrate = True
+            _log(f"  No path, created fresh candidates: {_dns_list_repr(dnsList)}")
+        else:
+            source = None
+            dest = None
+            for relVar in variable.relVarInfo:
+                relV = variable.relVarInfo[relVar]
+                varConcept = relV.relVarInfo
+                if source is None:
+                    source = relVar
+                elif dest is None:
+                    dest = relVar
+                if relVar in lcVariablesDns:
+                    continue
+
+                relV = V(name=relV.name, v=relV.v, relVarInfo=None)
+                result = getCandidates(dn, varConcept, relV, lcVariablesDns, lc, logger)
+                # add candidates for this variable to lcVariablesDns so that they can be used when processing the next variable
+                lcVariablesDns[relVar] = result[0]
+
+            # Build Cartesian product of source and dest datanodes,
+            # then find corresponding relation datanodes via relation links and relation attributes
+            if source is not None and dest is not None and source in lcVariablesDns and dest in lcVariablesDns:
+                sourceDnsList = lcVariablesDns[source]
+                destDnsList = lcVariablesDns[dest]
+
+                _log(f"  Building relation candidates from Cartesian product of '{source}' ({len(sourceDnsList)} groups) x '{dest}' ({len(destDnsList)} groups)")
+
+                # Find all relation datanodes of this concept type
+                rootConcept = dn.findRootConceptOrRelation(conceptName)
+                allRelationDns = findDatanodesForRootConcept(dn, rootConcept)
+
+                _log(f"  Found {len(allRelationDns)} total relation datanodes for '{conceptName}'")
+
+                conceptInfo = dn.graph.findConceptInfo(e[0])
+                relationAttrs = conceptInfo['relationAttrs']
+                it = iter(relationAttrs)
+                sourceAttr = next(it, None)
+                if sourceAttr is None:
+                    sourceAttrName = None
+                elif isinstance(sourceAttr, str):
+                    sourceAttrName = sourceAttr
+                else:
+                    sourceAttrName = getattr(sourceAttr, "name", None) or getattr(sourceAttr, "fullname", None)
+                destAttr = next(it, None)
+                if destAttr is None:
+                    destAttrName = None
+                elif isinstance(destAttr, str):
+                    destAttrName = destAttr
+                else:
+                    destAttrName = getattr(destAttr, "name", None) or getattr(destAttr, "fullname", None)
+                relDnLookup = {}
+                for relDn in allRelationDns:
+                    # Get the source and dest datanodes linked to this relation datanode
+                    # Relation datanodes have relationLinks from concept datanodes that point to them
+                    relSrcDns = []
+                    relDestDns = []
+
+                    for linkName, linkDns in relDn.getRelationLinks().items():
+                        if linkName == "contains":
+                            continue
+
+                        if linkName == sourceAttrName:
+                            relSrcDns.extend(linkDns)
+                        elif linkName == destAttrName:
+                            relDestDns.extend(linkDns)
+
+                    # Build lookup entries for all src x dest combinations this relation connects
+                    for sDn in relSrcDns:
+                        for dDn in relDestDns:
+                            key = (sDn.getInstanceID(), dDn.getInstanceID())
+                            relDnLookup[key] = relDn
+
+                _log(f"  Built relation lookup with {len(relDnLookup)} (src, dest) -> relDn mappings")
+
+                # Create Cartesian product of source and dest datanodes
+                # and find corresponding relation datanodes
+                for srcGroup in sourceDnsList:
+                    for destGroup in destDnsList:
+                        for srcDn in srcGroup:
+                            if srcDn is None:
+                                continue
+                            for destDn in destGroup:
+                                if destDn is None:
+                                    continue
+                                key = (srcDn.getInstanceID(), destDn.getInstanceID())
+                                relDn = relDnLookup.get(key, None)
+                                if relDn is not None:
+                                    dnsList.append([relDn])
+                                else:
+                                    dnsList.append([None])
+
+                _log(f"  Cartesian product produced {len(dnsList)} relation candidate groups")
+            else:
+                logger.warning(f"  Could not resolve source '{source}' or dest '{dest}' for relation '{conceptName}'")
+
+    return dnsList, new_iterate, integrate
     
 def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate=False):
     """
@@ -142,15 +259,18 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate=False):
             logger.error('The element %s of logical constraint %s has no name for variable' % (conceptName, lc.lcName))
             return None, None, None
 
-        # Check if we already found this variable
-        if variable.name in lcVariablesDns:
-            dnsList = lcVariablesDns[variable.name]
-            _log(f"  No path, reusing existing variable '{variable.name}': {_dns_list_repr(dnsList)}")
-        else:
-            rootConcept = dn.findRootConceptOrRelation(conceptName)
-            rootDns = findDatanodesForRootConcept(dn, rootConcept)
-            dnsList = [[rDn] for rDn in rootDns]
-            _log(f"  No path, created fresh candidates: {_dns_list_repr(dnsList)}")
+        dnsList, _, _ = getDatanoteForVariable(
+            dn=dn,
+            e=e,
+            variable=variable,
+            lcVariablesDns=lcVariablesDns,
+            lc=lc,
+            logger=logger,
+            _log=_log,
+            _dns_list_repr=_dns_list_repr,
+            conceptName=conceptName,
+        )
+                           
     else:  # Path specified
         from domiknows.graph.logicalConstrain import eqL
         if not isinstance(variable.v, eqL):
@@ -199,18 +319,20 @@ def getCandidates(dn, e, variable, lcVariablesDns, lc, logger, integrate=False):
 
             _log(f"  PATH {i}: referredVariableName='{referredVariableName}', path_spec={v}")
 
-            if referredVariableName not in lcVariablesDns:  # Not yet defined
-                rootConcept = dn.findRootConceptOrRelation(conceptName)
-                rootDns = findDatanodesForRootConcept(dn, rootConcept)
-                referredDns = [[rDn] for rDn in rootDns]
-                integrate = True
-                new_iterate = True
-                _log(f"    Variable '{referredVariableName}' NOT in lcVariablesDns, using root: {_dns_list_repr(referredDns)}")
-            else:  # Already defined in the logical constraint
-                new_iterate = False
-                referredDns = lcVariablesDns[referredVariableName]
-                referredVariableNames.append(referredVariableName)
-                _log(f"    Variable '{referredVariableName}' found in lcVariablesDns: {_dns_list_repr(referredDns)}")
+            # Get datanodes for the referred variable (the source of the current path)
+            referredDns, new_iterate, integrate = getDatanoteForVariable(
+                dn=dn,
+                e=e,
+                variable=None,
+                lcVariablesDns=lcVariablesDns,
+                lc=lc,
+                logger=logger,
+                _log=_log,
+                _dns_list_repr=_dns_list_repr,
+                conceptName=conceptName,
+                variableName=referredVariableName,
+                referredVariableNames=referredVariableNames,
+            )
 
             # Check if expansion is needed: source has multiple items per group
             needs_expansion = (

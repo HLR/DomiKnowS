@@ -59,37 +59,3 @@ with Graph('visual_qa') as graph:
     # Subclasses of material
     metal = material(name='metal')
     rubber = material(name='rubber')
-
-    # =========================================================
-    # Query: "What material is the big object that is 
-    #         right of the brown cylinder and 
-    #         left of the big brown sphere?"
-    # =========================================================
-    
-    the_material_answer = queryL(
-        material,          # Parent multiclass concept
-        iotaL(
-            andL(
-                big('z'), # z is the big object
-                iotaL(andL(brown('x'), cylinder('x'))), # x is the brown cylinder
-                iotaL(andL(big('y'), brown('y'), sphere('y'))), # y is the big brown sphere
-                left_of('z', 'y'), # z is left of y
-                right_of('z', 'x'), # z is right of x
-            )
-        )  # Entity selection from iotaL
-    )
-    
-    # =========================================================
-    # Query: "How many objects are there that are right of the big brown sphere?
-    # =========================================================
-    
-    count_right_of_big_brown_sphere = queryL(
-        sumL(
-            andL(
-                big('z'), # z is the big object
-                brown('z'), # z is brown
-                sphere('z'), # z is a sphere
-                right_of('z', 'y') # z is right of y
-            )
-        )
-    )

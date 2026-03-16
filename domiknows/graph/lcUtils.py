@@ -56,7 +56,7 @@ def checkLcCorrectness(graph):
 
         # find all variables used in the logical constrain - report error if some of them are not defined
         # gather paths defined in the logical constrain per variable
-        used_variables = check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc.name)
+        used_variables = check_if_all_used_variables_are_defined(lc, found_variables, headLc=lc.name, graph=graph)
         
         # save information about variables used and defined in the logical constrain
         current_lc_info = LcInfo(found_variables, used_variables, lc.name)
@@ -325,6 +325,16 @@ def _iter_all_lcs(graph):
         yield from graph.logicalConstrains.items()
         for key, elc in graph.executableLCs.items():
             yield (key, elc.innerLC)
+
+def _format_lc_context(headLc, lc):
+    """Format LC context text and include nested LC only when different from head LC."""
+    if headLc is None:
+        return str(lc)
+
+    if getattr(lc, 'name', None) == headLc:
+        return str(headLc)
+
+    return f"{headLc} {lc}"
             
 def find_lc_variable(lc, found_variables=None, headLc=None):
     '''Finds all variables defined in a logical constraint and reports errors for duplicates.
@@ -361,27 +371,25 @@ def find_lc_variable(lc, found_variables=None, headLc=None):
 
     from domiknows.graph import V, LogicalConstrain, LcElement
 
+    lc_context = _format_lc_context(headLc, lc)
+
     e_before = None
     for e in lc.e:
         # checking if element is a variable
         if isinstance(e, V) and e and e.name:
             variable_name = e.name
             if e_before:
-                if variable_name in found_variables:
-                    exceptionStr1 = f"In logical constraint {headLc} {lc} variable {variable_name} associated with concept {e_before[1]} already defined "
-                    exceptionStr2 = f"in {found_variables[variable_name][0]} and associated with concept {found_variables[variable_name][2][1]}"
-                    raise Exception(exceptionStr1 + exceptionStr2)
-        
-                variable_info = (lc, variable_name, e_before)
-                found_variables[variable_name] = variable_info
+                if variable_name not in found_variables:
+                    variable_info = (lc, variable_name, e_before)
+                    found_variables[variable_name] = variable_info
             else:
-                exceptionStr = f"In logical constraint {headLc} {lc} variable {variable_name} is not associated with any concept"
+                exceptionStr = f"In logical constraint {lc_context} variable {variable_name} is not associated with any concept"
                 raise Exception(exceptionStr)
             
         # checking for extra variable:
         elif e and isinstance(e, tuple) and e[0] == 'extraV':
             predicate = lc.e[0][1]
-            exceptionStr1 = f"Logical constraint {headLc} {lc}: Each predicate can only have one new variable definition. For the predicate {predicate}, you have used both {e[1]} and {e[2]} as new variables."
+            exceptionStr1 = f"Logical constraint {lc_context}: Each predicate can only have one new variable definition. For the predicate {predicate}, you have used both {e[1]} and {e[2]} as new variables."
             exceptionStr2 = f"Either wrap both under on variable, if you intended to initialize {e[1]} based on another value, then the second argument should be a path=(...)."
             raise Exception(f"{exceptionStr1} {exceptionStr2}")
         # checking if element is a tuple 
@@ -391,12 +399,12 @@ def find_lc_variable(lc, found_variables=None, headLc=None):
             current_lc_element_concepts = [c for c in current_lc_element.e if isinstance(c, tuple) and not isinstance(c, V)]
 
             if len(current_lc_element_concepts) != len(e[1]):
-                raise Exception(f"Logical constraint {headLc} {lc} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
+                raise Exception(f"Logical constraint {lc_context} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
 
             if len(e) >= 2 and isinstance(e[1], tuple):
                 for v in e[1]:
                     if not isinstance(v, str):
-                        raise Exception(f"Logical constraint {headLc} {lc} has incorrect definition of combination {e} - all variables should be strings")
+                        raise Exception(f"Logical constraint {lc_context} has incorrect definition of combination {e} - all variables should be strings")
 
                 for index, v in enumerate(e[1]):
                     variable_name = v
@@ -411,7 +419,7 @@ def find_lc_variable(lc, found_variables=None, headLc=None):
 
     return found_variables
 
-def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=None, headLc=None):
+def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=None, headLc=None, graph=None):
     '''Checks if all variables used in a logical constraint are properly defined.
 
     This method traverses through the elements of a logical constraint to identify all the variables 
@@ -441,14 +449,39 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
 
     from domiknows.graph import V, LogicalConstrain
 
+    lc_context = _format_lc_context(headLc, lc)
+
+    def _is_implicit_relation_var(variable_name):
+        """Return relation concept name for implicit vars like relationName_1, else None."""
+        if graph is None or not isinstance(variable_name, str):
+            return None
+
+        parts = variable_name.rsplit('_', 1)
+        if len(parts) != 2 or not parts[1].isdigit():
+            return None
+
+        relation_name = parts[0]
+        relation_concept = graph.findConcept(relation_name)
+        if relation_concept is None:
+            return None
+
+        return relation_name
+
     def handle_variable_name(lc_variable_name, lcPath):
+        lcElementType = lc.e[i-1]
+
         if lc_variable_name not in found_variables:
-            raise Exception(f"Variable {lc_variable_name} found in {headLc} {lc} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
+            implicit_relation_name = _is_implicit_relation_var(lc_variable_name)
+
+            if implicit_relation_name:
+                relation_concept = graph.findConcept(implicit_relation_name)
+                found_variables[lc_variable_name] = (lc, lc_variable_name, (relation_concept, relation_concept.name, None, 1))
+            else:
+                raise Exception(f"Variable {lc_variable_name} found in {lc_context} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
 
         if lc_variable_name not in used_variables:
             used_variables[lc_variable_name] = []
 
-        lcElementType = lc.e[i-1]
         variable_info = (lc, lc_variable_name, lcElementType, lcPath)
         used_variables[lc_variable_name].append(variable_info)
 
@@ -466,13 +499,13 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
                         if isinstance(t[0], str):
                             handle_variable_name(t[0], t)
                         else:
-                            raise Exception(f"Path {t} found in {headLc} {lc} is not correct")
+                            raise Exception(f"Path {t} found in {lc_context} is not correct")
                 else:
-                    raise Exception(f"Path {e} found in {headLc} {lc} is not correct")
+                    raise Exception(f"Path {e} found in {lc_context} is not correct")
             else:
-                raise Exception(f"Path {e} found in {headLc} {lc} is not correct")
+                raise Exception(f"Path {e} found in {lc_context} is not correct")
         elif isinstance(e, LogicalConstrain):
-            check_if_all_used_variables_are_defined(e, found_variables, used_variables=used_variables, headLc=headLc)
+            check_if_all_used_variables_are_defined(e, found_variables, used_variables=used_variables, headLc=headLc, graph=graph)
 
     return used_variables
 
@@ -685,10 +718,9 @@ def collectVarMaps(lc, varMapsList):
                 # It means that this is the usage of these variables in the lc
                 for variableName in currentVarMap:
                     # Find previous definition in varMapsList of the variable in the current VarMap
-                    definedVaribleList = [d.get(variableName, None) for d in varMapsList]
-                    
-                    if definedVaribleList:
-                        definedVarible = definedVaribleList[0]
+                    definedVarible = next((d.get(variableName, None) for d in varMapsList if d.get(variableName, None) is not None), None)
+
+                    if definedVarible is not None:
                         variable = currentVarMap[variableName]
                     
                         # Update the path variable in the current varMap to the one used in variable definition

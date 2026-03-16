@@ -43,7 +43,7 @@ with Graph('global') as graph:
         kill = pair(name='kill')
         
         # LC1
-        ifL(word('x'), exactL(people(path=('x')), organization(path=('x')), location(path=('x')), other(path=('x')), o(path=('x'))), active = True)
+        ifL(word('x'), exactL(people('x'), organization('x'), location('x'), other('x'), o('x')), active = True)
         #ifL(word('x'), exactL(people('x'), organization('x'), location('x'), other('x'), o('x'), 1), active=True)
         
         # LC2
@@ -55,6 +55,7 @@ with Graph('global') as graph:
         
         # LC4
         ifL(located_in('x', 'y'), andL(location('x'), organization('y')), active = True)
+        #ifL(located_in('x', 'y'), location(path='x'), active = True)
         
         # LC5
         ifL(live_in('x', 'y'), andL(people('x'), location('y')), active = True)

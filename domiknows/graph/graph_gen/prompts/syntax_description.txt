@@ -1,0 +1,170 @@
+Here is the COMPLETE DomiKnows syntax reference you must follow:
+
+## Graph & Concepts
+```python
+from domiknows.graph import Graph, Concept, EnumConcept
+
+with Graph('my_graph') as graph:
+    entity = Concept('entity')
+    person = Concept('person')
+    person.is_a(entity)
+    color = EnumConcept('color', values=['red', 'green', 'blue'])
+    sentence = Concept('sentence')
+    word = Concept('word')
+    sentence.contains(word)
+```
+
+## Relations (binary connections between two concepts)
+
+Binary relations use `has_a()`:
+
+```python
+    work_for = Concept('work_for')
+    (rel_wf_person, rel_wf_org) = work_for.has_a(person, organization)
+```
+
+## How to Access Enum/Subtype Children in Constraints
+
+There are two ways to define subtypes, and each determines how you access children:
+
+### Manual is_a — children are separate Python variables
+```python
+color = Concept('color')
+red = Concept('red');   red.is_a(color)
+blue = Concept('blue'); blue.is_a(color)
+```
+In constraints, use the variable directly:
+```python
+red('x')          # "x is red"
+blue('y')         # "y is blue"
+```
+
+### EnumConcept — children are accessed ONLY via dot notation
+```python
+color = EnumConcept('color', values=['red', 'blue'])
+```
+EnumConcept does not create standalone Python variables — `red` and `blue` do not exist as variables. You MUST use dot notation:
+```python
+color.red('x')    # "x is red"
+color.blue('y')   # "y is blue"
+```
+
+### Attached EnumConcept — same dot notation
+```python
+nli_class = pair(name='nli_class', ConceptClass=EnumConcept,
+                 values=['entailment', 'contradiction', 'neutral'])
+```
+In constraints:
+```python
+nli_class.entailment('x')         # "x is entailment"
+nli_class.entailment(path=('x'))  # with path expression
+```
+
+For `queryL`, use the PARENT concept as first argument:
+```python
+queryL(color, iotaL(big('x')))   # "What color is the big thing?"
+```
+
+## Path Expressions
+
+Path expressions navigate from one concept through a relation to reach another concept. \
+They are ESSENTIAL when accessing an attribute that is connected via a relation.
+
+```python
+# Given:
+has_color = Concept('has_color')
+(rel_hc_ball, rel_hc_color) = has_color.has_a(ball, color)
+
+# To say "x is a ball that is green (via has_color relation)":
+andL(ball('x'), color.green('x', path=('x', rel_hc_color.name)))
+```
+
+Path syntax: `concept('var', path=('start_var', 'relation_variable_name'))`
+
+**When to use paths vs direct arguments:**
+- Attribute connected via a relation → MUST use path: `color.green('x', path=('x', rel_hc_color.name))`
+- Binary relation with `has_a(A, B)` → use two variables: `left_of('x', 'y')`
+- Direct `is_a` child (no relation involved) → use directly: `ball('x')`
+
+## Logical Constraints — IMPORTS
+```python
+from domiknows.graph import (
+    # Boolean logic
+    ifL, andL, orL, nandL, notL, equivalenceL,
+    # Element-wise counting
+    existsL, atLeastL, atMostL, exactL,
+    # Comparative counting
+    greaterL, greaterEqL, lessL, lessEqL, equalCountsL,
+    # Entity selection and attribute query
+    iotaL, queryL,
+    # Execution
+    execute,
+)
+```
+
+## Constraint variable syntax
+Variables are PLAIN STRINGS passed as positional arguments.
+- Single-variable concept: `person('x')`
+- Binary relation (defined with has_a): `work_for('x', 'y')`
+- Same variable string = same entity.
+- Different variable names = different entities (independent iteration).
+
+## Boolean Logic Operators
+```python
+andL(person('x'), organization('y'))   # a AND b
+orL(person('x'), organization('x'))    # a OR b
+notL(person('x'))                      # NOT a
+ifL(person('x'), entity('x'))          # a → b (implication)
+nandL(person('x'), organization('x'))  # NOT(a AND b)
+```
+
+## Element-wise Counting Constraints (within a single sample)
+```python
+existsL(person('x'))          # ∃x: at least 1 entity satisfies
+atLeastL(person('x'), 2)      # count ≥ 2
+atMostL(person('x'), 1)       # count ≤ 1
+exactL(person('x'), 3)        # count == 3
+```
+
+## Comparative Counting Constraints
+```python
+greaterL(person('x'), organization('y'))     # count(person) > count(org)
+greaterEqL(employee('x'), manager('y'))      # count(employee) ≥ count(manager)
+lessL(manager('x'), employee('y'))           # count(manager) < count(employee)
+lessEqL(intern('x'), employee('y'))          # count(intern) ≤ count(employee)
+equalCountsL(input('x'), output('y'))        # count(input) == count(output)
+```
+
+## Entity Selection — iotaL (Definite Description)
+`iotaL` selects THE unique entity satisfying a condition. \
+Unlike `existsL` which returns a boolean, `iotaL` returns the entity itself.
+```python
+iotaL(sphere('x'))                           # select THE sphere
+iotaL(andL(large('x'), red('x')))            # select THE large red object
+# Nested: "Is something left of THE blue cube?"
+existsL(left_of('x', iotaL(andL(blue('y'), cube('y')))))
+```
+
+## Attribute Query — queryL
+`queryL` asks "What is the <attribute> of THE <entity>?"
+```python
+queryL(material, iotaL(andL(big('x'), sphere('x'))))    # "What material is the big sphere?"
+queryL(color, iotaL(andL(small('x'), cube('x'))))       # "What color is the small cube?"
+```
+Requirements: First argument must be a Concept with is_a() subclasses OR an EnumConcept.
+
+## Priority & naming
+```python
+ifL(person('x'), entity('x'), p=100, name='person_implies_entity')
+```
+
+## RULES:
+1. All code inside `with Graph('name') as graph:` block.
+2. Use plain string variables ('x', 'y') in constraints.
+3. Every concept must be defined before use in constraints.
+4. Binary relations require `has_a(concept1, concept2)` returning two relation variables.
+5. `is_a()` for sub-typing, `contains()` for containment.
+6. For EnumConcept, use dot notation in constraints (e.g., `color.red('x')`). For manual is_a children, use the variable directly (e.g., `red('x')`).
+7. Use path expressions to navigate through relations to reach attribute concepts.
+8. Wrap code in ```python ... ``` block.
+9. Code must be self-contained and executable.

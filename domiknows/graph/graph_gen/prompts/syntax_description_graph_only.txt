@@ -1,0 +1,53 @@
+Here is the DomiKnows syntax reference you must follow:
+
+## Graph & Concepts
+```python
+from domiknows.graph import Graph, Concept, EnumConcept
+
+with Graph('my_graph') as graph:
+    # Base concepts (entity types)
+    entity = Concept('entity')
+    pair = Concept(name='pair')
+    (rel_arg1, rel_arg2) = pair.has_a(arg1=entity, arg2=entity)
+
+    # Subtyping: person IS A entity
+    person = Concept('person')
+    person.is_a(entity)
+    organization = Concept('organization')
+    organization.is_a(entity)
+
+    # Enum concept (standalone):
+    color = EnumConcept('color', values=['red', 'green', 'blue'])
+    # EnumConcept does not create standalone Python variables — access children ONLY via dot notation: color.red, color.green, color.blue
+
+    # Containment: a sentence contains words
+    sentence = Concept('sentence')
+    word = Concept('word')
+    sentence.contains(word)
+```
+
+## Relations (binary connections between two concepts)
+
+Binary relations are THE way to connect two concepts. A relation is itself a Concept \
+that uses `has_a()` to declare which two concepts it connects.
+
+```python
+    # "work_for" connects a person to an organization
+    work_for = pair('work_for')
+
+    # Narrowing domain and range of pair relation to person and organization 
+    (rel_wf_person, rel_wf_org) = work_for.has_a(person, organization)
+
+
+    # "left_of" connects an object to another object (spatial relation)
+    left_of = pair('left_of')
+```
+
+## RULES:
+1. All code inside `with Graph('name') as graph:` block.
+2. Use `has_a()` for binary relations — it returns two relation variables.
+3. Use `is_a()` for subtyping (child.is_a(parent)).
+4. Use `contains()` for containment hierarchies.
+5. Every concept must be defined before it is referenced.
+6. Wrap code in ```python ... ``` block.
+7. Code must be self-contained and executable.

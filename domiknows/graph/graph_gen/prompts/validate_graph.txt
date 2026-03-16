@@ -1,0 +1,26 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations. 
+The following DomiKnowS graph was generated but is MISSING some of the required concepts or relations.
+
+## Required concepts (from extraction):
+{required_concepts}
+
+## Required relations (from extraction):
+{required_relations}
+
+## Missing concepts: {missing_concepts}
+## Missing relations: {missing_relations}
+
+## Current graph code:
+```python
+{code}
+```
+
+{syntax_description_graph_only}
+
+Please fix the code to include ALL missing concepts and relations. \
+Do not remove any existing concepts or relations — only add the missing ones. \
+Do NOT add any logical constraints.
+
+Return the COMPLETE corrected Python code in a ```python ... ``` block.

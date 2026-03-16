@@ -1,0 +1,165 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations. 
+You have a DomiKnowS graph already defined with the following concepts and relations:
+
+## Graph code (for reference — do NOT repeat it):
+```python
+{graph_code}
+```
+
+Convert the following SINGLE user question into a DomiKnowS `execute()` constraint call.
+
+## Question:
+{question}
+
+## Question Type → Constraint Pattern
+
+### Existence: "Is there a [property] [object]?"
+→ `execute(existsL(andL(property('x'), object('x'))))`
+Example: "Is there a red cube?"
+→ `execute(existsL(andL(red('x'), cube('x'))))`
+
+### Relation: "Is X [relation] Y?"
+→ `execute(existsL(relation(iotaL(X_description), iotaL(Y_description))))`
+Example: "Is the red cube left of the blue sphere?"
+→ `execute(existsL(left_of(iotaL(andL(red('x'), cube('x'))), iotaL(andL(blue('y'), sphere('y'))))))`
+
+### Counting: "How many [property] [objects]...?" (answer = N)
+→ `execute(exactL(andL(property('x'), object('x')), N))`
+Example: "How many red cubes are there?" (answer = N)
+→ `execute(exactL(andL(red('x'), cube('x')), N))`
+
+### "Are there at least/more than N...?"
+→ `execute(atLeastL(property_filter('x'), N))`
+Example: "Are there at least 3 metal objects?"
+→ `execute(atLeastL(andL(metal('x'), object('x')), 3))`
+
+### Comparative: "Are there more X than Y?"
+→ `execute(greaterL(X_filter('x'), Y_filter('y')))`
+Example: "Are there more cubes than spheres?"
+→ `execute(greaterL(cube('x'), sphere('y')))`
+
+### Attribute Query: "What [attribute] is the [description]?"
+→ `execute(queryL(attribute_concept, iotaL(description_filter)))`
+Example: "What color is the large cylinder?"
+→ `execute(queryL(color, iotaL(andL(large('x'), cylinder('x')))))`
+
+### Counting: "How many objects with the given property exist"
+→ `execute(sumL(property_filter('x')))`
+Example: "How many red cubes are there?" (answer = N)
+→ `execute(sumL(andL(red('x'), cube('x'))))`
+
+## Available Constraint Operators
+
+### Boolean Logic
+- `andL(a, b)` — a AND b
+- `orL(a, b)` — a OR b
+- `notL(a)` — NOT a
+- `ifL(a, b)` — a → b (implication)
+- `nandL(a, b)` — NOT(a AND b)
+
+### Element-wise Counting (within a single sample)
+- `existsL(a)` — at least 1 entity satisfies (∃x)
+- `atLeastL(a, k)` — count ≥ k
+- `atMostL(a, k)` — count ≤ k
+- `exactL(a, k)` — count == k
+
+### Comparative Counting (compare counts between two sets)
+- `greaterL(a, b)` — count(a) > count(b)
+- `lessL(a, b)` — count(a) < count(b)
+- `equalCountsL(a, b)` — count(a) == count(b)
+- 'sumL(a)' — count(a) == N
+
+### Entity Selection — iotaL (Definite Description)
+`iotaL` selects THE unique entity satisfying a condition.
+- `iotaL(andL(red('x'), cube('x')))` — select THE red cube
+- Can be nested: `left_of('x', iotaL(andL(blue('y'), cube('y'))))`
+
+### Attribute Query — queryL
+`queryL(attribute_concept, iotaL(entity_description))` — "What is the <attribute> of THE <entity>?"
+- First argument: the PARENT concept (with `is_a()` children or EnumConcept).
+- Second argument: typically an `iotaL(...)` selecting the entity.
+For `queryL`, use the PARENT concept as the first argument:
+```python
+queryL(color, iotaL(big('x')))   # "What color is the big thing?"
+```
+
+## How Relations Work — has_a and Path Expressions
+
+Binary relations are defined with `has_a()`:
+```python
+left_of = Concept('left_of')
+(rel_left_of_obj1, rel_left_of_obj2) = left_of.has_a(object, object)
+```
+
+In constraints, relations take variable arguments directly (just like concepts):
+```python
+left_of('x', 'y')   # "x is left_of y"
+```
+
+### Full Example with Paths:
+
+```python
+with Graph('visual_qa') as graph:
+    image = Concept(name='image')
+    
+    object_node = Concept(name='object')
+    (image_contains_object,) = image.contains(object_node)
+    
+    # Object properties
+    big = object_node(name='big')
+    large = object_node(name='large')
+    brown = object_node(name='brown')
+    cylinder = object_node(name='cylinder')
+    sphere = object_node(name='sphere')
+    
+    # Spatial relations 
+    pair = Concept(name='pair')
+    (rel_arg1, rel_arg2) = pair.has_a(arg1=object_node, arg2=object_node)
+    
+    right_of = pair(name='right_of')
+    left_of = pair(name='left_of')
+    
+    # =========================================================
+    # Material as multiclass concept with subclasses
+    # =========================================================
+    material = object_node(name='material')
+    
+    # Subclasses of material
+    metal = material(name='metal')
+    rubber = material(name='rubber')
+
+    # =========================================================
+    # Query: "What material is the big object that is 
+    #         right of the brown cylinder and 
+    #         left of the large brown sphere?"
+    # =========================================================
+    
+    the_material_answer = queryL(
+        material,          # Parent multiclass concept
+        iotaL(
+            andL(
+                big('z'), # z is the big object
+                iotaL(andL(brown('x'), cylinder('x'))), # x is the brown cylinder
+                iotaL(andL(large('y'), brown('y'), sphere('y'))), # y is the large brown sphere
+                left_of('z', 'y'), # z is left of y
+                right_of('z', 'x'), # z is right of x
+            )
+        )  # Entity selection from iotaL
+    )
+
+```
+
+## Critical Rules
+
+1. Only reference concepts and relations that exist in the graph.
+2. Variables are plain single-quoted strings: `concept('x')` not `concept("x")`.
+3. Relations such as `left_of` have two variables directly as arguments: `left_of('x', 'y')` x represents the first argument (rel_arg1), y represents the second argument (rel_arg2).   
+4. For multiclass ALWAYS use the child concept directly (e.g., `red('x')`), NEVER pass a value to the parent.
+   For EnumConcepts, use dot notation to access the value (e.g., `color.red('x')`), NEVER pass the value as an argument.
+5. Add a comment above the call indicating the question type: `# Existence:`, `# Counting:`, `# Relation:`, `# Query:`, `# Comparative:`.
+6. Do not invent concepts not present in the graph.
+7. Do not confuse `iotaL` with `existsL` — iotaL selects an entity; existsL checks existence.
+8. Return EXACTLY ONE `execute()` call for the given question.
+9. Wrap the code in ```python ... ```.

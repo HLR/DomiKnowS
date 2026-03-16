@@ -37,30 +37,16 @@ with Graph('visual_qa_enum') as graph:
     #         left of the large brown sphere?"
     # =========================================================
     
-    # Step 1: THE brown cylinder
-    the_brown_cylinder = iotaL(
-        andL(brown('x'), cylinder(path='x'))
-    )
     
-    # Step 2: THE large brown sphere  
-    the_large_brown_sphere = iotaL(
-        andL(large('y'), brown(path='y'), sphere(path='y'))
-    )
-    
-    # Step 3: THE big object that is right of #1 and left of #2
-    the_target_object = iotaL(
-        andL(
-            big('z'),
-            right_of('r1', path=('z', rel_arg1.reversed)),
-            the_brown_cylinder,
-            left_of('r2', path=('z', rel_arg1.reversed)),
-            the_large_brown_sphere
-        )
-    )
-    
-    # Step 4: Query material of the target object using EnumConcept
-    # queryL returns the most probable enum value (metal or rubber)
     the_material_answer = queryL(
         material,          # EnumConcept with values=['metal', 'rubber']
-        the_target_object  # Entity selection from iotaL
+        iotaL(
+            andL(
+                big('z'), # z is the big object
+                iotaL(andL(brown('x'), cylinder('x'))), # x is the brown cylinder
+                iotaL(andL(large('y'), brown('y'), sphere('y'))), # y is the large brown sphere
+                right_of('z', 'x'), # z is right of x
+                left_of('z', 'y') # z is left of y
+            )
+        )
     )

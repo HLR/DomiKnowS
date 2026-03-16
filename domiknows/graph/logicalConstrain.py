@@ -7,7 +7,7 @@ import torch
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
-V = namedtuple("V", ['name', 'v'], defaults= [None, None])
+V = namedtuple("V", ['name', 'v', 'relVarInfo'], defaults= [None, None, None])
 
 class LcElement:
     def __init__(self, *e,  name = None):
@@ -61,8 +61,21 @@ class LcElement:
         for _, eItem in enumerate(self.e):
             if eItem == None:
                 continue
+        
             if isinstance(eItem, Concept): # binary concept mapping to tuple representation
                 updatedE.append((eItem, eItem.name, None, 1))
+            elif isinstance(eItem, V) and eItem.relVarInfo is not None: # Concept with relation variable mapping to tuple representation
+                    updatedArgs = {}
+                    for arg, v in eItem.relVarInfo.items():
+                        concept = v.relVarInfo
+                        if callable(concept): # multiclass label
+                            conceptEncoding = concept.__call__() # generated label
+                            updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=conceptEncoding)
+                        if isinstance(concept, Concept):
+                            updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=(concept, concept.name, None, 1))
+                            
+                    eItem = V(name=eItem.name, v=eItem.v, relVarInfo=updatedArgs)
+                    updatedE.append(eItem)
             else:
                 updatedE.append(eItem)
                 

@@ -43,9 +43,9 @@ def get_graph(constraint, atmost, atleast, test_number):
             )))
         elif constraint == "orL":
             # For each neighbor pair, at least one city must be a fire station
-            ifL(neighbor('z'), orL(
-                firestationCity("x", path=('z', city1)),
-                firestationCity("p", path=('z', city2))
+            ifL(neighbor("z1", "z2"), orL(
+                firestationCity("z1"),
+                firestationCity("z2")
             ))
         else:
             pass
