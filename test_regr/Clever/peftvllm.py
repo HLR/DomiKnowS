@@ -26,6 +26,17 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 
+# Monkey-patch torch.utils.checkpoint.checkpoint to default to use_reentrant=False.
+# InternVL's custom model code calls checkpoint() directly without passing use_reentrant,
+# which defaults to True. With use_reentrant=True, gradient checkpointing requires inputs
+# to have requires_grad=True, but with QLoRA only internal LoRA weights need grad —
+# so gradients die silently. use_reentrant=False handles this correctly.
+import torch.utils.checkpoint as _ckpt
+_orig_checkpoint_fn = _ckpt.checkpoint
+def _patched_checkpoint(*args, use_reentrant=False, **kwargs):
+    return _orig_checkpoint_fn(*args, use_reentrant=use_reentrant, **kwargs)
+_ckpt.checkpoint = _patched_checkpoint
+
 from PIL import Image, ImageDraw
 import numpy as np
 from tqdm import tqdm
@@ -152,9 +163,10 @@ def dynamic_preprocess(image: Image.Image, image_size=448, use_thumbnail=True, m
             if blocks > max_num:
                 continue
             target_ratio = gw / gh
-            candidates.append((abs(target_ratio - ratio), gw, gh))
-    candidates.sort(key=lambda x: x[0])
-    _, gw, gh = candidates[0]
+            # Sort by ratio diff (ascending), then by -blocks (prefer more tiles on tie)
+            candidates.append((abs(target_ratio - ratio), -blocks, gw, gh))
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    _, _, gw, gh = candidates[0]
     blocks = gw * gh
 
     target_width = gw * image_size
@@ -197,10 +209,11 @@ def get_conv_template_from_model(model):
     conv_mod = importlib.import_module(pkg + ".conversation")
     return conv_mod.get_conv_template
 
-def build_internvl_query(model, tokenizer, question: str):
+def build_internvl_query(model, tokenizer, question: str, num_patches: int = 1):
     """
     Matches InternVL chat-style prompt:
-      <img> <IMG_CONTEXT>*num_image_token </img>\n{question}
+      <img> <IMG_CONTEXT>*(num_image_token * num_patches) </img>\n{question}
+    num_patches = number of tiles for this image (from dynamic_preprocess).
     """
     IMG_START_TOKEN = "<img>"
     IMG_END_TOKEN = "</img>"
@@ -209,7 +222,7 @@ def build_internvl_query(model, tokenizer, question: str):
     get_conv_template = get_conv_template_from_model(model)
     template = get_conv_template(model.template)
 
-    image_tokens = IMG_START_TOKEN + (IMG_CONTEXT_TOKEN * model.num_image_token) + IMG_END_TOKEN
+    image_tokens = IMG_START_TOKEN + (IMG_CONTEXT_TOKEN * model.num_image_token * num_patches) + IMG_END_TOKEN
     template.append_message(template.roles[0], image_tokens + "\n" + question)
     template.append_message(template.roles[1], None)
     query = template.get_prompt()
@@ -252,11 +265,14 @@ class InternVLHF:
         # LoRA shared across all users of the singleton
         use_llm_lora: bool = False,
         use_vision_lora: bool = False,
-        lora_r: int = 16,
-        lora_alpha: int = 32,
+        lora_r: int = 4,
+        lora_alpha: int = 8,
         lora_dropout: float = 0.05,
-        # Updated: max_num_patches from max_dynamic_patch 6
-        max_num_patches: int = 6,
+        max_num_patches: int = 1,
+        # QLoRA 4-bit quantization
+        load_4bit: bool = False,
+        # Temperature for softmax over target tokens (>1 = softer, prevents gradient vanishing)
+        softmax_temperature: float = 1.0,
     ):
         if getattr(self, "_initialized", False):
             return
@@ -264,18 +280,20 @@ class InternVLHF:
         device = torch.device(device if torch.cuda.is_available() else "cpu")
         self.device = device
         self.max_num_patches = max_num_patches
+        self.load_4bit = load_4bit
+        self.softmax_temperature = softmax_temperature
 
         # Determine compute dtype based on GPU support
         if device.type == "cuda":
             self.compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         else:
             self.compute_dtype = torch.float32
-        
+
         if dtype is not None:
             self.compute_dtype = dtype
         self.dtype = self.compute_dtype
-        
-        logging.info(f"Initializing InternVL on {device} (dtype={self.compute_dtype}).")
+
+        logging.info(f"Initializing InternVL on {device} (dtype={self.compute_dtype}, 4bit={load_4bit}).")
 
         # Updated: model_max_length=8192 from max_seq_length 8192
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -287,29 +305,71 @@ class InternVLHF:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token or "<PAD>"
 
-        # Updated: use_flash_attn=True, device_map="auto"
+        # Check flash attention availability
+        try:
+            import flash_attn
+            _use_flash_attn = True
+        except ImportError:
+            _use_flash_attn = False
+            logging.info("flash_attn not available, falling back to eager attention.")
+
         load_kwargs = dict(
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=True,
-            use_flash_attn=True,
+            use_flash_attn=_use_flash_attn,
             torch_dtype=torch.bfloat16,
-            device_map="auto",
         )
+
+        if load_4bit:
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=self.compute_dtype,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+            )
+            load_kwargs["quantization_config"] = bnb_config
+            load_kwargs["device_map"] = {"": device}
+            logging.info("Loading model with QLoRA 4-bit quantization.")
+
         base_model = AutoModel.from_pretrained(model_path, **load_kwargs)
-        
-        # Enable gradient checkpointing
-        base_model.gradient_checkpointing_enable()
 
-        # Freeze all blocks then selectively enable requires_grad
-        for block in [base_model.language_model, base_model.mlp1, base_model.vision_model]:
-            freeze(block, True)
+        _any_lora = use_llm_lora or use_vision_lora
 
-        # Enable input require grads and disable cache
-        base_model.language_model.enable_input_require_grads()
-        base_model.language_model.config.use_cache = False
-        base_model.vision_model.gradient_checkpointing = True
-        if hasattr(base_model.vision_model, 'encoder'):
-            base_model.vision_model.encoder.gradient_checkpointing = True
+        if _any_lora:
+            # Training-related setup: only needed when LoRA is applied
+            if load_4bit:
+                # prepare_model_for_kbit_training handles freezing + gradient checkpointing
+                # use_reentrant=False is critical: with True (default), gradient checkpointing
+                # requires inputs to have requires_grad=True, but with QLoRA only internal LoRA
+                # weights need grad, not the layer inputs — so gradients die silently.
+                base_model = prepare_model_for_kbit_training(
+                    base_model,
+                    gradient_checkpointing_kwargs={"use_reentrant": False}
+                )
+                # Fix: prepare_model_for_kbit_training casts norm layers to float32,
+                # causing dtype mismatch in vision model's Conv2d (float32 bias vs bfloat16 input).
+                # Cast vision_model and mlp1 back to compute_dtype since they aren't quantized.
+                base_model.vision_model = base_model.vision_model.to(self.compute_dtype)
+                base_model.mlp1 = base_model.mlp1.to(self.compute_dtype)
+            else:
+                # Enable gradient checkpointing (use_reentrant=False for LoRA compatibility)
+                base_model.gradient_checkpointing_enable(
+                    gradient_checkpointing_kwargs={"use_reentrant": False}
+                )
+                # Enable requires_grad for all blocks (LoRA will add trainable params on top)
+                for block in [base_model.language_model, base_model.mlp1, base_model.vision_model]:
+                    freeze(block, True)
+
+            # Enable input require grads and disable cache
+            base_model.language_model.enable_input_require_grads()
+            base_model.language_model.config.use_cache = False
+            base_model.vision_model.gradient_checkpointing = True
+            if hasattr(base_model.vision_model, 'encoder'):
+                base_model.vision_model.encoder.gradient_checkpointing = True
+        else:
+            # Eval-only: no LoRA, no training setup — clean base model
+            logging.info("No LoRA requested — loading base model for eval only.")
+            base_model.eval()
 
         # Apply LoRA with updated target modules
         if use_llm_lora:
@@ -318,7 +378,10 @@ class InternVLHF:
         if use_vision_lora:
             self._apply_vision_lora(base_model, lora_r, lora_alpha, lora_dropout)
 
-        self.model = base_model.to(dtype=self.compute_dtype, device=self.device)
+        if load_4bit:
+            self.model = base_model  # Already on device from device_map
+        else:
+            self.model = base_model.to(dtype=self.compute_dtype, device=self.device)
 
         # Set up image tokens
         self.IMG_START_TOKEN = "<img>"
@@ -374,7 +437,7 @@ class InternVLHF:
     def _init_template(self) -> Tuple[Any, int]:
         """Initialize conversation template for internvl2_5."""
         config_to_check = getattr(self.model, "config", None)
-        template_name = "internvl2_5"  # Set from shell script's --conv_style
+        template_name = getattr(config_to_check, "template", "internvl2_5") if config_to_check else "internvl2_5"
         system_message = getattr(config_to_check, "system_message", None) if config_to_check else None
 
         if template_name:
@@ -450,14 +513,25 @@ class InternVLHF:
 
         # images -> tiles
         pvs = []
-        for img in image_paths:
+        num_patches_per_image = []
+        for idx, img in enumerate(image_paths):
+            if isinstance(img, Image.Image):
+                _dbg_sz = img.size
+            else:
+                _dbg_sz = "not-pil"
             pv = load_image_to_tiles(img, input_size=input_size, max_num=max_num, use_thumbnail=use_thumbnail)
+            if idx == 0 and not getattr(self, '_tile_logged', False):
+                print(f"[TILE DEBUG] img_size={_dbg_sz}, max_num={max_num}, use_thumbnail={use_thumbnail}, "
+                      f"tiles={pv.shape[0]}, tile_shape={pv.shape[1:]}")
+                self._tile_logged = True
             pvs.append(pv)
+            num_patches_per_image.append(pv.shape[0])
         pixel_values = torch.cat(pvs, dim=0).to(self.device, dtype=self.dtype)
         image_flags = torch.ones(pixel_values.shape[0], 1, device=self.device, dtype=torch.long)
 
-        # prompts
-        queries = [build_internvl_query(self.model, self.tokenizer, q) for q in questions]
+        # prompts — pass num_patches so prompt has correct number of IMG_CONTEXT tokens
+        queries = [build_internvl_query(self.model, self.tokenizer, q, num_patches=np)
+                   for q, np in zip(questions, num_patches_per_image)]
         enc = self.tokenizer(queries, return_tensors="pt", padding=True)
         input_ids = enc["input_ids"].to(self.device)
         attention_mask = enc["attention_mask"].to(self.device)
@@ -530,9 +604,12 @@ class InternVLHF:
             use_thumbnail=False,
         )  # [1,V]
 
-        sel = next_logits[0, token_ids]  # [K]
-        probs = torch.softmax(sel, dim=-1)
-        return probs.to(self.device)
+        # Select Yes/No logits, scale by temperature, then subtract
+        # C = log(exp(yes) + exp(no)) to match vLLM's normalization.
+        # No softmax — inferLocal() applies the only softmax later.
+        sel = next_logits[0, token_ids] / self.softmax_temperature  # [K]
+        C = torch.logsumexp(sel, dim=-1)  # scalar
+        return (sel - C).to(self.device)
 
     def _score_batch(
         self,
@@ -544,10 +621,12 @@ class InternVLHF:
         temperature=0.0,     # kept for signature compatibility; not used here
         input_size=448,
         max_num=1,
+        max_batch_size=4,
     ):
         """
         Returns tensor probs [B,K] on device.
         Default target_tokens=["Yes","No"] -> [B,2]
+        Chunks forward passes to limit peak VRAM from intermediate activations.
         """
         if candidates is not None:
             questions = [
@@ -559,17 +638,27 @@ class InternVLHF:
             target_tokens = ["Yes", "No"]
 
         token_ids = [self.tokenizer.convert_tokens_to_ids(tok) for tok in target_tokens]
-        next_logits = self._next_token_logits(
-            image_paths=image_paths,
-            questions=questions,
-            input_size=input_size,
-            max_num=max_num,
-            use_thumbnail=False,
-        )  # [B,V]
 
-        sel = next_logits[:, token_ids]  # [B,K]
-        probs = torch.softmax(sel, dim=-1)
-        return probs.to(self.device)
+        all_probs = []
+        B = len(image_paths)
+        for start in range(0, B, max_batch_size):
+            end = min(start + max_batch_size, B)
+            chunk_logits = self._next_token_logits(
+                image_paths=image_paths[start:end],
+                questions=questions[start:end],
+                input_size=input_size,
+                max_num=max_num,
+                use_thumbnail=False,
+            )  # [chunk, V]
+            # Select Yes/No logits, scale by temperature, then subtract
+            # C = log(exp(yes) + exp(no)) to match vLLM's normalization.
+            # No softmax — inferLocal() applies the only softmax later.
+            sel = chunk_logits[:, token_ids] / self.softmax_temperature  # [chunk, K]
+            C = torch.logsumexp(sel, dim=-1, keepdim=True)  # [chunk, 1]
+            all_probs.append(sel - C)
+
+        logits_out = torch.cat(all_probs, dim=0)  # [B, K]
+        return logits_out.to(self.device)
 
 
 # =============================================================================
@@ -601,13 +690,17 @@ class InternVLSharedHF(nn.Module):
         attr="no name",
         # tiling/batch stability knobs
         input_size=448,
-        max_num=6,  # Updated: from max_dynamic_patch 6
+        max_num=1,
         # LoRA (shared)
         use_llm_lora=False,
         use_vision_lora=False,
-        lora_r=16,
-        lora_alpha=32,
+        lora_r=4,
+        lora_alpha=8,
         lora_dropout=0.05,
+        # QLoRA
+        load_4bit=False,
+        # Temperature for softmax (>1 = softer outputs, prevents gradient vanishing)
+        softmax_temperature=1.0,
         *args,
         **kwargs
     ):
@@ -616,6 +709,7 @@ class InternVLSharedHF(nn.Module):
         self.relation = relation
         self.attr = attr
         self.device = device
+        self.softmax_temperature = softmax_temperature
 
         if dtype is None:
             dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
@@ -634,8 +728,13 @@ class InternVLSharedHF(nn.Module):
                 lora_r=lora_r,
                 lora_alpha=lora_alpha,
                 lora_dropout=lora_dropout,
-                max_num_patches=max_num,  # Pass max_num to InternVLHF
+                max_num_patches=max_num,
+                load_4bit=load_4bit,
+                softmax_temperature=softmax_temperature,
             )
+            # Register the actual nn.Module only in first instance
+            # so DomiKnowS can discover parameters for training
+            self._hf_model = InternVLSharedHF.model.model
         self.model = InternVLSharedHF.model
 
     def _to_pil(self, image):
@@ -669,8 +768,9 @@ class InternVLSharedHF(nn.Module):
 
     def _draw_and_resize(self, base_pil: Image.Image, boxes, colors):
         """
-        Draw one or more boxes on a copy of base image, then resize to fixed input_size
-        to keep tile count stable in batched InternVL forward.
+        Draw bounding boxes on image.  Keep original aspect ratio and let
+        load_image_to_tiles / dynamic_preprocess handle resizing — this
+        matches vLLM behavior which passes raw PIL images to the processor.
         """
         img = base_pil.copy()
         draw = ImageDraw.Draw(img)
@@ -678,32 +778,16 @@ class InternVLSharedHF(nn.Module):
             if isinstance(box, torch.Tensor):
                 box = box.detach().cpu().tolist()
             draw.rectangle(box, outline=color, width=3)
-        # resize to fixed size (stabilizes tiling)
-        img = img.resize((self.input_size, self.input_size), resample=Image.BICUBIC)
         return img
 
-    def forward(self, image, bounding_boxes, label=None):
-        """
-        Exactly like your vLLM InternVLShared:
-          image: [something] (you used image=image[0]) — we support both.
-          bounding_boxes: iterable of boxes (Tensor/list)
-          returns: probs tensor [N,2] (Yes,No) on device
-
-        If labels provided, returns (probs, loss).
-        """
-        # match your old behavior: image may come in as [image]
+    def _prepare_images_questions(self, image, bounding_boxes):
+        """Prepare image-question pairs for scoring."""
         if isinstance(image, (list, tuple)) and len(image) == 1:
             image = image[0]
-
         base = self._to_pil(image)
 
         images, questions = [], []
-
         if self.relation == 2:
-            # The formula (from convert_CLEVR_domiKnowS) places RESULT at obj1
-            # and SOURCE at obj2, so left(pair) = True means "obj1 is left of obj2".
-            # box1 = obj1 (result, red), box2 = obj2 (source, green).
-            # Question asks "Is obj1(red) {attr} of obj2(green)?" which matches directly.
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
                     img = self._draw_and_resize(base, [box1, box2], ["red", "green"])
@@ -716,37 +800,62 @@ class InternVLSharedHF(nn.Module):
                 q = f"Is the object in the red bounding box {self.attr}? answer with only Yes or No."
                 images.append(img)
                 questions.append(q)
+        return images, questions
 
-        # probs: [N,2] for ["Yes","No"]
+    def forward(self, image, bounding_boxes, label=None):
+        """
+        Forward pass for DomiKnowS.
+        Returns probs tensor [N,2] matching vLLM output order: [P(No), P(Yes)].
+        vLLM's _score_batch has a variable-name swap (yes_logit gets No logprob
+        and vice-versa), so its output is effectively [P(No), P(Yes)].
+        DomiKnowS was calibrated with that order, so we match it here.
+        """
+        images, questions = self._prepare_images_questions(image, bounding_boxes)
+
         probs = self.model._score_batch(
             image_paths=images,
             questions=questions,
-            target_tokens=["Yes", "No"],
+            target_tokens=["No", "Yes"],
             input_size=self.input_size,
             max_num=self.max_num,
         )
+        return probs.float()
 
-        if labels is None:
-            return probs
+    def train_step(self, image, bounding_boxes, gt_labels, optimizer, grad_accum_steps=1):
+        """
+        Memory-efficient training: processes one pair at a time with gradient accumulation.
 
-        # training option: labels 0=Yes,1=No
-        labels = labels.to(self.device).long()
-        # convert probs back to logits safely: use model next-token logits instead (better gradients)
-        # But easiest: recompute logits directly here for correct CE gradients.
-        # We'll do it properly: compute next-token logits and pick yes/no.
-        next_logits = self.model._next_token_logits(
-            image_paths=images,
-            questions=questions,
-            input_size=self.input_size,
-            max_num=self.max_num,
-            use_thumbnail=False,
-        )  # [N,V]
+        Args:
+            image: PIL image or tensor
+            bounding_boxes: list of bounding boxes
+            gt_labels: ground truth labels [N] where 0=Yes, 1=No
+            optimizer: torch optimizer for LoRA parameters
+            grad_accum_steps: number of steps to accumulate before optimizer step
+        Returns:
+            avg_loss: average loss over all pairs
+        """
+        images, questions = self._prepare_images_questions(image, bounding_boxes)
+        N = len(images)
+
         yes_id = self.model.yes_token_id
-        no_id  = self.model.no_token_id
-        yn_logits = torch.stack([next_logits[:, yes_id], next_logits[:, no_id]], dim=-1)  # [N,2]
-        loss = F.cross_entropy(yn_logits, labels)
-        probs = torch.softmax(yn_logits, dim=-1)
-        return probs, loss
+        no_id = self.model.no_token_id
+        total_loss = 0.0
+
+        for i in range(N):
+            logits = self.model._next_token_logits(
+                image_paths=[images[i]],
+                questions=[questions[i]],
+                input_size=self.input_size,
+                max_num=self.max_num,
+                use_thumbnail=False,
+            )  # [1, V]
+            yn_logits = torch.stack([logits[0, yes_id], logits[0, no_id]]).float()  # [2]
+            target = gt_labels[i].to(self.device).long()
+            loss = F.cross_entropy(yn_logits.unsqueeze(0), target.unsqueeze(0)) / N
+            loss.backward()
+            total_loss += loss.item()
+
+        return total_loss
 
 
 # =============================================================================
@@ -1127,7 +1236,7 @@ if __name__ == "__main__":
             relation=1,
             attr="a cat",
             input_size=448,
-            max_num=6,  # Updated: from max_dynamic_patch 6
+            max_num=1,
             use_llm_lora=False,  # turn on if you want training adapters shared
         )
 
@@ -1142,7 +1251,7 @@ if __name__ == "__main__":
 
         # Training-style call (optional)
         labels = torch.tensor([1, 1], dtype=torch.long, device=device)  # pretend both are "No"
-        probs2, loss = m(dummy, boxes, label=label)
+        probs2, loss = m(dummy, boxes, label=labels)
         print("loss:", loss.item())
         loss.backward()
         print("backward ok")
