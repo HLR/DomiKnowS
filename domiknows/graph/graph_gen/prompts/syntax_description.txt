@@ -57,49 +57,11 @@ nli_class = pair(name='nli_class', ConceptClass=EnumConcept,
 In constraints:
 ```python
 nli_class.entailment('x')         # "x is entailment"
-nli_class.entailment(path=('x'))  # with path expression
 ```
 
 For `queryL`, use the PARENT concept as first argument:
 ```python
 queryL(color, iotaL(big('x')))   # "What color is the big thing?"
-```
-
-## Path Expressions
-
-Path expressions navigate from one concept through a relation to reach another concept. \
-They are ESSENTIAL when accessing an attribute that is connected via a relation.
-
-```python
-# Given:
-has_color = Concept('has_color')
-(rel_hc_ball, rel_hc_color) = has_color.has_a(ball, color)
-
-# To say "x is a ball that is green (via has_color relation)":
-andL(ball('x'), color.green('x', path=('x', rel_hc_color.name)))
-```
-
-Path syntax: `concept('var', path=('start_var', 'relation_variable_name'))`
-
-**When to use paths vs direct arguments:**
-- Attribute connected via a relation → MUST use path: `color.green('x', path=('x', rel_hc_color.name))`
-- Binary relation with `has_a(A, B)` → use two variables: `left_of('x', 'y')`
-- Direct `is_a` child (no relation involved) → use directly: `ball('x')`
-
-## Logical Constraints — IMPORTS
-```python
-from domiknows.graph import (
-    # Boolean logic
-    ifL, andL, orL, nandL, notL, equivalenceL,
-    # Element-wise counting
-    existsL, atLeastL, atMostL, exactL,
-    # Comparative counting
-    greaterL, greaterEqL, lessL, lessEqL, equalCountsL,
-    # Entity selection and attribute query
-    iotaL, queryL,
-    # Execution
-    execute,
-)
 ```
 
 ## Constraint variable syntax
@@ -165,6 +127,5 @@ ifL(person('x'), entity('x'), p=100, name='person_implies_entity')
 4. Binary relations require `has_a(concept1, concept2)` returning two relation variables.
 5. `is_a()` for sub-typing, `contains()` for containment.
 6. For EnumConcept, use dot notation in constraints (e.g., `color.red('x')`). For manual is_a children, use the variable directly (e.g., `red('x')`).
-7. Use path expressions to navigate through relations to reach attribute concepts.
-8. Wrap code in ```python ... ``` block.
-9. Code must be self-contained and executable.
+7. Wrap code in ```python ... ``` block.
+8. Code must be self-contained and executable.

@@ -1,5 +1,6 @@
 from . import DataNode
 import torch
+import traceback
 from domiknows.graph import LogicalConstrain, fixedL, ifL, V
 from domiknows.graph import EnumConcept
 
@@ -356,5 +357,239 @@ def satisfactionReportOfConstraints(dn):
                 lcSatisfactionMsgs["NotSatisfied"].append(lcSatisfactionMsg)
 
         lcSatisfactionTest['lcSatisfactionMsgs'] = lcSatisfactionMsgs
-        
+
     return lcSatisfaction
+
+
+def _describe_graph_structure(graph):
+    """Build a human-readable summary of the graph's concept/relation structure.
+
+    This is included in error messages so the LLM can see what the graph
+    actually contains and compare it with what the constraint expects.
+    """
+    lines = []
+
+    # Collect from main graph + subgraphs
+    # Guard against property descriptors (e.g. if Graph class was passed instead of instance)
+    try:
+        raw_concepts = graph.concepts
+        if isinstance(raw_concepts, property):
+            return "(graph.concepts is a property descriptor — not a Graph instance)"
+        all_concepts = dict(raw_concepts)
+    except TypeError:
+        return "(graph.concepts is not iterable — not a Graph instance)"
+
+    try:
+        subgraphs = graph.subgraphs if not isinstance(graph.subgraphs, property) else {}
+    except Exception:
+        subgraphs = {}
+
+    for _sk, sg in subgraphs.items():
+        try:
+            all_concepts.update(sg.concepts)
+        except Exception:
+            pass
+
+    root_concepts = []
+    child_concepts = {}   # parent_name -> [child_name, ...]
+    enum_concepts = {}     # concept_name -> [value, ...]
+    relation_concepts = {} # concept_name -> {attr_name: dst_concept_name}
+    is_a_map = {}          # child_name -> parent_name
+
+    for cname, concept in all_concepts.items():
+        # is_a
+        for rel in concept._out.get('is_a', []):
+            is_a_map[cname] = rel.dst.name
+
+        # contains
+        children = [rel.dst.name for rel in concept._out.get('contains', [])]
+        if children:
+            child_concepts[cname] = children
+
+        # has_a (relations)
+        has_a_rels = concept._out.get('has_a', [])
+        if has_a_rels:
+            attrs = {}
+            for rel in has_a_rels:
+                attrs[rel.name] = rel.dst.name if hasattr(rel, 'dst') and rel.dst else '?'
+            relation_concepts[cname] = attrs
+
+        # EnumConcept
+        if isinstance(concept, EnumConcept):
+            enum_concepts[cname] = list(concept.enum)
+
+        # Root detection
+        contained_in = concept._in.get('contains', [])
+        has_is_a = concept._out.get('is_a', [])
+        if not contained_in and not has_is_a and not has_a_rels:
+            root_concepts.append(cname)
+
+    if root_concepts:
+        lines.append(f"  Root concepts: {', '.join(root_concepts)}")
+
+    if child_concepts:
+        for parent, children in child_concepts.items():
+            lines.append(f"  {parent} contains: {', '.join(children)}")
+
+    if is_a_map:
+        for child, parent in is_a_map.items():
+            lines.append(f"  {child}.is_a({parent})")
+
+    if enum_concepts:
+        for cname, values in enum_concepts.items():
+            lines.append(f"  EnumConcept {cname}: [{', '.join(values)}]")
+
+    if relation_concepts:
+        for cname, attrs in relation_concepts.items():
+            attr_str = ', '.join(f"{k}->{v}" for k, v in attrs.items())
+            lines.append(f"  Relation {cname}.has_a({attr_str})")
+
+    return "\n".join(lines) if lines else "  (empty graph)"
+
+
+def _describe_constraint(elc):
+    """Build a human-readable description of an executable constraint."""
+    try:
+        inner = elc.innerLC
+        desc = f"{type(inner).__name__}"
+        if hasattr(inner, 'strEs'):
+            desc += inner.strEs()
+
+        # For queryL, add subclass info
+        if hasattr(inner, 'concept') and hasattr(inner, '_subclass_names'):
+            desc += f" over concept '{inner.concept.name}'"
+            if inner._subclass_names:
+                desc += f" with subclasses [{', '.join(inner._subclass_names)}]"
+
+        # List referenced concepts
+        try:
+            concepts = inner.getLcConcepts()
+            if concepts:
+                desc += f" | references concepts: {{{', '.join(sorted(concepts))}}}"
+        except Exception:
+            pass
+
+        return desc
+    except Exception:
+        return repr(elc)
+
+
+def verifyExecutableConstraints(graph):
+    """Verify executable constraints are structurally valid using dummy data.
+
+    Creates a dummy DataNode with random probabilities, then runs AnswerSolver
+    on each executable constraint.  Exceptions indicate structural errors in
+    the constraint definition (wrong concepts, broken nesting, etc.).
+
+    A ``None`` return from AnswerSolver means all hypotheses were infeasible,
+    which can happen legitimately with random data — this is logged as a
+    warning but **not** treated as an error.
+
+    Error messages are designed to be actionable for an LLM that generated
+    the graph code: they include the graph structure, constraint descriptions,
+    and tracebacks so the LLM can identify what to fix.
+
+    Args:
+        graph: A DomiKnowS Graph instance that has ``executableLCs``.
+
+    Returns:
+        tuple: ``(all_ok, messages)`` where *all_ok* is ``True`` when no
+        structural errors were found and *messages* is a list of error /
+        warning strings.
+    """
+    try:
+        from domiknows.solver.answerModule import AnswerSolver
+    except ImportError as e:
+        # Gurobi or other solver dependency missing — skip verification
+        return True, [f"Skipped executable constraint verification (missing dependency: {e})"]
+
+    if not graph.executableLCs:
+        return True, []
+
+    graph_desc = _describe_graph_structure(graph)
+
+    # --- Create dummy DataNode ---
+    try:
+        dn = createDummyDataNode(graph)
+    except Exception as e:
+        tb = traceback.format_exc()
+        return False, [
+            f"Failed to create dummy DataNode for graph verification.\n"
+            f"  This usually means the graph structure has an issue — e.g. a relation's "
+            f"has_a() target concept is missing, a concept hierarchy is broken, or "
+            f"an EnumConcept is misconfigured.\n"
+            f"  Error: {type(e).__name__}: {e}\n"
+            f"  Graph structure:\n{graph_desc}\n"
+            f"  Traceback:\n{tb}"
+        ]
+
+    if dn is None:
+        return True, ["Skipped: could not create dummy DataNode (no root concept found)"]
+
+    try:
+        dn.inferLocal()
+    except Exception as e:
+        tb = traceback.format_exc()
+        return False, [
+            f"Failed to run inferLocal() on dummy DataNode.\n"
+            f"  This usually means concept probabilities could not be computed — "
+            f"check that all concepts have valid is_a/contains/has_a structure.\n"
+            f"  Error: {type(e).__name__}: {e}\n"
+            f"  Graph structure:\n{graph_desc}\n"
+            f"  Traceback:\n{tb}"
+        ]
+
+    # --- Create AnswerSolver ---
+    try:
+        answer_solver = AnswerSolver(graph)
+    except Exception as e:
+        tb = traceback.format_exc()
+        return False, [
+            f"Failed to create AnswerSolver for constraint verification.\n"
+            f"  Error: {type(e).__name__}: {e}\n"
+            f"  Graph structure:\n{graph_desc}\n"
+            f"  Traceback:\n{tb}"
+        ]
+
+    # --- Test each executable constraint ---
+    errors = []
+    warnings = []
+
+    for elc_name, elc in graph.executableLCs.items():
+        constraint_desc = _describe_constraint(elc)
+
+        # Ensure the constraint is active for verification
+        prev_active = elc.active
+        prev_inner_active = elc.innerLC.active
+        elc.active = True
+        elc.innerLC.active = True
+
+        try:
+            result = answer_solver.answer(f"execute({elc_name})", dn)
+            if result is None:
+                warnings.append(
+                    f"{elc_name}: all hypotheses infeasible on dummy data "
+                    f"(may be normal with random probabilities)\n"
+                    f"  Constraint: {constraint_desc}"
+                )
+        except Exception as e:
+            tb = traceback.format_exc()
+            errors.append(
+                f"{elc_name}: constraint verification failed.\n"
+                f"  Constraint: {constraint_desc}\n"
+                f"  Error: {type(e).__name__}: {e}\n"
+                f"  This means the constraint references concepts or relations "
+                f"that don't match the graph structure. Check that all concept "
+                f"names in the constraint exist in the graph and have the "
+                f"correct is_a/contains/has_a relationships.\n"
+                f"  Graph structure:\n{graph_desc}\n"
+                f"  Traceback:\n{tb}"
+            )
+        finally:
+            # Restore original active state
+            elc.active = prev_active
+            elc.innerLC.active = prev_inner_active
+
+    all_ok = len(errors) == 0
+    messages = errors + warnings
+    return all_ok, messages

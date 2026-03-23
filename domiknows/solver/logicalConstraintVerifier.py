@@ -99,6 +99,8 @@ class LogicalConstraintVerifier:
             ifVerifyListLen = 0
             ifVerifyListSatisfied = 0
             
+            # Recompute satisfaction using only entries where the antecedent is true,
+            # so the conditional success rate is not diluted by vacuously satisfied cases.
             for i, v in enumerate(verifyList):
                 ifVi = []
                 if len(v) != len(firstLcV[i]):

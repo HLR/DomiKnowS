@@ -62,30 +62,36 @@ def _apply_threshold_to_predictions(program, datanode, threshold=0.5):
 def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
     """
     Unified implementation for evaluating constraints with proper metrics.
-    
+
     This method evaluates both boolean and counting constraints:
     - Boolean constraints (andL, atLeastAL, exactAL, etc.): Binary accuracy using 'local/argmax'
     - Counting constraints (sumL): Uses thresholded 'local/decision' key for verification
-    
+
+    Uses AnswerSolver as the primary evaluation method.  verifySingleConstraint
+    runs in parallel and any disagreement between the two is logged.
+
     Args:
         evaluate_data: Dataset to evaluate on
         device: Device to run evaluation on (default: "cpu")
-        threshold: Threshold for converting probabilities to binary decisions 
+        threshold: Threshold for converting probabilities to binary decisions
                   for counting constraints. Defaults to 0.0 - the threshold will not be applied.
         return_dict: If True, return full results dict; if False, return primary_metric float
-    
+
     Returns:
         dict or float: Full results dictionary or primary metric value
     """
     from domiknows.graph.logicalConstrain import sumL
-    
+    from domiknows.solver.answerModule import AnswerSolver
+
     boolean_correct = 0
     boolean_total = 0
-    
+
     counting_correct = 0
-    counting_total = 0  
-   
+    counting_total = 0
+
     total = 0
+
+    answer_solver = AnswerSolver(program.graph)
 
     for datanode in tqdm(
         program.populate(evaluate_data, device=device),
@@ -122,33 +128,70 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             label = datanode.getExecutableConstraintLabel(lc_name)
             if label is None:
                 continue
-            
+
             is_counting = isinstance(lc.innerLC, sumL)
-            
-            if is_counting:
-                try:
+
+            # ── AnswerSolver (primary) ──────────────────────────────
+            answer_correct = None
+            try:
+                answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
+            except Exception as e:
+                program.logger.warning(f"AnswerSolver failed for {lc_name}: {e}")
+                answer_result = None
+
+            if answer_result is not None:
+                if is_counting:
+                    # For sumL the label is the expected count
+                    expected_count = int(label.item() if torch.is_tensor(label) else label)
+                    answer_correct = (answer_result == expected_count)
+                else:
+                    # For boolean constraints the label is 1 (True) or 0 (False)
+                    expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
+                    answer_correct = (answer_result == expected_bool)
+
+            # ── verifySingleConstraint (comparison) ─────────────────
+            verify_correct = None
+            try:
+                if is_counting:
                     verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
-                except Exception as e:
-                    program.logger.warning(f"Failed to verify constraint {lc_name}: {e}")
-                    continue
-                
+                else:
+                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
+
                 is_satisfied = verify_result["satisfied"] == 100.0
-                expected_satisfied = 1
-                
-                if is_satisfied == expected_satisfied:
+
+                if is_counting:
+                    verify_correct = (is_satisfied == True)
+                else:
+                    expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
+                    verify_correct = (is_satisfied == expected_satisfied)
+            except Exception as e:
+                program.logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
+
+            # ── Log disagreement ────────────────────────────────────
+            if answer_correct is not None and verify_correct is not None and answer_correct != verify_correct:
+                program.logger.info(
+                    f"Disagreement on {lc_name}: "
+                    f"AnswerSolver={'correct' if answer_correct else 'incorrect'} "
+                    f"(answer={answer_result}), "
+                    f"verifySingleConstraint={'correct' if verify_correct else 'incorrect'} "
+                    f"(satisfied={verify_result['satisfied']:.1f}%), "
+                    f"label={label}"
+                )
+
+            # ── Use AnswerSolver as default, fall back to verify ────
+            if answer_correct is not None:
+                use_correct = answer_correct
+            elif verify_correct is not None:
+                use_correct = verify_correct
+            else:
+                continue
+
+            if is_counting:
+                if use_correct:
                     counting_correct += 1
                 counting_total += 1
             else:
-                try:
-                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
-                except Exception as e:
-                    program.logger.warning(f"Failed to verify constraint {lc_name}: {e}")
-                    continue
-                
-                is_satisfied = verify_result["satisfied"] == 100.0
-                expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
-                
-                if is_satisfied == expected_satisfied:
+                if use_correct:
                     boolean_correct += 1
                 boolean_total += 1
 
@@ -156,7 +199,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     results = {
         'boolean_correct': boolean_correct,
         'boolean_total': boolean_total,
-        'counting_correct': counting_correct, 
+        'counting_correct': counting_correct,
         'counting_total': counting_total
     }
 
@@ -193,10 +236,10 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         results['accuracy'] = results['boolean_accuracy']
     else:
         results['accuracy'] = 0.0
-        
+
     results["boolean_total"] = boolean_total
-    results["counting_total"] = counting_total   
-            
+    results["counting_total"] = counting_total
+
     return results if return_dict else results['accuracy']
 
 ################################################################################

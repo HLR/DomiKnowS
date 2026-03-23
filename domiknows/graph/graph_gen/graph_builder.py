@@ -8,13 +8,19 @@ Modes:
 
 import argparse
 import json
+import re
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
 from core import (
+    CONFIG_PATH,
+    DEFAULT_MODEL,
+    MODELS,
     MAX_FIX_ATTEMPTS,
+    do_add_missing_concepts,
+    do_continue_extract,
     do_extract,
     do_fix,
     do_generate,
@@ -23,7 +29,145 @@ from core import (
     execute_graph_code,
     merge_executable_into_graph,
     validate_graph_coverage,
+    validate_single_constraint,
 )
+
+EXTRACT_BATCH_SIZE = 20  # default batch size for concept extraction
+MAX_GRAPH_REPAIRS = None  # no limit — rebuild graph as many times as needed
+
+# ---------------------------------------------------------------------------
+# Snippet extraction helpers
+# ---------------------------------------------------------------------------
+
+def _extract_missing_names(val_error: str) -> list[str]:
+    """Extract missing concept/variable names from a NameError message.
+
+    Returns a list of names, or an empty list if the error is not a NameError.
+    """
+    names = re.findall(r"NameError: name '(\w+)' is not defined", val_error)
+    return list(dict.fromkeys(names))  # deduplicate, preserve order
+
+
+def _rebuild_graph(
+    questions: list[str],
+    concepts_json: dict,
+    missing_names: list[str],
+    trigger_question: str,
+    args,
+) -> tuple[str | None, dict]:
+    """Update concept extraction and regenerate the graph code.
+
+    1. Ask LLM to add missing names to the concept list.
+    2. Regenerate graph code from updated concepts.
+    3. Execute+fix the new graph.
+
+    Returns (new_graph_code_or_None, updated_concepts_json).
+    """
+    print(f"\n{'=' * 60}")
+    print(f"[GRAPH-REPAIR] Missing names detected: {', '.join(missing_names)}")
+    print(f"[GRAPH-REPAIR] Triggered by question: {trigger_question}")
+    print(f"[GRAPH-REPAIR] Updating concept extraction...")
+
+    # 1. Ask LLM to add missing concepts
+    prompt, raw, updated_json, _model = do_add_missing_concepts(
+        trigger_question, missing_names, concepts_json, model=args.model,
+    )
+    print(f"[GRAPH-REPAIR] LLM response: {len(raw) if raw else 0} chars")
+
+    if updated_json is None:
+        print(f"[GRAPH-REPAIR] ❌ Could not parse updated concepts JSON")
+        return None, concepts_json
+
+    n_before = len(concepts_json.get("concepts", []))
+    n_after = len(updated_json.get("concepts", []))
+    print(f"[GRAPH-REPAIR] Concepts: {n_before} → {n_after} (+{n_after - n_before})")
+    concepts_json = updated_json
+
+    # 2. Regenerate graph code
+    print(f"[GRAPH-REPAIR] Regenerating graph code...")
+    log, code = do_generate(questions, concepts_json, model=args.model)
+    for entry in log:
+        if entry["type"] == "llm_interaction":
+            print(f"[GRAPH-REPAIR] Graph generation iteration {entry['iteration']}")
+        else:
+            print(f"[GRAPH-REPAIR] ⚠️  {entry['message']}")
+
+    if not code:
+        print(f"[GRAPH-REPAIR] ❌ Failed to generate graph code")
+        return None, concepts_json
+
+    # 3. Execute and fix loop for the new graph
+    for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
+        success, output = execute_graph_code(code)
+        if success:
+            print(f"[GRAPH-REPAIR] ✅ New graph validated on attempt {attempt}")
+            print(f"{'=' * 60}\n")
+            return code, concepts_json
+
+        print(f"[GRAPH-REPAIR] ❌ Graph execution failed (attempt {attempt}): {output[:200]}")
+        if attempt < MAX_FIX_ATTEMPTS:
+            _, fixed_code = do_fix(code, output)
+            if fixed_code:
+                code = fixed_code
+            else:
+                break
+
+    print(f"[GRAPH-REPAIR] ❌ Could not produce a valid graph after repairs")
+    print(f"{'=' * 60}\n")
+    return None, concepts_json
+
+def _extract_snippet_from_fixed(fixed_code: str, graph_code: str) -> str | None:
+    """Extract the executable constraint snippet from LLM-fixed full code.
+
+    The fixed code contains the graph definition followed by a
+    ``with graph:`` block with the constraint(s).  We need to pull out
+    just the constraint lines from inside that block.
+
+    Strategy:
+    1. Find the *last* ``with graph:`` line (constraints are appended there).
+    2. Collect all indented lines after it as the snippet.
+    3. De-indent by the block's indentation level.
+    """
+    lines = fixed_code.splitlines()
+
+    # Find the last "with graph:" line
+    with_graph_idx = None
+    for idx, line in enumerate(lines):
+        if re.match(r'\s*with\s+graph\s*:', line):
+            with_graph_idx = idx
+
+    if with_graph_idx is None:
+        return None
+
+    # Collect indented lines after "with graph:"
+    snippet_lines = []
+    for line in lines[with_graph_idx + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            snippet_lines.append(stripped)
+            continue
+        # Check if still indented (inside the with block)
+        if line and not line[0].isspace():
+            break
+        # De-indent: remove leading 4 spaces or 1 tab
+        if line.startswith('    '):
+            snippet_lines.append(line[4:])
+        elif line.startswith('\t'):
+            snippet_lines.append(line[1:])
+        else:
+            snippet_lines.append(line.lstrip())
+
+    # Strip leading/trailing blank lines
+    while snippet_lines and not snippet_lines[0].strip():
+        snippet_lines.pop(0)
+    while snippet_lines and not snippet_lines[-1].strip():
+        snippet_lines.pop()
+
+    if not snippet_lines:
+        return None
+
+    return "\n".join(snippet_lines)
+
 
 # ---------------------------------------------------------------------------
 # Performance log  (JSON-lines in logs/ subfolder for model comparison)
@@ -35,7 +179,7 @@ def _init_perf_log(dataset_path: str | None, graph_path: str | None, model_hint:
     """Create a new performance log file and write the header record. Returns the log path."""
     LOGS_DIR.mkdir(exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_tag = (model_hint or "default").replace("/", "_").replace("\\", "_")
+    model_tag = re.sub(r'[\\/:*?"<>|]', "_", model_hint or "default")
     log_path = LOGS_DIR / f"perf_{model_tag}_{ts}.jsonl"
 
     header = {
@@ -61,6 +205,23 @@ def _log_perf_summary(log_path: Path, summary: dict):
     """Append the final summary record to the performance log."""
     summary["type"] = "run_summary"
     _log_perf_entry(log_path, summary)
+
+# ---------------------------------------------------------------------------
+# Output path helpers
+# ---------------------------------------------------------------------------
+
+def _derive_output_paths(base_output: str) -> tuple[Path, Path]:
+    """Derive concepts JSON and graph-only Python paths from the main output path.
+
+    'output_graph_gpt4_20260323.py' →
+      ('output_graph_gpt4_20260323_concepts.json',
+       'output_graph_gpt4_20260323_graph.py')
+    """
+    base = Path(base_output)
+    stem = base.stem
+    parent = base.parent
+    return parent / f"{stem}_concepts.json", parent / f"{stem}_graph.py"
+
 
 # ---------------------------------------------------------------------------
 # Question collection helpers
@@ -163,15 +324,71 @@ def load_questions_from_dataset(
     return questions
 
 # ---------------------------------------------------------------------------
+# Question pre-filter for continue extraction
+# ---------------------------------------------------------------------------
+
+# Common stop-words that never indicate a new domain concept
+_STOP_WORDS = frozenset(
+    "a an the is are was were be been being have has had do does did will would "
+    "shall should may might can could of in on at to for with by from and or not "
+    "no nor but if then else when where how what which who whom whose that this "
+    "these those there here than so as it its they them their he she his her we "
+    "our you your i my me us any all each every some many much more most few "
+    "less least very too also just only still already even about into over after "
+    "before between under above through during against same other another such "
+    "both either neither while until because since although though whether "
+    "number count many equal less greater fewer more than does exist exists "
+    "thing things object objects".split()
+)
+
+
+def _build_known_terms(concepts_json: dict) -> set[str]:
+    """Build a set of lower-case tokens that are already covered by the ontology."""
+    terms: set[str] = set()
+    for c in concepts_json.get("concepts", []):
+        # Add concept name tokens (e.g. "surface_property" → {"surface", "property"})
+        for tok in re.split(r"[_\s]+", c["name"].lower()):
+            terms.add(tok)
+        # Add description words
+        for tok in re.findall(r"[a-z]+", c.get("description", "").lower()):
+            terms.add(tok)
+        # Add enum values if present
+        for val in c.get("values", []):
+            for tok in re.split(r"[_\s]+", str(val).lower()):
+                terms.add(tok)
+    for r in concepts_json.get("relations", []):
+        for tok in re.split(r"[_\s]+", r["name"].lower()):
+            terms.add(tok)
+        for tok in re.findall(r"[a-z]+", r.get("description", "").lower()):
+            terms.add(tok)
+    return terms
+
+
+def _question_may_add_concepts(question: str, known_terms: set[str]) -> bool:
+    """Return True if the question contains content words not yet in known_terms.
+
+    This is a cheap text-based heuristic: if every meaningful word in the
+    question is already covered by the existing ontology, the question is
+    unlikely to contribute new concepts and can be skipped.
+    """
+    words = set(re.findall(r"[a-z]+", question.lower()))
+    novel = words - known_terms - _STOP_WORDS
+    return len(novel) > 0
+
+
+# ---------------------------------------------------------------------------
 # Shared pipeline
 # ---------------------------------------------------------------------------
 
-def build_graph(questions: list[str], args) -> str | None:
-    print(f"\n[BUILD] Starting build_graph with {len(questions)} questions")
-    # 1. Extract concepts and relations
-    print("\n--- Step 1: Extracting concepts and relations ---")
-    print(f"[BUILD] Calling do_extract...")
-    prompt, raw, concepts_json = do_extract(questions)
+def build_graph(questions: list[str], args) -> tuple[str | None, dict | None]:
+    batch_size = getattr(args, "extract_batch_size", EXTRACT_BATCH_SIZE) or EXTRACT_BATCH_SIZE
+    print(f"\n[BUILD] Starting build_graph with {len(questions)} questions (extract batch size: {batch_size})")
+
+    # 1. Extract concepts and relations (first batch)
+    first_batch = questions[:batch_size]
+    print(f"\n--- Step 1: Extracting concepts and relations (batch 1 — {len(first_batch)} questions) ---")
+    print(f"[BUILD] Calling do_extract with first {len(first_batch)} questions...")
+    prompt, raw, concepts_json, _model = do_extract(first_batch, model=args.model)
     print(f"[BUILD] do_extract returned — raw length: {len(raw) if raw else 0}")
     print(f"\n[Prompt Sent]\n{prompt}\n")
     print(f"\n[Raw LLM Response]\n{raw}\n")
@@ -182,6 +399,71 @@ def build_graph(questions: list[str], args) -> str | None:
     else:
         print(f"Extracted {len(concepts_json.get('concepts', []))} concepts, "
               f"{len(concepts_json.get('relations', []))} relations.")
+
+    # 1b. Continue concept extraction for remaining questions
+    #     Pre-filter each question: only include it in a batch if it may
+    #     contribute concepts not already in the ontology.
+    remaining = questions[batch_size:]
+    if remaining and concepts_json and "raw" not in concepts_json:
+        print(f"\n--- Step 1b: Continue concept extraction ({len(remaining)} remaining questions) ---")
+
+        # Pre-filter: assess each remaining question
+        known_terms = _build_known_terms(concepts_json)
+        candidates: list[str] = []
+        skipped = 0
+        for q in remaining:
+            if _question_may_add_concepts(q, known_terms):
+                candidates.append(q)
+            else:
+                skipped += 1
+
+        print(f"[BUILD] Pre-filter: {len(candidates)} questions may contribute new concepts, "
+              f"{skipped} skipped (already covered)")
+
+        if candidates:
+            batch_num = 1  # continues from initial batch 1
+            while candidates:
+                # Take the next batch
+                batch = candidates[:batch_size]
+                candidates = candidates[batch_size:]
+                batch_num += 1
+
+                n_concepts_before = len(concepts_json.get("concepts", []))
+                n_relations_before = len(concepts_json.get("relations", []))
+
+                print(f"\n[BUILD] Continue extraction batch {batch_num} — {len(batch)} questions")
+                prompt, raw, updated_json, _model = do_continue_extract(
+                    batch, concepts_json, model=args.model
+                )
+                print(f"[BUILD] do_continue_extract returned — raw length: {len(raw) if raw else 0}")
+                print(f"\n[Prompt Sent]\n{prompt}\n")
+                print(f"\n[Raw LLM Response]\n{raw}\n")
+
+                if updated_json is not None:
+                    n_concepts_after = len(updated_json.get("concepts", []))
+                    n_relations_after = len(updated_json.get("relations", []))
+                    new_concepts = n_concepts_after - n_concepts_before
+                    new_relations = n_relations_after - n_relations_before
+                    print(f"  Batch {batch_num}: +{new_concepts} concepts, +{new_relations} relations "
+                          f"(total: {n_concepts_after} concepts, {n_relations_after} relations)")
+                    concepts_json = updated_json
+
+                    # Rebuild known terms and re-filter remaining candidates
+                    # so questions now covered by newly added concepts are skipped
+                    if candidates:
+                        known_terms = _build_known_terms(concepts_json)
+                        before_refilter = len(candidates)
+                        candidates = [q for q in candidates if _question_may_add_concepts(q, known_terms)]
+                        newly_skipped = before_refilter - len(candidates)
+                        if newly_skipped:
+                            print(f"  Re-filter: {newly_skipped} more questions now covered, "
+                                  f"{len(candidates)} candidates remaining")
+                else:
+                    print(f"  ⚠️  Batch {batch_num}: Could not parse response — keeping existing concepts.")
+
+        print(f"\n[BUILD] Continue extraction complete — "
+              f"final: {len(concepts_json.get('concepts', []))} concepts, "
+              f"{len(concepts_json.get('relations', []))} relations")
 
     # 2. Generate graph code
     print("\n--- Step 2: Generating DomiKnowS graph ---")
@@ -202,7 +484,7 @@ def build_graph(questions: list[str], args) -> str | None:
 
     if not code:
         print("Failed to generate graph code.")
-        return None
+        return None, concepts_json
 
     # 2b. Validate coverage
     for cov_attempt in range(1, MAX_FIX_ATTEMPTS + 1):
@@ -241,7 +523,7 @@ def build_graph(questions: list[str], args) -> str | None:
 
         if success:
             print(f"\n✅ Graph created successfully on attempt {attempt}!")
-            return code
+            return code, concepts_json
 
         print(f"\n❌ Execution failed (attempt {attempt}/{MAX_FIX_ATTEMPTS}):")
         print(output)
@@ -263,7 +545,7 @@ def build_graph(questions: list[str], args) -> str | None:
                 print("=" * 60)
 
     print(f"\n❌ Failed to produce a valid graph after {MAX_FIX_ATTEMPTS} attempts.")
-    return None
+    return None, concepts_json
 
 # ---------------------------------------------------------------------------
 # Interactive mode  (original behaviour)
@@ -283,22 +565,45 @@ def run_interactive(args):
     # If graph is provided, skip concept extraction and graph generation
     if args.graph_path:
         graph_code = Path(args.graph_path).read_text()
+        concepts_json = None  # extraction was skipped
         print(f"\n[INTERACTIVE] Graph loaded from {args.graph_path} ({len(graph_code)} chars) — skipping concept extraction & generation")
         print(f"[INTERACTIVE] Jumping directly to executable constraint generation")
     else:
         print(f"\n[INTERACTIVE] No --graph-path provided, running full pipeline (extract → generate → execute)")
-        graph_code = build_graph(questions, args)
+        graph_code, concepts_json = build_graph(questions, args)
     if graph_code is None:
         print(f"[INTERACTIVE] ERROR: graph_code is None — aborting")
         sys.exit(1)
 
     print(f"\n[INTERACTIVE] Graph code ready ({len(graph_code)} chars)")
 
+    # Save intermediate files (concepts JSON + graph-only code)
+    concepts_path, graph_only_path = _derive_output_paths(args.output)
+
+    if concepts_json is not None:
+        concepts_path.write_text(
+            json.dumps(concepts_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"[INTERACTIVE] Concepts/relations saved to: {concepts_path}")
+
+    graph_only_path.write_text(graph_code, encoding="utf-8")
+    print(f"[INTERACTIVE] Graph code saved to: {graph_only_path}")
+    print(f"[INTERACTIVE]   (usable as --graph-path for subsequent runs)")
+
+    if getattr(args, 'graph_only', False):
+        print(f"\n{'=' * 60}")
+        print(f"--graph-only: stopping after graph generation.")
+        if concepts_json is not None:
+            print(f"  Concepts: {concepts_path}")
+        print(f"  Graph:    {graph_only_path}")
+        print(f"{'=' * 60}")
+        return
+
     # Initialize performance log
     perf_log = _init_perf_log(
         dataset_path=None,
         graph_path=args.graph_path,
-        model_hint=getattr(args, "model", None),
+        model_hint=args.model,
         total_questions=len(questions),
     )
 
@@ -399,6 +704,11 @@ def run_interactive(args):
 
 def run_batch(args):
     run_start = time.time()
+
+    if getattr(args, 'graph_only', False) and args.graph_path:
+        print("WARNING: --graph-only has no effect with --graph-path "
+              "(graph already exists, nothing to generate).")
+
     questions = load_questions_from_dataset(
         dataset_path=args.dataset,
         keyword=args.keyword,
@@ -416,22 +726,45 @@ def run_batch(args):
     # If graph is provided, skip concept extraction and graph generation
     if args.graph_path:
         graph_code = Path(args.graph_path).read_text()
+        concepts_json = None  # extraction was skipped
         print(f"\n[BATCH] Graph loaded from {args.graph_path} ({len(graph_code)} chars) — skipping concept extraction & generation")
         print(f"[BATCH] Jumping directly to executable constraint generation")
     else:
         print(f"\n[BATCH] No --graph-path provided, running full pipeline (extract → generate → execute)")
-        graph_code = build_graph(questions, args)
+        graph_code, concepts_json = build_graph(questions, args)
     if graph_code is None:
         print(f"[BATCH] ERROR: graph_code is None — aborting")
         sys.exit(1)
 
     print(f"\n[BATCH] Graph code ready ({len(graph_code)} chars)")
 
+    # Save intermediate files (concepts JSON + graph-only code)
+    concepts_path, graph_only_path = _derive_output_paths(args.output)
+
+    if concepts_json is not None:
+        concepts_path.write_text(
+            json.dumps(concepts_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"[BATCH] Concepts/relations saved to: {concepts_path}")
+
+    graph_only_path.write_text(graph_code, encoding="utf-8")
+    print(f"[BATCH] Graph code saved to: {graph_only_path}")
+    print(f"[BATCH]   (usable as --graph-path for subsequent runs)")
+
+    if getattr(args, 'graph_only', False):
+        print(f"\n{'=' * 60}")
+        print(f"--graph-only: stopping after graph generation.")
+        if concepts_json is not None:
+            print(f"  Concepts: {concepts_path}")
+        print(f"  Graph:    {graph_only_path}")
+        print(f"{'=' * 60}")
+        return
+
     # Initialize performance log
     perf_log = _init_perf_log(
         dataset_path=args.dataset,
         graph_path=args.graph_path,
-        model_hint=getattr(args, "model", None),
+        model_hint=args.model,
         total_questions=len(questions),
     )
 
@@ -439,13 +772,17 @@ def run_batch(args):
     print(f"\n--- Step 3: Encoding questions as executable constraints ---")
     print(f"[BATCH] Processing {len(questions)} questions individually...\n")
 
+    MAX_SNIPPET_FIX = 3  # per-snippet fix attempts
     results: list[dict] = []  # {"question": str, "snippet": str|None, "success": bool}
+    graph_repair_count = 0
 
-    for i, question in enumerate(questions):
+    i = 0
+    while i < len(questions):
+        question = questions[i]
         print(f"[BATCH] [{i + 1}/{len(questions)}] {question}")
         t0 = time.time()
         try:
-            _prompt, _raw, snippet, _model = do_generate_executable_single(question, graph_code)
+            _prompt, _raw, snippet, _model = do_generate_executable_single(question, graph_code, model=args.model)
             elapsed = time.time() - t0
             print(f"[BATCH]   raw response: {len(_raw) if _raw else 0} chars, model={_model}, time: {elapsed:.1f}s")
         except Exception as e:
@@ -464,29 +801,158 @@ def run_batch(args):
                 "snippet": None,
             })
             results.append({"question": question, "snippet": None, "success": False})
+            i += 1
             continue
 
-        if snippet:
-            print(f"  ✅ snippet: {len(snippet)} chars, time: {elapsed:.1f}s")
-            print(f"  >> {snippet.strip()}")
-            results.append({"question": question, "snippet": snippet.strip(), "success": True})
-        else:
+        if not snippet:
             print(f"  ⚠️  Could not extract execute() call (time: {elapsed:.1f}s)")
             print(f"[BATCH]   raw response preview: {(_raw or '')[:200]}")
+            _log_perf_entry(perf_log, {
+                "type": "question",
+                "index": i + 1,
+                "question": question,
+                "success": False,
+                "error": "no execute() snippet extracted",
+                "model": _model,
+                "time_s": round(elapsed, 2),
+                "raw_response_chars": len(_raw) if _raw else 0,
+                "snippet_chars": 0,
+                "snippet": None,
+            })
             results.append({"question": question, "snippet": None, "success": False})
+            i += 1
+            continue
 
+        # Validate the snippet by executing it against the graph
+        snippet = snippet.strip()
+        print(f"  ✅ snippet: {len(snippet)} chars, time: {elapsed:.1f}s")
+        print(f"  >> {snippet}")
+
+        valid, val_error = validate_single_constraint(graph_code, snippet)
+
+        # --- Check for missing concepts (NameError) → graph repair ---
+        # NameErrors cannot be fixed by patching the snippet — the graph
+        # itself is missing the concept.  We must repair the graph first,
+        # then retry this question from scratch.
+        if not valid and _extract_missing_names(val_error):
+            missing_names = _extract_missing_names(val_error)
+            graph_repair_count += 1
+            print(f"  ⚠️  Missing concepts in graph: {', '.join(missing_names)}")
+            print(f"  [GRAPH-REPAIR #{graph_repair_count}] "
+                  f"Rebuilding graph to add missing concepts...")
+
+            new_graph_code, concepts_json = _rebuild_graph(
+                questions, concepts_json, missing_names, question, args,
+            )
+            if new_graph_code is not None:
+                graph_code = new_graph_code
+
+                # Save updated intermediates
+                concepts_path, graph_only_path = _derive_output_paths(args.output)
+                if concepts_json is not None:
+                    concepts_path.write_text(
+                        json.dumps(concepts_json, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                graph_only_path.write_text(graph_code, encoding="utf-8")
+                print(f"[GRAPH-REPAIR] Saved updated graph to: {graph_only_path}")
+
+                # Invalidate all previous results — they were validated
+                # against the old graph and must be re-validated
+                if results:
+                    prev_ok = sum(1 for r in results if r["success"])
+                    print(f"[GRAPH-REPAIR] Re-validating {prev_ok} previously encoded constraints...")
+                    new_results = []
+                    for prev in results:
+                        if prev["success"] and prev["snippet"]:
+                            ok, _ = validate_single_constraint(graph_code, prev["snippet"])
+                            if ok:
+                                new_results.append(prev)
+                                print(f"  ✅ Q: {prev['question'][:60]}...")
+                            else:
+                                new_results.append({
+                                    "question": prev["question"],
+                                    "snippet": None,
+                                    "success": False,
+                                })
+                                print(f"  ❌ Q: {prev['question'][:60]}... (needs re-encode)")
+                        else:
+                            new_results.append(prev)
+                    results = new_results
+
+                # Retry the current question (don't increment i)
+                print(f"[GRAPH-REPAIR] Retrying question {i + 1}...")
+                continue
+            else:
+                print(f"  ❌ Graph repair failed — skipping question")
+                results.append({"question": question, "snippet": None, "success": False})
+                i += 1
+                continue
+
+        # --- Normal snippet fix loop (non-NameError failures) ---
+        if not valid:
+            print(f"  ❌ validation failed: {val_error}")
+            for fix_attempt in range(1, MAX_SNIPPET_FIX + 1):
+                combined_code = merge_executable_into_graph(graph_code, snippet)
+                log, fixed_code = do_fix(combined_code, val_error, expected_execute_count=1, model=args.model)
+                for entry in log:
+                    if entry["type"] == "llm_interaction":
+                        print(f"    [Fix {fix_attempt}/{MAX_SNIPPET_FIX}]")
+                    else:
+                        print(f"    ⚠️  {entry['message']}")
+
+                if not fixed_code:
+                    print(f"    ❌ LLM returned no code")
+                    break
+
+                fixed_snippet = _extract_snippet_from_fixed(fixed_code, graph_code)
+                if not fixed_snippet:
+                    print(f"    ❌ Could not extract snippet from fixed code")
+                    break
+
+                snippet = fixed_snippet
+                valid, val_error = validate_single_constraint(graph_code, snippet)
+                if valid:
+                    print(f"    ✅ fixed on attempt {fix_attempt}")
+                    print(f"    >> {snippet}")
+                    break
+
+                # If the fix introduced a NameError, escalate to graph repair
+                new_missing = _extract_missing_names(val_error)
+                if new_missing:
+                    print(f"    ⚠️  Fix introduced missing concepts: {', '.join(new_missing)}")
+                    # Break out of snippet fix loop — the outer while loop
+                    # will re-validate and trigger graph repair on next iteration
+                    break
+
+                print(f"    ❌ still invalid: {val_error}")
+
+            # After snippet fix loop, if still invalid due to NameError,
+            # let the while loop retry (it will hit the graph repair branch)
+            if not valid and _extract_missing_names(val_error):
+                continue
+
+        if valid:
+            print(f"  ✅ validated")
+
+        final_success = valid
         _log_perf_entry(perf_log, {
             "type": "question",
             "index": i + 1,
             "question": question,
-            "success": snippet is not None,
-            "error": None,
+            "success": final_success,
+            "error": None if final_success else val_error[:500],
             "model": _model,
-            "time_s": round(elapsed, 2),
+            "time_s": round(time.time() - t0, 2),
             "raw_response_chars": len(_raw) if _raw else 0,
             "snippet_chars": len(snippet) if snippet else 0,
-            "snippet": snippet.strip() if snippet else None,
+            "snippet": snippet if final_success else None,
         })
+        if final_success:
+            results.append({"question": question, "snippet": snippet, "success": True})
+        else:
+            results.append({"question": question, "snippet": None, "success": False})
+        i += 1
 
     # Build output Python file
     output_path = Path(args.output)
@@ -547,41 +1013,7 @@ def run_batch(args):
         print(f"  Questions failed:  {fail_count} (marked as comments in output)")
     print(f"{'=' * 60}")
 
-    # Optionally validate the full code
-    if args.no_validate:
-        print("Skipping validation (--no-validate).")
-        return
-
-    print("\n--- Step 4: Validating full code ---")
-    full_code = output_code
-    # Extract only the successful snippets for expected execute count
-    expected = success_count
-
-    for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
-        success, output = execute_graph_code(full_code)
-
-        if success:
-            print(f"\n✅ Full code validated on attempt {attempt}!")
-            # Overwrite with validated code
-            output_path.write_text(full_code, encoding="utf-8")
-            return
-
-        print(f"\n❌ Execution failed (attempt {attempt}/{MAX_FIX_ATTEMPTS}):")
-        print(output)
-
-        if attempt < MAX_FIX_ATTEMPTS:
-            log, fixed_code = do_fix(full_code, output, expected_execute_count=expected)
-            for entry in log:
-                if entry["type"] == "llm_interaction":
-                    print(f"\n[Fix Iteration {entry['iteration']}]")
-                else:
-                    print(f"  ⚠️  {entry['message']}")
-
-            if fixed_code:
-                full_code = fixed_code
-                output_path.write_text(full_code, encoding="utf-8")
-
-    print(f"\n⚠️  Validation failed after {MAX_FIX_ATTEMPTS} attempts. Output file may contain errors.")
+    # All constraints were individually validated in Step 3 — no Step 4 needed.
 
 # ---------------------------------------------------------------------------
 # CLI entry point
@@ -594,6 +1026,19 @@ def parse_args():
     parser.add_argument(
         "--interactive", action="store_true",
         help="Run in interactive mode (prompt for questions at the terminal)",
+    )
+
+    # Model selection — available models come from config.yaml + discovered Ollama
+    available_models = list(MODELS.keys())
+    parser.add_argument(
+        "--model", "-m",
+        default=None,
+        metavar="NAME",
+        help=(
+            "LLM model to use (default: first in config = '%(default_model)s'). "
+            "Configured: %(models)s"
+        ) % {"default_model": available_models[0] if available_models else "?",
+             "models": ", ".join(available_models) if available_models else "none"},
     )
 
     # Batch mode arguments
@@ -621,12 +1066,21 @@ def parse_args():
         help="Maximum number of questions to process",
     )
     batch.add_argument(
-        "-o", "--output", default="output_graph.py",
-        help="Output Python file path (default: output_graph.py)",
+        "-o", "--output", default=None,
+        help="Output Python file path (default: output_graph_<model>_<date>.py)",
     )
     batch.add_argument(
         "--no-validate", action="store_true", dest="no_validate",
         help="Skip execution/validation of the generated output",
+    )
+    batch.add_argument(
+        "--extract-batch-size", type=int, default=EXTRACT_BATCH_SIZE, dest="extract_batch_size",
+        help=f"Number of questions per concept-extraction batch (default: {EXTRACT_BATCH_SIZE})",
+    )
+    batch.add_argument(
+        "--graph-only", action="store_true", dest="graph_only",
+        help="Stop after graph generation; skip executable constraint generation. "
+             "Saves concepts JSON and graph code to separate files.",
     )
 
     return parser.parse_args()
@@ -634,6 +1088,24 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Resolve and validate model selection
+    if args.model is not None:
+        from core import _build_model_catalog
+        catalog = _build_model_catalog()
+        if args.model not in catalog:
+            print(f"ERROR: Unknown model '{args.model}'.")
+            print(f"Available models: {', '.join(catalog.keys())}")
+            sys.exit(1)
+    selected = args.model or DEFAULT_MODEL
+    print(f"[CONFIG] Config file: {CONFIG_PATH}")
+    print(f"[CONFIG] Using model: {selected}" + (" (default)" if args.model is None else ""))
+
+    # If user didn't override --output, embed date + model in the default filename
+    if args.output is None:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_tag = re.sub(r'[\\/:*?"<>|]', "_", selected)
+        args.output = f"output_graph_{model_tag}_{ts}.py"
 
     if args.interactive:
         run_interactive(args)

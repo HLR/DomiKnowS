@@ -150,12 +150,21 @@ with Graph('visual_qa') as graph:
     )
 
 ```
+How to build the `execute()` call for a given question:
+1. Identify the question type (Existence, Relation, Counting, Comparative, Attribute Query).
+2. Use the corresponding constraint pattern from above.
+3. Identify how many objects are mentioned in the question and create variables for them (e.g., 'x', 'y', 'z').
+4. For each object, identify its properties and relations to other objects.
+5. If there is only single object realtion are not needed in this case, just use the properties of the object in the constraint.
+6. If two objects are mentioned, identify the relation between them and use the relation in the constraint. Ususly  single relation is needed in this case.
+7. If there are more than two objects, identify the relations between them and use them in the constraint. Ususly 2-3 relations are needed in this case.
+8. Add comments after each element of the constraint to indicate which part of the question it corresponds to (e.g., `# big object`, `# right of brown cylinder`).
 
 ## Critical Rules
 
 1. Only reference concepts and relations that exist in the graph.
 2. Variables are plain single-quoted strings: `concept('x')` not `concept("x")`.
-3. Relations such as `left_of` have two variables directly as arguments: `left_of('x', 'y')` x represents the first argument (rel_arg1), y represents the second argument (rel_arg2).   
+3. Relations such as `left_of` have two variables directly as arguments: `left_of('x', 'y')` x represents the first argument (rel_arg1), y represents the second argument (rel_arg2).
 4. For multiclass ALWAYS use the child concept directly (e.g., `red('x')`), NEVER pass a value to the parent.
    For EnumConcepts, use dot notation to access the value (e.g., `color.red('x')`), NEVER pass the value as an argument.
 5. Add a comment above the call indicating the question type: `# Existence:`, `# Counting:`, `# Relation:`, `# Query:`, `# Comparative:`.
@@ -163,3 +172,10 @@ with Graph('visual_qa') as graph:
 7. Do not confuse `iotaL` with `existsL` — iotaL selects an entity; existsL checks existence.
 8. Return EXACTLY ONE `execute()` call for the given question.
 9. Wrap the code in ```python ... ```.
+
+## IMPORTANT — What NOT to do
+- Do NOT redefine or repeat graph concepts (Concept, object_node, has_a, contains, etc.).
+  The graph code above is already defined — you are only writing an execute() call that USES it.
+- Do NOT output multiple code blocks. Output exactly ONE ```python block with one execute() call.
+- If you need to assign the result to a variable, that is fine, but the code block must
+  still contain exactly one execute() call wrapping a constraint expression.

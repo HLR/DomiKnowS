@@ -559,10 +559,39 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
     from .relation import IsA, HasA, Relation
     from .logicalConstrain import eqL
     from .concept import Concept
-    
+
+    def _is_ancestor_of(ancestor_name, descendant_concept):
+        """Check if ancestor_name is an ancestor of descendant_concept via is_a chain.
+
+        In an andL, a variable like 'x' can satisfy multiple predicates
+        simultaneously — e.g. brown('x') says x has color=brown, while
+        right_of('z', 'x') says x is an object.  The relation endpoint
+        (object) is an ancestor of the variable's declared concept (brown →
+        color → … → object) through the containment hierarchy, so the path
+        is valid even though the types don't match directly.
+        """
+        current = descendant_concept
+        visited = set()
+        while current is not None and id(current) not in visited:
+            visited.add(id(current))
+            if current.name == ancestor_name:
+                return True
+            # Walk up is_a
+            parents = current._out.get('is_a', [])
+            if parents:
+                current = parents[0].dst
+            else:
+                # Walk up contains (child → parent)
+                containers = current._in.get('contains', [])
+                if containers:
+                    current = containers[0].src
+                else:
+                    break
+        return False
+
     requiredLeftConcept = variableConceptParent.name # path element has to be relation with this type to the left
     requiredEndOfPathConcept = resultConcept[1] # path has to result in this concept
-    requiredEndOfPathConceptRoot = graph.findRootConceptOrRelation(resultConcept[0]).name  
+    requiredEndOfPathConceptRoot = graph.findRootConceptOrRelation(resultConcept[0]).name
     expectedRightConcept =  None
     lastPathElement = False
     pathStr = getPathStr(path)
@@ -603,8 +632,23 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
             pathElementDst = pathElement.dst.name
             pathElementVarName = pathElement.var_name if pathElement.var_name else ""
 
+            # In an andL, a variable may satisfy multiple predicates.
+            # E.g. brown('x'), right_of('z', 'x') — x is both a "brown"
+            # (color attribute) and an "object" (relation endpoint).
+            # The relation src/dst may be an ancestor of the variable's
+            # declared concept, which is valid.
+            srcCompatible = (
+                requiredLeftConcept == pathElementSrc
+                or _is_ancestor_of(pathElementSrc, variableConceptParent)
+            )
+            dstCompatible = (
+                expectedRightConceptRoot == pathElementDst
+                or _is_ancestor_of(pathElementDst, resultConcept[0])
+            )
+
             # Check if there is a problem with reversed usage of the current path element - it has to be possible to reverse the order to fix it
-            if requiredLeftConcept == pathElementDst and expectedRightConceptRoot == pathElementSrc:                    
+            if (not srcCompatible and requiredLeftConcept == pathElementDst
+                    and (expectedRightConceptRoot == pathElementSrc or _is_ancestor_of(pathElementSrc, resultConcept[0]))):
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid"
                 exceptionStr2 = f"The relation {pathElementVarName} is from a {pathElementSrc} to a {pathElementDst}, but you have used it from a {pathElementDst} to a {pathElementSrc}."
                 if not pathElement.is_reversed:
@@ -614,13 +658,13 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
                     f"You can use without the .reversed property to change the direction."
                 raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
             # Check if the current path element is correctly connected to the left (source) - has matching type
-            elif requiredLeftConcept != pathElementSrc:
+            elif not srcCompatible:
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
                 exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
                 exceptionStr3 = f"but the used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
                 raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
             # Check if the current path element is correctly connected to the right (destination) - has matching type
-            elif expectedRightConceptRoot != pathElementDst: 
+            elif not dstCompatible:
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
                 if lastPathElement: # if this is the last element it has to match the concept in which this path is embedded
                     exceptionStr2 = f"The required destination type after {pathPart} is a {expectedRightConcept}."

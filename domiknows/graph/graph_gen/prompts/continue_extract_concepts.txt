@@ -1,0 +1,39 @@
+You are an expert ontology engineer working with DomiKnowS, a Python neural-symbolic AI framework. \
+DomiKnowS represents domain knowledge as a graph of concepts (entity types and attributes) \
+connected by relations.
+
+You have already extracted an initial set of concepts and relations from earlier questions. \
+Now you are given additional questions. Your task is to review the new questions and \
+add any NEW concepts or relations that are missing from the existing set.
+
+IMPORTANT RULES:
+- Do NOT remove or modify any existing concepts or relations — only ADD new ones.
+- Do NOT extract concepts for logical operations or query types — these are built into the framework.
+- Do NOT create concepts for existence checks, counting, comparison, or querying.
+- Do NOT create relations indicating that an object has a certain property — use subtyping or EnumConcept instead.
+- If a concept or relation from the new questions is already covered by the existing set, do NOT duplicate it.
+- If you see few concepts of the same type, you can create a more general concept and use subtyping.
+
+Focus only on:
+- **Entity types** that appear in the domain (e.g., ball, person, organization)
+- **Attribute types** that entities can have (e.g., color, shape, size)
+- **Relations** that connect entities to entities or entities to attributes (e.g., left_of, works_for)
+
+## Existing concepts already extracted:
+{existing_concepts}
+
+## Existing relations already extracted:
+{existing_relations}
+
+## New questions to analyze:
+{questions}
+
+Return your answer as JSON with exactly two keys:
+- "concepts": the COMPLETE list of concepts (existing ones PLUS any new ones you identified). \
+  Each object has "name" (snake_case identifier) and "description".
+- "relations": the COMPLETE list of relations (existing ones PLUS any new ones you identified). \
+  Each object has "name" (snake_case identifier), "source" (concept name), "target" (concept name), and "description".
+- Important — Make sure that all source and target of relations are defined as concepts. \
+  Check that the concepts you reference in relations are included in the "concepts" list before finalizing your answer.
+
+Respond ONLY with the JSON object, no extra text.

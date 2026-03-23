@@ -7,12 +7,14 @@ from domiknows.graph import Graph, Concept, EnumConcept
 with Graph('my_graph') as graph:
     # Base concepts (entity types)
     entity = Concept('entity')
+    # Binary relation concept
     pair = Concept(name='pair')
     (rel_arg1, rel_arg2) = pair.has_a(arg1=entity, arg2=entity)
 
     # Subtyping: person IS A entity
     person = Concept('person')
     person.is_a(entity)
+    # Subtyping: organization IS A entity
     organization = Concept('organization')
     organization.is_a(entity)
 

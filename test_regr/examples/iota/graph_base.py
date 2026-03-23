@@ -1,5 +1,14 @@
 from domiknows.graph import Graph, Concept, Relation
-from domiknows.graph.logicalConstrain import iotaL, andL, existsL, queryL, sumL
+from domiknows.graph.concept import EnumConcept
+from domiknows.graph import (
+    ifL, andL, orL, nandL, norL, xorL, notL, equivalenceL,
+    eqL, fixedL, forAllL,
+    existsL, atLeastL, atMostL, exactL,
+    existsAL, atLeastAL, atMostAL, exactAL,
+    greaterL, greaterEqL, lessL, lessEqL, equalCountsL,
+    sumL, iotaL, queryL,
+    execute
+)
 
 Graph.clear()
 Concept.clear()
@@ -11,50 +20,39 @@ with Graph('visual_qa') as graph:
     object_node = Concept(name='object')
     (image_contains_object,) = image.contains(object_node)
     
-    # Object properties
-    
-    # -- Size ['big', 'large', 'small', 'tiny']
-    big = object_node(name='big')
-    small = object_node(name='small')
-    large = object_node(name='large')
-    tiny = object_node(name='tiny')
-    
-    # -- Color  ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
-    brown = object_node(name='brown')
-    gray = object_node(name='gray')
-    red = object_node(name='red')   
-    blue = object_node(name='blue')
-    green = object_node(name='green')
-    purple = object_node(name='purple')
-    cyan = object_node(name='cyan')
-    yellow = object_node(name='yellow')
-    
-    # -- Shape ['cube', 'sphere', 'cylinder']
-    cylinder = object_node(name='cylinder')
-    sphere = object_node(name='sphere')
-    cube = object_node(name='cube')
-    
-    # -- Texture  ['shiny', 'matte']
-    shiny = object_node(name='shiny')
-    matte = object_node(name='matte')
+    # Attribute concepts (EnumConcepts give us dot‑notation access)
+    size = EnumConcept('size', values=['big', 'large', 'small', 'tiny'])
+    color = EnumConcept('color', values=[
+        'gray', 'red', 'blue', 'green', 'brown',
+        'purple', 'cyan', 'yellow'
+    ])
+    shape = EnumConcept('shape', values=['cube', 'sphere', 'cylinder'])
+    texture = EnumConcept('texture', values=['shiny', 'matte'])
+    material = EnumConcept('material', values=['metal', 'rubber'])
     
     # Spatial relations ['left_of', 'right_of', 'front_of', 'behind', 'above', 'below']
     pair = Concept(name='pair')
     (rel_arg1, rel_arg2) = pair.has_a(arg1=object_node, arg2=object_node)
     
-   
-    
+    # Define spatial relation concepts using the pair relation
     right_of = pair(name='right_of')
     left_of = pair(name='left_of')
     front_of = pair(name='front_of')
     behind = pair(name='behind')
     above = pair(name='above')
     below = pair(name='below')
+    
+    # Same-attribute relations (e.g., same_color, same_size)
+    same_size = pair(name='same_size')
+    same_color = pair(name='same_color')
+    same_shape = pair(name='same_shape')
+    same_texture = pair(name='same_texture')
+    same_material = pair(name='same_material')
 
     # =========================================================
     # Material as multiclass concept with subclasses
     # =========================================================
-    material = object_node(name='material')
+    material = EnumConcept('material', values=['metal', 'rubber'])
     
     # Subclasses of material
     metal = material(name='metal')

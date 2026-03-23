@@ -746,11 +746,66 @@
     }
 
     // -----------------------------------------------------------------------
+    // Clear downstream steps when re-executing an earlier step
+    // -----------------------------------------------------------------------
+    function clearFromStep(step) {
+        // step: 1 = extract, 2 = generate graph, 3 = execute graph, 4 = exec constraints
+        // Clears everything AFTER the given step.
+
+        if (step <= 1) {
+            // Clear Step 2: concepts display
+            state.conceptsJson = null;
+            document.getElementById("step-concepts").classList.add("hidden");
+            document.getElementById("concepts-display").innerHTML = "";
+            document.getElementById("generate-status").className = "hidden";
+            document.getElementById("generate-status").innerHTML = "";
+            document.getElementById("generate-log").innerHTML = "";
+            document.getElementById("btn-generate").disabled = false;
+        }
+
+        if (step <= 2) {
+            // Clear Step 3: generated graph code
+            state.graphCode = "";
+            state.graphAttempt = 0;
+            document.getElementById("step-code").classList.add("hidden");
+            document.getElementById("code-display").value = "";
+            document.getElementById("attempt-badge").textContent = "";
+            document.getElementById("coverage-status").className = "hidden";
+            document.getElementById("coverage-status").innerHTML = "";
+            document.getElementById("execute-status").className = "hidden";
+            document.getElementById("execute-status").innerHTML = "";
+            document.getElementById("execute-log").innerHTML = "";
+            document.getElementById("btn-execute").disabled = false;
+
+            // Also clear load-graph status
+            document.getElementById("load-graph-status").innerHTML = "";
+        }
+
+        if (step <= 3) {
+            // Clear Step 4: executable constraints
+            state.execSnippet = "";
+            state.fullCode = "";
+            state.execAttempt = 0;
+            document.getElementById("step-exec-constraints").classList.add("hidden");
+            document.getElementById("exec-code-display").value = "";
+            document.getElementById("exec-attempt-badge").textContent = "";
+            document.getElementById("question-progress").innerHTML = "";
+            document.getElementById("exec-constraint-status").className = "hidden";
+            document.getElementById("exec-constraint-status").innerHTML = "";
+            document.getElementById("exec-constraint-log").innerHTML = "";
+            document.getElementById("btn-execute-full").disabled = false;
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Step 1: Extract concepts
     // -----------------------------------------------------------------------
     async function extractConcepts() {
         const raw = document.getElementById("questions").value.trim();
         if (!raw) return;
+
+        // Clear all downstream steps (2, 3, 4)
+        clearFromStep(1);
 
         state.questions = raw.split("\n").map(q => q.trim()).filter(Boolean);
         document.getElementById("btn-extract").disabled = true;
@@ -797,6 +852,9 @@
     // Step 2: Generate graph
     // -----------------------------------------------------------------------
     async function generateGraph() {
+        // Clear downstream steps (3, 4)
+        clearFromStep(2);
+
         document.getElementById("btn-generate").disabled = true;
         document.getElementById("generate-log").innerHTML = '';
         showLoading("generate-status", "Generating DomiKnowS graph code...");
@@ -836,6 +894,9 @@
             showStatus("load-graph-status", "error", "Please select a .py file first.");
             return;
         }
+
+        // Clear downstream steps (3, 4) since we're replacing graph code
+        clearFromStep(2);
 
         // Capture domain questions — needed later for executable constraint generation
         const raw = document.getElementById("questions").value.trim();
@@ -910,6 +971,9 @@
     // Step 3: Execute graph (with fix loop)
     // -----------------------------------------------------------------------
     async function executeGraphCode() {
+        // Clear downstream step (4)
+        clearFromStep(3);
+
         // Sync any manual edits from the textarea back to state
         state.graphCode = document.getElementById("code-display").value;
         document.getElementById("btn-execute").disabled = true;

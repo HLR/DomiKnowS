@@ -273,5 +273,8 @@ test_regr/ConllQA/ConllQA_with_global_constraints/adaptive_tnorm_details_entitie
 training_1_lr_0.001_entities_with_relation.pth
 result.txt
 domiknows/graph/graph_gen/config_openai.yaml
-domiknows/.claude/*
+**/.claude/
 domiknows/graph/graph_gen/test_graph.py
+domiknows/graph/graph_gen/output_graph.py
+test_regr/Clever/models/*
+domiknows/graph/graph_gen/output_*.*

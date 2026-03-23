@@ -51,9 +51,13 @@ Each question is processed individually by the LLM. Successfully encoded questio
 | `dataset` (positional) | — | Path to the JSON dataset file |
 | `--keyword` | `question` | JSON key holding the question text in each record |
 | `--list-key` | auto-detect | Top-level JSON key containing the list of records |
-| `-o`, `--output` | `output_graph.py` | Output Python file path |
+| `-o`, `--output` | `output_graph_<model>_<timestamp>.py` | Output Python file path (also used as stem for intermediate files) |
 | `--limit` | all | Maximum number of questions to process |
 | `--no-validate` | off | Skip execution/validation of the generated output |
+| `--graph-only` | off | Stop after graph generation; skip executable constraint generation. Saves concepts JSON and graph code to separate files |
+| `--graph-path PATH` | — | Path to an existing graph `.py` file; skips concept extraction and graph generation |
+| `-m`, `--model` | first in config | LLM model to use |
+| `--extract-batch-size` | 20 | Number of questions per concept-extraction batch |
 
 #### Supported JSON formats
 
@@ -68,10 +72,22 @@ Each question is processed individually by the LLM. Successfully encoded questio
 ["Is there a red cube?", "How many spheres are green?"]
 ```
 
+#### Output Files
+
+Given `-o output_graph_gpt4_20260323.py` (or the auto-generated default), the pipeline produces:
+
+| File | When produced | Description |
+|---|---|---|
+| `*_concepts.json` | Always (when extraction ran) | Extracted concepts and relations as JSON |
+| `*_graph.py` | Always | Validated graph code (concepts + relations only, no constraints) |
+| `*.py` | Full mode only (not `--graph-only`) | Combined output: graph code + all executable constraints |
+
+The `*_graph.py` file is directly usable as `--graph-path` input for subsequent runs, enabling a two-stage workflow.
+
 #### Examples
 
 ```bash
-# Process a CLEVR questions file
+# Process a CLEVR questions file (full pipeline)
 uv run graph_builder.py CLEVR_val_questions.json
 
 # Custom keyword and limit
@@ -79,6 +95,13 @@ uv run graph_builder.py my_data.json --keyword text --limit 100 -o clevr_graph.p
 
 # Explicit list key, skip validation
 uv run graph_builder.py dataset.json --list-key data --no-validate
+
+# Generate graph only (no executable constraints)
+uv run graph_builder.py dataset.json --graph-only
+
+# Two-stage workflow: first generate graph, then encode constraints separately
+uv run graph_builder.py dataset.json --graph-only -o clevr.py
+uv run graph_builder.py dataset.json --graph-path clevr_graph.py -o clevr.py
 ```
 
 ### CLI — Interactive Mode
