@@ -106,9 +106,10 @@ class LossCalculator:
         myBooleanMethods.setTNorm(selected_tnorm)
 
         if isinstance(lc, sumL) and label is None:
-            label = dn.getExecutableConstraintLabel(lc.lcName).float()
-            if label is None:
+            _rawLabel = dn.getExecutableConstraintLabel(lc.lcName)
+            if _rawLabel is None:
                 return None
+            label = _rawLabel.float()
 
         self.solver.myLogger.info(f'Processing {lc} with t-norm {selected_tnorm}')
 

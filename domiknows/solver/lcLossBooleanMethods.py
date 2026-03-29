@@ -870,6 +870,8 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.myLogger.debug("%s called with %d variables", logicMethodName, len(_var))
             
         if onlyConstrains:
+            if label is None:
+                return None
             self.myLogger.debug("%s called with onlyConstrains=True, delegating to countVar with limitOp=='==', limit=label", logicMethodName)
             return self.countVar(m, *_var, onlyConstrains=True, limitOp="==", limit=label, logicMethodName=f"{logicMethodName}")
 

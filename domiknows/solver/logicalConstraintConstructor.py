@@ -507,8 +507,84 @@ class LogicalConstraintConstructor:
                     vNo[0] += 1
 
                     lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
-                    lcVariables[newVariableName] = lcVariables[variableName]
-                    usedVariablesNames.add(variableName)
+
+                    # When the current element is a Concept/tuple with a different concept
+                    # than what the variable was originally bound to, we need to look up
+                    # the NEW concept's ILP variables on the same datanodes rather than
+                    # copying the old concept's values.
+                    # E.g., in ifL(word('x'), exactL(people('x'), org('x'), ...)),
+                    # people('x') should get <people>/ILP/x, not <word>/ILP/x values.
+                    is_concept_tuple = isinstance(e, tuple) and len(e) >= 1 and isinstance(e[0], Concept)
+                    if is_concept_tuple:
+                        conceptName = e[0].name
+                        xPkey = '<' + conceptName + ">" + key
+                        dnsList = lcVariablesDns[variableName]
+                        vDns = []
+                        if sample:
+                            sampleInfoForVariable = []
+
+                        for dns in dnsList:
+                            _vDns = []
+                            if sample:
+                                _sampleInfoForVariable = []
+
+                            for _dn in dns:
+                                if not _dn:
+                                    _vDns.append(None)
+                                    continue
+
+                                if isinstance(e[0], EnumConcept) and e[2] == None:
+                                    eList = e[0].enum
+                                    for i, _ in enumerate(eList):
+                                        eT = (e[0].name, i, i)
+                                        if sample:
+                                            vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                            _sampleInfoForVariable.append(vDnSampleInfo)
+                                        else:
+                                            vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        _vDns.append(vDn)
+                                elif isinstance(e[0], EnumConcept) and e[2] != None:
+                                    eT = (e[0].name, e[2], e[2])
+                                    if sample:
+                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        _sampleInfoForVariable.append(vDnSampleInfo)
+                                    else:
+                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                    _vDns.append(vDn)
+                                else:
+                                    eT = (conceptName, 1, 0)
+                                    if sample:
+                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        _sampleInfoForVariable.append(vDnSampleInfo)
+                                    else:
+                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                    _vDns.append(vDn)
+
+                            vDns.append(_vDns)
+                            if sample:
+                                sampleInfoForVariable.append(_sampleInfoForVariable)
+
+                        if vDns and loss and not sample:
+                            vDnsList = [v[0] for v in vDns]
+                            try:
+                                tStack = torch.stack(vDnsList, dim=0)
+                                tsqueezed = torch.squeeze(tStack, dim=0)
+                                if not len(tsqueezed.shape):
+                                    tsqueezed = torch.unsqueeze(tsqueezed, 0)
+                                lcVariables[newVariableName] = [[tStack]]
+                            except TypeError:
+                                for v in vDns:
+                                    if v[0] != None and torch.is_tensor(v[0]):
+                                        v[0] = torch.unsqueeze(v[0], 0)
+                                lcVariables[newVariableName] = vDns
+                        else:
+                            lcVariables[newVariableName] = vDns
+
+                        if sample:
+                            sampleInfo[newVariableName] = sampleInfoForVariable
+                    else:
+                        lcVariables[newVariableName] = lcVariables[variableName]
+                    usedVariablesNames.add(newVariableName)
 
                 elif isinstance(e, (Concept, tuple)):
                     # Get dataNode candidates 

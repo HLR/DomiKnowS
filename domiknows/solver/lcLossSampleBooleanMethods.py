@@ -302,8 +302,10 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         
     def summationVar(self, m, *var, onlyConstrains=False, label=None, logicMethodName="SUMMATION"):
         "Sums up a list of binary literals to an integer literal."
-        
+
         if onlyConstrains:
+            if label is None:
+                return None
             return self.countVar(m, *var, onlyConstrains=True, limitOp='==', limit=label, logicMethodName=logicMethodName)
             
         if self.ifNone(var):

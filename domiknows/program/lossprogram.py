@@ -136,7 +136,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             try:
                 answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
             except Exception as e:
-                program.logger.warning(f"AnswerSolver failed for {lc_name}: {e}")
+                program.logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
                 answer_result = None
 
             if answer_result is not None:

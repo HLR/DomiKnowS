@@ -87,12 +87,12 @@ def build_visual_reasoning_graph(
         behind_fwd    = pair_forward(name="behind")
 
         # spatial relations — reverse direction
-        left_of_rev   = pair_reverse(name="left_of")
-        right_of_rev  = pair_reverse(name="right_of")
-        above_rev     = pair_reverse(name="above")
-        below_rev     = pair_reverse(name="below")
-        in_front_rev  = pair_reverse(name="in_front_of")
-        behind_rev    = pair_reverse(name="behind")
+        left_of_rev   = pair_reverse(name="left_of_rev")
+        right_of_rev  = pair_reverse(name="right_of_rev")
+        above_rev     = pair_reverse(name="above_rev")
+        below_rev     = pair_reverse(name="below_rev")
+        in_front_rev  = pair_reverse(name="in_front_of_rev")
+        behind_rev    = pair_reverse(name="behind_rev")
 
     ctx = {
         "graph":  graph,
@@ -119,7 +119,7 @@ def build_visual_reasoning_graph(
         "below":       below_fwd,
         "in_front_of": in_front_fwd,
         "behind":      behind_fwd,
-        # spatial — reverse (OWL inverse properties)
+        # spatial — reverse (needed for inverse constraints)
         "left_of_rev":     left_of_rev,
         "right_of_rev":    right_of_rev,
         "above_rev":       above_rev,

@@ -297,6 +297,8 @@ class booleanMethodsCalculator(constraintsProcessor):
         - Integer sum of all truthy values
         """
         if onlyConstrains:
+            if label is None:
+                return None
             return self.countVar(m, *var, onlyConstrains=onlyConstrains, limitOp=">=", limit=label, logicMethodName=logicMethodName)
         
         varSum = 0

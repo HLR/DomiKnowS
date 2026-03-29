@@ -228,16 +228,7 @@ examples/IMDB/.vector_cache/*
 /examples/Typenet/resources/*
 data/MNIST/processed/test.pt
 data/MNIST/processed/training.pt
-data/MNIST/raw/t10k-images-idx3-ubyte
-data/MNIST/raw/t10k-images-idx3-ubyte.gz
-data/MNIST/raw/t10k-labels-idx1-ubyte
-data/MNIST/raw/t10k-labels-idx1-ubyte.gz
-data/MNIST/raw/train-images-idx3-ubyte
-data/MNIST/raw/train-images-idx3-ubyte.gz
-data/MNIST/raw/train-labels-idx1-ubyte
-data/MNIST/raw/train-labels-idx1-ubyte.gz
-.vscode/settings.json
-.vscode/settings.json
+data/MNIST/raw/*
 .vscode/settings.json
 /data/
 
@@ -269,7 +260,7 @@ domiknows/graph/simplifiedLCSyntax/*
 test_regr/InferenceAPI/results.txt
 test_regr/ConllQA/ConllQA_with_global_constraints/result.txt
 test_regr/ConllQA/ConllQA_with_global_constraints/*.pth
-test_regr/ConllQA/ConllQA_with_global_constraints/adaptive_tnorm_details_entities_with_relation_epoch*.csv
+*adaptive_tnorm_*.csv
 training_1_lr_0.001_entities_with_relation.pth
 result.txt
 domiknows/graph/graph_gen/config_openai.yaml
@@ -278,3 +269,6 @@ domiknows/graph/graph_gen/test_graph.py
 domiknows/graph/graph_gen/output_graph.py
 test_regr/Clever/models/*
 domiknows/graph/graph_gen/output_*.*
+test_regr/Clever/dataset_cache/*
+test_regr/Clever/train/*
+test_regr/Clever/results.txt

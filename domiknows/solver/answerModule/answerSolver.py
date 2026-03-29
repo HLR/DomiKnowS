@@ -31,6 +31,79 @@ class AnswerSolver:
             from domiknows.solver import ilpOntSolverFactory
             self.solver = ilpOntSolverFactory.getOntSolverInstance({graph})
 
+    # ── ILP cache management ────────────────────────────────────────────
+
+    @staticmethod
+    def _clear_ilp_cache(dn, visited=None):
+        """Remove cached ILP variables from the DataNode tree.
+
+        ``createILPVariable`` (gurobiILPOntSolver) stores Gurobi variables
+        on each DataNode under keys like ``<concept>/ILP/x``.  When we
+        need a *different* Gurobi model (e.g. a fresh build per
+        hypothesis), the stale cache must be cleared so that variables
+        are created on the new model.
+        """
+        if visited is None:
+            visited = set()
+        if id(dn) in visited:
+            return
+        visited.add(id(dn))
+
+        ilp_keys = [k for k in dn.attributes if '/ILP/' in k]
+        for k in ilp_keys:
+            del dn.attributes[k]
+
+        # Recurse into explicit children
+        if hasattr(dn, 'childDataNodes'):
+            for children in dn.childDataNodes.values():
+                for child in children:
+                    AnswerSolver._clear_ilp_cache(child, visited)
+
+        # Recurse through graph links as well. The solver uses findDatanodes(),
+        # which traverses links rather than only childDataNodes, so stale ILP
+        # vars can survive on linked relation/object nodes unless we clear them.
+        if hasattr(dn, 'getLinks'):
+            for linked_dns in dn.getLinks().values():
+                for linked_dn in linked_dns:
+                    AnswerSolver._clear_ilp_cache(linked_dn, visited)
+
+    @staticmethod
+    def _safe_var_name(var):
+        try:
+            return var.VarName
+        except Exception:
+            return f"<{type(var).__name__}:name-unavailable>"
+
+    def _log_var_not_in_model_details(self, error, dn, model, stage):
+        """Log candidate variable names and return a short diagnostic summary."""
+        if "Variable not in model" not in str(error):
+            return None
+
+        try:
+            model_vars = model.getVars()
+            names = []
+            for mv in model_vars[:10]:
+                try:
+                    names.append(mv.VarName)
+                except Exception:
+                    continue
+
+            logger.error(
+                "Variable not in model during %s. model_var_count=%d, sample_model_vars=%s",
+                stage,
+                len(model_vars),
+                names,
+            )
+            sample = ",".join(names)
+            return f"stage={stage}; model_var_count={len(model_vars)}; sample_model_vars={sample}"
+        except Exception as debug_error:
+            logger.error(
+                "Variable-not-in-model debug logging failed during %s: %s",
+                stage,
+                debug_error,
+            )
+            return f"stage={stage}; debug_logging_failed={debug_error}"
+
     # ── public API ──────────────────────────────────────────────────────
 
     def answer(self, question, dn):
@@ -49,26 +122,41 @@ class AnswerSolver:
 
         constraint_name = question[len('execute('):-1].strip()
 
-        elc = self._resolve_constraint(constraint_name, dn.graph)
-        lc = elc.innerLC
+        # AnswerSolver builds fresh Gurobi models. Cached ILP vars on the
+        # DataNode tree may still point to a previous model and must be purged
+        # before model construction.
+        self._clear_ilp_cache(dn)
 
-        m, x, conceptsRelations = self._build_base_model(dn)
+        try:
+            elc = self._resolve_constraint(constraint_name, dn.graph)
+            lc = elc.innerLC
 
-        # Dispatch to per-type handler
-        if isinstance(lc, queryL):
-            return self._answer_queryL(lc, dn, m, x)
-        elif isinstance(lc, existsL):
-            return self._answer_existsL(lc, dn, m, x)
-        elif isinstance(lc, sumL):
-            return self._answer_sumL(lc, dn, m, x)
-        elif isinstance(lc, greaterL):
-            return self._answer_greaterL(lc, dn, m, x)
-        elif isinstance(lc, atLeastL):
-            return self._answer_atLeastL(lc, dn, m, x)
-        elif isinstance(lc, exactL):
-            return self._answer_exactL(lc, dn, m, x)
-        else:
-            raise ValueError(f"Unsupported constraint type: {type(lc).__name__}")
+            m, x, conceptsRelations = self._build_base_model(dn)
+
+            # Dispatch to per-type handler
+            if isinstance(lc, queryL):
+                return self._answer_queryL(lc, dn, m, x)
+            elif isinstance(lc, existsL):
+                return self._answer_existsL(lc, dn, m, x)
+            elif isinstance(lc, sumL):
+                return self._answer_sumL(lc, dn, m, x)
+            elif isinstance(lc, greaterL):
+                return self._answer_greaterL(lc, dn, m, x)
+            elif isinstance(lc, atLeastL):
+                return self._answer_atLeastL(lc, dn, m, x)
+            elif isinstance(lc, exactL):
+                return self._answer_exactL(lc, dn, m, x)
+            else:
+                raise ValueError(f"Unsupported constraint type: {type(lc).__name__}")
+        except Exception as e:
+            if "Variable not in model" not in str(e):
+                raise
+
+            details = f"constraint={constraint_name}"
+
+            raise RuntimeError(f"{e}; {details}") from e
+        finally:
+            self._clear_ilp_cache(dn)
 
     # ── constraint resolution ───────────────────────────────────────────
 
@@ -128,14 +216,14 @@ class AnswerSolver:
         # Save headLC state of any nested LCs before construction mutates them
         saved_head = {id(e): e.headLC for e in elements if isinstance(e, LogicalConstrain)}
 
-        # Swap graph.logicalConstrains with a temp dict so auto-registration
-        # goes into the void — the real constraint set stays untouched
-        original_lcs = graph.logicalConstrains
-        graph.logicalConstrains = OrderedDict()
+        # Swap the backing store so auto-registration goes into a temporary
+        # dict — graph.logicalConstrains is a read-only property.
+        original_lcs = graph._logicalConstrains
+        graph._logicalConstrains = OrderedDict()
         try:
             hyp_lc = lc_class(*elements, **kwargs)
         finally:
-            graph.logicalConstrains = original_lcs
+            graph._logicalConstrains = original_lcs
 
         # Restore headLC on any nested LCs that were mutated by __init__
         for e in elements:
@@ -186,7 +274,13 @@ class AnswerSolver:
                     lcs.append(lc_item)
 
         if lcs:
-            self.solver.addLogicalConstrains(m, dn, lcs, 100, key="/ILP/x")
+            try:
+                self.solver.addLogicalConstrains(m, dn, lcs, 100, key="/ILP/x")
+            except Exception as e:
+                details = self._log_var_not_in_model_details(e, dn, m, "base-logical-constraints")
+                if details:
+                    raise RuntimeError(f"{e}; {details}") from e
+                raise
 
         # Set objective
         if Q is None:
@@ -198,29 +292,14 @@ class AnswerSolver:
 
         return m, x, conceptsRelations
 
-    # ── model copy helper ───────────────────────────────────────────────
-
-    def _copy_model_and_vars(self, m, x):
-        """Copy a Gurobi model and remap the variable dictionary."""
-        mCopy = m.copy()
-        xCopy = OrderedDict()
-        for k, v in x.items():
-            if v is not None:
-                xCopy[k] = mCopy.getVarByName(v.VarName)
-            else:
-                xCopy[k] = None
-        return mCopy, xCopy
-
     # ── generic hypothesis loop ─────────────────────────────────────────
 
-    def _solve_with_hypotheses(self, m, x, dn, hypotheses, build_hypothesis_lc_fn):
-        """Test each hypothesis by copying the model, compiling the hypothesis
-        as a LogicalConstrain, adding it via addLogicalConstrains, solving,
-        and selecting the feasible result with the best objective.
+    def _solve_with_hypotheses(self, dn, hypotheses, build_hypothesis_lc_fn):
+        """Test each hypothesis by building a fresh ILP model, adding the
+        hypothesis constraint, solving, and selecting the feasible result
+        with the best objective
 
         Args:
-            m: Base Gurobi model (already has variables, constraints, objective).
-            x: Variable dictionary {(concept, label, instanceID, labelIndex): GurobiVar}.
             dn: Root DataNode.
             hypotheses: Iterable of hypothesis values to test.
             build_hypothesis_lc_fn: callable(hypothesis) -> LogicalConstrain
@@ -233,23 +312,35 @@ class AnswerSolver:
         best_obj = None
 
         for hyp in hypotheses:
-            mCopy, xCopy = self._copy_model_and_vars(m, x)
+            # Clear ILP cache so _build_base_model creates fresh variables
+            self._clear_ilp_cache(dn)
+
+            # Build a fresh model (variables are cached on dn for THIS model)
+            m, x, _ = self._build_base_model(dn)
 
             # Build hypothesis as a proper LogicalConstrain
             hyp_lc = build_hypothesis_lc_fn(hyp)
 
-            # Add hypothesis constraint to the copied model via the solver infrastructure
-            # This correctly translates nested LCs into ILP constraints
-            self.solver.addLogicalConstrains(mCopy, dn, [hyp_lc], 100, key="/ILP/x")
+            # Add hypothesis constraint to the fresh model
+            try:
+                self.solver.addLogicalConstrains(m, dn, [hyp_lc], 100, key="/ILP/x")
+            except Exception as e:
+                details = self._log_var_not_in_model_details(e, dn, m, f"hypothesis={hyp}")
+                if details:
+                    raise RuntimeError(f"{e}; {details}") from e
+                raise
 
-            mCopy.update()
-            mCopy.optimize()
+            m.update()
+            m.optimize()
 
-            if mCopy.status == GRB.Status.OPTIMAL:
-                obj = mCopy.ObjVal
+            if m.status == GRB.Status.OPTIMAL:
+                obj = m.ObjVal
                 if best_obj is None or obj > best_obj:
                     best_obj = obj
                     best_hypothesis = hyp
+
+        # Clear cache after loop so dn isn't left with stale vars
+        self._clear_ilp_cache(dn)
 
         if best_hypothesis is None:
             logger.warning("All hypotheses were infeasible")
@@ -277,7 +368,7 @@ class AnswerSolver:
                 inner = self._compile_hypothesis(existsL, lc.e, graph)
                 return self._compile_hypothesis(notL, [inner], graph)
 
-        best, _ = self._solve_with_hypotheses(m, x, dn, [True, False], build_hyp)
+        best, _ = self._solve_with_hypotheses(dn, [True, False], build_hyp)
         return best
 
     def _answer_queryL(self, lc, dn, m, x):
@@ -311,7 +402,7 @@ class AnswerSolver:
             hyp_elements = [subclass_tuple] + list(iota_elements)
             return self._compile_hypothesis(andL, hyp_elements, graph)
 
-        best, _ = self._solve_with_hypotheses(m, x, dn, subclass_names, build_hyp)
+        best, _ = self._solve_with_hypotheses(dn, subclass_names, build_hyp)
         return best
 
     def _answer_sumL(self, lc, dn, m, x):
@@ -342,7 +433,7 @@ class AnswerSolver:
             hyp_elements = list(base_elements) + [n]
             return self._compile_hypothesis(exactL, hyp_elements, graph)
 
-        best, _ = self._solve_with_hypotheses(m, x, dn, range(0, max_count + 1), build_hyp)
+        best, _ = self._solve_with_hypotheses(dn, range(0, max_count + 1), build_hyp)
         return best
 
     def _answer_greaterL(self, lc, dn, m, x):
@@ -361,7 +452,7 @@ class AnswerSolver:
                 inner = self._compile_hypothesis(greaterL, lc.e, graph)
                 return self._compile_hypothesis(notL, [inner], graph)
 
-        best, _ = self._solve_with_hypotheses(m, x, dn, [True, False], build_hyp)
+        best, _ = self._solve_with_hypotheses(dn, [True, False], build_hyp)
         return best
 
     def _answer_atLeastL(self, lc, dn, m, x):
@@ -380,7 +471,7 @@ class AnswerSolver:
                 inner = self._compile_hypothesis(atLeastL, lc.e, graph)
                 return self._compile_hypothesis(notL, [inner], graph)
 
-        best, _ = self._solve_with_hypotheses(m, x, dn, [True, False], build_hyp)
+        best, _ = self._solve_with_hypotheses(dn, [True, False], build_hyp)
         return best
 
     def _answer_exactL(self, lc, dn, m, x):
@@ -399,5 +490,5 @@ class AnswerSolver:
                 inner = self._compile_hypothesis(exactL, lc.e, graph)
                 return self._compile_hypothesis(notL, [inner], graph)
 
-        best, _ = self._solve_with_hypotheses(m, x, dn, [True, False], build_hyp)
+        best, _ = self._solve_with_hypotheses(dn, [True, False], build_hyp)
         return best

@@ -1,6 +1,5 @@
 """
 visual_constraints.py
-
 Reusable, *generic* commonsense constraint library for DomiKnowS
 visual-reasoning graphs built with build_visual_reasoning_graph().
 
@@ -22,8 +21,10 @@ Usage:
 from domiknows.graph import ifL, andL, nandL, notL, equivalenceL
 
 # ======================================================================
-# §0  Spatial: opposite (reverse) relations  A ↔ ¬B
-# In English we say "A is left of B" ↔ "B is not left of A" (i.e. "B is right of A").
+# §0  Spatial: opposite constraints   R_fwd(a,b) ↔ ¬R_opp_fwd(a,b)
+#
+# Both concepts live on pair_forward, so this expresses:
+#   "if A is left of B then A is NOT right of B" (and vice-versa).
 # ======================================================================
 
 OPPOSITE_PAIRS = [
@@ -33,73 +34,75 @@ OPPOSITE_PAIRS = [
 ]
 
 def apply_opposite_constraints(ctx, *, pairs=None):
-    """R(A,B) ↔ ¬R_opp(A,B) for every opposite pair present in ctx."""
-    pairs = pairs or [
-        (ctx.get(r1), ctx.get(r2)) for r1, r2 in OPPOSITE_PAIRS
-    ]
+    """R_fwd(a,b) ↔ ¬R_opp_fwd(a,b)  — both on pair_forward."""
+    if pairs is None:
+        pairs = [(ctx.get(r1), ctx.get(r2)) for r1, r2 in OPPOSITE_PAIRS]
     for r1, r2 in pairs:
         if r1 is None or r2 is None:
             continue
         equivalenceL(
             r1('a', 'b'),
             notL(r2('a', 'b')),
-            name=f"rev_{r1.name}_{r2.name}",
+            name=f"opp_{r1.name}_{r2.name}",
         )
 
 
 # ======================================================================
-# §1  Spatial: inverse relations
-# In English we say "A is left of B" ↔ "B is right of A".
+# §1  Spatial: inverse constraints   R_fwd(a,b) ↔ R_inv_rev(a,b)
+#
+# The forward concept and the reverse concept live on DIFFERENT nodes
+# (pair_forward vs pair_reverse), so their ILP variables are distinct
+# even though both use the slot names ('a','b').
+#
+# This encodes: "A is left of B"  ↔  "B is right of A"
+# without any contradiction with §0.
 # ======================================================================
 
+INVERSE_PAIRS = [
+    ("left_of",     "right_of_rev"),
+    ("right_of",    "left_of_rev"),
+    ("above",       "below_rev"),
+    ("below",       "above_rev"),
+    ("in_front_of", "behind_rev"),
+    ("behind",      "in_front_of_rev"),
+]
+
 def apply_inverse_constraints(ctx, *, pairs=None):
-    """R(A,B) ↔ R_inv(B,A) for every inverse pair present in ctx."""
-    pairs = pairs or [
-        (ctx.get(r1), ctx.get(r2)) for r1, r2 in OPPOSITE_PAIRS
-    ]
+    """R_fwd(a,b) ↔ R_inv_rev(a,b)  — across pair_forward and pair_reverse."""
+    if pairs is None:
+        pairs = [(ctx.get(r1), ctx.get(r2)) for r1, r2 in INVERSE_PAIRS]
     for r1, r2 in pairs:
         if r1 is None or r2 is None:
             continue
-        # r1(a,b) ↔ r2(b,a): same variables, reversed argument order
         equivalenceL(
             r1('a', 'b'),
-            r2('b', 'a'),
+            r2('a', 'b'),
             name=f"inverse_{r1.name}_{r2.name}",
         )
 
+
 # ======================================================================
-# §2  Spatial: transitivity (soft)
-# In English we say "A is left of B" ∧ "B is left of C" ⇒ "A is left of C".
+# §2  Spatial: transitivity   R(a,b) ∧ R(b,c) ⇒ R(a,c)
 # ======================================================================
 
 def apply_transitive_constraints(ctx, *, relations=None):
-    """
-    R(A,B) ∧ R(B,C) ⇒ R(A,C).
-
-    Parameters
-    ----------
-    relations : list | None
-        Which spatial relations to make transitive.
-        Defaults to left_of, right_of, above, below.
-    """
+    """R(a,b) ∧ R(b,c) ⇒ R(a,c)  — applied on pair_forward only."""
     relations = relations or [
-        ctx["left_of"], ctx["right_of"], ctx["above"], ctx["below"]
+        ctx.get("left_of"), ctx.get("right_of"),
+        ctx.get("above"),   ctx.get("below"),
     ]
     for rel in relations:
         if rel is None:
             continue
         ifL(
-            andL(
-                rel('a', 'b'),
-                rel('b', 'c'),
-            ),
+            andL(rel('a', 'b'), rel('b', 'c')),
             rel('a', 'c'),
             name=f"transitive_{rel.name}",
         )
 
+
 # ======================================================================
-# §3  Cross-attribute plausibility (soft world knowledge)
-# In English we say "A is a small and elephant" is implausible, so "small(x) ∧ elephant(x)" ⇒ False.
+# §3  Cross-attribute plausibility
 # ======================================================================
 
 def apply_nand_combos(
@@ -109,27 +112,22 @@ def apply_nand_combos(
     *,
     tag: str = "implausible",
 ):
-    """
-    For each (val_a, val_b) in `implausible`,
-    create nandL(concept_a(x), concept_b(x)).
-
-    Works for any two attribute dictionaries, e.g.
-      apply_nand_combos(shapes, sizes, [("sphere","small")])
-    """
     for val_a, val_b in implausible:
         ca = concept_dict_a.get(val_a)
         cb = concept_dict_b.get(val_b)
         if ca is None or cb is None:
             continue
-        nandL(
-            ca('x'),
-            cb('x'),
-            name=f"{tag}_{val_a}_{val_b}",
-        )
+        nandL(ca('x'), cb('x'), name=f"{tag}_{val_a}_{val_b}")
 
 
 # ======================================================================
-# §4  Convenience: apply all generic constraints
+# §4  Apply all constraints
+#
+# All three spatial constraint types are safe to use simultaneously
+# because pair_forward and pair_reverse are distinct concept nodes:
+#   §0 opposite  — pair_forward only          → no conflict
+#   §1 inverse   — pair_forward ↔ pair_reverse → no conflict with §0
+#   §2 transitive — pair_forward only          → no conflict
 # ======================================================================
 
 def apply_all_constraints(
@@ -138,16 +136,10 @@ def apply_all_constraints(
     implausible_shape_size: list[tuple[str, str]] | None = None,
     implausible_color_material: list[tuple[str, str]] | None = None,
 ):
-    """
-    Apply the full generic constraint set to a ctx dict
-    returned by `build_visual_reasoning_graph`.
-    """
-    # --- Spatial ---
     apply_opposite_constraints(ctx)
     apply_inverse_constraints(ctx)
     apply_transitive_constraints(ctx)
 
-    # --- Optional domain-specific plausibility ---
     if implausible_shape_size:
         apply_nand_combos(
             ctx["shapes"], ctx["sizes"],
@@ -155,7 +147,6 @@ def apply_all_constraints(
             tag="implausible_shape_size",
         )
     if implausible_color_material:
-        # material is EnumConcept — build a dict from its enum values
         mat = ctx["material"]
         mat_dict = {v: getattr(mat, v) for v in mat.enum}
         apply_nand_combos(

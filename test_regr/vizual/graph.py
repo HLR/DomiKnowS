@@ -18,7 +18,6 @@ Answer: metal
 """
 
 from domiknows.graph.visual.visual_reasoning_graph import build_visual_reasoning_graph
-from domiknows.graph.visual.visual_constraints import apply_all_constraints
 from domiknows.graph.logicalConstrain import iotaL, andL, queryL
 
 # ── 1. Build generic graph ───────────────────────────────────────────
@@ -34,9 +33,9 @@ graph, ctx = build_visual_reasoning_graph(
 image                = ctx["image"]
 object_node          = ctx["object"]
 image_contains_object = ctx["image_contains_object"]
-pair                 = ctx["pair"]
-rel_arg1             = ctx["rel_arg1"]
-rel_arg2             = ctx["rel_arg2"]
+pair                 = ctx["pair_forward"]
+rel_arg1             = ctx["rel_arg1_fwd"]
+rel_arg2             = ctx["rel_arg2_fwd"]
 
 # Attribute sub-concepts
 red      = ctx["colors"]["red"]
@@ -55,11 +54,7 @@ left_of  = ctx["left_of"]
 # Material EnumConcept
 material = ctx["material"]
 
-# ── 2. Apply generic commonsense constraints ─────────────────────────
 with graph:
-    apply_all_constraints(ctx)
-
-    # ── 3. Task-specific query constraints ───────────────────────────
 
     # Step 1: THE small blue cube
     the_small_blue_cube = iotaL(
