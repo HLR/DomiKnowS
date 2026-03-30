@@ -21,10 +21,16 @@ Usage:
 from domiknows.graph import ifL, andL, nandL, notL, equivalenceL
 
 # ======================================================================
-# §0  Spatial: opposite constraints   R_fwd(a,b) ↔ ¬R_opp_fwd(a,b)
+# §0  Spatial: opposite constraints (mutual exclusion)
+#
+#     nandL(R1(a,b), R2(a,b))
 #
 # Both concepts live on pair_forward, so this expresses:
-#   "if A is left of B then A is NOT right of B" (and vice-versa).
+#   "A cannot be both left of B and right of B simultaneously"
+#
+# This is mutual exclusion, NOT exhaustive dichotomy.  Two objects
+# may be neither left nor right of each other (e.g. directly
+# above/below, or at the same x-coordinate).
 # ======================================================================
 
 OPPOSITE_PAIRS = [
@@ -34,15 +40,15 @@ OPPOSITE_PAIRS = [
 ]
 
 def apply_opposite_constraints(ctx, *, pairs=None):
-    """R_fwd(a,b) ↔ ¬R_opp_fwd(a,b)  — both on pair_forward."""
+    """nandL(R1(a,b), R2(a,b))  — mutual exclusion on pair_forward."""
     if pairs is None:
         pairs = [(ctx.get(r1), ctx.get(r2)) for r1, r2 in OPPOSITE_PAIRS]
     for r1, r2 in pairs:
         if r1 is None or r2 is None:
             continue
-        equivalenceL(
+        nandL(
             r1('a', 'b'),
-            notL(r2('a', 'b')),
+            r2('a', 'b'),
             name=f"opp_{r1.name}_{r2.name}",
         )
 
@@ -56,6 +62,10 @@ def apply_opposite_constraints(ctx, *, pairs=None):
 #
 # This encodes: "A is left of B"  ↔  "B is right of A"
 # without any contradiction with §0.
+#
+# equivalenceL is correct here because this is a true semantic
+# identity — left_fwd(a,b) and right_rev(a,b) refer to the exact
+# same real-world fact, just represented on different graph nodes.
 # ======================================================================
 
 INVERSE_PAIRS = [
@@ -125,9 +135,9 @@ def apply_nand_combos(
 #
 # All three spatial constraint types are safe to use simultaneously
 # because pair_forward and pair_reverse are distinct concept nodes:
-#   §0 opposite  — pair_forward only          → no conflict
-#   §1 inverse   — pair_forward ↔ pair_reverse → no conflict with §0
-#   §2 transitive — pair_forward only          → no conflict
+#   §0 opposite   — pair_forward only (nandL)    → no conflict
+#   §1 inverse    — pair_forward ↔ pair_reverse   → no conflict with §0
+#   §2 transitive — pair_forward only              → no conflict
 # ======================================================================
 
 def apply_all_constraints(

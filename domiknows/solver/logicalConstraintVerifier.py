@@ -82,8 +82,9 @@ class LogicalConstraintVerifier:
         verifyListLen = 0
         verifyListSatisfied = 0
         for vl in verifyList:
-            verifyListLen += len(vl)
-            verifyListSatisfied += sum(vl)
+            cleaned = [int(v) for v in vl if v is not None]
+            verifyListLen += len(cleaned)
+            verifyListSatisfied += sum(cleaned)
         
         if verifyListLen:
             result['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
@@ -113,7 +114,8 @@ class LogicalConstraintVerifier:
                         currentAntecedent = firstLcV[i][j] 
                         
                     if currentAntecedent == 1:
-                        ifVi.append(w)
+                        if w is not None:
+                            ifVi.append(int(w))
                             
                 ifVerifyList.append(ifVi)
                 

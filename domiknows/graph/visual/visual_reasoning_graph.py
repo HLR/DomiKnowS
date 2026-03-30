@@ -2,7 +2,7 @@
 visual_reasoning_graph.py
 """
 
-from domiknows.graph import Graph, Concept, Relation, equivalenceL, notL
+from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.concept import EnumConcept
 
 DEFAULT_COLORS    = ["red","green","blue","yellow","brown","gray","cyan","purple","orange","white","black"]
@@ -67,10 +67,12 @@ def build_visual_reasoning_graph(
         #   pair_forward — subject → referent: "A is left of B"
         #   pair_reverse — referent → subject: same objects, other direction
         #
-        # Now left_of on pair_forward and right_of on pair_reverse are
+        # Left_of on pair_forward and left_of on pair_reverse are
         # distinct ILP variables, so both constraints are satisfiable:
-        #   opposite: left_of_fwd(a,b) ↔ ¬right_of_fwd(a,b)
-        #   inverse:  left_of_fwd(a,b) ↔  right_of_rev(a,b)
+        #   opposite: nandL(left_of_fwd(a,b), right_of_fwd(a,b))
+        #             — mutual exclusion; both can be false
+        #   inverse:  left_of_fwd(a,b) ↔ right_of_rev(a,b)
+        #             — true semantic identity across pair nodes
         # ==============================================================
         pair_forward = Concept(name="pair_forward")
         (rel_arg1_fwd, rel_arg2_fwd) = pair_forward.has_a(arg1=object_node, arg2=object_node)

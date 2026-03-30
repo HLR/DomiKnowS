@@ -255,7 +255,6 @@ test_regr/examples/PMDExistL/pmd_counting_tests/PMD_Counting_Constraints_Root _C
 test_regr/ConllQA/debug_data.py
 test_regr/ConllQA/entities_*
 test_regr/ConllQA/result.txt
-test_regr/examples/conll04/sumL/*
 domiknows/graph/simplifiedLCSyntax/*
 test_regr/InferenceAPI/results.txt
 test_regr/ConllQA/ConllQA_with_global_constraints/result.txt
@@ -272,3 +271,5 @@ domiknows/graph/graph_gen/output_*.*
 test_regr/Clever/dataset_cache/*
 test_regr/Clever/train/*
 test_regr/Clever/results.txt
+Src_dump/*
+dump-src.ps1

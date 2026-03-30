@@ -117,7 +117,7 @@ class Concept(BaseGraphTree):
                 error = ("extraV", ) + tuple(args)
             else:
                 newVariable = self.name + '_' + str(Concept.get_new_variable_index()) + ''
-                
+
                 info = {arg: V(name=None, v=(newVariable, value))  for arg, value in zip(args, relation_attrs.keys())}
                 relVarInfo = {arg: V(name=arg, relVarInfo = value) for arg, value in zip(args, relation_attrs.values())}
 

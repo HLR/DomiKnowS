@@ -12,6 +12,44 @@ sys.path.append('../')
 sys.path.append('./')
 from pathlib import Path
 import argparse, torch, logging
+from datetime import datetime
+
+
+class _TeeWriter:
+    """Write to terminal and a log file at the same time."""
+
+    def __init__(self, stream, log_file):
+        self._stream = stream
+        self._log_file = log_file
+
+    def write(self, data):
+        self._stream.write(data)
+        self._log_file.write(data)
+        return len(data)
+
+    def flush(self):
+        self._stream.flush()
+        self._log_file.flush()
+
+    def isatty(self):
+        return self._stream.isatty() if hasattr(self._stream, "isatty") else False
+
+
+def setup_console_log():
+    """Mirror stdout/stderr to logs/console.log under project root."""
+    project_root = Path(__file__).resolve().parents[2]
+    log_dir = project_root / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "console.log"
+
+    log_file = open(log_path, "a", encoding="utf-8")
+    log_file.write("\n" + "=" * 80 + "\n")
+    log_file.write(f"Session started: {datetime.now().isoformat(timespec='seconds')}\n")
+    log_file.write("=" * 80 + "\n")
+    log_file.flush()
+
+    sys.stdout = _TeeWriter(sys.stdout, log_file)
+    sys.stderr = _TeeWriter(sys.stderr, log_file)
 
 try:
     from monitor.constraint_monitor import (# type: ignore 
@@ -239,6 +277,10 @@ Examples:
                         choices=["relation", "query", "query_relation", "exist", "complex_relation", "counting"],
                         default="relation",
                         help="Type of questions to train on (default: relation)")
+    parser.add_argument("--relation-syntax",
+                        choices=["legacy", "binary"],
+                        default="binary",
+                        help="Relation syntax emitted by translator")
     parser.add_argument("--use-vlm", default=False, action="store_true", 
                         help="use InternVL for predictions")
     parser.add_argument("--peft", action="store_true",
@@ -286,6 +328,14 @@ Examples:
                         help="Epoch to start annealing temperature")
     parser.add_argument("--hard_gumbel", type=str2bool, nargs='?', const=True, default=True, 
                         help="Use hard Gumbel")
+    
+    # Constraint printing settings
+    parser.add_argument("--print-constraints", type=str, default=None, metavar="JSON_FILE",
+                        help="Load a CLEVR questions JSON (with programs), print each question "
+                             "and its compiled constraint expression, then exit. "
+                             "Supports standard CLEVR format or [{question, program, answer}, ...]")
+    parser.add_argument("--print-limit", type=int, default=70,
+                        help="Max number of questions to print with --print-constraints")
 
     # Register callback plugin arguments (exclude BERT unfreezing)
     from domiknows.program.plugins.callback_plugin_manager import CallbackPluginManager
@@ -320,13 +370,27 @@ def program_declaration(train, dev, args, device='cpu'):
         else:
             from internVLvLLM import InternVLShared as InternVL
 
-    def filter_relation(property, arg1, arg2):
-        return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
+    def filter_relation(property=None, arg1=None, arg2=None, **kwargs):
+        """Filter function for relation sensors. Flexible parameter handling for forward/reverse pairs."""
+        # Try explicit parameters first (forward pair: arg1, arg2)
+        if arg1 is not None and arg2 is not None:
+            return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
+        
+        # Fall back to extracting from kwargs (reverse pair variants)
+        remaining = [v for v in kwargs.values() if v is not None and hasattr(v, 'getAttribute')]
+        if len(remaining) >= 2:
+            return remaining[0].getAttribute("image_id") == remaining[1].getAttribute("image_id")
+        
+        return True
 
     # Build graph/logic over the full set used in this run so both train/dev can compile.
     dataset = train + (dev if dev is not None else [])
     include_query = args.question_type in ['query', 'query_relation']
-    results = create_graph(dataset, include_query_questions=include_query)
+    results = create_graph(
+        dataset,
+        include_query_questions=include_query,
+        relation_syntax=args.relation_syntax,
+    )
 
     questions_executions = results[0]
     graph = results[1]
@@ -338,6 +402,9 @@ def program_declaration(train, dev, args, device='cpu'):
     relaton_2_obj = results[7]
     attribute_names_dict = results[8]
     query_types = results[9] if len(results) > 9 else [None] * len(dataset)
+    obj1_rev = results[10] if len(results) > 10 else None
+    obj2_rev = results[11] if len(results) > 11 else None
+    relation_2_obj_rev = results[12] if len(results) > 12 else None
 
     # Answer-to-index mappings for query questions
     ATTRIBUTE_TO_INDEX = {}
@@ -373,6 +440,12 @@ def program_declaration(train, dev, args, device='cpu'):
             oracle_logit = math.log(oracle_conf / (1.0 - oracle_conf))
 
         spatial_list = g_relational_concepts.get("spatial_relation", [])
+        inverse_for_reverse = {
+            "left": "right",
+            "right": "left",
+            "front": "behind",
+            "behind": "front",
+        }
         for i in range(len(dataset)):
             all_objs = dataset[i].get('all_objects', [])
             n = len(all_objs)
@@ -387,6 +460,13 @@ def program_declaration(train, dev, args, device='cpu'):
                         else:
                             oracle_data.append([oracle_logit, 0])
                     dataset[i][f"oracle_is_{s_name}"] = oracle_data
+
+                # Reverse labels are derived from inverse forward relations.
+                # Example: left_rev(a,b) uses right(a,b) truth values.
+                for rev_name, src_name in inverse_for_reverse.items():
+                    src_key = f"oracle_is_{src_name}"
+                    if src_key in dataset[i]:
+                        dataset[i][f"oracle_is_{rev_name}_rev"] = list(dataset[i][src_key])
 
             for attr in ['size', 'color', 'material', 'shape']:
                 oracle_data = []
@@ -427,31 +507,48 @@ def program_declaration(train, dev, args, device='cpu'):
 
     relaton_2_obj[obj1.reversed, obj2.reversed] = CompositionCandidateSensor(
         object['image_id'], relations=(obj1.reversed, obj2.reversed), forward=filter_relation)
+    if relation_2_obj_rev is not None and obj1_rev is not None and obj2_rev is not None:
+        relation_2_obj_rev[obj1_rev.reversed, obj2_rev.reversed] = CompositionCandidateSensor(
+            object['image_id'], relations=(obj1_rev.reversed, obj2_rev.reversed), forward=filter_relation)
     
     if not args.use_vlm and not args.oracle_mode:
         object_relation_extraction = LEFTRelationEMB(input_size=256, output_size=1024, device=device)
         relaton_2_obj["emb"] = ModuleLearner(image["emb"], object["bounding_boxes"], 
                                              object["feature_emb"],
                                              module=object_relation_extraction, device=device)
+        if relation_2_obj_rev is not None:
+            relation_2_obj_rev["emb"] = ModuleLearner(
+                image["emb"],
+                object["bounding_boxes"],
+                object["feature_emb"],
+                module=object_relation_extraction,
+                device=device,
+            )
         _models['relation_emb'] = object_relation_extraction
 
     # Set up learners for attributes and relations
     spatial_relations = g_relational_concepts.get("spatial_relation", [])
+    spatial_relations_rev = [f"{name}_rev" for name in spatial_relations]
+    spatial_relation_names = set(spatial_relations + spatial_relations_rev)
     classifiers = {}
 
     for attr_name, attr_variable in attribute_names_dict.items():
+        relation_target = relaton_2_obj
+        if attr_name in spatial_relations_rev and relation_2_obj_rev is not None:
+            relation_target = relation_2_obj_rev
+
         if args.oracle_mode:
-            if attr_name in spatial_relations:
-                relaton_2_obj[f"{attr_variable}_label"] = FunctionalReaderSensor(
+            if attr_name in spatial_relation_names:
+                relation_target[f"{attr_variable}_label"] = FunctionalReaderSensor(
                     keyword=f"oracle_is_{attr_name}",
                     forward=lambda data: torch.Tensor(data).to(device))
-                relaton_2_obj[attr_variable] = ModuleLearner(
+                relation_target[attr_variable] = ModuleLearner(
                     f"{attr_name}_label", module=OracleDummyLearner(), device=device)
             elif attr_name.startswith("same_"):
-                relaton_2_obj[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                relation_target[f"{attr_variable}_label"] = FunctionalReaderSensor(
                     keyword=f"oracle_is_{attr_name}",
                     forward=lambda data: torch.Tensor(data).to(device))
-                relaton_2_obj[attr_variable] = ModuleLearner(
+                relation_target[attr_variable] = ModuleLearner(
                     f"{attr_name}_label", module=OracleDummyLearner(), device=device)
             else:
                 object[attr_variable] = ModuleLearner(
@@ -459,14 +556,14 @@ def program_declaration(train, dev, args, device='cpu'):
                     module=OracleModule(attr_name, relation=1, device=device,
                                         confidence=args.oracle_confidence), device=device)
         elif not args.use_vlm:
-            if attr_name in spatial_relations:
+            if attr_name in spatial_relation_names:
                 classifier = torch.nn.Linear(1024, 2).to(device)
                 classifiers[attr_name] = classifier
-                relaton_2_obj[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
+                relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
             elif attr_name.startswith("same_"):
                 classifier = torch.nn.Linear(1024, 2).to(device)
                 classifiers[attr_name] = classifier
-                relaton_2_obj[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
+                relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
             else:
                 classifier = torch.nn.Linear(1024, 2).to(device)
                 classifiers[attr_name] = classifier
@@ -482,13 +579,13 @@ def program_declaration(train, dev, args, device='cpu'):
                 lora_alpha=args.lora_alpha,
                 max_num=args.max_num_patches,
             ) if args.peft else {}
-            if attr_name in spatial_relations:
-                relaton_2_obj[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
+            if attr_name in spatial_relation_names:
+                relation_target[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
                                                              module=InternVL(model_path=MODEL_PATH, device=device,
                                                                              relation=2, attr=attr_name,
                                                                              **vlm_extra), device=device)
             elif attr_name.startswith("same_"):
-                relaton_2_obj[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
+                relation_target[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
                                                              module=InternVL(model_path=MODEL_PATH, device=device,
                                                                              relation=2, attr=attr_name,
                                                                              **vlm_extra), device=device)
@@ -502,10 +599,30 @@ def program_declaration(train, dev, args, device='cpu'):
 
     # Compile dataset
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
-    train_dataset = graph.compile_executable(train, logic_keyword='logic_str', 
-                                             logic_label_keyword='logic_label')
+    train_dataset = graph.compile_executable(train, logic_keyword='logic_str',
+                                             logic_label_keyword='logic_label',
+                                             extra_namespace_values=attribute_names_dict)
+    
+    # Diagnostic: verify executable constraints were registered
+    print(f"[graph] Total dataset size (train + dev): {len(dataset)}")
+    n_elc = len(getattr(graph, 'executableLCs', {}))
+    n_glc = len(getattr(graph, 'logicalConstrains', {}))
+    print(f"[graph] Executable constraints (per-sample): {n_elc}")
+    print(f"[graph] Global constraints (graph-level):    {n_glc}")
+    if n_elc == 0:
+        # Check if logic_str is actually present in the data
+        sample = train[0] if train else {}
+        has_key = 'logic_str' in sample
+        val = sample.get('logic_str', '<MISSING>')
+        print(f"[graph] WARNING: 0 executable constraints registered!")
+        print(f"[graph]   train[0] has 'logic_str': {has_key}")
+        print(f"[graph]   train[0]['logic_str'] = {val!r}")
+        has_label = 'logic_label' in sample
+        print(f"[graph]   train[0] has 'logic_label': {has_label}")
 
     poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
+    if relation_2_obj_rev is not None:
+        poi.append(relation_2_obj_rev)
     
     # Use BCELoss for constraint satisfaction
     import torch.nn as nn
@@ -527,12 +644,92 @@ def program_declaration(train, dev, args, device='cpu'):
 
     dev_dataset = None
     if dev is not None and len(dev) > 0:
-        dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str', 
-                                               logic_label_keyword='logic_label')
+        dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str',
+                                               logic_label_keyword='logic_label',
+                                               extra_namespace_values=attribute_names_dict)
+    
 
-    return program, train_dataset, dev_dataset
+    return program, train_dataset, dev_dataset, attribute_names_dict
 
 
+def _print_constraints_and_exit(args):
+    """
+    Load questions from a JSON file, compile constraint expressions,
+    and print each question with its constraint string.
+    """
+    import json as json_io
+
+    json_path = args.print_constraints
+    with open(json_path, "r", encoding="utf-8") as f:
+        raw = json_io.load(f)
+
+    # Accept CLEVR format {"questions": [...]} or flat list [...]
+    if isinstance(raw, dict):
+        entries = raw.get("questions", raw.get("data", []))
+    elif isinstance(raw, list):
+        entries = raw
+    else:
+        print(f"Unsupported JSON structure in {json_path}")
+        return
+
+    if args.print_limit is not None:
+        entries = entries[: args.print_limit]
+
+    # Build minimal dataset dicts expected by create_graph
+    dataset = []
+    for i, entry in enumerate(entries):
+        dataset.append({
+            "program": entry.get("program", []),
+            "question_raw": entry.get("question", f"<question {i}>"),
+            "answer": entry.get("answer", "?"),
+        })
+
+    print(f"Loaded {len(dataset)} questions from {json_path}")
+    print(f"Relation syntax: {args.relation_syntax}")
+    print()
+
+    include_query = args.question_type in ("query", "query_relation")
+
+    # Compile one at a time so a single unsupported op doesn't kill the run
+    print("=" * 70)
+    print("COMPILED CONSTRAINTS")
+    print("=" * 70)
+
+    ok_count = 0
+    err_count = 0
+
+    for i, item in enumerate(dataset):
+        q = item["question_raw"]
+        a = item["answer"]
+        program = item.get("program", [])
+
+        try:
+            single = [item]
+            results = create_graph(
+                single,
+                include_query_questions=include_query,
+                apply_constraints=False,  # skip constraints for speed
+                relation_syntax=args.relation_syntax,
+            )
+            exc = results[0][0]
+            qt = results[9][0] if len(results) > 9 else None
+            ok_count += 1
+        except Exception as e:
+            exc = f"<ERROR: {e}>"
+            qt = None
+            err_count += 1
+
+        print(f"[{i}] Q: {q}")
+        print(f"     A: {a}")
+        if qt is not None:
+            print(f"     query_type: {qt}")
+        print(f"     Constraint: {exc}")
+        print()
+
+    print("=" * 70)
+    print(f"Total: {ok_count + err_count}  |  OK: {ok_count}  |  Errors: {err_count}")
+    print("=" * 70)
+    
 def log_training_config(args, models=None, train=None, dev=None, test=None, plugin_manager=None):
     """Log all training configuration parameters."""
     print("\n" + "=" * 60)
@@ -578,6 +775,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     
     print("\n[Constraints]")
     print(f"  T-norm:           {args.tnorm}")
+    print(f"  Relation syntax:  {args.relation_syntax}")
     
     print("\n[Gumbel-Softmax]")
     if args.use_gumbel:
@@ -610,6 +808,10 @@ def main(args):
 
     # Load dataset
     dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
+    
+    if args.print_constraints is not None:
+        _print_constraints_and_exit(args)
+        return 0
 
     if args.min_objects is not None:
         before = len(dataset)
@@ -668,7 +870,7 @@ def main(args):
     plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
     
     # Create program
-    program, train_dataset, test_dataset = program_declaration(
+    program, train_dataset, test_dataset, attribute_names_dict = program_declaration(
         train_raw,
         test_raw,
         args, 
@@ -680,7 +882,8 @@ def main(args):
         test_dataset_filtered = program.graph.compile_executable(
             test_raw_filtered,
             logic_keyword='logic_str',
-            logic_label_keyword='logic_label'
+            logic_label_keyword='logic_label',
+            extra_namespace_values=attribute_names_dict,
         )
 
     eval_dataset = test_dataset if test_dataset is not None else train_dataset
@@ -705,7 +908,7 @@ def main(args):
     if args.infer_only:
         with torch.no_grad():
             acc = program.evaluate_condition(eval_dataset, device=device)
-        print(f"Accuracy on {eval_dataset_name.capitalize()}: {acc * 100:.2f}%")
+        print(f"Accuracy on {eval_dataset_name.capitalize()}: {acc :.2f}%")
         with open(_results_file, 'a') as f:
             print(save_file, file=f)
             print(f"Question type: {args.question_type}", file=f)
@@ -713,7 +916,7 @@ def main(args):
             print(f"Learning rate: {args.lr}", file=f)
             print(f"Train examples: {len(train_raw)}", file=f)
             print(f"Test examples: {len(test_raw) if test_raw is not None else 0}", file=f)
-            print(f"Accuracy: {acc * 100:.2f}%", file=f)
+            print(f"Accuracy: {acc :.2f}%", file=f)
     else:
         if not args.eval_only:
             # Configure plugins (no BERT-specific optimizer factory needed)
@@ -746,7 +949,7 @@ def main(args):
             # Baseline evaluation before training for quick sanity-check.
             with torch.no_grad():
                 baseline_acc = program.evaluate_condition(train_dataset, device=device)
-            print(f"Accuracy before training: {baseline_acc * 100:.2f}%")
+            print(f"Accuracy before training: {baseline_acc :.2f}%")
 
             # Install gradient chain diagnostic
             diagnostic = GradChainDiagnostic(program, _models['classifiers'])
@@ -766,11 +969,11 @@ def main(args):
 
                 with torch.no_grad():
                     epoch_train_acc = program.evaluate_condition(train_dataset, device=device)
-                print(f"Epoch {i + 1} train accuracy: {epoch_train_acc * 100:.2f}%")
+                print(f"Epoch {i + 1} train accuracy: {epoch_train_acc :.2f}%")
                 if test_dataset is not None:
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
-                    print(f"Epoch {i + 1} test accuracy: {epoch_test_acc * 100:.2f}%")
+                    print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
             
             # Final evaluation
             with torch.no_grad():
@@ -782,11 +985,11 @@ def main(args):
                 )
                 final_eval = program.evaluate_condition(train_dataset, device=device, 
                                                        threshold=0.5, return_dict=True)
-            print(f"Train accuracy after training: {final_train_acc * 100:.2f}%")
+            print(f"Train accuracy after training: {final_train_acc:.2f}%")
             if final_test_acc is not None:
-                print(f"Test accuracy after training: {final_test_acc * 100:.2f}%")
+                print(f"Test accuracy after training: {final_test_acc:.2f}%")
             if final_test_acc_filtered is not None:
-                print(f"Test accuracy (<={args.max_objects} objects): {final_test_acc_filtered * 100:.2f}%")
+                print(f"Test accuracy (<={args.max_objects} objects): {final_test_acc_filtered:.2f}%")
             
             # Display plugin summaries
             plugin_manager.final_display_all(final_eval=final_eval)
@@ -799,12 +1002,12 @@ def main(args):
                 print(f"Learning rate: {args.lr}", file=f)
                 print(f"Train examples: {len(train_raw)}", file=f)
                 print(f"Test examples: {len(test_raw) if test_raw is not None else 0}", file=f)
-                print(f"Baseline accuracy: {baseline_acc * 100:.2f}%", file=f)
-                print(f"Train accuracy: {final_train_acc * 100:.2f}%", file=f)
+                print(f"Baseline accuracy: {baseline_acc:.2f}%", file=f)
+                print(f"Train accuracy: {final_train_acc:.2f}%", file=f)
                 if final_test_acc is not None:
-                    print(f"Test accuracy: {final_test_acc * 100:.2f}%", file=f)
+                    print(f"Test accuracy: {final_test_acc:.2f}%", file=f)
                 if final_test_acc_filtered is not None:
-                    print(f"Test accuracy (<={args.max_objects} obj): {final_test_acc_filtered * 100:.2f}%", file=f)
+                    print(f"Test accuracy (<={args.max_objects} obj): {final_test_acc_filtered:.2f}%", file=f)
                 print("", file=f)
             
         else:
@@ -817,7 +1020,7 @@ def main(args):
                 print(f"Loading from {save_file}")
                 program.load(save_file)
                 acc = program.evaluate_condition(eval_dataset, device=device)
-                print(f"Accuracy on {eval_dataset_name.capitalize()}: {acc * 100:.2f}%")
+                print(f"Accuracy on {eval_dataset_name.capitalize()}: {acc :.2f}%")
 
                 with open(_results_file, 'a') as f:
                     print(save_file, file=f)
@@ -826,7 +1029,7 @@ def main(args):
                     print(f"Learning rate: {args.lr}", file=f)
                     print(f"Train examples: {len(train_raw)}", file=f)
                     print(f"Test examples: {len(test_raw) if test_raw is not None else 0}", file=f)
-                    print(f"Accuracy: {acc * 100:.2f}%", file=f)
+                    print(f"Accuracy: {acc :.2f}%", file=f)
             else:
                 print(f"Checkpoint not found: {save_file}")
     
@@ -838,5 +1041,6 @@ def main(args):
 
 
 if __name__ == '__main__':
+    setup_console_log()
     args = parse_arguments()
     main(args)

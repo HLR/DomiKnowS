@@ -467,6 +467,29 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
 
         return relation_name
 
+    def _find_variable_definition_in_lc(current_lc, variable_name):
+        """Best-effort scan for a variable definition inside the current LC tree.
+
+        This helps native binary syntax where path checks may encounter a variable
+        before the standard definition map was populated for a nested structure.
+        """
+        from domiknows.graph import V, LogicalConstrain
+
+        if not hasattr(current_lc, 'e') or not current_lc.e:
+            return None
+
+        prev = None
+        for item in current_lc.e:
+            if isinstance(item, V) and item.name == variable_name and prev is not None:
+                return (current_lc, variable_name, prev)
+            if isinstance(item, LogicalConstrain):
+                nested = _find_variable_definition_in_lc(item, variable_name)
+                if nested is not None:
+                    return nested
+            prev = item
+
+        return None
+
     def handle_variable_name(lc_variable_name, lcPath):
         lcElementType = lc.e[i-1]
 
@@ -477,7 +500,25 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
                 relation_concept = graph.findConcept(implicit_relation_name)
                 found_variables[lc_variable_name] = (lc, lc_variable_name, (relation_concept, relation_concept.name, None, 1))
             else:
-                raise Exception(f"Variable {lc_variable_name} found in {lc_context} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
+                inferred_definition = _find_variable_definition_in_lc(lc, lc_variable_name)
+                if inferred_definition is not None:
+                    found_variables[lc_variable_name] = inferred_definition
+                else:
+                    # Native binary syntax can introduce path-root variables in
+                    # nested fragments before explicit variable-defining atoms.
+                    # Fall back to the canonical object concept when available.
+                    fallback_object = None
+                    if graph is not None:
+                        fallback_object = graph.findConcept("obj") or graph.findConcept("object")
+
+                    if fallback_object is not None:
+                        found_variables[lc_variable_name] = (
+                            lc,
+                            lc_variable_name,
+                            (fallback_object, fallback_object.name, None, 1),
+                        )
+                    else:
+                        raise Exception(f"Variable {lc_variable_name} found in {lc_context} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
 
         if lc_variable_name not in used_variables:
             used_variables[lc_variable_name] = []
@@ -491,7 +532,7 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
                 continue
             elif isinstance(e.v, str):
                 handle_variable_name(e.v, e.v)
-            elif isinstance(e, tuple):
+            elif isinstance(e.v, tuple):
                 if isinstance(e.v[0], str): # single path
                     handle_variable_name(e.v[0], e.v)
                 elif isinstance(e.v[0], tuple): # path union
@@ -815,19 +856,27 @@ def handleVarsPath(lc, varMaps):
             # replace the V with the mapping for this found in varMap
             e = varMaps[e.name]
         elif needsVariableUpdate: # ths flag was set by the previous lc element
-            usedVarMap = lc.e[i+1][1] # get varMaps to use
-            usedVarMapIt= iter(usedVarMap.items())
-            firstUsedV = next(usedVarMapIt)[1][1]
-            secondUsedV = next(usedVarMapIt)[1][1]
+            # The next lc element should be ('VarMaps', {...}) created by
+            # Concept.processLCArgs for shorthand binary syntax relation('a','b').
+            if i + 1 < len(lc.e) and isinstance(lc.e[i+1], tuple) and lc.e[i+1][0] == 'VarMaps':
+                usedVarMap = lc.e[i+1][1]
+                usedVarValues = [v for v in usedVarMap.values() if isinstance(v, V) and v.v is not None]
 
-            # create new paths based on variables from varMaps
-            firstNewPath = firstUsedV + (firstUsedV[1].reversed,)
-            secondNewPath = secondUsedV + (secondUsedV[1].reversed,)
-            
-            path = (firstNewPath, secondNewPath)  
-            
-            updated_e = V(name="", v=path)
-            e = updated_e
+                if len(usedVarValues) >= 2:
+                    firstUsedV = usedVarValues[0].v
+                    secondUsedV = usedVarValues[1].v
+
+                    if (
+                        isinstance(firstUsedV, tuple) and len(firstUsedV) >= 2 and hasattr(firstUsedV[1], 'reversed') and
+                        isinstance(secondUsedV, tuple) and len(secondUsedV) >= 2 and hasattr(secondUsedV[1], 'reversed')
+                    ):
+                        # Build relation-path pair expected by downstream processor:
+                        # ((relVar, arg1.reversed), (relVar, arg2.reversed))
+                        firstNewPath = (firstUsedV[0], firstUsedV[1].reversed)
+                        secondNewPath = (secondUsedV[0], secondUsedV[1].reversed)
+                        path = (firstNewPath, secondNewPath)
+                        e = V(name="", v=path)
+
             needsVariableUpdate = False
         elif isinstance(e, tuple) and isinstance(e[0], Concept) and len(lc.e) > i+2:
             if isinstance(lc.e[i+2], tuple) and lc.e[i+2][0] == 'VarMaps':

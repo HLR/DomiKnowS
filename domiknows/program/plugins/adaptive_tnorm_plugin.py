@@ -5,6 +5,8 @@ Updated to use TNormSelector for unified t-norm selection.
 Supports three modes: specific t-norm, "default", or "auto".
 """
 
+import os
+
 import torch
 from domiknows.solver.adaptiveTNormLossCalculator import (
     AdaptiveTNormLossCalculator,
@@ -219,7 +221,9 @@ class AdaptiveTNormPlugin:
 
         train_portion = getattr(self.args, 'train_portion', 'unknown')
         epochs = getattr(self.args, 'epochs', 0)
-        csv_filename = f"adaptive_tnorm_details_{train_portion}_epoch{epochs}.csv"
+        logs_dir = "logs"
+        os.makedirs(logs_dir, exist_ok=True)
+        csv_filename = os.path.join(logs_dir, f"adaptive_tnorm_details_{train_portion}_epoch{epochs}.csv")
         csv_exported = False
         num_exported = 0
 

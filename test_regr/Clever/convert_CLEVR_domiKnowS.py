@@ -1,13 +1,31 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
+import re
 
 
-def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=True, indent=0):
+def _extract_first_var_symbol(expr: str) -> Optional[str]:
+    """Return the first single-letter variable symbol found in a predicate call."""
+    match = re.search(r"\('([a-z])'", expr)
+    return match.group(1) if match else None
+
+
+def translate_left_domiknows(
+    all_program,
+    current_idx,
+    first_initial,
+    apply_sum=True,
+    indent=0,
+    relation_syntax="legacy",
+):
     """
     Supports the common CLEVR-like operators:
       scene, filter_color, filter_material, filter_shape, filter_size,
       union, intersect (optional), count.
+
+    relation_syntax:
+      "legacy"  – reified path-based:  left('rel0', path=('a', obj1.reversed))
+      "binary"  – direct binary:       left('a', 'b')
     """
 
     # Each step i produces either:
@@ -17,11 +35,13 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     global var
     global use_count
     global need_relation2
+    global pending_arg2_nav
     if current_idx == len(all_program) - 1:
         var = 0
         use_count = 0
         relation_val = 0
         need_relation2 = False
+        pending_arg2_nav = "obj2"
 
     values = []
     step = all_program[current_idx]
@@ -32,12 +52,14 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     if fn == "scene":
         if not first_initial:
             var_name = chr(var + 96)
+            if relation_syntax == "binary":
+                return f"obj('{var_name}')", 0
             return f"obj(path=('{var_name}'))", 0
         suffix = ""
         var += 1
         var_name = chr(var + 96)
         if need_relation2:
-            suffix = f", path=('rel{relation_val - 1}', obj2)"
+            suffix = f", path=('rel{relation_val - 1}', {pending_arg2_nav})"
             need_relation2 = False
         return f"obj('{var_name}'{suffix})", 0
 
@@ -52,14 +74,27 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
             var_name = chr(var + 96)
             relation_suffix = ""
             if need_relation2:
-                relation_suffix = f", path=('rel{relation_val - 1}', obj2)"
-                need_relation2 = False
+                if relation_syntax == "binary":
+                    need_relation2 = False
+                else:
+                    relation_suffix = f", path=('rel{relation_val - 1}', {pending_arg2_nav})"
+                    need_relation2 = False
             init_str = f"{attr_value}('{var_name}'{relation_suffix})"
         else:
             var_name = chr(var + 96)
-            init_str = f"{attr_value}(path=('{var_name}'))"
+            if relation_syntax == "binary":
+                # In binary mode, use direct variable reference instead of path
+                init_str = f"{attr_value}('{var_name}')"
+            else:
+                init_str = f"{attr_value}(path=('{var_name}'))"
 
-        filter_str, depth_ins = translate_left_domiknows(all_program, ins[0], first_initial=False, apply_sum=apply_sum)
+        filter_str, depth_ins = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=False,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
         if depth_ins == 0:
             filter_str = ""
 
@@ -68,16 +103,34 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     elif fn == "union":
         if len(ins) != 2:
             raise ValueError(f"union expects 2 inputs at step {current_idx}")
-        base_ins_l, depth_ins_l = translate_left_domiknows(all_program, ins[0], first_initial, apply_sum=apply_sum)
+        base_ins_l, depth_ins_l = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
         base_ins_l = f"andL({base_ins_l})" if depth_ins_l > 1 else base_ins_l
-        base_ins_r, depth_ins_r = translate_left_domiknows(all_program, ins[1], first_initial, apply_sum=apply_sum)
+        base_ins_r, depth_ins_r = translate_left_domiknows(
+            all_program,
+            ins[1],
+            first_initial,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
         base_ins_r = f"andL({base_ins_r})" if depth_ins_r > 1 else base_ins_r
         return f"orL({base_ins_l}, {base_ins_r})", 1
 
     elif fn == "count":
         if len(ins) != 1:
             raise ValueError(f"count expects 1 input at step {current_idx}")
-        base_ins, depth_ins = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=apply_sum)
+        base_ins, depth_ins = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
 
         final_ins = f"andL({base_ins})" if depth_ins > 1 else base_ins
 
@@ -86,30 +139,66 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     elif fn == "less_than":
         if len(ins) != 2:
             raise ValueError(f"less than expects 2 input at step {current_idx}")
-        base_ins_l, depth_l = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=False)
-        base_ins_r, depth_r = translate_left_domiknows(all_program, ins[1], first_initial=True, apply_sum=False)
+        base_ins_l, depth_l = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=False,
+            relation_syntax=relation_syntax,
+        )
+        base_ins_r, depth_r = translate_left_domiknows(
+            all_program,
+            ins[1],
+            first_initial=True,
+            apply_sum=False,
+            relation_syntax=relation_syntax,
+        )
 
         return f"lessL({base_ins_l}, {base_ins_r})", max(depth_l, depth_l) + 1
 
     elif fn == "greater_than":
         if len(ins) != 2:
             raise ValueError(f"greater than expects 2 input at step {current_idx}")
-        base_ins_l, depth_l = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=False)
-        base_ins_r, depth_r = translate_left_domiknows(all_program, ins[1], first_initial=True, apply_sum=False)
+        base_ins_l, depth_l = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=False,
+            relation_syntax=relation_syntax,
+        )
+        base_ins_r, depth_r = translate_left_domiknows(
+            all_program,
+            ins[1],
+            first_initial=True,
+            apply_sum=False,
+            relation_syntax=relation_syntax,
+        )
 
         return f"greaterL({base_ins_l}, {base_ins_r})", max(depth_l, depth_l) + 1
 
     elif fn == "unique":
         if len(ins) != 1:
             raise ValueError(f"exist expects 1 input at step {current_idx}")
-        base_ins, depth = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=apply_sum)
+        base_ins, depth = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
 
         return f"{base_ins}", depth + 1
 
     elif fn == "exist":
         if len(ins) != 1:
             raise ValueError(f"exist expects 1 input at step {current_idx}")
-        base_ins, depth = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=apply_sum)
+        base_ins, depth = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
 
         final_ins = f"andL({base_ins})" if depth > 1 else base_ins
 
@@ -118,17 +207,79 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
     elif fn == "intersect":
         if len(ins) != 2:
             raise ValueError(f"intersect expects 2 inputs at step {current_idx}")
-        base_ins_l, depth_l = translate_left_domiknows(all_program, ins[0], first_initial, apply_sum=apply_sum)
-        base_ins_r, depth_r = translate_left_domiknows(all_program, ins[1], first_initial, apply_sum=apply_sum)
+        base_ins_l, depth_l = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
+        base_ins_r, depth_r = translate_left_domiknows(
+            all_program,
+            ins[1],
+            first_initial,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
 
         return f"andL({base_ins_l}, {base_ins_r})", max(depth_l, depth_l) + 1
+
+    elif fn.startswith("equal_") and fn != "equal_integer":
+        # equal_color, equal_shape, equal_material, equal_size
+        # Binary comparison: do two objects have the same attribute?
+        if len(ins) != 2:
+            raise ValueError(f"{fn} expects 2 inputs at step {current_idx}")
+
+        # Map equal_X → same_X for the relation concept name
+        attr_suffix = fn.replace("equal_", "")
+        same_name = f"same_{attr_suffix}"
+
+        base_ins_l, depth_l = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
+        base_ins_r, depth_r = translate_left_domiknows(
+            all_program,
+            ins[1],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
+
+        var_l = _extract_first_var_symbol(base_ins_l)
+        var_r = _extract_first_var_symbol(base_ins_r)
+
+        if relation_syntax == "binary" and var_l is not None and var_r is not None:
+            relation_term = f"{same_name}('{var_l}', '{var_r}')"
+        else:
+            relation_term = f"{same_name}('rel{relation_val}', path=('{var_l}', obj1.reversed))"
+            need_relation2 = True
+            pending_arg2_nav = "obj2"
+            relation_val += 1
+
+        return f"existsL(andL({base_ins_l}, {base_ins_r}, {relation_term}))", max(depth_l, depth_r) + 1
 
     elif fn == "equal_integer":
         if len(ins) != 2:
             raise ValueError(f"union expects 2 inputs at step {current_idx}")
 
-        base_ins_l, depth_l = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=False)
-        base_ins_r, depth_r = translate_left_domiknows(all_program, ins[1], first_initial=True, apply_sum=False)
+        base_ins_l, depth_l = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=False,
+            relation_syntax=relation_syntax,
+        )
+        base_ins_r, depth_r = translate_left_domiknows(
+            all_program,
+            ins[1],
+            first_initial=True,
+            apply_sum=False,
+            relation_syntax=relation_syntax,
+        )
 
         return f"equalCountsL({base_ins_l}, {base_ins_r})", max(depth_l, depth_l) + 1
 
@@ -136,14 +287,23 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
         if len(ins) != 1:
             raise ValueError(f"query expects 1 inputs at step {current_idx}")
         query_type = fn.split("_")[1]
-        target_obj, depth = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=apply_sum)
+        target_obj, depth = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
         return f"queryL({query_type}, iotaL({target_obj}))", depth + 1
 
-    elif fn == "relate":
+    elif fn.startswith("same_"):
+        # same_shape, same_color, same_material, same_size
+        # Semantics: given input object, find objects with the same attribute.
+        # Treated like relate — it's a binary relation between two objects.
         if len(ins) != 1:
-            raise ValueError(f"relate expects 1 input at step {current_idx}")
+            raise ValueError(f"{fn} expects 1 input at step {current_idx}")
 
-        attr_value = str(vins[0])
+        attr_value = fn  # e.g. "same_shape"
 
         init_relation_val = relation_val
 
@@ -152,33 +312,127 @@ def translate_left_domiknows(all_program, current_idx, first_initial, apply_sum=
             var += 1
             suffix = ""
             if need_relation2:
-                suffix = f", path=('rel{relation_val - 1}', obj2)"
-                need_relation2 = False
-            str_path = f"obj('{var_name}'{suffix}), {attr_value}('rel{init_relation_val}', path=('{var_name}', obj1.reversed))"
+                if relation_syntax == "binary":
+                    need_relation2 = False
+                else:
+                    suffix = f", path=('rel{relation_val - 1}', {pending_arg2_nav})"
+                    need_relation2 = False
+            obj_term = f"obj('{var_name}'{suffix})"
         else:
             var_name = chr(var + 96)
-            str_path = f"{attr_value}('rel{init_relation_val}', path=('{var_name}', obj1.reversed))"
+            obj_term = None
+
+        next_obj, depth = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
+        related_var = _extract_first_var_symbol(next_obj)
+
+        # same_* relations live on pair_forward, navigated via obj1/obj2
+        relation_legacy = f"{attr_value}('rel{init_relation_val}', path=('{var_name}', obj1.reversed))"
+
+        relation_binary = None
+        if related_var is not None and relation_syntax == "binary":
+            relation_binary = f"{attr_value}('{var_name}', '{related_var}')"
+
+        if relation_syntax == "legacy":
+            relation_term = relation_legacy
+        elif relation_syntax == "binary":
+            relation_term = relation_binary if relation_binary is not None else relation_legacy
+        else:
+            raise ValueError("relation_syntax must be one of: legacy, binary")
 
         need_relation2 = True
+        pending_arg2_nav = "obj2"
         relation_val += 1
-        next_obj, depth = translate_left_domiknows(all_program, ins[0], first_initial=True, apply_sum=apply_sum)
-        return f"{str_path}, {next_obj}", depth + 1
+
+        if relation_syntax == "binary" and relation_binary is not None:
+            if obj_term is not None:
+                return f"{obj_term}, {next_obj}, {relation_term}", depth + 1
+            return f"{next_obj}, {relation_term}", depth + 1
+
+        if obj_term is not None:
+            return f"{obj_term}, {relation_term}, {next_obj}", depth + 1
+        return f"{relation_term}, {next_obj}", depth + 1
+
+    elif fn == "relate":
+        if len(ins) != 1:
+            raise ValueError(f"relate expects 1 input at step {current_idx}")
+
+        attr_value = str(vins[0])
+
+        # Determine whether this is a reverse-direction relation (_rev suffix).
+        # Forward relations (left, right, front, behind) live on pair_forward and
+        # are navigated via obj1 / obj2.
+        # Reverse relations (left_rev, right_rev, …) live on pair_reverse and
+        # are navigated via obj1_rev / obj2_rev.
+        is_reverse = attr_value.endswith("_rev")
+        arg1_nav = "obj1_rev" if is_reverse else "obj1"
+        arg2_nav = "obj2_rev" if is_reverse else "obj2"
+
+        init_relation_val = relation_val
+
+        if first_initial:
+            var_name = chr(var + 97)
+            var += 1
+            suffix = ""
+            if need_relation2:
+                if relation_syntax == "binary":
+                    need_relation2 = False
+                else:
+                    suffix = f", path=('rel{relation_val - 1}', {pending_arg2_nav})"
+                    need_relation2 = False
+            obj_term = f"obj('{var_name}'{suffix})"
+        else:
+            var_name = chr(var + 96)
+            obj_term = None
+
+        next_obj, depth = translate_left_domiknows(
+            all_program,
+            ins[0],
+            first_initial=True,
+            apply_sum=apply_sum,
+            relation_syntax=relation_syntax,
+        )
+        related_var = _extract_first_var_symbol(next_obj)
+
+        relation_legacy = f"{attr_value}('rel{init_relation_val}', path=('{var_name}', {arg1_nav}.reversed))"
+
+        # Binary syntax is emitted here when requested.
+        relation_binary = None
+        if related_var is not None and relation_syntax == "binary":
+            relation_binary = f"{attr_value}('{var_name}', '{related_var}')"
+
+        if relation_syntax == "legacy":
+            relation_term = relation_legacy
+        elif relation_syntax == "binary":
+            relation_term = relation_binary if relation_binary is not None else relation_legacy
+        else:
+            raise ValueError("relation_syntax must be one of: legacy, binary")
+
+        need_relation2 = True
+        pending_arg2_nav = arg2_nav
+        relation_val += 1
+
+        # For binary, ensure the RHS object variable is introduced first.
+        # This avoids evaluating relation(a,b) before predicates that bind b.
+        if relation_syntax == "binary" and relation_binary is not None:
+            if obj_term is not None:
+                return f"{obj_term}, {next_obj}, {relation_term}", depth + 1
+            return f"{next_obj}, {relation_term}", depth + 1
+
+        if obj_term is not None:
+            return f"{obj_term}, {relation_term}, {next_obj}", depth + 1
+        return f"{relation_term}, {next_obj}", depth + 1
     else:
         raise NotImplementedError(f"Unsupported function '{fn}' at step {current_idx}")
 
 
 if __name__ == "__main__":
     import json
-
-    # with open("convert_CLEVR_program_manual_10_first_translation.json", 'rb') as file:
-    #     results = json.load(file)
-
-    # for program in results:
-    #     for program_info in program["CLEVR_program"]:
-    #         print(program_info)
-    #     print(translate_left_steps_to_your_dsl(program["CLEVR_program"], len(program["CLEVR_program"]) - 1,
-    #                                            first_initial=True))
-    #     break
 
     program = [
         {
@@ -235,6 +489,31 @@ if __name__ == "__main__":
             "value_inputs": []
         }
     ]
-    print(translate_left_domiknows(program, len(program) - 1, first_initial=True))
-    # for result in results:
-    #     str_op = translate_left_steps_to_your_dsl(result["program"])
+
+    print("=== Legacy syntax ===")
+    print(translate_left_domiknows(program, len(program) - 1, first_initial=True,
+                                   relation_syntax="legacy"))
+    print()
+    print("=== Binary syntax ===")
+    print(translate_left_domiknows(program, len(program) - 1, first_initial=True,
+                                   relation_syntax="binary"))
+
+    # Simple one-relation test
+    simple_program = [
+        {"inputs": [], "function": "scene", "value_inputs": []},
+        {"inputs": [0], "function": "filter_shape", "value_inputs": ["cube"]},
+        {"inputs": [1], "function": "filter_color", "value_inputs": ["red"]},
+        {"inputs": [2], "function": "unique", "value_inputs": []},
+        {"inputs": [3], "function": "relate", "value_inputs": ["left"]},
+        {"inputs": [4], "function": "filter_size", "value_inputs": ["large"]},
+        {"inputs": [5], "function": "exist", "value_inputs": []},
+    ]
+
+    print()
+    print("=== Simple one-relation (legacy) ===")
+    print(translate_left_domiknows(simple_program, len(simple_program) - 1,
+                                   first_initial=True, relation_syntax="legacy"))
+    print()
+    print("=== Simple one-relation (binary) ===")
+    print(translate_left_domiknows(simple_program, len(simple_program) - 1,
+                                   first_initial=True, relation_syntax="binary"))

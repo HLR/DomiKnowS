@@ -216,7 +216,7 @@ def create_execution_queryL(program, question_index, parent_img="img", property_
     return constraint, query_type
 
 
-def create_execution_for_question(program, question_index, question_type=None):
+def create_execution_for_question(program, question_index, question_type=None, relation_syntax="legacy"):
     """
     Factory function to create the appropriate execution based on question type.
     """
@@ -230,7 +230,12 @@ def create_execution_for_question(program, question_index, question_type=None):
     #     return create_execution_queryL(program, question_index)
     # else:
     #     print(program)
-    conversion_program = translate_left_domiknows(program, len(program) - 1, first_initial=True)[0]
+    conversion_program = translate_left_domiknows(
+        program,
+        len(program) - 1,
+        first_initial=True,
+        relation_syntax=relation_syntax,
+    )[0]
     return conversion_program, None
     
     # elif op_type == 'exist':
