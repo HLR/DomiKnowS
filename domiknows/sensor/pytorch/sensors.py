@@ -1,9 +1,20 @@
+import logging
 from typing import Dict, Any
 import os
 import torch
 
 from .. import Sensor
 from ...graph import Property
+from ...utils import setup_logger
+
+logger = setup_logger({
+    'log_name': 'sensor.pytorch',
+    'log_level': logging.INFO,
+    'log_filename': 'sensor.log',
+    'log_filesize': 50*1024*1024,  # 50MB
+    'log_backupCount': 5,
+    'log_fileMode': 'a',
+})
 
 
 class TorchSensor(Sensor):
@@ -115,7 +126,7 @@ class TorchSensor(Sensor):
         try:
             self.update_context(data_item, force=force)
         except Exception as ex:
-            print('Error {} during updating data item {} with sensor {}'.format(ex, data_item, self.fullname))
+            logger.error('Error %s during updating data item with sensor %s (data_item keys: %s)', ex, self.fullname, list(data_item.keys()) if isinstance(data_item, dict) else type(data_item).__name__)
             raise
         return data_item[self]
 

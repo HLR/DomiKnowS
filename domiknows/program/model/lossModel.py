@@ -110,7 +110,7 @@ class LossModel(torch.nn.Module):
             'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
@@ -251,7 +251,7 @@ class PrimalDualModel(LossModel):
             'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
@@ -317,7 +317,7 @@ class InferenceModel(LossModel):
             'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
@@ -463,7 +463,7 @@ class SampleLossModel(LossModel):
             'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         

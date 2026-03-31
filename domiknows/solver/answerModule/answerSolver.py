@@ -8,6 +8,7 @@ from domiknows.graph.logicalConstrain import (
     LogicalConstrain, queryL, existsL, sumL, greaterL, atLeastL, exactL,
     notL, andL,
 )
+from domiknows.utils import setup_logger
 
 
 # Map from constraint type name (as used in "execute(...)") to class
@@ -20,7 +21,14 @@ _TYPE_MAP = {
     'exactL': exactL,
 }
 
-logger = logging.getLogger(__name__)
+logger = setup_logger({
+    'log_name': 'answerSolver',
+    'log_level': logging.INFO,
+    'log_filename': 'answerSolver.log',
+    'log_filesize': 50*1024*1024,  # 50MB
+    'log_backupCount': 5,
+    'log_fileMode': 'a',
+})
 
 
 class AnswerSolver:

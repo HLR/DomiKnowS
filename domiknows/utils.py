@@ -19,6 +19,29 @@ init(autoreset=True, convert=True)        # enable Windows console colours
 
 from domiknows.config import config
 
+
+def _default_log_dir():
+    """Return a ``logs`` directory relative to the currently running program.
+
+    Resolution order:
+      1. Directory of the ``__main__`` module's file (the script that was
+         launched), if available.
+      2. Current working directory as fallback.
+
+    This ensures log files are co-located with the program that produces them
+    rather than depending on whichever directory happens to be the CWD.
+    """
+    try:
+        import __main__
+        main_file = getattr(__main__, '__file__', None)
+        if main_file:
+            script_dir = os.path.dirname(os.path.abspath(main_file))
+            if os.path.isdir(script_dir):
+                return os.path.join(script_dir, 'logs')
+    except (ImportError, AttributeError):
+        pass
+    return os.path.join(os.getcwd(), 'logs')
+
 def extract_args(*args, **kwargs):
     if '_stack_back_level_' in kwargs and kwargs['_stack_back_level_']:
         level = kwargs['_stack_back_level_']
@@ -172,7 +195,7 @@ _error_warning_handler_class = None
 _error_warning_log_dir = None
 
 
-def setup_error_warning_logger(log_dir='logs'):
+def setup_error_warning_logger(log_dir=None):
     """
     Setup a global error/warning logger configuration that will create the actual
     log file only when the first warning/error is detected.
@@ -188,7 +211,9 @@ def setup_error_warning_logger(log_dir='logs'):
     if _error_warning_logger_initialized:
         return _error_warning_logger
     
-    # Store log directory for later use
+    # Store log directory for later use (resolve default lazily)
+    if log_dir is None:
+        log_dir = _default_log_dir()
     _error_warning_log_dir = log_dir
     
     # Create error/warning logger without file handler initially
@@ -284,11 +309,11 @@ def setup_logger(config=None, default_filename='app.log'):
     """
     # Initialize error/warning logger on first call
     if not _error_warning_logger_initialized:
-        log_dir = 'logs'
+        log_dir = _default_log_dir()
         if config and isinstance(config, dict):
             log_dir = config.get('log_dir', log_dir)
         setup_error_warning_logger(log_dir)
-    
+
     # Default values
     logName = __name__
     logLevel = logging.CRITICAL
@@ -296,7 +321,7 @@ def setup_logger(config=None, default_filename='app.log'):
     logFilesize = 5*1024*1024*1024  # 5GB
     logBackupCount = 4
     logFileMode = 'a'
-    logDir = 'logs'
+    logDir = _default_log_dir()
     timestampBackupCount = 10
     
     # Override with config values if provided
