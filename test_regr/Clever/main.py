@@ -783,6 +783,11 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     print("\n[Constraints]")
     print(f"  T-norm:           {args.tnorm}")
     print(f"  Relation syntax:  {args.relation_syntax}")
+
+    print("\n[Logging]")
+    print(f"  Production mode:  {args.production_log_mode}")
+    print(f"  No time log:      {args.no_time_log}")
+    print(f"  Reuse model:      {args.reuse_model}")
     
     print("\n[Gumbel-Softmax]")
     if args.use_gumbel:

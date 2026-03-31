@@ -379,6 +379,15 @@ class AnswerSolver:
             try:
                 self.solver.addLogicalConstrains(m, dn, [hyp_lc], 100, key="/ILP/x")
             except Exception as e:
+                if "ILP model is infeasible" in str(e):
+                    # The hypothesis is structurally infeasible (e.g. NOT(1)
+                    # when the inner expression resolved to a fixed True).
+                    # Treat the same as an infeasible solve — skip this
+                    # hypothesis.
+                    logger.debug(
+                        "Hypothesis %r is structurally infeasible: %s", hyp, e
+                    )
+                    continue
                 details = self._log_var_not_in_model_details(e, dn, m, f"hypothesis={hyp}")
                 if details:
                     raise RuntimeError(f"{e}; {details}") from e
