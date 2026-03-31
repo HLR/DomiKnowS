@@ -36,9 +36,9 @@ class _TeeWriter:
 
 
 def setup_console_log():
-    """Mirror stdout/stderr to logs/console.log under project root."""
-    project_root = Path(__file__).resolve().parents[2]
-    log_dir = project_root / "logs"
+    """Mirror stdout/stderr to logs/console.log under this run directory."""
+    run_dir = Path(__file__).resolve().parent
+    log_dir = run_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "console.log"
 

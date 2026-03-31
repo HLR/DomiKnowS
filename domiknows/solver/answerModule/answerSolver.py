@@ -268,9 +268,15 @@ class AnswerSolver:
         # dict — graph.logicalConstrains is a read-only property.
         original_lcs = graph._logicalConstrains
         graph._logicalConstrains = OrderedDict()
+
+        # Push graph onto the shared context stack so LcElement.__init__
+        # can resolve the graph from element._context (which is empty
+        # outside a ``with graph:`` block).
+        graph._context.append(graph)
         try:
             hyp_lc = lc_class(*elements, **kwargs)
         finally:
+            graph._context.pop()
             graph._logicalConstrains = original_lcs
 
         # Restore headLC on any nested LCs that were mutated by __init__
