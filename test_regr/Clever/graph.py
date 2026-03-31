@@ -39,7 +39,7 @@ def create_graph(
     Create the DomiKnows graph for CLEVR dataset.
 
     Builds the graph programmatically (no exec/eval) and applies
-    spatial opposite + inverse constraints via the visual_constraints library.
+    spatial constraints via the visual_constraints library.
 
     Args:
         dataset: The CLEVR dataset (list of dicts).
@@ -143,7 +143,8 @@ def create_graph(
                 attribute_names_dict=attribute_names_dict,
             )
             apply_opposite_constraints(ctx)
-            apply_inverse_constraints(ctx)
+            if relation_syntax == "binary":
+                apply_inverse_constraints(ctx)
 
     # ------------------------------------------------------------------
     # 6b. Register all concept variable names in graph.varNameReversedMap

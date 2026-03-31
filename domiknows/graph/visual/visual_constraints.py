@@ -7,8 +7,6 @@ All constraints are parameterised by concept references from ctx —
 they never hard-code specific attribute values so the library works
 for any scene-understanding task.
 
-Uses the simplified string-variable syntax (not V-based paths).
-
 Usage:
     from visual_reasoning_graph import build_visual_reasoning_graph
     from visual_constraints import apply_all_constraints

@@ -106,6 +106,29 @@ class AnswerSolver:
 
     # ── public API ──────────────────────────────────────────────────────
 
+    @staticmethod
+    def _format_executable_constraint(elc, graph):
+        """Return a readable identifier/expression tuple for executable constraints."""
+        elc_id = getattr(elc, 'lcName', '<unknown-elc>')
+        elc_label = getattr(elc, 'name', elc_id)
+
+        # Find registry key (usually same as lcName) for extra traceability.
+        registry_key = elc_id
+        try:
+            for key, value in graph.executableLCs.items():
+                if value is elc:
+                    registry_key = key
+                    break
+        except Exception:
+            pass
+
+        try:
+            expression = elc.strEs()
+        except Exception:
+            expression = '<expression-unavailable>'
+
+        return registry_key, elc_id, elc_label, expression
+
     def answer(self, question, dn):
         """Answer an executable constraint question.
 
@@ -117,6 +140,8 @@ class AnswerSolver:
             The answer: str for queryL, int for sumL, bool for boolean types,
             or None if no feasible hypothesis exists.
         """
+        answer_started = perf_counter()
+
         if not question.startswith('execute(') or not question.endswith(')'):
             raise ValueError(f"Invalid question format: {question}")
 
@@ -130,25 +155,48 @@ class AnswerSolver:
         try:
             elc = self._resolve_constraint(constraint_name, dn.graph)
             lc = elc.innerLC
+            reg_key, elc_id, elc_label, elc_expr = self._format_executable_constraint(elc, dn.graph)
 
             m, x, conceptsRelations = self._build_base_model(dn)
 
             # Dispatch to per-type handler
             if isinstance(lc, queryL):
-                return self._answer_queryL(lc, dn, m, x)
+                answer_value = self._answer_queryL(lc, dn, m, x)
             elif isinstance(lc, existsL):
-                return self._answer_existsL(lc, dn, m, x)
+                answer_value = self._answer_existsL(lc, dn, m, x)
             elif isinstance(lc, sumL):
-                return self._answer_sumL(lc, dn, m, x)
+                answer_value = self._answer_sumL(lc, dn, m, x)
             elif isinstance(lc, greaterL):
-                return self._answer_greaterL(lc, dn, m, x)
+                answer_value = self._answer_greaterL(lc, dn, m, x)
             elif isinstance(lc, atLeastL):
-                return self._answer_atLeastL(lc, dn, m, x)
+                answer_value = self._answer_atLeastL(lc, dn, m, x)
             elif isinstance(lc, exactL):
-                return self._answer_exactL(lc, dn, m, x)
+                answer_value = self._answer_exactL(lc, dn, m, x)
             else:
                 raise ValueError(f"Unsupported constraint type: {type(lc).__name__}")
+
+            elapsed_ms = (perf_counter() - answer_started) * 1000.0
+            logger.info(
+                "AnswerSolver answered in %.2f ms | question=%s | constraint_lookup=%s | elc_id=%s | elc_name=%s | lc_type=%s | constraint=%s | answer=%r",
+                elapsed_ms,
+                question,
+                reg_key,
+                elc_id,
+                elc_label,
+                type(lc).__name__,
+                elc_expr,
+                answer_value,
+            )
+            return answer_value
         except Exception as e:
+            elapsed_ms = (perf_counter() - answer_started) * 1000.0
+            logger.error(
+                "AnswerSolver failed after %.2f ms | question=%s | parsed_constraint=%s | error=%s",
+                elapsed_ms,
+                question,
+                constraint_name,
+                e,
+            )
             if "Variable not in model" not in str(e):
                 raise
 

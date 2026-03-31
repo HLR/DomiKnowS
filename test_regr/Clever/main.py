@@ -64,7 +64,6 @@ except ImportError:
     MONITORING_AVAILABLE = False
 
 from domiknows import setProductionLogMode
-setProductionLogMode()
 
 from domiknows.program import CallbackProgram
 from domiknows.program.lossprogram import GumbelInferenceProgram
@@ -279,7 +278,7 @@ Examples:
                         help="Type of questions to train on (default: relation)")
     parser.add_argument("--relation-syntax",
                         choices=["legacy", "binary"],
-                        default="binary",
+                        default="legacy",
                         help="Relation syntax emitted by translator")
     parser.add_argument("--use-vlm", default=False, action="store_true", 
                         help="use InternVL for predictions")
@@ -311,6 +310,14 @@ Examples:
                         help="Experiment tag for checkpoint/results filenames")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to use for computation (default: cuda if available)")
+    
+    # Production logging settings
+    parser.add_argument("--production-log-mode", type=str2bool, nargs='?', const=True, default=True,
+                        help="Enable production logging mode (default: true)")
+    parser.add_argument("--no-time-log", type=str2bool, nargs='?', const=True, default=False,
+                        help="Disable regression timer log output when production mode is enabled")
+    parser.add_argument("--reuse-model", type=str2bool, nargs='?', const=True, default=True,
+                        help="Reuse compiled models in production mode (default: true)")
     
     # t-norm settings
     parser.add_argument("--tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
@@ -1043,4 +1050,6 @@ def main(args):
 if __name__ == '__main__':
     setup_console_log()
     args = parse_arguments()
+    if args.production_log_mode:
+        setProductionLogMode(no_UseTimeLog=args.no_time_log, reuse_model=args.reuse_model)
     main(args)
