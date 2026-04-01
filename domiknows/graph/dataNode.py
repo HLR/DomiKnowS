@@ -4084,10 +4084,16 @@ class DataNodeBuilder(dict):
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
             if len(typesInDNs) > 1:
                 from .relation import Relation
-                concept_types = {name for name, d in
-                                 ((d.getOntologyNode().name, d) for d in noRelationRoots)
-                                 if not isinstance(d.getOntologyNode(), Relation)
-                                 and name != 'constraint'}
+                def _is_structural(dn):
+                    ont = dn.getOntologyNode()
+                    if ont.name == 'constraint':
+                        return True
+                    if isinstance(ont, Relation):
+                        return True
+                    if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
+                        return True
+                    return False
+                concept_types = {d.getOntologyNode().name for d in noRelationRoots if not _is_structural(d)}
                 if len(concept_types) <= 1:
                     _DataNodeBuilder__Logger.debug('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
                 else:
@@ -4302,12 +4308,17 @@ class DataNodeBuilder(dict):
             if len(existingDns) != 1:
                 typesInDNs = {d.getOntologyNode().name for d in existingDns}
                 from .relation import Relation
-                non_constraint_types = typesInDNs - {'constraint'}
-                # Check if the extra types are all relations — a single
-                # concept root with relations and constraints is normal.
-                concept_types = {d.getOntologyNode().name for d in existingDns
-                                 if not isinstance(d.getOntologyNode(), Relation)
-                                 and d.getOntologyNode().name != 'constraint'}
+                def _is_structural(dn):
+                    """Constraint or relation-like concept (Relation instance or concept with has_a)."""
+                    ont = dn.getOntologyNode()
+                    if ont.name == 'constraint':
+                        return True
+                    if isinstance(ont, Relation):
+                        return True
+                    if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
+                        return True
+                    return False
+                concept_types = {d.getOntologyNode().name for d in existingDns if not _is_structural(d)}
                 if len(concept_types) <= 1:
                     _DataNodeBuilder__Logger.debug(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
                 else:
