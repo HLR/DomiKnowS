@@ -455,14 +455,23 @@ def program_declaration(train, dev, args, device='cpu'):
         }
         for i in range(len(dataset)):
             all_objs = dataset[i].get('all_objects', [])
-            n = len(all_objs)
+            # Use bounding-box count (objects_raw) as the authoritative object
+            # count.  Relation datanodes are created from bounding boxes, so the
+            # oracle tensors must have the same n*n length.  all_objects comes
+            # from scene['objects'] (GT) while objects_raw may come from
+            # scene['objects_detection'] — they can differ.
+            objects_raw = dataset[i].get('objects_raw', None)
+            if objects_raw is not None:
+                n = len(objects_raw)
+            else:
+                n = len(all_objs)
             gt_spatial = dataset[i].get('relation_spatial_relation', None)
 
             if gt_spatial is not None:
                 for s_idx, s_name in enumerate(spatial_list):
                     oracle_data = []
                     for pair_idx in range(n * n):
-                        if gt_spatial[pair_idx][s_idx] > 0.5:
+                        if pair_idx < len(gt_spatial) and gt_spatial[pair_idx][s_idx] > 0.5:
                             oracle_data.append([0, oracle_logit])
                         else:
                             oracle_data.append([oracle_logit, 0])
@@ -479,7 +488,8 @@ def program_declaration(train, dev, args, device='cpu'):
                 oracle_data = []
                 for obj_i in range(n):
                     for obj_j in range(n):
-                        if all_objs[obj_i].get(attr) == all_objs[obj_j].get(attr):
+                        if obj_i < len(all_objs) and obj_j < len(all_objs) and \
+                                all_objs[obj_i].get(attr) == all_objs[obj_j].get(attr):
                             oracle_data.append([0, oracle_logit])
                         else:
                             oracle_data.append([oracle_logit, 0])
