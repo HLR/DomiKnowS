@@ -155,10 +155,6 @@ class TorchSensor(Sensor):
             if not self.label:
                 data_item[self.prop] = val  # override state under property name
         else:
-            # Constraint ReaderSensors return None for non-current ELCs —
-            # skip the assignment entirely so it never reaches DataNodeBuilder.
-            if getattr(self, 'is_constraint', False):
-                return
             data_item[self] = None
             if not self.label:
                 data_item[self.prop] = None
@@ -342,6 +338,11 @@ class FunctionalSensor(TorchSensor):
             self.update_pre_context(data_item)
             self.define_inputs()
             val = self.forward_wrap()
+
+            # Constraint ReaderSensors return None for non-current ELCs —
+            # skip the assignment entirely so it never reaches DataNodeBuilder.
+            if val is None and getattr(self, 'is_constraint', False):
+                return
 
             data_item[self] = val
         if (self.prop not in data_item) or (override and not self.label):
