@@ -3207,8 +3207,13 @@ class DataNodeBuilder(dict):
                     _DataNodeBuilder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
 
             if len(existingDnsForRelation) != vInfo.len:
-                _DataNodeBuilder__Logger.error('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
-                raise ValueError('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
+                error_msg = (
+                    'Relation update length mismatch for relation %s and key %s: '
+                    'existing relation datanodes=%i, provided tensor length=%i'
+                    % (relationName, keyDataName, len(existingDnsForRelation), vInfo.len)
+                )
+                _DataNodeBuilder__Logger.error(error_msg)
+                raise ValueError(error_msg)
 
             if (not self.skeletonDataNode):
                 if len(existingDnsForRelationSorted) == 1:
