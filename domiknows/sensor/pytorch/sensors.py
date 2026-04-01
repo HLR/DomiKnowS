@@ -129,6 +129,10 @@ class TorchSensor(Sensor):
         except Exception as ex:
             logger.error('Error %s during updating data item with sensor %s (data_item keys: %s)', ex, self.fullname, list(data_item.keys()) if isinstance(data_item, dict) else type(data_item).__name__)
             raise
+        # Constraint sensors for non-current ELCs skip writing to data_item,
+        # so the key may legitimately be absent.
+        if self not in data_item and getattr(self, 'is_constraint', False):
+            return None
         return data_item[self]
 
     def update_context(
