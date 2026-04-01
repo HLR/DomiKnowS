@@ -3642,7 +3642,7 @@ class DataNodeBuilder(dict):
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
         if isinstance(value, list) and lenV ==  2 and keyDataName[0] == '<':
-            return ValueInfo(lenV = 1, value = value, dim=0)
+            return ValueInfo(len = 1, value = value, dim=0)
         elif isinstance(value, torch.Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
             return ValueInfo(len = 1, value = value, dim=0)
 
