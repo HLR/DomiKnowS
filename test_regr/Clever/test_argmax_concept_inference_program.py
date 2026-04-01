@@ -95,7 +95,8 @@ def program_declaration(dataset, device="cpu"):
 
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([int(dataset[i]["logic_label"])]).to(device)
-    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label',
+                                        extra_namespace_values=attribute_names_dict)
 
     poi = [image, objects, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
     program = InferenceProgram(graph, SolverModel,

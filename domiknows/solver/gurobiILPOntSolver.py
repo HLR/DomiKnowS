@@ -23,6 +23,7 @@ from domiknows.solver.booleanMethodsCalculator import booleanMethodsCalculator
 
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
+from domiknows.utils import _default_log_dir
 from domiknows.utils import getReuseModel
 from domiknows.utils import getDnSkeletonMode
 
@@ -1147,16 +1148,19 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i' % (p, mP.status))
         
          # ----------- Write model to file if logging level is INFO
+        _log_dir = _default_log_dir()
+        os.makedirs(_log_dir, exist_ok=True)
+
         if self.myLogger.level <= logging.INFO:
-            model_path = "logs/GurobiModel.lp"
+            model_path = os.path.join(_log_dir, "GurobiModel.lp")
             if os.path.exists(model_path):
                 os.remove(model_path)
             mP.write(model_path) # Write model to file
-           
+
         # ----------- Write infeasible model to file if model was proven to be infeasible or solution when found
-        infeasible_path = "logs/GurobiInfeasible.ilp"
-        sol_path = "logs/GurobiSolution.sol"
-        json_path = "logs/GurobiSolution.json"
+        infeasible_path = os.path.join(_log_dir, "GurobiInfeasible.ilp")
+        sol_path = os.path.join(_log_dir, "GurobiSolution.sol")
+        json_path = os.path.join(_log_dir, "GurobiSolution.json")
 
         if not solved:
             # Remove solution files if they exist from previous runs
