@@ -11,6 +11,7 @@ logger = setup_logger({
     'log_filesize': 50*1024*1024,  # 50MB
     'log_backupCount': 5,
     'log_fileMode': 'a',
+    'error_warning_capture': False,
 })
 
 
