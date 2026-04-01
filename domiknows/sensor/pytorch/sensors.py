@@ -155,6 +155,10 @@ class TorchSensor(Sensor):
             if not self.label:
                 data_item[self.prop] = val  # override state under property name
         else:
+            # Constraint ReaderSensors return None for non-current ELCs —
+            # skip the assignment entirely so it never reaches DataNodeBuilder.
+            if getattr(self, 'is_constraint', False):
+                return
             data_item[self] = None
             if not self.label:
                 data_item[self.prop] = None

@@ -36,13 +36,14 @@ class _TeeWriter:
 
 
 def setup_console_log():
-    """Mirror stdout/stderr to logs/console.log under this run directory."""
+    """Mirror stdout/stderr to logs/console.log for the current run only."""
     run_dir = Path(__file__).resolve().parent
     log_dir = run_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "console.log"
 
-    log_file = open(log_path, "a", encoding="utf-8")
+    # Always start a fresh console log for each run.
+    log_file = open(log_path, "w", encoding="utf-8")
     log_file.write("\n" + "=" * 80 + "\n")
     log_file.write(f"Session started: {datetime.now().isoformat(timespec='seconds')}\n")
     log_file.write("=" * 80 + "\n")
