@@ -4,12 +4,21 @@ import torch
 import numpy as np
 
 from .program import LearningBasedProgram, get_len
-from ..utils import consume
+from ..utils import consume, setup_logger
 from tqdm import tqdm
 
 from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
 from .model.base import Mode
 from .model.gbi import GBIModel
+
+logger = setup_logger({
+    'log_name': 'lossProgram',
+    'log_level': logging.INFO,
+    'log_filename': 'lossProgram.log',
+    'log_filesize': 50*1024*1024,  # 50MB
+    'log_backupCount': 5,
+    'log_fileMode': 'a',
+})
 
 
 # =============================================================================
@@ -136,7 +145,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             try:
                 answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
             except Exception as e:
-                program.logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
+                logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
                 answer_result = None
 
             if answer_result is not None:
@@ -165,16 +174,25 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                     expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
                     verify_correct = (is_satisfied == expected_satisfied)
             except Exception as e:
-                program.logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
+                logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
 
             # ── Log disagreement ────────────────────────────────────
             if answer_correct is not None and verify_correct is not None and answer_correct != verify_correct:
-                program.logger.info(
+                logger.info(
                     f"Disagreement on {lc_name}: "
                     f"AnswerSolver={'correct' if answer_correct else 'incorrect'} "
                     f"(answer={answer_result}), "
                     f"verifySingleConstraint={'correct' if verify_correct else 'incorrect'} "
                     f"(satisfied={verify_result['satisfied']:.1f}%), "
+                    f"label={label}"
+                )
+            else:
+                logger.debug(
+                    f"{lc_name}: "
+                    f"AnswerSolver={'correct' if answer_correct else 'incorrect' if answer_correct is not None else 'N/A'} "
+                    f"(answer={answer_result if answer_result is not None else 'N/A'}), "
+                    f"verifySingleConstraint={'correct' if verify_correct else 'incorrect' if verify_correct is not None else 'N/A'} "
+                    f"(satisfied={verify_result['satisfied']:.1f}% if verify_result is not None else 'N/A'), "
                     f"label={label}"
                 )
 
@@ -204,7 +222,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     }
 
     if total == 0:
-        program.logger.error("No Valid Constraint found for this dataset.")
+        logger.error("No Valid Constraint found for this dataset.")
         results.update({
             'boolean_accuracy': 0.0, 'counting_accuracy': 0.0,
             'primary_metric': 0.0
@@ -297,24 +315,24 @@ class LossProgram(LearningBasedProgram):
 
     def call_epoch(self, name, dataset, epoch_fn, **kwargs):
         if dataset is not None:
-            self.logger.info(f'{name}:')
+            logger.info(f'{name}:')
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
 
             consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
 
             if self.model.loss:
-                self.logger.info(' - loss:')
-                self.logger.info(self.model.loss)
+                logger.info(' - loss:')
+                logger.info(self.model.loss)
                     
             if self.cmodel.loss is not None and repr(self.cmodel.loss) != "'None'":
-                self.logger.info(' - Constraint loss:')
-                self.logger.info(self.cmodel.loss)
+                logger.info(' - Constraint loss:')
+                logger.info(self.cmodel.loss)
 
             if self.model.metric:
-                self.logger.info(' - metric:')
+                logger.info(' - metric:')
                 for key, metric in self.model.metric.items():
-                    self.logger.info(f' - - {key}')
-                    self.logger.info(metric)
+                    logger.info(f' - - {key}')
+                    logger.info(metric)
                     try:
                         self.f.write(f' - - {name}')
                         self.f.write(f' - - {key}')
@@ -361,13 +379,13 @@ class LossProgram(LearningBasedProgram):
         epoch_counter = 0
         
         if warmup_epochs > 0:
-            self.logger.info(f"[Phase 1] Warmup training for {warmup_epochs} epochs")
+            logger.info(f"[Phase 1] Warmup training for {warmup_epochs} epochs")
             for i in range(warmup_epochs):
                 if self.stop:
                     break
                 epoch_counter += 1
                 self.epoch = epoch_counter
-                self.logger.info(f'Epoch: {self.epoch}')
+                logger.info(f'Epoch: {self.epoch}')
                 self.call_epoch(
                     'Training', training_set, self.train_epoch,
                     c_session=c_session, batch_size=batch_size,
@@ -378,13 +396,13 @@ class LossProgram(LearningBasedProgram):
                     self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
         
         if constraint_epochs > 0 and not self.stop:
-            self.logger.info(f"[Phase 2] Constraint training for {constraint_epochs} epochs")
+            logger.info(f"[Phase 2] Constraint training for {constraint_epochs} epochs")
             for i in range(constraint_epochs):
                 if self.stop:
                     break
                 epoch_counter += 1
                 self.epoch = epoch_counter
-                self.logger.info(f'Epoch: {self.epoch}')
+                logger.info(f'Epoch: {self.epoch}')
                 self.call_epoch(
                     'Training', training_set, self.train_epoch,
                     c_session=c_session, batch_size=batch_size,
@@ -433,7 +451,7 @@ class GumbelTemperatureMixin:
         self.current_temp = initial_temp
         
         if use_gumbel:
-            self.logger.info(f"[Gumbel] Enabled: temp {initial_temp}→{final_temp}, hard={hard_gumbel}")
+            logger.info(f"[Gumbel] Enabled: temp {initial_temp}→{final_temp}, hard={hard_gumbel}")
     
     def get_temperature(self):
         """Compute current temperature with linear annealing."""
@@ -455,13 +473,13 @@ class GumbelTemperatureMixin:
         """Auto-set anneal_epochs from num_epochs if not specified."""
         if self.use_gumbel and self.anneal_epochs is None and num_epochs is not None:
             self.anneal_epochs = num_epochs
-            self.logger.info(f"[Gumbel] Auto-set anneal_epochs to {num_epochs}")
+            logger.info(f"[Gumbel] Auto-set anneal_epochs to {num_epochs}")
     
     def _update_temperature_for_epoch(self):
         """Update temperature and log periodically. Call at start of train_epoch."""
         self.current_temp = self.get_temperature()
         if self.use_gumbel and self.current_epoch % 10 == 0:
-            self.logger.info(f"[Gumbel] Epoch {self.current_epoch}: temp={self.current_temp:.3f}")
+            logger.info(f"[Gumbel] Epoch {self.current_epoch}: temp={self.current_temp:.3f}")
     
     def _increment_epoch(self):
         """Increment epoch counter. Call at end of train_epoch."""
