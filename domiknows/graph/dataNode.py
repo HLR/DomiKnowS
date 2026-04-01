@@ -4083,7 +4083,15 @@ class DataNodeBuilder(dict):
 
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
             if len(typesInDNs) > 1:
-                _DataNodeBuilder__Logger.warn('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
+                from .relation import Relation
+                concept_types = {name for name, d in
+                                 ((d.getOntologyNode().name, d) for d in noRelationRoots)
+                                 if not isinstance(d.getOntologyNode(), Relation)
+                                 and name != 'constraint'}
+                if len(concept_types) <= 1:
+                    _DataNodeBuilder__Logger.debug('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
+                else:
+                    _DataNodeBuilder__Logger.warning('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
                 return
 
             # Create the Batch Root DataNode
@@ -4293,8 +4301,18 @@ class DataNodeBuilder(dict):
 
             if len(existingDns) != 1:
                 typesInDNs = {d.getOntologyNode().name for d in existingDns}
-                _DataNodeBuilder__Logger.warning(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
-                self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                from .relation import Relation
+                non_constraint_types = typesInDNs - {'constraint'}
+                # Check if the extra types are all relations — a single
+                # concept root with relations and constraints is normal.
+                concept_types = {d.getOntologyNode().name for d in existingDns
+                                 if not isinstance(d.getOntologyNode(), Relation)
+                                 and d.getOntologyNode().name != 'constraint'}
+                if len(concept_types) <= 1:
+                    _DataNodeBuilder__Logger.debug(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                else:
+                    _DataNodeBuilder__Logger.warning(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                    self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
             else:
                 if not getProductionModeStatus():
                     _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
