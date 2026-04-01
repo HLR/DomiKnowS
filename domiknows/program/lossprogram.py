@@ -151,7 +151,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             if answer_result is not None:
                 if is_counting:
                     # For sumL the label is the expected count
-                    expected_count = int(label.item() if torch.is_tensor(label) else label)
+                    expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
                     answer_correct = (answer_result == expected_count)
                 else:
                     # For boolean constraints the label is 1 (True) or 0 (False)
@@ -196,8 +196,18 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                     f"label={label}"
                 )
 
-            # ── Use AnswerSolver as default, fall back to verify ────
-            if answer_correct is not None:
+            # ── Pick result source ───────────────────────────────────
+            # If AnswerSolver is incorrect (w.r.t. label) but verifySingleConstraint
+            # is correct, prefer verifySingleConstraint and log the override.
+            if answer_correct is False and verify_correct is True:
+                use_correct = verify_correct
+                logger.info(
+                    f"Override on {lc_name}: using verifySingleConstraint result because "
+                    f"AnswerSolver is incorrect for label={label}. "
+                    f"answer={answer_result if answer_result is not None else 'N/A'}, "
+                    f"verify_satisfied={verify_result['satisfied'] if verify_result is not None else 'N/A'}"
+                )
+            elif answer_correct is not None:
                 use_correct = answer_correct
             elif verify_correct is not None:
                 use_correct = verify_correct
