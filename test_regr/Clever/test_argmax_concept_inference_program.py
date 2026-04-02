@@ -29,9 +29,16 @@ MODEL_DIR = RUN_DIR / "models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def filter_relation(property, arg1, arg2):
+def filter_relation(property=None, arg1=None, arg2=None, **kwargs):
     # This is default of LEFT framework that perform all pair relation
-    return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
+    # Flexible parameter handling for forward/reverse pairs
+    if arg1 is not None and arg2 is not None:
+        return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
+    # Fall back to extracting from kwargs (reverse pair variants like arg1-1, arg2-1)
+    remaining = [v for v in kwargs.values() if v is not None and hasattr(v, 'getAttribute')]
+    if len(remaining) >= 2:
+        return remaining[0].getAttribute("image_id") == remaining[1].getAttribute("image_id")
+    return True
 
 
 def program_declaration(dataset, device="cpu"):
@@ -46,6 +53,9 @@ def program_declaration(dataset, device="cpu"):
     obj2 = results[6]
     relaton_2_obj = results[7]
     attribute_names_dict = results[8]
+    obj1_rev = results[10] if len(results) > 10 else None
+    obj2_rev = results[11] if len(results) > 11 else None
+    relation_2_obj_rev = results[12] if len(results) > 12 else None
 
     class DummyLearner(torch.nn.Module):
         def __init__(self, name):
@@ -77,16 +87,36 @@ def program_declaration(dataset, device="cpu"):
         relations=(obj1.reversed, obj2.reversed),
         forward=filter_relation)
 
+    if relation_2_obj_rev is not None and obj1_rev is not None and obj2_rev is not None:
+        relation_2_obj_rev[obj1_rev.reversed, obj2_rev.reversed] = CompositionCandidateSensor(
+            objects['image_id'],
+            relations=(obj1_rev.reversed, obj2_rev.reversed),
+            forward=filter_relation)
+
     spatial_relations = g_relational_concepts.get("spatial_relation", [])
+    spatial_relations_rev = [f"{name}_rev" for name in spatial_relations]
+    spatial_relation_names = set(spatial_relations + spatial_relations_rev)
 
     for attr_name, attr_variable in attribute_names_dict.items():
         if attr_name in spatial_relations:
-            # scene, box, object_features
+            # Forward spatial relations on pair_forward
             relaton_2_obj[f"{attr_variable}_label"] = FunctionalReaderSensor(keyword=f"is_{attr_name}",
                                                                              forward=lambda data: torch.Tensor(data).to(
                                                                                  device))
             relaton_2_obj[attr_variable] = ModuleLearner(f"{attr_name}_label", module=DummyLearner(attr_name),
                                                          device=device)
+        elif attr_name in spatial_relations_rev:
+            # Reverse spatial relations on pair_reverse
+            # The test dataset does not include reverse relation labels;
+            # derive them from forward relations (e.g. is_left_rev = is_left transposed).
+            # For this argmax test we still need sensors so the graph compiles.
+            if relation_2_obj_rev is not None:
+                fwd_name = attr_name.replace("_rev", "")
+                relation_2_obj_rev[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                    keyword=f"is_{fwd_name}",
+                    forward=lambda data: torch.Tensor(data).to(device))
+                relation_2_obj_rev[attr_variable] = ModuleLearner(
+                    f"{attr_name}_label", module=DummyLearner(attr_name), device=device)
         else:
             objects[f"{attr_variable}_label"] = FunctionalReaderSensor(keyword=f"is_{attr_name}",
                                                                        forward=lambda data: torch.Tensor(data).to(
@@ -99,6 +129,8 @@ def program_declaration(dataset, device="cpu"):
                                         extra_namespace_values=attribute_names_dict)
 
     poi = [image, objects, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
+    if relation_2_obj_rev is not None:
+        poi.append(relation_2_obj_rev)
     program = InferenceProgram(graph, SolverModel,
                                poi=poi,
                                device=device, tnorm="G",
