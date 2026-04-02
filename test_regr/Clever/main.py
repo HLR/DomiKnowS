@@ -279,7 +279,7 @@ Examples:
                         help="Type of questions to train on (default: relation)")
     parser.add_argument("--relation-syntax",
                         choices=["legacy", "binary"],
-                        default="legacy",
+                        default="binary",
                         help="Relation syntax emitted by translator")
     parser.add_argument("--use-vlm", default=False, action="store_true", 
                         help="use InternVL for predictions")
