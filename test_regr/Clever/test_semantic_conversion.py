@@ -15,8 +15,13 @@ device = "cpu"
 DATA_DIR = Path(__file__).parent
 
 
-def filter_relation(property, arg1, arg2):
-    return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
+def filter_relation(property=None, arg1=None, arg2=None, **kwargs):
+    if arg1 is not None and arg2 is not None:
+        return arg1.getAttribute("image_id") == arg2.getAttribute("image_id")
+    remaining = [v for v in kwargs.values() if v is not None and hasattr(v, 'getAttribute')]
+    if len(remaining) >= 2:
+        return remaining[0].getAttribute("image_id") == remaining[1].getAttribute("image_id")
+    return True
 
 
 class DummyLearner(torch.nn.Module):
@@ -45,6 +50,9 @@ def run_semantic_conversion(input_file: str):
     obj2 = results[6]
     relaton_2_obj = results[7]
     attribute_names_dict = results[8]
+    obj1_rev = results[10] if len(results) > 10 else None
+    obj2_rev = results[11] if len(results) > 11 else None
+    relation_2_obj_rev = results[12] if len(results) > 12 else None
 
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([int(dataset[i]["logic_label"])]).to(device)
@@ -74,7 +82,15 @@ def run_semantic_conversion(input_file: str):
         forward=filter_relation
     )
 
+    if relation_2_obj_rev is not None and obj1_rev is not None and obj2_rev is not None:
+        relation_2_obj_rev[obj1_rev.reversed, obj2_rev.reversed] = CompositionCandidateSensor(
+            object['image_id'],
+            relations=(obj1_rev.reversed, obj2_rev.reversed),
+            forward=filter_relation
+        )
+
     spatial_relations = g_relational_concepts.get("spatial_relation", [])
+    spatial_relations_rev = [f"{name}_rev" for name in spatial_relations]
 
     for attr_name, attr_variable in attribute_names_dict.items():
         if attr_name in spatial_relations:
@@ -85,6 +101,16 @@ def run_semantic_conversion(input_file: str):
             relaton_2_obj[attr_variable] = ModuleLearner(
                 f"{attr_name}_label", module=DummyLearner(attr_name), device=device
             )
+        elif attr_name in spatial_relations_rev:
+            if relation_2_obj_rev is not None:
+                fwd_name = attr_name.replace("_rev", "")
+                relation_2_obj_rev[f"{attr_variable}_label"] = FunctionalReaderSensor(
+                    keyword=f"is_{fwd_name}",
+                    forward=lambda data: torch.Tensor(data).to(device)
+                )
+                relation_2_obj_rev[attr_variable] = ModuleLearner(
+                    f"{attr_name}_label", module=DummyLearner(attr_name), device=device
+                )
         else:
             object[f"{attr_variable}_label"] = FunctionalReaderSensor(
                 keyword=f"is_{attr_name}",
@@ -94,9 +120,12 @@ def run_semantic_conversion(input_file: str):
                 f"{attr_name}_label", module=DummyLearner(attr_name), device=device
             )
 
-    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label',
+                                        extra_namespace_values=attribute_names_dict)
 
     poi = [image, object, *attribute_names_dict.values(), graph.constraint, relaton_2_obj]
+    if relation_2_obj_rev is not None:
+        poi.append(relation_2_obj_rev)
     program = InferenceProgram(
         graph, SolverModel,
         poi=poi,
