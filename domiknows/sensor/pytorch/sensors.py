@@ -1,9 +1,21 @@
+import logging
 from typing import Dict, Any
 import os
 import torch
 
 from .. import Sensor
 from ...graph import Property
+from ...utils import setup_logger
+
+logger = setup_logger({
+    'log_name': 'sensor.pytorch',
+    'log_level': logging.INFO,
+    'log_filename': 'sensor.log',
+    'log_filesize': 50*1024*1024,  # 50MB
+    'log_backupCount': 5,
+    'log_fileMode': 'a',
+    'error_warning_capture': False,
+})
 
 
 class TorchSensor(Sensor):
@@ -14,6 +26,61 @@ class TorchSensor(Sensor):
     Inherits from:
     - Sensor: The base class for sensors.
     """
+    
+    # Class-level default device (None means use instance-level logic)
+    _default_device = None
+    
+    @classmethod
+    def set_default_device(cls, device):
+        """
+        Set the default device for all TorchSensor instances created after this call.
+        
+        Args:
+            device (str or torch.device): The device to use ('auto', 'cuda', 'cpu', or torch.device object)
+        """
+        if device == 'auto':
+            is_cuda = torch.cuda.is_available()
+            cls._default_device = torch.device("cuda" if is_cuda else "cpu")
+        else:
+            cls._default_device = torch.device(device) if isinstance(device, str) else device
+    
+    @classmethod
+    def get_default_device(cls):
+        """
+        Get the current default device setting.
+        
+        Returns:
+            torch.device or None: The default device, or None if not set
+        """
+        return cls._default_device
+    
+    @classmethod
+    def clear_default_device(cls):
+        """
+        Clear the class-level default device, reverting to instance-level 'auto' behavior.
+        """
+        cls._default_device = None
+    
+    @staticmethod
+    def _resolve_device(device):
+        """
+        Helper method for subclasses that override __init__.
+        Resolves device string to torch.device following class default logic.
+        
+        Args:
+            device (str or torch.device): Device specification
+            
+        Returns:
+            torch.device: Resolved device
+        """
+        if device != 'auto':
+            return torch.device(device) if isinstance(device, str) else device
+        elif TorchSensor._default_device is not None:
+            return TorchSensor._default_device
+        else:
+            is_cuda = torch.cuda.is_available()
+            return torch.device("cuda" if is_cuda else "cpu")
+    
     def __init__(self, *pres, edges=None, label=False, device='auto'):
         """
         Initializes the TorchSensor with the provided parameters.
@@ -22,7 +89,9 @@ class TorchSensor(Sensor):
         - *pres: Variable-length argument list of predecessors.
         - edges (optional): Edges associated with this sensor.
         - label (bool, optional): Flag to indicate if this sensor is a label. Defaults to False.
-        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. Defaults to 'auto'.
+        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. 
+          Defaults to 'auto'. If a class-level default device is set via set_default_device(), it will be 
+          used when device='auto'.
         """
         super().__init__()
         if not edges:
@@ -32,14 +101,9 @@ class TorchSensor(Sensor):
         self.inputs = []
         self.edges = edges
         self.label = label
-        if device == 'auto':
-            is_cuda = torch.cuda.is_available()
-            if is_cuda:
-                self.device = torch.device("cuda")
-            else:
-                self.device = torch.device("cpu")
-        else:
-            self.device = device
+        
+        # Resolve device using helper method
+        self.device = self._resolve_device(device)
 
     def __call__(
         self,
@@ -63,8 +127,12 @@ class TorchSensor(Sensor):
         try:
             self.update_context(data_item, force=force)
         except Exception as ex:
-            print('Error {} during updating data item {} with sensor {}'.format(ex, data_item, self.fullname))
+            logger.error('Error %s during updating data item with sensor %s (data_item keys: %s)', ex, self.fullname, list(data_item.keys()) if isinstance(data_item, dict) else type(data_item).__name__)
             raise
+        # Constraint sensors for non-current ELCs skip writing to data_item,
+        # so the key may legitimately be absent.
+        if self not in data_item and getattr(self, 'is_constraint', False):
+            return None
         return data_item[self]
 
     def update_context(
@@ -275,6 +343,11 @@ class FunctionalSensor(TorchSensor):
             self.define_inputs()
             val = self.forward_wrap()
 
+            # Constraint ReaderSensors return None for non-current ELCs —
+            # skip the assignment entirely so it never reaches DataNodeBuilder.
+            if val is None and getattr(self, 'is_constraint', False):
+                return
+
             data_item[self] = val
         if (self.prop not in data_item) or (override and not self.label):
             data_item[self.prop] = val  # override state under property name
@@ -331,12 +404,38 @@ class FunctionalSensor(TorchSensor):
 
 
 class ConstantSensor(FunctionalSensor):
+    """
+    A sensor that provides a constant value.
+
+    Inherits from:
+    - FunctionalSensor: A sensor with defined forward functionality; this class
+        replaces that with a constant value.
+    """
     def __init__(self, *args, data, as_tensor=True, **kwargs):
+        """
+        Initializes a ConstantSensor.
+
+        Args:
+        - *args: Variable-length arguments for FunctionalSensor
+        - data: Constant values to return.
+        - as_tensor (optional): Flag for whether to create a new tensor instance
+            when returning the given constant value. If the provided value is
+            already a tensor, then will return a detached copy, otherwise will
+            try to create a new tensor instance with `torch.tensor`. Defaults to
+            True.
+        """
         super().__init__(*args, **kwargs)
         self.data = data
         self.as_tensor = as_tensor
 
     def forward(self, *_, **__) -> Any:
+        """
+        Performs the forward function call by returning the set constant value.
+
+        Returns:
+            - The set constant value, optionally creating a new tensor instance.
+                If the conversion fails, returns the set constant object as-is.
+        """
         try:
             if self.as_tensor:
                 if torch.is_tensor(self.data):
@@ -350,16 +449,51 @@ class ConstantSensor(FunctionalSensor):
 
 
 class PrefilledSensor(FunctionalSensor):
+    """
+    A sensor that returns the existing filled value of the property associated with this sensor.
+
+    Inherits from:
+    - FunctionalSensor: A sensor with defined forward functionality; this class
+        replaces that with the pre-filled property value.
+    """
     def forward(self, *args, **kwargs) -> Any:
+        """
+        Performs the forward function call by returning the pre-filled property value.
+
+        Returns:
+        - The existing filled value corresponding to the property associated with this sensor.
+        """
         return self.context_helper[self.prop]
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
+    """
+    A sensor that returns the existing filled value of the property associated with this sensor
+    and triggers a callback to another Sensor.
+
+    Inherits from:
+    - PrefilledSensor: A sensor that returns the existing value of the property.
+    """
     def __init__(self, *args, callback_sensor=None, **kwargs):
+        """
+        Initializes a TriggerPrefilledSensor instance.
+
+        Args:
+        - *args: Variable-length argument list for FunctionalSensor
+        - callback_sensor: The sensor instance to be called with the current `self.context_helper` value
+        - **kwargs: Additional keyword arguments for FunctionalSensor
+        """
         super().__init__(*args, **kwargs)
         self.callback_sensor = callback_sensor
 
     def forward(self, *args, **kwargs) -> Any:
+        """
+        Performs the forward function call by returning the pre-filled property value, but first
+        triggering a callback to the set `self.callback_sensor`.
+        
+        Returns:
+        - The existing filled value corresponding to the property associated with this sensor.
+        """
         self.callback_sensor(self.context_helper)
         return super().forward(*args, **kwargs)
 
@@ -475,38 +609,119 @@ def joint(SensorClass, JointSensorClass=JointSensor):
 
 
 class Cache:
+    """
+    A base Cache interface that supports setting & getting.
+    """
     def __setitem__(self, name, value):
+        """
+        Store a value by name.
+
+        Args:
+        - name: Cache key
+        - value: Cached value
+        """
         raise NotImplementedError
 
     def __getitem__(self, name):
+        """
+        Retrieve a cached value by name.
+
+        Args:
+        - name: Cache key
+
+        Returns:
+        - Cached value corresponding to the given key
+        """
         raise NotImplementedError
 
 
 class TorchCache(Cache):
+    """
+    Disk-based cache that serializes values with `torch.save` & uses file-names as keys.
+
+    Inherits from:
+    - Cache: Parent Cache interface supporting getting/setting.
+    """
     def __init__(self, path):
+        """
+        Initialize TorchCache instance.
+
+        Args:
+        - path: Folder to store cached values.
+        """
         super().__init__()
         self.path = path
 
     @property
     def path(self):
+        """
+        Path of folder where cached values will be saved.
+
+        Returns:
+        - Save folder path
+        """
         return self._path
 
     @path.setter
     def path(self, path):
+        """
+        Set save folder path and recursively create the folder if it doesn't
+        already exist.
+        """
         os.makedirs(path, exist_ok=True)
         self._path = path
 
     def sanitize(self, name):
+        """
+        Helper function for creating the cache file name by removing/replacing
+        certain symbols.
+
+        Args:
+        - name: Cache key
+        
+        Returns:
+        - Sanitized cache key
+        """
         return name.replace('/', '_').replace("<","").replace(">","")
 
     def file_path(self, name):
+        """
+        Gets the save/load path of the values given a cache key.
+
+        Args:
+        - name: Cache key
+
+        Returns:
+        - File-path where the cached values are located.
+        """
         return os.path.join(self.path, self.sanitize(name) + '.pt')
 
     def __setitem__(self, name, value):
+        """
+        Saves the value with the given name to disk using `torch.save`.
+
+        Args:
+        - name: Cache key
+        - value: Value to cache
+        """
         file_path = self.file_path(name)
         torch.save(value, file_path)
 
     def __getitem__(self, name):
+        """
+        Retrieves a cached value according to the given name (cache key).
+        Retrieves from disk using `torch.load`.
+
+        Args:
+        - name: Cache key
+
+        Returns:
+        - Cached value
+
+        Raises:
+        - KeyError if the cache key is not found (if the expected file does not exist on disk)
+        """
+
         file_path = self.file_path(name)
         try:
             return torch.load(file_path)
@@ -515,15 +730,56 @@ class TorchCache(Cache):
 
 
 class CacheSensor(FunctionalSensor):
+    """
+    FunctionalSensor with cached forward calls.
+    Can be backed by any dict-like object that supports __getitem__ and __setitem__.
+
+    Inherits from:
+    - FunctionalSensor: Parent class that performs forward passes using the provided
+        function.
+    """
     def __init__(self, *args, cache=dict(), **kwargs):
+        """
+        Creates an instance of CacheSensor.
+
+        Args:
+        - *args: Variable-length arguments for FunctionalSensor
+        - cache (optional): Any dict-like object that supports __getitem__ and __setitem__
+            and raises a KeyError if the key is not found.
+            Defaults to a globally set in-memory dict. An alternative cache is
+            `domiknows.sensor.pytorch.sensors.TorchCache`.
+            Setting the cache to None will result in the regular FunctionalSensor
+            behavior.
+        - **kwargs: Variable-length keyword-arguments for FunctionalSensor. e.g.,
+            `forward` for the underlying `forward` call.
+        """
         super().__init__(*args, **kwargs)
         self.cache = cache
         self._hash = None
 
     def fill_hash(self, hash):
+        """
+        Sets the cache key to use for the current instance. Should be
+        unique for the instance.
+
+        Args:
+        - hash: unique identifier for the current instance
+        """
         self._hash = hash
 
     def forward_wrap(self):
+        """
+        Wraps the parent `forward_wrap` by checking in the cache first.
+
+        If the key is not found, then it performs the regular `forward_wrap`
+        call and stores the resulting value.
+
+        The hash for the current data item must be set already by calling
+        `self.fill_hash`, otherwise None will be used as the cache key.
+
+        Returns:
+        - Cached `forward_wrap` call
+        """
         if self.cache is not None:
             try:
                 return self.cache[self._hash]
@@ -542,12 +798,58 @@ def cache(SensorClass, CacheSensorClass=CacheSensor):
 
 
 class ReaderSensor(ConstantSensor):
+    """
+    A sensor that retrieves values from input data dictionary for each instance.
+
+    Inherits from:
+    - ConstantSensor: A parent sensor class that just returns a constant value.
+    """
     def __init__(self, *args, keyword, is_constraint = False, **kwargs):
+        """
+        Initializes a ReaderSensor, used for loading values from data_items; e.g.,
+        for loading model inputs/labels.
+        
+        Tries to get the value from each data_item with key `keyword`.
+
+        Args:
+        - *args: Variable length arguments for ConstantSensor superclass.
+        - keyword: key by which values are retrieved from data_items. Keyword
+            can be a single keys or a tuple of keys. If a tuple is given
+            given, then ReaderSensor will retrieve each key individually and
+            return a tuple of values.
+        - is_constraint: if set to True, allows for the keyword to be
+            missing from data_items. If set to False, missing keywords will
+            result in a KeyError being raised. This is used for setting labels
+            by e.g., domiknows.graph.Graph.compile_executable when we have many
+            properties (many logical expressions) that we need to load labels
+            (and calculate loss) for, but not all at the same time. Set to
+            False by default.
+        - **kwargs: Variable length arguments for ConstantSensor superclass.
+            You may want to set as_tensor to False in order to prevent
+            read values from being converted to a tensor.
+
+        """
         super().__init__(*args, data=None, **kwargs)
         self.keyword = keyword
         self.is_constraint = is_constraint
 
     def fill_data(self, data_item):
+        """
+        Read the target value (based on the set keyword attribute) from the given
+        data_item into self.data.
+        By default, expects the keyword to be present in the data_item. However,
+        if self.is_constraint is set, then it allows the keyword to be missing (and
+        instead just sets self.data to None).
+
+        If the keyword is a tuple of values, then will read each item individually.
+        
+        Args:
+        - data_item: The data dictionary to read values from
+        
+        Raises:
+        - KeyError if self.is_constraint is False and the desired keyword
+            is missing from the input data_item.
+        """
         # If we're reading in a constraint, then allow for missing keywords in data items
         # in those cases, we just set the value to None
         if self.is_constraint:
@@ -567,6 +869,20 @@ class ReaderSensor(ConstantSensor):
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
 
     def forward(self, *_, **__) -> Any:
+        """
+        Computes the forward pass by returning the values read from the keyword.
+        Converts the data to torch tensors by default. Returns values that have
+        already been read (from self.data): expects self.fill_data to be called first
+        for each input sample.
+
+        May return None in certain conditions, including if self.fill_data has not
+        yet been called (see: self.fill_data).
+
+        Returns:
+        - Read values corresponding to the keyword; either a single value or a
+            tuple of values if the keyword is a tuple.
+        """
+
         if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
             return (super().forward(data) for data in self.data)
         else:
@@ -574,7 +890,35 @@ class ReaderSensor(ConstantSensor):
 
 
 class FunctionalReaderSensor(ReaderSensor):
+    """
+    Combines FunctionalSensor and ReaderSensor. Retrieves values
+    from input data dictionary for each instance, then applies the specified
+    `forward` function.
+
+    The given forward function must have a keyword argument `data`, which is
+    how the read values will be passed.
+
+    Similar to ReaderSensor, supports tuple keywords; the specified function
+    will be applied for each retrieved value individually.
+
+    Inherits from:
+    - ReaderSensor: A parent sensor class that retrieves values from the input data dictionary.
+    """
     def forward(self, *args, **kwargs) -> Any:
+        """
+        Computes the forward pass by applying the specified `forward` function to
+        the read values from the keyword.
+        Uses values that have already been read (from self.data): expects
+        self.fill_data to be called first for each input sample.
+
+        The `forward` function will always be called, but the passed `data` may be
+        None in certain circumstances, including if self.fill_data has not yet been
+        called (see: ReaderSensor.fill_data).
+
+        Returns:
+        - Read and processed values corresponding to the keyword; either a single
+            value or a tuple of values if the keyword is a tuple.
+        """
         if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
             return (super(ConstantSensor, self).forward(*args, data=data, **kwargs) for data in self.data)
         else:
@@ -582,21 +926,60 @@ class FunctionalReaderSensor(ReaderSensor):
 
 
 class JointReaderSensor(JointSensor, ReaderSensor):
+    """
+    Combines JointSensor and ReaderSensor. Retrieves values from the
+    input data dictionary into multiple properties.
+
+    Inherits from:
+    - JointSensor: A parent sensor class that calculates multiple properties.
+    - ReaderSensor: A parent sensor class that retrieves values from the input data dictionary.
+    """
     pass
 
-
 class LabelReaderSensor(ReaderSensor):
+    """
+    A ReaderSensor that's also a label. Equivalent to creating a ReaderSensor with the
+    `label` keyword argument set to True.
+
+    Inherits from:
+    - ReaderSensor: A parent sensor class that retrieves values from the input data dictionary.
+    """
     def __init__(self, *args, **kwargs):
+        """
+        Initializes a ReaderSensor that's also a label. Equivalent to:
+        `ReaderSensor(*args, **kwargs, label=True)`.
+        
+        See ReaderSensor for more information.
+        """
         kwargs['label'] = True
         super().__init__(*args, **kwargs)
 
 
 class NominalSensor(TorchSensor):
+    """
+    A base sensor class that calculates the one-hot encoded form of the `forward` function.
+    This class must be inherited and reimplemeted and is not usable.
+
+    Inherits from:
+    - TorchSensor: A parent sensor class for torch-based sensors in the graph.
+    """
     def __init__(self, *pres, vocab=None, edges=None, device='auto'):
+        """
+        Initializes a NominalSensor instance.
+
+        Args:
+        - *pres: Variable-length argument list of predecessors.
+        - vocab (optional): Vocabulary used to calculate the one-hot encodings.
+        - edges (optional): Edges associated with this sensor.
+        - device (str, optional): The device to run torch operations on. It can be 'auto', 'cuda', or 'cpu'. Defaults to 'auto'.
+        """
         super().__init__(*pres, edges=edges, device=device)
         self.vocab = vocab
 
     def complete_vocab(self):
+        """
+        Adds values to the vocabulary based on the forward pass output.
+        """
         if not self.vocab:
             self.vocab = []
         value = self.forward()
@@ -604,6 +987,20 @@ class NominalSensor(TorchSensor):
             self.vocab.append(value)
 
     def one_hot_encoder(self, value):
+        """
+        Helper function for calculating the one-hot encoding of a given value or set of values.
+
+        One-hot encodings are calculated by indexing against the self.vocab attribute.
+
+        Args:
+        - value: A value or list of values to encode as a one-hot tensor.
+        
+        Returns:
+        - A tensor of one-hot encoded values.
+            If a single value is provided, then outputs a tensor of size (1, V).
+            If a list of values is provided with non-zero size, then outputs a tensor of size (N, 1, V).
+            If an empty list of values is provided, then outputs a tensor of size (1, 1, V) with all zeros.
+        """
         if not isinstance(value, list):
             output = torch.zeros([1, len(self.vocab)], device=self.device)
             output[0][self.vocab.index(value)] = 1
@@ -620,6 +1017,13 @@ class NominalSensor(TorchSensor):
         self,
         data_item: Dict[str, Any],
         force=False):
+        """
+        Updates the context of the given data item for this sensor and calculates the one-hot encoding of the function output.
+
+        Args:
+        - data_item: The data dictionary to update.
+        - force (optional): Flag to force recalculation even if result is cached. Default is False.
+        """
         if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self]
@@ -662,6 +1066,12 @@ class ModuleSensor(FunctionalSensor):
 
 
 class TorchEdgeSensor(FunctionalSensor):
+    """
+    Torch Edge sensor used to create the link/edge between two concept to create relation
+
+    Inherits from:
+        - FunctionalSensor:  A functional sensor with functionality for forward pass operations making it directly usable.
+    """
     modes = ("forward", "backward", "selection")
 
     def __init__(self, *pres, to, mode="forward", edges=None, forward=None, label=False, device='auto'):
@@ -674,6 +1084,12 @@ class TorchEdgeSensor(FunctionalSensor):
         self.dst = None
 
     def attached(self, sup):
+        """
+        Attaches the two sensors using provide relation sup
+
+        Args:
+            sup: Relation to attach to source and destination concepts
+        """
         super().attached(sup)
         self.relation = sup.sup
         if self.mode == "forward":
@@ -700,10 +1116,27 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any],
         concept=None
     ) -> Any:
+        """
+        Updates the concept of the relation by provided data items
+
+        Args:
+         - data_item: data item to be updated the head of relation with
+        """
         concept = concept or self.src
         super().update_pre_context(data_item, concept)
 
     def fetch_value(self, pre, selector=None, concept=None):
+        """
+        Fetch the value of the head of relation using the optional selector
+
+        Args:
+        - pre: data item to be updated the head of relation with
+        - selector: optional selector used to fetch data
+        - concept: optional concept to fetch data if not, concept to fetch data is source of relation
+
+        Return:
+        - the value of the head of relation
+        """
         concept = concept or self.src
         return super().fetch_value(pre, selector, concept)
 
@@ -713,237 +1146,40 @@ class TorchEdgeSensor(FunctionalSensor):
         raise TypeError('{} is not to be associated with a concept.'.format(type(self)))
 
 
-# class TorchEdgeReaderSensor(TorchEdgeSensor, ReaderSensor):
-#     def __init__(self, *pres, to, keyword, mode="forward", edges=None, label=False, device='auto'):
-#         super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
-#         self.keyword = keyword
-#         self.data = None
-
-
-# class ModuleEdgeSensor(TorchEdgeSensor):
-#     def __init__(self, *pres, to, module, mode="forward", edges=None, label=False, device='auto'):
-#         self.module = module
-#         super().__init__(self, *pres, to=to, mode=mode, edges=edges, label=label, device=device)
-
-#     def forward(self, *inputs):
-#         return self.module(*inputs)
-
-
-# class ForwardEdgeSensor(TorchEdgeSensor):
-#     def forward(self, input) -> Any:
-#         return input
-
-    
-# class ConstantEdgeSensor(TorchEdgeSensor):
-#     def __init__(self, *pres, to, data, mode="forward", edges=None, label=False, as_tensor=True, device='auto'):
-#         super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
-#         self.data = data
-#         self.as_tensor = as_tensor
-
-#     def forward(self, *_) -> Any:
-#         try:
-#             if self.as_tensor:
-#                 return torch.tensor(self.data, device=self.device)
-#             else:
-#                 self.data
-#         except (TypeError, RuntimeError, ValueError):
-#             return self.data
-
-        
-class AggregationSensor(TorchSensor):
-    def __init__(self, *pres, edges, map_key, deafault_dim=480, device='auto'):
-        super().__init__(*pres, edges=edges, device=device)
-        self.edge_node = self.edges[0].sup
-        self.map_key = map_key
-        self.map_value = None
-        self.data = None
-        self.default_dim = deafault_dim
-        if self.edges[0].name == "backward":
-            self.src = self.edges[0].sup.dst
-            self.dst = self.edges[0].sup.src
-        else:
-            print("the mode should always be passed as backward to the edge used in aggregator sensor")
-            raise Exception('not valid')
-
-    def get_map_value(self, ):
-        self.map_value = self.context_helper[self.src[self.map_key]]
-
-    def update_context(
-        self,
-        data_item: Dict[str, Any],
-        force=False):
-        if not force and self in data_item:
-            # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self]
-        else:
-            self.define_inputs()
-            self.get_map_value()
-            self.get_data()
-            val = self.forward()
-        if val is not None:
-            data_item[self] = val
-            data_item[self.prop] = val # override state under property name
-        return data_item
-
-    def get_data(self):
-        result = []
-        for item in self.inputs[0]:
-            result.append(self.map_value[item[0]:item[1]+1])
-        self.data = result
-
-
-class MaxAggregationSensor(AggregationSensor):
-    def forward(self,) -> Any:
-        results = []
-        for item in self.data:
-            results.append(torch.max(item, dim=0)[0])
-        return torch.stack(results)
-
-
-class MinAggregationSensor(AggregationSensor):
-    def forward(self,) -> Any:
-        results = []
-        for item in self.data:
-            results.append(torch.min(item, dim=0)[0])
-        return torch.stack(results)
-
-
-class MeanAggregationSensor(AggregationSensor):
-    def forward(self,) -> Any:
-        results = []
-        if len(self.data):
-            for item in self.data:
-                results.append(torch.mean(item, dim=0))
-            return torch.stack(results)
-        else:
-            return torch.zeros(1, 1, self.default_dim, device=self.device)
-
-
-class ConcatAggregationSensor(AggregationSensor):
-    def forward(self,) -> Any:
-        results = []
-        for item in self.data:
-            results.append(torch.cat([x for x in item], dim=-1))
-        return torch.stack(results)
-
-
-class LastAggregationSensor(AggregationSensor):
-    def forward(self,) -> Any:
-        results = []
-        if len(self.data):
-            for item in self.data:
-                results.append(item[-1])
-            return torch.stack(results)
-        else:
-            return torch.zeros(1, 1, self.default_dim, device=self.device)
-
-
-class FirstAggregationSensor(AggregationSensor):
-    def forward(self,) -> Any:
-        results = []
-        if len(self.data):
-            for item in self.data:
-                results.append(item[0])
-            return torch.stack(results)
-        else:
-            return torch.zeros(1, 1, self.default_dim, device=self.device)
-
-
-# class SelectionEdgeSensor(TorchEdgeSensor):
-#     def __init__(self, *pres, mode="selection", device='auto'):
-#         super().__init__(*pres, mode=mode, device=device)
-#         self.selection_helper = None
-
-#     def __call__(
-#         self,
-#         data_item: Dict[str, Any]
-#     ) -> Dict[str, Any]:
-#         self.get_initialized()
-#         try:
-#             self.update_pre_context(data_item)
-#         except:
-#             print('Error during updating pre data item with sensor {}'.format(self))
-#             raise
-#         self.context_helper = data_item
-#         try:
-#             self.update_context(data_item)
-#         except:
-#             print('Error during updating data item with sensor {}'.format(self))
-#             raise
-#         return data_item[self.src[self.dst]]
-
-#     def get_selection_helper(self):
-#         self.selection_helper = self.context_helper[self.src[self.dst]]
-
-#     def update_context(
-#         self,
-#         data_item: Dict[str, Any],
-#         force=False):
-#         if not force and self in data_item:
-#             # data_item cached results by sensor name. override if forced recalc is needed
-#             val = data_item[self]
-#         else:
-#             self.define_inputs()
-#             self.get_selection_helper()
-#             val = self.forward()
-#         if val is not None:
-#             data_item[self] = val
-#             data_item[self.prop] = val  # override state under property name
-
-
-# class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
-#     def forward(self,) -> Any:
-#         return self.selection_helper
-
-
-# class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
-#     def __init__(self, *pres, threshold=0.5, device='auto'):
-#         # FIXME: @hfaghihi, do you mean to call super class of `SelectionEdgeSensor`, so here we skip the constructor of `SelectionEdgeSensor`?
-#         super(SelectionEdgeSensor).__init__(*pres, device=device)
-#         self.threshold = threshold
-
-#     def forward(self,) -> Any:
-#         return torch.tensor([x for x in self.selection_helper if x >= self.threshold], device=self.device)
-
-
 class ConcatSensor(TorchSensor):
+    """
+    A sensor that concatenates the inputs on the last dimension for each
+    forward pass.
+    """
     def forward(self,) -> Any:
+        """
+        Concatenate all tensors in self.inputs along the last dimension. Expects self.inputs
+        to already be tensors.
+
+        Returns:
+        - The concatenated tensor with shape identical to the inputs except for the
+            last dimension, which is the sum of all inputs' last-dimension sizes.
+        """
         return torch.cat(self.inputs, dim=-1)
 
 
 class ListConcator(TorchSensor):
+    """
+    A sensor that stacks lists of tensors and concatenates them
+    on the last dimension for each forward pass.
+    """
     def forward(self,) -> Any:
+        """
+        Stacks lists of tensors into a single tensor (in-place) and concatenates
+        all those inputs on the last dimension.
+
+        Returns:
+        - The concatenated tensor. The last dimension equals the sum of the
+            last-dimension sizes of all (converted) inputs.
+        """
         for it in range(len(self.inputs)):
             if isinstance(self.inputs[it], list):
                 self.inputs[it] = torch.stack(self.inputs[it])
         return torch.cat(self.inputs, dim=-1)
 
 
-class SpacyTokenizorSensor(FunctionalSensor):
-    from spacy.lang.en import English
-    nlp = English()
-
-    def forward(self, sentences):
-        tokens = self.nlp.tokenizer.pipe(sentences)
-        return list(tokens)
-
-
-class BertTokenizorSensor(FunctionalSensor):
-    TRANSFORMER_MODEL = 'bert-base-uncased'
-
-    @property
-    def tokenizer(self):
-        if self._tokenizer is None:
-            from transformers import BertTokenizer
-            self._tokenizer = BertTokenizer.from_pretrained(self.TRANSFORMER_MODEL)
-        return self._tokenizer
-
-    def forward(self, sentences):
-        tokens = self.tokenizer.batch_encode_plus(
-            sentences,
-            return_tensors='pt',
-            return_attention_mask=True,
-            #return_offsets_mapping=True,
-        )
-        tokens['tokens'] = self.tokenizer.convert_ids_to_tokens(tokens['input_ids'], skip_special_tokens=True)
-        return tokens

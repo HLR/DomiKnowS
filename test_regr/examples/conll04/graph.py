@@ -1,7 +1,10 @@
 from domiknows.graph import Graph, Concept, Relation
 from domiknows.graph.logicalConstrain import ifL, andL, nandL, exactL
 from domiknows.graph.relation import disjoint
-
+#from domiknows.graph.simplifiedLCSyntax import enable_simplified_syntax
+    
+# Enable once at startup
+#enable_simplified_syntax()
 
 Graph.clear()
 Concept.clear()
@@ -40,7 +43,8 @@ with Graph('global') as graph:
         kill = pair(name='kill')
         
         # LC1
-        ifL(word('x'), exactL(people(path=('x')), organization(path=('x')), location(path=('x')), other(path=('x')), o(path=('x'))), active = True)
+        ifL(word('x'), exactL(people('x'), organization('x'), location('x'), other('x'), o('x')), active = True)
+        #ifL(word('x'), exactL(people('x'), organization('x'), location('x'), other('x'), o('x'), 1), active=True)
         
         # LC2
         #ifL(pair('x'), exactL(work_for(path=('x')), located_in(path=('x')), live_in(path=('x')), orgbase_on(path=('x')), kill(path=('x'))), active = True)
@@ -51,6 +55,7 @@ with Graph('global') as graph:
         
         # LC4
         ifL(located_in('x', 'y'), andL(location('x'), organization('y')), active = True)
+        #ifL(located_in('x', 'y'), location(path='x'), active = True)
         
         # LC5
         ifL(live_in('x', 'y'), andL(people('x'), location('y')), active = True)

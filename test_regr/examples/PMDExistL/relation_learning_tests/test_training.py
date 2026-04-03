@@ -168,7 +168,7 @@ class TestTraining:
             train[i]["logic_label"] = torch.LongTensor([bool(train[i]['condition_label'][0])])
         
         # Compile logic
-        train = graph.compile_logic(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
+        train = graph.compile_executable(train, logic_keyword='logic_str', logic_label_keyword='logic_label')
         
         # Create program
         program = InferenceProgram(
@@ -184,7 +184,7 @@ class TestTraining:
         assert program is not None
         
         # Test evaluation works
-        acc = program.evaluate_condition(train)
+        acc = program.evaluate_condition(train, device='cpu')
         assert isinstance(acc, (int, float))
         assert 0 <= acc <= 100
 

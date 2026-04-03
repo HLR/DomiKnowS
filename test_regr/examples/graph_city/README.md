@@ -25,8 +25,13 @@ This test validates logical constraints on city services using DomiKnows framewo
 - `grocery > emergency` (grocery shops > emergency services)
 - `emergency ≠ grocery` (different counts)
 
+### Summation Constraints (using `sumL`)
+- `sum(emergency, grocery) == 14` - Total emergency + grocery services must equal 14
+- `sum(emergency, main, ancillary) >= 8` - Total emergency + all firestations must be at least 8
+- `emergency > sum(main, ancillary)` - Emergency services must exceed sum of firestation types
+- `if sum(emergency, grocery) >= 6 then exists(firestation)` - Conditional based on service sum
+
 ### Logical Constraints
-- Cities with grocery shops must have at least one neighbor with emergency service
 - All service cities must be subset of total cities
 
 ## Files

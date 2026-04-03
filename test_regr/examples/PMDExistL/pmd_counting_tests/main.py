@@ -143,26 +143,28 @@ def main(args: argparse.Namespace):
         for param in answer_module.parameters():
             param.add_(torch.randn_like(param) * 0.2)
 
-    # Warmup training
+    # Setup optimizer for model training
+    optimizer = torch.optim.Adam(answer_module.parameters(), lr=5e-3)
+    program.opt = optimizer
+    
+    # Use NEW generalized training with phases
     warmup_epochs = 20
-    if warmup_epochs > 0:
-        print(f"[INFO] Warmup training for {warmup_epochs} epochs...")
-        train_model(program, dataset, num_epochs=warmup_epochs)
-    
-    # Evaluate after warmup (for debugging only)
-    program.inferTypes = eval_infer
-    before_count = evaluate_model(program, dataset, b_answer).get(args.expected_value, 0)
-    print(f"[INFO] After warmup - Count of '{args.expected_value}': {before_count}/{args.M}")
-    print(f"[INFO] Target constraint: atLeastL={args.expected_atLeastL}, atMostL={args.expected_atMostL}")
-
-    # Constraint training
-    print("\n[INFO] Starting constraint training...")
-    program.model.train()
-    program.cmodel.train()
-    program.inferTypes = train_infer
-    
     constraint_epochs = args.epoch
-    train_model(program, dataset, constraint_epochs, constr_loss_only=True)
+    
+    print(f"[INFO] Starting phased training: warmup={warmup_epochs}, constraint={constraint_epochs}")
+    
+    program.train(
+        training_set=dataset,
+        valid_set=None,
+        test_set=None,
+        warmup_epochs=warmup_epochs,
+        constraint_epochs=constraint_epochs,
+        constraint_only=True,  # Use constraint-only mode for phase 2
+        constraint_loss_scale=200.0,  # Strong scaling for constraint loss
+        c_lr=5e-3,
+        batch_size=1,
+        dataset_size=len(dataset)
+    )
     
     # Final evaluation
     program.inferTypes = eval_infer
@@ -175,18 +177,19 @@ def main(args: argparse.Namespace):
             logits = _run_answer_module(answer_module, x)
             preds = logits.argmax(dim=-1).tolist()
             print(f"[data {di}] preds={preds}, count of {args.expected_value}: {preds.count(args.expected_value)}")
+    
+    # Note: before_count not available with program.train() approach
+    before_count = 0
           
-    # Check if constraints are satisfied - FIXED LOGIC
+    # Check if constraints are satisfied
     pass_test_case = True  
     if args.atLeastL and args.atMostL:
-        # Both constraints must be satisfied
         pass_test_case = (actual_count >= args.expected_atLeastL) and (actual_count <= args.expected_atMostL)
     elif args.atLeastL:
         pass_test_case = (actual_count >= args.expected_atLeastL)
     elif args.atMostL:
         pass_test_case = (actual_count <= args.expected_atMostL)
     else:
-        # exactL constraint
         pass_test_case = (actual_count == args.expected_atLeastL)
 
     print(f"\nTest case {'PASSED' if pass_test_case else 'FAILED'}")

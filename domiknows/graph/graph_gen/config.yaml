@@ -1,0 +1,9 @@
+# Available LLM options (keyed by model name, first is default)
+# Each model can optionally have an api_key for authenticated endpoints
+models:
+  qwen3-coder-next:
+    server_url: "http://localhost:11434"
+    # api_key: "sk-..."
+  gpt-oss:120b:
+    server_url: "http://localhost:11434"
+    # api_key: "sk-..."

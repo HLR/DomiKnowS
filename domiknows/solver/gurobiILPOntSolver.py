@@ -19,15 +19,15 @@ from domiknows.solver.ilpOntSolver import ilpOntSolver
 from domiknows.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
-from domiknows.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
+from domiknows.solver.booleanMethodsCalculator import booleanMethodsCalculator
 
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
+from domiknows.utils import _default_log_dir
 from domiknows.utils import getReuseModel
 from domiknows.utils import getDnSkeletonMode
 
-from domiknows.graph.candidates import getCandidates
-
+from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -38,6 +38,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
+        self.constraintConstructor = LogicalConstraintConstructor(self.myLogger)
+
         self.logical_constraints = {}
         for g in graph:
             self.logical_constraints = {**self.logical_constraints, **g.logicalConstrains}
@@ -58,21 +60,23 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.logical_constraints = self.myGraph[0].logicalConstrains ### Can myGraph really be multiple graphs?
         
     def getConcept(self, concept):
-        return concept[0]
+        return self.constraintConstructor.getConcept(concept)
     
     def getConceptName(self, concept):
-        return concept[0].name
+        return self.constraintConstructor.getConceptName(concept)
     
     def conceptIsBinary(self, concept):
-        return concept[2] is None
+        return self.constraintConstructor.conceptIsBinary(concept)
     
     def conceptIsMultiClass(self, concept):
-        return concept[2] is not None
+        return self.constraintConstructor.conceptIsMultiClass(concept)
     
-    # Check if value is NaN or if and has to be skipped
     def valueToBeSkipped(self, x):
-        return math.isnan(x) or math.isinf(x)
-        
+        return self.constraintConstructor.valueToBeSkipped(x)
+    
+    def getDatanodesForConcept(self, rootDn, currentName, conceptToDNSCash=None):
+        return self.constraintConstructor.getDatanodesForConcept(rootDn, currentName, conceptToDNSCash)
+    
     # Get Ground Truth for provided concept
     def __getLabel(self, dn, conceptRelation, fun=None, epsilon = None):
         value = dn.getAttribute(conceptRelation, 'label')
@@ -93,7 +97,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             value[1] = valueI[labelIndex] if self.conceptIsMultiClass(conceptRelation) else value[1]
             
         # If softmax process probability through function and apply epsilon
-        if "softmax" in key and value is not None and not math.isnan(value[0]) and epsilon is not None:
+        if "softmax" in key and value is not None and not torch.isnan(value[0]).item() and epsilon is not None:
             value[0] = max(epsilon, min(1-epsilon, value[0]))
             value[1] = max(epsilon, min(1-epsilon, value[1]))
                     
@@ -141,7 +145,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         return xNew
         
-    def getDatanodesForConcept(self, rootDn, currentName, conceptToDNSCash=None):
         if conceptToDNSCash is None or currentName is None:
             conceptToDNSCash = {}
            
@@ -229,12 +232,12 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     # Add variable to objective
                     if Q is None:
-                        Q = currentProbability[1] * xNew
+                        Q = currentProbability[1].detach() * xNew
                     else:
-                        Q += currentProbability[1] * xNew       
+                        Q += currentProbability[1].detach() * xNew       
                             
                     if self.conceptIsBinary(currentConceptRelation): 
-                        Q += currentProbability[0] * xNotNew    
+                        Q += currentProbability[0].detach() * xNotNew    
                 
             if self.conceptIsMultiClass(currentConceptRelation):
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%(currentLabel))
@@ -679,7 +682,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
     def addLogicalConstrains(self, m, dn, lcs, p, key = None):        
         if key == None:
-            key = "/ILP/xP" # to get ILP variable from datanodes
+            key = "/ILP/xP"
         
         for lc in lcs:   
             startLC = perf_counter_ns()
@@ -693,7 +696,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue
 
             lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-            result, _ = self.constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
+            
+            # Use the constraint constructor
+            self.constraintConstructor.current_device = self.current_device
+            self.constraintConstructor.myGraph = self.myGraph
+            result, _ = self.constraintConstructor.constructLogicalConstrains(
+                lc, self.myIlpBooleanProcessor, m, dn, p, key=key, headLC=True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -712,574 +720,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Failed to add Logical Constraint %r\n'%(lc))
                 self.myLoggerTime.error('Failed to add Logical Constraint %r'%(lc))
-
-    def isConceptFixed(self, conceptName):
-        for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                if not lc.headLC or not lc.active: # Process only active and head lcs
-                    continue
-                    
-                if type(lc) is not fixedL: # Skip not fixedL lc
-                    continue
                 
-                if not lc.e:
-                    continue
-                
-                if lc.e[0][1] == conceptName:
-                    return True
-            
-        return False
-                
-    def isVariableFixed(self, dn, conceptName, e):
-        fixedAttribute= None
-        fixedValue = None
-        
-        for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                if not lc.headLC or not lc.active: # Process only active and head lcs
-                    continue
-                    
-                if type(lc) is not fixedL: # Skip not fixedL lc
-                    continue
-                
-                if not lc.e:
-                    continue
-                
-                if lc.e[0][1] != conceptName:
-                    continue
-                
-                fixedAttribute = lc.e[1].v[1].e[1]
-                fixedValue = lc.e[1].v[1].e[2]
-                break
-                
-        if fixedAttribute == None or fixedValue == None:
-            return None
-                      
-        # For spec
-        if fixedAttribute not in dn.getAttributes():
-            return None
-        
-        attributeValue = dn.getAttribute(fixedAttribute).item()
-        
-        if attributeValue in fixedValue:
-            pass
-        elif (True in  fixedValue ) and attributeValue == 1:
-            pass
-        elif (False in  fixedValue ) and attributeValue == 0:
-            pass
-        else:
-            return None
-       
-        vDnLabel = self.__getLabel(dn, conceptName).item()
-
-        if vDnLabel == e[2]:
-            return 1
-        else:
-            return 0
-                    
-    def getMLResult(self, dn, xPkey, e, p, loss = False, sample = False):
-        if dn == None:
-            raise Exception("No datanode provided")
-            
-        conceptName = e[0]
-        
-        sampleKey = '<' + conceptName + ">/sample" 
-        if sample and sampleKey not in dn.getAttributes():
-            dn.getAttributes()[sampleKey] = {}
-        
-        if dn.ontologyNode.name == conceptName:
-            if not sample:
-                if "xP" in xPkey:
-                    return 1
-                elif loss:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                    
-                else:
-                    tOne = torch.ones(1, device=self.current_device, requires_grad=False)
-                    
-                tOneSqueezed = torch.squeeze(tOne)
-                return tOneSqueezed
-            else:
-                sampleSize = p
-                
-                if sampleSize not in dn.getAttributes()[sampleKey]: 
-                    dn.getAttributes()[sampleKey][sampleSize] = {}
-                    
-                xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
-
-                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device = self.current_device)
-                xP = torch.ones(sampleSize, device = self.current_device)
-                
-                return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
-        
-        if dn.getAttribute(xPkey) == None:
-            if not sample:
-                return None
-            else:   
-                return ([None], (None, [None]))
-        
-        if not loss: # ------- If ILP inference
-            if "xP" in xPkey:
-                vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept
-            elif "local/argmax" in xPkey:
-                vDn = dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concep
-            else:
-                vDn = dn.getAttribute(xPkey)[e[2]] # Get ILP variable for the concept
-                
-            return vDn # ILP variable for ILP inference
-        
-        # ----- Loss calculation
-        
-        isFiexd = self.isVariableFixed(dn, conceptName, e)
-
-        if isFiexd != None:
-            if isFiexd == 1:
-                vDn = torch.tensor(1.0, device=self.current_device, requires_grad=True)
-            else:
-                vDn = torch.tensor(0.0, device=self.current_device, requires_grad=True)
-        else:
-            try:
-                vDn = dn.getAttribute(xPkey)[e[1]] # Get value for the concept 
-            except IndexError: 
-                vDn = None
-    
-        if not sample:
-            return vDn # Return here if not sample
-        
-        # --- Generate sample 
-        if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
-            vDn = vDn.item()  
-             
-        sampleSize = p
-
-        xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
-                
-        usedSampleSize = sampleSize
-        if sampleSize == -1:
-            usedSampleSize = dn.getAttributes()[sampleKey][-1][e[1]].shape[0]
-        if isFiexd != None:  
-            if isFiexd == 1:
-                xP = torch.ones(usedSampleSize, device = self.current_device, requires_grad=True)
-            else:
-                xP = torch.zeros(usedSampleSize, device = self.current_device, requires_grad=True)
-        else:
-            xV = dn.getAttribute(xPkey)
-            xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV.squeeze(0)))
-            xP = xEp[:,e[1]]
-          
-        if sampleSize > -1: 
-            if sampleSize not in dn.getAttributes()[sampleKey]: 
-                dn.getAttributes()[sampleKey][sampleSize] = {}
-                
-            if e[1] not in dn.getAttributes()[sampleKey][sampleSize]:
-                # check if not already generated
-                if vDn == None or vDn != vDn:
-                    dn.getAttributes()[sampleKey][sampleSize][e[1]] = [None]
-                else:
-                    # Create sample for this concept and sample size
-                    dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.bernoulli(xP)
-            
-        return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName)) # Return sample data and probability info
-                      
-    def fixedLSupport(self, _dn, conceptName, vDn, i, m):
-        vDnLabel = self.__getLabel(_dn, conceptName).item()
-
-        if isinstance(vDn, Var):                                 
-            if vDnLabel == -100:
-                vDn.VTag = "None" + vDn.VarName
-            elif vDnLabel == i:
-                vDn.VTag = "True" + vDn.VarName
-            else:
-                vDn.VTag = "False" + vDn.VarName
-                
-            m.update()
-            return vDn
-        elif torch.is_tensor(vDn):
-            if vDnLabel == -100:
-                return None
-            elif vDnLabel == i:
-                ones = torch.ones(vDn.shape[0])
-                return ones
-            else:
-                zeros = torch.zeros(vDn.shape[0])
-                return zeros
-        else:
-            if vDnLabel == -100:
-                return None
-            elif vDnLabel == i:
-                return 1
-            else:
-                return 0
-        
-    def __addLossTovDns(self, loss, vDns):
-        if loss and vDns:
-            vDnsOriginal = vDns
-            vDnsList = [v[0] for v in  vDns]
-            
-            updatedVDns = []
-            try:
-                if len(vDnsList) > 1:
-                    tStack = torch.stack(vDnsList, dim=1)
-                else:
-                    tStack = vDnsList[0]
-                tsqueezed = torch.squeeze(tStack, dim=0)
-
-            except IndexError as ie:
-                tsqueezed = torch.stack(vDnsList, dim=0)
-                pass
-        
-            if not len(tsqueezed.shape):
-                tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                
-            tList = [tsqueezed]
-            updatedVDns.append(tList)
-            
-            return updatedVDns
-        else:
-            return vDns
-    
-    from collections import OrderedDict
-
-    def eliminate_duplicate_columns(self, data_dict, rows_to_consider, data_dict_target):
-        """
-        Eliminates columns that have identical elements across specified rows.
-        
-        Args:
-            data_dict: OrderedDict with row names as keys and lists as values
-            rows_to_consider: List of row names to check for duplicates
-            data_dict_target: OrderedDict with same structure to apply same column elimination
-        
-        Returns:
-            OrderedDict (data_dict_target) with same columns removed
-        """
-        if not rows_to_consider or not data_dict or not data_dict_target:
-            return data_dict_target
-        
-        # Get the length of columns (all rows have same length)
-        first_row = list(data_dict.values())[0]
-        num_columns = len(first_row)
-        
-        # Track which columns to keep
-        columns_to_keep = []
-        
-        for col_idx in range(num_columns):
-            # Get column values for specified rows
-            column_values = []
-            for row_name in rows_to_consider:
-                if row_name in data_dict:
-                    if col_idx >= len(data_dict[row_name]):
-                        continue
-                    column_values.append(data_dict[row_name][col_idx])
-            
-            # Check if there are any duplicate values in this column
-            unique_values = set(str(val) for val in column_values)
-            if len(unique_values) < len(column_values):
-                pass
-            else:
-                columns_to_keep.append(col_idx)
-        
-        # Create new OrderedDict with only non-duplicate columns from target
-        result = OrderedDict()
-        for row_name, row_data in data_dict_target.items():
-            if len(row_data) == 1:
-                try:
-                    # Try tensor indexing first
-                    original_tensor = row_data[0][0]
-                    filtered_tensor = original_tensor[columns_to_keep]
-                    result[row_name] = [[filtered_tensor]]
-                except (TypeError, IndexError):
-                    # Fall back to regular list indexing
-                    result[row_name] = [row_data[i] for i in columns_to_keep]
-            else:
-                # Handle regular list case
-                result[row_name] = [row_data[i] for i in columns_to_keep]
-        
-        return result
-
-    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key = None, lcVariablesDns = None, lcVariables = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
-        if key == None:
-            key = ""
-            
-        lcRepr = f'{lc.__class__.__name__} {lc.strEs()}' # for debugging
-
-        if lcVariablesDns == None:
-            lcVariablesDns = OrderedDict()
-
-        if lcVariables == None:
-            lcVariables = OrderedDict()
-            
-        usedVariablesNames = set()
-
-        if sample:
-            sampleInfo = OrderedDict()
-            lcVariablesSet = OrderedDict()
-            
-        if vNo == None:
-            vNo = [1, 1]
-        
-        firstV = None
-        integrate = False
-        newVariables = {}
-        for eIndex, e in enumerate(lc.e):
-            if  isinstance(e, V):
-                continue # Already processed in the previous Concept 
-            
-            if isinstance(e, (Concept,  LcElement, tuple)): 
-                # Look one step ahead in the parsed logical constraint and get variables names (if present) after the current concept
-                if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
-                    variable = lc.e[eIndex+1]
-                else:
-                    if isinstance(e, LogicalConstrain):
-                        variable = V(name="_lc" + str(vNo[1]))
-                        vNo[1] += 1
-                    elif isinstance(e, tuple) and isinstance(e[0], CandidateSelection):
-                        e[0].CandidateSelectionVariable = e[1]
-                        e = e[0]
-                        
-                        variable = V(name="_cs" + str(vNo[1]))
-                        vNo[1] += 1
-                    else:
-                        if firstV == None:
-                            variable = V(name="_x" + str(vNo[0]) )
-                            if not isinstance(lc, CandidateSelection):
-                                firstV = variable.name
-                            vNo[0] += 1
-                        else:
-                            variable = V(name="_x" + str(vNo[0]), v = (firstV,))
-                            vNo[0] += 1
-                    
-                if variable.name:
-                    variableName = variable.name
-                else:
-                    variableName = "V" + str(vNo[0])
-                    vNo[0] += 1
-                    
-                if variableName in lcVariables:
-                    newVariableName = "_x" + str(vNo[0])
-                    vNo[0] += 1
-
-                    lcVariablesDns[newVariableName] = lcVariablesDns[variableName]
-                    if None in lcVariablesDns:
-                        pass
-
-                    lcVariables[newVariableName] = lcVariables[variableName]
-                    usedVariablesNames.add(variableName)
-
-                elif isinstance(e, (Concept, tuple)): # -- Concept 
-                    # -- Get dataNodes candidates 
-                    dnsList, referedVariables = getCandidates(dn, e, variable, lcVariablesDns, lc, self.myLogger, integrate = integrate)
-                    lcVariablesDns[variableName] = dnsList
-                                
-                    if isinstance(lc, CandidateSelection):
-                        continue
-                    
-                    if len(referedVariables) == 1:
-                        referedVariable = referedVariables.pop()
-                        
-                        # if referedVariable starts with letter p - meaning it it variable of relation
-                        if referedVariable.startswith('p'):
-                            if referedVariable not in newVariables:
-                                newVariables[referedVariable] = set()
-                            newVariables[referedVariable].add(variableName)
-
-                    # -- Get ILP variables from collected DataNodes for the given element of logical constraint
-                    
-                    conceptName = e[0].name
-                    vDns = [] # Stores ILP variables
-                    if sample:
-                        sampleInfoForVariable = []
-                    xPkey = '<' + conceptName + ">" + key
-                    
-                    for dns in dnsList:
-                        _vDns = []
-                        if sample:
-                            _sampleInfoForVariable = []
-                            
-                        for _dn in dns:
-                            if not _dn:
-                                vDn = None
-                                _vDns.append(vDn)
-                                continue
-
-                            if isinstance(e[0], EnumConcept) and e[2] == None: # Multiclass concept
-                                eList = e[0].enum
-                                for i, _ in enumerate(eList):
-                                    eT = (e[0].name, i, i)
-                                    if sample:
-                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                        
-                                        _sampleInfoForVariable.append(vDnSampleInfo)
-                                    else:
-                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                    
-                                    if lc.__str__() == "fixedL":
-                                        vDn = self.fixedLSupport(_dn, conceptName, vDn, i, m)
-                                        
-                                    _vDns.append(vDn)
-                            elif isinstance(e[0], EnumConcept) and e[2] != None: # Multiclass concept label
-                                eT = (e[0].name, e[2], e[2])
-                                
-                                if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)                                    
-                                    _sampleInfoForVariable.append(vDnSampleInfo)
-                                else:
-                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                
-                                if lc.__str__() == "fixedL":
-                                    self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
-                                    
-                                vDn = _vDns.append(vDn)
-                            else: # Binary concept
-                                eT = (conceptName, 1, 0)
-                                if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-
-                                    _sampleInfoForVariable.append(vDnSampleInfo)
-                                else:
-                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
-                                
-                                if lc.__str__() == "fixedL":
-                                    self.fixedLSupport(_dn, conceptName, vDn, 1, m)
-                                        
-                                vDn = _vDns.append(vDn)
-                        
-                        if len(_vDns) == 0:
-                            #continue
-                            pass
-                        
-                        vDns.append(_vDns)
-                        
-                        if sample:
-                            sampleInfoForVariable.append(_sampleInfoForVariable)
-                        
-                    # -- Store ILP variables
-                    
-                    if None in lcVariablesDns:
-                        pass
-                    
-                    if vDns and loss and not sample:
-                        vDnsList = [v[0] for v in vDns]
-                        try:
-                            tStack = torch.stack(vDnsList, dim=0)
-                            tsqueezed = torch.squeeze(tStack, dim=0)
-                            if not len(tsqueezed.shape):
-                                tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                            lcVariables[variableName] = [[tStack]]
-                        except TypeError:
-                            for v in vDns:
-                                if v[0] != None and torch.is_tensor(v[0]):
-                                    v[0] = torch.unsqueeze(v[0], 0)
-                                                                    
-                            lcVariables[variableName] = vDns
-                    else:
-                        lcVariables[variableName] = vDns
-                    
-                    if sample:
-                        sampleInfo[variableName] = sampleInfoForVariable
-                        
-                    usedVariablesNames.add(variableName)
-                
-                if isinstance(e, LcElement):
-
-                    if isinstance(e, CandidateSelection): # -- nested LogicalConstrain - process recursively 
-                        lcVariablesDnsNew = self.constructLogicalConstrains(
-                                                                        e, booleanProcessor, m, dn, p, key = key, 
-                                                                        lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
-                                                                        headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                         
-                        lcVariablesDns = lcVariablesDnsNew
-                        vDns = None
-                        if lcVariablesDns:
-                            length_of_list = len(next(iter(lcVariablesDns.values())))
-
-                            if sample:
-                                vDns = [[torch.ones(p, device=self.current_device, requires_grad=False, dtype=torch.bool)] for _ in range(length_of_list)]
-                            elif loss:
-                                vDns = [[torch.zeros(length_of_list, device=self.current_device, requires_grad=True, dtype=torch.float64)]]
-                                vDns = self.__addLossTovDns(loss, vDns)
-                            else:
-                                vDns = [[1] for _ in range(length_of_list)]
-                                   
-                    if isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
-                        self.myLogger.info('Processing Nested %r - %s'%(e, e.strEs()))
-
-                        if sample:
-                            vDns, sampleInfoLC, lcVariablesLC, lcVariableUpdated = self.constructLogicalConstrains(
-                                                                                e, booleanProcessor, m, dn, p, key = key, 
-                                                                                lcVariablesDns = lcVariablesDns, lcVariables = lcVariables, 
-                                                                                headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                            sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
-                            
-                            lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
-                            lcVariables = lcVariableUpdated 
-                        else:
-                            vDns, lcVariableUpdated = self.constructLogicalConstrains(
-                                                                    e, booleanProcessor, m, dn, p, key = key, 
-                                                                    lcVariablesDns = lcVariablesDns, lcVariables = lcVariables,
-                                                                    headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
-                            
-                            vDns = self.__addLossTovDns(loss, vDns)
-                            lcVariables = lcVariableUpdated
-
-                    if vDns == None:
-                        self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
-                        return None
-                        
-                    countValid = sum(1 for sublist in vDns if sublist and any(elem is not None for elem in sublist))
-                    self.myLogger.info('Size of candidate list returned by %s(%s) nested Logical Constraint is %i of which %i is not None'%(e.lcName,e,len(vDns),countValid))
-                    lcVariables[variableName] = vDns   
-                    usedVariablesNames.add(variableName)    
-            # Int - limit 
-            elif isinstance(e, int): 
-                if eIndex == 0:
-                    pass # if this lc using it
-                else:
-                    pass # error!
-            elif isinstance(e, str): 
-                if eIndex == 2:
-                    pass # if this lc using it
-                else:
-                    pass # error!
-            else:
-                self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
-                return None
-
-        for referedVariable in newVariables: # assume relations are irreflexive
-            refVarSet = newVariables[referedVariable]
-            refVarSet.add(referedVariable)  
-            lcVariables = self.eliminate_duplicate_columns(lcVariablesDns, refVarSet, lcVariables)
-
-        # from lcVariables select used Variables in this lc
-        useLcVariables = {k: v for k, v in lcVariables.items() if k in usedVariablesNames}
-
-        if isinstance(lc, CandidateSelection):
-            return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
-        elif sample:
-            lcVariablesSet[lc] = useLcVariables
-            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet, lcVariables
-        elif verify and headLC:
-            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
-        else:
-            if loss:
-                slpitT = False
-                for v in useLcVariables:
-                    if useLcVariables[v] and len(useLcVariables[v]) > 1:
-                        slpitT = True
-                        break
-                    
-                if slpitT:
-                    for v in useLcVariables:
-                        if useLcVariables[v] and len(useLcVariables[v]) > 1:
-                            continue
-                         
-                        lcVSplitted = torch.split(useLcVariables[v][0][0], 1)
-                        useLcVariables[v] = []
-                        
-                        for s in lcVSplitted:
-                            useLcVariables[v].append([s]) 
-                    
-            return lc(m, booleanProcessor, useLcVariables, headConstrain = headLC, integrate = integrate), lcVariables
-    
     # ---------------
                 
     # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification  
@@ -1364,12 +805,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.update()
             
             # Collect head logical constraints
-            dn.setActiveLCs() # Set active logical constraints in the data node if constraints datanote set
+            dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
             _lcP = {}
             _lcP[100] = []
             pUsed = False
             for graph in self.myGraph:
-                for _, lc in graph.logicalConstrains.items():
+                for _, lc in graph.allLogicalConstrains:
                     if lc.headLC and lc.active: # Process only active and head lcs
                         if not ignorePinLCs:
                             lcP = lc.p
@@ -1707,16 +1148,19 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i' % (p, mP.status))
         
          # ----------- Write model to file if logging level is INFO
+        _log_dir = _default_log_dir()
+        os.makedirs(_log_dir, exist_ok=True)
+
         if self.myLogger.level <= logging.INFO:
-            model_path = "logs/GurobiModel.lp"
+            model_path = os.path.join(_log_dir, "GurobiModel.lp")
             if os.path.exists(model_path):
                 os.remove(model_path)
             mP.write(model_path) # Write model to file
-           
+
         # ----------- Write infeasible model to file if model was proven to be infeasible or solution when found
-        infeasible_path = "logs/GurobiInfeasible.ilp"
-        sol_path = "logs/GurobiSolution.sol"
-        json_path = "logs/GurobiSolution.json"
+        infeasible_path = os.path.join(_log_dir, "GurobiInfeasible.ilp")
+        sol_path = os.path.join(_log_dir, "GurobiSolution.sol")
+        json_path = os.path.join(_log_dir, "GurobiSolution.json")
 
         if not solved:
             # Remove solution files if they exist from previous runs
@@ -1741,626 +1185,3 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # Keep result of the model run
         lcRun[p] = {'p': p, 'solved': solved, 'objValue': objValue, 'lcs': lcs, 'mP': mP, 'xP': xP, 'elapsedOptimize': elapsedOptimizeInMs}
-  
-    # --------------- Sample Loss Calculation
-    def eliminateDuplicateSamples(self, lcVariables, sampleSize):
-        variablesSamples = [lcVariables[v][1] for v in lcVariables]
-                    
-        variablesSamplesT = torch.stack(variablesSamples)
-        
-        uniqueSampleIndex = OrderedDict()
-        
-        for i in range(sampleSize):
-            currentS = variablesSamplesT[:,i]
-            
-            currentSHash = hash(currentS.cpu().detach().numpy().tobytes())
-            
-            if currentSHash in uniqueSampleIndex:
-                continue
-                
-                # For testing  - not used now
-                if torch.equal(currentS, variablesSamplesT[:,uniqueSampleIndex[currentSHash]]):
-                    continue
-                else:
-                    raise Exception("HashWrong")
-            else:
-                uniqueSampleIndex[currentSHash] = i
-            
-        va = list(uniqueSampleIndex.values())
-            
-        newSampleSize = len(va)
-    
-        indices = torch.tensor(va, device = self.current_device)
-        #x = torch.arange(6).view(2,3)
-        Vs = torch.index_select(variablesSamplesT, dim=1, index=indices)
-        
-        return newSampleSize, indices, Vs
-
-    def calulateSampleLossForVariable(self, currentLcName, lcVariables, lcSuccesses, sampleSize, eliminateDuplicateSamples, replace_mul=False):
-        lcSampleSize = sampleSize
-        if eliminateDuplicateSamples:
-            lcSampleSize, indices, Vs = self.eliminateDuplicateSamples(lcVariables, sampleSize)
-
-        # Calculate loss value
-        if eliminateDuplicateSamples: 
-            lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
-        else:
-            # lossTensor = torch.clone(lcSuccesses)
-            if replace_mul:
-                lossTensor= torch.zeros(lcSuccesses.shape).to(self.current_device)
-            else:
-                lossTensor = torch.ones(lcSuccesses.shape).to(self.current_device)
-
-            #lossTensor = countSuccesses.div_(len(lossList))
-            
-        for i, v in enumerate(lcVariables):
-            currentV = lcVariables[v]
-            
-            if eliminateDuplicateSamples:
-                P = currentV[0][:lcSampleSize] # Tensor with the current variable p (v[0])
-            else:
-                P = currentV[0]
-            oneMinusP = torch.sub(torch.ones(lcSampleSize, device=self.current_device), P) # Tensor with the current variable 1-p
-            
-            if eliminateDuplicateSamples:
-                S = Vs[i, :] #currentV[1] # Sample for the current Variable
-            else:
-                S = currentV[1]
-                
-            if isinstance(S, list):
-                continue
-            
-            notS = torch.sub(torch.ones(lcSampleSize, device=self.current_device), S.float()) # Negation of Sample
-            
-            pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
-            oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
-            
-            cLoss = torch.add(pS, oneMinusPS) # Sum of p and 1-p tensors
-                                            
-            # Multiply the loss
-            if replace_mul:
-                lossTensor = lossTensor + torch.log(cLoss)
-            else:
-                lossTensor.mul_(cLoss)
-        
-        # if replace_mul:
-        #     lossTensor = torch.exp(lossTensor)
-        return lossTensor, lcSampleSize
-            
-    def generateSemanticSample(self, rootDn, conceptsRelations):
-        sampleSize = -1
-        
-        # Collect master concepts with length of multiclass set
-        masterConcepts = OrderedDict()
-        productConcepts = []
-        productSize = 1
-        productArgs = []
-        for currentConceptRelation in conceptsRelations:
-            currentConceptName = self.getConceptName(currentConceptRelation)
-            
-            if currentConceptName not in masterConcepts:
-                masterConcepts[currentConceptName] = OrderedDict()
-                
-                masterConcepts[currentConceptName]['e'] = []
-                masterConcepts[currentConceptName]['e'].append(currentConceptRelation)
-                
-                
-                rootConcept = rootDn.findRootConceptOrRelation(currentConceptName)
-                dns = rootDn.findDatanodes(select = rootConcept)
-                masterConcepts[currentConceptName]["dns"] = dns
-                
-                conceptRange = 2
-                if self.conceptIsMultiClass(currentConceptRelation):
-                    conceptRange = currentConceptRelation[3]
-                masterConcepts[currentConceptName]["range"] = [x for x in range(conceptRange)]
-                
-                masterConcepts[currentConceptName]['xkey'] = '<' + currentConceptName + '>/sample'
-                 
-                if self.isConceptFixed(currentConceptName):
-                    continue
-                
-                for _ in dns:
-                    productArgs.append(masterConcepts[currentConceptName]["range"])
-                    productSize *= conceptRange
-                    
-                productConcepts.append(currentConceptName)
-            else:
-                masterConcepts[currentConceptName]['e'].append(currentConceptRelation)
-
-        # Init sample 
-        for mConcept in masterConcepts:
-            mConceptInfo = masterConcepts[mConcept]
-            
-            if len(mConceptInfo["e"]) == 1: # Binary concept
-                mConceptInfo["binary"] = True
-            else:
-                mConceptInfo["binary"] = False
-            
-            for dn in mConceptInfo['dns']:
-                if mConceptInfo['xkey'] not in dn.getAttributes():
-                    dn.getAttributes()[mConceptInfo['xkey']] = OrderedDict()
-                                                                    
-                dn.getAttributes()[mConceptInfo['xkey']][sampleSize] = OrderedDict()
-                
-                for i, e in enumerate(mConceptInfo["e"]):
-                    isFiexd = self.isVariableFixed(dn, mConcept, e)
-                    
-                    if mConceptInfo["binary"]:
-                        i = 1
-                        
-                    if isFiexd != None:
-                        if isFiexd == 1:
-                            dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.ones((productSize,), device = self.current_device)
-                            continue
-                        
-                    dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.zeros((productSize,), device = self.current_device)
-             
-        from itertools import product
-        for j, p in enumerate(product(*productArgs, repeat=1)):
-            index = 0
-            if mConceptInfo["binary"]:
-                index = 1
-            for pConcept in productConcepts:
-                pConceptInfo = masterConcepts[pConcept]
-
-                for dn in pConceptInfo['dns']:
-                    try:
-                        dn.getAttributes()[pConceptInfo['xkey']][sampleSize][p[index]][j] = 1
-                    except:
-                        pass
-                    index +=1
-        
-        return productSize
-        
-    # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn, tnorm='L',counting_tnorm=None, sample = False, sampleSize = 0, sampleGlobalLoss = False, conceptsRelations = None):
-        start = perf_counter()
-
-        m = None 
-        p = 0
-        
-        self.current_device = dn.current_device
-
-        if sample: 
-            p = sampleSize
-            if sampleSize == -1: # Semantic Sample
-                sampleSize = self.generateSemanticSample(dn, conceptsRelations)
-            if sampleSize < -1: 
-                raise Exception("Sample size is not incorrect - %i"%(sampleSize))
-           
-            myBooleanMethods = self.myLcLossSampleBooleanMethods
-            myBooleanMethods.sampleSize = sampleSize
-                    
-            self.myLogger.info('Calculating sample loss with sample size: %i'%(p))
-            self.myLoggerTime.info('Calculating sample loss with sample size: %i'%(p))
-        else:
-            myBooleanMethods = self.myLcLossBooleanMethods
-            self.myLcLossBooleanMethods.setTNorm(tnorm)
-            if counting_tnorm:
-                self.myLcLossBooleanMethods.setCountingTNorm(counting_tnorm)
-            
-            self.myLogger.info('Calculating loss ')
-            self.myLoggerTime.info('Calculating loss ')
-
-        myBooleanMethods.current_device = dn.current_device
-        
-        key = "/local/softmax"
-        
-        lcCounter = 0 # Count processed lcs
-        lcLosses = {}
-        for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                startLC = perf_counter_ns()
-
-                if not lc.headLC or not lc.active: # Process only active and head lcs
-                    continue
-                    
-                if type(lc) is fixedL: # Skip fixedL lc
-                    continue
-                    
-                lcCounter +=  1
-                self.myLogger.info('\n')
-                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
-
-                lcName = lc.lcName
-                    
-                lcLosses[lcName] = {}
-                current_lcLosses = lcLosses[lcName]
-                
-                # Calculate loss for the given lc
-                if sample:
-                    # lossList will contain boolean results for lc evaluation for the given sample element
-                    # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo, inputLc, _ = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
-                    current_lcLosses['lossList'] = lossList
-                    current_lcLosses['sampleInfo'] = sampleInfo
-                    current_lcLosses['input'] = inputLc
-                    current_lcLosses['lossRate'] = []
-                    for li in lossList:
-                        liList = []
-                        for l in li:
-                            if l != None:
-                                liList.append(torch.sum(l)/l.shape[0])
-                            else:
-                                liList.append(None)
-                        
-                        current_lcLosses['lossRate'].append(liList)
-                else:
-                    # lossList will contain float result for lc loss calculation
-                    lossList = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
-                    current_lcLosses['lossList'] = lossList
-                             
-                endLC = perf_counter_ns()
-                elapsedInNsLC = endLC - startLC
-                elapsedInMsLC = elapsedInNsLC/1000000
-                current_lcLosses['elapsedInMsLC'] = elapsedInMsLC
-                            
-        if not sample: # Loss value
-            for currentLcName in lcLosses:
-                startLC = perf_counter_ns()
-
-                current_lcLosses = lcLosses[currentLcName]
-                lossList = current_lcLosses['lossList']
-                lossTensor = None
-
-                seperateTensorsUsed = False
-                if lossList and lossList[0]:
-                    if torch.is_tensor(lossList[0][0]) and (len(lossList[0][0].shape) == 0 or len(lossList[0][0].shape) == 1 and lossList[0][0].shape[0] == 1):
-                        seperateTensorsUsed = True
-                        
-                    if seperateTensorsUsed:
-                        lossTensor = torch.zeros(len(lossList), device=self.current_device)#, requires_grad=True) # Entry lcs
-                        for i, l in enumerate(lossList):
-                            lossTensor[i] = float("nan")
-                            for entry in l:
-                                if entry is not None:
-                                    if lossTensor[i] != lossTensor[i]:
-                                        lossTensor[i] = entry
-                                    else:
-                                        lossTensor[i] += entry.item()
-                    else:
-                        for entry in lossList[0]:
-                            if entry is not None:
-                                if lossTensor == None:
-                                    lossTensor = entry[0]
-                                else:
-                                    lossTensor += entry[0]
-                                    
-                current_lcLosses['lossTensor'] = lossTensor
-                current_lcLosses['conversionTensor'] = 1 - lossTensor
-                if lossTensor != None and torch.is_tensor(lossTensor):
-                    # Calculate differentiable normalized loss using sigmoid
-                    current_lcLosses['loss'] = torch.nansum(lossTensor)
-                    current_lcLosses['conversionSigmoid'] = torch.sigmoid(-current_lcLosses['loss'])
-                    # Calculate differentiable normalized loss using clamp 
-                    current_lcLosses['conversionClamp'] = torch.clamp(1 - current_lcLosses['loss'], min=0.0, max=1.0)
-                    # Keep original conversion for backwards compatibility
-                    current_lcLosses['conversion'] = 1 - current_lcLosses['loss']
-                else:
-                    current_lcLosses['loss'] = None 
-                    current_lcLosses['conversion'] = None
-                    current_lcLosses['conversionSigmoid'] = None
-                    current_lcLosses['conversionClamp'] = None
-                    
-                endLC = perf_counter_ns()
-                elapsedInNsLC = endLC - startLC
-                elapsedInMsLC = elapsedInNsLC/1000000
-                current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
-
-                if lossList is not None:
-                    self.myLoggerTime.info('Processing time for %s with %i entries is: %ims'%(currentLcName, len(lossList),  current_lcLosses['elapsedInMsLC']))
-                else:
-                    self.myLoggerTime.info('Processing time for %s with %i entries is: %ims'%(currentLcName, 0,  current_lcLosses['elapsedInMsLC']))
-
-                [h.flush() for h in self.myLoggerTime.handlers]
-            
-        else: # -----------Sample
-            globalSuccesses = torch.ones(sampleSize, device = self.current_device)
-            
-            for currentLcName in lcLosses:
-                startLC = perf_counter_ns()
-
-                current_lcLosses = lcLosses[currentLcName]
-                lossList = current_lcLosses['lossList']
-                
-                sampleInfo = current_lcLosses['sampleInfo']
-                    
-                successesList = [] # Entry lcs successes
-                lcSuccesses = torch.ones(sampleSize, device = self.current_device) # Consolidated successes for all the entry lcs
-                lcVariables = OrderedDict() # Unique variables used in all the entry lcs
-                countSuccesses = torch.zeros(sampleSize, device = self.current_device)
-                oneT = torch.ones(sampleSize, device = self.current_device)
-                
-                # Prepare data
-                if len(lossList) == 1:
-                    for currentFailures in lossList[0]:
-                        if currentFailures is None:
-                            successesList.append(None)
-                            continue
-                        
-                        currentSuccesses = torch.sub(oneT, currentFailures.float())
-                        successesList.append(currentSuccesses)
-                            
-                        lcSuccesses.mul_(currentSuccesses)
-                        globalSuccesses.mul_(currentSuccesses)
-                        countSuccesses.add_(currentSuccesses)
-                        
-                    # Collect lc variable
-                    for k in sampleInfo.keys():
-                        for c in sampleInfo[k]:
-                            if not c:
-                                continue
-                            c = c[0]
-                            if len(c) > 2:                                    
-                                if c[2] not in lcVariables:
-                                    lcVariables[c[2]] = c
-                else:
-                    for i, l in enumerate(lossList):
-                        for currentFailures in l:
-                            if currentFailures is None:
-                                successesList.append(None)
-                                continue
-                            
-                            currentSuccesses = torch.sub(oneT, currentFailures.float())
-                            successesList.append(currentSuccesses)
-                                
-                            lcSuccesses.mul_(currentSuccesses)
-                            globalSuccesses.mul_(currentSuccesses)
-                            countSuccesses.add_(currentSuccesses)
-                            
-                        # Collect lc variable
-                        for k in sampleInfo.keys():
-                            for c in sampleInfo[k][i]:
-                                if len(c) > 2:                                        
-                                    if c[2] not in lcVariables:
-                                        lcVariables[c[2]] = c
-                
-                current_lcLosses['successesList'] = successesList
-                current_lcLosses['lcSuccesses'] = lcSuccesses
-                current_lcLosses['lcVariables'] = lcVariables
-                current_lcLosses['countSuccesses'] = countSuccesses
-
-                endLC = perf_counter_ns()
-                elapsedInNsLC = endLC - startLC
-                elapsedInMsLC = elapsedInNsLC/1000000
-                current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
-
-            lcLosses["globalSuccesses"] = globalSuccesses
-            lcLosses["globalSuccessCounter"] = torch.nansum(globalSuccesses).item()
-            self.myLoggerTime.info('Global success counter is %i '%(lcLosses["globalSuccessCounter"]))
-            
-            for currentLcName in lcLosses:
-                if currentLcName in ["globalSuccessCounter", "globalSuccesses"]:
-                    continue
-                
-                startLC = perf_counter_ns()
-
-                current_lcLosses = lcLosses[currentLcName]
-                lossList = current_lcLosses['lossList']
-                
-                successesList = current_lcLosses['successesList']
-                lcSuccesses = current_lcLosses['lcSuccesses']
-                lcVariables = current_lcLosses['lcVariables']
-                        
-                #lcSuccessesSum = torch.sum(lcSuccesses).item()
-                                
-                eliminateDuplicateSamples = False # Eliminate duplicate samples
-                
-                # --- Calculate sample loss for lc variables
-                current_lcLosses['lossTensor'] = []
-                current_lcLosses['conversionTensor'] = []
-                current_lcLosses['lcSuccesses'] = []
-                current_lcLosses['lcVariables'] = []
-                current_lcLosses['loss'] = []
-                current_lcLosses['conversion'] = []
-                current_lcLosses['conversionSigmoid'] = []
-                current_lcLosses['conversionClamp'] = []
-
-                # Per each lc entry separately
-                if lc.sampleEntries:
-                    current_lcLosses['lcSuccesses'] = successesList
-                    
-                    for i, l in enumerate(lossList):
-                        currentLcVariables = OrderedDict()
-                        for k in sampleInfo.keys():
-                            for c in sampleInfo[k][i]:
-                                if len(c) > 2:                                        
-                                    if c[2] not in currentLcVariables:
-                                        currentLcVariables[c[2]] = c
-                                        
-                        
-                        usedLcSuccesses = successesList[i]
-                        if sampleGlobalLoss:
-                            usedLcSuccesses = globalSuccesses
-                        currentLossTensor, _ = self.calulateSampleLossForVariable(currentLcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
-                        
-                        current_lcLosses['lossTensor'].append(currentLossTensor)
-                        current_lcLosses['conversionTensor'].append(1-currentLossTensor)
-                        current_lcLosses['lcVariables'].append(currentLcVariables)
-    
-                        currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
-                        current_lcLosses['loss'].append(currentLoss)
-                        current_lcLosses['conversion'].append(1 - currentLoss)
-                        current_lcLosses['conversionSigmoid'].append(torch.sigmoid(-currentLoss))
-                        current_lcLosses['conversionClamp'].append(torch.clamp(1 - currentLoss, min=0.0, max=1.0))
-
-                else: # Regular calculation for all lc entries at once
-                    usedLcSuccesses = lcSuccesses
-                    if sampleGlobalLoss:
-                        usedLcSuccesses = globalSuccesses
-
-                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(
-                        currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples
-                    )
-
-                    # scalar loss for this iteration
-                    loss_val = torch.nansum(lossTensor).item()
-
-                    # keep scalars in the 'loss' list
-                    current_lcLosses['loss'].append(loss_val)
-
-                    # append per-iteration conversions (not extend)
-                    current_lcLosses['conversion'].append(1.0 - loss_val)
-
-                    # sigmoid/clamp 
-                    current_lcLosses['conversionSigmoid'].append(torch.sigmoid(torch.tensor(-loss_val)))
-                    current_lcLosses['conversionClamp'].append(
-                        torch.clamp(torch.tensor(1.0 - loss_val), min=0.0, max=1.0)
-                    )
-
-                    # per-sample tensors
-                    current_lcLosses['lossTensor'].append(lossTensor)
-                    current_lcLosses['conversionTensor'].append(1.0 - lossTensor)
-
-                    current_lcLosses['lcSuccesses'].append(lcSuccesses)
-                    current_lcLosses['lcVariables'].append(lcVariables)
-            
-                # Calculate processing time
-                endLC = perf_counter_ns()
-                elapsedInNsLC = endLC - startLC
-                elapsedInMsLC = elapsedInNsLC/1000000
-                current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
-
-                if lc.sampleEntries:
-                    self.myLoggerTime.info('Processing time for %s with %i entries and %i variables is: %ims'
-                                           %(currentLcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
-                if eliminateDuplicateSamples: 
-                    self.myLoggerTime.info('Processing time for %s with %i entries, %i variables and %i unique samples is: %ims'
-                                           %(currentLcName, len(lossList), len(lcVariables), lcSampleSize, current_lcLosses['elapsedInMsLC']))
-                else:
-                    self.myLoggerTime.info('Processing time for %s with %i entries and %i variables is: %ims'
-                                           %(currentLcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
-        
-        self.myLogger.info('')
-
-        self.myLogger.info('Processed %i logical constraints'%(lcCounter))
-        self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
-            
-        end = perf_counter()
-        elapsedInS = end - start
-        
-        if elapsedInS > 1:
-            self.myLogger.info('End of Loss Calculation - total internl time: %fs'%(elapsedInS))
-            self.myLoggerTime.info('End of Loss Calculation - total internl time: %fs'%(elapsedInS))
-        else:
-            elapsedInMs = (end - start) *1000
-            self.myLogger.info('End of Loss Calculation - total internl time: %ims'%(elapsedInMs))
-            self.myLoggerTime.info('End of Loss Calculation - total internl time: %ims'%(elapsedInMs))
-            
-        self.myLogger.info('')
-
-        [h.flush() for h in self.myLoggerTime.handlers]
-            
-        return lcLosses
-    
-    # -- Calculated loss values for logical constraints
-    def verifyResultsLC(self, dn, key = "/argmax"):
-        start = perf_counter()
-
-        m = None 
-        p = 0
-        
-        myBooleanMethods = self.booleanMethodsCalculator
-        myBooleanMethods.current_device = dn.current_device
-
-        self.myLogger.info('Calculating verify ')
-        self.myLoggerTime.info('Calculating verify ')
-        
-        lcCounter = 0 # Count processed lcs
-        lcVerifyResult = OrderedDict()
-        for graph in self.myGraph: # Loop through graphs
-            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                startLC = perf_counter_ns()
-
-                if not lc.headLC or not lc.active: # Process only active and head lcs
-                    continue
-                    
-                if type(lc) is fixedL: # Skip fixedL lc
-                    continue
-                    
-                lcCounter +=  1
-                self.myLogger.info('\n')
-                self.myLogger.info('Processing %r - %s'%(lc, lc.strEs()))
-
-                lcName = lc.lcName
-                    
-                lcVerifyResult[lcName] = {}
-                current_verifyResult = lcVerifyResult[lcName]
-                
-                # verifyList will contain result for the lc verification
-                verifyList, lcVariables = self.constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, verify=True)
-                current_verifyResult['verifyList'] = verifyList
-                
-                verifyListLen = 0
-                verifyListSatisfied = 0
-                for vl in verifyList:
-                    verifyListLen += len(vl)
-                    verifyListSatisfied += sum(vl)
-                
-                if verifyListLen:
-                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
-                else:
-                    current_verifyResult['satisfied'] = 0 # float("nan")
-                    
-                # If  this if logical constraints
-                if type(lc) is ifL or type(lc) is forAllL: # if LC
-                    firstKey = next(iter(lcVariables)) # antecedent variable name in the given if LC
-                    firstLcV = lcVariables[firstKey]   # values of antecedent 
-                    
-                    ifVerifyList = []
-                    
-                    ifVerifyListLen = 0
-                    ifVerifyListSatisfied = 0
-                    
-                    # Loop through the collected verification 
-                    for i, v in enumerate(verifyList):
-                        ifVi = []
-                        # Check if the number of elements in verify list is the same as number of elements in antecedent variables
-                        if len(v) != len(firstLcV[i]):
-                            continue # should be exception
-                        
-                        # Select these calculated verification which have antecedent true
-                        for j, w in enumerate(v):
-                            if torch.is_tensor(firstLcV[i][j]):
-                                currentAntecedent = firstLcV[i][j].item()
-                            else: 
-                                currentAntecedent = firstLcV[i][j] 
-                                
-                            if currentAntecedent == 1: # antecedent true
-                                ifVi.append(w)
-                                    
-                        ifVerifyList.append(ifVi)
-                        
-                        ifVerifyListLen += len(ifVi)
-                        ifVerifyListSatisfied += sum(ifVi)
-                    
-                    current_verifyResult['ifVerifyList'] = ifVerifyList
-                    if ifVerifyListLen:
-                        current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) *100
-                    else:
-                        current_verifyResult['ifSatisfied'] = 0 #float("nan")
-
-                endLC = perf_counter_ns()
-                elapsedInNsLC = endLC - startLC
-                elapsedInMsLC = elapsedInNsLC/1000000
-                current_verifyResult['elapsedInMsLC'] = elapsedInMsLC
-        
-        self.myLogger.info('Processed %i logical constraints'%(lcCounter))
-        self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
-            
-        end = perf_counter()
-        elapsedInS = end - start
-        
-        if elapsedInS > 1:
-            self.myLogger.info('End of Verify Calculation - total time: %fs'%(elapsedInS))
-            self.myLoggerTime.info('End of Verify Calculation - total time: %fs'%(elapsedInS))
-        else:
-            elapsedInMs = (end - start) *1000
-            self.myLogger.info('End of Verify Calculation - total time: %ims'%(elapsedInMs))
-            self.myLoggerTime.info('End of Verify Calculation - total time: %ims'%(elapsedInMs))
-            
-        self.myLogger.info('')
-        self.myLoggerTime.info('')
-
-        [h.flush() for h in self.myLoggerTime.handlers]
-        return lcVerifyResult

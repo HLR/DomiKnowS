@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..utils import consume, entuple
 from .model.base import Mode
 from .program import LearningBasedProgram
-
+import torch
 
 class ProgramStorageCallback():
     def __init__(self, program, fn) -> None:
@@ -29,8 +29,9 @@ class CallbackProgram(LearningBasedProgram):
 
     def default_after_train_step(self, output=None):
         loss, *_ = output
-        if self.opt and loss:
+        if self.opt and torch.is_tensor(loss) and loss.requires_grad:
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
             self.opt.step()
 
     def __init__(self, *args, **kwargs):
@@ -54,18 +55,20 @@ class CallbackProgram(LearningBasedProgram):
         super().train(*args, **kwargs)
         hook(self.after_train)
 
-    def train_pure_epoch(self, dataset):
+    def train_pure_epoch(self, dataset, **kwargs):
+        """Pass kwargs through to parent."""
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
             loss, metric, *output = self.model(data_item)
             yield (loss, metric, *output[:1])
 
-    def train_epoch(self, dataset):
+    def train_epoch(self, dataset, **kwargs):
+        """Pass kwargs through and fire hooks."""
         hook(self.before_train_epoch)
         for _, output in zip(
             map(hook, repeat(self.before_train_step)),
-            self.train_pure_epoch(dataset),
+            super().train_epoch(dataset, **kwargs),  # Pass kwargs to parent
             ):
             hook(self.after_train_step, output)
             yield output
@@ -76,11 +79,12 @@ class CallbackProgram(LearningBasedProgram):
         super().test(*args, **kwargs)
         hook(self.after_test)
 
-    def test_epoch(self, dataset):
+    def test_epoch(self, dataset, **kwargs):
+        """Pass kwargs through and fire hooks."""
         hook(self.before_test_epoch)
         for _, output in zip(
             map(hook, repeat(self.before_test_step)),
-            super().test_epoch(dataset),
+            super().test_epoch(dataset, **kwargs),  # Pass kwargs to parent
             ):
             hook(self.after_test_step, output)
             yield output

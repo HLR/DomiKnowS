@@ -1,4 +1,3 @@
-import os
 import os.path as osp
 from typing import Optional, Union, Callable, Sequence, List, Dict, Any, Tuple, Type
 import pickle
@@ -401,6 +400,7 @@ class CLEVRDatasetUnwrapped:
         feed_dict.image_index = metainfo.image_index
         feed_dict.image_filename = metainfo.image_filename
         feed_dict.image = None
+        pil_image = None
         
         if self.image_root and feed_dict.image_filename and \
            feed_dict.image_filename not in ["unknown_image.png", "error_invalid_scene.png", "error_dummy_scene.png"]:
@@ -427,7 +427,7 @@ class CLEVRDatasetUnwrapped:
         else: # No valid image, ensure 'objects' field matches 'objects_raw' (i.e., no transform applied)
             feed_dict.objects = feed_dict.objects_raw
 
-        feed_dict.pil_image = None
+        feed_dict.pil_image = pil_image
         feed_dict.question_index = metainfo.question_index
         feed_dict.question_raw = metainfo.question
         feed_dict.question_raw_tokenized = metainfo.question_tokenized
@@ -520,6 +520,21 @@ class CLEVRDatasetFilterableView:
         elif disallowed is not None: filter_name_suffix = f"[disallowed={{{','.join(list(disallowed))}}}]"
         return self.filter(filt, f'filter-question-type{filter_name_suffix}')
     
+    def filter_out_query(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions that are simple attribute queries without any relational operations, excluding those with 'query' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str:
+                return False
+            else:
+                return True
+        return self.filter(filt, f'filter-out-query')
+    
     def filter_relational_type(self, *args) -> 'CLEVRDatasetFilterableView':
         def convert_program_to_str(program: List[Dict[str, Any]]) -> str:
             """Converts a program to a string representation."""
@@ -548,6 +563,38 @@ class CLEVRDatasetFilterableView:
             else:
                 return False        
         return self.filter(filt, f'filter-one-left-or-right')
+
+    def filter_complex_relation(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions with multiple `spatial relation` operation in their program, excluding those with 'query', 'same_', 'than', or 'count' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same_" in program_str or "than" in program_str or "count" in program_str:
+                return False
+            return True
+        return self.filter(filt, f'filter-complex-relations')
+
+    def filter_counting(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include questions with multiple `spatial relation` operation in their program, excluding those with 'query', 'same_', 'than', or 'count' operations.
+        """
+        def convert_program_to_str_func(program: List[Dict[str, Any]]) -> str:
+            """Converts a program to a string representation."""
+            return ' '.join([str(op.get('type', op.get('function')))+"_"+str(op.get('value_inputs') or "") for op in program])
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program_str = convert_program_to_str_func(q_metainfo["program"])
+            if "query" in program_str or "same_" in program_str:
+                return False
+            if "equal" in program_str and "equal_integer" not in program_str:
+                return False
+            if "count" in program_str or "greater_than" in program_str or "less_than" in program_str:
+                return True
+            return False
+        return self.filter(filt, f'filter-counting-questions')
 
     def filter_only_query(self, *args) -> 'CLEVRDatasetFilterableView':
         """
@@ -599,6 +646,90 @@ class CLEVRDatasetFilterableView:
         logger.warning("`make_dataloader` (JacDataLoader) is removed. Use a standard DataLoader (e.g., torch.utils.data.DataLoader) and define a custom collate_fn if needed.")
         raise NotImplementedError("JacDataLoader and VarLengthCollateV2 are removed.")
 
+    def filter_query_only(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter to only include query-type questions 
+        (query_color, query_shape, query_material, query_size).
+        """
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program = q_metainfo.get("program", [])
+            if not program:
+                return False
+            last_op = program[-1]
+            op_type = last_op.get('type', last_op.get('function', ''))
+            return op_type.startswith('query_')
+        
+        return self.filter(filt, 'filter-query-only')
+
+    def filter_query_with_relations(self, max_relations: int = 2) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter query questions with at most max_relations spatial relations.
+        """
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program = q_metainfo.get("program", [])
+            if not program:
+                return False
+            
+            last_op = program[-1]
+            op_type = last_op.get('type', last_op.get('function', ''))
+            if not op_type.startswith('query_'):
+                return False
+            
+            relate_count = sum(1 for op in program 
+                             if op.get('type', op.get('function', '')) == 'relate')
+            
+            program_str = ' '.join([str(op.get('type', op.get('function'))) for op in program])
+            if 'same_' in program_str:
+                return False
+            
+            return relate_count <= max_relations
+        
+        return self.filter(filt, f'filter-query-with-relations[max={max_relations}]')
+
+    def filter_query_no_same(self, *args) -> 'CLEVRDatasetFilterableView':
+        """
+        Filter query questions without same_* operations.
+        """
+        def filt(q_metainfo: Dict[str, Any]) -> bool:
+            program = q_metainfo.get("program", [])
+            if not program:
+                return False
+            
+            last_op = program[-1]
+            op_type = last_op.get('type', last_op.get('function', ''))
+            if not op_type.startswith('query_'):
+                return False
+            
+            for op in program:
+                func = op.get('type', op.get('function', ''))
+                if func.startswith('same_'):
+                    return False
+            
+            return True
+        
+        return self.filter(filt, 'filter-query-no-same')
+    
+    def get_query_attribute(program: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+        """
+        Extract the queried attribute from a query-type program.
+        Returns 'color', 'shape', 'material', or 'size', or None if not a query.
+        """
+        if not program:
+            return None
+        
+        last_op = program[-1]
+        op_type = last_op.get('type', last_op.get('function', ''))
+        
+        if op_type == 'query_color':
+            return 'color'
+        elif op_type == 'query_shape':
+            return 'shape'
+        elif op_type == 'query_material':
+            return 'material'
+        elif op_type == 'query_size':
+            return 'size'
+        
+        return None
 
 class CLEVRCustomTransferDataset:
     """The unwrapped CLEVR dataset for custom transfer learning."""

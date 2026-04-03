@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DomiKnowS Graph Builder</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+        .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+        h1 { font-size: 1.8rem; margin-bottom: 0.3rem; color: #38bdf8; }
+        .subtitle { color: #94a3b8; margin-bottom: 2rem; font-size: 0.95rem; }
+
+        .step { background: #1e293b; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid #334155; }
+        .step-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+        .step-num { background: #38bdf8; color: #0f172a; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+        .step-title { font-size: 1.1rem; font-weight: 600; }
+
+        textarea {
+            width: 100%; min-height: 120px; background: #0f172a; border: 1px solid #475569;
+            border-radius: 6px; color: #e2e8f0; padding: 0.75rem; font-family: inherit;
+            font-size: 0.9rem; resize: vertical;
+        }
+        textarea:focus { outline: none; border-color: #38bdf8; }
+
+        .code-block {
+            background: #0f172a; border: 1px solid #475569; border-radius: 6px;
+            padding: 0.75rem; font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.82rem; white-space: pre-wrap; word-break: break-word;
+            max-height: 400px; overflow-y: auto; line-height: 1.5;
+        }
+
+        textarea.code-editor {
+            background: #0f172a; border: 1px solid #475569; border-radius: 6px;
+            padding: 0.75rem; font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.82rem; white-space: pre; word-break: break-word;
+            min-height: 300px; max-height: 500px; overflow-y: auto; line-height: 1.5;
+            width: 100%; box-sizing: border-box; color: #e2e8f0; resize: vertical;
+            tab-size: 4;
+        }
+        textarea.code-editor:focus {
+            outline: none; border-color: #38bdf8;
+        }
+
+        .btn {
+            padding: 0.6rem 1.4rem; border: none; border-radius: 6px; font-size: 0.9rem;
+            font-weight: 600; cursor: pointer; transition: all 0.15s;
+        }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary { background: #38bdf8; color: #0f172a; }
+        .btn-primary:hover:not(:disabled) { background: #7dd3fc; }
+        .btn-secondary { background: #475569; color: #e2e8f0; }
+        .btn-secondary:hover:not(:disabled) { background: #64748b; }
+        .btn-success { background: #22c55e; color: #0f172a; }
+        .btn-danger { background: #ef4444; color: #fff; }
+
+        .btn-row { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+
+        .status { padding: 0.5rem 0.75rem; border-radius: 6px; margin-top: 0.75rem; font-size: 0.85rem; }
+        .status-success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+        .status-error { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+        .status-info { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af; }
+        .status-warning { background: #451a03; color: #fbbf24; border: 1px solid #78350f; }
+
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #94a3b8; border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 0.5rem; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hidden { display: none; }
+
+        .concept-tag { display: inline-block; background: #312e81; color: #a5b4fc; padding: 0.25rem 0.6rem; border-radius: 4px; margin: 0.2rem; font-size: 0.8rem; }
+        .relation-tag { display: inline-block; background: #3b0764; color: #d8b4fe; padding: 0.25rem 0.6rem; border-radius: 4px; margin: 0.2rem; font-size: 0.8rem; }
+
+        .attempt-badge { font-size: 0.8rem; color: #94a3b8; margin-left: auto; }
+
+        .prompt-block {
+            background: #1a1a2e; border: 1px solid #3b3b5c; border-radius: 6px;
+            padding: 0.75rem; font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.78rem; white-space: pre-wrap; word-break: break-word;
+            max-height: 300px; overflow-y: auto; line-height: 1.4; color: #a5b4fc;
+        }
+
+        .interaction-log { margin-top: 0.75rem; }
+        .interaction-entry { margin-bottom: 0.75rem; border-left: 3px solid #334155; padding-left: 0.75rem; }
+        .interaction-entry.type-llm { border-left-color: #38bdf8; }
+        .interaction-entry.type-warning { border-left-color: #fbbf24; }
+        .interaction-entry.type-info { border-left-color: #6ee7b7; }
+        .interaction-entry.type-error { border-left-color: #ef4444; }
+        .interaction-label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.3rem; }
+        .interaction-label.warning { color: #fbbf24; }
+        .interaction-label.info { color: #6ee7b7; }
+        .interaction-label.error { color: #fca5a5; }
+        .interaction-label.llm { color: #38bdf8; }
+
+        .question-progress { margin-top: 0.75rem; }
+        .question-progress-item {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.4rem 0.6rem; margin-bottom: 0.3rem;
+            border-radius: 4px; font-size: 0.85rem; background: #0f172a;
+            border: 1px solid #334155;
+        }
+        .question-progress-item.pending { color: #94a3b8; }
+        .question-progress-item.processing { color: #93c5fd; border-color: #38bdf8; }
+        .question-progress-item.done { color: #6ee7b7; border-color: #065f46; }
+        .question-progress-item.failed { color: #fca5a5; border-color: #7f1d1d; }
+        .qp-icon { width: 20px; text-align: center; flex-shrink: 0; }
+        .qp-text { flex: 1; }
+
+        .model-badge {
+            display: inline-block; background: #312e81; color: #a5b4fc;
+            padding: 0.15rem 0.6rem; border-radius: 4px; font-size: 0.8rem;
+            margin-left: 0.5rem; vertical-align: middle;
+        }
+        .model-badge-inline {
+            display: inline-block; background: #1e3a5f; color: #7dd3fc;
+            padding: 0.1rem 0.45rem; border-radius: 3px; font-size: 0.72rem;
+            margin-left: 0.4rem; vertical-align: middle; font-weight: 400;
+        }
+
+        /* Model selector */
+        .model-selector-wrap {
+            display: flex; align-items: center; gap: 0.75rem;
+            margin-bottom: 1.5rem; padding: 0.75rem 1rem;
+            background: #1e293b; border-radius: 8px; border: 1px solid #334155;
+        }
+        .model-selector-wrap label { font-size: 0.9rem; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+        .model-selector-wrap select {
+            background: #0f172a; color: #e2e8f0; border: 1px solid #475569;
+            border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.9rem;
+            font-family: inherit; cursor: pointer; min-width: 220px;
+        }
+        .model-selector-wrap select:focus { outline: none; border-color: #38bdf8; }
+        .model-selector-wrap .server-hint { font-size: 0.78rem; color: #64748b; }
+
+        /* Saved sessions panel */
+        .sessions-panel {
+            background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+            padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+        }
+        .sessions-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        .sessions-header h3 { font-size: 0.95rem; color: #94a3b8; font-weight: 600; }
+        .sessions-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .sessions-empty { color: #64748b; font-size: 0.85rem; font-style: italic; }
+        .session-card {
+            display: flex; align-items: center; gap: 0.75rem;
+            background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+            padding: 0.6rem 0.85rem; transition: border-color 0.15s;
+        }
+        .session-card:hover { border-color: #38bdf8; }
+        .session-info { flex: 1; min-width: 0; }
+        .session-name {
+            font-size: 0.88rem; font-weight: 600; color: #e2e8f0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .session-meta { font-size: 0.75rem; color: #64748b; margin-top: 0.15rem; }
+        .session-meta .has-graph { color: #22c55e; }
+        .session-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+        .session-actions button {
+            padding: 0.3rem 0.65rem; border: none; border-radius: 5px;
+            font-size: 0.78rem; font-weight: 600; cursor: pointer;
+        }
+        .btn-load-session { background: #0369a1; color: #fff; }
+        .btn-load-session:hover { background: #0284c7; }
+        .btn-del-session { background: #7f1d1d; color: #fca5a5; }
+        .btn-del-session:hover { background: #991b1b; }
+
+        .save-row {
+            display: flex; gap: 0.5rem; margin-top: 0.75rem;
+        }
+        .save-row input {
+            flex: 1; background: #0f172a; border: 1px solid #475569; border-radius: 6px;
+            color: #e2e8f0; padding: 0.4rem 0.7rem; font-size: 0.85rem; font-family: inherit;
+        }
+        .save-row input:focus { outline: none; border-color: #38bdf8; }
+        .save-row input::placeholder { color: #475569; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+        <div>
+            <h1>✨🕸️ DomiKnowS Graph Builder</h1>
+            <p class="subtitle">✨ LLM-powered — Generate DomiKnowS graphs from natural language questions</p>
+        </div>
+        <button class="btn btn-danger" onclick="resetApp()" title="Clear everything and start over">🔄 New Session</button>
+    </div>
+
+    <!-- Model Selector -->
+    <div class="model-selector-wrap">
+        <label for="model-select">🤖 Model:</label>
+        <select id="model-select"></select>
+        <span class="server-hint" id="server-hint"></span>
+    </div>
+
+    <!-- Saved Sessions -->
+    <div class="sessions-panel">
+        <div class="sessions-header">
+            <h3>📂 Saved Sessions</h3>
+        </div>
+        <div id="sessions-list" class="sessions-list">
+            <div class="sessions-empty">No saved sessions yet.</div>
+        </div>
+        <div class="save-row">
+            <input type="text" id="session-name-input" placeholder="Session name (e.g. &quot;ball counting graph&quot;)…" />
+            <button class="btn btn-primary" style="padding:0.4rem 1rem;font-size:0.85rem;" onclick="saveCurrentSession()">💾 Save</button>
+        </div>
+    </div>
+
+    <!-- Step 1: Questions -->
+    <div class="step">
+        <div class="step-header">
+            <span class="step-num">1</span>
+            <span class="step-title">Enter Domain Questions</span>
+        </div>
+        <textarea id="questions" placeholder="Enter one question per line, e.g.:&#10;What organizations does a person work for?&#10;Which city is an organization located in?&#10;Who manages which department?"></textarea>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="btn-extract" onclick="extractConcepts()">Extract Concepts</button>
+        </div>
+        <div id="extract-status" class="hidden"></div>
+        <div id="extract-log" class="interaction-log"></div>
+    </div>
+
+    <!-- Step 2: Concepts -->
+    <div class="step hidden" id="step-concepts">
+        <div class="step-header">
+            <span class="step-num">2</span>
+            <span class="step-title">Extracted Concepts &amp; Relations</span>
+        </div>
+        <div id="concepts-display"></div>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="btn-generate" onclick="generateGraph()">Generate Graph</button>
+        </div>
+        <div id="generate-status" class="hidden"></div>
+        <div id="generate-log" class="interaction-log"></div>
+    </div>
+
+    
+    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+    <label style="color:#94a3b8;font-size:0.9rem;white-space:nowrap;">Load graph from file:</label>
+    <input type="file" id="graph-file-input" accept=".py"
+        style="background:#0f172a;border:1px solid #334155;border-radius:6px;
+            padding:0.35rem 0.6rem;color:#e2e8f0;font-size:0.85rem;flex:1;" />
+    <button onclick="loadGraphFromFile()"
+        style="background:#0369a1;color:#fff;border:none;border-radius:6px;
+            padding:0.45rem 1rem;cursor:pointer;font-size:0.85rem;white-space:nowrap;">
+        Load
+    </button>
+    </div>
+    <div id="load-graph-status" style="margin-bottom:0.75rem;"></div>
+
+    <!-- Step 3: Generated Code -->
+    <div class="step hidden" id="step-code">
+        <div class="step-header">
+            <span class="step-num">3</span>
+            <span class="step-title">Generated Graph Code</span>
+            <span class="attempt-badge" id="attempt-badge"></span>
+        </div>
+        <div id="coverage-status" class="hidden"></div>
+        <textarea id="code-display" class="code-editor" spellcheck="false" placeholder="Graph code will appear here..."></textarea>
+        <div class="btn-row">
+            <button class="btn btn-success" id="btn-execute" onclick="executeGraphCode()">▶ Execute Graph</button>
+            <button class="btn btn-secondary" onclick="copyCode('code-display')">📋 Copy</button>
+        </div>
+        <div id="execute-status" class="hidden"></div>
+        <div id="execute-log" class="interaction-log"></div>
+    </div>
+
+    <!-- Step 4: Executable Constraints -->
+    <div class="step hidden" id="step-exec-constraints">
+        <div class="step-header">
+            <span class="step-num">4</span>
+            <span class="step-title">Executable Constraints (Questions → Constraints)</span>
+            <span class="attempt-badge" id="exec-attempt-badge"></span>
+        </div>
+        <div id="question-progress" class="question-progress"></div>
+        <textarea id="exec-code-display" class="code-editor" spellcheck="false" placeholder="Full code with constraints will appear here..."></textarea>
+        <div class="btn-row">
+            <button class="btn btn-success" id="btn-execute-full" onclick="executeFullCode()">▶ Execute Full Code</button>
+            <button class="btn btn-secondary" onclick="copyCode('exec-code-display')">📋 Copy</button>
+        </div>
+        <div id="exec-constraint-status" class="hidden"></div>
+        <div id="exec-constraint-log" class="interaction-log"></div>
+    </div>
+</div>
+
+<script>
+    const MAX_FIXES = 5;
+    let state = {
+        questions: [],
+        conceptsJson: null,
+        graphCode: "",
+        execSnippet: "",
+        fullCode: "",
+        graphAttempt: 0,
+        execAttempt: 0,
+        availableModels: [],
+    };
+
+    // -----------------------------------------------------------------------
+    // IndexedDB — saved sessions
+    // -----------------------------------------------------------------------
+    const DB_NAME = "DomiKnowsGraphBuilder";
+    const DB_VERSION = 1;
+    const STORE_NAME = "sessions";
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+                    store.createIndex("savedAt", "savedAt", { unique: false });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function dbGetAll() {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.index("savedAt").getAll();
+            req.onsuccess = () => resolve(req.result.reverse()); // newest first
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function dbPut(record) {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const req = tx.objectStore(STORE_NAME).put(record);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function dbDelete(id) {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const req = tx.objectStore(STORE_NAME).delete(id);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    // ---- Render session list ----
+    async function renderSessionList() {
+        const container = document.getElementById("sessions-list");
+        let sessions;
+        try {
+            sessions = await dbGetAll();
+        } catch (e) {
+            console.error("[sessions] Failed to load:", e);
+            container.innerHTML = '<div class="sessions-empty">Could not load saved sessions.</div>';
+            return;
+        }
+
+        if (!sessions.length) {
+            container.innerHTML = '<div class="sessions-empty">No saved sessions yet.</div>';
+            return;
+        }
+
+        container.innerHTML = "";
+        for (const s of sessions) {
+            const card = document.createElement("div");
+            card.className = "session-card";
+
+            const qCount = (s.questions || []).length;
+            const hasGraph = s.graphCode ? '<span class="has-graph">✔ graph</span>' : '<span>no graph</span>';
+            const dateStr = new Date(s.savedAt).toLocaleString();
+
+            card.innerHTML = `
+                <div class="session-info">
+                    <div class="session-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</div>
+                    <div class="session-meta">${qCount} question${qCount !== 1 ? 's' : ''} · ${hasGraph} · ${dateStr}</div>
+                </div>
+                <div class="session-actions">
+                    <button class="btn-load-session" data-id="${s.id}">Load</button>
+                    <button class="btn-del-session" data-id="${s.id}">✕</button>
+                </div>
+            `;
+            card.querySelector(".btn-load-session").addEventListener("click", () => loadSession(s.id));
+            card.querySelector(".btn-del-session").addEventListener("click", () => deleteSession(s.id));
+            container.appendChild(card);
+        }
+    }
+
+    // ---- Save current session ----
+    async function saveCurrentSession() {
+        const nameInput = document.getElementById("session-name-input");
+        let name = nameInput.value.trim();
+
+        const questions = document.getElementById("questions").value.trim()
+            .split("\n").map(q => q.trim()).filter(Boolean);
+        const graphCode = document.getElementById("code-display").value || state.graphCode || "";
+
+        if (!questions.length && !graphCode) {
+            alert("Nothing to save — enter questions or load a graph first.");
+            return;
+        }
+
+        if (!name) {
+            // Auto-generate a name from first question
+            name = questions.length
+                ? questions[0].substring(0, 60) + (questions[0].length > 60 ? "…" : "")
+                : "Untitled session";
+        }
+
+        const record = {
+            id: `session_${Date.now()}`,
+            name: name,
+            savedAt: Date.now(),
+            questions: questions,
+            graphCode: graphCode,
+        };
+
+        try {
+            await dbPut(record);
+            nameInput.value = "";
+            await renderSessionList();
+            console.log("[sessions] Saved:", record.id, record.name);
+        } catch (e) {
+            console.error("[sessions] Save failed:", e);
+            alert("Failed to save session: " + e.message);
+        }
+    }
+
+    // ---- Load a session ----
+    async function loadSession(id) {
+        let sessions;
+        try {
+            sessions = await dbGetAll();
+        } catch (e) {
+            alert("Failed to read sessions: " + e.message);
+            return;
+        }
+
+        const s = sessions.find(s => s.id === id);
+        if (!s) { alert("Session not found."); return; }
+
+        // Populate questions
+        document.getElementById("questions").value = (s.questions || []).join("\n");
+        state.questions = s.questions || [];
+
+        // If session has a graph, load it into Step 3
+        if (s.graphCode) {
+            state.graphCode = s.graphCode;
+            document.getElementById("code-display").value = state.graphCode;
+            document.getElementById("attempt-badge").textContent = "";
+            document.getElementById("step-code").classList.remove("hidden");
+        } else {
+            // Hide Step 3 if no graph
+            state.graphCode = "";
+            document.getElementById("code-display").value = "";
+            document.getElementById("step-code").classList.add("hidden");
+        }
+
+        // Reset downstream state
+        state.conceptsJson = null;
+        state.execSnippet = "";
+        state.fullCode = "";
+        state.graphAttempt = 0;
+        state.execAttempt = 0;
+
+        // Hide steps 2 & 4, clear statuses
+        document.getElementById("step-concepts").classList.add("hidden");
+        document.getElementById("concepts-display").innerHTML = "";
+        document.getElementById("generate-status").className = "hidden";
+        document.getElementById("generate-log").innerHTML = "";
+        document.getElementById("step-exec-constraints").classList.add("hidden");
+        document.getElementById("exec-code-display").value = "";
+        document.getElementById("exec-constraint-status").className = "hidden";
+        document.getElementById("exec-constraint-log").innerHTML = "";
+        document.getElementById("question-progress").innerHTML = "";
+
+        // Clear status messages
+        ["extract-status", "execute-status", "load-graph-status", "coverage-status"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.className = "hidden"; el.innerHTML = ""; }
+        });
+        document.getElementById("extract-log").innerHTML = "";
+        document.getElementById("execute-log").innerHTML = "";
+
+        // Re-enable buttons
+        document.getElementById("btn-extract").disabled = false;
+        document.getElementById("btn-generate").disabled = false;
+        document.getElementById("btn-execute").disabled = false;
+        document.getElementById("btn-execute-full").disabled = false;
+
+        console.log(`[sessions] Loaded: ${s.name} — ${s.questions.length} questions, graph: ${!!s.graphCode}`);
+    }
+
+    // ---- Delete a session ----
+    async function deleteSession(id) {
+        if (!confirm("Delete this saved session?")) return;
+        try {
+            await dbDelete(id);
+            await renderSessionList();
+            console.log("[sessions] Deleted:", id);
+        } catch (e) {
+            console.error("[sessions] Delete failed:", e);
+            alert("Failed to delete session: " + e.message);
+        }
+    }
+
+    // Load session list on startup
+    renderSessionList();
+
+    // -----------------------------------------------------------------------
+    // Model selector
+    // -----------------------------------------------------------------------
+    function getSelectedModel() {
+        return document.getElementById("model-select").value || null;
+    }
+
+    function updateServerHint() {
+        const sel = document.getElementById("model-select");
+        const name = sel.value;
+        const m = state.availableModels.find(m => m.name === name);
+        document.getElementById("server-hint").textContent = m ? m.server_url : "";
+    }
+
+    fetch("/api/config")
+        .then(r => r.json())
+        .then(data => {
+            state.availableModels = data.models || [];
+            const sel = document.getElementById("model-select");
+            sel.innerHTML = '';
+            for (const m of state.availableModels) {
+                const opt = document.createElement("option");
+                opt.value = m.name;
+                opt.textContent = m.name;
+                if (m.name === data.default_model) opt.selected = true;
+                sel.appendChild(opt);
+            }
+            sel.addEventListener("change", updateServerHint);
+            updateServerHint();
+        })
+        .catch(() => {});
+
+    // -----------------------------------------------------------------------
+    // Reset / New Session
+    // -----------------------------------------------------------------------
+    function resetApp() {
+        if (!confirm("Start a new session? All current progress will be lost.")) return;
+
+        // Reset state
+        state.questions = [];
+        state.conceptsJson = null;
+        state.graphCode = "";
+        state.execSnippet = "";
+        state.fullCode = "";
+        state.graphAttempt = 0;
+        state.execAttempt = 0;
+        // keep state.availableModels — no need to refetch
+
+        // Clear Step 1: questions textarea and status/logs
+        document.getElementById("questions").value = "";
+        document.getElementById("extract-status").className = "hidden";
+        document.getElementById("extract-status").innerHTML = "";
+        document.getElementById("extract-log").innerHTML = "";
+        document.getElementById("btn-extract").disabled = false;
+
+        // Hide Step 2: concepts
+        document.getElementById("step-concepts").classList.add("hidden");
+        document.getElementById("concepts-display").innerHTML = "";
+        document.getElementById("generate-status").className = "hidden";
+        document.getElementById("generate-status").innerHTML = "";
+        document.getElementById("generate-log").innerHTML = "";
+        document.getElementById("btn-generate").disabled = false;
+
+        // Clear load-graph area
+        document.getElementById("graph-file-input").value = "";
+        document.getElementById("load-graph-status").innerHTML = "";
+
+        // Hide Step 3: generated code
+        document.getElementById("step-code").classList.add("hidden");
+        document.getElementById("code-display").value = "";
+        document.getElementById("attempt-badge").textContent = "";
+        document.getElementById("coverage-status").className = "hidden";
+        document.getElementById("coverage-status").innerHTML = "";
+        document.getElementById("execute-status").className = "hidden";
+        document.getElementById("execute-status").innerHTML = "";
+        document.getElementById("execute-log").innerHTML = "";
+        document.getElementById("btn-execute").disabled = false;
+
+        // Hide Step 4: executable constraints
+        document.getElementById("step-exec-constraints").classList.add("hidden");
+        document.getElementById("exec-code-display").value = "";
+        document.getElementById("exec-attempt-badge").textContent = "";
+        document.getElementById("question-progress").innerHTML = "";
+        document.getElementById("exec-constraint-status").className = "hidden";
+        document.getElementById("exec-constraint-status").innerHTML = "";
+        document.getElementById("exec-constraint-log").innerHTML = "";
+        document.getElementById("btn-execute-full").disabled = false;
+
+        // Reload prompts / model config from server
+        fetch("/api/config")
+            .then(r => r.json())
+            .then(data => {
+                state.availableModels = data.models || [];
+                const sel = document.getElementById("model-select");
+                sel.innerHTML = '';
+                for (const m of state.availableModels) {
+                    const opt = document.createElement("option");
+                    opt.value = m.name;
+                    opt.textContent = m.name;
+                    if (m.name === data.default_model) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+                updateServerHint();
+            })
+            .catch(() => {});
+
+        // Refresh saved sessions list
+        renderSessionList();
+
+        console.log("[resetApp] Session reset complete");
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+    function showStatus(id, type, msg) {
+        const el = document.getElementById(id);
+        el.className = `status status-${type}`;
+        el.innerHTML = msg;
+        el.classList.remove("hidden");
+    }
+
+    function showLoading(id, msg) {
+        showStatus(id, "info", `<span class="spinner"></span>${msg}`);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function modelBadgeHtml(modelName) {
+        if (!modelName) return '';
+        return `<span class="model-badge-inline" title="Model used">🤖 ${escapeHtml(modelName)}</span>`;
+    }
+
+    function appendLogEntry(containerId, entry) {
+        const container = document.getElementById(containerId);
+        const div = document.createElement('div');
+
+        if (entry.type === 'llm_interaction') {
+            div.className = 'interaction-entry type-llm';
+            const iter = entry.iteration || '?';
+            const qLabel = entry.question ? ` — "${escapeHtml(entry.question)}"` : '';
+            const mBadge = modelBadgeHtml(entry.model);
+            div.innerHTML = `
+                <div class="interaction-label llm">🔄 LLM Interaction — Iteration ${iter}${qLabel} ${mBadge}</div>
+                <details>
+                    <summary>📤 Prompt Sent to LLM</summary>
+                    <div class="prompt-block" style="margin-top:0.5rem">${escapeHtml(entry.prompt_sent || '')}</div>
+                </details>
+                <details>
+                    <summary>📥 Raw LLM Response</summary>
+                    <div class="code-block" style="margin-top:0.5rem">${escapeHtml(entry.raw_response || '')}</div>
+                </details>
+            `;
+        } else if (entry.type === 'warning') {
+            div.className = 'interaction-entry type-warning';
+            div.innerHTML = `<div class="interaction-label warning">⚠️ ${escapeHtml(entry.message || '')}</div>`;
+        } else if (entry.type === 'error') {
+            div.className = 'interaction-entry type-error';
+            div.innerHTML = `<div class="interaction-label error">❌ ${escapeHtml(entry.message || '')}</div>`;
+        } else {
+            div.className = 'interaction-entry type-info';
+            div.innerHTML = `<div class="interaction-label info">ℹ️ ${escapeHtml(entry.message || '')}</div>`;
+        }
+
+        container.appendChild(div);
+    }
+
+    function renderLog(containerId, logEntries) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (!logEntries || !logEntries.length) return;
+        for (const entry of logEntries) {
+            appendLogEntry(containerId, entry);
+        }
+    }
+
+    function addLogMessage(containerId, message, type = 'info') {
+        appendLogEntry(containerId, { type, message });
+    }
+
+    async function postJSON(url, body) {
+        // Inject selected model into every API call
+        body.model = getSelectedModel();
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        // Surface server-side errors consistently so callers always see .error
+        if (!resp.ok && data.error && !data.output) {
+            data.output = data.error;
+        }
+        return data;
+    }
+
+    function copyCode(elementId) {
+        const el = document.getElementById(elementId);
+        const text = el.value !== undefined ? el.value : el.textContent;
+        navigator.clipboard.writeText(text).then(() => {});
+    }
+
+    // -----------------------------------------------------------------------
+    // Question progress tracker helpers
+    // -----------------------------------------------------------------------
+    function initQuestionProgress(questions) {
+        const container = document.getElementById("question-progress");
+        container.innerHTML = '';
+        questions.forEach((q, i) => {
+            const item = document.createElement('div');
+            item.className = 'question-progress-item pending';
+            item.id = `qp-${i}`;
+            item.innerHTML = `<span class="qp-icon">○</span><span class="qp-text">Q${i + 1}: ${escapeHtml(q)}</span>`;
+            container.appendChild(item);
+        });
+    }
+
+    function setQuestionStatus(index, status) {
+        const item = document.getElementById(`qp-${index}`);
+        if (!item) return;
+        item.className = `question-progress-item ${status}`;
+        const icons = { pending: '○', processing: '<span class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></span>', done: '✅', failed: '⚠️' };
+        item.querySelector('.qp-icon').innerHTML = icons[status] || '○';
+    }
+
+    // -----------------------------------------------------------------------
+    // Clear downstream steps when re-executing an earlier step
+    // -----------------------------------------------------------------------
+    function clearFromStep(step) {
+        // step: 1 = extract, 2 = generate graph, 3 = execute graph, 4 = exec constraints
+        // Clears everything AFTER the given step.
+
+        if (step <= 1) {
+            // Clear Step 2: concepts display
+            state.conceptsJson = null;
+            document.getElementById("step-concepts").classList.add("hidden");
+            document.getElementById("concepts-display").innerHTML = "";
+            document.getElementById("generate-status").className = "hidden";
+            document.getElementById("generate-status").innerHTML = "";
+            document.getElementById("generate-log").innerHTML = "";
+            document.getElementById("btn-generate").disabled = false;
+        }
+
+        if (step <= 2) {
+            // Clear Step 3: generated graph code
+            state.graphCode = "";
+            state.graphAttempt = 0;
+            document.getElementById("step-code").classList.add("hidden");
+            document.getElementById("code-display").value = "";
+            document.getElementById("attempt-badge").textContent = "";
+            document.getElementById("coverage-status").className = "hidden";
+            document.getElementById("coverage-status").innerHTML = "";
+            document.getElementById("execute-status").className = "hidden";
+            document.getElementById("execute-status").innerHTML = "";
+            document.getElementById("execute-log").innerHTML = "";
+            document.getElementById("btn-execute").disabled = false;
+
+            // Also clear load-graph status
+            document.getElementById("load-graph-status").innerHTML = "";
+        }
+
+        if (step <= 3) {
+            // Clear Step 4: executable constraints
+            state.execSnippet = "";
+            state.fullCode = "";
+            state.execAttempt = 0;
+            document.getElementById("step-exec-constraints").classList.add("hidden");
+            document.getElementById("exec-code-display").value = "";
+            document.getElementById("exec-attempt-badge").textContent = "";
+            document.getElementById("question-progress").innerHTML = "";
+            document.getElementById("exec-constraint-status").className = "hidden";
+            document.getElementById("exec-constraint-status").innerHTML = "";
+            document.getElementById("exec-constraint-log").innerHTML = "";
+            document.getElementById("btn-execute-full").disabled = false;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 1: Extract concepts
+    // -----------------------------------------------------------------------
+    async function extractConcepts() {
+        const raw = document.getElementById("questions").value.trim();
+        if (!raw) return;
+
+        // Clear all downstream steps (2, 3, 4)
+        clearFromStep(1);
+
+        state.questions = raw.split("\n").map(q => q.trim()).filter(Boolean);
+        document.getElementById("btn-extract").disabled = true;
+        document.getElementById("extract-log").innerHTML = '';
+        showLoading("extract-status", "Extracting concepts from questions...");
+
+        try {
+            const data = await postJSON("/api/extract", { questions: state.questions });
+            if (data.error) { showStatus("extract-status", "error", data.error); return; }
+
+            state.conceptsJson = data.concepts_json;
+
+            renderLog("extract-log", [
+                { type: "llm_interaction", iteration: 1, prompt_sent: data.prompt_sent, raw_response: data.raw_response, model: data.model }
+            ]);
+
+            let html = "";
+            if (data.concepts_json?.concepts) {
+                html += "<div><strong>Concepts:</strong> ";
+                data.concepts_json.concepts.forEach(c => {
+                    html += `<span class="concept-tag" title="${c.description || ''}">${c.name}</span>`;
+                });
+                html += "</div>";
+            }
+            if (data.concepts_json?.relations) {
+                html += "<div style='margin-top:0.5rem'><strong>Relations:</strong> ";
+                data.concepts_json.relations.forEach(r => {
+                    html += `<span class="relation-tag" title="${r.description || ''}">${r.name} (${r.source}→${r.target})</span>`;
+                });
+                html += "</div>";
+            }
+            document.getElementById("concepts-display").innerHTML = html;
+
+            showStatus("extract-status", "success", "Concepts extracted successfully.");
+            document.getElementById("step-concepts").classList.remove("hidden");
+        } catch (e) {
+            showStatus("extract-status", "error", `Request failed: ${e.message}`);
+        } finally {
+            document.getElementById("btn-extract").disabled = false;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 2: Generate graph
+    // -----------------------------------------------------------------------
+    async function generateGraph() {
+        // Clear downstream steps (3, 4)
+        clearFromStep(2);
+
+        document.getElementById("btn-generate").disabled = true;
+        document.getElementById("generate-log").innerHTML = '';
+        showLoading("generate-status", "Generating DomiKnowS graph code...");
+
+        try {
+            const data = await postJSON("/api/generate", {
+                questions: state.questions,
+                concepts_json: state.conceptsJson,
+            });
+            if (data.error) { showStatus("generate-status", "error", data.error); return; }
+
+            state.graphCode = data.code || "";
+            state.graphAttempt = 0;
+
+            renderLog("generate-log", data.log || []);
+
+            await validateCoverage();
+
+            document.getElementById("code-display").value = state.graphCode;
+            document.getElementById("attempt-badge").textContent = "";
+            showStatus("generate-status", "success", "Code generated. Click Execute to validate the graph.");
+            document.getElementById("step-code").classList.remove("hidden");
+        } catch (e) {
+            showStatus("generate-status", "error", `Request failed: ${e.message}`);
+        } finally {
+            document.getElementById("btn-generate").disabled = false;
+        }
+    }
+
+
+    // -----------------------------------------------------------------------
+    // Load graph code from file (bypassing LLM generation)
+    // -----------------------------------------------------------------------
+    async function loadGraphFromFile() {
+        const input = document.getElementById("graph-file-input");
+        if (!input.files.length) {
+            showStatus("load-graph-status", "error", "Please select a .py file first.");
+            return;
+        }
+
+        // Clear downstream steps (3, 4) since we're replacing graph code
+        clearFromStep(2);
+
+        // Capture domain questions — needed later for executable constraint generation
+        const raw = document.getElementById("questions").value.trim();
+        if (!raw) {
+            showStatus("load-graph-status", "error", "Please enter domain questions first (Step 1) — they are needed for executable constraint generation.");
+            return;
+        }
+        state.questions = raw.split("\n").map(q => q.trim()).filter(Boolean);
+
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+
+        showStatus("load-graph-status", "info", "Loading…");
+        try {
+            const resp = await fetch("/api/load-graph", { method: "POST", body: formData });
+            const data = await resp.json();
+            if (data.error) {
+                showStatus("load-graph-status", "error", data.error);
+                return;
+            }
+            state.graphCode = data.graph_code;
+            document.getElementById("code-display").value = state.graphCode;
+            document.getElementById("attempt-badge").textContent = "";
+            document.getElementById("step-code").classList.remove("hidden");
+            showStatus("load-graph-status", "success",
+                `✅ Graph loaded from "${input.files[0].name}" — LLM generation skipped.`);
+        } catch (e) {
+            showStatus("load-graph-status", "error", `Request failed: ${e.message}`);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 2b: Validate coverage
+    // -----------------------------------------------------------------------
+    async function validateCoverage() {
+        for (let attempt = 0; attempt < MAX_FIXES; attempt++) {
+            const data = await postJSON("/api/validate_coverage", {
+                code: state.graphCode,
+                concepts_json: state.conceptsJson,
+            });
+
+            if (data.valid) {
+                showStatus("coverage-status", "success", "✅ All extracted concepts and relations present in graph.");
+                return;
+            }
+
+            let msg = "⚠️ Missing — ";
+            if (data.missing_concepts?.length) msg += `concepts: ${data.missing_concepts.join(", ")}`;
+            if (data.missing_relations?.length) msg += ` relations: ${data.missing_relations.join(", ")}`;
+            showStatus("coverage-status", "warning", msg + ` (fix attempt ${attempt + 1}/${MAX_FIXES})`);
+
+            if (data.prompt_sent || data.raw_response) {
+                addLogMessage("generate-log", `Coverage fix attempt ${attempt + 1}/${MAX_FIXES}`, "warning");
+                appendLogEntry("generate-log", {
+                    type: "llm_interaction",
+                    iteration: `coverage-fix-${attempt + 1}`,
+                    prompt_sent: data.prompt_sent || '',
+                    raw_response: data.raw_response || '',
+                    model: data.model || '',
+                });
+            }
+
+            if (data.code) {
+                state.graphCode = data.code;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3: Execute graph (with fix loop)
+    // -----------------------------------------------------------------------
+    async function executeGraphCode() {
+        // Clear downstream step (4)
+        clearFromStep(3);
+
+        // Sync any manual edits from the textarea back to state
+        state.graphCode = document.getElementById("code-display").value;
+        document.getElementById("btn-execute").disabled = true;
+        state.graphAttempt++;
+        document.getElementById("attempt-badge").textContent = `Attempt ${state.graphAttempt} / ${MAX_FIXES}`;
+
+        addLogMessage("execute-log", `--- Graph execution attempt ${state.graphAttempt} ---`);
+        showLoading("execute-status", "Executing graph code...");
+
+        try {
+            const data = await postJSON("/api/execute", { code: state.graphCode });
+
+            if (data.error) {
+                showStatus("execute-status", "error", data.error);
+                document.getElementById("btn-execute").disabled = false;
+                return;
+            }
+
+            if (data.success) {
+                showStatus("execute-status", "success", "✅ Graph validated! Generating executable constraints...");
+                addLogMessage("execute-log", "✅ Graph validated successfully!", "info");
+                await generateExecutableConstraints();
+                return;
+            }
+
+            addLogMessage("execute-log", `❌ Error: ${data.output || "Unknown error"}`, "error");
+
+            if (state.graphAttempt >= MAX_FIXES) {
+                showStatus("execute-status", "error", `❌ Failed after ${MAX_FIXES} attempts.`);
+                document.getElementById("btn-execute").disabled = false;
+                return;
+            }
+
+            addLogMessage("execute-log", "Asking LLM to fix the graph code...", "warning");
+            showLoading("execute-status", `Fixing graph code (attempt ${state.graphAttempt}/${MAX_FIXES})...`);
+
+            const fixData = await postJSON("/api/fix", { code: state.graphCode, error: data.output || data.error || "" });
+
+            if (fixData.log) {
+                for (const entry of fixData.log) {
+                    appendLogEntry("execute-log", entry);
+                }
+            }
+
+            if (fixData.code) {
+                state.graphCode = fixData.code;
+                document.getElementById("code-display").value = state.graphCode;
+                addLogMessage("execute-log", "Received corrected graph code. Re-executing...");
+                document.getElementById("btn-execute").disabled = false;
+                await executeGraphCode();
+                return;
+            } else {
+                showStatus("execute-status", "error", "LLM could not produce fixed code.");
+            }
+        } catch (e) {
+            showStatus("execute-status", "error", `Request failed: ${e.message}`);
+            addLogMessage("execute-log", `Request error: ${e.message}`, "error");
+        }
+
+        document.getElementById("btn-execute").disabled = false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 4: Generate executable constraints
+    // -----------------------------------------------------------------------
+    async function generateExecutableConstraints() {
+        console.log("[genExecConstraints] START — questions:", state.questions, "graphCode length:", state.graphCode.length);
+        showLoading("execute-status", "Generating executable constraints — processing each question individually...");
+
+        document.getElementById("step-exec-constraints").classList.remove("hidden");
+        document.getElementById("exec-constraint-log").innerHTML = '';
+        document.getElementById("exec-code-display").value = '';
+        initQuestionProgress(state.questions);
+        showLoading("exec-constraint-status", "Generating executable constraints…");
+
+        const snippets = [];
+
+        for (let i = 0; i < state.questions.length; i++) {
+            const question = state.questions[i];
+            console.log(`[genExecConstraints] Processing Q${i + 1}:`, question);
+            setQuestionStatus(i, 'processing');
+            showLoading("exec-constraint-status", `Generating constraint for Q${i + 1} of ${state.questions.length}…`);
+            addLogMessage("exec-constraint-log", `Processing Q${i + 1}: ${question}`);
+
+            try {
+                console.log(`[genExecConstraints] Calling /api/generate_executable_single for Q${i + 1}…`);
+                const data = await postJSON("/api/generate_executable_single", {
+                    question: question,
+                    graph_code: state.graphCode,
+                });
+                console.log(`[genExecConstraints] Q${i + 1} response:`, JSON.stringify(data).substring(0, 500));
+
+                if (data.error) {
+                    console.warn(`[genExecConstraints] Q${i + 1} server error:`, data.error);
+                    setQuestionStatus(i, 'failed');
+                    addLogMessage("exec-constraint-log", `Failed Q${i + 1}: ${data.error}`, "error");
+                    continue;
+                }
+
+                appendLogEntry("exec-constraint-log", {
+                    type: "llm_interaction",
+                    iteration: i + 1,
+                    question: question,
+                    prompt_sent: data.prompt_sent,
+                    raw_response: data.raw_response,
+                    model: data.model,
+                });
+
+                if (data.snippet) {
+                    console.log(`[genExecConstraints] Q${i + 1} snippet OK (${data.snippet.length} chars)`);
+                    snippets.push(`# Q${i + 1}: ${question}\n${data.snippet.trim()}`);
+                    setQuestionStatus(i, 'done');
+                } else {
+                    console.warn(`[genExecConstraints] Q${i + 1} snippet is null/empty — raw_response:`, data.raw_response?.substring(0, 300));
+                    setQuestionStatus(i, 'failed');
+                    addLogMessage("exec-constraint-log", `Could not extract execute() call for Q${i + 1}`, "warning");
+                }
+            } catch (e) {
+                console.error(`[genExecConstraints] Q${i + 1} exception:`, e);
+                setQuestionStatus(i, 'failed');
+                addLogMessage("exec-constraint-log", `Request error for Q${i + 1}: ${e.message}`, "error");
+            }
+        }
+
+        console.log(`[genExecConstraints] Loop done — ${snippets.length} snippets from ${state.questions.length} questions`);
+
+        if (snippets.length === 0) {
+            console.error("[genExecConstraints] No snippets — aborting");
+            showStatus("execute-status", "error", "Failed to generate any executable constraints. Check the log in Step 4 below.");
+            showStatus("exec-constraint-status", "error",
+                "❌ No executable constraints could be generated. The LLM could not produce valid execute() calls for any question. " +
+                "Try editing the graph code or rephrasing your questions.");
+            document.getElementById("btn-execute").disabled = false;
+            return;
+        }
+
+        state.execSnippet = snippets.join("\n\n");
+
+        try {
+            console.log("[genExecConstraints] Calling /api/merge_executable…");
+            const mergeData = await postJSON("/api/merge_executable", {
+                graph_code: state.graphCode,
+                snippet: state.execSnippet,
+            });
+            console.log("[genExecConstraints] merge response:", JSON.stringify(mergeData).substring(0, 500));
+
+            if (mergeData.error) {
+                showStatus("exec-constraint-status", "error", `Merge failed: ${mergeData.error}`);
+                document.getElementById("btn-execute").disabled = false;
+                return;
+            }
+
+            state.fullCode = mergeData.code || "";
+            state.execAttempt = 0;
+            document.getElementById("exec-code-display").value = state.fullCode;
+            console.log("[genExecConstraints] DONE — fullCode length:", state.fullCode.length);
+
+            const doneCount = snippets.length;
+            const totalCount = state.questions.length;
+            showStatus("execute-status", "success",
+                `✅ Graph validated. Executable constraints generated (${doneCount}/${totalCount} questions). Click Execute Full Code to validate.`);
+            showStatus("exec-constraint-status", "info",
+                `Executable constraints generated for ${doneCount}/${totalCount} question(s). Review the code below and click Execute Full Code.`);
+            addLogMessage("execute-log", `Executable constraints generated (${doneCount}/${totalCount}). See Step 4.`);
+            document.getElementById("btn-execute").disabled = false;
+        } catch (e) {
+            console.error("[genExecConstraints] merge/final exception:", e);
+            showStatus("exec-constraint-status", "error", `Failed to merge executable constraints: ${e.message}`);
+            document.getElementById("btn-execute").disabled = false;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 4b: Execute full code (with fix loop)
+    // -----------------------------------------------------------------------
+    async function executeFullCode() {
+        // Sync any manual edits from the textarea back to state
+        state.fullCode = document.getElementById("exec-code-display").value;
+        document.getElementById("btn-execute-full").disabled = true;
+        state.execAttempt++;
+        document.getElementById("exec-attempt-badge").textContent = `Attempt ${state.execAttempt} / ${MAX_FIXES}`;
+
+        addLogMessage("exec-constraint-log", `--- Full code execution attempt ${state.execAttempt} ---`);
+        showLoading("exec-constraint-status", "Executing full code with constraints...");
+
+        try {
+            const data = await postJSON("/api/execute", { code: state.fullCode });
+
+            if (data.error) {
+                showStatus("exec-constraint-status", "error", data.error);
+                document.getElementById("btn-execute-full").disabled = false;
+                return;
+            }
+
+            if (data.success) {
+                showStatus("exec-constraint-status", "success", "✅ Graph with executable constraints created successfully!");
+                addLogMessage("exec-constraint-log", "✅ Full code executed successfully!", "info");
+                document.getElementById("btn-execute-full").disabled = false;
+                return;
+            }
+
+            addLogMessage("exec-constraint-log", `❌ Error: ${data.output || "Unknown error"}`, "error");
+
+            if (state.execAttempt >= MAX_FIXES) {
+                showStatus("exec-constraint-status", "error", `❌ Failed after ${MAX_FIXES} attempts.`);
+                document.getElementById("btn-execute-full").disabled = false;
+                return;
+            }
+
+            addLogMessage("exec-constraint-log", "Asking LLM to fix the full code...", "warning");
+            showLoading("exec-constraint-status", `Fixing code (attempt ${state.execAttempt}/${MAX_FIXES})...`);
+
+            const fixData = await postJSON("/api/fix", {
+                code: state.fullCode,
+                error: data.output || data.error || "",
+                expected_execute_count: state.questions.length,
+            });
+
+            if (fixData.log) {
+                for (const entry of fixData.log) {
+                    appendLogEntry("exec-constraint-log", entry);
+                }
+            }
+
+            if (fixData.code) {
+                state.fullCode = fixData.code;
+                document.getElementById("exec-code-display").value = state.fullCode;
+                addLogMessage("exec-constraint-log", "Received corrected code. Re-executing...");
+                document.getElementById("btn-execute-full").disabled = false;
+                await executeFullCode();
+                return;
+            } else {
+                showStatus("exec-constraint-status", "error", "LLM could not produce fixed code.");
+            }
+        } catch (e) {
+            showStatus("exec-constraint-status", "error", `Request failed: ${e.message}`);
+            addLogMessage("exec-constraint-log", `Request error: ${e.message}`, "error");
+        }
+
+        document.getElementById("btn-execute-full").disabled = false;
+    }
+</script>
+</body>
+</html>

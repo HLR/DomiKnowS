@@ -4,6 +4,8 @@ from time import perf_counter, perf_counter_ns
 import re
 from itertools import count
 
+from domiknows.graph.logicalConstrain import sumL
+
 from .dataNodeConfig import dnConfig
 
 from ordered_set import OrderedSet
@@ -12,6 +14,10 @@ from domiknows import getRegrTimer_logger, getProductionModeStatus, graph, setup
 from domiknows.solver import ilpOntSolverFactory
 from domiknows.utils import getDnSkeletonMode
 from domiknows.graph.relation import Contains
+
+from domiknows.solver.lossCalculator import LossCalculator
+from domiknows.solver.sampleLossCalculator import SampleLossCalculator
+from domiknows.solver.logicalConstraintVerifier import LogicalConstraintVerifier
 
 from .property import Property
 from .concept import Concept, EnumConcept
@@ -103,6 +109,8 @@ class DataNode:
                 self.current_device = 'cuda:1'
             else:
                 self.current_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                
+        self.current_dtype = torch.float32
 
         self.gurobiModel = None
 
@@ -365,6 +373,10 @@ class DataNode:
                 key = key + "/"
                 keyBis = keyBis + "/"
 
+            # remove "/" from beginning of kConcept if present
+            if isinstance(kConcept, str) and kConcept.startswith("/"):
+                kConcept = kConcept[1:]
+                
             # Handle different way of representing concept in the key list
             if isinstance(kConcept, str): # Concept name
                 conceptForK = None
@@ -1230,6 +1242,97 @@ class DataNode:
 
         return None
 
+    # ----------------- Active Executable LC methods
+    
+    def getExecutableConstraintLabels(self):
+        """Get all active executable constraint labels from the constraint datanode.
+        
+        Finds the constraint concept's datanode via the builder and returns
+        its attributes dict (format: {'LC{n}/label': label_value, ...}).
+        
+        Returns:
+            dict: Executable constraint labels dict, or empty dict if no constraint datanode found.
+            
+        Raises:
+            ValueError: If multiple constraint datanodes are found.
+        """
+        if not self.myBuilder:
+            return {}
+
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
+        
+        if len(constraint_dn_search) == 0:
+            return {}
+        elif len(constraint_dn_search) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_concept.name}) '
+                f'found: {len(constraint_dn_search)}, expected one.'
+            )
+
+        return constraint_dn_search[0].getAttributes()
+
+    def getExecutableConstraintLabel(self, lcName):
+        """Get the label for a specific active executable constraint.
+        
+        Args:
+            lcName (str): Name of the executable constraint (e.g. 'LC0').
+            
+        Returns:
+            torch.Tensor or None: The label tensor if found, None otherwise.
+        """
+        labels = self.getExecutableConstraintLabels()
+        key = f'{lcName}/label'
+        label = labels.get(key, None)
+        if label is not None:
+            if label.dim() == 0:
+                label = label.unsqueeze(0)
+            label = label.squeeze()
+            
+        return label
+    
+    def getActiveExecutableConstraintNames(self):
+        """Get the set of active executable constraint names from constraint labels.
+        
+        Parses the constraint labels dict keys (format 'LC{n}/label') to extract
+        the executable constraint names (e.g. 'LC0', 'LC1').
+        
+        Returns:
+            set: Set of active executable constraint name strings.
+        """
+        read_labels = self.getExecutableConstraintLabels()
+        return set(x.split('/')[0] for x in read_labels)
+    
+    def setActiveExecutableLCs(self):
+        # If no builder or no executive LC datanode then return
+        if not self.myBuilder:
+            return
+
+        read_labels = self.getExecutableConstraintLabels()
+        if not read_labels:
+            return
+
+        active_lc_names = self.getActiveExecutableConstraintNames()
+
+        no_active_lcs = len(active_lc_names)
+        _DataNode__Logger.info('Number of active executive LCs: %d' % (no_active_lcs))
+
+        # Set active/inactive executive LCs in the graph
+        lc_no = 0
+        for lc_name, lc in self.graph.executableLCs.items():
+            assert lc_name == str(lc)  # TODO: where does lc_name come from? is it == str(lc)?
+            lc_no += 1
+            if lc_name in active_lc_names:
+                lc.active = True
+                lc.innerLC.active = True
+            else:
+                lc.active = False
+                lc.innerLC.active = False
+
+        return read_labels
+                
+    #----------------- Solver methods
+
     # cache
     collectedConceptsAndRelations = None
 
@@ -1331,46 +1434,6 @@ class DataNode:
 
         return myilpOntSolver, _conceptsRelations
 
-    def setActiveLCs(self):
-        # Try to get the datanode for the constraints concept
-
-        # If no builder or no constraint datanode then return 
-        if not self.myBuilder:
-            return
-
-        constraint_concept = self.graph.get_constraint_concept()
-        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
-        if len(constraint_dn_search) == 0:
-           return 
-        elif len(constraint_dn_search) > 1:
-            raise ValueError(f'Multiple constraint datanodes (for concept {constraint_concept.name}) found: found {len(constraint_dn_search)}, expected one.')
-
-        constraint_datanode = constraint_dn_search[0]
-
-        # Get the constraint labels
-        # read_labels will be of format: {'LC{n}/label': label_value}
-        read_labels = constraint_datanode.getAttributes()
-
-        # Get active constraints based on given constraint labels
-        active_lc_names = set(
-            x.split('/')[0] # TODO: parse this better?
-            for x in read_labels
-        )
-
-        # Set active/inactive constraints
-        lc_no = 0
-        for lc_name, lc in self.graph.logicalConstrains.items():
-            assert lc_name == str(lc) # TODO: where does lc_name come from? is it == str(lc)?
-            lc_no += 1
-            if lc_name in active_lc_names:
-                lc.active = True
-            else:
-                lc.active = False
-                
-        return read_labels
-                
-    #----------------- Solver methods
-
     def collectInferredResults(self, concept, inferKey):
         """Collect inferred results based on the given concept and inference key.
 
@@ -1442,7 +1505,16 @@ class DataNode:
         return torch.as_tensor(collectAttributeList)
 
     def infer(self):
-        """Calculate argMax and softMax for the ontology-based data structure."""
+        """Calculate argMax and softMax for the ontology-based data structure.
+        
+        This method calculates argmax/softmax ACROSS all datanodes (GLOBAL perspective):
+        - Collects values from ALL datanodes for a concept into a single tensor
+        - Finds which datanode has the maximum value (argmax gives index of winning datanode)
+        - Softmax is computed over all datanodes, showing probability distribution across them
+        - Example: If we have 3 datanodes with values [0.2, 0.8, 0.5], argmax=1 (2nd datanode wins)
+        
+        Compare with inferLocal() which calculates argmax/softmax WITHIN each datanode independently.
+        """
         conceptsRelations = self.collectConceptsAndRelations()
 
         for c in conceptsRelations:
@@ -1502,13 +1574,15 @@ class DataNode:
                         continue
 
             else:
-                # ---- loop through dns
+                # ---- loop through dns (GLOBAL CALCULATION MODE)
+                # This mode collects values from ALL datanodes and compares them
+                # to find which datanode has the maximum value (global competition)
                 dns = self.findDatanodes(select = cRoot)
 
                 if not dns:
                     continue
 
-                vs = []
+                vs = []  # Collect one value from each datanode
 
                 for dn in dns:
                     v = dn.getAttribute(c[0])
@@ -1532,12 +1606,14 @@ class DataNode:
                 if not vs:
                     continue
 
+                # Create tensor with one value per datanode: t[i] = value from dns[i]
                 t = torch.tensor(vs)
                 t[torch.isnan(t)] = 0 # NAN  -> 0
 
-                vM = torch.argmax(t).item() # argmax
+                # Find which datanode (by position index) has the maximum value
+                vM = torch.argmax(t).item() # argmax: index of winning datanode
 
-                # Elements for softmax
+                # Elements for softmax (computed across all datanodes)
                 tExp = torch.exp(t)
                 tExpSum = torch.sum(tExp).item()
 
@@ -1545,11 +1621,14 @@ class DataNode:
                 keySoftMax = "<" + c[0].name + ">/softmax"
 
                 # Add argmax and softmax to DataNodes
-                for dn in dns:
+                # Using enumerate to get position index (idx) which matches the tensor position
+                # idx=0 corresponds to first datanode, idx=1 to second, etc.
+                for idx, dn in enumerate(dns):
                     if keyArgmax not in dn.attributes:
                         dn.attributes[keyArgmax] = torch.empty(c[3], dtype=torch.float)
 
-                    if dn.getInstanceID() == vM:
+                    # Set argmax=1 only for the winning datanode (at position vM)
+                    if idx == vM:
                         dn.attributes[keyArgmax][c[2]] = 1
                     else:
                         dn.attributes[keyArgmax][c[2]] = 0
@@ -1557,7 +1636,8 @@ class DataNode:
                     if keySoftMax not in dn.attributes:
                         dn.attributes[keySoftMax] = torch.empty(c[3], dtype=torch.float)
 
-                    dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
+                    # Softmax probability for this datanode relative to all datanodes
+                    dnSoftmax = tExp[idx]/tExpSum
                     dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
     def inferGumbelLocal(self, temperature=1.0, hard=False):
@@ -1645,17 +1725,24 @@ class DataNode:
     def inferLocal(self, keys=("softmax", "argmax"), Acc=None):
         """
         Infer local probabilities and information for given concepts and relations.
+        
+        This method calculates argmax/softmax WITHIN each datanode independently (LOCAL perspective):
+        - Each datanode's values are processed separately without comparing across datanodes
+        - For each datanode, finds which class/feature has the maximum value within that datanode
+        - Softmax is computed over the values within each datanode independently
+        - Example: DataNode1 [0.2, 0.8] → argmax at index 1; DataNode2 [0.9, 0.1] → argmax at index 0
+        
+        Compare with infer() which calculates argmax/softmax ACROSS all datanodes (global competition).
 
         Args:
             keys (tuple): Tuple containing the types of information to infer ('softmax', 'argmax', etc.).
-            Acc (dict, optional): A dictionary containing some form of accumulated data for normalization.
+            Acc (dict, optional): Accuracy dictionary mapping concept names to accuracy values (0.0-1.0).
+                                  Used to weight normalized probabilities based on concept-specific accuracy.
+                                  Higher accuracy concepts get stronger multipliers (raised to power 4 or 8).
+                                  Example: Acc={'SentimentConcept': 0.95, 'EntityConcept': 0.87}
 
         Attributes affected:
             - This function manipulates the 'attributes' dictionary attribute of the class instance.
-
-        Notes:
-            - The method uses PyTorch for tensor operations.
-            - Logging is done to capture the time taken for inferring local probabilities.
         """
         startInferLocal = perf_counter()
 
@@ -1664,6 +1751,15 @@ class DataNode:
 
         conceptsRelations = self.collectConceptsAndRelations()
 
+        # normalized_keys: Advanced probability normalization methods that adjust softmax probabilities
+        # These methods apply transformations beyond basic softmax, incorporating entropy, mean deviation, etc.
+        # - normalizedProb: Softmax weighted by inverse entropy and mean normalization
+        # - meanNormalizedProb: Simple mean normalization without entropy
+        # - normalizedProbAll: Entropy normalization with powered deviation adjustment
+        # - meanNormalizedProbStd: Standard deviation-based adjustment
+        # - normalizedProbAcc: Entropy normalization weighted by concept accuracy (uses Acc param)
+        # - entropyNormalizedProbAcc: Pure entropy normalization weighted by accuracy (uses Acc param)
+        # - normalizedJustAcc: Softmax weighted only by accuracy multiplier (uses Acc param)
         normalized_keys = set([
                     "normalizedProb", "meanNormalizedProb",
                     "normalizedProbAll", "meanNormalizedProbStd",
@@ -1671,6 +1767,7 @@ class DataNode:
                     "normalizedJustAcc",
                     ])
 
+        # Check if we need to compute softmax first (required for normalized methods)
         if "softmax" in keys or normalized_keys.intersection(set(keys)):
             needSoftmax = True
         else:
@@ -1730,7 +1827,9 @@ class DataNode:
             if not inferLocalKeys:
                 continue
 
-            # ---- loop through dns
+            # ---- loop through dns (LOCAL CALCULATION MODE)
+            # IMPORTANT: Each datanode is processed INDEPENDENTLY without comparing across datanodes
+            # Each datanode finds its own local argmax/softmax within its own values
             dns = self.findDatanodes(select = cRoot)
             if not dns:
                 continue
@@ -1742,6 +1841,7 @@ class DataNode:
                     keySoftmax = "<" + c[0].name + ">/local/softmax"
 
                     if not dn.hasAttribute(keySoftmax):
+                        # Get this datanode's values only (no cross-datanode comparison)
                         v = dn.getAttribute(c[0])
 
                         # check if v is None or not a tensor
@@ -1894,6 +1994,8 @@ class DataNode:
                 if "argmax" in keys:
                     keyArgmax = "<" + c[0].name + ">/local/argmax"
                     if not dn.hasAttribute(keyArgmax):
+                        # LOCAL ARGMAX: Find max within THIS datanode's values only
+                        # (not comparing with other datanodes)
                         v = dn.getAttribute(c[0])
                         
                         # Check if v is None or not a tensor
@@ -1902,6 +2004,7 @@ class DataNode:
                         
                         # Create argmax tensor matching original shape
                         vArgmax = torch.zeros_like(v)
+                        # Find which position within this datanode has the max value
                         vArgmaxIndex = torch.argmax(v).item()
                         
                         # Use flat indexing to safely set value
@@ -2059,7 +2162,9 @@ class DataNode:
             results that satisfy each logical constraint.
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
-
+        myilpOntSolver.current_device = self.current_device
+        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        
         # Check if full data node is created and create it if not
         if self.myBuilder != None:
             self.myBuilder.createFullDataNode(self)
@@ -2071,11 +2176,168 @@ class DataNode:
         else:
             _DataNode__Logger.error("Not supported key %s for verifyResultsLC"%(key))
 
-        verifyResult = myilpOntSolver.verifyResultsLC(self, key = key)
+        verifyResult = verifier.verifyResults(self, key = key)
 
         return verifyResult
 
-    def calculateLcLoss(self, tnorm='P',counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
+    def verifySingleConstraint(self, lcName, key="/local/argmax", label = None):
+        """
+        Verify a single logical constraint against model predictions.
+        
+        This method evaluates how well the model's predictions satisfy a specific logical
+        constraint identified by name. It operates on discrete predictions (e.g., argmax 
+        results) rather than probability distributions, providing binary satisfaction metrics.
+        
+        Args:
+            lcName: The name of the logical constraint to verify
+            key: Attribute key for accessing predictions in datanodes.
+                 Default: "/local/argmax" for discrete predicted labels
+            
+        Returns:
+            dict: Verification result for the constraint with structure:
+                {
+                    'verifyList': [[bool, ...], ...],  # Satisfaction per instance
+                    'satisfied': float,                 # Overall satisfaction % (0-100)
+                    'ifVerifyList': [[bool, ...], ...], # (ifL/forAllL only) Filtered list
+                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100)
+                    'elapsedInMsLC': float              # Processing time in milliseconds
+                }
+                
+        Raises:
+            DataNodeError: If the constraint is not found or ILP solver is not initialized.
+        """
+        myilpOntSolver, _ = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
+        myilpOntSolver.current_device = self.current_device
+        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        
+        # Check if full data node is created and create it if not
+        if self.myBuilder is not None:
+            self.myBuilder.createFullDataNode(self)
+
+        if "local" in key:
+            self.inferLocal(keys=[key])
+        elif "ILP" in key:
+            self.infer()
+        else:
+            _DataNode__Logger.error("Not supported key %s for verifySingleConstraint" % (key))
+            raise DataNode.DataNodeError("Not supported key %s for verifySingleConstraint" % (key))
+
+        # Find the constraint by name
+        lc = None
+        for graph in myilpOntSolver.myGraph:
+            if lcName in graph.logicalConstrains:
+                lc = graph.logicalConstrains[lcName]
+                break
+        if lc is None:
+            for graph in myilpOntSolver.myGraph:
+                if lcName in graph.executableLCs:
+                    lc = graph.executableLCs[lcName]
+                    lc = lc.innerLC  # Get the inner logical constraint
+                    break
+        
+        if lc is None:
+            _DataNode__Logger.error("Constraint %s not found" % (lcName))
+            raise DataNode.DataNodeError("Constraint %s not found" % (lcName))
+        
+        myBooleanMethods = myilpOntSolver.booleanMethodsCalculator
+        myBooleanMethods.current_device = self.current_device
+        
+        return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key, label=label)
+   
+    def _prepareLcLossContext(self, tnorm='P', counting_tnorm=None):
+        """
+        Prepare shared context for calculating individual LC losses.
+        
+        Performs expensive setup once: creates full datanode, gets ILP solver,
+        runs inferLocal, sets active LCs, and initializes the LossCalculator.
+        
+        Returns:
+            dict with keys: 'solver', 'lossCalculator', 'lc_map'
+                - solver: the ILP solver instance
+                - lossCalculator: initialized LossCalculator ready for single-LC calls
+                - lc_map: dict mapping lcName -> lc object (from all graphs)
+        """
+        self.myBuilder.createFullDataNode(self)
+
+        myilpOntSolver, _ = self.getILPSolver(
+            conceptsRelations=self.collectConceptsAndRelations()
+        )
+        myilpOntSolver.current_device = self.current_device
+        self.inferLocal()
+
+        myBooleanMethods = myilpOntSolver.myLcLossBooleanMethods
+        myBooleanMethods.current_device = self.current_device
+        myBooleanMethods.current_dtype = myilpOntSolver.constraintConstructor.current_dtype
+
+        self.setActiveExecutableLCs()
+
+        lossCalculator = LossCalculator(myilpOntSolver)
+
+        # Build lookup: lcName -> lc for all graphs
+        lc_map = {}
+        for graph in myilpOntSolver.myGraph:
+            for _, lc in graph.logicalConstrains.items():
+                lc_map[lc.lcName] = lc
+            for name, elc in graph.executableLCs.items():
+                if name not in lc_map and hasattr(elc, 'innerLC'):
+                    lc_map[name] = elc.innerLC
+
+        return {
+            'solver': myilpOntSolver,
+            'lossCalculator': lossCalculator,
+            'lc_map': lc_map,
+        }
+
+    def calculateSingleLcLoss(self, lcName, tnorm='P', counting_tnorm=None, _context=None, label=None):
+        """
+        Calculate loss for a single logical constraint by name.
+
+        Parameters:
+        - lcName: str
+            The name of the logical constraint to calculate loss for.
+        - tnorm: str, optional
+            Fallback t-norm for unknown constraint types. Default is 'P'.
+        - counting_tnorm: str, optional
+            If provided, override t-norm for counting constraints. Default is None.
+        - _context: dict, optional
+            Pre-built context from _prepareLcLossContext(). If None, context is
+            created on the fly (expensive if called in a loop).
+        - labels: dict, optional
+
+        Returns:
+        - dict: Loss info dictionary for the constraint with keys:
+            'lc', 'tnorm_used', 'constraint_type', 'lossTensor',
+            'loss', 'conversionSigmoid', 'expectedCount' (counting only),   
+            'elapsedInMsLC'
+
+        Raises:
+        - DataNodeError: When the constraint is not found.
+        """
+        if _context is None:
+            _context = self._prepareLcLossContext(tnorm, counting_tnorm)
+
+        lc_map = _context['lc_map']
+        lossCalculator = _context['lossCalculator']
+
+        lc = lc_map.get(lcName)
+        if lc is None:
+            _DataNode__Logger.error("Constraint %s not found" % (lcName))
+            raise DataNode.DataNodeError("Constraint %s not found" % (lcName))
+        
+        result = lossCalculator.calculate_single_lc_loss( lc, self, "/local/softmax", tnorm, counting_tnorm, label=label)
+
+        if result is None:
+            _DataNode__Logger.warning(
+                "Constraint %s was skipped (inactive or fixed)" % (lcName)
+            )
+            return {
+                'lc': lc, 'loss': None, 'conversionSigmoid': None,
+                'elapsedInMsLC': 0.0
+            }
+
+        return result
+    
+    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2101,13 +2363,31 @@ class DataNode:
         self.myBuilder.createFullDataNode(self)
 
         myilpOntSolver, conceptsRelations = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
-
+        myilpOntSolver.current_device = self.current_device
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm=tnorm,counting_tnorm=counting_tnorm, sample=sample,
-                                                  sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss,
-                                                  conceptsRelations=conceptsRelations)
-
-        return lcResult
+        
+        """Calculate loss values for logical constraints."""
+        start = perf_counter()
+                
+        if sample:
+            sampleCalculator = SampleLossCalculator(myilpOntSolver)
+            lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
+        else:
+            lossCalculator = LossCalculator(myilpOntSolver)
+            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
+        
+        end = perf_counter()
+        elapsedInS = end - start
+        
+        if elapsedInS > 1:
+            self.myLoggerTime.info('End of Loss Calculation - total internal time: %fs' % (elapsedInS))
+        else:
+            elapsedInMs = (end - start) * 1000
+            self.myLoggerTime.info('End of Loss Calculation - total internal time: %ims' % (elapsedInMs))
+        
+        [h.flush() for h in self.myLoggerTime.handlers]
+        
+        return lcLosses
 
     def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
         """
@@ -2427,6 +2707,8 @@ class DataNodeBuilder(dict):
 
         if args:
             dict.__setitem__(self, "data_item", args[0])
+            
+        self.current_dtype = []
 
     @classmethod
     def clear(cls):
@@ -2741,18 +3023,23 @@ class DataNodeBuilder(dict):
         # Flatten the list of new dataNodes
         _flattenDns = list(flatten(dns))
         
+        # -- These dnds are filtered out in methods building batches nad providing root databNode
         # remove any dataNodes from flattenDns that do not have relationLinks to any of the existing root dataNodes
-        flattenDns = []
-        for dn in _flattenDns:
-            if dn.relationLinks:
-                if any(il in dnsRoots for il in dn.relationLinks):
-                    flattenDns.append(dn)
-            else:
-                flattenDns.append(dn)
+        #flattenDns = []
+        #for dn in _flattenDns:
+        #    if dn.relationLinks:
+        #        if any(il in dnsRoots for il in dn.relationLinks):
+        #           flattenDns.append(dn)
+        #        else:
+        #            if dn in dnsRoots:
+        #                # remove dn from dnsRoots if present
+        #                dnsRoots.remove(dn)
+        #    else:
+        #        flattenDns.append(dn)
 
         # Create a set of all unique dataNodes in dnsRoots and flattenDns
         allDns = set(dnsRoots)
-        allDns.update(flattenDns)
+        allDns.update(_flattenDns)
 
         # -- Update list of existing root dataNotes
 
@@ -2768,9 +3055,7 @@ class DataNodeBuilder(dict):
             else:
                 dnTypes[dn.ontologyNode] = [dn]
 
-            for il in dn.impactLinks:
-                if il in incomingLinks:
-                    incomingLinks[il] += 1
+            incomingLinks[dn] = len(dn.impactLinks)
 
         # Find the root dataNodes which have no incoming links
         noIncomingDNs = [dn for dn in allDns if (incomingLinks[dn] == 0 or not dn.impactLinks)]
@@ -2874,7 +3159,7 @@ class DataNodeBuilder(dict):
                 attributeNames = [*existingDnsForAttr]
 
                 # Create links between this relation and instance dataNode based on the candidate information provided by sensor for each relation attribute
-                for relationDnIndex, relationDn in existingDnsForRelationSorted.items():
+                for relationDnIndex, relationDn in existingDnsForRelationSorted.items():    
                     for attributeIndex, attribute in enumerate(attributeNames):
                         candidatesForRelation = relationAttrsCache[attribute][relationDnIndex]
 
@@ -2883,6 +3168,12 @@ class DataNodeBuilder(dict):
                             if isInRelation == 0:
                                 continue
 
+                            if attribute not in existingDnsForAttr:
+                                _DataNodeBuilder__Logger.error('Attribute %s not found in existing dataNodes for relation %s'%(attribute,relationName))
+                                continue
+                            if candidateIndex >= len(existingDnsForAttr[attribute]):
+                                _DataNodeBuilder__Logger.error('Candidate index %i is out of range for existing dataNodes of attribute %s for relation %s'%(candidateIndex,attribute,relationName))
+                                continue
                             candidateDn = existingDnsForAttr[attribute][candidateIndex]
 
                             #if attributeIndex == 0:
@@ -2916,8 +3207,13 @@ class DataNodeBuilder(dict):
                     _DataNodeBuilder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
 
             if len(existingDnsForRelation) != vInfo.len:
-                _DataNodeBuilder__Logger.error('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
-                raise ValueError('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
+                error_msg = (
+                    'Relation update length mismatch for relation %s and key %s: '
+                    'existing relation datanodes=%i, provided tensor length=%i'
+                    % (relationName, keyDataName, len(existingDnsForRelation), vInfo.len)
+                )
+                _DataNodeBuilder__Logger.error(error_msg)
+                raise ValueError(error_msg)
 
             if (not self.skeletonDataNode):
                 if len(existingDnsForRelationSorted) == 1:
@@ -3346,7 +3642,7 @@ class DataNodeBuilder(dict):
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
         if isinstance(value, list) and lenV ==  2 and keyDataName[0] == '<':
-            return ValueInfo(lenV = 1, value = value, dim=0)
+            return ValueInfo(len = 1, value = value, dim=0)
         elif isinstance(value, torch.Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
             return ValueInfo(len = 1, value = value, dim=0)
 
@@ -3477,6 +3773,10 @@ class DataNodeBuilder(dict):
             _DataNodeBuilder__Logger.error('The value for the key %s is None - abandon the update'%(key))
             self.collectTime(start)
             return dict.__setitem__(self, _key, value)
+
+        # Store dtype if value is a torch tensor
+        if isinstance(value, torch.Tensor):
+            self.current_dtype.append(value.dtype)
 
         if len(skey) < 2:
             _DataNodeBuilder__Logger.error('The key %s has only two elements, needs at least three - abandon the update'%(key))
@@ -3783,7 +4083,21 @@ class DataNodeBuilder(dict):
 
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
             if len(typesInDNs) > 1:
-                _DataNodeBuilder__Logger.warn('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
+                from .relation import Relation
+                def _is_structural(dn):
+                    ont = dn.getOntologyNode()
+                    if ont.name == 'constraint':
+                        return True
+                    if isinstance(ont, Relation):
+                        return True
+                    if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
+                        return True
+                    return False
+                concept_types = {d.getOntologyNode().name for d in noRelationRoots if not _is_structural(d)}
+                if len(concept_types) <= 1:
+                    _DataNodeBuilder__Logger.debug('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
+                else:
+                    _DataNodeBuilder__Logger.warning('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
                 return
 
             # Create the Batch Root DataNode
@@ -3813,10 +4127,123 @@ class DataNodeBuilder(dict):
             self.myLoggerTime.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
         else:
             raise ValueError('DataNode Builder has no DataNode started yet')
+        
+    def findRootDataNode(self, dns):
+        """
+        Find the root DataNode from a list of DataNodes based on relationLinks, impactLinks, and ontologyType.
+        
+        Args:
+            dns (list): List of DataNodes to search through
+        
+        Returns:
+            DataNode: The identified root DataNode. Guaranteed to return a DataNode if dns is not empty.
+            
+        Notes:
+            - A root DataNode is one with no incoming impactLinks (or only "contains" impactLinks)
+            - If multiple candidates exist, prefers nodes with the rarest ontologyType
+            - Falls back to the node with the most outgoing relationLinks
+            - Always returns a DataNode if the input list is not empty
+        """
+        if not dns:
+            _DataNodeBuilder__Logger.error('findRootDataNode called with empty dns list')
+            return None
+        
+        # Filter out nodes with non-"contains" incoming links (impactLinks)
+        root_candidates = []
+        for dn in dns:
+            # Check if node has no impactLinks or only "contains" impactLinks
+            has_non_contains_impact = any(
+                link_type != "contains" 
+                for link_type in dn.impactLinks.keys()
+            )
+            
+            if not has_non_contains_impact:
+                root_candidates.append(dn)
+        
+        # If no clear root candidates found, use all nodes as candidates
+        if not root_candidates:
+            _DataNodeBuilder__Logger.warning('No clear root DataNode found based on impactLinks, using all nodes as candidates')
+            root_candidates = dns
+        
+        # If only one candidate, return it
+        if len(root_candidates) == 1:
+            return root_candidates[0]
+        
+        # ---  Multiple candidates - apply additional filtering
+        
+        # 1. Check for initial instanceID preference
+        initialInstanceID = -1
+        if "READER" in self:
+            initialInstanceID = dict.__getitem__(self, "READER")
+        else:
+            initialInstanceID = 0
+            
+        # Check if any candidate matches the initial instanceID
+        if initialInstanceID >= 0:
+            for dn in root_candidates:
+                if dn.instanceID == initialInstanceID:
+                    _DataNodeBuilder__Logger.info(f'Selected DataNode with id {dn.instanceID} of type {dn.ontologyNode.name} based on matching initial instanceID {initialInstanceID}')
+                    return dn
+        
+        # 2. Count occurrences of each ontologyType among candidates
+        ontology_type_counts = {}
+        for dn in root_candidates:
+            ont_name = dn.ontologyNode.name
+            ontology_type_counts[ont_name] = ontology_type_counts.get(ont_name, 0) + 1
+        
+        # Find the minimum count (rarest type)
+        min_count = min(ontology_type_counts.values())
+        
+        # Filter to only nodes with the rarest ontologyType
+        rarest_candidates = [
+            dn for dn in root_candidates 
+            if ontology_type_counts[dn.ontologyNode.name] == min_count
+        ]
+        
+        if len(rarest_candidates) == 1:
+            selected_root = rarest_candidates[0]
+            _DataNodeBuilder__Logger.info(
+                f'Selected DataNode with id {selected_root.instanceID} '
+                f'of type {selected_root.ontologyNode.name} (rarest ontologyType with {min_count} occurrence(s))'
+            )
+            return selected_root
+        
+        # 3. Count outgoing relationLinks (excluding "contains")
+        def count_outgoing_relations(dn):
+            return sum(
+                len(targets) 
+                for rel_name, targets in dn.relationLinks.items() 
+                if rel_name != "contains"
+            )
+        
+        # Sort by number of outgoing relations (descending)
+        rarest_candidates.sort(key=count_outgoing_relations, reverse=True)
+        
+        # 4. If still tied, prefer nodes with more children
+        max_outgoing = count_outgoing_relations(rarest_candidates[0])
+        tied_candidates = [
+            dn for dn in rarest_candidates 
+            if count_outgoing_relations(dn) == max_outgoing
+        ]
+        
+        if len(tied_candidates) > 1:
+            tied_candidates.sort(
+                key=lambda dn: len(dn.getChildDataNodes() or []), 
+                reverse=True
+            )
+        
+        selected_root = tied_candidates[0]
+        
+        _DataNodeBuilder__Logger.info(
+            f'Multiple root candidates found. Selected DataNode with id {selected_root.instanceID} '
+            f'of type {selected_root.ontologyNode.name} based on rarest ontologyType and relationLinks analysis'
+        )
+        
+        return selected_root
 
     def getDataNode(self, context="interference", device='auto'):
         """
-        Retrieves and returns the first DataNode from the DataNodeBuilder object based on the given context and device.
+        Retrieves and returns the root DataNode from the DataNodeBuilder object based on the given context and device.
 
         Parameters:
         -----------
@@ -3828,21 +4255,7 @@ class DataNodeBuilder(dict):
         Returns:
         --------
         DataNode or None
-            Returns the first DataNode if it exists, otherwise returns None.
-
-        Side Effects:
-        -------------
-        - Updates the torch device for the returned DataNode based on the 'device' parameter.
-        - Logs various messages based on the context and production mode.
-
-        Raises:
-        -------
-        None
-
-        Notes:
-        ------
-        - This method makes use of internal logging for debugging and timing.
-
+            Returns the root DataNode if it exists, otherwise returns None.
         """
         self.__addGetDataNodeCounter()
 
@@ -3852,72 +4265,86 @@ class DataNodeBuilder(dict):
             if 'Counter' + '_setitem' in self:
                 self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter' + '_setitem']))
             if 'DataNodeTime' in self:
-                # self['DataNodeTime'] is in nanoseconds, so divide by 1000000 to get milliseconds
                 elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
                 self.myLoggerTime.info(f"DataNode Builder time usage - {elapsedInMsDataNodeBuilder:.5f}ms")
 
-                #self.myLoggerTime.info(f"DataNode Builder elapsed time in ns - {self['DataNodeTime']}")
-                #self.myLoggerTime.info(f"DataNode Builder start time in ns - {self['DataNodeTime_start']}")
-                #self.myLoggerTime.info(f"DataNode Builder end time in ns - {self['DataNodeTime_end']}")
-
-        # If DataNode it created then return it
+        # If DataNode is created then return it
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
             
-            noRelationRoots = []
-            for dn in existingDns:
-                # Consider nodes that either have no relationLinks or only have "contains" relation
-                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
-                    noRelationRoots.append(dn)
+            if len(existingDns) == 0:
+                _DataNodeBuilder__Logger.error('Returning None - dataNode list is empty')
+                return None
+            
+            # Use method to find the root DataNode
+            returnDn = self.findRootDataNode(existingDns)
+            
+            if returnDn is None:
+                _DataNodeBuilder__Logger.error('findRootDataNode returned None')
+                return None
 
-            if len(noRelationRoots) != 0:
-                returnDn = noRelationRoots[0]
+            # Set the torch device
+            returnDn.current_device = device
+            if returnDn.current_device == 'auto':
+                returnDn.current_device = 'cpu'
+                if torch.cuda.is_available():
+                    returnDn.current_device = 'cuda'
 
-                # Set the torch device
-                returnDn.current_device = device
-                if returnDn.current_device == 'auto': # if not set use cpu or cuda if available
-                    returnDn.current_device = 'cpu'
-                    if torch.cuda.is_available():
-                        returnDn.current_device = 'cuda'
-
-                if len(noRelationRoots) != 1:
-                    typesInDNs = {d.getOntologyNode().name for d in noRelationRoots[1:]}
-                    _DataNodeBuilder__Logger.warning(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
-                    self.myLoggerTime.info(f'Returning first dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(noRelationRoots)} dataNodes of types {typesInDNs}')
-                else:
+            # Set current_dtype if consistent in builder
+            if self.current_dtype:
+                # filter out not floet dtypes
+                current_dtype_float = [dtype for dtype in self.current_dtype if 'float' in str(dtype)]
+                if len(set(current_dtype_float)) == 1:
+                    # All dtypes are the same - set it on the root datanode
+                    returnDn.current_dtype = current_dtype_float[0]
                     if not getProductionModeStatus():
-                        _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
-                    self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
+                        _DataNodeBuilder__Logger.info(f'Set current_dtype to {returnDn.current_dtype} on root dataNode')
+                else:
+                    # Dtypes are inconsistent - log error
+                    _DataNodeBuilder__Logger.error(f'Inconsistent tensors dtypes in builder: {set(self.current_dtype)} - all dtypes of provided tensors have to be the same')
+                    # threw exception
+                    raise ValueError(f'Inconsistent tensors dtypes in builder: {set(self.current_dtype)}')
 
-                if self.skeletonDataNode:
-                    # Get the "variableSet" dictionary from the data node, or create a new empty dictionary if it doesn't exist
-                    variableSet = self.get("variableSet", {})
+            if len(existingDns) != 1:
+                typesInDNs = {d.getOntologyNode().name for d in existingDns}
+                from .relation import Relation
+                def _is_structural(dn):
+                    """Constraint or relation-like concept (Relation instance or concept with has_a)."""
+                    ont = dn.getOntologyNode()
+                    if ont.name == 'constraint':
+                        return True
+                    if isinstance(ont, Relation):
+                        return True
+                    if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
+                        return True
+                    return False
+                concept_types = {d.getOntologyNode().name for d in existingDns if not _is_structural(d)}
+                if len(concept_types) <= 1:
+                    _DataNodeBuilder__Logger.debug(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                else:
+                    _DataNodeBuilder__Logger.warning(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+                    self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
+            else:
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
+                self.myLoggerTime.info(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name}')
 
-                    # Create a dictionary of the items in "variableSet" with the keys and values swapped
-                    variableSetDict = {k2: self[k1] for k1, k2 in dict(variableSet).items()}
+            if self.skeletonDataNode:
+                variableSet = self.get("variableSet", {})
+                variableSetDict = {k2: self[k1] for k1, k2 in dict(variableSet).items()}
+                returnDn.attributes["variableSet"] = variableSetDict
 
-                    # Add the "variableSet" dictionary to the return data node attributes
-                    returnDn.attributes["variableSet"] = variableSetDict
+                propertySet = self.get("propertySet", {})
+                propertySetDict = {k2: self[k1] for k1, k2 in dict(propertySet).items()}
+                returnDn.attributes["propertySet"] = propertySetDict
 
-                    # Get the "propertySet" dictionary from the data node, or create a new empty dictionary if it doesn't exist
-                    propertySet = self.get("propertySet", {})
+                allDns = self.get("allDns", set())
+                for dn in allDns:
+                    if dn == returnDn:
+                        continue
+                    dn.attributes["rootDataNode"] = returnDn
 
-                    # Create a dictionary of the items in "propertySet"
-                    propertySetDict = {k2: self[k1] for k1, k2 in dict(propertySet).items()}
-
-                    # Add the "propertySet" dictionary to the return data node attributes
-                    returnDn.attributes["propertySet"] = propertySetDict
-
-                    # Get the "allDns" set from the data node, or create a new empty set if it doesn't exist
-                    allDns = self.get("allDns", set())
-
-                    # Iterate over the data nodes in "allDns" and add the "rootDataNode" attribute to them
-                    for dn in allDns:
-                        if dn == returnDn:
-                            continue
-                        dn.attributes["rootDataNode"] = returnDn
-
-                return returnDn
+            return returnDn
 
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNode')
         return None
@@ -3942,6 +4369,7 @@ class DataNodeBuilder(dict):
         Notes:
         ------
         - This method makes use of internal logging for debugging and timing.
+        - Uses findRootDataNode to identify the root, then returns all DataNodes at the same level.
         """
         self.__addGetDataNodeCounter()
 
@@ -3955,18 +4383,40 @@ class DataNodeBuilder(dict):
         if dict.__contains__(self, 'dataNode'):
             existingDns = dict.__getitem__(self, 'dataNode')
             
-            noRelationRoots = []
-            for dn in existingDns:
-                # Consider nodes that either have no relationLinks or only have "contains" relation
-                if not dn.relationLinks or all(relLink == "contains" for relLink in dn.relationLinks):
-                    noRelationRoots.append(dn)
-
-            if len(noRelationRoots) > 0:
-
+            if len(existingDns) == 0:
+                _DataNodeBuilder__Logger.error('Returning None - dataNode list is empty')
+                return None
+            
+            # Use findRootDataNode to determine the root
+            rootDn = self.findRootDataNode(existingDns)
+            
+            if rootDn is None:
+                _DataNodeBuilder__Logger.error('findRootDataNode returned None')
+                return None
+            
+            # If the root is a batch node with children, return the children
+            # Otherwise, return all existing DataNodes at the root level
+            if rootDn.ontologyNode.name == 'batch' and rootDn.getChildDataNodes():
+                batchChildren = rootDn.getChildDataNodes()
                 if not getProductionModeStatus():
-                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(noRelationRoots),noRelationRoots))
-
-                return noRelationRoots
+                    _DataNodeBuilder__Logger.info('Returning %i batch child dataNodes'%(len(batchChildren)))
+                return batchChildren
+            
+            # Return all DataNodes that are at the same structural level as the root
+            # (i.e., nodes with no non-contains impactLinks)
+            batchLevelDns = []
+            for dn in existingDns:
+                has_non_contains_impact = any(
+                    link_type != "contains" 
+                    for link_type in dn.impactLinks.keys()
+                )
+                if not has_non_contains_impact:
+                    batchLevelDns.append(dn)
+            
+            if len(batchLevelDns) > 0:
+                if not getProductionModeStatus():
+                    _DataNodeBuilder__Logger.info('Returning %i dataNodes - %s'%(len(batchLevelDns), batchLevelDns))
+                return batchLevelDns
 
         _DataNodeBuilder__Logger.error('Returning None - there are no dataNodes')
         return None

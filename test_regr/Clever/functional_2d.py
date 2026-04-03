@@ -9,7 +9,6 @@
 # Distributed under terms of the MIT license.
 
 import torch
-import jactorch
 
 __all__ = [
     'box_size', 'box_intersection', 'box_iou',
@@ -18,6 +17,34 @@ __all__ = [
 
 
 COOR_TO_LEN_CORR = 0
+
+
+def meshgrid_2d(y, x, dim=-1):
+    """
+    Replacement for jactorch.meshgrid for 2D grid generation.
+    Creates a grid from y and x tensors along the specified dimension.
+    """
+    # Handle negative dimension
+    if dim < 0:
+        dim = y.dim() + dim
+    
+    ny = y.size(dim)
+    nx = x.size(dim)
+    
+    # Build the target shape for y: insert nx at position dim+1
+    y_shape = list(y.shape)
+    y_shape.insert(dim + 1, nx)
+    
+    # Build the target shape for x: insert ny at position dim
+    x_shape = list(x.shape)
+    x_shape.insert(dim, ny)
+    
+    # Expand y: repeat along x dimension
+    y_expanded = y.unsqueeze(dim + 1).expand(y_shape)
+    # Expand x: repeat along y dimension  
+    x_expanded = x.unsqueeze(dim).expand(x_shape)
+    
+    return y_expanded, x_expanded
 
 
 def __last(arr, x):
@@ -52,7 +79,6 @@ def generate_union_box(box1, box2):
 
 
 def generate_roi_pool_bins(box, bin_size, c2l=COOR_TO_LEN_CORR):
-    # TODO(Jiayuan Mao @ 07/20): workaround: line space is not implemented for cuda.
     linspace = torch.linspace(0, 1, bin_size + 1, dtype=box.dtype).to(device=box.device)
     for i in range(box.dim() - 1):
         linspace.unsqueeze_(0)
@@ -60,8 +86,10 @@ def generate_roi_pool_bins(box, bin_size, c2l=COOR_TO_LEN_CORR):
     y_space = linspace * (__last(box, 3) - __last(box, 1) + c2l).unsqueeze(-1) + __last(box, 1).unsqueeze(-1)
     x1, x2 = x_space[:, :-1], x_space[:, 1:] - c2l
     y1, y2 = y_space[:, :-1], y_space[:, 1:] - c2l
-    y1, x1 = jactorch.meshgrid(y1, x1, dim=-1)
-    y2, x2 = jactorch.meshgrid(y2, x2, dim=-1)
+    
+    # Replace jactorch.meshgrid with custom implementation
+    y1, x1 = meshgrid_2d(y1, x1, dim=-1)
+    y2, x2 = meshgrid_2d(y2, x2, dim=-1)
 
     # shape: nr_boxes, bin_size^2, 4
     bins = torch.stack([x1, y1, x2, y2], dim=-1).view(box.size(0), -1, 4)

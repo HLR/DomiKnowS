@@ -1,7 +1,6 @@
 import shutil
 import sys
 import os
-import re
 import time
 import pathlib
 import inspect
@@ -19,6 +18,29 @@ from colorama import init
 init(autoreset=True, convert=True)        # enable Windows console colours
 
 from domiknows.config import config
+
+
+def _default_log_dir():
+    """Return a ``logs`` directory relative to the currently running program.
+
+    Resolution order:
+      1. Directory of the ``__main__`` module's file (the script that was
+         launched), if available.
+      2. Current working directory as fallback.
+
+    This ensures log files are co-located with the program that produces them
+    rather than depending on whichever directory happens to be the CWD.
+    """
+    try:
+        import __main__
+        main_file = getattr(__main__, '__file__', None)
+        if main_file:
+            script_dir = os.path.dirname(os.path.abspath(main_file))
+            if os.path.isdir(script_dir):
+                return os.path.join(script_dir, 'logs')
+    except (ImportError, AttributeError):
+        pass
+    return os.path.join(os.getcwd(), 'logs')
 
 def extract_args(*args, **kwargs):
     if '_stack_back_level_' in kwargs and kwargs['_stack_back_level_']:
@@ -85,7 +107,7 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
         # Check if file is empty - don't move empty files
         if os.path.getsize(logFilename) == 0:
             try:
-                os.remove(logFilename)
+                #os.remove(logFilename)
                 print(f"Removed empty log file: {logFilename}")
             except OSError as e:
                 print(f"Warning: Could not remove empty log file {logFilename}: {e}")
@@ -108,36 +130,35 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
         # Add retry mechanism for file operations
         max_retries = 3
         retry_delay = 0.1
-        
-        # Move all files from log directory to run subfolder
+
+        # Move only the specific log file (and its rotated backups) to run subfolder
+        base_name = os.path.basename(logFilename)
+        files_to_move = [logFilename]
+        # Also move rotated backups (e.g. app.log.1, app.log.2, ...)
         try:
-            all_files = os.listdir(log_dir)
-            for file_item in all_files:
-                source_path = os.path.join(log_dir, file_item)
-                
-                # Skip directories and the previous directory itself
-                if os.path.isdir(source_path):
-                    continue
-                
-                # Move each file to the run directory
-                for attempt in range(max_retries):
-                    try:
-                        target_path = os.path.join(run_dir, file_item)
-                        os.rename(source_path, target_path)
+            for file_item in os.listdir(log_dir):
+                if file_item.startswith(base_name + '.') and file_item != base_name:
+                    files_to_move.append(os.path.join(log_dir, file_item))
+        except OSError:
+            pass
+
+        for source_path in files_to_move:
+            if not os.path.isfile(source_path):
+                continue
+            file_item = os.path.basename(source_path)
+            for attempt in range(max_retries):
+                try:
+                    target_path = os.path.join(run_dir, file_item)
+                    os.rename(source_path, target_path)
+                    break
+                except (OSError, PermissionError) as e:
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                    else:
+                        print(f"Warning: Could not move file {source_path}: {e}")
                         break
-                        
-                    except (OSError, PermissionError) as e:
-                        if attempt < max_retries - 1:
-                            time.sleep(retry_delay)
-                            retry_delay *= 2
-                            continue
-                        else:
-                            print(f"Warning: Could not move file {source_path}: {e}")
-                            break
-                            
-        except OSError as e:
-            print(f"Warning: Could not list directory {log_dir}: {e}")
-            return
         
         # Clean up old run directories - keep only 10
         try:
@@ -173,7 +194,7 @@ _error_warning_handler_class = None
 _error_warning_log_dir = None
 
 
-def setup_error_warning_logger(log_dir='logs'):
+def setup_error_warning_logger(log_dir=None):
     """
     Setup a global error/warning logger configuration that will create the actual
     log file only when the first warning/error is detected.
@@ -189,7 +210,9 @@ def setup_error_warning_logger(log_dir='logs'):
     if _error_warning_logger_initialized:
         return _error_warning_logger
     
-    # Store log directory for later use
+    # Store log directory for later use (resolve default lazily)
+    if log_dir is None:
+        log_dir = _default_log_dir()
     _error_warning_log_dir = log_dir
     
     # Create error/warning logger without file handler initially
@@ -285,11 +308,11 @@ def setup_logger(config=None, default_filename='app.log'):
     """
     # Initialize error/warning logger on first call
     if not _error_warning_logger_initialized:
-        log_dir = 'logs'
+        log_dir = _default_log_dir()
         if config and isinstance(config, dict):
             log_dir = config.get('log_dir', log_dir)
         setup_error_warning_logger(log_dir)
-    
+
     # Default values
     logName = __name__
     logLevel = logging.CRITICAL
@@ -297,7 +320,7 @@ def setup_logger(config=None, default_filename='app.log'):
     logFilesize = 5*1024*1024*1024  # 5GB
     logBackupCount = 4
     logFileMode = 'a'
-    logDir = 'logs'
+    logDir = _default_log_dir()
     timestampBackupCount = 10
     
     # Override with config values if provided
@@ -355,8 +378,10 @@ def setup_logger(config=None, default_filename='app.log'):
     logger.propagate = False
     
     # Add error/warning handler to capture WARNING and ERROR messages
-    add_error_warning_handler_to_logger(logger)
-    
+    # (unless the caller opts out via 'error_warning_capture': False)
+    if not (config and isinstance(config, dict) and config.get('error_warning_capture') is False):
+        add_error_warning_handler_to_logger(logger)
+
     print("Log file for %s is in: %s" % (logName, handler.baseFilename))
     
     return logger

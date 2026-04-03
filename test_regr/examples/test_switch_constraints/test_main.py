@@ -78,7 +78,7 @@ def test_graph_compilation_and_training(setup_graph, dataset):
     graph, root, x, y = setup_graph
     
     # Pass x and y in extra_namespace_values since they're not in the graph's varContext
-    transformed_dataset = graph.compile_logic(
+    transformed_dataset = graph.compile_executable(
         dataset,
         logic_keyword='logic_str',
         logic_label_keyword='logic_label',

@@ -1,6 +1,4 @@
-
-
-def get_graph(constraint,atmost,atleast,test_number):
+def get_graph(constraint, atmost, atleast, test_number):
     from domiknows.graph import Graph, Concept, Relation
     from domiknows.graph.logicalConstrain import orL, existsL, ifL, notL, andL, atMostAL, atLeastAL
     Graph.clear()
@@ -17,33 +15,39 @@ def get_graph(constraint,atmost,atleast,test_number):
         
         firestationCity = city(name='firestationCity_'+str(test_number))
 
-        atMostAL(firestationCity,atmost)
-        atLeastAL(firestationCity,atleast)
+        # At most {atmost} cities can be fire stations
+        atMostAL(firestationCity, atmost)
+        # At least {atleast} cities must be fire stations
+        atLeastAL(firestationCity, atleast)
 
-        if constraint=="existL":
+        if constraint == "existL":
+            # City is fire station OR exists a neighboring city that is a fire station
             orL(firestationCity('x'), existsL(
-                ifL(neighbor("z",path=('x', city1.reversed))
-                    ,firestationCity("p",path=('z', city2))
+                ifL(neighbor("z", path=('x', city1.reversed)),
+                    firestationCity("p", path=('z', city2))
                 )
             ))
-        elif constraint=="orLnotLexistL":
+        elif constraint == "orLnotLexistL":
+            # City is fire station OR none of its neighbors are fire stations
             orL(firestationCity('x'), notL(existsL(
-                ifL(neighbor("z",path=('x', city1.reversed))
-                    , firestationCity("p",path=('z', city2))
+                ifL(neighbor("z", path=('x', city1.reversed)),
+                    firestationCity("p", path=('z', city2))
                 )
-            )))
-        elif constraint=="ifLnotLexistL":
+            )), name="orLnotLexistL")
+        elif constraint == "ifLnotLexistL":
+            # If city is fire station THEN none of its neighbors are fire stations
             ifL(firestationCity('x'), notL(existsL(
-                ifL(neighbor("z",path=('x', city1.reversed))
-                    , firestationCity("p",path=('z', city2))
+                ifL(neighbor("z", path=('x', city1.reversed)),
+                    firestationCity("p", path=('z', city2))
                 )
             )))
-        elif constraint=="orL":
-            ifL(neighbor('z'), orL(
-                firestationCity("x",path=('z', city1)),
-                firestationCity("p",path=('z', city2))
+        elif constraint == "orL":
+            # For each neighbor pair, at least one city must be a fire station
+            ifL(neighbor("z1", "z2"), orL(
+                firestationCity("z1"),
+                firestationCity("z2")
             ))
         else:
             pass
-            #print("no constraint.")
+
     return graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity

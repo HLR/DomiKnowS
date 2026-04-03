@@ -18,7 +18,7 @@ jobs:
   test-cpu:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,11 +33,16 @@ jobs:
         run: |
          uv sync --extra cpu --extra dev 
 
+      - name: Verify torch installation
+        run: |
+          .venv/bin/python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+          .venv/bin/pip show torch | grep -E "Name|Version|Location"
+
       - name: Install spaCy model
         run: |
-          uv run python -m spacy download en_core_web_sm
-          uv run python -m spacy download en_core_web_lg
-          python -m spacy validate || true
+            .venv/bin/python -m spacy download en_core_web_sm
+            .venv/bin/python -m spacy download en_core_web_lg
+            .venv/bin/python -m spacy validate || true
 
       - name: set USE_SUBPROCESS true
         run: |
@@ -47,19 +52,19 @@ jobs:
       - name: Check formatting (black)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run black --check .
+        run: uv run --no-sync black --check .
 
       - name: Check imports (isort)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run isort --profile black --check-only .
+        run: uv run --no-sync isort --profile black --check-only .
 
       - name: Type check (mypy)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true 
         run: |
           set +e
-          uv run mypy --install-types --non-interactive .
+          uv run --no-sync mypy --install-types --non-interactive .
 
       # --- Run CPU tests ---
       - name: Run CPU tests
@@ -82,13 +87,16 @@ jobs:
             'simple_regression'
             'solver'
             'namedTree'
+            'examples/iota'
+            'Clever'
+            'vizual'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-cpu
           path: |
@@ -99,7 +107,7 @@ jobs:
   test-gpu:
     runs-on: [self-hosted, linux, x64, gpu]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -116,9 +124,9 @@ jobs:
 
       - name: Install spaCy model
         run: |
-          uv run python -m spacy download en_core_web_sm
-          uv run python -m spacy download en_core_web_lg
-          python -m spacy validate || true
+            .venv/bin/python -m spacy download en_core_web_sm
+            .venv/bin/python -m spacy download en_core_web_lg
+            .venv/bin/python -m spacy validate || true
 
       - name: set USE_SUBPROCESS true
         run: |
@@ -128,19 +136,19 @@ jobs:
       - name: Check formatting (black)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run black --check .
+        run: uv run --no-sync black --check .
 
       - name: Check imports (isort)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true
-        run: uv run isort --profile black --check-only .
+        run: uv run --no-sync isort --profile black --check-only .
 
       - name: Type check (mypy)
         if: env.DEBUG_MODE == 'true'
         continue-on-error: true 
         run: |
           set +e
-          uv run mypy --install-types --non-interactive .
+          uv run --no-sync mypy --install-types --non-interactive .
 
       # --- Run GPU tests ---
       - name: Run GPU tests
@@ -155,7 +163,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-gpu
           path: |
@@ -171,7 +179,7 @@ jobs:
       contents: write
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.BOT_PAT }}
 
@@ -226,10 +234,10 @@ jobs:
     needs: [test-cpu, test-gpu]
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: test-results
 

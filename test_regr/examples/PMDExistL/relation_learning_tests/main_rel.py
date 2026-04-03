@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument("--max_relation", type=int, default=3)
     parser.add_argument("--load_save", type=str, default="")
     parser.add_argument("--save_file", type=str, default="model.pth")
+    parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
 
     # Print setup parameters to console
@@ -166,14 +167,14 @@ if __name__ == '__main__':
     for i in range(len(dataset)):
         dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['condition_label'][0])])
 
-    dataset = graph.compile_logic(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
+    dataset = graph.compile_executable(dataset, logic_keyword='logic_str', logic_label_keyword='logic_label')
 
     program = InferenceProgram(graph, SolverModel,
                                poi=[scene, objects, is_cond1, is_cond2, relation_obj1_obj2, is_relation1, is_relation2,
                                     graph.constraint],
                                tnorm="G", inferTypes=['local/argmax'])
 
-    # acc_train_before = program.evaluate_condition(dataset)
+    # acc_train_before = program.evaluate_condition(dataset, device=device)
     # print(55)
     if args.load_save:
         program.load(args.load_save)
@@ -181,7 +182,7 @@ if __name__ == '__main__':
     if not args.evaluate:
         program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epoch, c_lr=args.lr, c_warmup_iters=-1,
                       batch_size=1, print_loss=False)
-    acc_train_after = program.evaluate_condition(dataset)
+    acc_train_after = program.evaluate_condition(dataset, device=args.device)
 
     results_files = open(f"results_N_{args.N}.text", "a")
 

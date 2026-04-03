@@ -2,17 +2,24 @@ import logging
 
 import torch
 
-from domiknows.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from domiknows.solver.constraintsProcessorInterface import constraintsProcessor 
 
 from domiknows.solver.ilpConfig import ilpConfig 
    
-class lcLossSampleBooleanMethods(ilpBooleanProcessor):
+class lcLossSampleBooleanMethods(constraintsProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
         self.grad = False
+        self.current_dtype = None
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
+    
+    def _get_dtype(self):
+        """Get current dtype, defaulting to float32 if not yet detected."""
+        if self.current_dtype is not None:
+            return self.current_dtype
+        return torch.float32
     
     # -- Consider None
     def ifNone(self, var): # Used in all except countVar
@@ -178,18 +185,18 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 fixedVar.append(v)
             else:
                 if limitOp == '>=':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
                 elif limitOp == '<=':
-                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
                 elif limitOp == '==':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
         # --
 
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
 
-        varSum = torch.zeros([self.sampleSize], device=self.current_device)
+        varSum = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
         if fixedVar:
             varSum = fixedVar[0].clone()
 
@@ -253,7 +260,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         tensorsB = _to_tensor_list(varsB)
 
         # ---------- count “True” literals per sample --------------------------
-        countA = torch.zeros([self.sampleSize], device=self.current_device)
+        countA = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
         for t in tensorsA:
             countA.add_(t)
 
@@ -292,3 +299,191 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return fixedLoss
         else:
             return fixedSuccess
+        
+    def summationVar(self, m, *var, onlyConstrains=False, label=None, logicMethodName="SUMMATION"):
+        "Sums up a list of binary literals to an integer literal."
+
+        if onlyConstrains:
+            if label is None:
+                return None
+            return self.countVar(m, *var, onlyConstrains=True, limitOp='==', limit=label, logicMethodName=logicMethodName)
+            
+        if self.ifNone(var):
+            return None
+        
+        sumResult = torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype())
+        for v in var:
+            sumResult.add_(v)
+        
+        return sumResult
+    
+    def iotaVar(self, _, *var, onlyConstrains=False, temperature=1.0, logicMethodName="IOTA"):
+        """
+        Sample-based definite description: selects THE unique entity satisfying condition.
+        
+        In sample-based evaluation, variables are already binary samples from the
+        probability distribution. We find which entity satisfies in each sample.
+        
+        For each sample:
+            1. Find entities where condition is True (sampled value = 1)
+            2. If exactly one satisfies: select it (success)
+            3. If zero or multiple satisfy: violation
+        
+        Args:
+            _: Model context (unused)
+            *var: Sampled binary tensors [sample_size] or [sample_size, n]
+            onlyConstrains: If True, return violation indicator; if False, return selected index
+            temperature: Not used in sample-based (kept for interface)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: Boolean tensor indicating violations [sample_size]
+            - If onlyConstrains=False: Tensor of selected entity indices [sample_size]
+            (-1 indicates no valid selection)
+        """
+        if self.ifNone(var):
+            return None
+        
+        # -- Combine inputs into matrix [sample_size, n_entities]
+        # Each variable may be [sample_size] for one entity or [sample_size, k] for k entities
+        samples_list = []
+        for v in var:
+            if torch.is_tensor(v):
+                if v.dim() == 1:
+                    samples_list.append(v.unsqueeze(1))  # [sample_size, 1]
+                else:
+                    samples_list.append(v)  # [sample_size, k]
+        
+        if len(samples_list) == 0:
+            return None
+        
+        # Concatenate along entity dimension
+        # Result: [sample_size, n_entities]
+        samples = torch.cat(samples_list, dim=1)
+        sample_size, n = samples.shape
+        
+        # -- Convert to boolean (samples should be 0/1)
+        satisfied = samples > 0.5  # [sample_size, n]
+        
+        # Count how many entities satisfy in each sample
+        counts = satisfied.sum(dim=1)  # [sample_size]
+        
+        if onlyConstrains:
+            # Violation if count != 1 (either 0 or > 1)
+            violation = (counts != 1)
+            return violation
+        else:
+            # Find selected entity index for each sample
+            # If exactly one satisfies, return its index; otherwise -1
+            
+            # For samples with exactly one True, find the index
+            # torch.argmax returns first occurrence of max value
+            selected_indices = torch.argmax(satisfied.float(), dim=1)  # [sample_size]
+            
+            # Mark invalid selections (count != 1) with -1
+            valid = (counts == 1)
+            selected_indices = torch.where(valid, selected_indices, 
+                                        torch.tensor(-1, device=selected_indices.device))
+            
+            return selected_indices
+        
+    def queryVar(self, _, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+        """
+        Sample-based query operator for multiclass attribute selection.
+        
+        Given entity selection (e.g. from iotaL) and a multiclass concept with subclasses,
+        determines which subclass the selected entity belongs to in each sample.
+        
+        In sample-based evaluation, variables are already binary samples from the
+        probability distribution. We find which subclass is satisfied in each sample.
+        
+        For each sample:
+            1. Find subclasses where condition is True (sampled value = 1)
+            2. If exactly one subclass satisfies: select it (success)
+            3. If zero or multiple satisfy: violation
+        
+        Args:
+            _: Model context (unused)
+            concept: Parent multiclass concept (e.g., material)
+            subclasses: List of (subclass_concept, name, index) tuples
+            selection_vars: Sampled binary tensors indicating entity-subclass satisfaction
+            onlyConstrains: If True, return violation indicator; if False, return selected index
+            temperature: Not used in sample-based (kept for interface compatibility)
+            logicMethodName: Name for logging
+        
+        Returns:
+            - If onlyConstrains=True: Boolean tensor indicating violations [sample_size]
+            - If onlyConstrains=False: Tensor of selected subclass indices [sample_size]
+              (-1 indicates no valid selection)
+        """
+        if self.ifNone(selection_vars):
+            return None
+        
+        num_subclasses = len(subclasses)
+        
+        if num_subclasses == 0:
+            if onlyConstrains:
+                return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+            return torch.full([self.sampleSize], -1, device=self.current_device, dtype=torch.long)
+        
+        # -- Combine selection_vars into matrix [sample_size, num_subclasses]
+        samples_list = []
+        for v in selection_vars:
+            if torch.is_tensor(v):
+                if v.dim() == 1:
+                    samples_list.append(v.unsqueeze(1))  # [sample_size, 1]
+                else:
+                    samples_list.append(v)  # [sample_size, k]
+        
+        if len(samples_list) == 0:
+            if onlyConstrains:
+                return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
+            return torch.full([self.sampleSize], -1, device=self.current_device, dtype=torch.long)
+        
+        # Concatenate along subclass dimension
+        # Result: [sample_size, n_vars]
+        samples = torch.cat(samples_list, dim=1)
+        sample_size, n_vars = samples.shape
+        
+        # -- Handle mapping from variables to subclasses
+        if n_vars == num_subclasses:
+            # Direct mapping: each var corresponds to a subclass
+            subclass_samples = samples
+        elif n_vars > num_subclasses and n_vars % num_subclasses == 0:
+            # Multiple entities per subclass: aggregate using OR (any entity with this subclass)
+            entities_per_subclass = n_vars // num_subclasses
+            samples_reshaped = samples.view(sample_size, entities_per_subclass, num_subclasses)
+            # OR across entities: if any entity has this subclass, the subclass is satisfied
+            subclass_samples = samples_reshaped.any(dim=1).float()
+        elif n_vars < num_subclasses:
+            # Pad with zeros
+            padding = torch.zeros(sample_size, num_subclasses - n_vars, 
+                                  device=self.current_device, dtype=samples.dtype)
+            subclass_samples = torch.cat([samples, padding], dim=1)
+        else:
+            # Fallback: truncate
+            subclass_samples = samples[:, :num_subclasses]
+        
+        # -- Convert to boolean (samples should be 0/1)
+        satisfied = subclass_samples > 0.5  # [sample_size, num_subclasses]
+        
+        # Count how many subclasses satisfy in each sample
+        counts = satisfied.sum(dim=1)  # [sample_size]
+        
+        if onlyConstrains:
+            # Violation if count != 1 (either 0 or > 1 subclasses selected)
+            violation = (counts != 1)
+            return violation
+        else:
+            # Find selected subclass index for each sample
+            # If exactly one satisfies, return its index; otherwise -1
+            
+            # torch.argmax returns first occurrence of max value
+            selected_indices = torch.argmax(satisfied.float(), dim=1)  # [sample_size]
+            
+            # Mark invalid selections (count != 1) with -1
+            valid = (counts == 1)
+            selected_indices = torch.where(valid, selected_indices, 
+                                          torch.tensor(-1, device=selected_indices.device, dtype=selected_indices.dtype))
+            
+            return selected_indices

@@ -1,8 +1,9 @@
 import logging
 import torch
+
+from ..utils import consume, detuple
 from tqdm import tqdm
 
-from ..utils import consume, entuple, detuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
@@ -12,118 +13,6 @@ def get_len(dataset, default=None):
         return len(dataset)
     except TypeError:  # `generator` does not have __len__
         return default
-
-
-class dbUpdate():
-    def getTimeStamp(self):
-        from datetime import datetime, timezone, timedelta
-
-        timeNow = datetime.now(tz=timezone.utc)
-        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
-        timestamp_micros = (timeNow - epoch) // timedelta(microseconds=1)
-
-        return timestamp_micros
-
-    def __init__(self, graph):
-        self.experimentID = "startAt_%d"%(self.getTimeStamp())
-
-        import os
-        self.cwd = os.getcwd()
-        self.cwd = os.path.basename(self.cwd)
-
-        import __main__
-        if hasattr(__main__, '__file__'):
-            self.programName = os.path.basename(__main__.__file__)
-            if self.programName.index('.') >= 0:
-                self.programName = self.programName[:self.programName.index('.')]
-        else:
-            self.programName = ''
-
-        self.activeLCs = []
-        for _, lc in graph.logicalConstrains.items():
-            if lc.headLC:
-                self.activeLCs.append(lc.name)
-
-    def __calculateMetricTotal(self, metricResult):
-
-        if not isinstance(metricResult, dict):
-            return None
-
-        pT= 0
-        rT = 0
-
-        for _, v in metricResult.items():
-            if not isinstance(v, dict):
-                return None
-
-            if not ({'P', 'R'} <= v.keys()):
-                return None
-
-            pT += v['P']
-            rT += v['R']
-
-        pT = pT/len(metricResult.keys())
-        rT = rT/len(metricResult.keys())
-
-        total = {}
-        if pT + rT:
-            f1T = 2 * pT * rT / (pT + rT) # F1 score is the harmonic mean of precision and recall
-            total['F1'] = f1T
-        else:
-            return None
-
-        total['P'] = pT
-        total['R'] = rT
-
-        return total
-
-    def __call__(self, stepName, metricName, metricResult):
-
-        if self.dbClient is None:
-            return
-
-        upatedmetricResult = {}
-        for k, r in metricResult.value().items():
-            if torch.is_tensor(r):
-                upatedmetricResult[k] = r.item()
-            elif isinstance(r, dict):
-                updatedDict = {}
-
-                for j, e in r.items():
-                    if torch.is_tensor(e):
-                        updatedDict[j] = e.item()
-                    else:
-                        updatedDict[j] = e
-
-                upatedmetricResult[k] = updatedDict
-            else:
-                upatedmetricResult[k] = r
-
-        mlResult = {
-            'experimentID' : self.experimentID,
-            'experimant'   : self.cwd,
-            'program'      : self.programName,
-            'usedLCs'      : self.activeLCs,
-            'timestamp'    : self.getTimeStamp(),
-            'step'         : stepName,
-            'metric'       : metricName,
-            'results'      : upatedmetricResult
-        }
-
-        metricTotal = self.__calculateMetricTotal(upatedmetricResult)
-
-        if metricTotal is not None:
-            mlResult['metricTotal'] = metricTotal
-
-        #Step 3: Insert business object directly into MongoDB via isnert_one
-        try:
-            result = self.results.insert_one(mlResult)
-        except Exception as e:
-            return
-
-        if result.inserted_id:
-            pass
-
 
 class LearningBasedProgram():
     def __init__(self, graph, Model, logger=None, **kwargs):
@@ -234,11 +123,6 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
 
-                metricName = 'loss'
-                metricResult = self.model.loss
-
-            ilpMetric = None
-            softmaxMetric = None
 
             if self.model.metric:
                 self.logger.info(' - metric:')
@@ -254,25 +138,7 @@ class LearningBasedProgram():
                         self.f.write("\n")
                     except:
                         pass
-
-                    metricName = key
-                    metricResult = metric
-                    if self.dbUpdate is not None:
-                        self.dbUpdate(desc, metricName, metricResult)
-
-                    if key == 'ILP':
-                        ilpMetric = metric
-
-                    if key == 'softmax':
-                        softmaxMetric = metric
-
-            """if ilpMetric is not None and softmaxMetric is not None:
-                metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
-                metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
-
-                self.logger.info(f' - - {metricDeltaKey}')
-                self.logger.info(metricDelta)"""
-
+                    
     def train(
         self,
         training_set,
@@ -347,8 +213,9 @@ class LearningBasedProgram():
                 self.opt.zero_grad()
                 
             loss, metric, *output = self.model(data_item)
-            if self.opt and loss:
+            if self.opt and torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
                 self.opt.step()
                 
             yield (loss, metric, *output[:1])
@@ -394,10 +261,10 @@ class LearningBasedProgram():
             self.to(device)
         return next(self.populate_epoch([data_item], grad = grad))
 
-    def populate_epoch(self, dataset, grad = False):
+    def populate_epoch(self, dataset, grad=False):
         """
-        The `populate_epoch` function is used to iterate over a dataset and yield the output of a model
-        for each data item, either with or without gradient calculations.
+        The function populates the model with data from the dataset, either with or without computing
+        gradients.
         
         :param dataset: The `dataset` parameter is the input data that you want to use to populate the
         model. It could be a list, array, or any other iterable object that contains the data items
@@ -414,24 +281,16 @@ class LearningBasedProgram():
             print(f"\nNumber of iterations in epoch: {lenI}")
         except:
             pass
-
+        
         if not grad:
             with torch.no_grad():
-                for i, data_item in tqdm(enumerate(dataset)):
-                    # import time
-                    # start = time.time()
+                for i, data_item in enumerate(dataset):
                     loss, metric, datanode, builder = self.model(data_item)
-                    # end = time.time()
-                    # print("Time taken for one data item in populate epoch: ", end - start)
                     yield detuple(datanode)
         else:
-            for i, data_item in tqdm(enumerate(dataset)):
-                # import time
-                # start = time.time()
+            for i, data_item in enumerate(dataset):
                 data_item["modelKwargs"] = self.modelKwargs
                 _, _, *output = self.model(data_item)
-                # end = time.time()
-                # print("Time taken for one data item in populate epoch: ", end - start)
                 yield detuple(*output[:1])
 
     def save(self, path, **kwargs):
@@ -530,4 +389,3 @@ class LearningBasedProgram():
         if IF_exsits:
             print("total accuracy ifL:",zero_check(sum([i for i in ifl_ac]),(sum([i for i in ifl_t]))))
         return None
-

@@ -8,44 +8,42 @@ import torch
 from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
 from domiknows import setup_logger, getProductionModeStatus
+from domiknows.graph.logicalConstrain import sumL
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
-       next_step, log_single_lc, log_memory
+        log_single_lc, log_memory
     )
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
 
 class LossModel(torch.nn.Module):
+    """
+    Base model for training from constraint loss
+    
+    Implements the Primal Dual algorithm for constraint loss calculation.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
                  tnorm='P',
                  counting_tnorm=None,
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+                 sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
         """
-        This function initializes a LossModel object with the given parameters and sets up the
-        necessary variables and constraints.
+        Initialize LossModel.
         
-        :param graph: The `graph` parameter is an object that represents the logical constraints of a
-        graph. It contains information about the nodes, edges, and constraints of the graph
-        :param tnorm: The `tnorm` parameter specifies the type of t-norm to be used in the model.
-        T-norms are a family of binary operations that are used to model logical conjunction (AND) in
-        fuzzy logic. The default value is 'P', which stands for the product t-norm, defaults to P
-        (optional)
-        :param sample: The `sample` parameter is a boolean flag that determines whether to use sampling
-        during training. If set to `True`, the model will use sampling to estimate the loss function. If
-        set to `False`, the model will not use sampling and will use the exact loss function, defaults
-        to False (optional)
-        :param sampleSize: The `sampleSize` parameter determines the size of the sample used for
-        training. It specifies the number of samples that will be randomly selected from the dataset for
-        each training iteration, defaults to 0 (optional)
-        :param sampleGlobalLoss: The parameter `sampleGlobalLoss` is a boolean flag that determines
-        whether to sample the global loss during training. If `sampleGlobalLoss` is set to `True`, the
-        global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
-        :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
-        be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        :param graph: Graph representing the logical constraints
+        :param tnorm: T-norm type for fuzzy logic ('P' for product)
+        :param counting_tnorm: T-norm for counting constraints (None uses tnorm)
+        :param sample: Whether to use sampling during training
+        :param sampleSize: Number of samples per iteration
+        :param sampleGlobalLoss: Whether to sample global loss
+        :param device: Device for computation ('auto', 'cpu', 'cuda')
+        :param use_gumbel: If True, apply Gumbel-Softmax to local inference
+        :param temperature: Gumbel-Softmax temperature (lower = more discrete)
+        :param hard_gumbel: If True, use straight-through estimator
         """
         super().__init__()
         self.graph = graph
@@ -59,27 +57,48 @@ class LossModel(torch.nn.Module):
         self.sampleSize = sampleSize
         self.sampleGlobalLoss = sampleGlobalLoss
         
-        self.constr = OrderedDict(graph.logicalConstrainsRecursive)
+        # Gumbel-Softmax parameters
+        self.use_gumbel = use_gumbel
+        self.temperature = temperature
+        self.hard_gumbel = hard_gumbel
+        
+        # Extract all logical constraints from the graph recursively
+        self.constr = OrderedDict(graph.allLogicalConstrainsRecursive)
         nconstr = len(self.constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
                           'PrimalDualModel will not generate any constraint loss.')
             
+        # Initialize lambda (Lagrange multipliers) as learnable parameters for Primal-Dual optimization
+        # Each constraint gets its own lambda value that balances its contribution to the total loss
         self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
-        self.lmbd_p = torch.empty(nconstr)  # none parameter
+        
+        # Penalty terms (upper bounds) for lambda values, derived from constraint priorities
+        self.lmbd_p = torch.empty(nconstr)
+        
+        # Mapping from constraint keys to their index positions in lambda tensors
         self.lmbd_index = {}
         
+        # Initialize penalty terms based on constraint priority values (p)
         for i, (key, lc) in enumerate(self.constr.items()):
             self.lmbd_index[key] = i
+            
+            # Convert percentage priority to probability (0-1 range)
             p = float(lc.p) / 100.
+            
+            # Avoid log(0) by capping probability just below 1
             if p == 1:
                 p = 0.999999999999999
-            self.lmbd_p[i] = -np.log(1 - p)  # range: [0, inf)
             
+            # Compute penalty term: -log(1-p) ensures higher priority constraints have higher penalties
+            self.lmbd_p[i] = -np.log(1 - p)
+            
+        # Initialize lambda values (default: all set to 1.0)
         self.reset_parameters()
+        
+        # Set up loss tracker for monitoring constraint losses during training
         self.loss = MacroAverageTracker(lambda x:x)
         
-        # Set up dedicated logger for LossModel operations
         self._setup_lossmodel_logger()
 
     def _setup_lossmodel_logger(self):
@@ -88,19 +107,17 @@ class LossModel(torch.nn.Module):
             'log_name': 'lossModelOperations',
             'log_level': logging.DEBUG,
             'log_filename': 'lossmodel_operations.log',
-            'log_filesize': 50*1024*1024,  # 50MB
+            'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
         self.lossModelLogger = setup_logger(lossmodel_log_config)
         
-        # Disable logger if in production mode
         if getProductionModeStatus():
             self.lossModelLogger.addFilter(lambda record: False)
-            self.lossModelLogger.info("LossModel logger disabled due to production mode")
         else:
             self.lossModelLogger.info("=== LossModel Operations Logger Initialized ===")
 
@@ -118,75 +135,95 @@ class LossModel(torch.nn.Module):
             self.loss.reset()
 
     def get_lmbd(self, key):
-        """
-        The function `get_lmbd` returns a clamped value from a dictionary based on a given key.
-        
-        :param key: The key parameter is used to access a specific value in the lmbd dictionary
-        :return: the value of `self.lmbd[self.lmbd_index[key]]` after clamping it to a maximum value of
-        `self.lmbd_p[self.lmbd_index[key]]`.
-        """
         return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
 
-    def forward(self, builder, build=None):
+    def _apply_gumbel_softmax(self, datanode, temperature=None, hard=None):
+        """
+        Apply Gumbel-Softmax to softmax predictions in the datanode.
+        
+        Delegates to datanode.inferGumbelLocal() to avoid code duplication.
+        
+        Args:
+            datanode: The datanode containing predictions
+            temperature: Gumbel-Softmax temperature (defaults to self.temperature)
+            hard: If True, use straight-through estimator (defaults to self.hard_gumbel)
+        """
+        temperature = temperature if temperature is not None else self.temperature
+        hard = hard if hard is not None else self.hard_gumbel
+        
+        # Delegate to datanode's inferGumbelLocal method
+        datanode.inferGumbelLocal(temperature=temperature, hard=hard)
+
+    def forward(self, builder, build=None, use_gumbel=None, temperature=None, hard_gumbel=None):
+        """
+        Calculates the constraint loss based on the soft-logic translation.
+
+        :param builder: DataNode builder instance.
+        :param build: Whether to build the datanode.
+        :param use_gumbel: Override instance use_gumbel setting.
+        :param temperature: Override instance temperature setting.
+        :param hard_gumbel: Override instance hard_gumbel setting.
+        :returns: tuple of the constraint loss, a DataNode instance, and the DataNodeBuilder instance.
+        """
+        use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
+        temperature = temperature if temperature is not None else self.temperature
+        hard_gumbel = hard_gumbel if hard_gumbel is not None else self.hard_gumbel
+        
         self.lossModelLogger.info("=== LossModel Forward Operation Started ===")
-        self.lossModelLogger.info(f"Parameters: build={build}, sample={self.sample}, sampleSize={self.sampleSize}")
-        self.lossModelLogger.info(f"T-norm: {self.tnorm}, counting_tnorm: {self.counting_tnorm}")
-        self.lossModelLogger.info(f"Device: {self.device}")
+        self.lossModelLogger.info(f"Gumbel settings: use={use_gumbel}, temp={temperature}, hard={hard_gumbel}")
         
         if build is None:
             build = self.build
-            self.lossModelLogger.debug(f"Using default build value: {build}")
             
         if not build and not isinstance(builder, DataNodeBuilder):
-            self.lossModelLogger.error("PrimalDualModel must be invoked with `build` on or with provided DataNode Builder")
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        self.lossModelLogger.debug("Creating batch root data node")
         builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
-        self.lossModelLogger.info(f"DataNode created on device: {datanode.device if hasattr(datanode, 'device') else 'unknown'}")
         
-        # Call the loss calculation returns a dictionary, keys are matching the constraints
-        self.lossModelLogger.info("Calculating LC loss...")
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
-        self.lossModelLogger.info(f"Constraint loss keys: {list(constr_loss.keys())}")
+        # Apply Gumbel-Softmax if enabled
+        if use_gumbel:
+            self.lossModelLogger.info(f"Applying Gumbel-Softmax: temp={temperature}, hard={hard_gumbel}")
+            datanode.inferLocal(keys=("softmax",))
+            datanode.inferGumbelLocal(temperature=temperature, hard=hard_gumbel)
+        
+        constr_loss = datanode.calculateLcLoss(
+            tnorm=self.tnorm,
+            counting_tnorm=self.counting_tnorm, 
+            sample=self.sample, 
+            sampleSize=self.sampleSize
+        )
 
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
             globalLoss = constr_loss['globalLoss']
-            self.lossModelLogger.info(f"Using global loss: {globalLoss}")
             self.loss['globalLoss'](globalLoss)
-            lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
+            dtype = getattr(datanode, 'current_dtype', torch.float32)
+            lmbd_loss = torch.tensor(globalLoss, dtype=dtype, requires_grad=True)
         else:
-            self.lossModelLogger.debug("Processing individual constraint losses")
             for key, loss in constr_loss.items():
                 if key not in self.constr:
-                    self.lossModelLogger.debug(f"Skipping key '{key}' (not in constraints)")
                     continue
                 
-                if loss['lossTensor'] != None:
+                if loss['lossTensor'] is not None:
                     loss_value = loss['lossTensor'].clamp(min=0)
-                    loss_nansum = loss_value[loss_value==loss_value].sum()
+                    loss_nansum = loss_value[loss_value == loss_value].sum()
                     loss_ = self.get_lmbd(key) * loss_nansum
-                    self.lossModelLogger.debug(f"Constraint '{key}': loss_nansum={loss_nansum.item() if hasattr(loss_nansum, 'item') else loss_nansum}, lambda={self.get_lmbd(key).item()}, weighted_loss={loss_.item() if hasattr(loss_, 'item') else loss_}")
                     self.loss[key](loss_)
                     lmbd_loss.append(loss_)
-                else:
-                    self.lossModelLogger.debug(f"Constraint '{key}': lossTensor is None")
                
             lmbd_loss = sum(lmbd_loss)
-            self.lossModelLogger.info(f"Total lambda loss: {lmbd_loss.item() if hasattr(lmbd_loss, 'item') else lmbd_loss}")
         
-        self.lossModelLogger.info("=== LossModel Forward Operation Completed ===\n")
-        # (*out, datanode, builder)
+        self.lossModelLogger.info(f"Total loss: {lmbd_loss.item() if hasattr(lmbd_loss, 'item') else lmbd_loss}")
         return lmbd_loss, datanode, builder
 
-# The `PrimalDualModel` class is a subclass of `LossModel` that implements a primal-dual optimization
-# algorithm.
 class PrimalDualModel(LossModel):
+    """
+    Class used to train from the constraint loss, calculated using the Primal Dual method.
+    """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm='P',counting_tnorm=None, device='auto'):
+    def __init__(self, graph, tnorm='P', counting_tnorm=None, device='auto'):
         """
         The above function is the constructor for a class that initializes an object with a graph,
         tnorm, and device parameters.
@@ -203,8 +240,6 @@ class PrimalDualModel(LossModel):
         performed. It can take the following values:, defaults to auto (optional)
         """
         super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
-        
-        # Set up dedicated logger for PrimalDualModel operations
         self._setup_primaldual_logger()
 
     def _setup_primaldual_logger(self):
@@ -213,42 +248,64 @@ class PrimalDualModel(LossModel):
             'log_name': 'primalDualModelOperations',
             'log_level': logging.DEBUG,
             'log_filename': 'primaldual_model_operations.log',
-            'log_filesize': 50*1024*1024,  # 50MB
+            'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
         self.primalDualLogger = setup_logger(primaldual_log_config)
         
-        # Disable logger if in production mode
         if getProductionModeStatus():
             self.primalDualLogger.addFilter(lambda record: False)
-            self.primalDualLogger.info("PrimalDualModel logger disabled due to production mode")
         else:
             self.primalDualLogger.info("=== PrimalDualModel Operations Logger Initialized ===")
 
 class InferenceModel(LossModel):
+    """
+    Class used to train from the program execution loss.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
                  tnorm='P',
                  loss=torch.nn.BCELoss,
                  counting_tnorm=None,
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+                 sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+        """
+        Initializes an instance of InferenceModel.
 
-        # The concept where all the labels for the constraints are stored as properties
-        self.constraint_concept = graph.get_constraint_concept()
-
+        :param graph: The initialized graph either containing the logical expressions to be executed
+            and/or called with `.compile_executable` to use the logical expressions in the dataset.
+        :param tnorm: Sets the method used to perform the soft-logic translation of the logical expressions.
+            Defaults to 'P' (Product).
+        :param loss: Loss function to use for binary program outputs.
+        :counting_tnorm: Sets the method used to perform the soft-logic translation of the counting logical
+            expressions. If set to None, uses the same method as `tnorm`. Defaults to None.
+        :param sample: The `sample` parameter is a boolean flag that determines whether to use sampling
+        during training. If set to `True`, the model will use sampling to estimate the loss function. If
+        set to `False`, the model will not use sampling and will use the exact loss function, defaults
+        to False (optional)
+        :param sampleSize: The `sampleSize` parameter determines the size of the sample used for
+        training. It specifies the number of samples that will be randomly selected from the dataset for
+        each training iteration, defaults to 0 (optional)
+        :param sampleGlobalLoss: The parameter `sampleGlobalLoss` is a boolean flag that determines
+        whether to sample the global loss during training. If `sampleGlobalLoss` is set to `True`, the
+        global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
+        :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
+        be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        """
         self.graph = graph
 
-        super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss, device=device)
+        super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, 
+                         sample=sample, sampleSize=sampleSize, 
+                         sampleGlobalLoss=sampleGlobalLoss, device=device,
+                         use_gumbel=use_gumbel, temperature=temperature, 
+                         hard_gumbel=hard_gumbel)
 
-        # Initialize loss function (needs to be after module initialization)
         self.loss_func = loss()
-        
-        # Set up dedicated logger for InferenceModel operations
         self._setup_inference_logger()
 
     def _setup_inference_logger(self):
@@ -257,158 +314,144 @@ class InferenceModel(LossModel):
             'log_name': 'inferenceModelOperations',
             'log_level': logging.DEBUG,
             'log_filename': 'inference_model_operations.log',
-            'log_filesize': 50*1024*1024,  # 50MB
+            'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
         self.inferenceLogger = setup_logger(inference_log_config)
         
-        # Disable logger if in production mode
         if getProductionModeStatus():
             self.inferenceLogger.addFilter(lambda record: False)
-            self.inferenceLogger.info("InferenceModel logger disabled due to production mode")
         else:
             self.inferenceLogger.info("=== InferenceModel Operations Logger Initialized ===")
 
-    def forward(self, builder, build=None):
-        self.inferenceLogger.info("=== InferenceModel Forward Operation Started ===")
+    def forward(self, builder, build=None, use_gumbel=None, temperature=None, hard_gumbel=None):
+        use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
+        temperature = temperature if temperature is not None else self.temperature
+        hard_gumbel = hard_gumbel if hard_gumbel is not None else self.hard_gumbel
         
-        if MONITORING_AVAILABLE:
-            next_step()
-            self.inferenceLogger.debug("Monitoring next_step() called")
-            
+        self.inferenceLogger.info("=== InferenceModel Forward Operation Started ===")
+        self.inferenceLogger.info(f"Gumbel settings: use={use_gumbel}, temp={temperature}, hard={hard_gumbel}")
+        
         if build is None:
             build = self.build
-            self.inferenceLogger.debug(f"Using default build value: {build}")
             
         if not build and not isinstance(builder, DataNodeBuilder):
-            self.inferenceLogger.error("InferenceModel must be invoked with `build` on or with provided DataNode Builder")
             raise ValueError('InferenceModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        self.inferenceLogger.debug("Creating batch root data node")
         builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
+        dtype = getattr(datanode, 'current_dtype', torch.float32)
 
-        # Try to get the datanode for the constraints concept
-        constraint_dn_search = builder.findDataNodesInBuilder(select=self.constraint_concept.name)
-        if len(constraint_dn_search) == 0:
-            self.inferenceLogger.error(f"Constraint datanode (for concept {self.constraint_concept.name}) not found")
-            raise ValueError(f'Constraint datanode (for concept {self.constraint_concept.name}) not found.')
-        elif len(constraint_dn_search) > 1:
-            self.inferenceLogger.error(f"Multiple constraint datanodes found: {len(constraint_dn_search)}, expected one")
-            raise ValueError(f'Multiple constraint datanodes (for concept {self.constraint_concept.name}) found: found {len(constraint_datanode)}, expected one.')
+        if use_gumbel:
+            self.inferenceLogger.info(f"Applying Gumbel-Softmax: temp={temperature}, hard={hard_gumbel}")
+            datanode.inferLocal(keys=("softmax",))
+            datanode.inferGumbelLocal(temperature=temperature, hard=hard_gumbel)
 
-        constraint_datanode = constraint_dn_search[0]
-        self.inferenceLogger.info(f"Found constraint datanode: {constraint_datanode}")
+        # read executable constraint labels from datanode
+        read_labels = datanode.getExecutableConstraintLabels()
+        if len(read_labels) == 0:
+            raise ValueError('No active executable constraint labels found in datanode.')
 
-        # Get the constraint labels
-        # read_labels will be of format: {'LC{n}/label': label_value}
-        read_labels = constraint_datanode.getAttributes()
-        
-        datanode.setActiveLCs()
-                
-        # Call the loss calculation returns a dictionary, keys are matching the constraints
-        # Has the format {'LC{n}': {'lossTensor': tensor, ...}
-        self.inferenceLogger.info("Calculating LC loss...")
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm,counting_tnorm=self.counting_tnorm, sample=self.sample, sampleSize = self.sampleSize)
-        self.inferenceLogger.info(f"Constraint loss keys: {list(constr_loss.keys())}")
+        # Prepare shared context for loss calculation
+        lc_context = datanode._prepareLcLossContext(
+            tnorm=self.tnorm,
+            counting_tnorm=self.counting_tnorm,
+        )
 
-        # print('retrieved labels:', read_labels)
-
-        # Compile losses
         losses = []
-        for i, (lcName, loss_dict) in enumerate(constr_loss.items()):
-            if lcName not in self.constr:
-                self.inferenceLogger.debug(f"Skipping constraint '{lcName}' (not in self.constr)")
+        for lcName, lc in self.constr.items():
+            if f'{lcName}/label' not in read_labels:
                 continue
             
-            lc = self.graph.logicalConstrains[lcName]
-            lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-            self.inferenceLogger.debug(f"Processing constraint '{lcName}' ({i+1}/{len(constr_loss)}) with representation: {lcRepr}")
-                      
-            # Get the t-norm translated output of the constraint
-            constr_out = loss_dict['conversionSigmoid']
-            self.inferenceLogger.debug(f"Constraint '{lcName}' conversion (succes) output shape: {constr_out.shape}: {constr_out}")
+            if not lc.active:
+                continue
 
-            # Target for for constraint lcName
-            lbl = read_labels[f'{lcName}/label'].float().unsqueeze(0)
-            lbl = lbl.squeeze() # remove singleton dimension if present
-            self.inferenceLogger.debug(f"Constraint '{lcName}' label shape: {lbl.shape}: {lbl}")
+            # Use datanode method to get the label
+            lbl = datanode.getExecutableConstraintLabel(lcName).float()
+            
+            loss_dict = datanode.calculateSingleLcLoss(
+                lcName,
+                tnorm=self.tnorm,
+                counting_tnorm=self.counting_tnorm,
+                _context=lc_context
+            )
 
+            if loss_dict.get('loss') is None:
+                continue
+                
             if MONITORING_AVAILABLE:
+                lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
                 log_single_lc(
                     constraint_name=lcName,
                     loss_dict=loss_dict,
                     label_tensor=lbl,
                     lc_formulation=lcRepr
                 )
-
-            # Calcluate loss 
+                
+            is_sumL = isinstance(lc, sumL)
+            if is_sumL:
+                lbl = torch.tensor(1.0, dtype=dtype, device=self.device, requires_grad=True)
+                
+            constr_out = loss_dict['conversionSigmoid']
+            #if torch.equal(constr_out, lbl):
+            #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
             constraint_loss = self.loss_func(constr_out.float(), lbl)
-            self.inferenceLogger.debug(f"Constraint '{lcName}' calculated loss with function {self.loss_func.__class__.__name__}: {constraint_loss.item()}")
-            losses.append(constraint_loss) # TODO: match dtypes too?
 
-        loss_scalar = sum(losses)
-        self.inferenceLogger.info(f"Total inference loss: {loss_scalar.item() if hasattr(loss_scalar, 'item') else loss_scalar}")
-        
+            losses.append(constraint_loss)
+
+        if len(losses) == 0:
+            dtype = getattr(datanode, 'current_dtype', torch.float32)
+            loss = torch.tensor(0.0, dtype=dtype, device=self.device, requires_grad=True)
+        else:
+            loss = sum(losses)
+            
         if MONITORING_AVAILABLE:
             log_memory() 
-
-        self.inferenceLogger.info("=== InferenceModel Forward Operation Completed ===\n")
-        # (*out, datanode, builder)
-        return loss_scalar, datanode, builder
-
-class SampleLossModel(torch.nn.Module):
+        
+        self.inferenceLogger.info(f"Total loss: {loss.item()}")
+        return loss, datanode, builder
+    
+class SampleLossModel(LossModel):
+    """
+    Class used to train from the constraint loss, calculated using sampling.
+    """
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, 
                  tnorm='P', 
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto',
+                 counting_tnorm=None,
+                 sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
                  temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003):
-        super().__init__()
-        self.graph = graph
-        self.build = True
         
-        self.tnorm = tnorm
-        self.device = device
+        super().__init__(
+            graph=graph,
+            tnorm=tnorm,
+            counting_tnorm=counting_tnorm,
+            sample=sample,
+            sampleSize=sampleSize,
+            sampleGlobalLoss=sampleGlobalLoss,
+            device=device,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel
+        )
         
-        self.sample = sample
-        self.sampleSize = sampleSize
-        self.sampleGlobalLoss = sampleGlobalLoss
-        
-        # Gumbel-Softmax parameters
-        self.use_gumbel = use_gumbel
+        # SampleLossModel-specific: temperature annealing
         self.initial_temperature = temperature
-        self.temperature = temperature
-        self.hard_gumbel = hard_gumbel
         self.temperature_schedule = temperature_schedule
         self.min_temperature = min_temperature
         self.anneal_rate = anneal_rate
         self._step_count = 0
         
-        self.constr = OrderedDict(graph.logicalConstrainsRecursive)
-        nconstr = len(self.constr)
-        if nconstr == 0:
-            warnings.warn('No logical constraint detected in the graph. '
-                          'PrimalDualModel will not generate any constraint loss.')
-            
-        self.lmbd = torch.nn.Parameter(torch.zeros(nconstr).float())
-        self.lmbd_index = {}
-
+        # SampleLossModel-specific: iteration tracking
         self.iter_step = 0
-        self.warmpup = 80
+        self.warmup = 80
         
-        for i, (key, lc) in enumerate(self.constr.items()):
-            self.lmbd_index[key] = i
-            
-        self.reset_parameters()
-        self.loss = MacroAverageTracker(lambda x:x)
-        
-        # Set up dedicated logger for SampleLossModel operations
         self._setup_sampleloss_logger()
 
     def _setup_sampleloss_logger(self):
@@ -417,38 +460,26 @@ class SampleLossModel(torch.nn.Module):
             'log_name': 'sampleLossModelOperations',
             'log_level': logging.DEBUG,
             'log_filename': 'sampleloss_model_operations.log',
-            'log_filesize': 50*1024*1024,  # 50MB
+            'log_filesize': 50*1024*1024,
             'log_backupCount': 5,
             'log_fileMode': 'a',
-            'log_dir': 'logs',
+            # log_dir intentionally omitted — setup_logger uses _default_log_dir()
             'timestamp_backup_count': 10
         }
         
         self.sampleLossLogger = setup_logger(sampleloss_log_config)
         
-        # Disable logger if in production mode
         if getProductionModeStatus():
             self.sampleLossLogger.addFilter(lambda record: False)
-            self.sampleLossLogger.info("SampleLossModel logger disabled due to production mode")
         else:
             self.sampleLossLogger.info("=== SampleLossModel Operations Logger Initialized ===")
 
     def reset_parameters(self):
+        """Override: Initialize lambda to 0.0 instead of 1.0."""
         torch.nn.init.constant_(self.lmbd, 0.0)
 
-    def reset(self):
-        if isinstance(self.loss, MetricTracker):
-            self.loss.reset()
-
     def get_lmbd(self, key):
-        """
-        The function `get_lmbd` returns the value of `self.lmbd` at the index specified by
-        `self.lmbd_index[key]`, ensuring that the value is non-negative.
-        
-        :param key: The `key` parameter is used to access a specific element in the `self.lmbd` list. It
-        is used as an index to retrieve the corresponding value from the list
-        :return: the value of `self.lmbd[self.lmbd_index[key]]`.
-        """
+        """Override: Clamp to min 0 instead of max lmbd_p."""
         if self.lmbd[self.lmbd_index[key]] < 0:
             with torch.no_grad():
                 self.lmbd[self.lmbd_index[key]] = 0
@@ -466,10 +497,8 @@ class SampleLossModel(torch.nn.Module):
         self._step_count += 1
         
         if self.temperature_schedule == 'exponential':
-            # Exponential decay: T = max(T0 * exp(-rate * step), T_min)
             new_temp = self.initial_temperature * np.exp(-self.anneal_rate * self._step_count)
         elif self.temperature_schedule == 'linear':
-            # Linear decay: T = max(T0 - rate * step, T_min)
             new_temp = self.initial_temperature - self.anneal_rate * self._step_count
         else:
             new_temp = self.temperature
@@ -481,17 +510,14 @@ class SampleLossModel(torch.nn.Module):
         self.temperature = self.initial_temperature
         self._step_count = 0
 
-    def forward(self, builder, build=None, use_gumbel=False, temperature=1.0, hard_gumbel=False):
+    def forward(self, builder, build=None, use_gumbel=None, temperature=None, hard_gumbel=None):
         """
-        Forward pass with optional Gumbel-Softmax support.
+        Forward pass with sampling-based loss calculation.
+        """
+        use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
+        temperature = temperature if temperature is not None else self.temperature
+        hard_gumbel = hard_gumbel if hard_gumbel is not None else self.hard_gumbel
         
-        Args:
-            builder: DataNodeBuilder
-            build: Whether to build datanode
-            use_gumbel: If True, apply Gumbel-Softmax to local inference
-            temperature: Gumbel-Softmax temperature
-            hard_gumbel: If True, use straight-through estimator
-        """
         self.sampleLossLogger.info("=== SampleLossModel Forward Operation Started ===")
         self.sampleLossLogger.info(f"Iteration step: {self.iter_step}")
         self.sampleLossLogger.info(f"Gumbel settings: use={use_gumbel}, temp={temperature}, hard={hard_gumbel}")
@@ -501,168 +527,108 @@ class SampleLossModel(torch.nn.Module):
         self.iter_step += 1
             
         if not build and not isinstance(builder, DataNodeBuilder):
-            self.sampleLossLogger.error("SampleLossModel must be invoked with `build` on")
             raise ValueError('SampleLossModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        self.sampleLossLogger.debug("Creating batch root data node")
         builder.createBatchRootDN()
         datanode = builder.getDataNode(device=self.device)
         
-        # Apply Gumbel-Softmax if enabled
-        if self.use_gumbel:
-            # Anneal temperature during training
-            if self.training:
+        # Apply Gumbel-Softmax if enabled using datanode's method
+        if use_gumbel:
+            if self.training and temperature == self.temperature:
                 self.anneal_temperature()
+                temperature = self.temperature
             
-            self.sampleLossLogger.info(f"Applying Gumbel-Softmax with temp={self.temperature}, hard={self.hard_gumbel}")
-            # First compute standard local/softmax
+            self.sampleLossLogger.info(f"Applying Gumbel-Softmax: temp={temperature}, hard={hard_gumbel}")
             datanode.inferLocal(keys=("softmax",))
-            # Then apply Gumbel transformation
-            datanode.inferGumbelLocal(temperature=self.temperature, hard=self.hard_gumbel)
+            datanode.inferGumbelLocal(temperature=temperature, hard=hard_gumbel)
         
-        # Calculate LC loss (this now uses Gumbel-Softmax if applied above)
-        self.sampleLossLogger.info("Calculating LC loss...")
+        # Calculate LC loss
         constr_loss = datanode.calculateLcLoss(
             tnorm=self.tnorm, 
             sample=self.sample, 
             sampleSize=self.sampleSize, 
             sampleGlobalLoss=self.sampleGlobalLoss
         )
-        self.sampleLossLogger.info(f"Constraint loss keys: {list(constr_loss.keys())}")
         
-        import math
         lmbd_loss = []
         replace_mul = False
-        
         key_losses = dict()
+        
         for key, loss in constr_loss.items():
             if key not in self.constr:
-                self.sampleLossLogger.debug(f"Skipping key '{key}' (not in constraints)")
                 continue
-            # loss_value = loss['loss']
-            epsilon = 0.0
             key_loss = 0
-            new_eps = 0.01
-            self.sampleLossLogger.debug(f"Processing constraint '{key}' with {len(loss['lossTensor'])} loss tensors")
             
             for i, lossTensor in enumerate(loss['lossTensor']):
                 lcSuccesses = loss['lcSuccesses'][i]
-                self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: lossTensor sum={lossTensor.sum().item()}, lcSuccesses sum={lcSuccesses.sum().item()}")
                 
                 if self.sampleSize == -1:
-                    sample_info = [val_ for key, val in loss['sampleInfo'].items() for val_ in val if len(val_)]
+                    sample_info = [val_ for k, val in loss['sampleInfo'].items() for val_ in val if len(val_)]
                     sample_info = [val[i][1] for val in sample_info]
                     sample_info = torch.stack(sample_info).t()
-                    unique_output, unique_inverse, counts = torch.unique(sample_info, return_inverse=True, dim=0, return_counts=True)
+                    unique_output, unique_inverse, counts = torch.unique(
+                        sample_info, return_inverse=True, dim=0, return_counts=True
+                    )
                     _, ind_sorted = torch.sort(unique_inverse, stable=True)
                     cum_sum = counts.cumsum(0)
                     cum_sum = torch.cat((torch.tensor([0]).to(counts.device), cum_sum[:-1]))
                     first_indicies = ind_sorted[cum_sum]
                     assert lcSuccesses.sum().item() != 0
                     tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
-                    unique_selected_indexes = torch.tensor(np.intersect1d(first_indicies.cpu().numpy(), tidx.cpu().numpy()))
+                    unique_selected_indexes = torch.tensor(
+                        np.intersect1d(first_indicies.cpu().numpy(), tidx.cpu().numpy())
+                    )
                     if unique_selected_indexes.shape:
                         loss_value = lossTensor[unique_selected_indexes].sum()
                         loss_ = -1 * torch.log(loss_value)
                         key_loss += loss_
-                        self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: unique selected, loss_value={loss_value.item()}, loss_={loss_.item()}")
-
-                    else:
-                        loss_ = 0
-                        self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: no unique selected indexes")
-                    
                 else:
                     if constr_loss["globalSuccessCounter"] > 0:
                         lcSuccesses = constr_loss["globalSuccesses"]
-                        self.sampleLossLogger.debug(f"Using global successes: {lcSuccesses.sum().item()}")
                     if lossTensor.sum().item() != 0:
                         tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
                         true_val = lossTensor[tidx]
-                        self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: true_val sum={true_val.sum().item()}")
                         
                         if true_val.sum().item() != 0: 
                             if not replace_mul:
                                 loss_value = true_val.sum() / lossTensor.sum()
-                                loss_value = epsilon - ( -1 * torch.log(loss_value) )
-                                if self.iter_step < self.warmpup:
+                                loss_value = -(-1 * torch.log(loss_value))
+                                if self.iter_step < self.warmup:
                                     with torch.no_grad():
                                         min_val = loss_value
-                                    self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: warmup phase, min_val set to loss_value")
                                 else:
                                     min_val = -1
-                                    self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: post-warmup phase, min_val=-1")
-                                # min_val = -1
-                                # with torch.no_grad():
-                                #     min_val = loss_value
                                 loss_ = min_val * loss_value
                                 key_loss += loss_
-                                self.sampleLossLogger.debug(f"Constraint '{key}' tensor {i}: loss_value={loss_value.item()}, min_val={min_val}, loss_={loss_.item()}")
                             else:
                                 loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
                                 key_loss += -1 * loss_value
-
-                        else:
-                            loss_ = 0
-                        
-                        # if loss['lossTensor'].nansum().item() <= 1:
-                        #     loss_value = loss['lossTensor']
-                        #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
-                        # else:
-                        #     _idx = []
-                        #     for i in torch.unique(loss['lossTensor']):
-                        #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
-                        #     loss_value = loss['lossTensor'][_idx]
-                        #     # loss_value = torch.unique(loss['lossTensor'])
-
-                        # loss_value = torch.log(loss_value.sum())
-                        # loss_ = -1 * (loss_value)
-                        # self.loss[key](loss_)
-                        # lmbd_loss.append(loss_) 
-                        
-                    else:
-                        loss_ = 0
 
             epsilon = 1e-2
             if self.sampleSize != -1:
                 key_loss = max(key_loss - epsilon, 0) 
             if key_loss != 0:  
                 key_losses[key] = key_loss
-                # self.loss[key](key_loss)
-                # lmbd_loss.append(key_loss) 
                     
         all_losses = [key_losses[key] for key in key_losses]
         if all_losses:
-                all_losses = torch.stack(all_losses)
-                self.sampleLossLogger.debug(f"Stacked all_losses tensor: {all_losses}")
-
-                satisfied_num = len( set(constr_loss.keys()) - set(key_losses.keys()) )
-                unsatisfied_num = len(set(constr_loss.keys())) - satisfied_num
-                self.sampleLossLogger.info(f"Number of satisfied constraints: {satisfied_num}")
-                self.sampleLossLogger.info(f"Number of unsatisfied constraints: {unsatisfied_num}")
-                
-                for key in key_losses:
-                    if self.sampleSize != -1:
-                        if replace_mul:
-                            loss_val = (key_losses[key] / all_losses.sum()) * key_losses[key]
-                            self.sampleLossLogger.debug(f"Constraint '{key}': replace_mul mode, loss_val={loss_val.item()}")
-                        else:
-                            loss_val = key_losses[key]
-                            self.sampleLossLogger.debug(f"Constraint '{key}': standard mode, loss_val={loss_val.item()}")
+            all_losses = torch.stack(all_losses)
+            
+            for key in key_losses:
+                if self.sampleSize != -1:
+                    if replace_mul:
+                        loss_val = (key_losses[key] / all_losses.sum()) * key_losses[key]
                     else:
                         loss_val = key_losses[key]
-                        self.sampleLossLogger.debug(f"Constraint '{key}': sampleSize=-1 mode, loss_val={loss_val.item()}")
+                else:
+                    loss_val = key_losses[key]
 
-                    self.loss[key](loss_val)
-                    lmbd_loss.append(loss_val) 
-                    
-                lmbd_loss = sum(lmbd_loss)
-                self.sampleLossLogger.info(f"Final lambda loss: {lmbd_loss.item()}")
+                self.loss[key](loss_val)
+                lmbd_loss.append(loss_val) 
+                
+            lmbd_loss = sum(lmbd_loss)
         else:
-            self.sampleLossLogger.info("No losses calculated - all constraints satisfied or no valid losses")
             lmbd_loss = 0
-            self.sampleLossLogger.info(f"Lambda loss set to: {lmbd_loss}")
         
-        self.sampleLossLogger.info("=== SampleLossModel Forward Operation Completed ===")
-        self.sampleLossLogger.debug(f"Returning: lmbd_loss, datanode, builder")
-        
+        self.sampleLossLogger.info(f"Total loss: {lmbd_loss.item() if hasattr(lmbd_loss, 'item') else lmbd_loss}")
         return lmbd_loss, datanode, builder

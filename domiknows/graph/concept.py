@@ -1,6 +1,8 @@
 from collections import OrderedDict
 from itertools import chain, product
 from typing import Type
+
+from torch import softmax
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
 #from .relation import Contains, HasA, IsA
@@ -43,9 +45,11 @@ class Concept(BaseGraphTree):
                 
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
+                    originalDst = None
                     if 'is_a' in dst._out:
+                        originalDst = dst
                         dst = dst._out['is_a'][0].dst
-                    rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
+                    rel_inst = Rel(src, dst, originalDst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
 
@@ -96,6 +100,7 @@ class Concept(BaseGraphTree):
         from domiknows.graph.logicalConstrain import eqL, V
         
         error = None
+        relVarInfo = None
         
         if len(args) > 1 and isinstance(args[1], eqL):
             nameX = args[0]
@@ -111,9 +116,11 @@ class Concept(BaseGraphTree):
             if len(relation_attrs) != len(args):
                 error = ("extraV", ) + tuple(args)
             else:
-                newVariable = 'p' + str(600 + Concept.get_new_variable_index())
-                
+                newVariable = self.name + '_' + str(Concept.get_new_variable_index()) + ''
+
                 info = {arg: V(name=None, v=(newVariable, value))  for arg, value in zip(args, relation_attrs.keys())}
+                relVarInfo = {arg: V(name=arg, relVarInfo = value) for arg, value in zip(args, relation_attrs.values())}
+
                 args = (newVariable,)
                 error = ('VarMaps', info)
 
@@ -123,13 +130,13 @@ class Concept(BaseGraphTree):
             if "path" in kwargs:
                 path = kwargs['path']
                 
-                return [conceptT, V(name=name, v=path), error]
+                return [conceptT, V(name=name, v=path, relVarInfo=relVarInfo), error]
             else:
-                return [conceptT, V(name=name), error]
+                return [conceptT, V(name=name, relVarInfo=relVarInfo), error]
         elif "path" in kwargs:
             path = kwargs['path']
                                     
-            return [conceptT, V(name=None, v=path), error]
+            return [conceptT, V(name=None, v=path, relVarInfo=relVarInfo), error]
         else:
             return [conceptT]
 

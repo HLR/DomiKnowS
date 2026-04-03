@@ -45,7 +45,7 @@ if __name__ == "__main__":
             for sub_round in range(6):
                 # Training
                 command = [
-                    "python", "main.py",
+                    sys.executable, "main.py",
                     "--train-size", "6000",
                     "--test-size", "1000",
                     "--epochs", "1",
@@ -58,7 +58,7 @@ if __name__ == "__main__":
                 # Test
                 if sub_round == 5:
                     command = [
-                        "python", "main.py",
+                        sys.executable, "main.py",
                         "--train-size", "6000",
                         "--test-size", "1000",
                         "--epochs", "1",
@@ -69,7 +69,3 @@ if __name__ == "__main__":
                         "--eval-only"
                     ]
                     subprocess.run(command)
-                
-                # program1e-06_1_0__1_6000_
-                # G_1
-                # program1e-06_0__1_6000_G_1.pth
