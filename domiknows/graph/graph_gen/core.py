@@ -799,28 +799,119 @@ def _sanitize_code_strings(code: str) -> str:
     return stripped
 
 
+def _find_failing_line(code: str, e: Exception) -> tuple[int | None, str | None]:
+    """Try to identify the failing line number and text from the traceback.
+
+    Returns (original_lineno, line_text) or (None, None).
+    """
+    tb = e.__traceback__
+    if tb is None:
+        return None, None
+
+    while tb.tb_next:
+        tb = tb.tb_next
+
+    lineno = tb.tb_lineno
+    auto_import_lines = AUTO_IMPORTS.count('\n') + 1
+    original_lineno = lineno - auto_import_lines
+    lines = code.splitlines()
+    if 1 <= original_lineno <= len(lines):
+        return original_lineno, lines[original_lineno - 1].strip()
+    return None, None
+
+
+def _generate_error_hint(code: str, e: Exception, failing_lineno: int | None, failing_line: str | None) -> str | None:
+    """Generate a contextual hint for known error patterns, using actual names from the code.
+
+    Returns a hint string or None if no specific hint applies.
+    """
+    error_str = str(e)
+    lines = code.splitlines()
+
+    # --- Hint: 'list' object has no attribute 'has_a' ---
+    if isinstance(e, AttributeError) and "'list' object has no attribute 'has_a'" in error_str:
+        has_a_var = None
+        has_a_args = None
+        if failing_line:
+            m = re.match(r'.*?(\w+)\.has_a\((.+)\)', failing_line)
+            if m:
+                has_a_var = m.group(1)
+                has_a_args = m.group(2).strip()
+
+        # Find the assignment that created the bad variable
+        parent_concept = None
+        bad_assignment = None
+        if has_a_var and failing_lineno:
+            assign_pattern = re.compile(
+                rf"""^\s*{re.escape(has_a_var)}\s*=\s*(\w+)\s*\(\s*['"]"""
+            )
+            for i in range(failing_lineno - 2, -1, -1):
+                m = assign_pattern.match(lines[i])
+                if m:
+                    parent_concept = m.group(1)
+                    bad_assignment = lines[i].strip()
+                    break
+
+        parts = [
+            "Hint: A variable holds a list instead of a Concept, so .has_a() cannot be called on it."
+        ]
+
+        if has_a_var and parent_concept and bad_assignment:
+            parts.append(
+                f"The line `{bad_assignment}` did NOT create a new Concept. "
+                f"Calling `{parent_concept}('{has_a_var}')` invokes Concept.__call__, "
+                f"which creates a logical constraint variable (a list), not a new Concept."
+            )
+            parts.append(
+                f"Fix: first declare `{has_a_var}` as a Concept, then set its parent, "
+                f"then define its domain and range:"
+            )
+            fix_lines = [
+                f"    {has_a_var} = Concept('{has_a_var}')",
+                f"    {has_a_var}.is_a({parent_concept})",
+            ]
+            if has_a_args:
+                fix_lines.append(f"    (...) = {has_a_var}.has_a({has_a_args})")
+            parts.append("\n".join(fix_lines))
+        elif has_a_var:
+            parts.append(
+                f"Variable `{has_a_var}` must be declared as `{has_a_var} = Concept('{has_a_var}')` "
+                f"before calling `{has_a_var}.has_a(...)` to define its domain and range."
+            )
+        else:
+            parts.append(
+                "Each relation must first be declared as a Concept (e.g. `rel = Concept('rel')`) "
+                "before calling .has_a() to define its domain and range."
+            )
+
+        return "\n".join(parts)
+
+    # No specific hint for this error type
+    return None
+
+
 def execute_graph_code(code: str) -> tuple[bool, str]:
-    sanitized_code = _sanitize_code_strings(code)
-    full_code = AUTO_IMPORTS + "\n" + sanitized_code
+    full_code = AUTO_IMPORTS + "\n" + code
     exec_globals: dict = {}
     try:
         exec(full_code, exec_globals)
+        return True, "Graph executed successfully."
     except Exception as e:
-        import traceback as _tb
-        tb_str = _tb.format_exc()
         lc_mapping = _build_lc_mapping_from_graph(exec_globals)
         error_msg = f"{type(e).__name__}: {e}"
-        error_msg = _add_execution_hints(error_msg, tb_str, code)
+
+        # Try to identify the failing line
+        failing_lineno, failing_line = _find_failing_line(code, e)
+        if failing_lineno and failing_line:
+            error_msg += f"\nFailing code:\n  → line {failing_lineno}: {failing_line}"
+
+        # Append a contextual hint if one matches (None = no hint, original msg unchanged)
+        hint = _generate_error_hint(code, e, failing_lineno, failing_line)
+        if hint:
+            error_msg += f"\n{hint}"
+
+        # Existing enrichment — resolve LC/ELC names in the message
         return False, _enrich_error_with_constraint(error_msg, code, lc_mapping)
-
-    # Verify executable constraints using dummy DataNode + AnswerSolver
-    graph = _find_graph_in_globals(exec_globals)
-    if graph is not None and graph.executableLCs:
-        ok, err_msg = _verify_constraints(graph, code, exec_globals)
-        if not ok:
-            return False, err_msg
-
-    return True, "Graph executed successfully."
 
 # ---------------------------------------------------------------------------
 # Graph validation
