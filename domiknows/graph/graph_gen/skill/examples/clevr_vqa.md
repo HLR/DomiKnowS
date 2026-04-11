@@ -10,6 +10,8 @@
 - Is the large metal cube behind the small rubber sphere?
 - What color is the large sphere?
 - Are there more cubes than spheres?
+- Do the large cube and the small sphere have the same material?
+- Do the red cylinder and the blue sphere have different sizes?
 ```
 
 ---
@@ -132,7 +134,7 @@ $ ./scripts/validate.sh clevr_graph.py
   ✅ Graph context block found
   ✅ 21 concept definition(s) found
   ✅ No constraint operators in graph definition section
-  ℹ️  5 execute() call(s) found
+  ℹ️  7 execute() call(s) found
 
 ── Check 3: DomiKnowS Execution & Validation ──
   [A] Executing graph code...
@@ -143,7 +145,7 @@ $ ./scripts/validate.sh clevr_graph.py
       Concepts (21): image, object, large, small, red, blue, green, ...
       Relations (5): is_a, has_a, contains, ...
       Logical constraints: 0
-      Executable constraints: 5
+      Executable constraints: 7
 
   [C] DomiKnowS Framework Validation (checkLcCorrectness):
       ✅ All constraint validations passed
@@ -174,6 +176,12 @@ with graph:
 
     # Comparative: Are there more cubes than spheres?
     execute(greaterL(cube('x'), sphere('y')))
+
+    # Same: Do the large cube and the small sphere have the same material?
+    execute(sameL(material, iotaL(andL(large('x'), cube('x'))), iotaL(andL(small('y'), sphere('y')))))
+
+    # Different: Do the red cylinder and the blue sphere have different sizes?
+    execute(differentL(size, iotaL(andL(red('x'), cylinder('x'))), iotaL(andL(blue('y'), sphere('y')))))
 ```
 
 ---
@@ -186,7 +194,7 @@ from domiknows.graph import (
     ifL, andL, orL, nandL, notL,
     existsL, atLeastL, atMostL, exactL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL,
-    iotaL, queryL, execute,
+    iotaL, queryL, sameL, differentL, execute,
 )
 
 with Graph('clevr') as graph:
@@ -249,6 +257,12 @@ with graph:
 
     # Comparative: Are there more cubes than spheres?
     execute(greaterL(cube('x'), sphere('y')))
+
+    # Same: Do the large cube and the small sphere have the same material?
+    execute(sameL(material, iotaL(andL(large('x'), cube('x'))), iotaL(andL(small('y'), sphere('y')))))
+
+    # Different: Do the red cylinder and the blue sphere have different sizes?
+    execute(differentL(size, iotaL(andL(red('x'), cylinder('x'))), iotaL(andL(blue('y'), sphere('y')))))
 ```
 
 ---
@@ -264,6 +278,8 @@ qa_data = [
     {"constraint": 'existsL(behind(iotaL(andL(large("x"), metal("x"), cube("x"))), iotaL(andL(small("y"), rubber("y"), sphere("y")))))', "label": True},
     {"constraint": 'queryL(color, iotaL(andL(large("x"), sphere("x"))))', "label": 0},
     {"constraint": 'greaterL(cube("x"), sphere("y"))', "label": True},
+    {"constraint": 'sameL(material, iotaL(andL(large("x"), cube("x"))), iotaL(andL(small("y"), sphere("y"))))', "label": True},
+    {"constraint": 'differentL(size, iotaL(andL(red("x"), cylinder("x"))), iotaL(andL(blue("y"), sphere("y"))))', "label": True},
 ]
 
 logic_dataset = graph.compile_executable(

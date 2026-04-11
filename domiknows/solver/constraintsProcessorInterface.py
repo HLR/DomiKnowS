@@ -269,3 +269,42 @@ class constraintsProcessor(object, metaclass=abc.ABCMeta):
         Raises:
             Exception: In ILP mode, if model is infeasible (no entity can satisfy)
         """
+
+    # ------------------------------------------------------------------
+    # Same Attribute (sameL / differentL support)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def sameVar(
+        self,
+        m,
+        concept,
+        subclasses,
+        *entity_var_groups,
+        onlyConstrains: bool = False,
+        logicMethodName: str = "SAME"
+    ):
+        """Check whether all entities share the same subclass of a concept.
+
+        Given n entity variable groups, each containing k subclass indicator
+        variables (one per subclass of *concept*), returns a single boolean
+        indicating whether there exists a subclass j such that every entity
+        has that subclass active.
+
+        Semantics:
+            result = OR_j( AND_i( entity_i_has_subclass_j ) )
+
+        Args:
+            m: Model context (Gurobi model for ILP, None for others)
+            concept: Parent concept with subclasses
+            subclasses: List of (subclass_concept, name, index) tuples
+            *entity_var_groups: Each group is a list of k binary variables
+                representing one entity's subclass membership indicators.
+            onlyConstrains:
+                - If True: Add hard constraint / return loss
+                - If False: Return reified boolean variable / value
+            logicMethodName: Name for logging
+
+        Returns:
+            A single boolean variable (ILP), tensor (Loss/Sample), or
+            int (Verify) representing whether all entities share a subclass.
+        """

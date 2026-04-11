@@ -11,34 +11,47 @@ if [ ! -d "$RESULTS_DIR" ]; then
   exit 0
 fi
 
-echo "================================="
-echo "📊 COMBINED TEST RESULTS SUMMARY"
-echo "================================="
-echo ""
+# ── Aggregate results from all runners ──
 
-# Aggregate results from all runners
+# Directory-level counts (pass/fail/skip per test subfolder)
 total_passed=0
 total_failed=0
 total_skipped=0
 overall_failure=0
 
+# Pytest item-level counts (individual test functions)
+total_items_passed=0
+total_items_failed=0
+total_items_skipped=0
+total_items_errors=0
+
 declare -A ALL_PASSED_TESTS
 declare -A ALL_FAILED_TESTS
 declare -A ALL_SKIPPED_TESTS
 declare -A RUNNER_STATS
+declare -A RUNNER_ITEM_STATS
+declare -A TEST_ITEM_COUNTS
 
 # Process each result file
 for result_file in "$RESULTS_DIR"/*/test_results_*.txt; do
   if [ ! -f "$result_file" ]; then
     continue
   fi
-  
-  runner_id=""
+
+  # First pass: extract runner_id (written at end of file)
+  runner_id=$(grep -oE 'RUNNER_ID=.*' "$result_file" | head -1 | cut -d'=' -f2)
+  runner_id="${runner_id:-unknown}"
+
   runner_passed=0
   runner_failed=0
   runner_skipped=0
-  
-  while IFS=':' read -r status subfolder reason; do
+  runner_items_passed=0
+  runner_items_failed=0
+  runner_items_skipped=0
+  runner_items_errors=0
+
+  # Second pass: process all entries with runner_id already known
+  while IFS=':' read -r status subfolder f3 f4 f5 f6; do
     case "$status" in
       "PASS")
         ((total_passed++))
@@ -48,12 +61,25 @@ for result_file in "$RESULTS_DIR"/*/test_results_*.txt; do
       "FAIL")
         ((total_failed++))
         ((runner_failed++))
-        ALL_FAILED_TESTS["$subfolder"]="$reason|$runner_id"
+        ALL_FAILED_TESTS["$subfolder"]="$f3|$runner_id"
         ;;
       "SKIP")
         ((total_skipped++))
         ((runner_skipped++))
-        ALL_SKIPPED_TESTS["$subfolder"]="$reason|$runner_id"
+        ALL_SKIPPED_TESTS["$subfolder"]="$f3|$runner_id"
+        ;;
+      "ITEMS")
+        # Format: ITEMS:<subfolder>:<passed>:<failed>:<skipped>:<errors>
+        ip=${f3:-0}; ifa=${f4:-0}; is=${f5:-0}; ie=${f6:-0}
+        ((total_items_passed += ip))
+        ((total_items_failed += ifa))
+        ((total_items_skipped += is))
+        ((total_items_errors += ie))
+        ((runner_items_passed += ip))
+        ((runner_items_failed += ifa))
+        ((runner_items_skipped += is))
+        ((runner_items_errors += ie))
+        TEST_ITEM_COUNTS["$subfolder"]="${ip}p ${ifa}f ${is}s ${ie}e"
         ;;
       "OVERALL_RESULT"*)
         result=$(echo "$status" | cut -d'=' -f2)
@@ -61,109 +87,186 @@ for result_file in "$RESULTS_DIR"/*/test_results_*.txt; do
           overall_failure=1
         fi
         ;;
-      "RUNNER_ID"*)
-        runner_id=$(echo "$status" | cut -d'=' -f2)
-        ;;
     esac
   done < "$result_file"
-  
-  if [ -n "$runner_id" ]; then
-    RUNNER_STATS["$runner_id"]="✅ $runner_passed | ❌ $runner_failed | ⚠️  $runner_skipped"
-  fi
+
+  RUNNER_STATS["$runner_id"]="✅ $runner_passed | ❌ $runner_failed | ⚠️  $runner_skipped"
+  RUNNER_ITEM_STATS["$runner_id"]="✅ $runner_items_passed | ❌ $runner_items_failed | ⏭️  $runner_items_skipped | 💥 $runner_items_errors"
 done
 
 total_tests=$((total_passed + total_failed + total_skipped))
+total_items=$((total_items_passed + total_items_failed + total_items_skipped + total_items_errors))
 
-echo "📊 OVERALL SUMMARY: $total_tests total test directories"
-echo "   ✅ $total_passed passed"
-echo "   ❌ $total_failed failed" 
-echo "   ⚠️  $total_skipped skipped"
+# ── Helper: write to both stdout and GITHUB_STEP_SUMMARY ──
+# If GITHUB_STEP_SUMMARY is not set (local run), write to stdout only.
+SUMMARY_FILE="${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+report() {
+  echo "$1"
+  echo "$1" >> "$SUMMARY_FILE"
+}
+
+# ── Generate report ──
+
+echo "================================="
+echo "📊 COMBINED TEST RESULTS SUMMARY"
+echo "================================="
 echo ""
 
-# Show per-runner breakdown
-if [ ${#RUNNER_STATS[@]} -gt 0 ]; then
-  echo "🖥️  BREAKDOWN BY RUNNER:"
-  for runner in "${!RUNNER_STATS[@]}"; do
-    echo "   $runner: ${RUNNER_STATS[$runner]}"
-  done
-  echo ""
-fi
+report "## 📊 Test Results Summary"
+report ""
 
-# Show passed tests
-if [ ${#ALL_PASSED_TESTS[@]} -gt 0 ]; then
-  echo "✅ PASSED TEST DIRECTORIES:"
-  for subfolder in "${!ALL_PASSED_TESTS[@]}"; do
-    runner="${ALL_PASSED_TESTS[$subfolder]}"
-    echo "   ✅ $subfolder [$runner]"
-  done
-  echo ""
-fi
+# ── Overall numbers ──
 
-if [ $total_failed -eq 0 ]; then
-  echo "🎉 ALL TESTS PASSED OR SKIPPED"
-  
-  # Show skipped tests if any
-  if [ ${#ALL_SKIPPED_TESTS[@]} -gt 0 ]; then
-    echo ""
-    echo "📋 SKIPPED TEST DIRECTORIES:"
-    for subfolder in "${!ALL_SKIPPED_TESTS[@]}"; do
-      info="${ALL_SKIPPED_TESTS[$subfolder]}"
-      reason=$(echo "$info" | cut -d'|' -f1)
-      runner=$(echo "$info" | cut -d'|' -f2)
-      echo "   ⚠️  $subfolder [$runner]: $reason"
-    done
-  fi
-  
-  echo ""
-  echo "✅ Report completed successfully"
-  exit 0
+if [ $total_failed -eq 0 ] && [ $total_items_failed -eq 0 ] && [ $total_items_errors -eq 0 ]; then
+  report "### ✅ All tests passed"
 else
-  echo "💥 TEST FAILURES DETECTED"
-  echo ""
-  
+  report "### ❌ Failures detected"
+fi
+report ""
+
+# Summary table
+report "| Metric | Passed | Failed | Skipped | Errors | Total |"
+report "|--------|-------:|-------:|--------:|-------:|------:|"
+report "| **Test directories** | $total_passed | $total_failed | $total_skipped | — | $total_tests |"
+report "| **Pytest items** | $total_items_passed | $total_items_failed | $total_items_skipped | $total_items_errors | $total_items |"
+report ""
+
+# ── Per-runner breakdown ──
+
+if [ ${#RUNNER_STATS[@]} -gt 0 ]; then
+  report "<details>"
+  report "<summary>🖥️ Breakdown by runner</summary>"
+  report ""
+  report "| Runner | Dirs passed | Dirs failed | Dirs skipped | Items passed | Items failed | Items skipped | Items errors |"
+  report "|--------|------------:|------------:|-------------:|-------------:|-------------:|--------------:|-------------:|"
+  for runner in "${!RUNNER_STATS[@]}"; do
+    # Parse runner stats to get numbers
+    dir_stats="${RUNNER_STATS[$runner]}"
+    item_stats="${RUNNER_ITEM_STATS[$runner]}"
+    # Extract numbers from formatted strings
+    rp=$(echo "$dir_stats" | grep -oE '[0-9]+' | sed -n '1p')
+    rf=$(echo "$dir_stats" | grep -oE '[0-9]+' | sed -n '2p')
+    rs=$(echo "$dir_stats" | grep -oE '[0-9]+' | sed -n '3p')
+    rip=$(echo "$item_stats" | grep -oE '[0-9]+' | sed -n '1p')
+    rif=$(echo "$item_stats" | grep -oE '[0-9]+' | sed -n '2p')
+    ris=$(echo "$item_stats" | grep -oE '[0-9]+' | sed -n '3p')
+    rie=$(echo "$item_stats" | grep -oE '[0-9]+' | sed -n '4p')
+    report "| $runner | ${rp:-0} | ${rf:-0} | ${rs:-0} | ${rip:-0} | ${rif:-0} | ${ris:-0} | ${rie:-0} |"
+  done
+  report ""
+  report "</details>"
+  report ""
+fi
+
+# ── Failed tests ──
+
+if [ ${#ALL_FAILED_TESTS[@]} -gt 0 ]; then
+  report "### ❌ Failed test directories"
+  report ""
+  report "| Directory | Runner | Passed | Failed | Skipped | Errors | Failure reason |"
+  report "|-----------|--------|-------:|-------:|--------:|-------:|----------------|"
   for subfolder in "${!ALL_FAILED_TESTS[@]}"; do
     info="${ALL_FAILED_TESTS[$subfolder]}"
     failure_reason=$(echo "$info" | cut -d'|' -f1)
     runner=$(echo "$info" | cut -d'|' -f2)
-    
-    echo "❌ FAILED: $subfolder [$runner]"
-    
-    if [[ "$failure_reason" == *"Exception:"* ]]; then
-      exception_line=$(echo "$failure_reason" | grep "Exception:" | head -1)
-      echo "   💀 $exception_line"
-    elif [[ "$failure_reason" == *"FAILED"* ]]; then
-      failed_line=$(echo "$failure_reason" | grep "FAILED" | head -1)
-      echo "   💀 $failed_line"
-    else
-      echo "   💀 ${failure_reason}"
+    items="${TEST_ITEM_COUNTS[$subfolder]}"
+
+    # Parse item counts
+    ip=0; ifa=0; is=0; ie=0
+    if [ -n "$items" ]; then
+      ip=$(echo "$items" | grep -oE '[0-9]+p' | grep -oE '[0-9]+')
+      ifa=$(echo "$items" | grep -oE '[0-9]+f' | grep -oE '[0-9]+')
+      is=$(echo "$items" | grep -oE '[0-9]+s' | grep -oE '[0-9]+')
+      ie=$(echo "$items" | grep -oE '[0-9]+e' | grep -oE '[0-9]+')
     fi
-    echo ""
+
+    # Truncate failure reason for table cell
+    short_reason=""
+    if [[ "$failure_reason" == *"Exception:"* ]]; then
+      short_reason=$(echo "$failure_reason" | grep "Exception:" | head -1 | cut -c1-80)
+    elif [[ "$failure_reason" == *"FAILED"* ]]; then
+      short_reason=$(echo "$failure_reason" | grep "FAILED" | head -1 | cut -c1-80)
+    else
+      short_reason=$(echo "$failure_reason" | head -1 | cut -c1-80)
+    fi
+    # Escape pipe characters for Markdown table
+    short_reason=$(echo "$short_reason" | sed 's/|/\\|/g')
+
+    report "| \`$subfolder\` | $runner | ${ip:-0} | ${ifa:-0} | ${is:-0} | ${ie:-0} | ${short_reason} |"
   done
-  
-  # Show skipped tests if any
-  if [ ${#ALL_SKIPPED_TESTS[@]} -gt 0 ]; then
-    echo "📋 SKIPPED TEST DIRECTORIES (not failures):"
-    for subfolder in "${!ALL_SKIPPED_TESTS[@]}"; do
-      info="${ALL_SKIPPED_TESTS[$subfolder]}"
-      reason=$(echo "$info" | cut -d'|' -f1)
-      runner=$(echo "$info" | cut -d'|' -f2)
-      echo "   ⚠️  $subfolder [$runner]: $reason"
-    done
-    echo ""
-  fi
-  
-  # Check debug mode and exit accordingly
+  report ""
+fi
+
+# ── Passed tests ──
+
+if [ ${#ALL_PASSED_TESTS[@]} -gt 0 ]; then
+  report "<details>"
+  report "<summary>✅ Passed test directories (${#ALL_PASSED_TESTS[@]})</summary>"
+  report ""
+  report "| Directory | Runner | Passed | Failed | Skipped | Errors |"
+  report "|-----------|--------|-------:|-------:|--------:|-------:|"
+  for subfolder in "${!ALL_PASSED_TESTS[@]}"; do
+    runner="${ALL_PASSED_TESTS[$subfolder]}"
+    items="${TEST_ITEM_COUNTS[$subfolder]}"
+    ip=0; ifa=0; is=0; ie=0
+    if [ -n "$items" ]; then
+      ip=$(echo "$items" | grep -oE '[0-9]+p' | grep -oE '[0-9]+')
+      ifa=$(echo "$items" | grep -oE '[0-9]+f' | grep -oE '[0-9]+')
+      is=$(echo "$items" | grep -oE '[0-9]+s' | grep -oE '[0-9]+')
+      ie=$(echo "$items" | grep -oE '[0-9]+e' | grep -oE '[0-9]+')
+    fi
+    report "| \`$subfolder\` | $runner | ${ip:-0} | ${ifa:-0} | ${is:-0} | ${ie:-0} |"
+  done
+  report ""
+  report "</details>"
+  report ""
+fi
+
+# ── Skipped tests ──
+
+if [ ${#ALL_SKIPPED_TESTS[@]} -gt 0 ]; then
+  report "<details>"
+  report "<summary>⚠️ Skipped test directories (${#ALL_SKIPPED_TESTS[@]})</summary>"
+  report ""
+  report "| Directory | Runner | Reason |"
+  report "|-----------|--------|--------|"
+  for subfolder in "${!ALL_SKIPPED_TESTS[@]}"; do
+    info="${ALL_SKIPPED_TESTS[$subfolder]}"
+    reason=$(echo "$info" | cut -d'|' -f1)
+    runner=$(echo "$info" | cut -d'|' -f2)
+    reason_escaped=$(echo "$reason" | sed 's/|/\\|/g')
+    report "| \`$subfolder\` | $runner | $reason_escaped |"
+  done
+  report ""
+  report "</details>"
+  report ""
+fi
+
+# ── Debug mode notice ──
+
+if [ "$DEBUG_MODE" = "true" ]; then
+  report "> [!NOTE]"
+  report "> 🚧 **Debug mode** — CI configured to not fail on test failures."
+  report ""
+fi
+
+# ── Exit code ──
+
+if [ $total_failed -eq 0 ]; then
+  echo ""
+  echo "✅ Report completed successfully"
+  exit 0
+else
+  echo ""
+  echo "💥 TEST FAILURES DETECTED"
+
   if [ "$DEBUG_MODE" = "true" ]; then
     echo "🚧 DEBUG MODE: CI configured to not fail on test failures"
-    echo "   Real failures are logged above but won't trigger notifications"
-    echo "   To restore normal CI behavior, set DEBUG_MODE=false in the workflow"
-    echo ""
     echo "✅ Report completed (debug mode - always passing)"
     exit 0
   else
     echo "🚨 PRODUCTION MODE: CI will fail due to test failures"
-    echo "   This will trigger notifications and block the pipeline"
-    echo ""
     echo "❌ Report completed with failures"
     exit 1
   fi

@@ -167,7 +167,7 @@ from domiknows.graph import (
     existsL, atLeastL, atMostL, exactL,
     existsAL, atLeastAL, atMostAL, exactAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL,
-    sumL, iotaL, queryL,
+    sumL, iotaL, queryL, sameL, differentL,
     execute,
 )
 from domiknows.graph import Property
@@ -194,8 +194,8 @@ Save the validated graph. It is now ready for Phase B.
 
 Before encoding questions, understand the available graph:
 - What concepts exist? (`graph.getAllConceptNames()`)
-- Which concepts have `is_a` children? (Eligible for `queryL`)
-- Which concepts are `EnumConcept`? (Must use dot notation in constraints)
+- Which concepts have `is_a` children? (Eligible for `queryL`, `sameL`, `differentL`)
+- Which concepts are `EnumConcept`? (Must use dot notation in constraints; eligible for `sameL`/`differentL` if connected via `is_a`)
 - Which relations exist and what do they connect? (Determines variable arity)
 - What are the predicate shapes? (`graph.print_predicates()`)
 
@@ -249,6 +249,20 @@ execute(queryL(attribute_parent, iotaL(description_filter)))
 
 ```python
 execute(ifL(X_condition, Y_condition))
+# label: True/False
+```
+
+### Same Attribute: "Do [X] and [Y] have the same [attribute]?"
+
+```python
+execute(sameL(attribute_parent, iotaL(X_description), iotaL(Y_description)))
+# label: True/False
+```
+
+### Different Attribute: "Do [X] and [Y] have different [attribute]?"
+
+```python
+execute(differentL(attribute_parent, iotaL(X_description), iotaL(Y_description)))
 # label: True/False
 ```
 
@@ -319,6 +333,26 @@ queryL(color, iotaL(andL(small('x'), cube('x'))))      # "What color is the smal
 **Requirements:**
 - First argument must be a Concept with `is_a()` subclasses OR an `EnumConcept`
 - Label is an **integer index** into the subclass list (not True/False)
+
+### Same/Different Attribute — `sameL`, `differentL`
+
+`sameL` checks whether all referenced entities share the same value of a multiclass attribute.
+`differentL` is its negation — true when at least one entity differs.
+
+```python
+sameL(color, 'x', 'y')           # "Do x and y have the same color?"
+differentL(size, 'x', 'y')       # "Do x and y have different sizes?"
+```
+
+Semantics:
+- `sameL(concept, 'x', 'y')` = OR_j( AND_i( entity_i has subclass_j ) )
+- `differentL(concept, 'x', 'y')` = NOT( sameL(...) )
+
+**Requirements:**
+- First argument must be a Concept with `is_a()` subclasses OR an `EnumConcept`
+- The concept MUST be structurally connected to its parent via `is_a` (use `parent(name='attr', ConceptClass=EnumConcept, values=[...])` instead of standalone `EnumConcept(...)`)
+- Works with any number of entity variables (2 or more)
+- Can be combined with other constraints: `ifL(pair('x', 'y'), sameL(color, 'x', 'y'))`
 
 ---
 
@@ -443,7 +477,8 @@ At compile time:
 6. `queryL` first argument must have `is_a()` children or be `EnumConcept`; label is an integer index
 7. Always provide explicit count for counting operators: `exactL(green('x'), 3)` not `exactL(green('x'))`
 8. Each question produces EXACTLY ONE `execute()` call
-9. Add a comment indicating the question type: `# Existence:`, `# Counting:`, `# Relation:`, `# Query:`, `# Comparative:`
+9. Add a comment indicating the question type: `# Existence:`, `# Counting:`, `# Relation:`, `# Query:`, `# Comparative:`, `# Same:`, `# Different:`
+10. For `sameL`/`differentL`, the attribute concept must be connected to its parent via `is_a` (use `parent(name='attr', ConceptClass=EnumConcept, values=[...])` rather than standalone `EnumConcept(...)`)
 
 ---
 

@@ -45,6 +45,16 @@ Example: "Are there more cubes than spheres?"
 Example: "What color is the large cylinder?"
 → `execute(queryL(color, iotaL(andL(large('x'), cylinder('x')))))`
 
+### Same Attribute: "Do X and Y have the same [attribute]?"
+→ `execute(sameL(attribute_concept, iotaL(X_description), iotaL(Y_description)))`
+Example: "Do the large cube and the small sphere have the same color?"
+→ `execute(sameL(color, iotaL(andL(large('x'), cube('x'))), iotaL(andL(small('y'), sphere('y')))))`
+
+### Different Attribute: "Do X and Y have different [attribute]?"
+→ `execute(differentL(attribute_concept, iotaL(X_description), iotaL(Y_description)))`
+Example: "Do the red cube and the blue sphere have different sizes?"
+→ `execute(differentL(size, iotaL(andL(red('x'), cube('x'))), iotaL(andL(blue('y'), sphere('y')))))`
+
 ### Counting: "How many objects with the given property exist"
 → `execute(sumL(property_filter('x')))`
 Example: "How many red cubes are there?" (answer = N)
@@ -83,6 +93,17 @@ Example: "How many red cubes are there?" (answer = N)
 For `queryL`, use the PARENT concept as the first argument:
 ```python
 queryL(color, iotaL(big('x')))   # "What color is the big thing?"
+```
+
+### Same/Different Attribute — sameL, differentL
+`sameL(attribute_concept, 'x', 'y')` — "Do x and y have the same <attribute>?"
+`differentL(attribute_concept, 'x', 'y')` — "Do x and y have different <attribute>?"
+- First argument: the PARENT concept (with `is_a()` children or EnumConcept).
+- Remaining arguments: entity variable names (2 or more).
+- The attribute concept must be connected to its parent via `is_a`.
+```python
+sameL(color, 'x', 'y')           # "Do x and y have the same color?"
+differentL(size, 'x', 'y')       # "Do x and y have different sizes?"
 ```
 
 ## How Relations Work — has_a and Path Expressions
@@ -151,7 +172,7 @@ with Graph('visual_qa') as graph:
 
 ```
 How to build the `execute()` call for a given question:
-1. Identify the question type (Existence, Relation, Counting, Comparative, Attribute Query).
+1. Identify the question type (Existence, Relation, Counting, Comparative, Attribute Query, Same/Different).
 2. Use the corresponding constraint pattern from above.
 3. Identify how many objects are mentioned in the question and create variables for them (e.g., 'x', 'y', 'z').
 4. For each object, identify its properties and relations to other objects.
@@ -167,7 +188,7 @@ How to build the `execute()` call for a given question:
 3. Relations such as `left_of` have two variables directly as arguments: `left_of('x', 'y')` x represents the first argument (rel_arg1), y represents the second argument (rel_arg2).
 4. For multiclass ALWAYS use the child concept directly (e.g., `red('x')`), NEVER pass a value to the parent.
    For EnumConcepts, use dot notation to access the value (e.g., `color.red('x')`), NEVER pass the value as an argument.
-5. Add a comment above the call indicating the question type: `# Existence:`, `# Counting:`, `# Relation:`, `# Query:`, `# Comparative:`.
+5. Add a comment above the call indicating the question type: `# Existence:`, `# Counting:`, `# Relation:`, `# Query:`, `# Comparative:`, `# Same:`, `# Different:`.
 6. Do not invent concepts not present in the graph.
 7. Do not confuse `iotaL` with `existsL` — iotaL selects an entity; existsL checks existence.
 8. Return EXACTLY ONE `execute()` call for the given question.

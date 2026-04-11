@@ -41,13 +41,6 @@ with Graph('visual_qa') as graph:
     behind = pair(name='behind')
     above = pair(name='above')
     below = pair(name='below')
-    
-    # Same-attribute relations (e.g., same_color, same_size)
-    same_size = pair(name='same_size')
-    same_color = pair(name='same_color')
-    same_shape = pair(name='same_shape')
-    same_texture = pair(name='same_texture')
-    same_material = pair(name='same_material')
 
     # =========================================================
     # Material as multiclass concept with subclasses

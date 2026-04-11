@@ -328,10 +328,10 @@ class AnswerSolver:
         self.solver.addGraphConstrains(m, dn, *conceptsRelations)
         self.solver.addMulticlassExclusivity(conceptsRelations, dn, m)
 
-        # Collect and add all active logical constraints
+        # Collect and add all active *structural* logical constraints.
         lcs = []
         for graph in self.solver.myGraph:
-            for _, lc_item in graph.allLogicalConstrains:
+            for _, lc_item in graph.logicalConstrains.items():
                 if lc_item.headLC and lc_item.active:
                     lcs.append(lc_item)
 

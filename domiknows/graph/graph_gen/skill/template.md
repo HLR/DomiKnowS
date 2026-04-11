@@ -135,14 +135,14 @@ Save the validated graph. It is now ready to accept questions in Phase B.
 
 Before encoding questions, inspect the available graph:
 - What concepts exist? (Use `graph.getAllConceptNames()` or read the code)
-- Which concepts have `is_a` children? (These can be used with `queryL`)
-- Which concepts are `EnumConcept`? (Must use dot notation: `color.red('x')`)
+- Which concepts have `is_a` children? (These can be used with `queryL`, `sameL`, `differentL`)
+- Which concepts are `EnumConcept`? (Must use dot notation: `color.red('x')`; eligible for `sameL`/`differentL` if connected via `is_a`)
 - Which relations exist and what do they connect? (Determines variable arity)
 - What are the predicates? (Use `graph.print_predicates()` for variable shapes)
 
 **Available concepts:** `[list from graph]`
 **Available relations:** `[list from graph with source→target]`
-**Multiclass parents (for queryL):** `[concepts that have is_a children or are EnumConcept]`
+**Multiclass parents (for queryL, sameL, differentL):** `[concepts that have is_a children or are EnumConcept]`
 
 ---
 
@@ -158,6 +158,8 @@ For each question, determine its type and map to the appropriate constraint patt
 | "At least / more than N [X]?" | `atLeastL(X_filter, N)` | `True`/`False` |
 | "Are there more [X] than [Y]?" | `greaterL(X_filter, Y_filter)` | `True`/`False` |
 | "What [attr] is THE [X]?" | `queryL(attr_parent, iotaL(X_filter))` | `int` (index) |
+| "Do [X] and [Y] have the same [attr]?" | `sameL(attr_parent, iotaL(X_filter), iotaL(Y_filter))` | `True`/`False` |
+| "Do [X] and [Y] have different [attr]?" | `differentL(attr_parent, iotaL(X_filter), iotaL(Y_filter))` | `True`/`False` |
 | "If [X] then [Y]" | `ifL(X_condition, Y_condition)` | `True`/`False` |
 
 ---
@@ -203,6 +205,7 @@ logic_dataset = graph.compile_executable(
 - [ ] `EnumConcept` values use dot notation: `color.red('x')` not `red('x')`
 - [ ] Manual `is_a` children use direct variables: `red('x')` not `color.red('x')`
 - [ ] Path expressions used when accessing attributes through a relation
+- [ ] For `sameL`/`differentL`, attribute concept is connected to parent via `is_a` (not standalone `EnumConcept`)
 
 ---
 
@@ -247,3 +250,5 @@ Constraints: ✅ checkLcCorrectness passed
 | `exactL(green('x'))` without count | Defaults to 1, probably wrong | Always provide explicit count: `exactL(green('x'), N)` |
 | Inventing concepts not in the graph | `NameError` at execution | Only use concepts defined in the graph |
 | Forgetting path expression for relation-connected attributes | Constraint ignores the relation path | Use `path=('x', rel_name.name)` syntax |
+| `sameL(color, ...)` with standalone `EnumConcept` | Empty variable resolution, no results | Connect via `is_a`: `color = parent(name='color', ConceptClass=EnumConcept, values=[...])` |
+| Using `andL` to check same attribute across entities | Checks properties on one entity, not cross-entity | Use `sameL(attribute, 'x', 'y')` for cross-entity comparison |

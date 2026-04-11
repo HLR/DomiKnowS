@@ -815,44 +815,172 @@ class LogicalConstrain(LcElement):
         return zVars
    
     def createQuerySelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName):
-            """Build query selection over attribute subclasses."""
+            """Build query selection over attribute subclasses.
+
+            Variables in *v* fall into two groups:
+
+            - **Selection variables** (from ``iotaL`` etc.) — entity selection weights.
+              These do NOT start with ``_ql_``.
+            - **Subclass-data variables** (added by ``queryL.__init__``) — per-entity
+              subclass predictions.  Their names start with ``_ql_``.
+
+            The method collects both groups and passes them to ``queryVar``.
+            """
             try:
                 lcVariableNames = [name for name in iter(v)]
             except StopIteration:
                 return []
-            
+
             if not lcVariableNames:
                 myLogger.error(f"{logicMethodName} has no variables")
                 return []
-            
-            lcVariableName0 = lcVariableNames[0]
-            lcVariableSet0 = v[lcVariableName0]
-            
+
+            # -- Separate selection vars from subclass-data vars --------
+            sel_var_names = [n for n in lcVariableNames if not n.startswith('_ql_')]
+            sub_var_names = [n for n in lcVariableNames if n.startswith('_ql_')]
+
+            if not sel_var_names:
+                myLogger.error(f"{logicMethodName} has no selection variables")
+                return []
+
+            # Iterate over the *selection* variables' row count
+            sel_var_0 = v[sel_var_names[0]]
+            num_iterations = len(sel_var_0)
+
             zVars = []
-            
-            for i, _ in enumerate(lcVariableSet0):
+
+            for i in range(num_iterations):
+                # Collect selection values for this row
                 selection_vars = []
-                for currentV in iter(v):
-                    selection_vars.extend(v[currentV][i])
-                
+                for name in sel_var_names:
+                    if i < len(v[name]):
+                        selection_vars.extend(v[name][i])
+
                 if len(selection_vars) == 0:
                     zVars.append([None])
                     continue
-                
+
+                # Collect subclass data if _ql_* variables are present
+                subclass_data = None
+                if sub_var_names:
+                    subclass_data = self._collect_query_subclass_data(
+                        v, sub_var_names, i, num_iterations, len(subclasses))
+
                 result = myConstraintVarProcessor.queryVar(
                     model,
                     concept,
                     subclasses,
                     selection_vars,
+                    subclass_data=subclass_data,
                     onlyConstrains=headConstrain,
                     temperature=temperature,
                     logicMethodName=logicMethodName,
                 )
-                
+
                 zVars.append([result])
-            
+
             return zVars
-         
+
+    @staticmethod
+    def _collect_query_subclass_data(v, sub_var_names, iteration, num_sel_iterations, num_subclasses):
+        """Gather per-entity subclass prediction data from ``_ql_*`` variables.
+
+        Returns ``subclass_data[entity_idx]`` = list of *num_subclasses* values,
+        one per subclass, representing the model's prediction for that entity.
+
+        Two layouts are handled:
+
+        * **EnumConcept** (single ``_ql_attr`` variable): each row already
+          contains *K* values (one per enum member).
+        * **is_a subtypes** (multiple ``_ql_sub_N`` variables): each variable
+          has one value per entity per row.
+
+        In verification mode (``num_sel_iterations == 1``) the selection
+        variables have a single row while the subclass variables have *N*
+        rows (one per entity).  We return all *N* entities' data so that
+        ``queryVar`` can look up the selected entity.
+
+        In loss mode (after the constructor's split, ``num_sel_iterations > 1``)
+        every variable has *N* rows; we return only row *iteration*.
+        """
+        if num_sel_iterations == 1:
+            # Verification / ILP mode — collect ALL entity rows
+            if len(sub_var_names) == 1:
+                # EnumConcept: single var, K values per entity row
+                return [list(row) for row in v[sub_var_names[0]]]
+            else:
+                # is_a subtypes: K vars, 1 value per entity per var
+                num_entities = len(v[sub_var_names[0]])
+                result = []
+                for entity_idx in range(num_entities):
+                    entity_subs = []
+                    for name in sub_var_names:
+                        if entity_idx < len(v[name]):
+                            entity_subs.extend(v[name][entity_idx])
+                    result.append(entity_subs)
+                return result
+        else:
+            # Loss mode (after split) — one entity per iteration
+            if len(sub_var_names) == 1:
+                var_data = v[sub_var_names[0]]
+                if iteration < len(var_data):
+                    return [list(var_data[iteration])]
+                return None
+            else:
+                entity_subs = []
+                for name in sub_var_names:
+                    if iteration < len(v[name]):
+                        entity_subs.extend(v[name][iteration])
+                return [entity_subs] if entity_subs else None
+
+    def createSameSelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, logicMethodName):
+        """
+        Build constraints checking whether all entities share the same subclass.
+
+        Each variable name in v corresponds to one entity's subclass indicator
+        variables (resolved from concept variable bindings like ``color('x')``).
+        Collects per-entity groups and delegates to sameVar for comparison.
+        """
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+
+        lcVariableName0 = lcVariableNames[0]
+        lcVariableSet0 = v[lcVariableName0]
+
+        zVars = []
+
+        for i, _ in enumerate(lcVariableSet0):
+            entity_var_groups = []
+            for currentV in lcVariableNames:
+                group = list(v[currentV][i]) if i < len(v[currentV]) else []
+                entity_var_groups.append(group)
+
+            if len(entity_var_groups) < 2:
+                zVars.append([None])
+                continue
+
+            result = myConstraintVarProcessor.sameVar(
+                model,
+                concept,
+                subclasses,
+                *entity_var_groups,
+                onlyConstrains=headConstrain,
+                logicMethodName=logicMethodName,
+            )
+
+            zVars.append([result])
+
+        if model is not None:
+            model.update()
+
+        return zVars
+
 def use_grad(grad):
     if not grad:
         torch.no_grad()
@@ -1186,10 +1314,28 @@ class queryL(LogicalConstrain):
             )
         """
         
-        def __init__(self, concept, *e, p=100, temperature=1.0, active=True, 
+        def __init__(self, concept, *e, p=100, temperature=1.0, active=True,
                     sampleEntries=False, name=None):
-            
-            super().__init__(*e, p=p, active=active, 
+            from domiknows.graph.concept import EnumConcept
+
+            # Build concept variable bindings so the constraint constructor
+            # collects per-entity subclass predictions into v.  This lets
+            # queryVar see which subclass each entity actually has.
+            attr_elements = []
+            if isinstance(concept, EnumConcept):
+                binding = concept('_ql_attr')
+                if isinstance(binding, list):
+                    attr_elements = [b for b in binding if b is not None]
+            else:
+                sub_idx = 0
+                for rel in concept._in.get('is_a', []):
+                    sub = rel.src
+                    sub_binding = sub(f'_ql_sub_{sub_idx}')
+                    sub_idx += 1
+                    if isinstance(sub_binding, list):
+                        attr_elements.extend(b for b in sub_binding if b is not None)
+
+            super().__init__(*e, *attr_elements, p=p, active=active,
                             sampleEntries=sampleEntries, name=name)
             self.concept = concept
             self.temperature = temperature
@@ -1238,10 +1384,172 @@ class queryL(LogicalConstrain):
                     v, 
                     headConstrain, 
                     integrate,
-                    temperature=self.temperature, 
+                    temperature=self.temperature,
                     logicMethodName=str(self),
                 )
-        
+
+class sameL(LogicalConstrain):
+        """
+        Same-attribute constraint for multiclass concepts.
+
+        Given a multiclass concept (parent with subclasses via is_a, or EnumConcept)
+        and entity variable names, returns true iff all entities share the same
+        subclass value.
+
+        Semantics:
+            result = OR_j( AND_i( entity_i has subclass_j ) )
+
+        Usage:
+            color = EnumConcept(name='color', values=['red', 'blue', 'green'])
+
+            # Check: "Do entities x and y have the same color?"
+            sameL(color, 'x', 'y')
+
+            # Typically used within a pair/relation context:
+            ifL(right_of('x', 'y'), sameL(color, 'x', 'y'))
+        """
+
+        def __init__(self, concept, *e, p=100, active=True,
+                    sampleEntries=False, name=None):
+
+            # Convert string variable names to concept variable bindings
+            converted = []
+            for var in e:
+                if isinstance(var, str):
+                    binding = concept(var)  # e.g. color('x') -> [tuple, V, error_or_None]
+                    if isinstance(binding, list):
+                        converted.extend(b for b in binding if b is not None)
+                    else:
+                        converted.append(binding)
+                else:
+                    converted.append(var)
+
+            super().__init__(*converted, p=p, active=active,
+                            sampleEntries=sampleEntries, name=name)
+            self.concept = concept
+            self._returns_value = False
+            self._subclasses = None
+            self._subclass_names = None
+            self._init_subclasses()
+
+        def _init_subclasses(self):
+            """Initialize subclass information from concept."""
+            from domiknows.graph.concept import EnumConcept
+
+            if isinstance(self.concept, EnumConcept):
+                self._subclass_names = list(self.concept.enum)
+                self._subclasses = [(self.concept, name, i)
+                                for i, name in enumerate(self._subclass_names)]
+            else:
+                self._subclasses = []
+                self._subclass_names = []
+
+                for rel in self.concept._in.get('is_a', []):
+                    subclass = rel.src
+                    self._subclasses.append((subclass, subclass.name, len(self._subclasses)))
+                    self._subclass_names.append(subclass.name)
+
+            if not self._subclasses:
+                raise ValueError(f"Concept '{self.concept.name}' has no subclasses.")
+
+        def __call__(self, model, myConstraintVarProcessor, v,
+                    headConstrain=False, integrate=False):
+            with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+                return self.createSameSelection(
+                    model,
+                    self.concept,
+                    self._subclasses,
+                    myConstraintVarProcessor,
+                    v,
+                    headConstrain,
+                    logicMethodName=str(self),
+                )
+
+class differentL(LogicalConstrain):
+        """
+        Different-attribute constraint for multiclass concepts.
+
+        Negation of sameL: returns true iff NOT all entities share the same
+        subclass value (i.e., at least one entity differs).
+
+        Semantics:
+            result = NOT( OR_j( AND_i( entity_i has subclass_j ) ) )
+
+        Usage:
+            color = EnumConcept(name='color', values=['red', 'blue', 'green'])
+
+            # Check: "Do entities x and y have different colors?"
+            differentL(color, 'x', 'y')
+        """
+
+        def __init__(self, concept, *e, p=100, active=True,
+                    sampleEntries=False, name=None):
+
+            # Convert string variable names to concept variable bindings
+            converted = []
+            for var in e:
+                if isinstance(var, str):
+                    binding = concept(var)
+                    if isinstance(binding, list):
+                        converted.extend(b for b in binding if b is not None)
+                    else:
+                        converted.append(binding)
+                else:
+                    converted.append(var)
+
+            super().__init__(*converted, p=p, active=active,
+                            sampleEntries=sampleEntries, name=name)
+            self.concept = concept
+            self._returns_value = False
+            self._subclasses = None
+            self._subclass_names = None
+            self._init_subclasses()
+
+        def _init_subclasses(self):
+            """Initialize subclass information from concept."""
+            from domiknows.graph.concept import EnumConcept
+
+            if isinstance(self.concept, EnumConcept):
+                self._subclass_names = list(self.concept.enum)
+                self._subclasses = [(self.concept, name, i)
+                                for i, name in enumerate(self._subclass_names)]
+            else:
+                self._subclasses = []
+                self._subclass_names = []
+
+                for rel in self.concept._in.get('is_a', []):
+                    subclass = rel.src
+                    self._subclasses.append((subclass, subclass.name, len(self._subclasses)))
+                    self._subclass_names.append(subclass.name)
+
+            if not self._subclasses:
+                raise ValueError(f"Concept '{self.concept.name}' has no subclasses.")
+
+        def __call__(self, model, myConstraintVarProcessor, v,
+                    headConstrain=False, integrate=False):
+            with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+                same_result = self.createSameSelection(
+                    model,
+                    self.concept,
+                    self._subclasses,
+                    myConstraintVarProcessor,
+                    v,
+                    headConstrain,
+                    logicMethodName=str(self),
+                )
+                # Negate each result: differentL = NOT(sameL)
+                negated = []
+                for row in same_result:
+                    neg_row = []
+                    for val in row:
+                        if val is None:
+                            neg_row.append(None)
+                        else:
+                            neg_row.append(
+                                myConstraintVarProcessor.notVar(model, val))
+                    negated.append(neg_row)
+                return negated
+
 class execute:
     """
     Wrapper for logical constraints that marks them as executable rather than standard constraints.

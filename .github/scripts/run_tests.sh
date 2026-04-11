@@ -88,7 +88,30 @@ for subfolder in "${TEST_LIST[@]}"; do
     echo "   ----------------------------------------"
     echo "$test_output"
     echo "   ----------------------------------------"
-    
+
+    # ── Extract per-item pytest counts from the summary line ──
+    # Pytest prints lines like: "= 4 passed, 1 failed, 2 skipped in 3.21s ="
+    # or: "= 4 passed in 1.88s ="
+    pytest_summary_line=$(echo "$test_output" | grep -E '=+ .*(passed|failed|error).* =+' | tail -1)
+    items_passed=0
+    items_failed=0
+    items_skipped=0
+    items_errors=0
+    items_warnings=0
+    if [ -n "$pytest_summary_line" ]; then
+      val=$(echo "$pytest_summary_line" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || true)
+      [ -n "$val" ] && items_passed=$val
+      val=$(echo "$pytest_summary_line" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || true)
+      [ -n "$val" ] && items_failed=$val
+      val=$(echo "$pytest_summary_line" | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+' || true)
+      [ -n "$val" ] && items_skipped=$val
+      val=$(echo "$pytest_summary_line" | grep -oE '[0-9]+ error' | grep -oE '[0-9]+' || true)
+      [ -n "$val" ] && items_errors=$val
+      val=$(echo "$pytest_summary_line" | grep -oE '[0-9]+ warning' | grep -oE '[0-9]+' || true)
+      [ -n "$val" ] && items_warnings=$val
+      echo "   📈 Pytest items: $items_passed passed, $items_failed failed, $items_skipped skipped, $items_errors errors"
+    fi
+
     if [ $test_exit_code -eq 5 ]; then
       # Exit code 5: No tests collected - treat as warning, not failure
       echo "   ⚠️  Exit code 5: No tests collected"
@@ -101,11 +124,12 @@ for subfolder in "${TEST_LIST[@]}"; do
       fi
       SKIPPED_TESTS["$subfolder"]="$skip_reason"
       echo "SKIP:$subfolder:$skip_reason" >> "$RESULTS_FILE"
+      echo "ITEMS:$subfolder:0:0:0:0" >> "$RESULTS_FILE"
       echo "   ✅ Treating as SKIP (not failure)"
     elif [ $test_exit_code -ne 0 ]; then
       echo "   ❌ Exit code $test_exit_code: Test failure"
       OVERALL_RESULT=1
-      
+
       # Extract failure summary from pytest output
       failure_summary=$(echo "$test_output" | grep -A 10 "short test summary info" | tail -n +2 | head -20)
       if [ -z "$failure_summary" ]; then
@@ -116,17 +140,19 @@ for subfolder in "${TEST_LIST[@]}"; do
         # Last resort: get last few lines of output
         failure_summary=$(echo "$test_output" | tail -10)
       fi
-      
+
       FAILED_TESTS["$subfolder"]="$failure_summary"
       echo "FAIL:$subfolder:$failure_summary" >> "$RESULTS_FILE"
+      echo "ITEMS:$subfolder:$items_passed:$items_failed:$items_skipped:$items_errors" >> "$RESULTS_FILE"
       echo "   🔍 Failure details preview:"
       echo "$failure_summary" | head -3
-      
+
       # Append full test output to failed output file
       echo "============================================" >> "$FAILED_OUTPUT_FILE"
       echo "FAILED TEST: $subfolder" >> "$FAILED_OUTPUT_FILE"
       echo "Test path: $test_path" >> "$FAILED_OUTPUT_FILE"
       echo "Exit code: $test_exit_code" >> "$FAILED_OUTPUT_FILE"
+      echo "Pytest items: $items_passed passed, $items_failed failed, $items_skipped skipped, $items_errors errors" >> "$FAILED_OUTPUT_FILE"
       echo "--------------------------------------------" >> "$FAILED_OUTPUT_FILE"
       echo "$test_output" >> "$FAILED_OUTPUT_FILE"
       echo "" >> "$FAILED_OUTPUT_FILE"
@@ -135,6 +161,7 @@ for subfolder in "${TEST_LIST[@]}"; do
     else
       echo "   ✅ Exit code 0: Tests PASSED"
       echo "PASS:$subfolder:" >> "$RESULTS_FILE"
+      echo "ITEMS:$subfolder:$items_passed:$items_failed:$items_skipped:$items_errors" >> "$RESULTS_FILE"
     fi
   else
     echo "   ❌ Directory does not exist: $test_path"

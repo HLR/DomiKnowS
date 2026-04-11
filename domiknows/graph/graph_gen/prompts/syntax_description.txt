@@ -115,6 +115,32 @@ queryL(color, iotaL(andL(small('x'), cube('x'))))       # "What color is the sma
 ```
 Requirements: First argument must be a Concept with is_a() subclasses OR an EnumConcept.
 
+## Same/Different Attribute — sameL, differentL
+`sameL` checks whether all referenced entities share the same value of a multiclass attribute.
+`differentL` is its negation — true when at least one entity differs.
+
+Semantics:
+- `sameL(concept, 'x', 'y')` = OR_j( AND_i( entity_i has subclass_j ) )
+- `differentL(concept, 'x', 'y')` = NOT( sameL(...) )
+
+```python
+sameL(color, 'x', 'y')           # "Do x and y have the same color?"
+differentL(color, 'x', 'y')      # "Do x and y have different colors?"
+```
+
+Requirements:
+- First argument must be a Concept with is_a() subclasses OR an EnumConcept.
+- The concept MUST be structurally connected to its parent via is_a (use
+  `parent(name='attr', ConceptClass=EnumConcept, values=[...])` instead of
+  standalone `EnumConcept(...)`).
+- Works with any number of entity variables (2 or more).
+
+Can be combined with other constraints:
+```python
+ifL(pair('x', 'y'), sameL(color, 'x', 'y'))   # "If x and y are paired, they share a color"
+andL(sameL(color, 'x', 'y'), differentL(size, 'x', 'y'))  # "Same color but different size"
+```
+
 ## Priority & naming
 ```python
 ifL(person('x'), entity('x'), p=100, name='person_implies_entity')
@@ -129,3 +155,4 @@ ifL(person('x'), entity('x'), p=100, name='person_implies_entity')
 6. For EnumConcept, use dot notation in constraints (e.g., `color.red('x')`). For manual is_a children, use the variable directly (e.g., `red('x')`).
 7. Wrap code in ```python ... ``` block.
 8. Code must be self-contained and executable.
+9. For `sameL`/`differentL`, the attribute concept must be connected to its parent via `is_a` (use `parent(name='attr', ConceptClass=EnumConcept, values=[...])` rather than standalone `EnumConcept(...)`).
