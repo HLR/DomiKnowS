@@ -3,6 +3,7 @@ sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('./')
 sys.path.append('../')
+import pytest
 import torch, random
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
@@ -63,6 +64,9 @@ email[m2] = DummyLearner('email_id', output_size=2)
 
 program = SolverPOIProgram(graph,poi=[email,m1,m2],inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),metric=PRF1Tracker())
 
+gurobipy = pytest.importorskip("gurobipy", reason="gurobipy not installed")
+
+@pytest.mark.gurobi
 def test_xor():
     for datanode in program.populate(dataset=dataset):
         datanode.inferILPResults()
