@@ -1,4 +1,5 @@
-from collections import namedtuple
+﻿from collections import namedtuple
+from difflib import get_close_matches
 
 from domiknows.graph import V, CandidateSelection, Concept, LogicalConstrain
 
@@ -315,6 +316,34 @@ def _raise_missing_concept_error(graph, lc_name, concept_name, constraint_type,
     
     raise ValueError(error_msg)
 
+
+def _raise_undefined_variable(variable_name, lc_context, lc_path, found_variables):
+    """Raise a clear error when a variable used in a path was never defined in the constraint.
+
+    Includes 'did you mean' suggestions based on edit distance against already-defined
+    variable names so that common typos (e.g. 'e1' vs 'el1') are caught early.
+    """
+    defined_vars = sorted(v for v in found_variables if isinstance(v, str))
+    close = get_close_matches(variable_name, defined_vars, n=3, cutoff=0.5)
+
+    msg = f"Variable '{variable_name}' used in {lc_context} is not defined."
+
+    if lc_path is not None:
+        msg += f"\n  Used in path: {lc_path}"
+
+    msg += (
+        f"\n  You must first introduce '{variable_name}' as a direct argument "
+        f"(without a path) before referencing it inside a path."
+    )
+
+    if close:
+        msg += f"\n  Did you mean: {', '.join(repr(c) for c in close)}?"
+    elif defined_vars:
+        msg += f"\n  Variables defined in this constraint: {', '.join(defined_vars)}"
+
+    raise ValueError(msg)
+
+
 def _iter_all_lcs(graph):
         """Helper to iterate over all logical constraints including executable ones.
         
@@ -364,7 +393,7 @@ def find_lc_variable(lc, found_variables=None, headLc=None):
             exceptionStr1 = f"{lc.typeName} {headLc} has incorrect cardinality definition - "
         
         exceptionStr2 = f"integer {lc.cardinalityException} has to be last element in the same Logical operator for counting or existing logical operators!"
-        raise Exception(f"{exceptionStr1} {exceptionStr2}")
+        raise ValueError(f"{exceptionStr1} {exceptionStr2}")
 
     if found_variables is None:
         found_variables = {}
@@ -384,14 +413,14 @@ def find_lc_variable(lc, found_variables=None, headLc=None):
                     found_variables[variable_name] = variable_info
             else:
                 exceptionStr = f"In logical constraint {lc_context} variable {variable_name} is not associated with any concept"
-                raise Exception(exceptionStr)
+                raise ValueError(exceptionStr)
             
         # checking for extra variable:
         elif e and isinstance(e, tuple) and e[0] == 'extraV':
             predicate = lc.e[0][1]
             exceptionStr1 = f"Logical constraint {lc_context}: Each predicate can only have one new variable definition. For the predicate {predicate}, you have used both {e[1]} and {e[2]} as new variables."
             exceptionStr2 = f"Either wrap both under on variable, if you intended to initialize {e[1]} based on another value, then the second argument should be a path=(...)."
-            raise Exception(f"{exceptionStr1} {exceptionStr2}")
+            raise ValueError(f"{exceptionStr1} {exceptionStr2}")
         # checking if element is a tuple 
         elif isinstance(e, tuple) and e and isinstance(e[0], LcElement) and not isinstance(e[0], LogicalConstrain):
             find_lc_variable(e[0], found_variables=found_variables, headLc=headLc)
@@ -399,12 +428,12 @@ def find_lc_variable(lc, found_variables=None, headLc=None):
             current_lc_element_concepts = [c for c in current_lc_element.e if isinstance(c, tuple) and not isinstance(c, V)]
 
             if len(current_lc_element_concepts) != len(e[1]):
-                raise Exception(f"Logical constraint {lc_context} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
+                raise ValueError(f"Logical constraint {lc_context} has incorrect definition of combination {e} - number of variables does not match number of concepts in combination")
 
             if len(e) >= 2 and isinstance(e[1], tuple):
                 for v in e[1]:
                     if not isinstance(v, str):
-                        raise Exception(f"Logical constraint {lc_context} has incorrect definition of combination {e} - all variables should be strings")
+                        raise ValueError(f"Logical constraint {lc_context} has incorrect definition of combination {e} - all variables should be strings")
 
                 for index, v in enumerate(e[1]):
                     variable_name = v
@@ -518,7 +547,7 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
                             (fallback_object, fallback_object.name, None, 1),
                         )
                     else:
-                        raise Exception(f"Variable {lc_variable_name} found in {lc_context} is not defined. You should first use {lc_variable_name} without putting it in a path to define it.")
+                        _raise_undefined_variable(lc_variable_name, lc_context, lcPath, found_variables)
 
         if lc_variable_name not in used_variables:
             used_variables[lc_variable_name] = []
@@ -540,11 +569,11 @@ def check_if_all_used_variables_are_defined(lc, found_variables, used_variables=
                         if isinstance(t[0], str):
                             handle_variable_name(t[0], t)
                         else:
-                            raise Exception(f"Path {t} found in {lc_context} is not correct")
+                            raise ValueError(f"Path {t} found in {lc_context} is not correct")
                 else:
-                    raise Exception(f"Path {e} found in {lc_context} is not correct")
+                    raise ValueError(f"Path {e} found in {lc_context} is not correct")
             else:
-                raise Exception(f"Path {e} found in {lc_context} is not correct")
+                raise ValueError(f"Path {e} found in {lc_context} is not correct")
         elif isinstance(e, LogicalConstrain):
             check_if_all_used_variables_are_defined(e, found_variables, used_variables=used_variables, headLc=headLc, graph=graph)
 
@@ -605,10 +634,10 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
         """Check if ancestor_name is an ancestor of descendant_concept via is_a chain.
 
         In an andL, a variable like 'x' can satisfy multiple predicates
-        simultaneously — e.g. brown('x') says x has color=brown, while
+        simultaneously â€” e.g. brown('x') says x has color=brown, while
         right_of('z', 'x') says x is an object.  The relation endpoint
-        (object) is an ancestor of the variable's declared concept (brown →
-        color → … → object) through the containment hierarchy, so the path
+        (object) is an ancestor of the variable's declared concept (brown â†’
+        color â†’ â€¦ â†’ object) through the containment hierarchy, so the path
         is valid even though the types don't match directly.
         """
         current = descendant_concept
@@ -622,7 +651,7 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
             if parents:
                 current = parents[0].dst
             else:
-                # Walk up contains (child → parent)
+                # Walk up contains (child â†’ parent)
                 containers = current._in.get('contains', [])
                 if containers:
                     current = containers[0].src
@@ -646,7 +675,7 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
             exceptionStr1 = f"The variable {pathVariable}, defined in the path for {lc_name} is not valid. The concept of {pathVariable} is a of type {requiredLeftConcept},"
             exceptionStr2 = f"but the required concept by the logical constraint element is {requiredEndOfPathConceptRoot}."
             exceptionStr3 = f"The variable used inside the path should match its type with {requiredEndOfPathConceptRoot}."
-            raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+            raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
         
     for pathIndex, pathElement in enumerate(path[1:], start=1):   
         if isinstance(pathElement, (eqL,)):
@@ -658,7 +687,7 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
                 exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
                 exceptionStr3 = f"but the used variable {pathElement} is a string which is not a valid name of a graph relationship."
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
             
         if pathIndex < len(path) - 1:
             expectedRightConcept = pathElement.dst
@@ -674,7 +703,7 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
             pathElementVarName = pathElement.var_name if pathElement.var_name else ""
 
             # In an andL, a variable may satisfy multiple predicates.
-            # E.g. brown('x'), right_of('z', 'x') — x is both a "brown"
+            # E.g. brown('x'), right_of('z', 'x') â€” x is both a "brown"
             # (color attribute) and an "object" (relation endpoint).
             # The relation src/dst may be an ancestor of the variable's
             # declared concept, which is valid.
@@ -697,13 +726,13 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
                 else:
                     exceptionStr3 = f"You can change  '{pathElement.var_name}.reversed' to '{pathElement.var_name}' to go from {pathElementSrc} to the {pathElementDst}, which is what is required here."
                     f"You can use without the .reversed property to change the direction."
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
             # Check if the current path element is correctly connected to the left (source) - has matching type
             elif not srcCompatible:
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
                 exceptionStr2 = f"The required source type after {pathPart} is a {requiredLeftConcept},"
                 exceptionStr3 = f"but the used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
             # Check if the current path element is correctly connected to the right (destination) - has matching type
             elif not dstCompatible:
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, defined in {lc_name} is not valid."
@@ -712,7 +741,7 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
                 else: # if this it intermediary path element that if is expected that it will match next path element source type
                     exceptionStr2 = f"The expected destination type after {pathPart} is a {expectedRightConcept}."
                 exceptionStr3 = f"The used variable {pathElementVarName} is a relationship defined between a {pathElementSrc} and a {pathElementDst}, which is not correctly used here."
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3}")
             
             # Move along the path with the requiredLeftConcept and pathVariable
             requiredLeftConcept = pathElementDst
@@ -724,12 +753,12 @@ def check_path(graph, path, resultConcept, variableConceptParent, lc_name, found
                 exceptionStr3 = f"- If you meant that '{pathVariable}' should be of type {expectedRightConcept}: {expectedRightConcept}(path=('{pathVariable}'))"
                 exceptionStr4 = f"- If you meant another entity 'y' should be of type {expectedRightConcept} which is somehow related to '{pathVariable}': {expectedRightConcept}(path=('x', edge1, edge2, ...))"
                 exceptionStr5 = f"where edge1, edge2, ... are relations that connect '{pathVariable}' to 'y'."
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4} {exceptionStr5}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4} {exceptionStr5}")
             else: # all other types not allowed in path
                 pathElementType = type(pathElement)
                 exceptionStr1 = f"The Path '{pathStr}' from the variable {pathVariable}, after {pathPart} is not valid."
                 exceptionStr2 = f"The used variable {pathElement} is a {pathElementType}, path element can be only relation or eqL logical constraint used to filter candidates in the path."
-                raise Exception(f"{exceptionStr1} {exceptionStr2}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2}")
 
 def are_keys_new(given_dict, dict_list):
     """
@@ -925,7 +954,7 @@ def validate_queryL_constraints(graph, lc, headLc=None):
             if not hasattr(concept, 'enum') or not concept.enum:
                 exceptionStr1 = f"queryL constraint in {headLc} has invalid EnumConcept '{concept_name}'."
                 exceptionStr2 = f"EnumConcept must have non-empty 'enum' values defined."
-                raise Exception(f"{exceptionStr1} {exceptionStr2}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2}")
             # Valid EnumConcept
             return
         
@@ -944,7 +973,7 @@ def validate_queryL_constraints(graph, lc, headLc=None):
                 exceptionStr2 = f"The concept used in queryL must be a multiclass concept with subclasses defined via is_a()."
                 exceptionStr3 = f"Example: metal.is_a({concept_name}), rubber.is_a({concept_name})"
                 exceptionStr4 = f"Alternatively, use EnumConcept: {concept_name} = EnumConcept('{concept_name}', values=['value1', 'value2'])"
-                raise Exception(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4}")
+                raise ValueError(f"{exceptionStr1} {exceptionStr2} {exceptionStr3} {exceptionStr4}")
             
             # Valid - concept has subclasses
             return
@@ -952,7 +981,7 @@ def validate_queryL_constraints(graph, lc, headLc=None):
         # Neither EnumConcept nor Concept
         exceptionStr1 = f"queryL constraint in {headLc} has invalid concept type: {type(concept)}."
         exceptionStr2 = f"The first argument to queryL must be a Concept with is_a subclasses or an EnumConcept."
-        raise Exception(f"{exceptionStr1} {exceptionStr2}")
+        raise ValueError(f"{exceptionStr1} {exceptionStr2}")
     
     # Recursively check nested logical constraints
     for e in lc.e:
@@ -980,7 +1009,7 @@ def _validate_counting_constraints(lc, lc_name):
         if isinstance(lc, counting_types):
             # Check if constraint has elements to count
             if not lc.e or len(lc.e) == 0:
-                raise Exception(
+                raise ValueError(
                     f"Counting constraint '{lc_name}' ({type(lc).__name__}) has no elements to count"
                 )
             
@@ -993,7 +1022,7 @@ def _validate_counting_constraints(lc, lc_name):
                 limit = 1  # default
             
             if isinstance(limit, int) and limit < 0:
-                raise Exception(
+                raise ValueError(
                     f"Counting constraint '{lc_name}' ({type(lc).__name__}) has negative limit: {limit}"
                 )
         
@@ -1032,7 +1061,7 @@ def _validate_relations_in_constraints(graph, allConceptNames, lc, lc_name):
                         
                         # Validate has_a has at least 2 destinations
                         if len(has_a_relations) < 2:
-                            raise Exception(
+                            raise ValueError(
                                 f"Relation concept '{concept.name}' in '{lc_name}' has only {len(has_a_relations)} destination(s), but has_a requires at least 2"
                             )
                         
@@ -1040,7 +1069,7 @@ def _validate_relations_in_constraints(graph, allConceptNames, lc, lc_name):
                         for rel in has_a_relations:
                             dest_name = rel.dst.name if hasattr(rel.dst, 'name') else str(rel.dst)
                             if dest_name not in allConceptNames:
-                                raise Exception(
+                                raise ValueError(
                                     f"Relation '{concept.name}' in '{lc_name}' references destination concept '{dest_name}' which is not in the graph"
                                 )
                 
