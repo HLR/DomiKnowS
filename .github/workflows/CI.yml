@@ -120,7 +120,7 @@ jobs:
 
       - name: Resolve & install
         run: |
-         uv sync --extra cpu --extra dev 
+         uv sync --extra cu128 --extra dev --extra vllm --extra peft
 
       - name: Install spaCy model
         run: |
