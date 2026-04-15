@@ -47,7 +47,9 @@ DEFAULT_TNORM_BY_TYPE = {
     'nandL': 'SP',
     'norL': 'SP',
     'ifL': 'P',
-    'existsL': 'L',
+    'existsL': 'G',
+    'queryL': 'P',
+    'iotaL': 'P',
     'notL': 'SP',
     # Fallback
     'default': 'L',

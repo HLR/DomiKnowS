@@ -83,10 +83,17 @@ def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation')
                 print(f"cached to {cache_file}")
 
     print(f"Dataset length: {len(dataset)}")
-    
+
+    train_start = getattr(args, 'train_start', 0) or 0
+    test_start = getattr(args, 'test_start', None)
+
     if args.eval_only:
         if args.test_size is not None and args.test_size < len(dataset):
-            dataset = dataset[-args.test_size:]
+            if test_start is not None:
+                start = max(0, int(test_start))
+                dataset = dataset[start : start + args.test_size]
+            else:
+                dataset = dataset[-args.test_size:]
     else:
         if args.train_size is not None:
             if args.subset != -1:
@@ -95,10 +102,30 @@ def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation')
                 end_idx = subset_size * args.subset
                 dataset = dataset[start_idx:end_idx]
             else:
-                dataset = dataset[:min(args.train_size, len(dataset))]
+                start = max(0, int(train_start))
+                dataset = dataset[start : start + args.train_size]
         # If train_size is None, use full dataset
-    
+
     return dataset
+
+
+def load_full_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
+    """
+    Load the full cached dataset without applying train/test slicing.
+
+    Used by main.py when --train-start / --test-start are different, so
+    the test slice can come from a different region of the same cached
+    dataset than the training slice.
+    """
+    cache_file = CACHE_DIR / f"dataset_{question_type}.pkl"
+    if cache_file.exists():
+        with cache_file.open("rb") as f:
+            dataset = pickle.load(f)
+            return dataset
+
+    # Fall back to the regular builder if no cache yet — don't duplicate
+    # the dummy-mode caching logic (that path is only used for small tests).
+    return preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=question_type)
 
 
 def preprocess_folders_and_files(dummy):

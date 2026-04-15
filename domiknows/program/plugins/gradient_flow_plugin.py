@@ -17,6 +17,8 @@ Key design notes:
     fresh constraint losses CAN flow to classifiers (diagnostic, not training).
 """
 
+import io
+import contextlib
 import torch
 import logging
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
@@ -242,11 +244,7 @@ class GradientFlowPlugin:
 
     def _check_gradient_flow(self, output):
         self.step_counter[0] += 1
-        if self.step_counter[0] % self.check_every != 0:
-            return
-
-        print(f"\n[Gradient Flow Check - Step {self.step_counter[0]}]")
-        print("=" * 60)
+        verbose = (self.step_counter[0] % self.check_every == 0)
 
         # Extract datanode
         datanode = None
@@ -257,9 +255,21 @@ class GradientFlowPlugin:
                     break
 
         if datanode is None:
-            print("  ⚠️  No datanode found in output")
+            if verbose:
+                print(f"\n[Gradient Flow Check - Step {self.step_counter[0]}]")
+                print("  ⚠️  No datanode found in output")
             return
 
+        if verbose:
+            print(f"\n[Gradient Flow Check - Step {self.step_counter[0]}]")
+            print("=" * 60)
+            self._run_diagnostic(datanode)
+        else:
+            # Run the full diagnostic silently s
+            with contextlib.redirect_stdout(io.StringIO()):
+                self._run_diagnostic(datanode)
+
+    def _run_diagnostic(self, datanode):
         # Calculate losses — this builds a FRESH computation graph
         try:
             losses = datanode.calculateLcLoss(

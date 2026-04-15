@@ -67,8 +67,8 @@ except ImportError:
 from domiknows import setProductionLogMode
 
 from domiknows.program import CallbackProgram
-from domiknows.program.lossprogram import GumbelInferenceProgram
-from domiknows.program.model.pytorch import SolverModel, PoiModel
+from domiknows.program.lossprogram import GumbelInferenceProgram, InferenceProgram
+from domiknows.program.model.pytorch import SolverModel
 import torch.nn as nn
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, ModuleSensor
@@ -77,12 +77,12 @@ from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from domiknows.program.plugins.grad_chain_diagnostic import GradChainDiagnostic
 
 try:
-    from .preprocess import preprocess_dataset, preprocess_folders_and_files
+    from .preprocess import preprocess_dataset, preprocess_folders_and_files, load_full_dataset
     from .graph import create_graph
     from .modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
     from .dataset import g_relational_concepts, g_attribute_concepts
 except ImportError:
-    from preprocess import preprocess_dataset, preprocess_folders_and_files
+    from preprocess import preprocess_dataset, preprocess_folders_and_files, load_full_dataset
     from graph import create_graph
     from modules import LEFTObjectEMB, LEFTRelationEMB, ResnetLEFT, LinearLayer
     from dataset import g_relational_concepts, g_attribute_concepts
@@ -172,26 +172,10 @@ class _LossFactory(dict):
         return True  # always truthy — losses will be created on demand
 
 
-class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
-    """InferenceProgram with callback support."""
+class _CallbacksMixin:
+    """Shared callback hook setup for callback-enabled programs."""
     
-    def default_after_train_step(self, output=None):
-        """Override to do nothing - GumbelInferenceProgram already handles backward."""
-        pass
-    
-    def __init__(self, graph, Model, loss=None, **kwargs):
-        """
-        Initialize with proper handling of loss parameter.
-        
-        Args:
-            graph: Knowledge graph
-            Model: Model class (e.g., PoiModel, SolverModel)
-            loss: Loss function (optional, primarily for PoiModel)
-            **kwargs: Additional arguments
-        """
-        # Standard initialization
-        super().__init__(graph, Model, loss=loss, **kwargs)
-        
+    def _init_callback_hooks(self):
         # Initialize all callback hooks
         self.after_train_step = [self.default_after_train_step]
         self.before_train = []
@@ -209,6 +193,41 @@ class InferenceProgramWithCallbacks(CallbackProgram, GumbelInferenceProgram):
         self.after_test_epoch = []
         self.before_test_step = []
         self.after_test_step = []
+
+
+class InferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, InferenceProgram):
+    """InferenceProgram with callback support."""
+    
+    def default_after_train_step(self, output=None):
+        """Override to do nothing - InferenceProgram already handles backward."""
+        pass
+    
+    def __init__(self, graph, Model, loss=None, **kwargs):
+        """Initialize callback-enabled InferenceProgram."""
+        super().__init__(graph, Model, loss=loss, **kwargs)
+        self._init_callback_hooks()
+
+
+class GumbelInferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, GumbelInferenceProgram):
+    """GumbelInferenceProgram with callback support."""
+    
+    def default_after_train_step(self, output=None):
+        """Override to do nothing - GumbelInferenceProgram already handles backward."""
+        pass
+    
+    def __init__(self, graph, Model, loss=None, **kwargs):
+        """
+        Initialize with proper handling of loss parameter.
+        
+        Args:
+            graph: Knowledge graph
+            Model: Model class (e.g., PoiModel, SolverModel)
+            loss: Loss function (optional, primarily for PoiModel)
+            **kwargs: Additional arguments
+        """
+        # Standard initialization
+        super().__init__(graph, Model, loss=loss, **kwargs)
+        self._init_callback_hooks()
 
 
 def str2bool(v):
@@ -247,12 +266,22 @@ Examples:
 
     parser.add_argument("--train-size", type=int, default=None,
                         help="Number of training examples to use (default: use all available)")
+    parser.add_argument("--train-start", type=int, default=0,
+                        help="Start index within the full dataset for the training slice "
+                             "(default: 0). The training slice is "
+                             "dataset[train_start : train_start + train_size].")
     parser.add_argument("--test-size", type=int, default=None,
                         help="Number of test examples to use (default: use all available)")
+    parser.add_argument("--test-start", type=int, default=None,
+                        help="Start index within the full dataset for the test slice "
+                             "(default: None — fall back to the legacy hold-out-from-end "
+                             "behavior). When set, the test slice is "
+                             "dataset[test_start : test_start + test_size] drawn from the "
+                             "full cached dataset, so it can be disjoint from --train-start.")
     parser.add_argument("--epochs", type=int, default=4,
                         help="Number of training epochs (default: 4)")
-    parser.add_argument("--lr", "--learning-rate", type=float, default=1e-6,
-                        help="Learning rate for optimizer (default: 1e-6)")
+    parser.add_argument("--lr", "--learning-rate", type=float, default=1e-3,
+                        help="Learning rate for optimizer (default: 1e-3)")
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Mini-batch size for training (default: 1)")
     parser.add_argument("--subset", type=int, default=-1,
@@ -615,12 +644,18 @@ def program_declaration(train, dev, args, device='cpu'):
 
     _models['classifiers'] = classifiers
 
-    # Compile dataset
+    # Compile dataset — both train AND dev must be compiled BEFORE the
+    # program is created, 
     graph.constraint['label'] = ReaderSensor(keyword='logic_label', label=True)
     train_dataset = graph.compile_executable(train, logic_keyword='logic_str',
                                              logic_label_keyword='logic_label',
                                              extra_namespace_values=attribute_names_dict)
-    
+    dev_dataset = None
+    if dev is not None and len(dev) > 0:
+        dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str',
+                                               logic_label_keyword='logic_label',
+                                               extra_namespace_values=attribute_names_dict)
+
     # Diagnostic: verify executable constraints were registered
     print(f"[graph] Total dataset size (train + dev): {len(dataset)}")
     n_elc = len(getattr(graph, 'executableLCs', {}))
@@ -646,26 +681,25 @@ def program_declaration(train, dev, args, device='cpu'):
     import torch.nn as nn
     loss_func = nn.BCELoss
     
-    program = InferenceProgramWithCallbacks(
-        graph, SolverModel,
-        loss=loss_func,
-        poi=poi,
-        device=device,
-        tnorm=args.tnorm,
-        use_gumbel=args.use_gumbel,
-        initial_temp=args.gumbel_temp_start,
-        final_temp=args.gumbel_temp_end,
-        anneal_start_epoch=args.gumbel_anneal_start,
-        anneal_epochs=args.epochs - args.gumbel_anneal_start,
-        hard_gumbel=args.hard_gumbel,
-    )
+    ProgramClass = GumbelInferenceProgramWithCallbacks if args.use_gumbel else InferenceProgramWithCallbacks
 
-    dev_dataset = None
-    if dev is not None and len(dev) > 0:
-        dev_dataset = graph.compile_executable(dev, logic_keyword='logic_str',
-                                               logic_label_keyword='logic_label',
-                                               extra_namespace_values=attribute_names_dict)
-    
+    program_kwargs = {
+        'loss': loss_func,
+        'poi': poi,
+        'device': device,
+        'tnorm': args.tnorm,
+    }
+    if args.use_gumbel:
+        program_kwargs.update({
+            'use_gumbel': args.use_gumbel,
+            'initial_temp': args.gumbel_temp_start,
+            'final_temp': args.gumbel_temp_end,
+            'anneal_start_epoch': args.gumbel_anneal_start,
+            'anneal_epochs': args.epochs - args.gumbel_anneal_start,
+            'hard_gumbel': args.hard_gumbel,
+        })
+
+    program = ProgramClass(graph, SolverModel, **program_kwargs)
 
     return program, train_dataset, dev_dataset, attribute_names_dict
 
@@ -846,7 +880,22 @@ def main(args):
         print(f"Dataset: {len(dataset)} total, {n_within} with <={args.max_objects} objects")
 
     # Train/test split on raw examples before graph compilation.
-    if args.test_split > 0 and args.test_split < len(dataset):
+    # Priority:
+    #   1. If --test-start is set, draw an independent test slice
+    #      dataset[test_start : test_start + test_size] from the FULL cached
+    #      dataset so it can be disjoint from --train-start.
+    #   2. Else if --test-split is set, hold out the tail of the train slice.
+    #   3. Else use the full train slice for training only.
+    if args.test_start is not None and args.test_size is not None and not args.eval_only:
+        full_dataset = load_full_dataset(args, NUM_INSTANCES, CACHE_DIR,
+                                         question_type=args.question_type)
+        t_start = max(0, int(args.test_start))
+        test_raw = full_dataset[t_start : t_start + args.test_size]
+        train_raw = dataset
+        print(f"Train/test slices: train[{args.train_start}:{args.train_start + (args.train_size or len(dataset))}] "
+              f"({len(train_raw)} train), test[{t_start}:{t_start + args.test_size}] "
+              f"({len(test_raw)} test) — drawn from full dataset size {len(full_dataset)}")
+    elif args.test_split > 0 and args.test_split < len(dataset):
         test_raw = dataset[-args.test_split:]
         train_raw = dataset[:-args.test_split]
         print(f"Train/test split: {len(train_raw)} train, {len(test_raw)} test")
@@ -981,6 +1030,10 @@ def main(args):
             # Training loop
             for i in range(args.epochs):
                 print(f"Training epoch {i + 1}/{args.epochs}")
+                # Expose the outer epoch number to program/callbacks so
+                # tqdm descriptions and plugin logs show the true epoch
+                # instead of the reset inner-1 from train_epoch_num=1.
+                program.global_epoch = i + 1
                 save_file = ckpt_path(args.lr, i + 1, args.load_epoch, args.batch_size,
                                      args.tnorm, args.subset, args.question_type,
                                      **_ckpt_extra)

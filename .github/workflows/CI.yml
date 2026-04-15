@@ -89,7 +89,6 @@ jobs:
             'namedTree'
             'examples/iota'
             'examples/same_different'
-            'Clever'
             'vizual'
           )
           
@@ -157,6 +156,7 @@ jobs:
           TEST_LIST=(
             'examples/PMDExistL/pmd_counting_tests'
             'examples/PMDExistL/relation_learning_tests'
+            'Clever'
           )
           # Note: ConllQA test is temporarily disabled
           

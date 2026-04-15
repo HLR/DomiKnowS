@@ -68,11 +68,12 @@ class LcElement:
                     updatedArgs = {}
                     for arg, v in eItem.relVarInfo.items():
                         concept = v.relVarInfo
-                        if callable(concept): # multiclass label
+                        if isinstance(concept, Concept):
+                            # Concept path takes precedence. 
+                            updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=(concept, concept.name, None, 1))
+                        elif callable(concept): # multiclass label
                             conceptEncoding = concept.__call__() # generated label
                             updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=conceptEncoding)
-                        if isinstance(concept, Concept):
-                            updatedArgs[arg] = V(name=v.name, v=v.v, relVarInfo=(concept, concept.name, None, 1))
                             
                     eItem = V(name=eItem.name, v=eItem.v, relVarInfo=updatedArgs)
                     updatedE.append(eItem)

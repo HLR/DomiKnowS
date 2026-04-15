@@ -115,7 +115,9 @@ class LearningBasedProgram():
         """
         if dataset is not None:
             self.logger.info(f'{name}:')
-            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+            # Prefer externally-set global_epoch 
+            _display_epoch = getattr(self, 'global_epoch', None) or self.epoch
+            desc = name if _display_epoch is None else f'Epoch {_display_epoch} {name}'
 
             consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
 

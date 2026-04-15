@@ -76,8 +76,11 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     - Boolean constraints (andL, atLeastAL, exactAL, etc.): Binary accuracy using 'local/argmax'
     - Counting constraints (sumL): Uses thresholded 'local/decision' key for verification
 
-    Uses AnswerSolver as the primary evaluation method.  verifySingleConstraint
-    runs in parallel and any disagreement between the two is logged.
+    Uses AnswerSolver as the primary evaluation method — it performs an ILP
+    hypothesis search that correctly handles executable-constraint semantics
+    (iotaL selection, counting, etc.). verifySingleConstraint runs in parallel
+    as a diagnostic cross-check and any disagreement between the two is
+    logged. 
 
     Args:
         evaluate_data: Dataset to evaluate on
@@ -176,41 +179,11 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             except Exception as e:
                 logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
 
-            # ── Log disagreement ────────────────────────────────────
-            if answer_correct is not None and verify_correct is not None and answer_correct != verify_correct:
-                logger.info(
-                    f"Disagreement on {lc_name}: "
-                    f"AnswerSolver={'correct' if answer_correct else 'incorrect'} "
-                    f"(answer={answer_result}), "
-                    f"verifySingleConstraint={'correct' if verify_correct else 'incorrect'} "
-                    f"(satisfied={verify_result['satisfied']:.1f}%), "
-                    f"label={label}"
-                )
-            else:
-                logger.debug(
-                    f"{lc_name}: "
-                    f"AnswerSolver={'correct' if answer_correct else 'incorrect' if answer_correct is not None else 'N/A'} "
-                    f"(answer={answer_result if answer_result is not None else 'N/A'}), "
-                    f"verifySingleConstraint={'correct' if verify_correct else 'incorrect' if verify_correct is not None else 'N/A'} "
-                    f"(satisfied={verify_result['satisfied']:.1f}% if verify_result is not None else 'N/A'), "
-                    f"label={label}"
-                )
-
             # ── Pick result source ───────────────────────────────────
-            # If AnswerSolver is incorrect (w.r.t. label) but verifySingleConstraint
-            # is correct, prefer verifySingleConstraint and log the override.
-            if answer_correct is False and verify_correct is True:
+            if verify_correct is not None:
                 use_correct = verify_correct
-                logger.info(
-                    f"Override on {lc_name}: using verifySingleConstraint result because "
-                    f"AnswerSolver is incorrect for label={label}. "
-                    f"answer={answer_result if answer_result is not None else 'N/A'}, "
-                    f"verify_satisfied={verify_result['satisfied'] if verify_result is not None else 'N/A'}"
-                )
             elif answer_correct is not None:
                 use_correct = answer_correct
-            elif verify_correct is not None:
-                use_correct = verify_correct
             else:
                 continue
 

@@ -107,7 +107,8 @@ class EpochLoggingPlugin:
     
     def _log_epoch_metrics(self):
         """Log comprehensive metrics after each epoch."""
-        epoch = self.program.epoch or 0
+        # Prefer global_epoch 
+        epoch = getattr(self.program, 'global_epoch', None) or self.program.epoch or 0
         
         print(f"\n[Epoch {epoch}] Starting evaluation...")
         
@@ -203,6 +204,11 @@ class EpochLoggingPlugin:
     
     def final_display(self, final_eval=None):
         """Display final summary and learning assessment."""
+        # Tolerate being unconfigured: main.py skips plugin_manager.configure_all
+        # under --oracle-mode / --use-vlm, but final_display_all still runs.
+        if self.metrics_history is None:
+            print("\n[Epoch Logging] Plugin was registered but not configured — nothing to display")
+            return
         if len(self.metrics_history['epoch']) == 0:
             print("\n[Epoch Logging] No metrics collected")
             return

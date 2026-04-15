@@ -308,7 +308,9 @@ def satisfactionReportOfConstraints(dn):
     lcCounter = 0 # Count processed lcs
     lcSatisfaction = {}
     for graph in mySolver.myGraph: # Loop through graphs
-        for _, lc in graph.allLogicalConstrains: # loop trough lcs in the graph
+        # Skip executable LCs — they are question-specific hypothesis
+        # checks, not domain constraints, and are handled separately.
+        for _, lc in graph.logicalConstrains.items():
 
             if not lc.headLC or not lc.active: # Process only active and head lcs
                 continue
