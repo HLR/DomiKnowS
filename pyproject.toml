@@ -52,8 +52,8 @@ cpu = [
   "torchvision==0.26.*"
 ]
 cu128 = [
-  "torch==2.11.*",
-  "torchvision==0.26.*"
+  "torch==2.10.*",
+  "torchvision==0.25.*"
 ]
 cu126 = [
   "torch==2.11.*",
@@ -65,7 +65,7 @@ xpu = [
   "pytorch-triton-xpu"
 ]
 vllm = [
-  "vllm>=0.9.0; sys_platform == 'linux'",
+  "vllm>=0.17.0,<0.20; sys_platform == 'linux'",
   "ray>=2.0; sys_platform == 'linux'",
   "numpy>=2.0; sys_platform == 'linux'",
 ]
@@ -76,10 +76,24 @@ peft = [
 
 [tool.uv]
 conflicts = [
+    # Torch flavors are mutually exclusive
     [
         { extra = "cpu" },
         { extra = "cu128" },
         { extra = "cu126" },
+        { extra = "xpu" },
+    ],
+    # vllm only works with cu128 (needs matching torch+torchvision)
+    [
+        { extra = "vllm" },
+        { extra = "cpu" },
+    ],
+    [
+        { extra = "vllm" },
+        { extra = "cu126" },
+    ],
+    [
+        { extra = "vllm" },
         { extra = "xpu" },
     ],
 ]
