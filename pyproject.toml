@@ -72,6 +72,7 @@ vllm = [
 peft = [
   "peft>=0.13.0",
   "bitsandbytes>=0.43.0; sys_platform != 'darwin'",
+  "timm>=1.0.0",
 ]
 
 [tool.uv]
