@@ -146,29 +146,29 @@ jobs:
               "https://dl.fbaipublicfiles.com/clevr/CLEVR_v1.0.zip"
             echo "Extracting training images ..."
             .venv/bin/python - <<'PYEOF'
-                import zipfile, os, shutil
+          import zipfile, os, shutil
 
-                zip_path  = "/tmp/CLEVR_v1.0.zip"
-                dest_dir  = "test_regr/Clever/train/images"
-                prefix    = "CLEVR_v1.0/images/train/"
-                # Tests use indices up to dataset length (7856); extract 10k to cover all
-                # possible --train-start / --test-start combinations with a small buffer.
-                MAX_IMAGES = 10_000
+          zip_path  = "/tmp/CLEVR_v1.0.zip"
+          dest_dir  = "test_regr/Clever/train/images"
+          prefix    = "CLEVR_v1.0/images/train/"
+          # Tests use indices up to dataset length (7856); extract 10k to cover all
+          # possible --train-start / --test-start combinations with a small buffer.
+          MAX_IMAGES = 10_000
 
-                os.makedirs(dest_dir, exist_ok=True)
-                with zipfile.ZipFile(zip_path) as zf:
-                    entries = sorted(
-                        e for e in zf.namelist()
-                        if e.startswith(prefix) and not e.endswith("/")
-                    )[:MAX_IMAGES]
-                    print(f"Extracting {len(entries)} of ~70k training images (test fraction)")
-                    for i, entry in enumerate(entries):
-                        target = os.path.join(dest_dir, os.path.basename(entry))
-                        with zf.open(entry) as src, open(target, "wb") as dst:
-                            shutil.copyfileobj(src, dst)
-                        if (i + 1) % 2000 == 0:
-                            print(f"  {i+1}/{len(entries)} ...")
-                print(f"Done — {len(entries)} images in {dest_dir}")
+          os.makedirs(dest_dir, exist_ok=True)
+          with zipfile.ZipFile(zip_path) as zf:
+              entries = sorted(
+                  e for e in zf.namelist()
+                  if e.startswith(prefix) and not e.endswith("/")
+              )[:MAX_IMAGES]
+              print(f"Extracting {len(entries)} of ~70k training images (test fraction)")
+              for i, entry in enumerate(entries):
+                  target = os.path.join(dest_dir, os.path.basename(entry))
+                  with zf.open(entry) as src, open(target, "wb") as dst:
+                      shutil.copyfileobj(src, dst)
+                  if (i + 1) % 2000 == 0:
+                      print(f"  {i+1}/{len(entries)} ...")
+          print(f"Done — {len(entries)} images in {dest_dir}")
           PYEOF
             rm /tmp/CLEVR_v1.0.zip
             echo "Extracted $(ls $TRAIN_IMAGES | wc -l) images to $TRAIN_IMAGES"
