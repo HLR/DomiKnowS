@@ -132,6 +132,26 @@ jobs:
         run: |
           echo "USE_SUBPROCESS=true" >> $GITHUB_ENV
 
+      - name: Download CLEVR dataset images
+        run: |
+          TRAIN_IMAGES="test_regr/Clever/train/images"
+          if [ -d "$TRAIN_IMAGES" ] && [ "$(ls -A $TRAIN_IMAGES)" ]; then
+            echo "CLEVR training images already cached at $TRAIN_IMAGES"
+            echo "Image count: $(ls $TRAIN_IMAGES | wc -l)"
+          else
+            echo "Downloading CLEVR_v1.0.zip ..."
+            mkdir -p "$TRAIN_IMAGES"
+            curl -L --retry 3 --retry-delay 5 \
+              -o /tmp/CLEVR_v1.0.zip \
+              "https://dl.fbaipublicfiles.com/clevr/CLEVR_v1.0.zip"
+            echo "Extracting training images ..."
+            unzip -j /tmp/CLEVR_v1.0.zip \
+              "CLEVR_v1.0/images/train/*" \
+              -d "$TRAIN_IMAGES"
+            rm /tmp/CLEVR_v1.0.zip
+            echo "Extracted $(ls $TRAIN_IMAGES | wc -l) images to $TRAIN_IMAGES"
+          fi
+
       - name: Download InternVL3_5-1B model
         run: |
           MODEL_DIR="models/InternVL3_5-1B"
@@ -241,7 +261,7 @@ jobs:
           if torch.cuda.is_available():
               print(f'CUDA version:   {torch.version.cuda}')
               print(f'GPU:            {torch.cuda.get_device_name(0)}')
-              print(f'GPU memory:     {torch.cuda.get_device_properties(0).total_mem / 1024**3:.1f} GB')
+              print(f'GPU memory:     {torch.cuda.get_device_properties(0).total_memory/ 1024**3:.1f} GB')
               # Quick matmul smoke test
               a = torch.randn(1000, 1000, device='cuda')
               b = torch.randn(1000, 1000, device='cuda')
@@ -275,7 +295,7 @@ jobs:
 
           print('=== vLLM Engine Initialization Test ===')
           print(f'GPU: {torch.cuda.get_device_name(0)}')
-          print(f'GPU memory: {torch.cuda.get_device_properties(0).total_mem / 1024**3:.1f} GB')
+          print(f'GPU memory: {torch.cuda.get_device_properties(0).total_memory/ 1024**3:.1f} GB')
           print(f'Free memory: {torch.cuda.mem_get_info()[0] / 1024**3:.1f} GB')
           print()
 
