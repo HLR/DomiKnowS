@@ -9,11 +9,14 @@ import subprocess
 import sys
 import re
 import random
+from pathlib import Path
 import pytest
 from flaky import flaky
 
 PYTHON = sys.executable
-MAIN = "main.py"
+# Resolve main.py relative to this test file so it works regardless of cwd
+_TEST_DIR = Path(__file__).resolve().parent
+MAIN = str(_TEST_DIR / "main.py")
 TIMEOUT = 600  # 10 minutes max per test
 
 
@@ -25,6 +28,7 @@ def _run(args: list[str], timeout: int = TIMEOUT) -> subprocess.CompletedProcess
         capture_output=True,
         text=True,
         timeout=timeout,
+        cwd=str(_TEST_DIR),
     )
     return result
 
