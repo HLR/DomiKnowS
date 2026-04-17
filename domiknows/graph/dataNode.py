@@ -2199,7 +2199,7 @@ class DataNode:
                     'verifyList': [[bool, ...], ...],  # Satisfaction per instance
                     'satisfied': float,                 # Overall satisfaction % (0-100)
                     'ifVerifyList': [[bool, ...], ...], # (ifL/forAllL only) Filtered list
-                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100)
+                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100, or NaN if no antecedent is True)
                     'elapsedInMsLC': float              # Processing time in milliseconds
                 }
                 
