@@ -145,38 +145,28 @@ jobs:
         run: |
           TRAIN_IMAGES="test_regr/Clever/train/images"
           DATASET_CACHE="test_regr/Clever/dataset_cache"
+
           if [ -d "$TRAIN_IMAGES" ] && [ "$(ls -A $TRAIN_IMAGES)" ]; then
-            echo "CLEVR training images already cached at $TRAIN_IMAGES"
-            echo "Image count: $(ls $TRAIN_IMAGES | wc -l)"
-            # Check for stale dataset cache (built without images → image=None)
+            echo "CLEVR training images already present: $(ls $TRAIN_IMAGES | wc -l) files"
+
+            # Timestamp-based stale check: if any image file is newer than the
+            # dataset cache pkl, the cache was built before images were available
+            # (image=None in every cached sample).  No Python/pickle parsing needed.
             if [ -d "$DATASET_CACHE" ]; then
-              STALE=$(.venv/bin/python - <<'PYEOF'
-          import pickle, glob, os, sys
-          cache_dir = "test_regr/Clever/dataset_cache"
-          pkl_files = glob.glob(os.path.join(cache_dir, "dataset_*.pkl"))
-          stale = False
-          for pkl in pkl_files:
-              try:
-                  with open(pkl, "rb") as f:
-                      data = pickle.load(f)
-                  samples = data[:min(5, len(data))] if isinstance(data, list) else []
-                  if any(
-                      s.get("image_filename") not in [None, "unknown_image.png", "error_invalid_scene.png"]
-                      and s.get("image") is None
-                      for s in samples
-                  ):
-                      stale = True
-                      break
-              except Exception:
-                  pass
-          print("yes" if stale else "no")
-          PYEOF
-              )
-              if [ "$STALE" = "yes" ]; then
-                echo "Dataset cache is stale (image=None while images exist). Clearing cache..."
-                rm -rf "$DATASET_CACHE"
+              CACHE_PKL=$(ls -t "$DATASET_CACHE"/*.pkl 2>/dev/null | head -1)
+              NEWEST_IMG=$(ls -t "$TRAIN_IMAGES"/*.png 2>/dev/null | head -1)
+              if [ -n "$CACHE_PKL" ] && [ -n "$NEWEST_IMG" ]; then
+                CACHE_T=$(stat -c %Y "$CACHE_PKL")
+                IMAGE_T=$(stat -c %Y "$NEWEST_IMG")
+                echo "Cache mtime: $CACHE_T  |  Newest image mtime: $IMAGE_T"
+                if [ "$IMAGE_T" -gt "$CACHE_T" ]; then
+                  echo "Images are newer than dataset cache — cache was built without images. Clearing."
+                  rm -rf "$DATASET_CACHE"
+                else
+                  echo "Dataset cache is up to date (built after images were downloaded)."
+                fi
               else
-                echo "Dataset cache looks healthy."
+                echo "No existing cache pkl found; fresh build will occur on first test run."
               fi
             fi
           else
@@ -188,14 +178,10 @@ jobs:
             echo "Extracting training images ..."
             .venv/bin/python - <<'PYEOF'
           import zipfile, os, shutil
-
           zip_path  = "/tmp/CLEVR_v1.0.zip"
           dest_dir  = "test_regr/Clever/train/images"
           prefix    = "CLEVR_v1.0/images/train/"
-          # Tests use indices up to dataset length (7856); extract 10k to cover all
-          # possible --train-start / --test-start combinations with a small buffer.
           MAX_IMAGES = 10_000
-
           os.makedirs(dest_dir, exist_ok=True)
           with zipfile.ZipFile(zip_path) as zf:
               entries = sorted(
@@ -213,11 +199,10 @@ jobs:
           PYEOF
             rm /tmp/CLEVR_v1.0.zip
             echo "Extracted $(ls $TRAIN_IMAGES | wc -l) images to $TRAIN_IMAGES"
-            # Images were newly downloaded — clear any stale dataset cache
-            if [ -d "$DATASET_CACHE" ]; then
-              echo "Clearing stale dataset cache (was built without images)"
-              rm -rf "$DATASET_CACHE"
-            fi
+            # Images were newly downloaded — always clear any pre-existing cache
+            # (it was built without images and has image=None everywhere).
+            rm -rf "$DATASET_CACHE"
+            echo "Cleared dataset cache so next run rebuilds it with real images."
           fi
 
       - name: Download InternVL3_5-1B model
@@ -467,6 +452,24 @@ jobs:
               traceback.print_exc()
               exit(1)
           "
+
+      - name: Write test summary
+        if: always()
+        run: |
+          OUT="/tmp/test_results_test-vllm.txt"
+          {
+            echo "=== test-vllm results ==="
+            echo "Date: $(date -u)"
+            echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo unknown)"
+            echo "vLLM: $(.venv/bin/python -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo unknown)"
+            echo ""
+            # Summarise which steps passed/failed based on their exit codes written above
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "RESULT: ALL PASSED"
+            else
+              echo "RESULT: SOME STEPS FAILED (see job log for details)"
+            fi
+          } > "$OUT"
 
       - name: Upload vLLM test results
         if: always()
