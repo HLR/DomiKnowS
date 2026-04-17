@@ -123,12 +123,13 @@ jobs:
         run: |
          uv sync --extra cu128 --extra dev --extra vllm --extra peft
 
-      - name: Install system dependencies
+      - name: Add venv bin to PATH
         run: |
-          apt-get install -y ninja-build 2>/dev/null || \
-          sudo apt-get install -y ninja-build 2>/dev/null || \
-          echo "Could not install ninja-build (may already be present)"
-          ninja --version || which ninja || echo "ninja not found in PATH after install attempt"
+          # Expose .venv/bin so that ninja (shipped by the Python 'ninja' package)
+          # is found by ALL child processes, including vLLM's multiprocessing spawn
+          # workers that JIT-compile FlashInfer CUDA kernels via ninja.
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+          echo "Added $(pwd)/.venv/bin to GITHUB_PATH"
 
       - name: Install spaCy model
         run: |
@@ -257,16 +258,6 @@ jobs:
           set +e
           uv run --no-sync mypy --install-types --non-interactive .
 
-      - name: Set vLLM attention backend for GPU
-        run: |
-          CC=$(.venv/bin/python -c "import torch; cc=torch.cuda.get_device_capability(); print(cc[0]*10+cc[1])")
-          if [ "$CC" -lt 80 ]; then
-            echo "Compute capability ${CC} < 80 (pre-Ampere): forcing XFORMERS (FlashInfer/FlashAttn require >= 8.0)"
-            echo "VLLM_ATTENTION_BACKEND=XFORMERS" >> $GITHUB_ENV
-          else
-            echo "Compute capability ${CC} >= 80: using vLLM default attention backend (FlashInfer)"
-          fi
-
       # --- Run GPU tests ---
       - name: Run GPU tests
         run: |
@@ -307,12 +298,10 @@ jobs:
         run: |
           uv sync --extra cu128 --extra dev --extra vllm --extra peft
 
-      - name: Install system dependencies
+      - name: Add venv bin to PATH
         run: |
-          apt-get install -y ninja-build 2>/dev/null || \
-          sudo apt-get install -y ninja-build 2>/dev/null || \
-          echo "Could not install ninja-build (may already be present)"
-          ninja --version || which ninja || echo "ninja not found in PATH after install attempt"
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+          echo "Added $(pwd)/.venv/bin to GITHUB_PATH"
 
       - name: Set MODEL_PATH if cached
         run: |
@@ -368,16 +357,6 @@ jobs:
           print(f'vLLM version: {vllm.__version__}')
           print('vLLM import OK')
           "
-
-      - name: Set vLLM attention backend for GPU
-        run: |
-          CC=$(.venv/bin/python -c "import torch; cc=torch.cuda.get_device_capability(); print(cc[0]*10+cc[1])")
-          if [ "$CC" -lt 80 ]; then
-            echo "Compute capability ${CC} < 80 (pre-Ampere): forcing XFORMERS (FlashInfer/FlashAttn require >= 8.0)"
-            echo "VLLM_ATTENTION_BACKEND=XFORMERS" >> $GITHUB_ENV
-          else
-            echo "Compute capability ${CC} >= 80: using vLLM default (FlashInfer)"
-          fi
 
       - name: Test vLLM engine initialization
         timeout-minutes: 10
