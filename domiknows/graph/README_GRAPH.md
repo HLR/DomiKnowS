@@ -501,6 +501,12 @@ ifL(
 equivalenceL(person('x'), entity('x'))
 ```
 
+##### `iffL` - If and Only If (alias)
+```python
+# Exact alias of equivalenceL
+iffL(person('x'), entity('x'))
+```
+
 ##### `forAllL` - Universal Quantifier
 ```python
 # ∀x: person(x) → entity(x)
