@@ -143,67 +143,110 @@ jobs:
 
       - name: Download CLEVR dataset images
         run: |
-          TRAIN_IMAGES="test_regr/Clever/train/images"
-          DATASET_CACHE="test_regr/Clever/dataset_cache"
+          mkdir -p "test_regr/Clever/train/images"
 
-          if [ -d "$TRAIN_IMAGES" ] && [ "$(ls -A $TRAIN_IMAGES)" ]; then
-            echo "CLEVR training images already present: $(ls $TRAIN_IMAGES | wc -l) files"
-
-            # Timestamp-based stale check: if any image file is newer than the
-            # dataset cache pkl, the cache was built before images were available
-            # (image=None in every cached sample).  No Python/pickle parsing needed.
-            if [ -d "$DATASET_CACHE" ]; then
-              CACHE_PKL=$(ls -t "$DATASET_CACHE"/*.pkl 2>/dev/null | head -1)
-              NEWEST_IMG=$(ls -t "$TRAIN_IMAGES"/*.png 2>/dev/null | head -1)
-              if [ -n "$CACHE_PKL" ] && [ -n "$NEWEST_IMG" ]; then
-                CACHE_T=$(stat -c %Y "$CACHE_PKL")
-                IMAGE_T=$(stat -c %Y "$NEWEST_IMG")
-                echo "Cache mtime: $CACHE_T  |  Newest image mtime: $IMAGE_T"
-                if [ "$IMAGE_T" -gt "$CACHE_T" ]; then
-                  echo "Images are newer than dataset cache — cache was built without images. Clearing."
-                  rm -rf "$DATASET_CACHE"
-                else
-                  echo "Dataset cache is up to date (built after images were downloaded)."
-                fi
-              else
-                echo "No existing cache pkl found; fresh build will occur on first test run."
-              fi
-            fi
+          # Step 1 — ensure questions.json exists.
+          # Only output-vocab.7z is tracked by git; the large JSON files
+          # (questions.json, scenes.json, vocab.json) are generated from it on
+          # first use.  Extract the 7z here so the next step can read the questions.
+          if [ ! -f "test_regr/Clever/train/questions.json" ]; then
+            echo "Extracting JSON/vocab files from output-vocab.7z ..."
+            .venv/bin/python -c "
+          import py7zr
+          with py7zr.SevenZipFile('test_regr/Clever/train/output-vocab.7z', 'r') as z:
+              z.extractall(path='test_regr/Clever/train/')
+          print('Extraction complete.')
+          "
           else
-            echo "Downloading CLEVR_v1.0.zip ..."
-            mkdir -p "$TRAIN_IMAGES"
-            curl -L --retry 3 --retry-delay 5 \
-              -o /tmp/CLEVR_v1.0.zip \
-              "https://dl.fbaipublicfiles.com/clevr/CLEVR_v1.0.zip"
-            echo "Extracting training images ..."
-            .venv/bin/python - <<'PYEOF'
-          import zipfile, os, shutil
-          zip_path  = "/tmp/CLEVR_v1.0.zip"
-          dest_dir  = "test_regr/Clever/train/images"
-          prefix    = "CLEVR_v1.0/images/train/"
-          MAX_IMAGES = 10_000
-          os.makedirs(dest_dir, exist_ok=True)
-          with zipfile.ZipFile(zip_path) as zf:
-              entries = sorted(
-                  e for e in zf.namelist()
-                  if e.startswith(prefix) and not e.endswith("/")
-              )[:MAX_IMAGES]
-              print(f"Extracting {len(entries)} of ~70k training images (test fraction)")
-              for i, entry in enumerate(entries):
-                  target = os.path.join(dest_dir, os.path.basename(entry))
-                  with zf.open(entry) as src, open(target, "wb") as dst:
-                      shutil.copyfileobj(src, dst)
-                  if (i + 1) % 2000 == 0:
-                      print(f"  {i+1}/{len(entries)} ...")
-          print(f"Done — {len(entries)} images in {dest_dir}")
-          PYEOF
-            rm /tmp/CLEVR_v1.0.zip
-            echo "Extracted $(ls $TRAIN_IMAGES | wc -l) images to $TRAIN_IMAGES"
-            # Images were newly downloaded — always clear any pre-existing cache
-            # (it was built without images and has image=None everywhere).
-            rm -rf "$DATASET_CACHE"
-            echo "Cleared dataset cache so next run rebuilds it with real images."
+            echo "questions.json already present — skipping 7z extraction"
           fi
+
+          # Step 2 — download only the images actually referenced by the
+          # filter_one_relation questions (a small subset of the 70k total).
+          # On subsequent runs the images are on disk and nothing is downloaded.
+          .venv/bin/python - <<'PYEOF'
+          import json, os, shutil, subprocess, sys, zipfile
+          from pathlib import Path
+
+          dest      = Path("test_regr/Clever/train/images")
+          qjson     = Path("test_regr/Clever/train/questions.json")
+          cache_f   = Path("test_regr/Clever/train/needed_images.txt")
+          zipp      = Path("/tmp/CLEVR_v1.0.zip")
+          ds_cache  = Path("test_regr/Clever/dataset_cache")
+          PREFIX    = "CLEVR_v1.0/images/train/"
+          ZIP_URL   = "https://dl.fbaipublicfiles.com/clevr/CLEVR_v1.0.zip"
+
+          dest.mkdir(exist_ok=True)
+
+          # Build (once) or load the cached list of image filenames needed by
+          # filter_one_relation: exactly-one-relate, no query/same_/than/count.
+          if cache_f.exists():
+              needed = set(cache_f.read_text().splitlines())
+              print(f"Loaded {len(needed)} needed image names from {cache_f}")
+          else:
+              print("Parsing questions.json to find relation-question images ...")
+              with qjson.open() as f:
+                  data = json.load(f)
+              def _prog_str(prog):
+                  return " ".join(
+                      str(op.get("type", op.get("function", "")))
+                      + "_" + str(op.get("value_inputs") or "")
+                      for op in prog
+                  )
+              needed = set()
+              for q in data.get("questions", []):
+                  ps = _prog_str(q.get("program", []))
+                  if any(k in ps for k in ("query", "same_", "than", "count")):
+                      continue
+                  if ps.count("relate") == 1 and q.get("image_filename"):
+                      needed.add(q["image_filename"])
+              cache_f.write_text("\n".join(sorted(needed)))
+              print(f"Found {len(needed)} unique images; saved to {cache_f}")
+
+          missing = {fn for fn in needed if not (dest / fn).exists()}
+          on_disk = len(needed) - len(missing)
+          print(f"Images: {on_disk}/{len(needed)} on disk, {len(missing)} missing")
+
+          if not missing:
+              print("All required images already on disk — nothing to extract.")
+              sys.exit(0)
+
+          # Download the zip only when images are missing
+          if not zipp.exists():
+              print(f"Downloading {ZIP_URL} ...")
+              subprocess.run(
+                  ["curl", "-fL", "--retry", "3", "--retry-delay", "5",
+                   "-o", str(zipp), ZIP_URL],
+                  check=True,
+              )
+              print("Download complete.")
+
+          print(f"Extracting {len(missing)} missing images from zip ...")
+          try:
+              with zipfile.ZipFile(zipp) as zf:
+                  entries = [
+                      e for e in zf.namelist()
+                      if e.startswith(PREFIX) and not e.endswith("/")
+                      and os.path.basename(e) in missing
+                  ]
+                  for i, entry in enumerate(entries):
+                      tgt = dest / os.path.basename(entry)
+                      with zf.open(entry) as src, tgt.open("wb") as dst:
+                          shutil.copyfileobj(src, dst)
+                      if (i + 1) % 500 == 0:
+                          print(f"  {i+1}/{len(entries)} ...")
+          finally:
+              zipp.unlink(missing_ok=True)   # remove zip even on failure
+
+          print(f"Done — {len(list(dest.iterdir()))} total images in {dest}")
+
+          # Clear the dataset cache so it is rebuilt fresh with all images now
+          # on disk (cached samples may have image=None from a previous run
+          # where some images were absent).
+          if ds_cache.exists():
+              shutil.rmtree(ds_cache)
+              print(f"Cleared {ds_cache} — will rebuild on next test run with real images")
+          PYEOF
 
       - name: Download InternVL3_5-1B model
         run: |

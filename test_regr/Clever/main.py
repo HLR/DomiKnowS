@@ -527,6 +527,10 @@ def program_declaration(train, dev, args, device='cpu'):
 
     # Set up sensors - shared across all modes
     image["pil_image"] = FunctionalReaderSensor(keyword="pil_image", forward=lambda data: [data])
+    # image_filename is used by VLM modules as a fallback: if pil_image is None
+    # (stale dataset cache built before images were downloaded), the module can
+    # load the image directly from train/images/<filename> on demand.
+    image["image_filename"] = FunctionalReaderSensor(keyword="image_filename", forward=lambda data: [data])
     image["image_id"] = FunctionalReaderSensor(keyword='image_index', forward=lambda data: [data])
     object["bounding_boxes"] = FunctionalReaderSensor(keyword="objects_raw",
                                                       forward=lambda data: torch.Tensor(data).to(device))
@@ -627,20 +631,23 @@ def program_declaration(train, dev, args, device='cpu'):
                 max_num=args.max_num_patches,
             ) if args.peft else {}
             if attr_name in spatial_relation_names:
-                relation_target[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
-                                                             module=InternVL(model_path=MODEL_PATH, device=device,
-                                                                             relation=2, attr=attr_name,
-                                                                             **vlm_extra), device=device)
+                relation_target[attr_variable] = ModuleLearner(
+                    image["pil_image"], image["image_filename"], object["bounding_boxes"],
+                    module=InternVL(model_path=MODEL_PATH, device=device,
+                                    relation=2, attr=attr_name,
+                                    **vlm_extra), device=device)
             elif attr_name.startswith("same_"):
-                relation_target[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
-                                                             module=InternVL(model_path=MODEL_PATH, device=device,
-                                                                             relation=2, attr=attr_name,
-                                                                             **vlm_extra), device=device)
+                relation_target[attr_variable] = ModuleLearner(
+                    image["pil_image"], image["image_filename"], object["bounding_boxes"],
+                    module=InternVL(model_path=MODEL_PATH, device=device,
+                                    relation=2, attr=attr_name,
+                                    **vlm_extra), device=device)
             else:
-                object[attr_variable] = ModuleLearner(image["pil_image"], object["bounding_boxes"],
-                                                      module=InternVL(model_path=MODEL_PATH, device=device, 
-                                                                      relation=1, attr=attr_name,
-                                                                      **vlm_extra), device=device)
+                object[attr_variable] = ModuleLearner(
+                    image["pil_image"], image["image_filename"], object["bounding_boxes"],
+                    module=InternVL(model_path=MODEL_PATH, device=device,
+                                    relation=1, attr=attr_name,
+                                    **vlm_extra), device=device)
 
     _models['classifiers'] = classifiers
 

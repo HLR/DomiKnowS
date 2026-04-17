@@ -780,10 +780,25 @@ class InternVLSharedHF(nn.Module):
             draw.rectangle(box, outline=color, width=3)
         return img
 
-    def _prepare_images_questions(self, image, bounding_boxes):
+    def _prepare_images_questions(self, image, image_filename, bounding_boxes):
         """Prepare image-question pairs for scoring."""
         if isinstance(image, (list, tuple)) and len(image) == 1:
             image = image[0]
+        if isinstance(image_filename, (list, tuple)) and len(image_filename) == 1:
+            image_filename = image_filename[0]
+        # Fallback: if pil_image is None (stale cache built before images were
+        # downloaded), try to load directly from the images directory on disk.
+        if image is None and image_filename is not None:
+            _path = os.path.join("train", "images", image_filename)
+            try:
+                image = Image.open(_path).convert("RGB")
+            except (FileNotFoundError, OSError):
+                pass
+        if image is None:
+            raise TypeError(
+                f"pil_image is None for '{image_filename}' and the file was not found on disk. "
+                f"Ensure CLEVR images are downloaded to train/images/."
+            )
         base = self._to_pil(image)
 
         images, questions = [], []
@@ -802,7 +817,7 @@ class InternVLSharedHF(nn.Module):
                 questions.append(q)
         return images, questions
 
-    def forward(self, image, bounding_boxes, label=None):
+    def forward(self, image, image_filename, bounding_boxes, label=None):
         """
         Forward pass for DomiKnowS.
         Returns probs tensor [N,2] matching vLLM output order: [P(No), P(Yes)].
@@ -810,7 +825,7 @@ class InternVLSharedHF(nn.Module):
         and vice-versa), so its output is effectively [P(No), P(Yes)].
         DomiKnowS was calibrated with that order, so we match it here.
         """
-        images, questions = self._prepare_images_questions(image, bounding_boxes)
+        images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
 
         probs = self.model._score_batch(
             image_paths=images,
@@ -821,12 +836,13 @@ class InternVLSharedHF(nn.Module):
         )
         return probs.float()
 
-    def train_step(self, image, bounding_boxes, gt_labels, optimizer, grad_accum_steps=1):
+    def train_step(self, image, image_filename, bounding_boxes, gt_labels, optimizer, grad_accum_steps=1):
         """
         Memory-efficient training: processes one pair at a time with gradient accumulation.
 
         Args:
-            image: PIL image or tensor
+            image: PIL image or tensor (may be None if cache is stale; image_filename is the fallback)
+            image_filename: image filename for on-demand disk loading when image is None
             bounding_boxes: list of bounding boxes
             gt_labels: ground truth labels [N] where 0=Yes, 1=No
             optimizer: torch optimizer for LoRA parameters
@@ -834,7 +850,7 @@ class InternVLSharedHF(nn.Module):
         Returns:
             avg_loss: average loss over all pairs
         """
-        images, questions = self._prepare_images_questions(image, bounding_boxes)
+        images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
         N = len(images)
 
         yes_id = self.model.yes_token_id

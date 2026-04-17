@@ -425,10 +425,24 @@ class InternVLShared(torch.nn.Module):
             InternVLShared.model = InternVL(model_path=model_path, device=device)
         self.model = InternVLShared.model
 
-    def forward(self, image, bounding_boxes):
+    def forward(self, image, image_filename, bounding_boxes):
         image = image[0]
+        fn = image_filename[0] if (image_filename is not None) else None
+        # Fallback: if pil_image is None (stale cache built before images were
+        # downloaded), try to load directly from the images directory on disk.
+        if image is None and fn is not None:
+            _path = os.path.join("train", "images", fn)
+            try:
+                image = Image.open(_path).convert("RGB")
+            except (FileNotFoundError, OSError):
+                pass
         if isinstance(image, str):
             image = Image.open(image).convert("RGB")
+        if image is None:
+            raise ValueError(
+                f"pil_image is None for '{fn}' and the file was not found on disk. "
+                f"Ensure CLEVR images are downloaded to train/images/."
+            )
         
         images, questions = [], []
         
