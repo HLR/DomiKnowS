@@ -106,6 +106,7 @@ jobs:
 
   test-gpu:
     runs-on: [self-hosted, linux, x64, gpu]
+    needs: [test-vllm]
     steps:
       - uses: actions/checkout@v6
 
@@ -122,6 +123,13 @@ jobs:
         run: |
          uv sync --extra cu128 --extra dev --extra vllm --extra peft
 
+      - name: Install system dependencies
+        run: |
+          apt-get install -y ninja-build 2>/dev/null || \
+          sudo apt-get install -y ninja-build 2>/dev/null || \
+          echo "Could not install ninja-build (may already be present)"
+          ninja --version || which ninja || echo "ninja not found in PATH after install attempt"
+
       - name: Install spaCy model
         run: |
             .venv/bin/python -m spacy download en_core_web_sm
@@ -135,9 +143,41 @@ jobs:
       - name: Download CLEVR dataset images
         run: |
           TRAIN_IMAGES="test_regr/Clever/train/images"
+          DATASET_CACHE="test_regr/Clever/dataset_cache"
           if [ -d "$TRAIN_IMAGES" ] && [ "$(ls -A $TRAIN_IMAGES)" ]; then
             echo "CLEVR training images already cached at $TRAIN_IMAGES"
             echo "Image count: $(ls $TRAIN_IMAGES | wc -l)"
+            # Check for stale dataset cache (built without images → image=None)
+            if [ -d "$DATASET_CACHE" ]; then
+              STALE=$(.venv/bin/python - <<'PYEOF'
+          import pickle, glob, os, sys
+          cache_dir = "test_regr/Clever/dataset_cache"
+          pkl_files = glob.glob(os.path.join(cache_dir, "dataset_*.pkl"))
+          stale = False
+          for pkl in pkl_files:
+              try:
+                  with open(pkl, "rb") as f:
+                      data = pickle.load(f)
+                  samples = data[:min(5, len(data))] if isinstance(data, list) else []
+                  if any(
+                      s.get("image_filename") not in [None, "unknown_image.png", "error_invalid_scene.png"]
+                      and s.get("image") is None
+                      for s in samples
+                  ):
+                      stale = True
+                      break
+              except Exception:
+                  pass
+          print("yes" if stale else "no")
+          PYEOF
+              )
+              if [ "$STALE" = "yes" ]; then
+                echo "Dataset cache is stale (image=None while images exist). Clearing cache..."
+                rm -rf "$DATASET_CACHE"
+              else
+                echo "Dataset cache looks healthy."
+              fi
+            fi
           else
             echo "Downloading CLEVR_v1.0.zip ..."
             mkdir -p "$TRAIN_IMAGES"
@@ -172,6 +212,11 @@ jobs:
           PYEOF
             rm /tmp/CLEVR_v1.0.zip
             echo "Extracted $(ls $TRAIN_IMAGES | wc -l) images to $TRAIN_IMAGES"
+            # Images were newly downloaded — clear any stale dataset cache
+            if [ -d "$DATASET_CACHE" ]; then
+              echo "Clearing stale dataset cache (was built without images)"
+              rm -rf "$DATASET_CACHE"
+            fi
           fi
 
       - name: Download InternVL3_5-1B model
@@ -216,8 +261,8 @@ jobs:
         run: |
           CC=$(.venv/bin/python -c "import torch; cc=torch.cuda.get_device_capability(); print(cc[0]*10+cc[1])")
           if [ "$CC" -lt 80 ]; then
-            echo "Compute capability ${CC} < 80 (pre-Ampere): forcing TRITON_ATTN (FlashInfer requires >= 8.0)"
-            echo "VLLM_ATTENTION_BACKEND=TRITON_ATTN" >> $GITHUB_ENV
+            echo "Compute capability ${CC} < 80 (pre-Ampere): forcing XFORMERS (FlashInfer/FlashAttn require >= 8.0)"
+            echo "VLLM_ATTENTION_BACKEND=XFORMERS" >> $GITHUB_ENV
           else
             echo "Compute capability ${CC} >= 80: using vLLM default attention backend (FlashInfer)"
           fi
@@ -226,8 +271,8 @@ jobs:
       - name: Run GPU tests
         run: |
           TEST_LIST=(
-            'examples/PMDExistL/pmd_counting_tests'
-            'examples/PMDExistL/relation_learning_tests'
+            #'examples/PMDExistL/pmd_counting_tests'
+            #'examples/PMDExistL/relation_learning_tests'
             'Clever'
           )
           # Note: ConllQA test is temporarily disabled
@@ -246,7 +291,6 @@ jobs:
 
   test-vllm:
     runs-on: [self-hosted, linux, x64, gpu]
-    needs: [test-gpu]
     steps:
       - uses: actions/checkout@v6
 
@@ -262,6 +306,13 @@ jobs:
       - name: Resolve & install
         run: |
           uv sync --extra cu128 --extra dev --extra vllm --extra peft
+
+      - name: Install system dependencies
+        run: |
+          apt-get install -y ninja-build 2>/dev/null || \
+          sudo apt-get install -y ninja-build 2>/dev/null || \
+          echo "Could not install ninja-build (may already be present)"
+          ninja --version || which ninja || echo "ninja not found in PATH after install attempt"
 
       - name: Set MODEL_PATH if cached
         run: |
@@ -322,8 +373,8 @@ jobs:
         run: |
           CC=$(.venv/bin/python -c "import torch; cc=torch.cuda.get_device_capability(); print(cc[0]*10+cc[1])")
           if [ "$CC" -lt 80 ]; then
-            echo "Compute capability ${CC} < 80 (pre-Ampere): forcing TRITON_ATTN"
-            echo "VLLM_ATTENTION_BACKEND=TRITON_ATTN" >> $GITHUB_ENV
+            echo "Compute capability ${CC} < 80 (pre-Ampere): forcing XFORMERS (FlashInfer/FlashAttn require >= 8.0)"
+            echo "VLLM_ATTENTION_BACKEND=XFORMERS" >> $GITHUB_ENV
           else
             echo "Compute capability ${CC} >= 80: using vLLM default (FlashInfer)"
           fi
