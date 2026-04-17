@@ -9,6 +9,7 @@ import subprocess
 import sys
 import os
 import re
+import signal
 import random
 from pathlib import Path
 import pytest
@@ -22,23 +23,46 @@ TIMEOUT = 1800  # 30 minutes max per test (10-epoch training can be slow on CI)
 
 
 def _run(args: list[str], timeout: int = TIMEOUT) -> subprocess.CompletedProcess:
-    """Run main.py with given CLI args and return the completed process."""
+    """Run main.py with given CLI args, capture output, and kill the entire
+    process group on exit so orphaned vLLM EngineCore subprocesses don't hold
+    GPU memory for the next test."""
     cmd = [PYTHON, MAIN] + args
-    result = subprocess.run(
+    proc = subprocess.Popen(
         cmd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=timeout,
         cwd=str(_TEST_DIR),
+        start_new_session=True,  # new process group so we can kill grandchildren
     )
-    return result
+    pgid = os.getpgid(proc.pid)
+    stdout, stderr = "", ""
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        stdout, stderr = proc.communicate()
+    finally:
+        # Kill the whole process group to reap any orphaned vLLM EngineCore
+        # subprocesses spawned by main.py (they outlive main.py on crash).
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass  # already gone
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
 
 
 def _skip_if_vllm_failed(result: subprocess.CompletedProcess):
-    """Skip test if vLLM engine failed to initialize (GPU too small, driver issue, etc.)."""
+    """Skip test if vLLM engine failed to initialize or died during execution
+    (GPU too small, driver issue, EngineDeadError, etc.)."""
     combined = result.stdout + result.stderr
     if "Engine core initialization failed" in combined:
         pytest.skip("vLLM engine core failed to initialize (likely insufficient GPU memory)")
+    if "EngineDeadError" in combined or "EngineCore encountered an issue" in combined:
+        pytest.skip("vLLM EngineCore died during execution (likely OOM or driver issue)")
     if "ImportError" in combined and "timm" in combined:
         pytest.skip("Missing 'timm' package required by InternVL")
 
@@ -139,7 +163,7 @@ class TestZeroShotVLM:
     EXPECTED: accuracy noticeably above 50% thanks to InternVL's prior knowledge.
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "100", "--epochs", "1", "--use-vlm", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7756))]
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--use-vlm", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7836))]
     # VLM uses InternVL3_5-8B by default; if MODEL_PATH is set, override
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]

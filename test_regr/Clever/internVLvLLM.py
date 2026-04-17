@@ -135,16 +135,21 @@ def make_llm(model_path,
     target_concurrency = 8  # bump up until you hit VRAM or no longer see speedup
     # 2) Try FP8 KV cache for speed+capacity; fall back safely if unsupported
     if "1b" in model_path.lower():
+        # Conservative settings for small-VRAM GPUs (≤12 GiB, e.g. RTX 2080 Ti).
+        # CLEVR answers are short words, so a 4096-token context window is plenty.
+        # enforce_eager skips CUDA-graph capture (saves ~1 GiB on sm_75 devices).
+        # gpu_memory_utilization=0.65 leaves ~3.5 GiB free for the next test
+        # (e.g. PEFT training) so orphaned EngineCore processes don't cause OOM.
         llm = LLM(
             model=model_path,
             trust_remote_code=True,
             dtype="auto",
-            enable_prefix_caching=True,
-            #max_seq_len_to_capture=want_len,  # or the real upper bound of your shared prefix
-            max_model_len=want_len,
-            max_num_batched_tokens=4096 * target_concurrency,
-            mm_processor_cache_gb=5,
-            gpu_memory_utilization=0.9,
+            enable_prefix_caching=False,
+            enforce_eager=True,           # skip CUDA-graph capture; saves ~1 GiB on sm_75
+            max_model_len=4096,           # CLEVR answers are short; small KV cache
+            max_num_batched_tokens=4096,  # modest batching → avoids peak-VRAM spikes
+            mm_processor_cache_gb=1,      # small image cache sufficient for CI-scale tests
+            gpu_memory_utilization=0.65,  # leaves ~3.5 GiB free for subsequent tests
             logprobs_mode='processed_logits',
             logits_processors=[WrappedPerReqLogitsProcessor],
         )
