@@ -68,6 +68,7 @@ vllm = [
   "vllm>=0.17.0,<0.20; sys_platform == 'linux'",
   "ray>=2.0; sys_platform == 'linux'",
   "numpy>=2.0; sys_platform == 'linux'",
+  "ninja; sys_platform == 'linux'",
 ]
 peft = [
   "peft>=0.13.0",
