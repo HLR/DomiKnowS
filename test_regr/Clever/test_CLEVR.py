@@ -452,7 +452,9 @@ class TestPEFTTraining:
     from the logic solver into the VLM's LoRA adapters.
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
+    # --load-4bit enables QLoRA: weights are kept in NF4 (~0.7 GiB for
+    # the 1B model vs. ~2.5 GiB in FP16), 
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--load-4bit", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
     # PEFT uses InternVL3_5-1B by default; use local copy if available
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
@@ -460,8 +462,8 @@ class TestPEFTTraining:
     @pytest.fixture(autouse=True)
     def _require_vram(self):
         _skip_if_insufficient_vram(
-            _MIN_VRAM_PEFT_GIB,
-            "PEFT/LoRA training of InternVL-1B requires ≥16 GiB VRAM",
+            _MIN_VRAM_VLM_GIB,
+            "PEFT/LoRA (QLoRA 4-bit) training of InternVL-1B requires ≥10 GiB VRAM",
         )
 
     @pytest.mark.slow

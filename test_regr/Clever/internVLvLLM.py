@@ -153,7 +153,34 @@ def make_llm(model_path,
         _tp = int(os.environ.get("VLLM_TP", "1"))
     except ValueError:
         _tp = 1
+    # We cap TP at the number of visible GPUs to prevent init failure; vLLM will raise a warning and fall back to single-GPU if you ask for more parallelism than you have devices.
     tp = max(1, min(_tp, _visible_gpus or 1))
+
+   
+    if tp > 1 and torch.cuda.is_available():
+        try:
+            _cap = torch.cuda.get_device_capability(0)
+        except Exception:
+            _cap = (0, 0)
+        if _cap == (7, 5):
+            print(
+                f"[make_llm] Detected Turing (sm_75) GPU; forcing "
+                f"tensor_parallel_size=1 (was {tp}) — vLLM TP is "
+                f"unreliable on this architecture.",
+                flush=True,
+            )
+            tp = 1
+
+    # The 1B model fits on a single 10.75 GiB card with room to spare;
+    # tensor parallelism just adds init overhead and failure modes, so
+    # we clamp it here regardless of VLLM_TP.
+    if "1b" in model_path.lower() and tp > 1:
+        print(
+            f"[make_llm] 1B model detected; forcing tensor_parallel_size=1 "
+            f"(was {tp}) — weights fit on a single GPU.",
+            flush=True,
+        )
+        tp = 1
 
     # 2) Try FP8 KV cache for speed+capacity; fall back safely if unsupported
     if "1b" in model_path.lower():
