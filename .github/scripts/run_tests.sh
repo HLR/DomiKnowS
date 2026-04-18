@@ -76,10 +76,20 @@ for subfolder in "${TEST_LIST[@]}"; do
     fi
     
     echo "   🧪 Running pytest..."
-    echo "   Command: uv run --no-sync pytest -v -s --tb=short --no-header \"$test_path\""
-    
+    # Optional keyword filter via PYTEST_K env var. Lets callers limit a
+    # subfolder run to specific classes/functions, e.g.
+    #   PYTEST_K="TestZeroShotVLM or TestPEFTTraining"
+    # to narrow `test_regr/Clever/` down to those two classes without
+    # touching the TEST_LIST structure.
+    K_ARG=()
+    if [ -n "${PYTEST_K:-}" ]; then
+      K_ARG=(-k "$PYTEST_K")
+      echo "   🔎 Applying -k filter: $PYTEST_K"
+    fi
+    echo "   Command: uv run --no-sync pytest -v -s --tb=short --no-header ${K_ARG[*]} \"$test_path\""
+
     # Capture both stdout and stderr
-    test_output=$(uv run --no-sync pytest -v -s --tb=short --no-header "$test_path" 2>&1)
+    test_output=$(uv run --no-sync pytest -v -s --tb=short --no-header "${K_ARG[@]}" "$test_path" 2>&1)
     test_exit_code=$?
     
     echo "   📊 Pytest exit code: $test_exit_code"

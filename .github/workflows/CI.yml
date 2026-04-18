@@ -318,7 +318,12 @@ jobs:
           fi
 
       # --- Run GPU tests ---
+      # Temporarily restricted to TestZeroShotVLM + TestPEFTTraining to cut CI
+      # time while those two classes are being debugged. To restore full
+      # Clever coverage, remove the ``PYTEST_K`` env var below.
       - name: Run GPU tests
+        env:
+          PYTEST_K: "TestZeroShotVLM or TestPEFTTraining"
         run: |
           TEST_LIST=(
             #'examples/PMDExistL/pmd_counting_tests'

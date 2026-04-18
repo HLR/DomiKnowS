@@ -70,6 +70,18 @@ def _total_gpu_vram_gib() -> float | None:
         return None
 
 
+def _skip(msg: str):
+    """pytest.skip wrapper that *also* prints the reason to stderr.
+
+    Default pytest output only shows "SKIPPED" — the ``reason`` argument is
+    invisible without ``-rs`` / ``-v``. That makes diagnosing CI skips from
+    logs nearly impossible. Echoing to stderr before skipping means the
+    message always lands in the captured log output.
+    """
+    print(f"[skip] {msg}", file=sys.stderr, flush=True)
+    pytest.skip(msg)
+
+
 def _skip_if_insufficient_vram(min_gib: float, reason: str):
     """Skip a test if the visible GPUs cannot collectively hold the workload.
 
@@ -82,7 +94,7 @@ def _skip_if_insufficient_vram(min_gib: float, reason: str):
     """
     vram_single = _gpu_vram_gib()
     if vram_single is None:
-        pytest.skip("No CUDA GPU available")
+        _skip("No CUDA GPU available")
     if vram_single >= min_gib:
         return  # single-GPU is enough
 
@@ -98,11 +110,11 @@ def _skip_if_insufficient_vram(min_gib: float, reason: str):
         return  # multi-GPU sharding covers the workload
 
     if _sharding_on:
-        pytest.skip(
+        _skip(
             f"{reason}: sharding enabled but aggregate VRAM "
             f"{vram_total:.2f} GiB is still below the {min_gib} GiB threshold."
         )
-    pytest.skip(
+    _skip(
         f"{reason}: need ≥{min_gib} GiB VRAM, have {vram_single:.2f} GiB on "
         f"GPU 0 and no multi-GPU sharding enabled. Set VLLM_TP=2 / "
         f"PEFT_DEVICE_MAP=auto with ≥2 matching GPUs visible to shard."
@@ -142,19 +154,31 @@ def _run(args: list[str], timeout: int = TIMEOUT) -> subprocess.CompletedProcess
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
 
 
+def _tail(text: str, n: int = 3000) -> str:
+    """Return the last ``n`` characters of ``text`` — useful for embedding the
+    actual error into the skip message so CI logs show *why* vLLM failed."""
+    return text[-n:] if text else ""
+
+
 def _skip_if_vllm_failed(result: subprocess.CompletedProcess):
     """Skip test if vLLM engine failed to initialize or died during execution
-    (GPU too small, driver issue, EngineDeadError, etc.)."""
+    (GPU too small, driver issue, EngineDeadError, etc.).
+
+    Skip messages include a tail of the subprocess stderr so the CI log shows
+    the actual failure, not just "SKIPPED".
+    """
     combined = result.stdout + result.stderr
+    tail = _tail(result.stderr) or _tail(combined)
+
     if "Engine core initialization failed" in combined:
-        pytest.skip("vLLM engine core failed to initialize (likely insufficient GPU memory)")
+        _skip(f"vLLM engine core failed to initialize. STDERR tail:\n{tail}")
     if "EngineDeadError" in combined or "EngineCore encountered an issue" in combined:
-        pytest.skip("vLLM EngineCore died during execution (likely OOM or driver issue)")
+        _skip(f"vLLM EngineCore died during execution. STDERR tail:\n{tail}")
     if "ImportError" in combined and "timm" in combined:
-        pytest.skip("Missing 'timm' package required by InternVL")
+        _skip("Missing 'timm' package required by InternVL")
     if ("Expected all tensors to be on the same device" in combined
             and "lcLossBooleanMethods" in combined):
-        pytest.skip(
+        _skip(
             "Known domiknows bug: VLM output tensors on CPU but LC graph on "
             "CUDA (lcLossBooleanMethods.andVar device mismatch)"
         )
@@ -162,14 +186,14 @@ def _skip_if_vllm_failed(result: subprocess.CompletedProcess):
     if ("Expected all tensors to be on the same device" in combined
             and "accelerate/hooks.py" in combined
             and ("layer_norm" in combined or "normalization.py" in combined)):
-        pytest.skip(
+        _skip(
             "HF Accelerate device_map='auto' unstable for LoRA training on "
             "sharded model: LayerNorm weight/activation ended up on different "
             "GPUs. Run PEFT on a single GPU with ≥16 GiB VRAM, or disable "
             "sharding via PEFT_DEVICE_MAP=single."
         )
     if "torch.OutOfMemoryError" in combined or "CUDA out of memory" in combined:
-        pytest.skip("CUDA OOM — GPU too small for this VLM/PEFT workload")
+        _skip(f"CUDA OOM — GPU too small for this VLM/PEFT workload. STDERR tail:\n{tail}")
 
 
 def _parse_accuracy(output: str, pattern: str) -> float | None:
