@@ -89,16 +89,36 @@ class lcLossBooleanMethods(constraintsProcessor):
         
     # -- Consider None
     def _fixVar(self, var):
-        varFixed = []  
+        """Normalize every input tensor to the solver's current device, dtype,
+        and gradient-tracking state.
+        """
+        target_device = self.current_device
+        target_dtype = self._get_dtype()
+        varFixed = []
         for v in var:
-            if v == None or self._isTensor(v) == -100:
-                varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=self._get_dtype()))
-            else:
-                # Ensure the tensor has gradient tracking
-                if torch.is_tensor(v) and not v.requires_grad:
+            if v is None or self._isTensor(v) == -100:
+                varFixed.append(torch.tensor(
+                    [0], device=target_device, requires_grad=True,
+                    dtype=target_dtype,
+                ))
+                continue
+
+            if torch.is_tensor(v):
+                # Coerce device first, then dtype. .to() is a no-op when the
+                # tensor is already on the right device/dtype, so this is
+                # cheap for the common case.
+                if v.device != torch.device(target_device):
+                    v = v.to(target_device)
+                if v.dtype != target_dtype:
+                    v = v.to(target_dtype)
+                # Ensure the tensor participates in autograd. If it's a leaf
+                # without grad, re-mark it; if it's a non-leaf produced by
+                # the .to() above, it already tracks grad.
+                if not v.requires_grad and v.is_leaf:
                     v = v.detach().requires_grad_(True)
-                varFixed.append(v)
-        
+
+            varFixed.append(v)
+
         return varFixed
 
     def notVar(self, _, var, onlyConstrains = False):

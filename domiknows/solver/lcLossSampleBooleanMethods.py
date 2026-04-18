@@ -20,30 +20,51 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         if self.current_dtype is not None:
             return self.current_dtype
         return torch.float32
-    
+
+    # ------------------------------------------------------------------
+    # Normalising at every entry
+    # point keeps the rest of the class device-agnostic.
+    # ------------------------------------------------------------------
+    def _coerceDevice(self, var):
+        """Return ``var`` with every tensor element moved to
+        ``self.current_device``. Non-tensor elements (None, int, bool, …)
+        are passed through unchanged — callers like ``countVar`` already
+        handle them separately."""
+        if getattr(self, "current_device", None) is None:
+            return list(var)
+        target = torch.device(self.current_device)
+        out = []
+        for v in var:
+            if torch.is_tensor(v) and v.device != target:
+                v = v.to(target)
+            out.append(v)
+        return out
+
     # -- Consider None
     def ifNone(self, var): # Used in all except countVar
         for v in var:
             if not torch.is_tensor(v):
                 return True
-        
+
         return False
     #--
     
     def notVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):
             return None
-        
+        var, = self._coerceDevice((var,))
+
         if onlyConstrains:
             return var # notLoss
         else:
             notSuccess = torch.logical_not(var)
             return notSuccess
-    
-    def andVar(self, _, *var, onlyConstrains = False): 
+
+    def andVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
-        
+        var = self._coerceDevice(var)
+
         andSuccess = var[0]
         for i in range(1, len(var)):
             andSuccess = torch.logical_and(andSuccess, var[i])
@@ -58,7 +79,8 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
     def orVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
-        
+        var = self._coerceDevice(var)
+
         orSuccess = var[0]
         for i in range(1, len(var)):
             orSuccess = torch.logical_or(orSuccess, var[i])
@@ -74,7 +96,8 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         #results = self.notVar(_, self.andVar(_, var))
         if self.ifNone(var):
             return None
-            
+        var = self._coerceDevice(var)
+
         nandSuccess = var[0]
         for i in range(1, len(var)):
             nandSuccess = torch.logical_and(nandSuccess, var[i])
@@ -90,7 +113,8 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         if self.ifNone([var1, var2]):
             return None
-                
+        var1, var2 = self._coerceDevice((var1, var2))
+
         ifSuccess = torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
@@ -104,7 +128,8 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
         #results = self.notVar(_, self.orVar(_, var))
         if self.ifNone(var):
             return None
-            
+        var = self._coerceDevice(var)
+
         norSuccess = var[0]
         for i in range(1, len(var)):
             norSuccess = torch.logical_or(norSuccess, var[i])
@@ -120,7 +145,8 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
     def xorVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
-        
+        var = self._coerceDevice(var)
+
         if len(var) == 0:
             # XOR of no variables is False
             return torch.zeros([self.sampleSize], device=self.current_device, dtype=torch.bool)
@@ -147,7 +173,8 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
     def equivalenceVar(self, _, *var, onlyConstrains = False):
         if self.ifNone(var):
             return None
-        
+        var = self._coerceDevice(var)
+
         if len(var) == 0:
             # Equivalence of no variables is True (vacuous truth)
             return torch.ones([self.sampleSize], device=self.current_device, dtype=torch.bool)
@@ -178,18 +205,22 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
                 return equivSuccess
             
     def countVar(self, _, *var, onlyConstrains=False, limitOp='==', limit=1, logicMethodName="COUNT"):
-        # -- Consider None
+        # -- Consider None (and coerce real tensors onto current_device so
+        # varSum.add_(fixedVar[i]) below does not mix devices).
+        target_device = self.current_device
         fixedVar = []
         for v in var:
             if torch.is_tensor(v):
+                if torch.device(target_device) != v.device:
+                    v = v.to(target_device)
                 fixedVar.append(v)
             else:
                 if limitOp == '>=':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=target_device, dtype=self._get_dtype()))
                 elif limitOp == '<=':
-                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
+                    fixedVar.append(torch.ones([self.sampleSize], device=target_device, dtype=self._get_dtype()))
                 elif limitOp == '==':
-                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device, dtype=self._get_dtype()))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=target_device, dtype=self._get_dtype()))
         # --
 
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
@@ -246,14 +277,18 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
             raise ValueError(f"{logicMethodName}: unsupported operator {compareOp}")
 
         # ---------- helper to normalise missing literals ----------------------
+        target_device = self.current_device
         def _to_tensor_list(iterable):
             tensors = []
             for v in iterable:
                 if torch.is_tensor(v):
+                    # coerce device 
+                    if torch.device(target_device) != v.device:
+                        v = v.to(target_device)
                     tensors.append(v)
                 else:                       # treat None / scalars as 0-tensor
                     tensors.append(torch.zeros(
-                        [self.sampleSize], device=self.current_device))
+                        [self.sampleSize], device=target_device))
             return tensors
 
         tensorsA = _to_tensor_list(varsA)

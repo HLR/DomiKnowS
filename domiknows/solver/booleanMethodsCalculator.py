@@ -5,14 +5,29 @@ from domiknows.solver.constraintsProcessorInterface import constraintsProcessor
 from domiknows.solver.ilpConfig import ilpConfig 
 
 class booleanMethodsCalculator(constraintsProcessor):
-    
+
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-                
+
         self.grad = False
-        
+
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
+
+    # ------------------------------------------------------------------
+    # Make sure all variables are on the same device (CPU or GPU) for consistent operations.
+    # ------------------------------------------------------------------
+    def _coerceDevice(self, var):
+        target = getattr(self, "current_device", None)
+        if target is None:
+            return list(var)
+        target = torch.device(target)
+        out = []
+        for v in var:
+            if torch.is_tensor(v) and v.device != target:
+                v = v.to(target)
+            out.append(v)
+        return out
         
     def notVar(self, _, var, onlyConstrains = False):
         # -- Consider None
@@ -25,8 +40,9 @@ class booleanMethodsCalculator(constraintsProcessor):
         return notSuccess
             
     def andVar(self, _, *var, onlyConstrains = False):
+        var = self._coerceDevice(var)
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tOnes = torch.ones(1, device=self.current_device, requires_grad=False)
@@ -44,8 +60,9 @@ class booleanMethodsCalculator(constraintsProcessor):
         return andSuccess    
     
     def orVar(self, _, *var, onlyConstrains = False):
+        var = self._coerceDevice(var)
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
@@ -55,7 +72,7 @@ class booleanMethodsCalculator(constraintsProcessor):
                 varFixed.append(v)
         var = varFixed
         # --
-        
+
         orSuccess = 0
         if sum(var) > 0:
             orSuccess = 1
@@ -64,9 +81,10 @@ class booleanMethodsCalculator(constraintsProcessor):
          
     def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
-        
+        var = self._coerceDevice(var)
+
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
@@ -74,7 +92,7 @@ class booleanMethodsCalculator(constraintsProcessor):
                 varFixed.append(tZerosSqueezed)  # when None
             else:
                 varFixed.append(v)
-        
+
         var = varFixed
         # --
             
@@ -103,8 +121,9 @@ class booleanMethodsCalculator(constraintsProcessor):
     
     def norVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.orVar(_, var))
+        var = self._coerceDevice(var)
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tOnes = torch.ones(1, device=self.current_device, requires_grad=False)

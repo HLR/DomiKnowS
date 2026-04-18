@@ -320,6 +320,33 @@ class InternVLHF:
             torch_dtype=torch.bfloat16,
         )
 
+        # ------------------------------------------------------------------
+        # Multi-GPU sharding for the base (frozen) model.
+        #
+        # Since LoRA keeps the backbone frozen and only trains small adapter
+        # matrices, we can safely pipeline-shard the base model across the
+        # visible CUDA devices using HuggingFace Accelerate's ``device_map``.
+        # This lets two small memory GPUs hold a model whose
+        # weights + activations wouldn't fit on one of them alone.
+        #
+        # Opt-in controls:
+        #   PEFT_DEVICE_MAP=auto       → force HF Accelerate auto-sharding
+        #   PEFT_DEVICE_MAP=single     → force single-device placement
+        #   (unset, ≥2 GPUs visible)   → default to "auto"
+        #   (unset, ≤1 GPU visible)    → single-device placement
+        #
+        # 4-bit quantized loading has its own device_map handling below and
+        # is not affected by this logic.
+        # ------------------------------------------------------------------
+        _visible_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        _dm_env = os.environ.get("PEFT_DEVICE_MAP", "").strip().lower()
+        if _dm_env == "auto":
+            self._auto_sharded = True
+        elif _dm_env == "single":
+            self._auto_sharded = False
+        else:
+            self._auto_sharded = _visible_gpus >= 2
+
         if load_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -329,7 +356,17 @@ class InternVLHF:
             )
             load_kwargs["quantization_config"] = bnb_config
             load_kwargs["device_map"] = {"": device}
+            # 4-bit always uses a single device — bitsandbytes does its own
+            # placement and we don't pipeline-shard a quantized backbone here.
+            self._auto_sharded = False
             logging.info("Loading model with QLoRA 4-bit quantization.")
+        elif self._auto_sharded:
+            load_kwargs["device_map"] = "auto"
+            logging.info(
+                "Loading model with device_map='auto' across %d GPUs "
+                "(PEFT_DEVICE_MAP=%s).",
+                _visible_gpus, _dm_env or "default",
+            )
 
         base_model = AutoModel.from_pretrained(model_path, **load_kwargs)
 
@@ -380,6 +417,13 @@ class InternVLHF:
 
         if load_4bit:
             self.model = base_model  # Already on device from device_map
+        elif self._auto_sharded:
+            # Model is pipeline-sharded across multiple GPUs by HF Accelerate.
+            # Do NOT call .to(device=...) — that would consolidate every shard
+            # onto a single GPU and defeat the purpose of the auto map. We
+            # can, however, cast dtype safely: PyTorch dispatches the cast to
+            # each shard in place on its own device.
+            self.model = base_model.to(dtype=self.compute_dtype)
         else:
             self.model = base_model.to(dtype=self.compute_dtype, device=self.device)
 

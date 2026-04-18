@@ -286,6 +286,37 @@ jobs:
           set +e
           uv run --no-sync mypy --install-types --non-interactive .
 
+      # --- Detect multi-GPU opportunity ---
+      # Small-VRAM GPUs
+      # + PEFT training on a single card. When ≥2 GPUs are visible, we:
+      #   - pin both to the job via CUDA_VISIBLE_DEVICES (indexes 0,1 by
+      #     default — override with GPU_IDS=2,3 in the runner env if you
+      #     need a different pair, e.g. to avoid mixing 2080 Ti + 2070),
+      #   - tell vLLM to shard inference weights across both GPUs
+      #     (VLLM_TP=2, consumed by make_llm() in internVLvLLM.py),
+      #   - let HuggingFace Accelerate pipeline-shard the PEFT base model
+      #     (PEFT_DEVICE_MAP=auto, consumed by peftvllm.py).
+      # On a single-GPU host nothing changes — the env vars default to
+      # single-card behavior.
+      - name: Configure multi-GPU (if available)
+        run: |
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            _gpu_count=$(nvidia-smi --list-gpus | wc -l)
+          else
+            _gpu_count=0
+          fi
+          echo "Detected ${_gpu_count} GPU(s)."
+          if [ "${_gpu_count}" -ge 2 ]; then
+            # Pin to the two GPUs chosen by GPU_IDS, or 0,1 by default.
+            _gpu_ids="${GPU_IDS:-0,1}"
+            echo "Enabling multi-GPU: CUDA_VISIBLE_DEVICES=${_gpu_ids}, VLLM_TP=2, PEFT_DEVICE_MAP=auto"
+            echo "CUDA_VISIBLE_DEVICES=${_gpu_ids}" >> "$GITHUB_ENV"
+            echo "VLLM_TP=2" >> "$GITHUB_ENV"
+            echo "PEFT_DEVICE_MAP=auto" >> "$GITHUB_ENV"
+          else
+            echo "Single-GPU runner — leaving VLLM_TP and PEFT_DEVICE_MAP unset."
+          fi
+
       # --- Run GPU tests ---
       - name: Run GPU tests
         run: |
@@ -351,6 +382,18 @@ jobs:
           echo ""
           echo "=== GPU memory ==="
           nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader
+          echo ""
+          # Topology matrix — shows the interconnect between every pair of
+          # GPUs. Used to pick a topologically close pair for tensor
+          # parallelism (set GPU_IDS on the runner). Legend:
+          #   NV# = NVLink (N bricks)     best
+          #   PIX = single PCIe switch    very good
+          #   PXB = multiple PCIe bridges good
+          #   PHB = PCIe host bridge
+          #   NODE = same NUMA node
+          #   SYS = crosses CPU sockets   slowest
+          echo "=== GPU topology (nvidia-smi topo -m) ==="
+          nvidia-smi topo -m || echo "(nvidia-smi topo -m unavailable on this driver)"
 
       - name: Verify torch CUDA
         run: |
