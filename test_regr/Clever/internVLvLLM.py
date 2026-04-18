@@ -158,13 +158,25 @@ def make_llm(model_path,
     # 2) Try FP8 KV cache for speed+capacity; fall back safely if unsupported
     if "1b" in model_path.lower():
         # Conservative settings for small-VRAM GPUs (≤12 GiB, e.g. RTX 2080 Ti).
-        # CLEVR answers are short words, so a 4096-token context window is plenty.
+        # CLEVR answers are short words, so a 2048-token context window is plenty.
         # enforce_eager skips CUDA-graph capture (saves ~1 GiB on sm_75 devices).
-        # With TP=1, gpu_memory_utilization=0.65 leaves ~3.5 GiB free for the
+        # With TP=1, gpu_memory_utilization=0.55 leaves ~4.5 GiB free for the
         # next test (e.g. PEFT training) so orphaned EngineCore processes don't
         # cause OOM. With TP≥2 we can raise the utilization because weights are
         # split and the leftover headroom is needed less on each individual GPU.
-        _util_1b = 0.80 if tp > 1 else 0.65
+        try:
+            _util_env = float(os.environ.get("VLLM_GPU_UTIL", ""))
+        except ValueError:
+            _util_env = 0.0
+        if _util_env > 0.0:
+            _util_1b = _util_env
+        else:
+            _util_1b = 0.80 if tp > 1 else 0.55
+        try:
+            _max_len_env = int(os.environ.get("VLLM_MAX_MODEL_LEN", ""))
+        except ValueError:
+            _max_len_env = 0
+        _max_len_1b = _max_len_env if _max_len_env > 0 else 2048
         llm = LLM(
             model=model_path,
             trust_remote_code=True,
@@ -172,8 +184,9 @@ def make_llm(model_path,
             tensor_parallel_size=tp,
             enable_prefix_caching=False,
             enforce_eager=True,           # skip CUDA-graph capture; saves ~1 GiB on sm_75
-            max_model_len=4096,           # CLEVR answers are short; small KV cache
-            max_num_batched_tokens=4096,  # modest batching → avoids peak-VRAM spikes
+            max_model_len=_max_len_1b,    # CLEVR answers are short; small KV cache
+            max_num_batched_tokens=_max_len_1b,  # one batch of the context window
+            max_num_seqs=8,               # cap concurrent seqs; lowers KV-cache ceiling
             mm_processor_cache_gb=1,      # small image cache sufficient for CI-scale tests
             gpu_memory_utilization=_util_1b,
             logprobs_mode='processed_logits',
