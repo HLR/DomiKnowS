@@ -724,7 +724,7 @@ class TorchCache(Cache):
 
         file_path = self.file_path(name)
         try:
-            return torch.load(file_path)
+            return torch.load(file_path, weights_only=True)
         except FileNotFoundError as e:
             raise KeyError(f'{name} (e.message)')
 

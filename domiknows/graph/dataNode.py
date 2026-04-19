@@ -2475,9 +2475,9 @@ class DataNode:
                 _DataNode__Logger.error("Concept %s predictions is not a Tensor - not able to calculate metrics"%(cr[1]))
                 continue
 
-            # Move to CPU
-            if preds.is_cuda: preds = preds.cpu()
-            if labelsR.is_cuda: labelsR = labelsR.cpu()
+            # Move to CPU (.cpu() is a no-op if already on CPU)
+            preds = preds.cpu()
+            labelsR = labelsR.cpu()
 
             # Translate labels - if provided as True/False to long
             labels = torch.clone(labelsR)

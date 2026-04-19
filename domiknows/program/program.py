@@ -33,27 +33,50 @@ class LearningBasedProgram():
 
         self.logger = logger or logging.getLogger(__name__)
 
+        # --- PyTorch 2.10/2.11 feature kwargs (on by default; pass False to opt out) ---
+        # AMP (mixed precision) — bfloat16 is the safe default:
+        #   * works on CUDA (Ampere+), XPU, and CPU
+        #   * does not require GradScaler (no loss scaling needed)
+        # Users can switch to 'float16' for broader GPU support (scaler is
+        # created automatically) or disable entirely with use_amp=False.
+        self.use_amp = kwargs.pop('use_amp', True)
+        self.amp_dtype = kwargs.pop('amp_dtype', 'bfloat16')
+        # torch.compile — compiles each TorchLearner sub-module by default.
+        # Sub-module compilation avoids graph breaks from the dynamic
+        # DataNode/sensor orchestration in TorchModel.forward. Pass
+        # compile_model=False to disable, or compile_submodules=False to
+        # compile the top-level model instead (expect graph breaks).
+        self.compile_model = kwargs.pop('compile_model', True)
+        self.compile_backend = kwargs.pop('compile_backend', 'inductor')
+        self.compile_mode = kwargs.pop('compile_mode', None)
+        self.compile_submodules = kwargs.pop('compile_submodules', True)
+        # Gradient clipping norm (exposed for convenience; default preserves old behavior)
+        self.grad_clip_norm = kwargs.pop('grad_clip_norm', 10.0)
+
+        # GradScaler is created lazily in train(); only float16 on CUDA needs it.
+        self.scaler = None
+
         from inspect import signature
         self.modelSignature = signature(Model.__init__)
-        
+
         self.kwargs = kwargs
         self.modelKwargs = {}
         for param in self.modelSignature.parameters.values():
             paramName = param.name
             if paramName in kwargs:
                 self.modelKwargs[paramName] = kwargs[paramName]
-        
+
         # Only add kwargs if the Model signature has **kwargs parameter
         has_var_keyword = any(
-            param.kind == param.VAR_KEYWORD 
+            param.kind == param.VAR_KEYWORD
             for param in self.modelSignature.parameters.values()
         )
-        
+
         if has_var_keyword:
             # Pass remaining kwargs that weren't explicitly matched
             remaining_kwargs = {k: v for k, v in kwargs.items() if k not in self.modelKwargs}
             self.modelKwargs.update(remaining_kwargs)
-        
+
         self.model = Model(graph, **self.modelKwargs)
         self.opt = None
         self.epoch = None
@@ -61,6 +84,123 @@ class LearningBasedProgram():
         self.device = "auto"
         if "f" in kwargs:
             self.f=kwargs["f"]
+
+        # Apply torch.compile if requested (after model is built)
+        self._maybe_compile()
+
+    # ------------------------------------------------------------------
+    # PyTorch 2.10/2.11 feature helpers
+    # ------------------------------------------------------------------
+    def _maybe_compile(self):
+        """Apply torch.compile to the model or to its sub-learner modules.
+
+        DomiKnowS' top-level ``TorchModel.forward`` iterates sensors and
+        constructs DataNodes dynamically, which is incompatible with
+        ``torch.compile(fullgraph=True)``. By default we compile each
+        ``TorchLearner``'s underlying ``nn.Module`` instead, which captures
+        the compute-heavy parts while leaving the dynamic orchestration
+        uncompiled.
+        """
+        if not self.compile_model:
+            return
+        compile_kwargs = {'backend': self.compile_backend}
+        if self.compile_mode is not None:
+            compile_kwargs['mode'] = self.compile_mode
+        try:
+            if self.compile_submodules:
+                from ..sensor.pytorch.learners import TorchLearner
+                compiled_count = 0
+                for learner in self.graph.get_sensors(TorchLearner):
+                    if getattr(learner, 'model', None) is not None and \
+                       isinstance(learner.model, torch.nn.Module):
+                        learner.model = torch.compile(learner.model, **compile_kwargs)
+                        compiled_count += 1
+                self.logger.info(
+                    'torch.compile applied to %d learner sub-modules (backend=%s, mode=%s)',
+                    compiled_count, self.compile_backend, self.compile_mode)
+            else:
+                self.logger.warning(
+                    'torch.compile applied to the top-level model; '
+                    'dynamic DataNode construction may cause graph breaks.')
+                self.model = torch.compile(self.model, **compile_kwargs)
+        except Exception as e:
+            self.logger.error('torch.compile failed (%s); continuing uncompiled.', e)
+
+    def _resolve_amp_dtype(self):
+        """Translate the string amp_dtype into a torch dtype."""
+        mapping = {
+            'float16': torch.float16,
+            'fp16': torch.float16,
+            'half': torch.float16,
+            'bfloat16': torch.bfloat16,
+            'bf16': torch.bfloat16,
+        }
+        if isinstance(self.amp_dtype, torch.dtype):
+            return self.amp_dtype
+        dtype = mapping.get(str(self.amp_dtype).lower())
+        if dtype is None:
+            raise ValueError(
+                f"Unsupported amp_dtype '{self.amp_dtype}'. "
+                "Expected one of: float16, bfloat16.")
+        return dtype
+
+    def _device_type(self):
+        """Best-effort device type string for torch.autocast."""
+        dev = getattr(self, 'device', None)
+        if isinstance(dev, torch.device):
+            return dev.type
+        if isinstance(dev, str) and dev not in ('auto', None):
+            return torch.device(dev).type
+        return 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    def _autocast_ctx(self):
+        """Return an autocast context manager, or a null context if AMP is off."""
+        if not self.use_amp:
+            import contextlib
+            return contextlib.nullcontext()
+        return torch.autocast(device_type=self._device_type(),
+                              dtype=self._resolve_amp_dtype())
+
+    def _ensure_scaler(self):
+        """Create a GradScaler on first use when float16 AMP is enabled."""
+        if not self.use_amp:
+            self.scaler = None
+            return
+        if self._resolve_amp_dtype() != torch.float16:
+            # bfloat16 does not need loss scaling
+            self.scaler = None
+            return
+        if self.scaler is None:
+            # torch.amp.GradScaler replaces torch.cuda.amp.GradScaler in 2.x
+            self.scaler = torch.amp.GradScaler(self._device_type())
+
+    def _backward_and_step(self, loss, zero_grad=True, step=True):
+        """AMP-aware backward / grad-clip / optimizer step.
+
+        :param loss: scalar loss tensor
+        :param zero_grad: call ``opt.zero_grad()`` before backward
+        :param step: call ``opt.step()`` (and ``scaler.step``/``update`` if applicable)
+        """
+        if self.opt is None or not torch.is_tensor(loss) or not loss.requires_grad:
+            return
+        if zero_grad:
+            self.opt.zero_grad()
+        if self.scaler is not None:
+            self.scaler.scale(loss).backward()
+            if step:
+                if self.grad_clip_norm is not None:
+                    self.scaler.unscale_(self.opt)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), max_norm=self.grad_clip_norm)
+                self.scaler.step(self.opt)
+                self.scaler.update()
+        else:
+            loss.backward()
+            if step:
+                if self.grad_clip_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), max_norm=self.grad_clip_norm)
+                self.opt.step()
 
     def to(self, device='auto'):
         if device == 'auto':
@@ -182,6 +322,8 @@ class LearningBasedProgram():
             self.opt = Optim(self.model.parameters())
         else:
             self.opt = None
+        # Create GradScaler now that the optimizer exists and device is set.
+        self._ensure_scaler()
         self.train_epoch_num = train_epoch_num
         self.epoch = 0
         self.stop = False
@@ -210,16 +352,12 @@ class LearningBasedProgram():
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
-            
-            if self.opt is not None:
-                self.opt.zero_grad()
-                
-            loss, metric, *output = self.model(data_item)
-            if self.opt and torch.is_tensor(loss) and loss.requires_grad:
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-                self.opt.step()
-                
+            with self._autocast_ctx():
+                loss, metric, *output = self.model(data_item)
+            # _backward_and_step is a no-op when self.opt is None or loss
+            # isn't differentiable, and handles AMP scaling when enabled.
+            self._backward_and_step(loss)
+
             yield (loss, metric, *output[:1])
 
     def test(self, dataset, device=None, **kwargs):
@@ -248,7 +386,7 @@ class LearningBasedProgram():
         """
         self.model.mode(Mode.TEST)
         self.model.reset()
-        with torch.no_grad():
+        with torch.no_grad(), self._autocast_ctx():
             for data_item in dataset:
                 loss, metric, *output = self.model(data_item)
                 yield (loss, metric, *output[:1])
@@ -310,6 +448,7 @@ class LearningBasedProgram():
         
         :param path: The path parameter is the file path to the saved model state dictionary
         """
+        kwargs.setdefault('weights_only', True)
         self.model.load_state_dict(torch.load(path, **kwargs))
 
     def verifyResultsLC(self,data,constraint_names=None,device=None):
