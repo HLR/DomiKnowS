@@ -41,6 +41,8 @@ class LearningBasedProgram():
         # created automatically) or disable entirely with use_amp=False.
         self.use_amp = kwargs.pop('use_amp', True)
         self.amp_dtype = kwargs.pop('amp_dtype', 'bfloat16')
+        # CPU autocast is opt-in: set amp_on_cpu=True to enable it.
+        self.amp_on_cpu = kwargs.pop('amp_on_cpu', False)
         # torch.compile — compiles each TorchLearner sub-module by default.
         # Sub-module compilation avoids graph breaks from the dynamic
         # DataNode/sensor orchestration in TorchModel.forward. Pass
@@ -154,11 +156,18 @@ class LearningBasedProgram():
         return 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def _autocast_ctx(self):
-        """Return an autocast context manager, or a null context if AMP is off."""
+        """Return an autocast context manager, or a null context if AMP is off.
+
+        AMP is skipped on CPU: bfloat16 CPU autocast offers marginal benefit
+        for typical DomiKnowS workloads. Pass ``amp_on_cpu=True`` to force it.
+        """
+        import contextlib
         if not self.use_amp:
-            import contextlib
             return contextlib.nullcontext()
-        return torch.autocast(device_type=self._device_type(),
+        device_type = self._device_type()
+        if device_type == 'cpu' and not self.amp_on_cpu:
+            return contextlib.nullcontext()
+        return torch.autocast(device_type=device_type,
                               dtype=self._resolve_amp_dtype())
 
     def _ensure_scaler(self):
@@ -170,9 +179,14 @@ class LearningBasedProgram():
             # bfloat16 does not need loss scaling
             self.scaler = None
             return
+        device_type = self._device_type()
+        if device_type == 'cpu' and not self.amp_on_cpu:
+            # AMP is disabled on CPU; no scaler needed.
+            self.scaler = None
+            return
         if self.scaler is None:
             # torch.amp.GradScaler replaces torch.cuda.amp.GradScaler in 2.x
-            self.scaler = torch.amp.GradScaler(self._device_type())
+            self.scaler = torch.amp.GradScaler(device_type)
 
     def _backward_and_step(self, loss, zero_grad=True, step=True):
         """AMP-aware backward / grad-clip / optimizer step.
