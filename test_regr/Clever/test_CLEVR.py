@@ -17,23 +17,10 @@ PYTHON = sys.executable
 # Resolve main.py relative to this test file so it works regardless of cwd
 _TEST_DIR = Path(__file__).resolve().parent
 MAIN = str(_TEST_DIR / "main.py")
-TIMEOUT = 2700 
+TIMEOUT = 1800  
 
-# Minimum VRAM (GiB) required to run a VLM / PEFT test without OOM.
-#
-# VLM (vLLM serving InternVL3.5-1B, zero-shot):
-#   - model weights in bf16: ~2.5 GiB
-#   - gpu_memory_utilization=0.65 × 10.75 GiB = ~7 GiB total budget
-#   - enforce_eager=True saves ~1 GiB of CUDA-graph capture
-#   - max_model_len=4096 keeps KV cache tiny
-#   → fits in 10 GiB comfortably; 8 GiB cards still OOM during weight load.
-#
-# PEFT (LoRA training InternVL3.5-1B + Adam state):
-#   - weights + grads + Adam moments + activations with grad ckpt: ~12 GiB
-#   → needs ~16 GiB on a single GPU, or 2× ≥10 GiB GPUs with a pinned-mlp1
-#     device map (see peftvllm.py::_build_peft_device_map).
-_MIN_VRAM_VLM_GIB = 10.0
-_MIN_VRAM_PEFT_GIB = 16.0
+_MIN_VRAM_VLM_GIB = 24.0
+_MIN_VRAM_PEFT_GIB = 24.0
 
 
 def _gpu_vram_gib() -> float | None:
@@ -85,10 +72,11 @@ def _skip_if_insufficient_vram(min_gib: float, reason: str):
 
     Logic:
       * If the first device already has ≥ ``min_gib``, pass (single-GPU OK).
-      * Else, if multi-GPU sharding is *enabled via env* (``VLLM_TP`` > 1 or
-        ``PEFT_DEVICE_MAP=auto``) AND the total VRAM across all visible
+      * Else, if multi-GPU sharding is opted-in via env (``VLLM_TP`` > 1 or
+        ``PEFT_DEVICE_MAP=auto``) AND the aggregate VRAM across all visible
         devices is ≥ ``min_gib``, pass (sharding will cover it).
-      * Otherwise skip with a clear explanation.
+      * Otherwise skip.
+
     """
     vram_single = _gpu_vram_gib()
     if vram_single is None:
@@ -114,8 +102,9 @@ def _skip_if_insufficient_vram(min_gib: float, reason: str):
         )
     _skip(
         f"{reason}: need ≥{min_gib} GiB VRAM, have {vram_single:.2f} GiB on "
-        f"GPU 0 and no multi-GPU sharding enabled. Set VLLM_TP=2 / "
-        f"PEFT_DEVICE_MAP=auto with ≥2 matching GPUs visible to shard."
+        f"GPU 0 and no multi-GPU sharding enabled. Run on a larger GPU "
+        f"(H100 / A100 / 4090 / A10G), or set VLLM_TP=2 / PEFT_DEVICE_MAP=auto "
+        f"with ≥2 matching GPUs visible to opt into sharding."
     )
 
 
@@ -187,8 +176,9 @@ def _skip_if_vllm_failed(result: subprocess.CompletedProcess):
         _skip(
             "HF Accelerate device_map='auto' unstable for LoRA training on "
             "sharded model: LayerNorm weight/activation ended up on different "
-            "GPUs. Run PEFT on a single GPU with ≥16 GiB VRAM, or disable "
-            "sharding via PEFT_DEVICE_MAP=single."
+            "GPUs. Run PEFT on a single GPU with ≥24 GiB VRAM (H100 / A100 "
+            "/ 4090), which is the default path — only opt into sharding "
+            "via PEFT_DEVICE_MAP=auto if necessary."
         )
     if "torch.OutOfMemoryError" in combined or "CUDA out of memory" in combined:
         _skip(f"CUDA OOM — GPU too small for this VLM/PEFT workload. STDERR tail:\n{tail}")
@@ -202,9 +192,7 @@ def _skip_if_timed_out(result: subprocess.CompletedProcess):
         tail = _tail(result.stderr) or _tail(result.stdout)
         _skip(
             f"Subprocess exceeded the {TIMEOUT}s per-test timeout and was "
-            f"SIGTERM'd (exit {result.returncode}). Expected on slow GPUs "
-            f"(e.g. 2080 Ti) when --epochs ≥ 1 pushes wall time past 45 min. "
-            f"STDERR tail:\n{tail}"
+            f"SIGTERM'd (exit {result.returncode}). STDERR tail:\n{tail}"
         )
 
 
@@ -295,12 +283,9 @@ class TestUntrainedBaseline:
 # 2. Zero-Shot VLM Inference
 # ---------------------------------------------------------------------------
 class TestZeroShotVLM:
-    """--use-vlm with --infer-only (implicitly via epochs=1 + no training flag).
-
-    Note: The original script does NOT pass --infer-only for this mode,
-    so it will do 1 epoch of training + evaluation. We replicate that.
-
-    EXPECTED: accuracy noticeably above 50% thanks to InternVL's prior knowledge.
+    """--use-vlm — VLM inference + one training epoch.
+    EXPECTED: accuracy noticeably above 50% thanks to InternVL's prior
+    knowledge.
     """
 
     ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--use-vlm", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7836))]
@@ -469,9 +454,7 @@ class TestPEFTTraining:
     from the logic solver into the VLM's LoRA adapters.
     """
 
-    # --load-4bit enables QLoRA: weights are kept in NF4 (~0.7 GiB for
-    # the 1B model vs. ~2.5 GiB in FP16), 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--load-4bit", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
     # PEFT uses InternVL3_5-1B by default; use local copy if available
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
@@ -479,8 +462,8 @@ class TestPEFTTraining:
     @pytest.fixture(autouse=True)
     def _require_vram(self):
         _skip_if_insufficient_vram(
-            _MIN_VRAM_VLM_GIB,
-            "PEFT/LoRA (QLoRA 4-bit) training of InternVL-1B requires ≥10 GiB VRAM",
+            _MIN_VRAM_PEFT_GIB,
+            "PEFT/LoRA training of InternVL-1B requires ≥24 GiB VRAM",
         )
 
     @pytest.mark.slow

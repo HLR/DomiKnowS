@@ -106,7 +106,8 @@ jobs:
 
   test-gpu:
     runs-on: [self-hosted, linux, x64, gpu]
-    needs: [test-vllm]
+    # NOTE: `test-vllm` used to gate this job, but test-vllm is currently
+    # disabled (see its `if: false` below). 
     steps:
       - uses: actions/checkout@v6
 
@@ -286,18 +287,6 @@ jobs:
           set +e
           uv run --no-sync mypy --install-types --non-interactive .
 
-      # --- Detect multi-GPU opportunity ---
-      # Small-VRAM GPUs
-      # + PEFT training on a single card. When ≥2 GPUs are visible, we:
-      #   - pin both to the job via CUDA_VISIBLE_DEVICES (indexes 0,1 by
-      #     default — override with GPU_IDS=2,3 in the runner env if you
-      #     need a different pair, e.g. to avoid mixing 2080 Ti + 2070),
-      #   - tell vLLM to shard inference weights across both GPUs
-      #     (VLLM_TP=2, consumed by make_llm() in internVLvLLM.py),
-      #   - let HuggingFace Accelerate pipeline-shard the PEFT base model
-      #     (PEFT_DEVICE_MAP=auto, consumed by peftvllm.py).
-      # On a single-GPU host nothing changes — the env vars default to
-      # single-card behavior.
       - name: Configure multi-GPU (if available)
         run: |
           if command -v nvidia-smi >/dev/null 2>&1; then
@@ -318,12 +307,8 @@ jobs:
           fi
 
       # --- Run GPU tests ---
-      # Temporarily restricted to TestZeroShotVLM + TestPEFTTraining to cut CI
-      # time while those two classes are being debugged. To restore full
-      # Clever coverage, remove the ``PYTEST_K`` env var below.
+
       - name: Run GPU tests
-        env:
-          PYTEST_K: "TestZeroShotVLM or TestPEFTTraining"
         run: |
           TEST_LIST=(
             #'examples/PMDExistL/pmd_counting_tests'
@@ -346,6 +331,8 @@ jobs:
 
   test-vllm:
     runs-on: [self-hosted, linux, x64, gpu]
+    # `test-vllm` to `test-gpu`'s `needs:` above if you want gating.
+    if: false
     steps:
       - uses: actions/checkout@v6
 

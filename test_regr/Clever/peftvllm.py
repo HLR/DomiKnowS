@@ -323,17 +323,10 @@ class InternVLHF:
         # ------------------------------------------------------------------
         # Multi-GPU sharding for the base (frozen) model.
         #
-        # Since LoRA keeps the backbone frozen and only trains small adapter
-        # matrices, we can pipeline-shard the base model across the visible
-        # CUDA devices using HuggingFace Accelerate's ``device_map``. This
-        # lets two small-memory GPUs hold a model whose weights + activations
-        # wouldn't fit on one of them alone.
-        #
         # Opt-in controls:
-        #   PEFT_DEVICE_MAP=auto       → force HF Accelerate auto-sharding
-        #   PEFT_DEVICE_MAP=single     → force single-device placement
-        #   (unset, ≥2 GPUs visible)   → default to "auto"
-        #   (unset, ≤1 GPU visible)    → single-device placement
+        #   PEFT_DEVICE_MAP=auto    → enable HF Accelerate auto-sharding
+        #   PEFT_DEVICE_MAP=single  → force single-device placement (default)
+        #   (unset)                 → single-device placement
         #
         # 4-bit quantized loading has its own device_map handling below and
         # is not affected by this logic.
@@ -342,10 +335,11 @@ class InternVLHF:
         _dm_env = os.environ.get("PEFT_DEVICE_MAP", "").strip().lower()
         if _dm_env == "auto":
             self._auto_sharded = True
-        elif _dm_env == "single":
-            self._auto_sharded = False
         else:
-            self._auto_sharded = _visible_gpus >= 2
+            # Default (including ``single`` or unset): keep everything on one
+            # device. Users on multi-GPU boxes with oversized models can
+            # explicitly set PEFT_DEVICE_MAP=auto.
+            self._auto_sharded = False
 
         if load_4bit:
             bnb_config = BitsAndBytesConfig(
@@ -449,10 +443,6 @@ class InternVLHF:
             self.model = base_model  # Already on device from device_map
         elif self._auto_sharded:
             # Model is pipeline-sharded across multiple GPUs by HF Accelerate.
-            # Do NOT call .to(device=...) — that would consolidate every shard
-            # onto a single GPU and defeat the purpose of the auto map. We
-            # can, however, cast dtype safely: PyTorch dispatches the cast to
-            # each shard in place on its own device.
             self.model = base_model.to(dtype=self.compute_dtype)
         else:
             self.model = base_model.to(dtype=self.compute_dtype, device=self.device)
@@ -771,31 +761,18 @@ class InternVLHF:
             use_thumbnail=use_thumbnail,
         )
 
-        pad_present = (attention_mask.sum(dim=1) != attention_mask.size(1)).any()
-        if pad_present:
-            out = self.model(
-                pixel_values=pixel_values,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                image_flags=image_flags,
-                return_dict=True,
-            )
-            logits = out.logits  # [B, T, V]
-            last_pos = attention_mask.sum(dim=1) - 1
-            batch_idx = torch.arange(B, device=self.device)
-            next_logits = logits[batch_idx, last_pos, :]  # [B, V]
-        else:
-            # Unpadded batch: every row ends at the final token, 
-            out = self.model(
-                pixel_values=pixel_values,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                image_flags=image_flags,
-                return_dict=True,
-                logits_to_keep=1,  # materialize logits for last token only
-            )
-            # out.logits has shape [B, 1, V] — squeeze the time dim
-            next_logits = out.logits[:, -1, :]
+        out = self.model(
+            pixel_values=pixel_values,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            image_flags=image_flags,
+            return_dict=True,
+        )
+        logits = out.logits  # [B, T, V]
+
+        last_pos = attention_mask.sum(dim=1) - 1
+        batch_idx = torch.arange(B, device=self.device)
+        next_logits = logits[batch_idx, last_pos, :]  # [B, V]
         return next_logits
 
     # --------------------------

@@ -137,103 +137,61 @@ def make_llm(model_path,
     # ------------------------------------------------------------------
     # Tensor parallelism (multi-GPU).
     #
-    # On a small-VRAM box (e.g. two small memory GPUs), setting
-    # VLLM_TP=2 splits the model's weights across both GPUs so each card
-    # only has to hold ~half the parameters + its own KV cache. Opt-in via
-    # env var so single-GPU runs are unaffected. We cap the requested
-    # world size at the number of visible CUDA devices so an over-set env
-    # can't crash vLLM at init; we also require TP ≥ 1.
-    #
-    # Combine with ``CUDA_VISIBLE_DEVICES=0,1`` (or similar) to pin the run
-    # to matched GPUs — mixing 2080 Ti (10.75 GiB) with 2070 (8 GiB)
-    # bottlenecks on the smaller card.
+    # Opt-in via ``VLLM_TP`` env var. World size is capped at the number
+    # of visible CUDA devices so an over-set env can't crash vLLM at init.
     # ------------------------------------------------------------------
     _visible_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
     try:
         _tp = int(os.environ.get("VLLM_TP", "1"))
     except ValueError:
         _tp = 1
-    # We cap TP at the number of visible GPUs to prevent init failure; vLLM will raise a warning and fall back to single-GPU if you ask for more parallelism than you have devices.
     tp = max(1, min(_tp, _visible_gpus or 1))
 
-   
-    if tp > 1 and torch.cuda.is_available():
-        try:
-            _cap = torch.cuda.get_device_capability(0)
-        except Exception:
-            _cap = (0, 0)
-        if _cap == (7, 5):
-            print(
-                f"[make_llm] Detected Turing (sm_75) GPU; forcing "
-                f"tensor_parallel_size=1 (was {tp}) — vLLM TP is "
-                f"unreliable on this architecture.",
-                flush=True,
-            )
-            tp = 1
+    # 2) Build the vLLM engine.
+    #
+    # Optional env overrides let users tune for unusual hardware without
+    # editing this file:
+    #   VLLM_GPU_UTIL       — float in (0, 1]; default 0.85
+    #   VLLM_MAX_MODEL_LEN  — int max context window; default 4096 (1B) /
+    #                         ``want_len`` (= 16384) for larger models.
+    try:
+        _util_env = float(os.environ.get("VLLM_GPU_UTIL", ""))
+    except ValueError:
+        _util_env = 0.0
+    _gpu_util = _util_env if _util_env > 0.0 else 0.85
 
-    # The 1B model fits on a single 10.75 GiB card with room to spare;
-    # tensor parallelism just adds init overhead and failure modes, so
-    # we clamp it here regardless of VLLM_TP.
-    if "1b" in model_path.lower() and tp > 1:
-        print(
-            f"[make_llm] 1B model detected; forcing tensor_parallel_size=1 "
-            f"(was {tp}) — weights fit on a single GPU.",
-            flush=True,
-        )
-        tp = 1
+    try:
+        _max_len_env = int(os.environ.get("VLLM_MAX_MODEL_LEN", ""))
+    except ValueError:
+        _max_len_env = 0
 
-    # 2) Try FP8 KV cache for speed+capacity; fall back safely if unsupported
     if "1b" in model_path.lower():
-        # Conservative settings for small-VRAM GPUs (≤12 GiB, e.g. RTX 2080 Ti).
-        # CLEVR answers are short words, so a 2048-token context window is plenty.
-        # enforce_eager skips CUDA-graph capture (saves ~1 GiB on sm_75 devices).
-        # With TP=1, gpu_memory_utilization=0.55 leaves ~4.5 GiB free for the
-        # next test (e.g. PEFT training) so orphaned EngineCore processes don't
-        # cause OOM. With TP≥2 we can raise the utilization because weights are
-        # split and the leftover headroom is needed less on each individual GPU.
-        try:
-            _util_env = float(os.environ.get("VLLM_GPU_UTIL", ""))
-        except ValueError:
-            _util_env = 0.0
-        if _util_env > 0.0:
-            _util_1b = _util_env
-        else:
-            _util_1b = 0.80 if tp > 1 else 0.55
-        try:
-            _max_len_env = int(os.environ.get("VLLM_MAX_MODEL_LEN", ""))
-        except ValueError:
-            _max_len_env = 0
-        _max_len_1b = _max_len_env if _max_len_env > 0 else 2048
-        llm = LLM(
-            model=model_path,
-            trust_remote_code=True,
-            dtype="auto",
-            tensor_parallel_size=tp,
-            enable_prefix_caching=False,
-            enforce_eager=True,           # skip CUDA-graph capture; saves ~1 GiB on sm_75
-            max_model_len=_max_len_1b,    # CLEVR answers are short; small KV cache
-            max_num_batched_tokens=_max_len_1b,  # one batch of the context window
-            max_num_seqs=8,               # cap concurrent seqs; lowers KV-cache ceiling
-            mm_processor_cache_gb=1,      # small image cache sufficient for CI-scale tests
-            gpu_memory_utilization=_util_1b,
-            logprobs_mode='processed_logits',
-            logits_processors=[WrappedPerReqLogitsProcessor],
-        )
-    else:
-
+        _max_len = _max_len_env if _max_len_env > 0 else 4096
         llm = LLM(
             model=model_path,
             trust_remote_code=True,
             dtype="auto",
             tensor_parallel_size=tp,
             enable_prefix_caching=True,
-            #max_seq_len_to_capture=want_len,  # or the real upper bound of your shared prefix
-            max_model_len=want_len,
-            max_num_batched_tokens=4096 * target_concurrency,
-            gpu_memory_utilization=0.85,
+            max_model_len=_max_len,
+            max_num_batched_tokens=_max_len,
+            gpu_memory_utilization=_gpu_util,
             logprobs_mode='processed_logits',
             logits_processors=[WrappedPerReqLogitsProcessor],
-
+        )
+    else:
+        _max_len = _max_len_env if _max_len_env > 0 else want_len
+        llm = LLM(
+            model=model_path,
+            trust_remote_code=True,
+            dtype="auto",
+            tensor_parallel_size=tp,
+            enable_prefix_caching=True,
+            max_model_len=_max_len,
+            max_num_batched_tokens=4096 * target_concurrency,
+            gpu_memory_utilization=_gpu_util,
+            logprobs_mode='processed_logits',
+            logits_processors=[WrappedPerReqLogitsProcessor],
         )
 
     # llm = LLM(
