@@ -606,9 +606,23 @@ class LogicalConstraintConstructor:
                         mapping = expansionInfo['mapping']
                         expanded_vars = expansionInfo['expanded_vars']
                         
-                        self.myLogger.info(f"Applying expansion to lcVariables for: {expanded_vars}")
+                        # Expand all lcVariables entries that match the pre-expansion
+                        # group count — not only those from lcVariablesDns.
+                        # Nested constraint results (e.g. existsL output stored as _lc1)
+                        # live only in lcVariables and must also be realigned when
+                        # a sibling variable triggers expansion (issue #377).
+                        pre_expansion_len = max(idx for idx, _ in mapping) + 1 if mapping else 0
+                        vars_to_expand = set(expanded_vars)
+                        for var_name in list(lcVariables.keys()):
+                            if var_name in vars_to_expand:
+                                continue
+                            old_structure = lcVariables[var_name]
+                            if old_structure and len(old_structure) == pre_expansion_len:
+                                vars_to_expand.add(var_name)
                         
-                        for var_name in expanded_vars:
+                        self.myLogger.info(f"Applying expansion to lcVariables for: {vars_to_expand}")
+                        
+                        for var_name in vars_to_expand:
                             if var_name not in lcVariables:
                                 continue
                             
