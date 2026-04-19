@@ -60,7 +60,7 @@ class LogicalConstraintVerifier:
                     'verifyList': [[bool, ...], ...],  # Satisfaction per instance
                     'satisfied': float,                 # Overall satisfaction % (0-100)
                     'ifVerifyList': [[bool, ...], ...], # (ifL/forAllL only) Filtered list
-                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100)
+                    'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100, or NaN if no antecedent is True)
                     'elapsedInMsLC': float              # Processing time in milliseconds
                 }
         """
@@ -126,7 +126,7 @@ class LogicalConstraintVerifier:
             if ifVerifyListLen:
                 result['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) * 100
             else:
-                result['ifSatisfied'] = 0
+                result['ifSatisfied'] = float('nan')
 
         endLC = perf_counter_ns()
         elapsedInNsLC = endLC - startLC
@@ -164,7 +164,7 @@ class LogicalConstraintVerifier:
                         'verifyList': [[bool, ...], ...],  # Satisfaction per instance
                         'satisfied': float,                 # Overall satisfaction % (0-100)
                         'ifVerifyList': [[bool, ...], ...], # (ifL/forAllL only) Filtered list
-                        'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100)
+                        'ifSatisfied': float,               # (ifL/forAllL only) Conditional satisfaction % (0-100, or NaN if no antecedent is True)
                         'elapsedInMsLC': float              # Processing time in milliseconds
                     },
                     ...
@@ -175,6 +175,7 @@ class LogicalConstraintVerifier:
             - Fixed constraints (fixedL) are skipped as they don't need verification
             - For ifL/forAllL constraints, 'ifSatisfied' measures satisfaction when the
               condition is true, which is often more meaningful than overall satisfaction
+            - 'ifSatisfied' is NaN when no instance has the antecedent True (no applicable cases)
             - A satisfaction rate of 100% means all instances satisfy the constraint
             - Lower satisfaction rates indicate constraint violations that may need attention
         """
