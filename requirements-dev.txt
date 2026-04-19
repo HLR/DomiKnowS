@@ -182,7 +182,7 @@ networkx==3.5
     # via
     #   domiknows
     #   torch
-nltk==3.9.1
+nltk==3.9.4
     # via domiknows
 numpy==2.3.3
     # via
