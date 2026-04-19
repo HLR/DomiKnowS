@@ -1054,6 +1054,15 @@ class equivalenceL(LogicalConstrain):
         with torch.set_grad_enabled(myConstraintVarProcessor.grad): 
             return self.createLogicalConstrains('Equivalence', myConstraintVarProcessor.equivalenceVar, model, v, headConstrain)
 
+
+class iffL(equivalenceL):
+    """Bi-conditional logical constraint (A ↔ B).
+
+    This is a user-facing alias for `equivalenceL`.
+    Semantics: true when all provided operands have the same truth value.
+    """
+    pass
+
 # ----------------- Counting
 
 class _CountBaseL(LogicalConstrain):

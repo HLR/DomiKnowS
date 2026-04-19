@@ -2,7 +2,7 @@ from .graph import Graph
 from .concept import Concept, EnumConcept
 from .relation import Relation
 from .logicalConstrain import LcElement, LogicalConstrain, V, execute
-from .logicalConstrain import andL, nandL, orL, ifL, norL, xorL, notL, equivalenceL
+from .logicalConstrain import andL, nandL, orL, ifL, norL, xorL, notL, equivalenceL, iffL
 from .logicalConstrain import eqL, fixedL, forAllL
 from .logicalConstrain import existsL, atLeastL, atMostL, exactL
 from .logicalConstrain import existsAL, atLeastAL, atMostAL, exactAL

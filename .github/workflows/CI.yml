@@ -105,6 +105,7 @@ jobs:
           retention-days: 1
 
   test-gpu:
+    if: github.repository == 'HLR/DomiKnowS'
     runs-on: [self-hosted, linux, x64, gpu]
     # NOTE: `test-vllm` used to gate this job, but test-vllm is currently
     # disabled (see its `if: false` below). 
