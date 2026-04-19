@@ -771,18 +771,31 @@ class InternVLHF:
             use_thumbnail=use_thumbnail,
         )
 
-        out = self.model(
-            pixel_values=pixel_values,
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            image_flags=image_flags,
-            return_dict=True,
-        )
-        logits = out.logits  # [B, T, V]
-
-        last_pos = attention_mask.sum(dim=1) - 1
-        batch_idx = torch.arange(B, device=self.device)
-        next_logits = logits[batch_idx, last_pos, :]  # [B, V]
+        pad_present = (attention_mask.sum(dim=1) != attention_mask.size(1)).any()
+        if pad_present:
+            out = self.model(
+                pixel_values=pixel_values,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                image_flags=image_flags,
+                return_dict=True,
+            )
+            logits = out.logits  # [B, T, V]
+            last_pos = attention_mask.sum(dim=1) - 1
+            batch_idx = torch.arange(B, device=self.device)
+            next_logits = logits[batch_idx, last_pos, :]  # [B, V]
+        else:
+            # Unpadded batch: every row ends at the final token, 
+            out = self.model(
+                pixel_values=pixel_values,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                image_flags=image_flags,
+                return_dict=True,
+                logits_to_keep=1,  # materialize logits for last token only
+            )
+            # out.logits has shape [B, 1, V] — squeeze the time dim
+            next_logits = out.logits[:, -1, :]
         return next_logits
 
     # --------------------------
