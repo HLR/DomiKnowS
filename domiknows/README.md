@@ -228,7 +228,7 @@ program.test(test_data, device='cuda')
 - **Weak supervision**: Learn from partial labels + domain knowledge
 
 ### Flexible Constraint Types
-- **Logical**: AND, OR, NOT, IF, equivalence
+- **Logical**: AND, OR, NOT, IF, IFF (equivalence)
 - **Quantifiers**: exists, forall, counting constraints
 - **Paths**: Express constraints over graph structure
 - **Priorities**: Soft vs. hard constraints

@@ -4028,6 +4028,110 @@ class DataNodeBuilder(dict):
         elapsedCreateFullDataNode = (endCreateFullDataNode - startCreateFullDataNode) * 1000
         self.myLoggerTime.info(f'Creating Full Datanode: {elapsedCreateFullDataNode}ms')
 
+    def _getRootCandidates(self):
+        """Returns list of root candidate DataNodes (no relationLinks or only 'contains')."""
+        if not dict.__contains__(self, 'dataNode'):
+            return []
+        existingDns = dict.__getitem__(self, 'dataNode')
+        roots = []
+        for dn in existingDns:
+            if not dn.relationLinks or all(r == "contains" for r in dn.relationLinks):
+                roots.append(dn)
+        return roots
+
+    def _is_structural(self, dn):
+        """Check if dn is a constraint/relation concept rather than a real data concept."""
+        from .relation import Relation
+        ont = dn.getOntologyNode()
+        if ont.name == 'constraint':
+            return True
+        if isinstance(ont, Relation):
+            return True
+        if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
+            return True
+        return False
+
+    def isRootUnique(self):
+        """
+        Check whether the builder has a single unambiguous root DataNode.
+
+        Returns True if there is exactly one root candidate (ignoring structural
+        nodes like constraints and relations). Returns False when there are zero
+        or multiple real root candidates, which means createBatchRootDN() or
+        addBatchRootDN() should be called before getDataNode().
+
+        Returns:
+            bool
+        """
+        roots = self._getRootCandidates()
+        if len(roots) <= 1:
+            return len(roots) == 1
+        # filter out structural nodes and check how many real concept types remain
+        concept_roots = [d for d in roots if not self._is_structural(d)]
+        return len(concept_roots) <= 1
+
+    def needsBatchRootDN(self):
+        """
+        Check whether the builder needs a batch root DataNode.
+
+        This is the inverse of isRootUnique() — returns True when there are
+        multiple root candidates that should be wrapped under a single
+        dummy/batch root before calling getDataNode().
+
+        Returns:
+            bool
+        """
+        return not self.isRootUnique()
+
+    def addBatchRootDN(self):
+        """
+        Force-create a dummy batch root DataNode even when root candidates
+        have different ontology types.
+
+        Unlike createBatchRootDN() which bails out when roots have mixed types,
+        this method always wraps all root candidates under a synthetic 'batch'
+        concept. Useful when the root doesn't exist in the data structure but
+        you still need a single entry point for inference / metric calculation.
+
+        Raises:
+            ValueError: If the builder has no DataNodes at all.
+        """
+        if not dict.__contains__(self, 'dataNode'):
+            raise ValueError('DataNode Builder has no DataNode started yet')
+
+        roots = self._getRootCandidates()
+        if len(roots) <= 1:
+            # nothing to wrap
+            if not getProductionModeStatus():
+                _DataNodeBuilder__Logger.info(
+                    'addBatchRootDN: no wrapping needed, %d root candidate(s)' % len(roots))
+            return
+
+        # pick any root to grab the parent graph
+        supGraph = None
+        for r in roots:
+            supGraph = r.getOntologyNode().sup
+            if supGraph is not None:
+                break
+        if supGraph is None:
+            raise ValueError('addBatchRootDN: none of the root candidates are connected to a graph')
+
+        if 'batch' in supGraph.concepts:
+            batchConcept = supGraph.concepts['batch']
+        else:
+            batchConcept = Concept(name='batch')
+        supGraph.attach(batchConcept)
+
+        batchRoot = DataNode(myBuilder=self, instanceID=0, instanceValue="", ontologyNode=batchConcept)
+        for d in roots:
+            batchRoot.addChildDataNode(d)
+
+        self.__updateRootDataNodeList([batchRoot])
+
+        typesInDNs = {d.getOntologyNode().name for d in roots}
+        _DataNodeBuilder__Logger.info(
+            'addBatchRootDN: created batch root wrapping %d nodes of types %s' % (len(roots), typesInDNs))
+
     def createBatchRootDN(self):
         """
         Creates a batch root DataNode when certain conditions are met.
@@ -4083,17 +4187,7 @@ class DataNodeBuilder(dict):
 
             # If there are more than one type of DataNodes in the builder, then it is not possible to create new Batch Root DataNode
             if len(typesInDNs) > 1:
-                from .relation import Relation
-                def _is_structural(dn):
-                    ont = dn.getOntologyNode()
-                    if ont.name == 'constraint':
-                        return True
-                    if isinstance(ont, Relation):
-                        return True
-                    if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
-                        return True
-                    return False
-                concept_types = {d.getOntologyNode().name for d in noRelationRoots if not _is_structural(d)}
+                concept_types = {d.getOntologyNode().name for d in noRelationRoots if not self._is_structural(d)}
                 if len(concept_types) <= 1:
                     _DataNodeBuilder__Logger.debug('DataNode Builder has DataNodes of different types: %s, not possible to create batch Datanode' % (typesInDNs))
                 else:
@@ -4307,18 +4401,7 @@ class DataNodeBuilder(dict):
 
             if len(existingDns) != 1:
                 typesInDNs = {d.getOntologyNode().name for d in existingDns}
-                from .relation import Relation
-                def _is_structural(dn):
-                    """Constraint or relation-like concept (Relation instance or concept with has_a)."""
-                    ont = dn.getOntologyNode()
-                    if ont.name == 'constraint':
-                        return True
-                    if isinstance(ont, Relation):
-                        return True
-                    if hasattr(ont, 'has_a') and callable(ont.has_a) and list(ont.has_a()):
-                        return True
-                    return False
-                concept_types = {d.getOntologyNode().name for d in existingDns if not _is_structural(d)}
+                concept_types = {d.getOntologyNode().name for d in existingDns if not self._is_structural(d)}
                 if len(concept_types) <= 1:
                     _DataNodeBuilder__Logger.debug(f'Returning dataNode with id {returnDn.instanceID} of type {returnDn.getOntologyNode().name} - there are total {len(existingDns)} dataNodes of types {typesInDNs}')
                 else:

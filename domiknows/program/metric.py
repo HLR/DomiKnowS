@@ -215,6 +215,16 @@ class MetricTracker(torch.nn.Module):
             self.reset()
         return value
 
+    @staticmethod
+    def _to_python_scalars(value):
+        # Replaced nested Python for-loops with recursive dict comprehension (issue #315).
+        # Reduces Python-level overhead when converting metric tensors for display.
+        if isinstance(value, dict):
+            return {k: MetricTracker._to_python_scalars(v) for k, v in value.items()}
+        if torch.is_tensor(value):
+            return value.item()
+        return value
+
     def __str__(self):
         """
         Provides a string representation of the computed metric value(s).
@@ -223,27 +233,8 @@ class MetricTracker(torch.nn.Module):
             str: A string representation of the metric value(s).
         """
         value = self.value()
-        
         if isinstance(value, dict):
-            newValue = {}
-            for v in value:
-                if isinstance(value[v], dict):
-                    newV = {}
-                    for w in value[v]:
-                        if torch.is_tensor(value[v][w]):
-                            newV[w] = value[v][w].item()
-                        else:
-                            newV[w] = value[v][w]
-                        
-                    newValue[v] = newV   
-                else:
-                    if torch.is_tensor(value[v]):
-                        newValue[v] = value[v].item()
-                    else:
-                        newValue[v] = value[v]
-                   
-            value = newValue
-                                    
+            value = self._to_python_scalars(value)
         return str(value)
 
 class MacroAverageTracker(MetricTracker):
@@ -273,35 +264,31 @@ class MacroAverageTracker(MetricTracker):
             Any: The macro-averaged value. The structure (tensor, list, or dictionary) of the output
                  mirrors the structure of the input.
         """
+        # Use torch.as_tensor to avoid unnecessary copies for numpy/list inputs (issue #315).
         def func(value):
-            """
-            Computes the mean of the provided tensor after detaching it.
-
-            Args:
-                value (torch.Tensor): A tensor value.
-
-            Returns:
-                torch.Tensor: The mean of the tensor.
-            """
             return value.clone().detach().mean()
         def apply(value):
-            """
-            Recursively applies the mean computation based on the type of the input value.
-
-            Args:
-                value (Any): The input value to be averaged.
-
-            Returns:
-                Any: The averaged value.
-            """
             if isinstance(value, dict):
                 return {k: apply(v) for k, v in value.items()}
             elif isinstance(value, torch.Tensor):
                 return func(value)
             else:
-                return apply(torch.tensor(value))
-        retval = apply(values)
-        return retval
+                return func(torch.as_tensor(value, dtype=torch.float32))
+        return apply(values)
+
+
+def _aggregate_cm_value(val):
+    # Replaced Python sum() on lists of tensors with torch.stack().sum() (issue #315).
+    # torch.stack + sum runs as a single fused tensor op instead of creating N-1
+    # intermediate tensors through Python's reduce. Works on both CPU and CUDA.
+    if isinstance(val, torch.Tensor):
+        return val.sum().float()
+    elif isinstance(val, (list, tuple)):
+        if val and torch.is_tensor(val[0]):
+            return torch.stack(val).sum().float()
+        return torch.tensor(val, dtype=torch.float32).sum()
+    else:
+        return torch.tensor(float(val), dtype=torch.float32)
 
 
 class PRF1Tracker(MetricTracker):
@@ -345,35 +332,13 @@ class PRF1Tracker(MetricTracker):
 
             CM = wrap_batch(values)
 
-            if isinstance(CM['TP'], list):
-                tp = sum(CM['TP'])
-            else:
-                tp = CM['TP'].sum().float()
+            # Aggregate confusion matrix values using tensor ops instead of Python
+            # sum() loops. See _aggregate_cm_value() and issue #315.
+            tp = _aggregate_cm_value(CM['TP'])
+            fp = _aggregate_cm_value(CM['FP'])
+            fn = _aggregate_cm_value(CM['FN'])
+            tn = _aggregate_cm_value(CM['TN'])
 
-            if isinstance(CM['FP'], list):
-                fp = sum(CM['FP'])
-            else:
-                fp = CM['FP'].sum().float()
-
-            if isinstance(CM['FN'], list):
-                fn = sum(CM['FN'])
-            else:
-                fn = CM['FN'].sum().float()
-
-            if isinstance(CM['TN'], list):
-                tn = sum(CM['TN'])
-            else:
-                tn = CM['TN'].sum().float()
-
-            if not torch.is_tensor(tp):
-                tp = torch.tensor(tp)
-            if not torch.is_tensor(fp):
-                fp = torch.tensor(fp)
-            if not torch.is_tensor(fn):
-                fn = torch.tensor(fn)
-            if not torch.is_tensor(tn):
-                tn = torch.tensor(tn)
-                
             if tp:
                 p = tp / (tp + fp)
                 r = tp / (tp + fn)
@@ -382,9 +347,11 @@ class PRF1Tracker(MetricTracker):
                 p = torch.zeros_like(tp)
                 r = torch.zeros_like(tp)
                 f1 = torch.zeros_like(tp)
-            if (tp + fp + fn + tn):
-                accuracy=(tp + tn) / (tp + fp + fn + tn)
-            return {'P': p, 'R': r, 'F1': f1,"accuracy":accuracy}
+
+            total = tp + fp + fn + tn
+            accuracy = (tp + tn) / total if total else torch.zeros_like(tp)
+
+            return {'P': p, 'R': r, 'F1': f1, "accuracy": accuracy}
         elif values[0]:
             names=values[0]["class_names"][:]
             n=len(names)

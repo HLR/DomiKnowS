@@ -105,6 +105,7 @@ jobs:
           retention-days: 1
 
   test-gpu:
+    if: github.repository == 'HLR/DomiKnowS'
     runs-on: [self-hosted, linux, x64, gpu]
     steps:
       - uses: actions/checkout@v6
