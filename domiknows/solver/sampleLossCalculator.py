@@ -64,11 +64,11 @@ class SampleLossCalculator:
         
         dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
 
-        # First pass: construct logical constraints and collect sample data
+        # First pass: construct logical constraints and collect sample data.
         for graph in self.solver.myGraph:
-            for _, lc in graph.allLogicalConstrains:
+            for _, lc in graph.logicalConstrains.items():
                 startLC = perf_counter_ns()
-                
+
                 if not lc.headLC or not lc.active:
                     continue
                 

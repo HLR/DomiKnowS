@@ -810,7 +810,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             _lcP[100] = []
             pUsed = False
             for graph in self.myGraph:
-                for _, lc in graph.allLogicalConstrains:
+                for _, lc in graph.logicalConstrains.items():
                     if lc.headLC and lc.active: # Process only active and head lcs
                         if not ignorePinLCs:
                             lcP = lc.p

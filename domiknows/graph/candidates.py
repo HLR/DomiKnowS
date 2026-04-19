@@ -66,19 +66,19 @@ def intersection_of_lists(lists):
 def findDatanodesForRootConcept(dn, rootConcept):
     if isinstance(rootConcept, str):
         print(f"Warning: rootConcept {rootConcept} is a string, expected a Concept or Relation object.")
-    
+
     # Check if rootConcept is a string
     concept_name = rootConcept if isinstance(rootConcept, str) else rootConcept.name
-    
+
     if dn.myBuilder != None and "DataNodesConcepts" in dn.myBuilder:
         if concept_name in dn.myBuilder["DataNodesConcepts"]:
             return dn.myBuilder["DataNodesConcepts"][concept_name]
 
     dns = dn.findDatanodes(select = rootConcept)
-    
+
     if dn.myBuilder != None:
         dn.myBuilder["DataNodesConcepts"][concept_name] = dns
-        
+
     return dns
 
 def getDatanoteForVariable(dn, e, variable, lcVariablesDns, lc, logger, _log, _dns_list_repr, conceptName, variableName=None, referredVariableNames=None):
@@ -86,7 +86,49 @@ def getDatanoteForVariable(dn, e, variable, lcVariablesDns, lc, logger, _log, _d
     new_iterate = True
     integrate = False
 
-    lookupName = variableName if variableName is not None else variable.name
+    lookupName = variableName if variableName is not None else (variable.name if variable is not None else None)
+
+    # On-demand resolution: if another element's V is being referenced by
+    # name (e.g. path ('behind_15', HasA('arg2'))) but the referred
+    # element hasn't been processed yet, search lc.e for its declaration
+    # and resolve it recursively. This removes the order dependency in
+    # lc.e that previously forced callers to list variable definitions
+    # before references — the resolver now handles forward references.
+    if (
+        variableName is not None
+        and lookupName not in lcVariablesDns
+        and lc is not None
+        and hasattr(lc, 'e')
+    ):
+        try:
+            _lc_es = lc.e
+            for _k in range(len(_lc_es)):
+                _cand = _lc_es[_k]
+                if _k + 1 >= len(_lc_es):
+                    break
+                _candV = _lc_es[_k + 1]
+                if not isinstance(_candV, V):
+                    continue
+                if getattr(_candV, 'name', None) != lookupName:
+                    continue
+                if not hasattr(_cand, '__class__'):
+                    continue
+                # Found the declaring element. Recursively build its dns.
+                _result = getCandidates(
+                    dn, _cand, _candV, lcVariablesDns, lc, logger,
+                )
+                if _result is not None and _result[0] is not None:
+                    lcVariablesDns[lookupName] = _result[0]
+                break
+        except Exception as _exc:
+            if logger is not None:
+                try:
+                    logger.debug(
+                        "Lazy resolve of forward variable %s failed: %s",
+                        lookupName, _exc,
+                    )
+                except Exception:
+                    pass
 
     # Check if we already found this variable
     if lookupName in lcVariablesDns:
@@ -555,10 +597,10 @@ def getEdgeDataNode(dn, path, currentIndexDN, lcVariablesDns, logger=None, depth
     if (not isinstance(path[0], eqL)) and len(path) == 1:
         relDns = dn.getDnsForRelation(path[0])
         _log(f"Single element path '{path[0]}' -> {_dns_repr(relDns)}")
-                
+
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
-        
+
         return relDns
             
     # Path has at least 2 elements - will perform recursion

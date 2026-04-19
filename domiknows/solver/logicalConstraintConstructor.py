@@ -417,8 +417,8 @@ class LogicalConstraintConstructor:
                 result[row_name] = [row_data[i] for i in columns_to_keep]
         
         return result
-    
-    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key=None, 
+
+    def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key=None,
                                    lcVariablesDns=None, lcVariables=None, headLC=False, 
                                    loss=False, sample=False, vNo=None, verify=False, label=None):
         """
@@ -468,15 +468,17 @@ class LogicalConstraintConstructor:
         firstV = None
         integrate = False
         newVariables = {}
-        
-        for eIndex, e in enumerate(lc.e):
+
+        iter_es = lc.e
+
+        for eIndex, e in enumerate(iter_es):
             if isinstance(e, V):
                 continue
             
             if isinstance(e, (Concept, LcElement, tuple)): 
                 # Look ahead for variable names
-                if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
-                    variable = lc.e[eIndex+1]
+                if eIndex + 1 < len(iter_es) and isinstance(iter_es[eIndex+1], V):
+                    variable = iter_es[eIndex+1]
                 else:
                     if isinstance(e, LogicalConstrain):
                         variable = V(name="_lc" + str(vNo[1]))
@@ -661,7 +663,7 @@ class LogicalConstraintConstructor:
                     if sample:
                         sampleInfoForVariable = []
                     xPkey = '<' + conceptName + ">" + key
-                    
+
                     for dns in dnsList:
                         _vDns = []
                         if sample:

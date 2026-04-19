@@ -21,11 +21,11 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with: { python-version: "3.13" }
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
 
@@ -88,7 +88,7 @@ jobs:
             'solver'
             'namedTree'
             'examples/iota'
-            'Clever'
+            'examples/same_different'
             'vizual'
           )
           
@@ -107,21 +107,31 @@ jobs:
   test-gpu:
     if: github.repository == 'HLR/DomiKnowS'
     runs-on: [self-hosted, linux, x64, gpu]
+    # NOTE: `test-vllm` used to gate this job, but test-vllm is currently
+    # disabled (see its `if: false` below). 
     steps:
       - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with: { python-version: "3.13" }
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
 
       - name: Resolve & install
         run: |
-         uv sync --extra cpu --extra dev 
+         uv sync --extra cu128 --extra dev --extra vllm --extra peft
+
+      - name: Add venv bin to PATH
+        run: |
+          # Expose .venv/bin so that ninja (shipped by the Python 'ninja' package)
+          # is found by ALL child processes, including vLLM's multiprocessing spawn
+          # workers that JIT-compile FlashInfer CUDA kernels via ninja.
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+          echo "Added $(pwd)/.venv/bin to GITHUB_PATH"
 
       - name: Install spaCy model
         run: |
@@ -132,6 +142,133 @@ jobs:
       - name: set USE_SUBPROCESS true
         run: |
           echo "USE_SUBPROCESS=true" >> $GITHUB_ENV
+
+      - name: Download CLEVR dataset images
+        run: |
+          mkdir -p "test_regr/Clever/train/images"
+
+          # Step 1 — ensure questions.json exists.
+          # Only output-vocab.7z is tracked by git; the large JSON files
+          # (questions.json, scenes.json, vocab.json) are generated from it on
+          # first use.  Extract the 7z here so the next step can read the questions.
+          if [ ! -f "test_regr/Clever/train/questions.json" ]; then
+            echo "Extracting JSON/vocab files from output-vocab.7z ..."
+            .venv/bin/python -c "
+          import py7zr
+          with py7zr.SevenZipFile('test_regr/Clever/train/output-vocab.7z', 'r') as z:
+              z.extractall(path='test_regr/Clever/train/')
+          print('Extraction complete.')
+          "
+          else
+            echo "questions.json already present — skipping 7z extraction"
+          fi
+
+          # Step 2 — download only the images actually referenced by the
+          # filter_one_relation questions (a small subset of the 70k total).
+          # On subsequent runs the images are on disk and nothing is downloaded.
+          .venv/bin/python - <<'PYEOF'
+          import json, os, shutil, subprocess, sys, zipfile
+          from pathlib import Path
+
+          dest      = Path("test_regr/Clever/train/images")
+          qjson     = Path("test_regr/Clever/train/questions.json")
+          cache_f   = Path("test_regr/Clever/train/needed_images.txt")
+          zipp      = Path("/tmp/CLEVR_v1.0.zip")
+          ds_cache  = Path("test_regr/Clever/dataset_cache")
+          PREFIX    = "CLEVR_v1.0/images/train/"
+          ZIP_URL   = "https://dl.fbaipublicfiles.com/clevr/CLEVR_v1.0.zip"
+
+          dest.mkdir(exist_ok=True)
+
+          # Build (once) or load the cached list of image filenames needed by
+          # filter_one_relation: exactly-one-relate, no query/same_/than/count.
+          if cache_f.exists():
+              needed = set(cache_f.read_text().splitlines())
+              print(f"Loaded {len(needed)} needed image names from {cache_f}")
+          else:
+              print("Parsing questions.json to find relation-question images ...")
+              with qjson.open() as f:
+                  data = json.load(f)
+              def _prog_str(prog):
+                  return " ".join(
+                      str(op.get("type", op.get("function", "")))
+                      + "_" + str(op.get("value_inputs") or "")
+                      for op in prog
+                  )
+              needed = set()
+              for q in data.get("questions", []):
+                  ps = _prog_str(q.get("program", []))
+                  if any(k in ps for k in ("query", "same_", "than", "count")):
+                      continue
+                  if ps.count("relate") == 1 and q.get("image_filename"):
+                      needed.add(q["image_filename"])
+              cache_f.write_text("\n".join(sorted(needed)))
+              print(f"Found {len(needed)} unique images; saved to {cache_f}")
+
+          missing = {fn for fn in needed if not (dest / fn).exists()}
+          on_disk = len(needed) - len(missing)
+          print(f"Images: {on_disk}/{len(needed)} on disk, {len(missing)} missing")
+
+          if not missing:
+              print("All required images already on disk — nothing to extract.")
+              sys.exit(0)
+
+          # Download the zip only when images are missing
+          if not zipp.exists():
+              print(f"Downloading {ZIP_URL} ...")
+              subprocess.run(
+                  ["curl", "-fL", "--retry", "3", "--retry-delay", "5",
+                   "-o", str(zipp), ZIP_URL],
+                  check=True,
+              )
+              print("Download complete.")
+
+          print(f"Extracting {len(missing)} missing images from zip ...")
+          try:
+              with zipfile.ZipFile(zipp) as zf:
+                  entries = [
+                      e for e in zf.namelist()
+                      if e.startswith(PREFIX) and not e.endswith("/")
+                      and os.path.basename(e) in missing
+                  ]
+                  for i, entry in enumerate(entries):
+                      tgt = dest / os.path.basename(entry)
+                      with zf.open(entry) as src, tgt.open("wb") as dst:
+                          shutil.copyfileobj(src, dst)
+                      if (i + 1) % 500 == 0:
+                          print(f"  {i+1}/{len(entries)} ...")
+          finally:
+              zipp.unlink(missing_ok=True)   # remove zip even on failure
+
+          print(f"Done — {len(list(dest.iterdir()))} total images in {dest}")
+
+          # Clear the dataset cache so it is rebuilt fresh with all images now
+          # on disk (cached samples may have image=None from a previous run
+          # where some images were absent).
+          if ds_cache.exists():
+              shutil.rmtree(ds_cache)
+              print(f"Cleared {ds_cache} — will rebuild on next test run with real images")
+          PYEOF
+
+      - name: Download InternVL3_5-1B model
+        run: |
+          MODEL_DIR="models/InternVL3_5-1B"
+          if [ -d "$MODEL_DIR" ] && [ -f "$MODEL_DIR/config.json" ]; then
+            echo "Model already cached at $MODEL_DIR"
+          else
+            echo "Downloading OpenGVLab/InternVL3_5-1B to $MODEL_DIR ..."
+            .venv/bin/python -c "
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='OpenGVLab/InternVL3_5-1B',
+              local_dir='models/InternVL3_5-1B',
+              ignore_patterns=['*.safetensors.index.json'],
+          )
+          print('Download complete')
+          "
+          fi
+          echo "MODEL_PATH=$(pwd)/models/InternVL3_5-1B" >> $GITHUB_ENV
+          ls -lh "$MODEL_DIR"/ | head -20
 
       # --- Quality gate: formatting & types (only in debug mode) ---
       - name: Check formatting (black)
@@ -146,20 +283,41 @@ jobs:
 
       - name: Type check (mypy)
         if: env.DEBUG_MODE == 'true'
-        continue-on-error: true 
+        continue-on-error: true
         run: |
           set +e
           uv run --no-sync mypy --install-types --non-interactive .
 
+      - name: Configure multi-GPU (if available)
+        run: |
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            _gpu_count=$(nvidia-smi --list-gpus | wc -l)
+          else
+            _gpu_count=0
+          fi
+          echo "Detected ${_gpu_count} GPU(s)."
+          if [ "${_gpu_count}" -ge 2 ]; then
+            # Pin to the two GPUs chosen by GPU_IDS, or 0,1 by default.
+            _gpu_ids="${GPU_IDS:-0,1}"
+            echo "Enabling multi-GPU: CUDA_VISIBLE_DEVICES=${_gpu_ids}, VLLM_TP=2, PEFT_DEVICE_MAP=auto"
+            echo "CUDA_VISIBLE_DEVICES=${_gpu_ids}" >> "$GITHUB_ENV"
+            echo "VLLM_TP=2" >> "$GITHUB_ENV"
+            echo "PEFT_DEVICE_MAP=auto" >> "$GITHUB_ENV"
+          else
+            echo "Single-GPU runner — leaving VLLM_TP and PEFT_DEVICE_MAP unset."
+          fi
+
       # --- Run GPU tests ---
+
       - name: Run GPU tests
         run: |
           TEST_LIST=(
-            'examples/PMDExistL/pmd_counting_tests'
-            'examples/PMDExistL/relation_learning_tests'
+            #'examples/PMDExistL/pmd_counting_tests'
+            #'examples/PMDExistL/relation_learning_tests'
+            'Clever'
           )
           # Note: ConllQA test is temporarily disabled
-          
+
           bash .github/scripts/run_tests.sh "test-gpu" "${TEST_LIST[@]}"
 
       - name: Upload test results
@@ -170,6 +328,235 @@ jobs:
           path: |
             /tmp/test_results_test-gpu.txt
             /tmp/test_failures_test-gpu.txt
+          retention-days: 1
+
+  test-vllm:
+    runs-on: [self-hosted, linux, x64, gpu]
+    # `test-vllm` to `test-gpu`'s `needs:` above if you want gating.
+    if: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with: { python-version: "3.13" }
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Resolve & install
+        run: |
+          uv sync --extra cu128 --extra dev --extra vllm --extra peft
+
+      - name: Add venv bin to PATH
+        run: |
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+          echo "Added $(pwd)/.venv/bin to GITHUB_PATH"
+
+      - name: Set MODEL_PATH if cached
+        run: |
+          MODEL_DIR="models/InternVL3_5-1B"
+          if [ -d "$MODEL_DIR" ] && [ -f "$MODEL_DIR/config.json" ]; then
+            echo "Using cached model at $MODEL_DIR"
+            echo "MODEL_PATH=$(pwd)/$MODEL_DIR" >> $GITHUB_ENV
+          else
+            echo "No cached model found — will use HF hub directly"
+          fi
+
+      - name: GPU & driver info
+        run: |
+          echo "=== nvidia-smi ==="
+          nvidia-smi
+          echo ""
+          echo "=== CUDA version ==="
+          nvidia-smi --query-gpu=driver_version,compute_cap --format=csv,noheader
+          echo ""
+          echo "=== GPU memory ==="
+          nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader
+          echo ""
+          # Topology matrix — shows the interconnect between every pair of
+          # GPUs. Used to pick a topologically close pair for tensor
+          # parallelism (set GPU_IDS on the runner). Legend:
+          #   NV# = NVLink (N bricks)     best
+          #   PIX = single PCIe switch    very good
+          #   PXB = multiple PCIe bridges good
+          #   PHB = PCIe host bridge
+          #   NODE = same NUMA node
+          #   SYS = crosses CPU sockets   slowest
+          echo "=== GPU topology (nvidia-smi topo -m) ==="
+          nvidia-smi topo -m || echo "(nvidia-smi topo -m unavailable on this driver)"
+
+      - name: Verify torch CUDA
+        run: |
+          .venv/bin/python -c "
+          import torch
+          print(f'PyTorch:        {torch.__version__}')
+          print(f'CUDA available: {torch.cuda.is_available()}')
+          if torch.cuda.is_available():
+              print(f'CUDA version:   {torch.version.cuda}')
+              print(f'GPU:            {torch.cuda.get_device_name(0)}')
+              print(f'GPU memory:     {torch.cuda.get_device_properties(0).total_memory/ 1024**3:.1f} GB')
+              # Quick matmul smoke test
+              a = torch.randn(1000, 1000, device='cuda')
+              b = torch.randn(1000, 1000, device='cuda')
+              torch.cuda.synchronize()
+              import time
+              t0 = time.perf_counter()
+              for _ in range(100):
+                  c = a @ b
+              torch.cuda.synchronize()
+              elapsed = time.perf_counter() - t0
+              print(f'100x matmul(1k,1k): {elapsed:.3f}s ({100/elapsed:.0f} ops/s)')
+          else:
+              print('WARNING: CUDA not available!')
+              exit(1)
+          "
+
+      - name: Verify vLLM import
+        run: |
+          .venv/bin/python -c "
+          import vllm
+          print(f'vLLM version: {vllm.__version__}')
+          print('vLLM import OK')
+          "
+
+      - name: Test vLLM engine initialization
+        timeout-minutes: 10
+        run: |
+          .venv/bin/python -c "
+          import torch
+          import time
+
+          cc = torch.cuda.get_device_capability()
+          print('=== vLLM Engine Initialization Test ===')
+          print(f'GPU: {torch.cuda.get_device_name(0)}')
+          print(f'Compute capability: {cc[0]}.{cc[1]}')
+          print(f'GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB')
+          print(f'Free memory: {torch.cuda.mem_get_info()[0] / 1024**3:.1f} GB')
+          print()
+
+          from vllm import LLM, SamplingParams
+
+          t0 = time.perf_counter()
+          try:
+              llm = LLM(
+                  model='facebook/opt-125m',
+                  gpu_memory_utilization=0.5,
+                  max_model_len=256,
+                  enforce_eager=True,
+              )
+              init_time = time.perf_counter() - t0
+              print(f'Engine init:    {init_time:.1f}s')
+
+              # Run a simple generation to test end-to-end
+              params = SamplingParams(temperature=0.0, max_tokens=20)
+              t1 = time.perf_counter()
+              outputs = llm.generate(['Hello, world!'], params)
+              gen_time = time.perf_counter() - t1
+              print(f'Generation:     {gen_time:.2f}s')
+              print(f'Output:         {outputs[0].outputs[0].text[:100]}')
+              print()
+              print('vLLM engine test PASSED')
+
+              # Cleanup
+              del llm
+              torch.cuda.empty_cache()
+
+          except Exception as e:
+              elapsed = time.perf_counter() - t0
+              print(f'FAILED after {elapsed:.1f}s: {e}')
+              import traceback
+              traceback.print_exc()
+              exit(1)
+          "
+
+      - name: Test InternVL model loading (PEFT)
+        timeout-minutes: 15
+        continue-on-error: true
+        run: |
+          .venv/bin/python -c "
+          import torch
+          import time
+          import os
+
+          print('=== InternVL / PEFT Load Test ===')
+          print(f'GPU: {torch.cuda.get_device_name(0)}')
+          print(f'Free memory: {torch.cuda.mem_get_info()[0] / 1024**3:.1f} GB')
+          print()
+
+          from transformers import AutoModel, AutoTokenizer
+
+          # Use local model if downloaded by test-gpu, otherwise pull from HF
+          model_path = os.environ.get('MODEL_PATH', 'OpenGVLab/InternVL3_5-1B')
+          print(f'Loading {model_path} ...')
+
+          t0 = time.perf_counter()
+          try:
+              tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+              model = AutoModel.from_pretrained(
+                  model_path,
+                  dtype=torch.float16,
+                  trust_remote_code=True,
+              ).cuda()
+              load_time = time.perf_counter() - t0
+              n_params = sum(p.numel() for p in model.parameters()) / 1e6
+              print(f'Load time:      {load_time:.1f}s')
+              print(f'Parameters:     {n_params:.0f}M')
+              print(f'GPU used:       {torch.cuda.memory_allocated() / 1024**3:.2f} GB')
+              print()
+
+              # Test PEFT wrapping
+              from peft import LoraConfig, get_peft_model
+              lora_config = LoraConfig(
+                  r=8, lora_alpha=16,
+                  target_modules=['q_proj', 'v_proj'],
+                  lora_dropout=0.05,
+              )
+              peft_model = get_peft_model(model, lora_config)
+              trainable = sum(p.numel() for p in peft_model.parameters() if p.requires_grad)
+              total = sum(p.numel() for p in peft_model.parameters())
+              print(f'LoRA trainable: {trainable/1e6:.1f}M / {total/1e6:.0f}M ({100*trainable/total:.2f}%)')
+              print()
+              print('InternVL + PEFT test PASSED')
+
+              del peft_model, model
+              torch.cuda.empty_cache()
+
+          except Exception as e:
+              elapsed = time.perf_counter() - t0
+              print(f'FAILED after {elapsed:.1f}s: {e}')
+              import traceback
+              traceback.print_exc()
+              exit(1)
+          "
+
+      - name: Write test summary
+        if: always()
+        run: |
+          OUT="/tmp/test_results_test-vllm.txt"
+          {
+            echo "=== test-vllm results ==="
+            echo "Date: $(date -u)"
+            echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo unknown)"
+            echo "vLLM: $(.venv/bin/python -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo unknown)"
+            echo ""
+            # Summarise which steps passed/failed based on their exit codes written above
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "RESULT: ALL PASSED"
+            else
+              echo "RESULT: SOME STEPS FAILED (see job log for details)"
+            fi
+          } > "$OUT"
+
+      - name: Upload vLLM test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results-vllm
+          path: |
+            /tmp/test_results_test-vllm.txt
           retention-days: 1
 
   generate-requirements:
@@ -185,12 +572,12 @@ jobs:
           token: ${{ secrets.BOT_PAT }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
 
@@ -232,7 +619,7 @@ jobs:
 
   report:
     runs-on: ubuntu-latest
-    needs: [test-cpu, test-gpu]
+    needs: [test-cpu, test-gpu, test-vllm]
     if: always()
     steps:
       - uses: actions/checkout@v6

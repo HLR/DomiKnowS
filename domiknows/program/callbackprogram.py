@@ -29,10 +29,9 @@ class CallbackProgram(LearningBasedProgram):
 
     def default_after_train_step(self, output=None):
         loss, *_ = output
-        if self.opt and torch.is_tensor(loss) and loss.requires_grad:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-            self.opt.step()
+        # Delegate to the AMP-/compile-aware helper on the base class.
+        # zero_grad is handled by default_before_train_step, so skip it here.
+        self._backward_and_step(loss, zero_grad=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -60,7 +59,8 @@ class CallbackProgram(LearningBasedProgram):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
-            loss, metric, *output = self.model(data_item)
+            with self._autocast_ctx():
+                loss, metric, *output = self.model(data_item)
             yield (loss, metric, *output[:1])
 
     def train_epoch(self, dataset, **kwargs):

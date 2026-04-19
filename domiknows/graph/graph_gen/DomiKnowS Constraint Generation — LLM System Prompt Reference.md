@@ -291,12 +291,6 @@ with Graph('clevr') as graph:
     right_of = Concept('right_of'); right_of.is_a(rel)
     behind = Concept('behind');     behind.is_a(rel)
     in_front = Concept('in_front'); in_front.is_a(rel)
-
-    # Same-attribute relations
-    same_color = Concept('same_color');     same_color.has_a(object, object)
-    same_shape = Concept('same_shape');     same_shape.has_a(object, object)
-    same_material = Concept('same_material'); same_material.has_a(object, object)
-    same_size = Concept('same_size');       same_size.has_a(object, object)
 ```
 
 ### Generated constraint data:

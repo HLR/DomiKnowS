@@ -115,6 +115,61 @@ class AdaptiveTNormPlugin:
         """Return the selector so callers (LossCalculator, SampleLossCalculator) can use it."""
         return self.selector
 
+    @staticmethod
+    def _collect_executable_lc_losses(datanode, tnorm):
+        """
+        Compute per-sample executable LC losses using the same path
+        ``InferenceModel.forward`` uses, so the adaptive tracker sees the
+        constraints that actually drive training.
+
+        Returns a dict {lcName: loss_dict} in the same format
+        ``LossCalculator.calculateLoss`` returns, which lets callers merge
+        it into the global-LC dict and reuse the existing record loop.
+        """
+        result = {}
+        graph = getattr(datanode, 'graph', None)
+        if graph is None or not getattr(graph, 'executableLCs', None):
+            return result
+
+        try:
+            datanode.setActiveExecutableLCs()
+        except Exception:
+            return result
+
+        try:
+            active_names = datanode.getActiveExecutableConstraintNames()
+        except Exception:
+            active_names = set()
+        if not active_names:
+            return result
+
+        try:
+            ctx = datanode._prepareLcLossContext(tnorm=tnorm, counting_tnorm=None)
+        except Exception:
+            ctx = None
+
+        for lc_name in active_names:
+            lc = graph.executableLCs.get(lc_name)
+            if lc is None or not getattr(lc, 'active', False):
+                continue
+            try:
+                loss_dict = datanode.calculateSingleLcLoss(
+                    lc_name,
+                    tnorm=tnorm,
+                    counting_tnorm=None,
+                    _context=ctx,
+                )
+            except Exception:
+                continue
+            if loss_dict is None:
+                continue
+            # Ensure 'lc' key is populated for downstream record_observation.
+            if loss_dict.get('lc') is None:
+                loss_dict['lc'] = lc
+            result[lc_name] = loss_dict
+
+        return result
+
     def _on_step_end(self, output):
         """Track metrics grouped by constraint type."""
         self.step_counter[0] += 1
@@ -134,6 +189,13 @@ class AdaptiveTNormPlugin:
             # For monitoring we always pass a valid tnorm to calculateLcLoss
             monitor_tnorm = current_tnorm if current_tnorm in VALID_TNORMS else 'L'
             losses = datanode.calculateLcLoss(tnorm=monitor_tnorm)
+
+            # Also collect executable (per-sample) LC losses so the tracker
+            # sees the constraints that drive training via InferenceModel.
+            elc_losses = self._collect_executable_lc_losses(datanode, monitor_tnorm)
+            if elc_losses:
+                # Merge — ELC names (e.g. 'ELC0') don't collide with 'LC0'.
+                losses = {**losses, **elc_losses}
 
             grad_norm = 0.0
             for clf in self.models['classifiers'].values():
@@ -168,6 +230,9 @@ class AdaptiveTNormPlugin:
                         continue
                     try:
                         tnorm_losses = datanode.calculateLcLoss(tnorm=tnorm)
+                        elc_tnorm_losses = self._collect_executable_lc_losses(datanode, tnorm)
+                        if elc_tnorm_losses:
+                            tnorm_losses = {**tnorm_losses, **elc_tnorm_losses}
                         for lc_name, loss_dict in tnorm_losses.items():
                             lc = loss_dict.get('lc')
                             loss_tensor = loss_dict.get('loss')

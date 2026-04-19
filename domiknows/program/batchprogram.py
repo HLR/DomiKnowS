@@ -20,10 +20,13 @@ class BatchProgram(LearningBasedProgram):
         self.model.reset()
         self.opt.zero_grad()
         for index, data_item in enumerate(dataset):
-            loss, metric, *output = self.model(data_item)
+            with self._autocast_ctx():
+                loss, metric, *output = self.model(data_item)
             if self.opt and torch.is_tensor(loss) and loss.requires_grad:
-                loss.backward()
-                if index % self.batch_size == self.batch_size - 1:
-                    self.opt.step()
+                # Gradient accumulation: backward every step, step/zero at
+                # batch boundary. _backward_and_step handles AMP scaling.
+                is_boundary = index % self.batch_size == self.batch_size - 1
+                self._backward_and_step(loss, zero_grad=False, step=is_boundary)
+                if is_boundary:
                     self.opt.zero_grad()
             yield (loss, metric, *output[:1])

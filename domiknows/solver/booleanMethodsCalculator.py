@@ -5,14 +5,29 @@ from domiknows.solver.constraintsProcessorInterface import constraintsProcessor
 from domiknows.solver.ilpConfig import ilpConfig 
 
 class booleanMethodsCalculator(constraintsProcessor):
-    
+
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-                
+
         self.grad = False
-        
+
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
+
+    # ------------------------------------------------------------------
+    # Make sure all variables are on the same device (CPU or GPU) for consistent operations.
+    # ------------------------------------------------------------------
+    def _coerceDevice(self, var):
+        target = getattr(self, "current_device", None)
+        if target is None:
+            return list(var)
+        target = torch.device(target)
+        out = []
+        for v in var:
+            if torch.is_tensor(v) and v.device != target:
+                v = v.to(target)
+            out.append(v)
+        return out
         
     def notVar(self, _, var, onlyConstrains = False):
         # -- Consider None
@@ -25,8 +40,9 @@ class booleanMethodsCalculator(constraintsProcessor):
         return notSuccess
             
     def andVar(self, _, *var, onlyConstrains = False):
+        var = self._coerceDevice(var)
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tOnes = torch.ones(1, device=self.current_device, requires_grad=False)
@@ -44,8 +60,9 @@ class booleanMethodsCalculator(constraintsProcessor):
         return andSuccess    
     
     def orVar(self, _, *var, onlyConstrains = False):
+        var = self._coerceDevice(var)
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
@@ -55,7 +72,7 @@ class booleanMethodsCalculator(constraintsProcessor):
                 varFixed.append(v)
         var = varFixed
         # --
-        
+
         orSuccess = 0
         if sum(var) > 0:
             orSuccess = 1
@@ -64,9 +81,10 @@ class booleanMethodsCalculator(constraintsProcessor):
          
     def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
-        
+        var = self._coerceDevice(var)
+
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
@@ -74,7 +92,7 @@ class booleanMethodsCalculator(constraintsProcessor):
                 varFixed.append(tZerosSqueezed)  # when None
             else:
                 varFixed.append(v)
-        
+
         var = varFixed
         # --
             
@@ -103,8 +121,9 @@ class booleanMethodsCalculator(constraintsProcessor):
     
     def norVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.orVar(_, var))
+        var = self._coerceDevice(var)
         # -- Consider None
-        varFixed = []  
+        varFixed = []
         for v in var:
             if v is None:
                 tOnes = torch.ones(1, device=self.current_device, requires_grad=False)
@@ -367,37 +386,30 @@ class booleanMethodsCalculator(constraintsProcessor):
                 # Violation: zero or multiple satisfy
                 return -1
 
-    def queryVar(self, _, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Query operator for multiclass attribute selection in verification mode.
-        
+
         Given entity selection (e.g. from iotaL) and a multiclass concept with subclasses,
         returns indicators for which subclass the selected entity belongs to.
-        
+
         In verification mode, all inputs are discrete 0/1 values from argmax predictions.
         This method evaluates whether the query constraint is satisfied.
-        
-        Verification Logic:
-            Given:
-            - s_i: selection indicator for entity i (from iotaL, exactly one should be 1)
-            - Subclasses: {subclass_0, subclass_1, ..., subclass_k}
-            
-            Returns:
-            - r_j: result indicator for subclass j (one-hot among subclasses)
-            
-            Verification checks:
-            1. Exactly one entity is selected (Σ s_i = 1)
-            2. Returns one-hot indicators based on selection
-        
+
         Args:
             _: Model context (unused in verification)
             concept: Parent multiclass concept (e.g., material)
             subclasses: List of (subclass_concept, name, index) tuples
             selection_vars: Entity selection variables from iotaL (list of 0/1 values)
+            subclass_data: Per-entity subclass predictions.
+                ``subclass_data[entity_idx]`` is a list of K values (one per
+                subclass) representing the model's discrete prediction for that
+                entity.  When available, the selected entity's row is returned
+                directly so the query result reflects the actual prediction.
             onlyConstrains: If True, return verification result (1=satisfied, 0=violated)
             temperature: Not used in verification (for interface compatibility)
             logicMethodName: Name for logging
-        
+
         Returns:
             - If onlyConstrains=True: 1 if valid selection exists, 0 otherwise
             - If onlyConstrains=False: List of 0/1 indicators [r_0, r_1, ..., r_k]
@@ -406,9 +418,9 @@ class booleanMethodsCalculator(constraintsProcessor):
             if onlyConstrains:
                 return 0
             return None
-        
+
         num_subclasses = len(subclasses)
-        
+
         # Handle None values and convert tensors to numeric
         sel_vars_fixed = []
         for v in selection_vars:
@@ -424,12 +436,12 @@ class booleanMethodsCalculator(constraintsProcessor):
                 sel_vars_fixed.append(int(v.item() > 0.5))
             else:
                 sel_vars_fixed.append(int(float(v) > 0.5) if v else 0)
-        
+
         if len(sel_vars_fixed) == 0:
             if onlyConstrains:
                 return 0
             return [0] * num_subclasses
-        
+
         # Find which entity is selected (has value 1)
         selected_idx = -1
         selected_count = 0
@@ -438,20 +450,76 @@ class booleanMethodsCalculator(constraintsProcessor):
                 if selected_idx == -1:
                     selected_idx = i
                 selected_count += 1
-        
+
         if onlyConstrains:
             # Return 1 if exactly one entity selected, 0 otherwise
             return 1 if selected_count == 1 else 0
-        
+
         if selected_idx == -1:
             # No entity selected - constraint violated, return zeros
             return [0] * num_subclasses
-        
-        # For verification, return one-hot with first subclass selected
-        # The actual subclass determination happens at a higher level
-        # based on the model's predictions for that entity
-        result = [0] * num_subclasses
-        if num_subclasses > 0:
-            result[0] = 1
-        
-        return result
+
+        # Use subclass_data to determine the actual subclass of the selected entity
+        if subclass_data is not None and selected_idx < len(subclass_data):
+            entity_row = subclass_data[selected_idx]
+            if entity_row is not None and len(entity_row) >= num_subclasses:
+                # Convert to discrete 0/1 list
+                result = []
+                for val in entity_row[:num_subclasses]:
+                    if val is None:
+                        result.append(0)
+                    elif torch.is_tensor(val):
+                        result.append(int(val.item() > 0.5))
+                    elif hasattr(val, 'item'):
+                        result.append(int(val.item() > 0.5))
+                    else:
+                        result.append(int(float(val) > 0.5) if val else 0)
+                # Verify exactly one subclass is active (valid multiclass prediction)
+                if sum(result) == 1:
+                    return result
+                elif sum(result) > 1:
+                    # Multiple subclasses active — pick the first one
+                    first_active = result.index(1)
+                    result = [0] * num_subclasses
+                    result[first_active] = 1
+                    return result
+                # else: no subclass active, fall through to zeros
+
+        # Fallback: no subclass data or lookup failed — return zeros
+        return [0] * num_subclasses
+
+    def sameVar(self, _, concept, subclasses, *entity_var_groups,
+                onlyConstrains=False, logicMethodName="SAME"):
+        """
+        Discrete verification: check whether all entities share the same subclass.
+
+        result = OR_j( AND_i( entity_i_has_subclass_j ) )
+        """
+        num_subclasses = len(subclasses)
+        num_entities = len(entity_var_groups)
+
+        if num_entities == 0 or num_subclasses == 0:
+            return 1
+
+        # For each subclass j, check if ALL entities have it
+        for j in range(num_subclasses):
+            all_have_j = True
+            for i in range(num_entities):
+                group = entity_var_groups[i]
+                if j < len(group):
+                    val = group[j]
+                    if torch.is_tensor(val):
+                        val = int(val.item() > 0.5)
+                    elif val is None:
+                        val = 0
+                    else:
+                        val = int(float(val) > 0.5)
+                else:
+                    val = 0
+                if val != 1:
+                    all_have_j = False
+                    break
+            if all_have_j:
+                return 1  # Found a subclass shared by all entities
+
+        return 0  # No shared subclass found

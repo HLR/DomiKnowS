@@ -974,52 +974,53 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
         
         return select_vars
 
-    def queryVar(self, m, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, m, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Query operator for multiclass attribute selection in ILP.
-        
+
         Given entity selection (from iotaL) and a multiclass concept with subclasses,
         returns indicators for which subclass the selected entity belongs to.
-        
+
         ILP Formulation:
             Given:
             - s_i: selection indicator for entity i (from iotaL, exactly one is 1)
-            - c_{j,i}: indicator that entity i has subclass j (from model predictions)
-            - Subclasses: {subclass_0, subclass_1, ..., subclass_k}
-            
+            - c_{j,i}: indicator that entity i has subclass j (from subclass_data)
+
             Create:
             - r_j: result indicator for subclass j
-            
+
             Constraints:
-            1. Σ r_j = 1                    (exactly one subclass selected)
-            2. r_j ≤ Σ_i (s_i ∧ c_{j,i})   (can only select if entity has subclass)
-            
-            The selection s_i comes from iotaL (exactly one entity selected).
-            The result r_j indicates which subclass that entity has.
-        
+            1. Σ r_j = 1                       (exactly one subclass selected)
+            2. r_j ≤ Σ_i (s_i * c_{j,i})       (selected only if entity has subclass)
+
         Args:
             m: Gurobi model
             concept: Parent multiclass concept (e.g., material)
             subclasses: List of (subclass_concept, name, index) tuples
             selection_vars: Entity selection variables from iotaL (list of vars)
+            subclass_data: Per-entity subclass predictions.
+                ``subclass_data[entity_idx]`` is a list of K values (one per
+                subclass).  Used in the constant-input path to look up the
+                selected entity's actual subclass, and in the variable path
+                to link r_j to entity predictions.
             onlyConstrains: If True, only add constraints without returning vars
             temperature: Not used in ILP (for interface compatibility)
             logicMethodName: Name for logging
-        
+
         Returns:
             - If onlyConstrains=True: None
             - If onlyConstrains=False: List of binary variables [r_0, r_1, ..., r_k]
               representing subclass selection (one-hot)
         """
         from gurobipy import GRB, LinExpr
-        
+
         if not subclasses:
             if self.ifLog:
                 self.myLogger.error(f"{logicMethodName} called with no subclasses")
             return None
-        
+
         num_subclasses = len(subclasses)
-        
+
         # Handle None values in selection_vars
         sel_vars_fixed = []
         for v in selection_vars:
@@ -1027,20 +1028,20 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
                 sel_vars_fixed.append(0)
             else:
                 sel_vars_fixed.append(v)
-        
+
         if len(sel_vars_fixed) == 0:
             if self.ifLog:
                 self.myLogger.warning(f"{logicMethodName} called with empty selection_vars")
             if onlyConstrains:
                 return None
             return [0] * num_subclasses
-        
+
         if self.ifLog:
             self.myLogger.debug(f"{logicMethodName} called with {len(sel_vars_fixed)} selection vars, {num_subclasses} subclasses")
-        
+
         # Check if all selection vars are constants
         all_constants = all(self.__varIsNumber(v) for v in sel_vars_fixed)
-        
+
         if all_constants:
             # Find which entity is selected (has value 1)
             selected_idx = -1
@@ -1048,65 +1049,144 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
                 if v == 1:
                     selected_idx = i
                     break
-            
+
             if selected_idx == -1:
                 # No entity selected
                 if onlyConstrains:
                     return None
                 return [0] * num_subclasses
-            
-            # For constant case, return indicator for first subclass by default
-            # (actual subclass determination requires runtime prediction data)
+
+            # Use subclass_data to determine the actual subclass
+            if subclass_data is not None and selected_idx < len(subclass_data):
+                entity_row = subclass_data[selected_idx]
+                if entity_row is not None and len(entity_row) >= num_subclasses:
+                    result = []
+                    for val in entity_row[:num_subclasses]:
+                        if val is None:
+                            result.append(0)
+                        elif self.__varIsNumber(val):
+                            result.append(int(float(val) > 0.5))
+                        else:
+                            result.append(val)  # Gurobi var — keep as-is
+                    if onlyConstrains:
+                        return None
+                    return result
+
+            # Fallback: no subclass data
             if onlyConstrains:
                 return None
-            result = [0] * num_subclasses
-            if num_subclasses > 0:
-                result[0] = 1
-            return result
-        
+            return [0] * num_subclasses
+
         # Create result variables for each subclass
         result_vars = []
         var_name_base = f"{logicMethodName}_{concept.name if hasattr(concept, 'name') else 'concept'}"
-        
+
         for j, (subclass, name, idx) in enumerate(subclasses):
             var_name = f"{var_name_base}_{name}_{j}"
             r_j = m.addVar(vtype=GRB.BINARY, name=var_name[:254])
             result_vars.append(r_j)
-        
+
         if m:
             m.update()
-        
+
         # Constraint 1: Exactly one subclass selected (Σ r_j = 1)
         sum_result = LinExpr()
         for r_j in result_vars:
             sum_result.addTerms(1.0, r_j)
-        
+
         m.addConstr(sum_result == 1, name=f'{logicMethodName}_exactly_one_subclass:')
-        
+
         if self.ifLog:
             self.myLogger.debug(f"{logicMethodName} added constraint: Σ r_j = 1")
-        
-        # Constraint 2: Link result to selection
-        # Each r_j is bounded by whether an entity is selected
-        sum_selection = LinExpr()
-        for s_i in sel_vars_fixed:
-            if not self.__varIsNumber(s_i):
-                sum_selection.addTerms(1.0, s_i)
-            else:
-                sum_selection += s_i
-        
-        for j, r_j in enumerate(result_vars):
-            m.addConstr(r_j <= sum_selection, name=f'{logicMethodName}_bound_{j}:')
-        
+
+        # Constraint 2: Link result to selection and subclass data
+        if subclass_data is not None:
+            # Proper linking: r_j ≤ Σ_i (s_i * c_{j,i})
+            # For each subclass j, r_j can only be 1 if a selected entity has that subclass
+            for j, r_j in enumerate(result_vars):
+                link_expr = LinExpr()
+                for i, s_i in enumerate(sel_vars_fixed):
+                    if i < len(subclass_data) and subclass_data[i] is not None and j < len(subclass_data[i]):
+                        c_ji = subclass_data[i][j]
+                        if self.__varIsNumber(s_i) and self.__varIsNumber(c_ji):
+                            link_expr += float(s_i) * float(c_ji)
+                        elif self.__varIsNumber(c_ji):
+                            if float(c_ji) > 0.5:
+                                link_expr.addTerms(1.0, s_i)
+                        elif self.__varIsNumber(s_i):
+                            if float(s_i) > 0.5:
+                                link_expr.addTerms(1.0, c_ji)
+                        else:
+                            # Both are Gurobi vars — need auxiliary AND var
+                            and_var = self.andVar(m, s_i, c_ji, onlyConstrains=False)
+                            if and_var is not None and not self.__varIsNumber(and_var):
+                                link_expr.addTerms(1.0, and_var)
+                            else:
+                                link_expr += (and_var if and_var is not None else 0)
+                m.addConstr(r_j <= link_expr, name=f'{logicMethodName}_link_{j}:')
+        else:
+            # Fallback: bound by total selection (weaker constraint)
+            sum_selection = LinExpr()
+            for s_i in sel_vars_fixed:
+                if not self.__varIsNumber(s_i):
+                    sum_selection.addTerms(1.0, s_i)
+                else:
+                    sum_selection += s_i
+
+            for j, r_j in enumerate(result_vars):
+                m.addConstr(r_j <= sum_selection, name=f'{logicMethodName}_bound_{j}:')
+
         if self.ifLog:
-            self.myLogger.debug(f"{logicMethodName} added {num_subclasses} bounding constraints")
-        
+            self.myLogger.debug(f"{logicMethodName} added linking constraints")
+
         if onlyConstrains:
             if self.ifLog:
                 self.myLogger.debug(f"{logicMethodName} constraints only - returning None")
             return None
-        
+
         if self.ifLog:
             self.myLogger.debug(f"{logicMethodName} returns {num_subclasses} result variables")
-        
+
         return result_vars
+
+    def sameVar(self, m, concept, subclasses, *entity_var_groups,
+                onlyConstrains=False, logicMethodName="SAME"):
+        """
+        Check whether all entities share the same subclass of a concept (ILP).
+
+        For each subclass j, computes AND over all entities' indicators for j.
+        Then ORs all per-subclass ANDs together.
+
+        result = OR_j( AND_i( entity_i_has_subclass_j ) )
+        """
+        num_subclasses = len(subclasses)
+        num_entities = len(entity_var_groups)
+
+        if num_entities == 0 or num_subclasses == 0:
+            if self.ifLog:
+                self.myLogger.warning(f"{logicMethodName} called with {num_entities} entities, {num_subclasses} subclasses")
+            return 1 if not onlyConstrains else None
+
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} called with {num_entities} entities, {num_subclasses} subclasses")
+
+        # For each subclass j: a_j = AND(entity_0[j], entity_1[j], ..., entity_n[j])
+        and_results = []
+        for j in range(num_subclasses):
+            vars_for_j = []
+            for i in range(num_entities):
+                group = entity_var_groups[i]
+                if j < len(group):
+                    vars_for_j.append(group[j])
+                else:
+                    vars_for_j.append(0)
+            a_j = self.andVar(m, *vars_for_j)
+            and_results.append(a_j)
+
+        # result = OR(a_0, a_1, ..., a_k)
+        result = self.orVar(m, *and_results, onlyConstrains=onlyConstrains)
+
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} returns result")
+
+        return result

@@ -133,35 +133,65 @@ def make_llm(model_path,
     want_len = 4096 * 4  # tighten this if you can — it’s a big speed lever
     target_util = 0.85
     target_concurrency = 8  # bump up until you hit VRAM or no longer see speedup
-    # 2) Try FP8 KV cache for speed+capacity; fall back safely if unsupported
+
+    # ------------------------------------------------------------------
+    # Tensor parallelism (multi-GPU).
+    #
+    # Opt-in via ``VLLM_TP`` env var. World size is capped at the number
+    # of visible CUDA devices so an over-set env can't crash vLLM at init.
+    # ------------------------------------------------------------------
+    _visible_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    try:
+        _tp = int(os.environ.get("VLLM_TP", "1"))
+    except ValueError:
+        _tp = 1
+    tp = max(1, min(_tp, _visible_gpus or 1))
+
+    # 2) Build the vLLM engine.
+    #
+    # Optional env overrides let users tune for unusual hardware without
+    # editing this file:
+    #   VLLM_GPU_UTIL       — float in (0, 1]; default 0.85
+    #   VLLM_MAX_MODEL_LEN  — int max context window; default 4096 (1B) /
+    #                         ``want_len`` (= 16384) for larger models.
+    try:
+        _util_env = float(os.environ.get("VLLM_GPU_UTIL", ""))
+    except ValueError:
+        _util_env = 0.0
+    _gpu_util = _util_env if _util_env > 0.0 else 0.85
+
+    try:
+        _max_len_env = int(os.environ.get("VLLM_MAX_MODEL_LEN", ""))
+    except ValueError:
+        _max_len_env = 0
+
     if "1b" in model_path.lower():
+        _max_len = _max_len_env if _max_len_env > 0 else 4096
         llm = LLM(
             model=model_path,
             trust_remote_code=True,
             dtype="auto",
+            tensor_parallel_size=tp,
             enable_prefix_caching=True,
-            #max_seq_len_to_capture=want_len,  # or the real upper bound of your shared prefix
-            max_model_len=want_len,
-            max_num_batched_tokens=4096 * target_concurrency,
-            mm_processor_cache_gb=5,
-            gpu_memory_utilization=0.9,
+            max_model_len=_max_len,
+            max_num_batched_tokens=_max_len,
+            gpu_memory_utilization=_gpu_util,
             logprobs_mode='processed_logits',
             logits_processors=[WrappedPerReqLogitsProcessor],
         )
     else:
-
+        _max_len = _max_len_env if _max_len_env > 0 else want_len
         llm = LLM(
             model=model_path,
             trust_remote_code=True,
             dtype="auto",
+            tensor_parallel_size=tp,
             enable_prefix_caching=True,
-            #max_seq_len_to_capture=want_len,  # or the real upper bound of your shared prefix
-            max_model_len=want_len,
+            max_model_len=_max_len,
             max_num_batched_tokens=4096 * target_concurrency,
-            gpu_memory_utilization=0.85,
+            gpu_memory_utilization=_gpu_util,
             logprobs_mode='processed_logits',
             logits_processors=[WrappedPerReqLogitsProcessor],
-
         )
 
     # llm = LLM(
@@ -425,10 +455,24 @@ class InternVLShared(torch.nn.Module):
             InternVLShared.model = InternVL(model_path=model_path, device=device)
         self.model = InternVLShared.model
 
-    def forward(self, image, bounding_boxes):
+    def forward(self, image, image_filename, bounding_boxes):
         image = image[0]
+        fn = image_filename[0] if (image_filename is not None) else None
+        # Fallback: if pil_image is None (stale cache built before images were
+        # downloaded), try to load directly from the images directory on disk.
+        if image is None and fn is not None:
+            _path = os.path.join("train", "images", fn)
+            try:
+                image = Image.open(_path).convert("RGB")
+            except (FileNotFoundError, OSError):
+                pass
         if isinstance(image, str):
             image = Image.open(image).convert("RGB")
+        if image is None:
+            raise ValueError(
+                f"pil_image is None for '{fn}' and the file was not found on disk. "
+                f"Ensure CLEVR images are downloaded to train/images/."
+            )
         
         images, questions = [], []
         

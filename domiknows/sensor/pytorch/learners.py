@@ -125,7 +125,7 @@ class TorchLearner(Learner, FunctionalSensor):
         """
         save_path = os.path.join(filepath, self.sanitized_name)
         try:
-            self.model.load_state_dict(torch.load(save_path))
+            self.model.load_state_dict(torch.load(save_path, weights_only=True))
             self.model.eval()
             self.model.train()
         except FileNotFoundError:

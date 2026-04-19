@@ -50,6 +50,9 @@ DEFAULT_TNORM_BY_TYPE = {
     'equivalenceL': 'P',
     'iffL': 'P',
     'existsL': 'L',
+    'existsL': 'P',
+    'queryL': 'P',
+    'iotaL': 'P',
     'notL': 'SP',
     # Fallback
     'default': 'L',

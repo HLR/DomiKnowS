@@ -167,7 +167,7 @@ class LossCalculator:
         dn.setActiveExecutableLCs()
 
         for graph in self.solver.myGraph:
-            for _, lc in graph.allLogicalConstrains:
+            for _, lc in graph.logicalConstrains.items():
                 result = self.calculate_single_lc_loss(lc, dn, key, tnorm=tnorm, counting_tnorm=counting_tnorm, label=None)
                 if result is not None:
                     lcLosses[lc.lcName] = result

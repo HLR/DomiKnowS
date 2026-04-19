@@ -227,12 +227,11 @@ def translate_left_domiknows(
     elif fn.startswith("equal_") and fn != "equal_integer":
         # equal_color, equal_shape, equal_material, equal_size
         # Binary comparison: do two objects have the same attribute?
+        # Uses sameL(attribute_concept, 'x', 'y') — no relation node needed.
         if len(ins) != 2:
             raise ValueError(f"{fn} expects 2 inputs at step {current_idx}")
 
-        # Map equal_X → same_X for the relation concept name
         attr_suffix = fn.replace("equal_", "")
-        same_name = f"same_{attr_suffix}"
 
         base_ins_l, depth_l = translate_left_domiknows(
             all_program,
@@ -252,15 +251,9 @@ def translate_left_domiknows(
         var_l = _extract_first_var_symbol(base_ins_l)
         var_r = _extract_first_var_symbol(base_ins_r)
 
-        if relation_syntax == "binary" and var_l is not None and var_r is not None:
-            relation_term = f"{same_name}('{var_l}', '{var_r}')"
-        else:
-            relation_term = f"{same_name}('rel{relation_val}', path=('{var_l}', obj1.reversed))"
-            need_relation2 = True
-            pending_arg2_nav = "obj2"
-            relation_val += 1
+        same_term = f"sameL({attr_suffix}, '{var_l}', '{var_r}')"
 
-        return f"existsL(andL({base_ins_l}, {base_ins_r}, {relation_term}))", max(depth_l, depth_r) + 1
+        return f"existsL(andL({base_ins_l}, {base_ins_r}, {same_term}))", max(depth_l, depth_r) + 1
 
     elif fn == "equal_integer":
         if len(ins) != 2:
@@ -296,16 +289,17 @@ def translate_left_domiknows(
         )
         return f"queryL({query_type}, iotaL({target_obj}))", depth + 1
 
-    elif fn.startswith("same_"):
+    elif fn.startswith("same_") or fn.startswith("different_"):
         # same_shape, same_color, same_material, same_size
-        # Semantics: given input object, find objects with the same attribute.
-        # Treated like relate — it's a binary relation between two objects.
+        # different_shape, different_color, different_material, different_size
+        # Semantics: given input object, find objects with the same / different attribute.
+        # Uses sameL / differentL — no relation node or pair concept needed.
         if len(ins) != 1:
             raise ValueError(f"{fn} expects 1 input at step {current_idx}")
 
-        attr_value = fn  # e.g. "same_shape"
-
-        init_relation_val = relation_val
+        is_different = fn.startswith("different_")
+        attr_suffix = fn.replace("different_", "") if is_different else fn.replace("same_", "")
+        constraint_name = "differentL" if is_different else "sameL"
 
         if first_initial:
             var_name = chr(var + 97)
@@ -331,32 +325,11 @@ def translate_left_domiknows(
         )
         related_var = _extract_first_var_symbol(next_obj)
 
-        # same_* relations live on pair_forward, navigated via obj1/obj2
-        relation_legacy = f"{attr_value}('rel{init_relation_val}', path=('{var_name}', obj1.reversed))"
-
-        relation_binary = None
-        if related_var is not None and relation_syntax == "binary":
-            relation_binary = f"{attr_value}('{var_name}', '{related_var}')"
-
-        if relation_syntax == "legacy":
-            relation_term = relation_legacy
-        elif relation_syntax == "binary":
-            relation_term = relation_binary if relation_binary is not None else relation_legacy
-        else:
-            raise ValueError("relation_syntax must be one of: legacy, binary")
-
-        need_relation2 = True
-        pending_arg2_nav = "obj2"
-        relation_val += 1
-
-        if relation_syntax == "binary" and relation_binary is not None:
-            if obj_term is not None:
-                return f"{obj_term}, {next_obj}, {relation_term}", depth + 1
-            return f"{next_obj}, {relation_term}", depth + 1
+        same_term = f"{constraint_name}({attr_suffix}, '{var_name}', '{related_var}')"
 
         if obj_term is not None:
-            return f"{obj_term}, {relation_term}, {next_obj}", depth + 1
-        return f"{relation_term}, {next_obj}", depth + 1
+            return f"{obj_term}, {next_obj}, {same_term}", depth + 1
+        return f"{next_obj}, {same_term}", depth + 1
 
     elif fn == "relate":
         if len(ins) != 1:

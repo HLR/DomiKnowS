@@ -936,7 +936,7 @@ class Graph(BaseGraphTree):
                 raise Exception(
                     f"Failed to evaluate constraint '{lc_string_fmt}'. "
                     f"Error: {str(e)}"
-                ) from None
+                ) from e
             
             # --- Step 7: Store label in executableLCsLabels ---
             # Labels indicate expected satisfaction (True/False) for supervised training

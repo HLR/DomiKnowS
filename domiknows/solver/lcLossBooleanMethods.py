@@ -89,16 +89,36 @@ class lcLossBooleanMethods(constraintsProcessor):
         
     # -- Consider None
     def _fixVar(self, var):
-        varFixed = []  
+        """Normalize every input tensor to the solver's current device, dtype,
+        and gradient-tracking state.
+        """
+        target_device = self.current_device
+        target_dtype = self._get_dtype()
+        varFixed = []
         for v in var:
-            if v == None or self._isTensor(v) == -100:
-                varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=self._get_dtype()))
-            else:
-                # Ensure the tensor has gradient tracking
-                if torch.is_tensor(v) and not v.requires_grad:
+            if v is None or self._isTensor(v) == -100:
+                varFixed.append(torch.tensor(
+                    [0], device=target_device, requires_grad=True,
+                    dtype=target_dtype,
+                ))
+                continue
+
+            if torch.is_tensor(v):
+                # Coerce device first, then dtype. .to() is a no-op when the
+                # tensor is already on the right device/dtype, so this is
+                # cheap for the common case.
+                if v.device != torch.device(target_device):
+                    v = v.to(target_device)
+                if v.dtype != target_dtype:
+                    v = v.to(target_dtype)
+                # Ensure the tensor participates in autograd. If it's a leaf
+                # without grad, re-mark it; if it's a non-leaf produced by
+                # the .to() above, it already tracks grad.
+                if not v.requires_grad and v.is_leaf:
                     v = v.detach().requires_grad_(True)
-                varFixed.append(v)
-        
+
+            varFixed.append(v)
+
         return varFixed
 
     def notVar(self, _, var, onlyConstrains = False):
@@ -1036,7 +1056,7 @@ class lcLossBooleanMethods(constraintsProcessor):
             else:
                 return selection
 
-    def queryVar(self, _, concept, subclasses, selection_vars, *, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Differentiable query operator for multiclass attribute selection.
         
@@ -1130,30 +1150,47 @@ class lcLossBooleanMethods(constraintsProcessor):
         # -- Compute subclass selection based on t-norm
         tOne = torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
         tZero = torch.zeros(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
-        
-        # For query selection, we aggregate scores per subclass
-        # If selection_vars are organized as [entity0_sub0, entity0_sub1, ..., entity1_sub0, ...]
-        # we need to reshape and aggregate
-    
-        if n_entities == num_subclasses:
-            # Direct mapping: each selection var corresponds to a subclass
-            subclass_scores = t
-            self.countLogger.debug("Direct mapping: selection vars match subclass count")
-        elif n_entities > num_subclasses and n_entities % num_subclasses == 0:
-            # Multiple entities per subclass: aggregate by summing/averaging
-            entities_per_subclass = n_entities // num_subclasses
-            t_reshaped = t.view(entities_per_subclass, num_subclasses)
-            subclass_scores = t_reshaped.sum(dim=0)  # Sum over entities
-            self.countLogger.debug(f"Aggregated: {entities_per_subclass} entities per subclass")
-        else:
-            # Fallback: use selection vars as-is, pad or truncate to num_subclasses
-            if n_entities < num_subclasses:
-                padding = torch.zeros(num_subclasses - n_entities, device=self.current_device, 
-                                     dtype=self._get_dtype(), requires_grad=True)
-                subclass_scores = torch.cat([t, padding])
-            else:
-                subclass_scores = t[:num_subclasses]
-            self.countLogger.debug(f"Fallback: adjusted from {n_entities} to {num_subclasses}")
+
+        # Compute r_j = Σ_i s_i * c_{j,i}
+        # Weight each entity's subclass prediction by the entity selection probability.
+        if subclass_data is None or len(subclass_data) == 0:
+            self.countLogger.error(f"{logicMethodName} called without subclass_data")
+            if onlyConstrains:
+                return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(),
+                            requires_grad=True) / num_subclasses
+
+        # Build a [num_entities, num_subclasses] matrix from subclass_data
+        sub_rows = []
+        for row in subclass_data:
+            if row is None:
+                sub_rows.append(torch.zeros(num_subclasses, device=self.current_device, dtype=self._get_dtype()))
+                continue
+            vals = []
+            for val in row[:num_subclasses]:
+                if val is None:
+                    vals.append(torch.zeros(1, device=self.current_device, dtype=self._get_dtype()))
+                elif torch.is_tensor(val):
+                    vals.append(val.flatten()[:1].to(self.current_device, self._get_dtype()))
+                else:
+                    vals.append(torch.tensor([float(val)], device=self.current_device, dtype=self._get_dtype()))
+            if len(vals) < num_subclasses:
+                vals.extend([torch.zeros(1, device=self.current_device, dtype=self._get_dtype())] * (num_subclasses - len(vals)))
+            sub_rows.append(torch.cat(vals))
+        c_matrix = torch.stack(sub_rows)  # [num_entities, num_subclasses]
+
+        # Align selection weights with subclass data rows
+        sel_weights = t
+        if sel_weights.numel() < c_matrix.shape[0]:
+            padding = torch.zeros(c_matrix.shape[0] - sel_weights.numel(),
+                                  device=self.current_device, dtype=self._get_dtype())
+            sel_weights = torch.cat([sel_weights, padding])
+        elif sel_weights.numel() > c_matrix.shape[0]:
+            sel_weights = sel_weights[:c_matrix.shape[0]]
+
+        # r_j = Σ_i s_i * c_{j,i}
+        subclass_scores = torch.matmul(sel_weights, c_matrix)  # [num_subclasses]
+        self.countLogger.debug(f"Computed subclass_scores from subclass_data: {subclass_scores}")
         
         self.countLogger.info(f"Subclass scores: {subclass_scores}")
         
@@ -1219,3 +1256,41 @@ class lcLossBooleanMethods(constraintsProcessor):
             else:
                 self.countLogger.info(f"Product selection: {selection}")
                 return selection
+
+    def sameVar(self, _, concept, subclasses, *entity_var_groups,
+                onlyConstrains=False, logicMethodName="SAME"):
+        """
+        Differentiable check whether all entities share the same subclass.
+
+        result = OR_j( AND_i( entity_i_has_subclass_j ) )
+
+        Uses the configured t-norm for AND/OR operations.
+        """
+        num_subclasses = len(subclasses)
+        num_entities = len(entity_var_groups)
+
+        if num_entities == 0 or num_subclasses == 0:
+            if self.ifLog:
+                self.myLogger.warning(f"{logicMethodName} called with {num_entities} entities, {num_subclasses} subclasses")
+            tOne = torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            return tOne if not onlyConstrains else tOne
+
+        if self.ifLog:
+            self.myLogger.debug(f"{logicMethodName} called with {num_entities} entities, {num_subclasses} subclasses")
+
+        # For each subclass j: a_j = AND(entity_0[j], entity_1[j], ...)
+        and_results = []
+        for j in range(num_subclasses):
+            vars_for_j = []
+            for i in range(num_entities):
+                group = entity_var_groups[i]
+                if j < len(group):
+                    vars_for_j.append(group[j])
+                else:
+                    vars_for_j.append(torch.zeros(1, device=self.current_device, dtype=self._get_dtype()))
+            a_j = self.andVar(_, *vars_for_j)
+            and_results.append(a_j)
+
+        # result = OR(a_0, a_1, ..., a_k)
+        result = self.orVar(_, *and_results, onlyConstrains=onlyConstrains)
+        return result

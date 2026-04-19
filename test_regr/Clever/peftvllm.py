@@ -320,6 +320,27 @@ class InternVLHF:
             torch_dtype=torch.bfloat16,
         )
 
+        # ------------------------------------------------------------------
+        # Multi-GPU sharding for the base (frozen) model.
+        #
+        # Opt-in controls:
+        #   PEFT_DEVICE_MAP=auto    → enable HF Accelerate auto-sharding
+        #   PEFT_DEVICE_MAP=single  → force single-device placement (default)
+        #   (unset)                 → single-device placement
+        #
+        # 4-bit quantized loading has its own device_map handling below and
+        # is not affected by this logic.
+        # ------------------------------------------------------------------
+        _visible_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        _dm_env = os.environ.get("PEFT_DEVICE_MAP", "").strip().lower()
+        if _dm_env == "auto":
+            self._auto_sharded = True
+        else:
+            # Default (including ``single`` or unset): keep everything on one
+            # device. Users on multi-GPU boxes with oversized models can
+            # explicitly set PEFT_DEVICE_MAP=auto.
+            self._auto_sharded = False
+
         if load_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -329,9 +350,49 @@ class InternVLHF:
             )
             load_kwargs["quantization_config"] = bnb_config
             load_kwargs["device_map"] = {"": device}
+            # 4-bit always uses a single device — bitsandbytes does its own
+            # placement and we don't pipeline-shard a quantized backbone here.
+            self._auto_sharded = False
             logging.info("Loading model with QLoRA 4-bit quantization.")
+        elif self._auto_sharded:
+            # Build a *custom* device map that keeps known-problematic
+            # Sequentials (notably InternVL's ``mlp1`` projection between
+            # vision_model and language_model) pinned atomically to one GPU.
+            custom_map = self._build_peft_device_map(
+                model_path=model_path,
+                n_gpus=_visible_gpus,
+                dtype=self.compute_dtype,
+                trust_remote_code=trust_remote_code,
+            )
+            if custom_map is not None:
+                load_kwargs["device_map"] = custom_map
+                logging.info(
+                    "Loading model with custom device_map across %d GPUs "
+                    "(PEFT_DEVICE_MAP=%s). mlp1 pinned atomically.",
+                    _visible_gpus, _dm_env or "default",
+                )
+            else:
+                # Fallback: accelerate's default auto. Pass ``no_split``
+                # hints via the model's own ``_no_split_modules`` attribute
+                # (set by transformers when the config declares it).
+                load_kwargs["device_map"] = "auto"
+                logging.info(
+                    "Loading model with device_map='auto' across %d GPUs "
+                    "(custom map unavailable; PEFT_DEVICE_MAP=%s).",
+                    _visible_gpus, _dm_env or "default",
+                )
 
         base_model = AutoModel.from_pretrained(model_path, **load_kwargs)
+
+        # Defensive consolidation: if the loaded base model ended up with
+        # ``mlp1`` parameters split across devices (e.g. the fallback path
+        # above or a stale cached device_map), move the whole projection
+        # onto the device of its first parameter.
+        if self._auto_sharded and hasattr(base_model, "mlp1"):
+            try:
+                self._consolidate_submodule_if_split(base_model, "mlp1")
+            except Exception as e:
+                logging.warning("mlp1 consolidation failed, continuing: %s", e)
 
         _any_lora = use_llm_lora or use_vision_lora
 
@@ -380,6 +441,9 @@ class InternVLHF:
 
         if load_4bit:
             self.model = base_model  # Already on device from device_map
+        elif self._auto_sharded:
+            # Model is pipeline-sharded across multiple GPUs by HF Accelerate.
+            self.model = base_model.to(dtype=self.compute_dtype)
         else:
             self.model = base_model.to(dtype=self.compute_dtype, device=self.device)
 
@@ -399,6 +463,149 @@ class InternVLHF:
         self.no_token_id = self.tokenizer.convert_tokens_to_ids("No")
 
         self._initialized = True
+
+    # ------------------------------------------------------------------
+    # Multi-GPU device-map helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _build_peft_device_map(
+        model_path: str,
+        n_gpus: int,
+        dtype: torch.dtype,
+        trust_remote_code: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """Compute a device map that keeps InternVL's ``mlp1`` projection whole.
+
+        Strategy
+        --------
+        1. Construct the model on the ``meta`` device from its config alone
+           (no weight download) so we can inspect its structure cheaply.
+        2. Ask ``accelerate.infer_auto_device_map`` for a balanced split,
+           passing every likely transformer-block class as
+           ``no_split_module_classes`` so accelerate won't partition them.
+        3. Post-process: find any key prefixed ``mlp1`` and collapse them all
+           onto a single device (the device holding the *last* vision layer
+           — i.e. where ``mlp1``'s input naturally arrives).
+
+        Returns ``None`` if this analysis fails for any reason, signalling
+        the caller to fall back to vanilla ``device_map="auto"``.
+        """
+        if n_gpus < 2:
+            return None
+        try:
+            from accelerate import init_empty_weights, infer_auto_device_map
+            from transformers import AutoConfig
+        except ImportError:
+            return None
+
+        try:
+            config = AutoConfig.from_pretrained(
+                model_path, trust_remote_code=trust_remote_code
+            )
+            with init_empty_weights():
+                meta_model = AutoModel.from_config(
+                    config, trust_remote_code=trust_remote_code
+                )
+        except Exception as e:
+            logging.warning("meta-model construction failed: %s", e)
+            return None
+
+        # Start from the model's own no-split hints, then add likely block
+        # class names. ``no_split_module_classes`` matches by class __name__.
+        no_split = list(getattr(meta_model, "_no_split_modules", []) or [])
+        for extra in (
+            "InternVisionEncoderLayer",
+            "InternVisionTransformerBlock",
+            "Qwen2DecoderLayer",
+            "LlamaDecoderLayer",
+            "Phi3DecoderLayer",
+        ):
+            if extra not in no_split:
+                no_split.append(extra)
+
+        # Leave headroom so activations + LoRA adapters + optimiser state
+        # fit. On 10.75 GiB 2080 Tis we cap weights at 8 GiB per GPU.
+        try:
+            per_gpu_gib = max(
+                4,
+                int(
+                    min(
+                        torch.cuda.get_device_properties(i).total_memory
+                        for i in range(n_gpus)
+                    )
+                    / (1024 ** 3)
+                )
+                - 2,  # leave 2 GiB headroom
+            )
+        except Exception:
+            per_gpu_gib = 8
+        max_memory = {i: f"{per_gpu_gib}GiB" for i in range(n_gpus)}
+        max_memory["cpu"] = "16GiB"
+
+        try:
+            device_map = infer_auto_device_map(
+                meta_model,
+                no_split_module_classes=no_split,
+                max_memory=max_memory,
+                dtype=dtype,
+            )
+        except Exception as e:
+            logging.warning("infer_auto_device_map failed: %s", e)
+            return None
+
+        # Pin ``mlp1`` whole. Prefer the device holding the final vision
+        # layer (natural data-flow placement), falling back to GPU 0.
+        vision_last_device: Optional[Union[int, str]] = None
+        for k, v in device_map.items():
+            if k.startswith("vision_model"):
+                vision_last_device = v
+        pin_device = vision_last_device if vision_last_device is not None else 0
+        # Strip any partial ``mlp1.*`` entries, assign ``mlp1`` whole.
+        for k in list(device_map.keys()):
+            if k == "mlp1" or k.startswith("mlp1."):
+                del device_map[k]
+        device_map["mlp1"] = pin_device
+
+        logging.info(
+            "Built custom device map: %d modules across GPUs, mlp1 -> %s, "
+            "no_split=%s",
+            len(device_map), pin_device, no_split,
+        )
+        return device_map
+
+    @staticmethod
+    def _consolidate_submodule_if_split(base_model: torch.nn.Module, attr: str) -> bool:
+        """Force an attribute submodule onto a single device if its params
+        currently live on more than one.
+
+        Used as a safety net after ``from_pretrained`` in case the device
+        map still split the target module (e.g. because the model class
+        name didn't match ``no_split_module_classes``). Returns ``True``
+        if a move was performed.
+        """
+        sub = getattr(base_model, attr, None)
+        if sub is None:
+            return False
+        devices = {p.device for p in sub.parameters() if p.device.type != "meta"}
+        if len(devices) <= 1:
+            return False
+        # Pick the device holding the first parameter as the target — it's
+        # typically where this module's input arrives from the preceding
+        # pipeline stage.
+        target = next(sub.parameters()).device
+        # Removing accelerate's AlignDevicesHook is necessary so our ``.to``
+        # actually moves the weights (hooks otherwise re-offload them).
+        try:
+            from accelerate.hooks import remove_hook_from_module
+            remove_hook_from_module(sub, recurse=True)
+        except ImportError:
+            pass
+        setattr(base_model, attr, sub.to(target))
+        logging.info(
+            "Consolidated split submodule %r onto %s (was on %s)",
+            attr, target, sorted(str(d) for d in devices),
+        )
+        return True
 
     def _apply_llm_lora(self, base_model: torch.nn.Module, lora_r: int, lora_alpha: int, lora_dropout: float) -> None:
         """Apply LoRA to language model with updated target modules."""
@@ -780,10 +987,25 @@ class InternVLSharedHF(nn.Module):
             draw.rectangle(box, outline=color, width=3)
         return img
 
-    def _prepare_images_questions(self, image, bounding_boxes):
+    def _prepare_images_questions(self, image, image_filename, bounding_boxes):
         """Prepare image-question pairs for scoring."""
         if isinstance(image, (list, tuple)) and len(image) == 1:
             image = image[0]
+        if isinstance(image_filename, (list, tuple)) and len(image_filename) == 1:
+            image_filename = image_filename[0]
+        # Fallback: if pil_image is None (stale cache built before images were
+        # downloaded), try to load directly from the images directory on disk.
+        if image is None and image_filename is not None:
+            _path = os.path.join("train", "images", image_filename)
+            try:
+                image = Image.open(_path).convert("RGB")
+            except (FileNotFoundError, OSError):
+                pass
+        if image is None:
+            raise TypeError(
+                f"pil_image is None for '{image_filename}' and the file was not found on disk. "
+                f"Ensure CLEVR images are downloaded to train/images/."
+            )
         base = self._to_pil(image)
 
         images, questions = [], []
@@ -802,7 +1024,7 @@ class InternVLSharedHF(nn.Module):
                 questions.append(q)
         return images, questions
 
-    def forward(self, image, bounding_boxes, label=None):
+    def forward(self, image, image_filename, bounding_boxes, label=None):
         """
         Forward pass for DomiKnowS.
         Returns probs tensor [N,2] matching vLLM output order: [P(No), P(Yes)].
@@ -810,7 +1032,7 @@ class InternVLSharedHF(nn.Module):
         and vice-versa), so its output is effectively [P(No), P(Yes)].
         DomiKnowS was calibrated with that order, so we match it here.
         """
-        images, questions = self._prepare_images_questions(image, bounding_boxes)
+        images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
 
         probs = self.model._score_batch(
             image_paths=images,
@@ -821,12 +1043,13 @@ class InternVLSharedHF(nn.Module):
         )
         return probs.float()
 
-    def train_step(self, image, bounding_boxes, gt_labels, optimizer, grad_accum_steps=1):
+    def train_step(self, image, image_filename, bounding_boxes, gt_labels, optimizer, grad_accum_steps=1):
         """
         Memory-efficient training: processes one pair at a time with gradient accumulation.
 
         Args:
-            image: PIL image or tensor
+            image: PIL image or tensor (may be None if cache is stale; image_filename is the fallback)
+            image_filename: image filename for on-demand disk loading when image is None
             bounding_boxes: list of bounding boxes
             gt_labels: ground truth labels [N] where 0=Yes, 1=No
             optimizer: torch optimizer for LoRA parameters
@@ -834,7 +1057,7 @@ class InternVLSharedHF(nn.Module):
         Returns:
             avg_loss: average loss over all pairs
         """
-        images, questions = self._prepare_images_questions(image, bounding_boxes)
+        images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
         N = len(images)
 
         yes_id = self.model.yes_token_id

@@ -2475,9 +2475,9 @@ class DataNode:
                 _DataNode__Logger.error("Concept %s predictions is not a Tensor - not able to calculate metrics"%(cr[1]))
                 continue
 
-            # Move to CPU
-            if preds.is_cuda: preds = preds.cpu()
-            if labelsR.is_cuda: labelsR = labelsR.cpu()
+            # Move to CPU (.cpu() is a no-op if already on CPU)
+            preds = preds.cpu()
+            labelsR = labelsR.cpu()
 
             # Translate labels - if provided as True/False to long
             labels = torch.clone(labelsR)
@@ -4386,18 +4386,20 @@ class DataNodeBuilder(dict):
 
             # Set current_dtype if consistent in builder
             if self.current_dtype:
-                # filter out not floet dtypes
-                current_dtype_float = [dtype for dtype in self.current_dtype if 'float' in str(dtype)]
-                if len(set(current_dtype_float)) == 1:
-                    # All dtypes are the same - set it on the root datanode
-                    returnDn.current_dtype = current_dtype_float[0]
+                current_dtype_float = {d for d in self.current_dtype if 'float' in str(d)}
+                if len(current_dtype_float) == 1:
+                    returnDn.current_dtype = next(iter(current_dtype_float))
                     if not getProductionModeStatus():
                         _DataNodeBuilder__Logger.info(f'Set current_dtype to {returnDn.current_dtype} on root dataNode')
+                elif current_dtype_float and current_dtype_float <= {torch.float32, torch.bfloat16, torch.float16}:
+                    # AMP pattern: fp32 inputs + bf16/fp16 activations. Upcast
+                    # to the highest precision present for loss/constraint math.
+                    returnDn.current_dtype = torch.float32 if torch.float32 in current_dtype_float else torch.float16
+                    if not getProductionModeStatus():
+                        _DataNodeBuilder__Logger.info(f'Mixed-precision tensors {current_dtype_float} in builder; using {returnDn.current_dtype} on root dataNode')
                 else:
-                    # Dtypes are inconsistent - log error
-                    _DataNodeBuilder__Logger.error(f'Inconsistent tensors dtypes in builder: {set(self.current_dtype)} - all dtypes of provided tensors have to be the same')
-                    # threw exception
-                    raise ValueError(f'Inconsistent tensors dtypes in builder: {set(self.current_dtype)}')
+                    _DataNodeBuilder__Logger.error(f'Inconsistent tensors dtypes in builder: {current_dtype_float} - all dtypes of provided tensors have to be the same')
+                    raise ValueError(f'Inconsistent tensors dtypes in builder: {current_dtype_float}')
 
             if len(existingDns) != 1:
                 typesInDNs = {d.getOntologyNode().name for d in existingDns}

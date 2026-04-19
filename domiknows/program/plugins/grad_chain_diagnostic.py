@@ -77,7 +77,7 @@ class GradChainDiagnostic:
         print(f"  grad_fn={loss_tensor.grad_fn}")
 
         if loss_tensor.grad_fn is None:
-            print("\n  ❌ CRITICAL: Loss has no grad_fn — it's a leaf tensor or was detached!")
+            print("\n  [X] CRITICAL: Loss has no grad_fn - it's a leaf tensor or was detached!")
             print("     backward() will be a no-op. No parameters will receive gradients.")
             return
 
@@ -123,14 +123,14 @@ class GradChainDiagnostic:
                 disconnected_clfs.append((clf_name, f"autograd error: {e}"))
 
         if connected_clfs:
-            print(f"\n  ✓ CONNECTED classifiers ({len(connected_clfs)}):")
+            print(f"\n  [OK] CONNECTED classifiers ({len(connected_clfs)}):")
             for clf_name, non_none, total, norm in connected_clfs:
                 print(f"    {clf_name:15s}: {non_none}/{total} params, grad_norm={norm:.6f}")
         else:
-            print(f"\n  ❌ NO classifiers are connected to the loss!")
+            print(f"\n  [X] NO classifiers are connected to the loss!")
 
         if disconnected_clfs:
-            print(f"\n  ✗ DISCONNECTED classifiers ({len(disconnected_clfs)}):")
+            print(f"\n  [--] DISCONNECTED classifiers ({len(disconnected_clfs)}):")
             for clf_name, reason in disconnected_clfs:
                 print(f"    {clf_name:15s}: {reason}")
 
@@ -172,20 +172,20 @@ class GradChainDiagnostic:
         indent = "    " + "  " * depth
         cls_name = grad_fn.__class__.__name__
 
-        # Highlight interesting nodes
+        # Highlight interesting nodes (ASCII-only to survive cp1252 consoles)
         highlight = ""
         if "Softmax" in cls_name:
-            highlight = " ← SOFTMAX"
+            highlight = " <- SOFTMAX"
         elif "Detach" in cls_name:
-            highlight = " ← ⚠️ DETACH (gradient chain BROKEN here)"
+            highlight = " <- !! DETACH (gradient chain BROKEN here)"
         elif "Accumulate" in cls_name:
-            highlight = " ← LEAF PARAMETER"
+            highlight = " <- LEAF PARAMETER"
         elif "Mm" in cls_name or "Addmm" in cls_name or "Linear" in cls_name:
-            highlight = " ← LINEAR/MATMUL"
+            highlight = " <- LINEAR/MATMUL"
         elif "Clone" in cls_name:
-            highlight = " ← CLONE"
+            highlight = " <- CLONE"
         elif "Cat" in cls_name:
-            highlight = " ← CONCAT"
+            highlight = " <- CONCAT"
 
         print(f"{indent}{cls_name}{highlight}")
 
