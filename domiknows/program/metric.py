@@ -143,7 +143,10 @@ class MetricTracker(torch.nn.Module):
             Any: The computed metric value.
         """
         value = self.metric(*args, **kwargs)
-        self.list.append(value)
+        # Tracker lists are for summary/logging only — keeping grad-attached
+        # tensors here stacks autograd graphs across steps (leaks into OOM
+        # on long training runs).
+        self.list.append(value.detach() if torch.is_tensor(value) else value)
         return value
 
     def __call_dict__(self, keys, *args, **kwargs) -> Any:
@@ -157,7 +160,7 @@ class MetricTracker(torch.nn.Module):
             Any: The computed metric value.
         """
         value = self.metric(*args, **kwargs)
-        self.dict[keys].append(value)
+        self.dict[keys].append(value.detach() if torch.is_tensor(value) else value)
         return value
 
     def __getitem__(self, keys):
