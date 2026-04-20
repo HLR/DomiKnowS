@@ -37,6 +37,26 @@ def _patched_checkpoint(*args, use_reentrant=False, **kwargs):
     return _orig_checkpoint_fn(*args, use_reentrant=use_reentrant, **kwargs)
 _ckpt.checkpoint = _patched_checkpoint
 
+# Monkey-patch transformers.verify_tp_plan to tolerate a string _tp_plan.
+# InternVL's remote modeling code declares ``_tp_plan = ''`` as a "disabled"
+# sentinel (for transformers 4.51+ compat), but transformers 4.56.1's
+# ``verify_tp_plan`` calls ``.copy()`` on it and crashes. Treating any
+# non-dict plan as "no plan" restores the pre-4.56 behavior. We patch the
+# original module *and* any modules that have already imported the name.
+try:
+    import transformers.integrations.tensor_parallel as _tp_mod
+    import transformers.modeling_utils as _mu_mod
+    _orig_verify_tp_plan = _tp_mod.verify_tp_plan
+    def _safe_verify_tp_plan(expected_keys, tp_plan):
+        if tp_plan is not None and not isinstance(tp_plan, dict):
+            tp_plan = None
+        return _orig_verify_tp_plan(expected_keys, tp_plan)
+    _tp_mod.verify_tp_plan = _safe_verify_tp_plan
+    if getattr(_mu_mod, "verify_tp_plan", None) is _orig_verify_tp_plan:
+        _mu_mod.verify_tp_plan = _safe_verify_tp_plan
+except Exception:
+    pass
+
 from PIL import Image, ImageDraw
 import numpy as np
 from tqdm import tqdm
