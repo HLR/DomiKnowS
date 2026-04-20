@@ -897,7 +897,11 @@ class InferenceProgram(LossProgram):
                     dataset_size=None, print_loss=True,
                     training_mode='standard', **kwargs):
         """Simple training: model loss + constraint loss."""
-        
+
+        import os as _os
+        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = c_session.get('_mem_step', 0)
+
         self.model.mode(Mode.TRAIN)
         self.model.train()
         self.model.reset()
@@ -911,9 +915,9 @@ class InferenceProgram(LossProgram):
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
-            
+
             mloss, metric, *output = self.model(data)
-            
+
             if training_mode == 'warmup':
                 loss = mloss
             else:
@@ -922,7 +926,7 @@ class InferenceProgram(LossProgram):
                     loss = mloss + self.beta * closs
                 else:
                     loss = mloss
-            
+
             if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
 
@@ -936,10 +940,17 @@ class InferenceProgram(LossProgram):
                 if self.copt is not None:
                     self.copt.step()
                 iter_count += 1
-            
+
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
+
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
+        c_session['_mem_step'] = _mem_step
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
         return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
@@ -970,8 +981,12 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
                     dataset_size=None, print_loss=True,
                     training_mode='standard', **kwargs):
         """Inference training epoch with Gumbel-Softmax."""
+        import os as _os
+        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = c_session.get('_mem_step', 0)
+
         self._update_temperature_for_epoch()
-        
+
         self.model.mode(Mode.TRAIN)
         self.model.train()
         self.model.reset()
@@ -985,9 +1000,9 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
-            
+
             mloss, metric, *output = self.model(data)
-            
+
             if training_mode == 'warmup':
                 loss = mloss
             else:
@@ -996,7 +1011,7 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
                     loss = mloss + self.beta * closs
                 else:
                     loss = mloss
-            
+
             if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
 
@@ -1010,10 +1025,17 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
                 if self.copt is not None:
                     self.copt.step()
                 iter_count += 1
-            
+
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
+
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
+        c_session['_mem_step'] = _mem_step
         self._increment_epoch()
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
