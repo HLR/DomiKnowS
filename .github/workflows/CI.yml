@@ -89,7 +89,8 @@ jobs:
             'namedTree'
             'examples/iota'
             'examples/same_different'
-            'vizual'
+            'vizual',
+            'fixes'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"

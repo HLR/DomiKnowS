@@ -53,12 +53,16 @@ def setup_console_log():
     sys.stderr = _TeeWriter(sys.stderr, log_file)
 
 try:
-    from monitor.constraint_monitor import (# type: ignore 
+    from monitor.constraint_monitor import (# type: ignore
         next_step,enable_monitoring, start_new_epoch, finish_experiment, disable_monitoring
     )
     MONITORING_AVAILABLE = True
-    
-    if MONITORING_AVAILABLE and '--help' not in sys.argv and '-h' not in sys.argv:
+
+    # Monitoring is OFF by default. Set CLEVR_ENABLE_MONITOR=1 to opt in.
+    if (MONITORING_AVAILABLE
+            and '--help' not in sys.argv
+            and '-h' not in sys.argv
+            and os.environ.get("CLEVR_ENABLE_MONITOR") == "1"):
         enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
         #enable_monitoring(port=8080, slave_mode=False)  # Master mode with web server
 except ImportError:
