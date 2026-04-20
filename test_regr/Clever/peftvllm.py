@@ -57,6 +57,24 @@ try:
 except Exception:
     pass
 
+# Monkey-patch _move_missing_keys_from_meta_to_device to tolerate a missing
+# ``all_tied_weights_keys`` attribute. Transformers 4.56.1 expects every
+# PreTrainedModel to have that dict populated by ``post_init()``, but
+# InternVL's remote ``InternVLChatModel`` only defines the legacy
+# ``_tied_weights_keys`` list and doesn't trigger the new init path, so the
+# loader crashes in ``_finalize_model_loading``. An empty dict means "no
+# tied weights to exclude", which matches the older transformers behaviour.
+try:
+    import transformers.modeling_utils as _mu_mod  # noqa: F811
+    _orig_move_missing = _mu_mod.PreTrainedModel._move_missing_keys_from_meta_to_device
+    def _move_missing_with_tied_fallback(self, *args, **kwargs):
+        if not hasattr(self, "all_tied_weights_keys"):
+            self.all_tied_weights_keys = {}
+        return _orig_move_missing(self, *args, **kwargs)
+    _mu_mod.PreTrainedModel._move_missing_keys_from_meta_to_device = _move_missing_with_tied_fallback
+except Exception:
+    pass
+
 from PIL import Image, ImageDraw
 import numpy as np
 from tqdm import tqdm
