@@ -377,6 +377,11 @@ Examples:
                              "Supports standard CLEVR format or [{question, program, answer}, ...]")
     parser.add_argument("--print-limit", type=int, default=70,
                         help="Max number of questions to print with --print-constraints")
+    parser.add_argument("--disable-plugins", action="store_true",
+                        help="Skip all callback plugins (AdaptiveTNorm, GradientFlow, "
+                             "EpochLogging, GumbelMonitoring). Useful in tests where "
+                             "plugin diagnostics are noise and their extra forward "
+                             "passes add memory pressure.")
 
     # Register callback plugin arguments (exclude BERT unfreezing)
     from domiknows.program.plugins.callback_plugin_manager import CallbackPluginManager
@@ -855,7 +860,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     else:
         print(f"  Enabled:          No")
     
-    if plugin_manager:
+    if plugin_manager and not getattr(args, 'disable_plugins', False):
         plugin_manager.log_all_configs(args)
     
     print("\n[Mode]")
@@ -1003,7 +1008,7 @@ def main(args):
     else:
         if not args.eval_only:
             # Configure plugins (no BERT-specific optimizer factory needed)
-            if not args.oracle_mode and not args.use_vlm:
+            if not args.oracle_mode and not args.use_vlm and not args.disable_plugins:
                 plugin_manager.configure_all(
                     program=program,
                     models=_models,
@@ -1079,7 +1084,8 @@ def main(args):
                 print(f"Test accuracy (<={args.max_objects} objects): {final_test_acc_filtered:.2f}%")
             
             # Display plugin summaries
-            plugin_manager.final_display_all(final_eval=final_eval)
+            if not args.disable_plugins:
+                plugin_manager.final_display_all(final_eval=final_eval)
 
             with open(_results_file, 'a') as f:
                 print(f"=== {args.exp_tag or 'training_run'} ===", file=f)

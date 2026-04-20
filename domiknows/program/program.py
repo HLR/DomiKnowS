@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 
 from ..utils import consume, detuple
@@ -367,12 +368,20 @@ class LearningBasedProgram():
         """
         self.model.mode(Mode.TRAIN)
         self.model.reset()
+        _mem_probe = os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = 0
         for data_item in dataset:
             with self._autocast_ctx():
                 loss, metric, *output = self.model(data_item)
             # _backward_and_step is a no-op when self.opt is None or loss
             # isn't differentiable, and handles AMP scaling when enabled.
             self._backward_and_step(loss)
+
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
 
             yield (loss, metric, *output[:1])
 
