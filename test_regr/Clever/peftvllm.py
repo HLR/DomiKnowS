@@ -866,13 +866,20 @@ class InternVLHF:
         temperature=0.0,     # kept for signature compatibility; not used here
         input_size=448,
         max_num=1,
-        max_batch_size=4,
+        max_batch_size=None,
     ):
         """
         Returns tensor probs [B,K] on device.
         Default target_tokens=["Yes","No"] -> [B,2]
         Chunks forward passes to limit peak VRAM from intermediate activations.
+
+        ``max_batch_size`` defaults to ``INTERNVL_SCORE_CHUNK`` env var if set,
+        else 2. Even with gradient checkpointing enabled, chunks of 4 can
+        push peak activation memory past 90 GiB on scenes with many objects
+        (issue seen on InternVL3-1B + CLEVR + 6×H100).
         """
+        if max_batch_size is None:
+            max_batch_size = int(os.environ.get("INTERNVL_SCORE_CHUNK", "2"))
         if candidates is not None:
             questions = [
                 f"{q}\n If you have to classify among one of these objects {candidates}, {q}"
