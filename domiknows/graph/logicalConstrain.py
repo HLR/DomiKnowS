@@ -1113,6 +1113,37 @@ class existsL(_CountBaseL):
     limitOp = ">="
     fixedLimit = 1
 
+class oneOfL(_CountBaseL):
+    """
+    Mutual-exclusion + covering constraint between concepts (issue #371).
+
+    Requires **exactly one** of the supplied concept applications to be true
+    per candidate. Semantically equivalent to ``exactL(c1, c2, ..., 1)`` but:
+
+    * the limit is pinned to ``1`` (``fixedLimit = 1``) so it cannot be
+      accidentally overridden by a trailing integer, and
+    * the name makes the "exactly one of these concepts" intent explicit —
+      directly answering the question in the issue ("Defining ExactL
+      between various concepts"). ``atMostL(c1, c2, c3)`` would allow zero
+      of them to be true; ``oneOfL`` does not.
+
+    Example — for every ``(step, entity)`` pair, exactly one of
+    ``action_create``, ``action_destroy`` and ``action_move`` must hold::
+
+        forAllL(
+            combinationC(step, entity)('i', 'e'),
+            ifL(
+                action('x', path=(('i', action_step.reversed),
+                                  ('e', action_entity.reversed))),
+                oneOfL(action_create(path='x'),
+                       action_destroy(path='x'),
+                       action_move(path='x')),
+            ),
+        )
+    """
+    limitOp = "=="
+    fixedLimit = 1
+
 # ----------------- Accumulated Counting
 
 class _AccumulatedCountBaseL(LogicalConstrain):
@@ -1159,6 +1190,15 @@ class exactAL(_AccumulatedCountBaseL):    limitOp = "=="
 class existsAL(_AccumulatedCountBaseL):   
     limitOp = ">="
     fixedLimit = 1 
+
+class oneOfAL(_AccumulatedCountBaseL):
+    """Accumulated-counting sibling of :class:`oneOfL` (issue #371).
+
+    Enforces that exactly one of the supplied concept applications is true
+    across all accumulated candidates (global scope), rather than per-row.
+    """
+    limitOp = "=="
+    fixedLimit = 1
 
 # -----------------  Comparative counting constraints (count(A) ∘ count(B)+diff)
 

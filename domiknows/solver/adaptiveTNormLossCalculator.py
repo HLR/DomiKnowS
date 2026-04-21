@@ -41,6 +41,9 @@ DEFAULT_TNORM_BY_TYPE = {
     # Exact count
     'exactL': 'L',
     'exactAL': 'L',
+    # Exactly-one-of (issue #371)
+    'oneOfL': 'L',
+    'oneOfAL': 'L',
     # Boolean logic
     'andL': 'SP',
     'orL': 'SP',
@@ -58,7 +61,7 @@ DEFAULT_TNORM_BY_TYPE = {
     'default': 'L',
 }
 
-COUNTING_CONSTRAINTS = {'sumL', 'atLeastL', 'atLeastAL', 'atMostL', 'atMostAL', 'exactL', 'exactAL'}
+COUNTING_CONSTRAINTS = {'sumL', 'atLeastL', 'atLeastAL', 'atMostL', 'atMostAL', 'exactL', 'exactAL', 'oneOfL', 'oneOfAL'}
 
 def is_global_constraint(lc_name: str) -> bool:
     """Global constraints have names like LC0, LC1 (not ELC0)."""
@@ -75,6 +78,7 @@ def get_constraint_type(lc) -> str:
     normalize = {
         'atMostL': 'atMostAL', 'atLeastL': 'atLeastAL',
         'exactL': 'exactAL',
+        'oneOfL': 'oneOfAL',
     }
     return normalize.get(type_name, type_name)
 
