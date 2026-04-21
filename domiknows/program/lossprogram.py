@@ -258,7 +258,8 @@ class LossProgram(LearningBasedProgram):
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
+    def __init__(self, graph, Model, CModel=None, beta=1,
+                 copt_class=None, copt_kwargs=None, **kwargs):
         """
         Initializes an instance of the LossProgram.
 
@@ -267,27 +268,58 @@ class LossProgram(LearningBasedProgram):
         :param CModel: Class used to calculate the constraint model loss. If set to None uses
             the `DEFAULTCMODEL`, which is `PrimalDualModel`.
         :param beta: Weight given to the constraint model loss.
+        :param copt_class: Optimizer class used for the constraint model. Defaults to
+            ``torch.optim.Adam``; pass e.g. ``torch.optim.SGD`` to switch. Only takes effect
+            on subclasses whose ``train()`` builds ``self.copt`` (``PrimalDualProgram``,
+            ``InferenceProgram`` and ``SampleLossProgram``). See issue #422 for hyperparameter
+            guidance — defaults are a reasonable starting point but ``c_lr``, ``c_warmup_iters``
+            and the optimizer choice almost always need task-specific tuning.
+        :param copt_kwargs: Optional ``dict`` of extra keyword arguments passed to
+            ``copt_class`` (for example ``{'momentum': 0.9}`` for SGD). The learning rate is
+            set from ``c_lr`` in ``train()`` and must not be included here.
         :params kwargs: Keyword arguments are passed to both the parent class and the CModel.
             (if found in the signature).
         """
+        # Validate our own kwargs before calling super(), so a bad copt_kwargs fails
+        # fast without first spinning up the (possibly heavy) Model.
+        if copt_kwargs is not None and 'lr' in copt_kwargs:
+            raise ValueError(
+                "copt_kwargs must not contain 'lr'; pass the learning rate via c_lr in train()."
+            )
+
         super().__init__(graph, Model, **kwargs)
-        
+
         if CModel is None:
             CModel = self.DEFAULTCMODEL
         if CModel is None:
             raise ValueError(f"{self.__class__.__name__} must specify CModel or set DEFAULTCMODEL")
-            
+
         from inspect import signature
         cmodelSignature = signature(CModel.__init__)
-        
+
         cmodelKwargs = {}
         for param in cmodelSignature.parameters.values():
             if param.name in kwargs:
                 cmodelKwargs[param.name] = kwargs[param.name]
-                
+
         self.cmodel = CModel(graph, **cmodelKwargs)
         self.copt = None
         self.beta = beta
+
+        # Pluggable constraint-optimizer configuration (issue #422).
+        self.copt_class = copt_class if copt_class is not None else torch.optim.Adam
+        self.copt_kwargs = dict(copt_kwargs) if copt_kwargs else {}
+
+    def _make_copt(self, lr):
+        """Build the constraint optimizer if the cmodel has parameters, else return None.
+
+        Centralising this means subclasses all honour ``copt_class`` / ``copt_kwargs``
+        without each having to re-implement optimizer construction.
+        """
+        params = list(self.cmodel.parameters())
+        if not params:
+            return None
+        return self.copt_class(params, lr=lr, **self.copt_kwargs)
 
     def to(self, device):
         super().to(device=device)
@@ -544,10 +576,7 @@ class PrimalDualProgram(LossProgram):
         """
         
         # Setup constraint optimizer
-        if list(self.cmodel.parameters()):
-            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=c_lr)
-        else:
-            self.copt = None
+        self.copt = self._make_copt(c_lr)
         
         # Store c_freq for _init_session to use
         self._c_freq = c_freq
@@ -949,11 +978,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
         """
         # Pick the constraint optimizer's learning rate based on style so the
         # two modes stay consistent with the standalone programs they mirror.
-        if list(self.cmodel.parameters()):
-            copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
-            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=copt_lr)
-        else:
-            self.copt = None
+        copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
+        self.copt = self._make_copt(copt_lr)
 
         self._c_freq = c_freq
         self._auto_set_anneal_epochs(num_epochs)
@@ -1093,11 +1119,8 @@ class SampleLossProgram(LossProgram):
     def train(self, training_set, valid_set=None, test_set=None,
               c_lr=0.05, c_warmup_iters=10, **kwargs):
         """Setup optimizer and train."""
-        if list(self.cmodel.parameters()):
-            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=c_lr)
-        else:
-            self.copt = None
-        
+        self.copt = self._make_copt(c_lr)
+
         return super().train(
             training_set, valid_set=valid_set, test_set=test_set,
             c_warmup_iters=c_warmup_iters, **kwargs
