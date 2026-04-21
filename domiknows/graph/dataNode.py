@@ -2688,11 +2688,18 @@ class DataNodeBuilder(dict):
         Parameters:
         - args: Positional arguments to pass to the dict constructor.
         - kwargs: Keyword arguments to pass to the dict constructor.
+            - primaryRootConcept (optional): a Concept or concept name that should
+              be preferred when multiple root DataNodes exist. See
+              ``setPrimaryRootConcept`` for details.
 
         Side Effects:
         - Logs the instance creation.
         - Initializes various instance variables.
         """
+        # Pull our own kwargs out before handing the rest to dict.__init__,
+        # otherwise dict will choke on unknown keyword arguments.
+        primaryRootConcept = kwargs.pop("primaryRootConcept", None)
+
         dict.__init__(self, *args, **kwargs)
         _DataNodeBuilder__Logger.info("")
         _DataNodeBuilder__Logger.info("Called")
@@ -2707,8 +2714,30 @@ class DataNodeBuilder(dict):
 
         if args:
             dict.__setitem__(self, "data_item", args[0])
-            
+
         self.current_dtype = []
+
+        # Optional developer hint for which concept should be treated as the
+        # primary root when more than one root DataNode exists. Resolved lazily
+        # in ``findRootDataNode`` so that it can be set before or after the
+        # DataNodes themselves are built.
+        self.primaryRootConcept = primaryRootConcept
+
+    def setPrimaryRootConcept(self, concept):
+        """
+        Explicitly mark which concept should be treated as the primary root.
+
+        When the builder ends up holding more than one root DataNode (which
+        routinely happens because the ``constraint`` concept is added as a
+        root, and because some graphs legitimately have several top-level
+        concepts), ``getDataNode`` needs to pick one to return. Before this
+        hook the choice depended on list ordering, which is not stable.
+
+        Args:
+            concept: Either a ``Concept`` instance or its ``name`` (str). Pass
+                ``None`` to clear a previously set preference.
+        """
+        self.primaryRootConcept = concept
 
     @classmethod
     def clear(cls):
@@ -3074,8 +3103,27 @@ class DataNodeBuilder(dict):
         # Set the updated root list
         if not getProductionModeStatus():
             _DataNodeBuilder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
+
+        # The `constraint` concept is injected as a root by the graph machinery
+        # but must never be *the* root we return. Previously we only rotated
+        # when it happened to land at index 0, which left the result dependent
+        # on the (unstable) input ordering. Instead, partition deterministically:
+        # real concepts first (sorted by rarity, name, instanceID), constraint
+        # DataNodes pushed to the tail so they remain accessible but out of the
+        # way.
         if newDnsRoots:
-            if newDnsRoots[0].ontologyNode._is_constraint_concept(): newDnsRoots = newDnsRoots[1:]+[newDnsRoots[0]]
+            def _root_sort_key(dn):
+                return (
+                    len(dnTypes[dn.ontologyNode]),
+                    dn.ontologyNode.name,
+                    dn.instanceID,
+                )
+
+            regularRoots = [dn for dn in newDnsRoots if dn.ontologyNode.name != 'constraint']
+            constraintRoots = [dn for dn in newDnsRoots if dn.ontologyNode.name == 'constraint']
+            regularRoots.sort(key=_root_sort_key)
+            constraintRoots.sort(key=_root_sort_key)
+            newDnsRoots = regularRoots + constraintRoots
 
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
 
@@ -4222,18 +4270,23 @@ class DataNodeBuilder(dict):
         else:
             raise ValueError('DataNode Builder has no DataNode started yet')
         
-    def findRootDataNode(self, dns):
+    def findRootDataNode(self, dns, primaryRootConcept=None):
         """
         Find the root DataNode from a list of DataNodes based on relationLinks, impactLinks, and ontologyType.
-        
+
         Args:
             dns (list): List of DataNodes to search through
-        
+            primaryRootConcept (optional): Concept or concept name (str) to
+                select as root when it is present among ``dns``. Overrides the
+                value stored on the builder via ``setPrimaryRootConcept``.
+
         Returns:
             DataNode: The identified root DataNode. Guaranteed to return a DataNode if dns is not empty.
             
         Notes:
             - A root DataNode is one with no incoming impactLinks (or only "contains" impactLinks)
+            - ``constraint`` DataNodes are never picked unless they are the
+              only candidates left.
             - If multiple candidates exist, prefers nodes with the rarest ontologyType
             - Falls back to the node with the most outgoing relationLinks
             - Always returns a DataNode if the input list is not empty
@@ -4241,7 +4294,24 @@ class DataNodeBuilder(dict):
         if not dns:
             _DataNodeBuilder__Logger.error('findRootDataNode called with empty dns list')
             return None
-        
+
+        # Honor an explicit developer request first. A matching DN short-circuits
+        # all heuristics so the selection is stable and predictable.
+        requestedConcept = primaryRootConcept if primaryRootConcept is not None else getattr(self, 'primaryRootConcept', None)
+        if requestedConcept is not None:
+            requestedName = requestedConcept.name if hasattr(requestedConcept, 'name') else requestedConcept
+            for dn in dns:
+                if dn.ontologyNode.name == requestedName:
+                    _DataNodeBuilder__Logger.info(
+                        f'Selected DataNode with id {dn.instanceID} of type {dn.ontologyNode.name} '
+                        f'via explicit primaryRootConcept={requestedName}'
+                    )
+                    return dn
+            _DataNodeBuilder__Logger.warning(
+                f'primaryRootConcept={requestedName} requested but no matching DataNode found; '
+                'falling back to automatic selection'
+            )
+
         # Filter out nodes with non-"contains" incoming links (impactLinks)
         root_candidates = []
         for dn in dns:
@@ -4257,8 +4327,14 @@ class DataNodeBuilder(dict):
         # If no clear root candidates found, use all nodes as candidates
         if not root_candidates:
             _DataNodeBuilder__Logger.warning('No clear root DataNode found based on impactLinks, using all nodes as candidates')
-            root_candidates = dns
-        
+            root_candidates = list(dns)
+
+        # ``constraint`` is a bookkeeping concept, not a real root. Exclude it
+        # from consideration unless it's literally all we have.
+        non_constraint = [dn for dn in root_candidates if dn.ontologyNode.name != 'constraint']
+        if non_constraint:
+            root_candidates = non_constraint
+
         # If only one candidate, return it
         if len(root_candidates) == 1:
             return root_candidates[0]
@@ -4321,11 +4397,16 @@ class DataNodeBuilder(dict):
         ]
         
         if len(tied_candidates) > 1:
+            # Primary: most children; secondary: stable name/id ordering so the
+            # result is reproducible across runs regardless of input order.
             tied_candidates.sort(
-                key=lambda dn: len(dn.getChildDataNodes() or []), 
-                reverse=True
+                key=lambda dn: (
+                    -len(dn.getChildDataNodes() or []),
+                    dn.ontologyNode.name,
+                    dn.instanceID,
+                )
             )
-        
+
         selected_root = tied_candidates[0]
         
         _DataNodeBuilder__Logger.info(
@@ -4335,7 +4416,7 @@ class DataNodeBuilder(dict):
         
         return selected_root
 
-    def getDataNode(self, context="interference", device='auto'):
+    def getDataNode(self, context="interference", device='auto', primaryRootConcept=None):
         """
         Retrieves and returns the root DataNode from the DataNodeBuilder object based on the given context and device.
 
@@ -4345,6 +4426,11 @@ class DataNodeBuilder(dict):
             The context under which to get the DataNode, defaults to "interference".
         device : str, optional
             The torch device to set for the DataNode, defaults to 'auto'.
+        primaryRootConcept : Concept or str, optional
+            Concept (or its name) that should be returned as the root when
+            multiple root DataNodes exist. Overrides ``setPrimaryRootConcept``
+            for this call only. When ``None`` (default), falls back to the
+            builder-level preference and finally to automatic selection.
 
         Returns:
         --------
@@ -4371,7 +4457,7 @@ class DataNodeBuilder(dict):
                 return None
             
             # Use method to find the root DataNode
-            returnDn = self.findRootDataNode(existingDns)
+            returnDn = self.findRootDataNode(existingDns, primaryRootConcept=primaryRootConcept)
             
             if returnDn is None:
                 _DataNodeBuilder__Logger.error('findRootDataNode returned None')
