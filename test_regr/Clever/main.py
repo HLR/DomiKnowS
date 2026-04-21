@@ -68,7 +68,7 @@ try:
 except ImportError:
     MONITORING_AVAILABLE = False
 
-from domiknows import setProductionLogMode
+from domiknows import setProductionLogMode, setup_step_notebook, StepNotebook
 
 from domiknows.program import CallbackProgram
 from domiknows.program.lossprogram import GumbelInferenceProgram, InferenceProgram
@@ -382,6 +382,13 @@ Examples:
                              "EpochLogging, GumbelMonitoring). Useful in tests where "
                              "plugin diagnostics are noise and their extra forward "
                              "passes add memory pressure.")
+    parser.add_argument("--step-notebook", type=str2bool, nargs='?', const=True, default=True,
+                        help="Write a per-step JSONL notebook (logs/step_notebook.jsonl) "
+                             "with the question, GT answer, predicted answer and per-concept "
+                             "softmax/argmax tensors for each evaluated example.")
+    parser.add_argument("--step-notebook-file", type=str, default=None,
+                        help="Override the step-notebook output filename "
+                             "(default: step_notebook[_<exp_tag>].jsonl in logs/).")
 
     # Register callback plugin arguments (exclude BERT unfreezing)
     from domiknows.program.plugins.callback_plugin_manager import CallbackPluginManager
@@ -989,6 +996,29 @@ def main(args):
     log_training_config(args, _models, train=train_raw, dev=None,
                        test=test_raw if test_raw is not None else train_raw,
                        plugin_manager=plugin_manager)
+
+    if getattr(args, 'step_notebook', False):
+        notebook_dir = RUN_DIR / "logs"
+        notebook_file = args.step_notebook_file or (
+            f"step_notebook_{args.exp_tag}.jsonl" if args.exp_tag else "step_notebook.jsonl"
+        )
+        setup_step_notebook(
+            log_dir=str(notebook_dir),
+            filename=notebook_file,
+            run_tag=args.exp_tag,
+            metadata={
+                'question_type': args.question_type,
+                'use_vlm': args.use_vlm,
+                'peft': args.peft,
+                'oracle_mode': args.oracle_mode,
+                'oracle_confidence': args.oracle_confidence if args.oracle_mode else None,
+                'infer_only': args.infer_only,
+                'tnorm': args.tnorm,
+                'train_size': len(train_raw),
+                'test_size': len(test_raw) if test_raw is not None else 0,
+                'epochs': args.epochs,
+            },
+        )
     
     save_file = ckpt_path(args.lr, 1, args.load_epoch, args.batch_size, args.tnorm,
                          args.subset, args.question_type, **_ckpt_extra)
@@ -1129,6 +1159,10 @@ def main(args):
     if MONITORING_AVAILABLE:
         finish_experiment(label="run_1")
         disable_monitoring()
+
+    _nb = StepNotebook.active()
+    if _nb is not None:
+        _nb.close()
 
     return 0
 

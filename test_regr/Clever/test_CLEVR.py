@@ -241,7 +241,9 @@ class TestUntrainedBaseline:
     EXPECTED: accuracy near random (~50% for binary questions).
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--infer-only", "--disable-plugins", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--infer-only", "--disable-plugins",
+            "--step-notebook", "true", "--step-notebook-file", "step_notebook_untrained.jsonl",
+            "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
 
     def test_exits_successfully(self):
         result = _run(self.ARGS)
@@ -288,7 +290,9 @@ class TestZeroShotVLM:
     knowledge.
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--use-vlm", "--disable-plugins", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7836))]
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--use-vlm", "--disable-plugins",
+            "--step-notebook", "true", "--step-notebook-file", "step_notebook_zeroshot_vlm.jsonl",
+            "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7836))]
     # VLM uses InternVL3_5-8B by default; if MODEL_PATH is set, override
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
@@ -350,7 +354,9 @@ class TestOracleMode:
     EXPECTED: accuracy MUST be 100%.
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--oracle-mode", "--disable-plugins", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--oracle-mode", "--disable-plugins",
+            "--step-notebook", "true", "--step-notebook-file", "step_notebook_oracle.jsonl",
+            "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
 
     def test_exits_successfully(self):
         result = _run(self.ARGS)
@@ -395,7 +401,9 @@ class TestStandardTraining:
     gradients flow from logic into CNN/Linear layers.
     """
 
-    ARGS = ["--train-size", "10", "--epochs", "10", "--test-size", "10", "--disable-plugins", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
+    ARGS = ["--train-size", "10", "--epochs", "10", "--test-size", "10", "--disable-plugins",
+            "--step-notebook", "true", "--step-notebook-file", "step_notebook_standard.jsonl",
+            "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
 
     def test_exits_successfully(self):
         result = _run(self.ARGS)
@@ -454,7 +462,9 @@ class TestPEFTTraining:
     from the logic solver into the VLM's LoRA adapters.
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--disable-plugins", "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
+    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--disable-plugins",
+            "--step-notebook", "true", "--step-notebook-file", "step_notebook_peft.jsonl",
+            "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
     # PEFT uses InternVL3_5-1B by default; use local copy if available
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]

@@ -94,6 +94,9 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     """
     from domiknows.graph.logicalConstrain import sumL
     from domiknows.solver.answerModule import AnswerSolver
+    from domiknows.step_notebook import (
+        StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
+    )
 
     boolean_correct = 0
     boolean_total = 0
@@ -105,13 +108,29 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
     answer_solver = AnswerSolver(program.graph)
 
-    for datanode in tqdm(
-        program.populate(evaluate_data, device=device),
+    _notebook_active = StepNotebook.active() is not None
+    try:
+        _evaluate_data_indexable = hasattr(evaluate_data, '__getitem__')
+    except Exception:
+        _evaluate_data_indexable = False
+
+    def _populate_with_vlm_buffer():
+        # Clear once at entry so a step's buffer only contains that step's
+        # VLM calls, then drain after every yielded datanode.
+        if _notebook_active:
+            reset_vlm_buffer()
+        for _dn in program.populate(evaluate_data, device=device):
+            _calls = drain_vlm_buffer() if _notebook_active else None
+            yield _dn, _calls
+
+    for _step_idx, (datanode, _vlm_calls) in enumerate(tqdm(
+        _populate_with_vlm_buffer(),
         total=len(evaluate_data),
         desc="Evaluating",
         position=0,
         leave=True
-    ):
+    )):
+        _step_results = {} if _notebook_active else None
         constraint_labels_dict = datanode.getExecutableConstraintLabels()
         if not constraint_labels_dict:
             continue
@@ -163,6 +182,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
             # ── verifySingleConstraint (comparison) ─────────────────
             verify_correct = None
+            verify_result = None
             try:
                 if is_counting:
                     verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
@@ -195,6 +215,33 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                 if use_correct:
                     boolean_correct += 1
                 boolean_total += 1
+
+            if _step_results is not None:
+                _step_results[lc_name] = {
+                    'answer_result': answer_result,
+                    'verify_result': verify_result,
+                    'correct': bool(use_correct),
+                    'is_counting': bool(is_counting),
+                }
+
+        if _notebook_active:
+            _data_item = None
+            if _evaluate_data_indexable:
+                try:
+                    _data_item = evaluate_data[_step_idx]
+                except Exception:
+                    _data_item = None
+            _extras = {'threshold': threshold}
+            if _vlm_calls:
+                _extras['vlm_calls'] = _vlm_calls
+            write_active_step(
+                datanode, program,
+                data_item=_data_item,
+                phase='eval',
+                step_idx=_step_idx,
+                precomputed_constraints=_step_results,
+                extras=_extras,
+            )
 
     # Build results
     results = {
@@ -242,6 +289,55 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     results["counting_total"] = counting_total
 
     return results if return_dict else results['accuracy']
+
+
+def _write_training_step_record(program, data, data_idx, builder,
+                                 mloss, closs, total_loss,
+                                 iter_count, epoch, training_mode,
+                                 device='cpu'):
+    """Write one step record during training, mirroring the eval hook.
+
+    Captures per-concept softmax/argmax (so the trajectory of a given
+    example across epochs is readable), the classification loss
+    (``mloss``), the constraint loss (``closs``, may be None before the
+    warmup boundary), and enough training state (epoch, global step,
+    training mode) to order the records. Silent no-op when no
+    StepNotebook is active. All work guarded by try/except so a bad
+    datanode extraction can never break training.
+    """
+    from domiknows.step_notebook import StepNotebook, write_active_step
+    if StepNotebook.active() is None:
+        return
+    try:
+        datanode = builder.getDataNode(device=device)
+    except Exception:
+        return
+    try:
+        def _scalar(x):
+            if x is None:
+                return None
+            try:
+                return float(x.item()) if torch.is_tensor(x) else float(x)
+            except Exception:
+                return None
+        extras = {
+            'epoch': epoch,
+            'global_step': iter_count,
+            'training_mode': training_mode,
+            'mloss': _scalar(mloss),
+            'closs': _scalar(closs),
+            'total_loss': _scalar(total_loss),
+        }
+        write_active_step(
+            datanode, program,
+            data_item=data if isinstance(data, dict) else None,
+            phase='train',
+            step_idx=data_idx,
+            extras=extras,
+        )
+    except Exception:
+        pass
+
 
 ################################################################################
 # LossProgram Base Class
@@ -613,8 +709,9 @@ class PrimalDualProgram(LossProgram):
                 import traceback
                 traceback.print_exc()
                 raise
-            
+
             # Compute loss based on training mode
+            closs = None
             if training_mode == 'warmup':
                 loss = mloss
             elif constraint_only:
@@ -635,6 +732,13 @@ class PrimalDualProgram(LossProgram):
 
             if not loss:
                 continue
+
+            _write_training_step_record(
+                self, data, data_idx, output[1],
+                mloss=mloss, closs=closs, total_loss=loss,
+                iter_count=iter_count, epoch=self.epoch,
+                training_mode=training_mode, device=self.device,
+            )
 
             batch_pos = data_idx % batch_size
             do_update = (batch_pos == batch_size - 1) or (data_idx == num_data_iters - 1)
@@ -773,7 +877,8 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
                 import traceback
                 traceback.print_exc()
                 raise
-            
+
+            closs = None
             if training_mode == 'warmup':
                 loss = mloss
             elif constraint_only:
@@ -794,6 +899,13 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
 
             if not loss:
                 continue
+
+            _write_training_step_record(
+                self, data, data_idx, output[1],
+                mloss=mloss, closs=closs, total_loss=loss,
+                iter_count=iter_count, epoch=self.epoch,
+                training_mode=training_mode, device=self.device,
+            )
 
             batch_pos = data_idx % batch_size
             do_update = (batch_pos == batch_size - 1) or (data_idx == num_data_iters - 1)

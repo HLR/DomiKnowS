@@ -867,6 +867,8 @@ class InternVLHF:
         input_size=448,
         max_num=1,
         max_batch_size=None,
+        call_metadata=None,
+        topk=5,
     ):
         """
         Returns tensor probs [B,K] on device.
@@ -891,6 +893,15 @@ class InternVLHF:
 
         token_ids = [self.tokenizer.convert_tokens_to_ids(tok) for tok in target_tokens]
 
+        # Only import the step-notebook hook lazily so this module stays
+        # importable when domiknows isn't on sys.path (e.g. standalone eval).
+        try:
+            from domiknows.step_notebook import StepNotebook, record_vlm_call
+            _notebook_active = StepNotebook.active() is not None
+        except Exception:
+            _notebook_active = False
+            record_vlm_call = None
+
         all_probs = []
         B = len(image_paths)
         for start in range(0, B, max_batch_size):
@@ -908,6 +919,38 @@ class InternVLHF:
             sel = chunk_logits[:, token_ids] / self.softmax_temperature  # [chunk, K]
             C = torch.logsumexp(sel, dim=-1, keepdim=True)  # [chunk, 1]
             all_probs.append(sel - C)
+
+            if _notebook_active and record_vlm_call is not None:
+                try:
+                    with torch.no_grad():
+                        raw_target = chunk_logits[:, token_ids].detach().float().cpu()
+                        full_probs = F.softmax(chunk_logits.detach().float(), dim=-1).cpu()
+                        norm_logp = (sel - C).detach().float().cpu()  # log P(target_i | target)
+                        k = min(topk, chunk_logits.shape[-1])
+                        topk_ids = chunk_logits.detach().float().topk(k, dim=-1).indices.cpu()
+                        topk_p = full_probs.gather(-1, topk_ids)
+                    for i_in_chunk in range(end - start):
+                        q_idx = start + i_in_chunk
+                        meta = call_metadata[q_idx] if call_metadata else {}
+                        topk_tokens = [
+                            self.tokenizer.decode([int(t)])
+                            for t in topk_ids[i_in_chunk].tolist()
+                        ]
+                        record_vlm_call(
+                            concept=meta.get('concept'),
+                            relation=meta.get('relation'),
+                            obj_i=meta.get('obj_i'),
+                            obj_j=meta.get('obj_j'),
+                            prompt=questions[q_idx],
+                            target_tokens=list(target_tokens),
+                            target_raw_logits=raw_target[i_in_chunk].tolist(),
+                            target_log_probs=norm_logp[i_in_chunk].tolist(),
+                            topk_tokens=topk_tokens,
+                            topk_probs=topk_p[i_in_chunk].tolist(),
+                        )
+                except Exception:
+                    # Notebook instrumentation must never break training.
+                    pass
 
         logits_out = torch.cat(all_probs, dim=0)  # [B, K]
         return logits_out.to(self.device)
@@ -1032,6 +1075,21 @@ class InternVLSharedHF(nn.Module):
             draw.rectangle(box, outline=color, width=3)
         return img
 
+    def _build_call_metadata(self, n_boxes):
+        """Per-question metadata matching the order produced by
+        ``_prepare_images_questions``. Consumed by the step-notebook to
+        tag each VLM call with its concept and object indices.
+        """
+        if self.relation == 2:
+            return [
+                {'concept': self.attr, 'relation': 2, 'obj_i': i, 'obj_j': j}
+                for i in range(n_boxes) for j in range(n_boxes)
+            ]
+        return [
+            {'concept': self.attr, 'relation': 1, 'obj_i': i, 'obj_j': None}
+            for i in range(n_boxes)
+        ]
+
     def _prepare_images_questions(self, image, image_filename, bounding_boxes):
         """Prepare image-question pairs for scoring."""
         if isinstance(image, (list, tuple)) and len(image) == 1:
@@ -1078,6 +1136,7 @@ class InternVLSharedHF(nn.Module):
         DomiKnowS was calibrated with that order, so we match it here.
         """
         images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
+        call_metadata = self._build_call_metadata(len(bounding_boxes))
 
         probs = self.model._score_batch(
             image_paths=images,
@@ -1085,6 +1144,7 @@ class InternVLSharedHF(nn.Module):
             target_tokens=["No", "Yes"],
             input_size=self.input_size,
             max_num=self.max_num,
+            call_metadata=call_metadata,
         )
         return probs.float()
 
