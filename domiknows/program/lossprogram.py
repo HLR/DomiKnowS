@@ -851,7 +851,11 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
 # Inference Program
 #=============================================================================
 
-class InferenceProgram(LossProgram):
+# Supported training styles for InferenceProgram.
+_INFERENCE_STYLES = ('simple', 'primal_dual')
+
+
+class InferenceProgram(GumbelTemperatureMixin, LossProgram):
     """
     Program for training with program execution.
 
@@ -859,12 +863,33 @@ class InferenceProgram(LossProgram):
     or compiled from the dataset are executed using soft-logic. Parameters are
     then updated based on the soft-logic output and the provided ground-truth value
     of the logical expression.
+
+    Two training styles are supported (issue #424):
+
+    * ``training_style='simple'`` (default) — one-shot update per batch:
+      ``loss = mloss + beta * closs``. This matches the original
+      ``InferenceProgram`` behaviour and is fully backward compatible.
+    * ``training_style='primal_dual'`` — Lagrangian primal/dual updates with
+      gradient reversal on the dual parameters, constraint-update frequency
+      scheduling and learning-rate decay. Identical algorithm to
+      ``GumbelPrimalDualProgram`` but driven by ``InferenceModel`` instead of
+      ``PrimalDualModel``.
+
+    Gumbel-Softmax annealing (``use_gumbel=True``) can be enabled with either
+    style; when enabled the constraint model is called through the
+    ``GumbelTemperatureMixin`` helpers so the same annealing schedule you get
+    from ``GumbelInferenceProgram`` / ``GumbelPrimalDualProgram`` is available
+    directly on ``InferenceProgram``.
     """
     DEFAULTCMODEL = InferenceModel
-    
+
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, beta=1, **kwargs):
+    def __init__(self, graph, Model, beta=1,
+                 training_style='simple',
+                 use_gumbel=False, initial_temp=1.0, final_temp=0.1,
+                 anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 **kwargs):
         """
         Initializes an InferenceProgram instance.
 
@@ -873,31 +898,115 @@ class InferenceProgram(LossProgram):
         :param Model: The class to use for the regular forward pass and
             supervised training (e.g., `SolverModel`).
         :param beta: The weight given to the CModel loss (in this case, the loss from the program
-            execution output)
+            execution output).
+        :param training_style: Either ``'simple'`` (default) or ``'primal_dual'``. See the class
+            docstring for details.
+        :param use_gumbel: If ``True``, apply Gumbel-Softmax sampling to the local decisions when
+            computing the constraint loss. Other ``*_temp`` / ``anneal_*`` / ``hard_gumbel``
+            parameters control the annealing schedule (see ``GumbelTemperatureMixin``).
         """
+        if training_style not in _INFERENCE_STYLES:
+            raise ValueError(
+                f"training_style must be one of {_INFERENCE_STYLES}, got {training_style!r}"
+            )
+        self.training_style = training_style
+
         super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
+        self._init_gumbel(use_gumbel, initial_temp, final_temp,
+                          anneal_start_epoch, anneal_epochs, hard_gumbel)
+
+    # ------------------------------------------------------------------
+    # Session / training setup
+    # ------------------------------------------------------------------
+
+    def _init_session(self):
+        """Session shape depends on the training style."""
+        if self.training_style == 'primal_dual':
+            c_freq = getattr(self, '_c_freq', 10)
+            return {
+                'iter': 0,
+                'c_update_iter': 0,
+                'c_update_freq': c_freq,
+                'c_update': 0,
+            }
+        return super()._init_session()
 
     def train(self, training_set, valid_set=None, test_set=None,
               batch_size=1, dataset_size=None, print_loss=True,
-              warmup_epochs=0, constraint_epochs=0, **kwargs):
-        """Setup optimizer and train."""
+              warmup_epochs=0, constraint_epochs=0,
+              num_epochs=None,
+              # primal-dual specific scheduling; ignored in 'simple' mode
+              c_lr=0.05, c_warmup_iters=10, c_freq=10,
+              c_freq_increase=5, c_freq_increase_freq=1,
+              c_lr_decay=4, c_lr_decay_param=1,
+              constraint_only=False, constraint_loss_scale=1.0,
+              **kwargs):
+        """Setup optimizer and train.
+
+        The ``c_*`` parameters are the Primal-Dual scheduling knobs; they are
+        forwarded to ``train_epoch`` but have no effect in ``'simple'`` mode.
+        ``num_epochs`` is used to auto-configure the Gumbel annealing window.
+        """
+        # Pick the constraint optimizer's learning rate based on style so the
+        # two modes stay consistent with the standalone programs they mirror.
         if list(self.cmodel.parameters()):
-            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=0.01)
+            copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
+            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=copt_lr)
         else:
             self.copt = None
-        
+
+        self._c_freq = c_freq
+        self._auto_set_anneal_epochs(num_epochs)
+
         return super().train(
             training_set, valid_set=valid_set, test_set=test_set,
             batch_size=batch_size, dataset_size=dataset_size,
             print_loss=print_loss, warmup_epochs=warmup_epochs,
-            constraint_epochs=constraint_epochs, **kwargs
+            constraint_epochs=constraint_epochs,
+            c_lr=c_lr, c_warmup_iters=c_warmup_iters,
+            c_freq_increase=c_freq_increase,
+            c_freq_increase_freq=c_freq_increase_freq,
+            c_lr_decay=c_lr_decay, c_lr_decay_param=c_lr_decay_param,
+            constraint_only=constraint_only,
+            constraint_loss_scale=constraint_loss_scale,
+            **kwargs,
         )
+
+    # ------------------------------------------------------------------
+    # Epoch dispatch
+    # ------------------------------------------------------------------
 
     def train_epoch(self, dataset, c_session={}, batch_size=1,
                     dataset_size=None, print_loss=True,
                     training_mode='standard', **kwargs):
-        """Simple training: model loss + constraint loss."""
-        
+        """Dispatch to the correct training loop based on ``training_style``."""
+        if self.training_style == 'primal_dual':
+            # GumbelPrimalDualProgram.train_epoch is style-complete: it handles
+            # the Lagrangian update, the c_freq schedule and (optionally) the
+            # Gumbel-Softmax annealing based on ``self.use_gumbel``. Delegating
+            # keeps the PD algorithm in a single place.
+            yield from GumbelPrimalDualProgram.train_epoch(
+                self, dataset,
+                c_session=c_session, batch_size=batch_size,
+                dataset_size=dataset_size, print_loss=print_loss,
+                training_mode=training_mode, **kwargs,
+            )
+            return
+
+        # 'simple' style — the original inference loop, with an optional
+        # Gumbel-Softmax hop on the constraint call.
+        yield from self._train_epoch_simple(
+            dataset, c_session=c_session, batch_size=batch_size,
+            dataset_size=dataset_size, print_loss=print_loss,
+            training_mode=training_mode, **kwargs,
+        )
+
+    def _train_epoch_simple(self, dataset, c_session={}, batch_size=1,
+                            dataset_size=None, print_loss=True,
+                            training_mode='standard', **kwargs):
+        """Original (non-PD) inference training loop."""
+        self._update_temperature_for_epoch()
+
         self.model.mode(Mode.TRAIN)
         self.model.train()
         self.model.reset()
@@ -911,18 +1020,21 @@ class InferenceProgram(LossProgram):
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
-            
+
             mloss, metric, *output = self.model(data)
-            
+
             if training_mode == 'warmup':
                 loss = mloss
             else:
-                closs, *_ = self.cmodel(output[1])
+                if self.use_gumbel:
+                    closs, *_ = self._call_cmodel_with_gumbel(output[1])
+                else:
+                    closs, *_ = self.cmodel(output[1])
                 if torch.is_tensor(closs):
                     loss = mloss + self.beta * closs
                 else:
                     loss = mloss
-            
+
             if torch.is_tensor(loss) and loss.requires_grad:
                 loss.backward()
 
@@ -936,85 +1048,29 @@ class InferenceProgram(LossProgram):
                 if self.copt is not None:
                     self.copt.step()
                 iter_count += 1
-            
+
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
+        self._increment_epoch()
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
         return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
 
 #=============================================================================
-# Gumbel Inference Program 
+# Gumbel Inference Program
 #=============================================================================
 
-class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
-    """Inference Program with Gumbel-Softmax for differentiable discrete sampling."""
-    
+class GumbelInferenceProgram(InferenceProgram):
+    """Backward-compatible wrapper around ``InferenceProgram``.
+
+    Since issue #424, ``InferenceProgram`` itself accepts ``use_gumbel`` and
+    the related temperature-annealing kwargs. This subclass is kept so that
+    existing user code constructing ``GumbelInferenceProgram`` keeps working;
+    new code should prefer ``InferenceProgram(..., use_gumbel=True)``.
+    """
+
     logger = logging.getLogger(__name__)
-
-    def __init__(self, graph, Model, beta=1,
-                 use_gumbel=False, initial_temp=1.0, final_temp=0.1,
-                 anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
-                 **kwargs):
-        super().__init__(graph, Model, beta=beta, **kwargs)
-        self._init_gumbel(use_gumbel, initial_temp, final_temp,
-                          anneal_start_epoch, anneal_epochs, hard_gumbel)
-    
-    def train(self, training_set, valid_set=None, test_set=None,
-              num_epochs=None, **kwargs):
-        self._auto_set_anneal_epochs(num_epochs)
-        return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
-
-    def train_epoch(self, dataset, c_session={}, batch_size=1,
-                    dataset_size=None, print_loss=True,
-                    training_mode='standard', **kwargs):
-        """Inference training epoch with Gumbel-Softmax."""
-        self._update_temperature_for_epoch()
-        
-        self.model.mode(Mode.TRAIN)
-        self.model.train()
-        self.model.reset()
-        self.cmodel.train()
-        self.cmodel.reset()
-
-        iter_count = c_session.get('iter', 0)
-
-        for data in dataset:
-            if self.opt is not None:
-                self.opt.zero_grad()
-            if self.copt is not None:
-                self.copt.zero_grad()
-            
-            mloss, metric, *output = self.model(data)
-            
-            if training_mode == 'warmup':
-                loss = mloss
-            else:
-                closs, *_ = self._call_cmodel_with_gumbel(output[1])
-                if torch.is_tensor(closs):
-                    loss = mloss + self.beta * closs
-                else:
-                    loss = mloss
-            
-            if torch.is_tensor(loss) and loss.requires_grad:
-                loss.backward()
-
-                # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
-                if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
-
-                if self.opt is not None:
-                    self.opt.step()
-                if self.copt is not None:
-                    self.copt.step()
-                iter_count += 1
-            
-            yield (loss, metric, *output[:1])
-
-        c_session['iter'] = iter_count
-        self._increment_epoch()
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
         return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
