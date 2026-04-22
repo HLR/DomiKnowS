@@ -315,19 +315,13 @@ class TestZeroShotVLM:
     ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--use-vlm", "--disable-plugins",
             "--step-notebook", "true", "--step-notebook-file", "step_notebook_zeroshot_vlm.jsonl",
             "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7836))]
-    # main.py's --use-vlm default is InternVL3_5-8B (~16 GiB fp16 weights),
-    # which does NOT fit on small CI GPUs like the 2080 Ti (10.8 GiB). Force
-    # the 1B variant unless the operator pins a specific model via MODEL_PATH.
-    # The 1B weights (~2 GiB) plus vLLM KV cache fit comfortably in 10.8 GiB.
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
     else:
         ARGS += ["--model-path", "OpenGVLab/InternVL3_5-1B"]
 
     # Environment for the VLM subprocess:
-    # * INTERNVL_SCORE_CHUNK is a no-op on the pure --use-vlm path (it only
-    #   affects peftvllm._score_batch), kept here as a harmless hedge in case
-    #   the VLM path ever falls back to the HF scorer.
+    # * INTERNVL_SCORE_CHUNK is a no-op on the pure --use-vlm path 
     # * VLLM_GPU_UTIL caps vLLM's cache claim to 80 % of device memory so the
     #   remaining 20 % covers the CLEVR pipeline's scratch allocations.
     # * VLLM_MAX_MODEL_LEN shrinks the KV-cache reservation from the 4096
@@ -335,7 +329,7 @@ class TestZeroShotVLM:
     #   under 2 k tokens, and the saved KV memory is what makes the test
     #   land cleanly on 10.8 GiB cards.
     ENV = {
-        "INTERNVL_SCORE_CHUNK": "8",
+        "INTERNVL_SCORE_CHUNK": "2",
         "VLLM_GPU_UTIL": "0.80",
         "VLLM_MAX_MODEL_LEN": "2048",
     }
@@ -512,8 +506,8 @@ class TestPEFTTraining:
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
 
-    # See TestZeroShotVLM.ENV — capped at 8 for CI-GPU safety headroom.
-    ENV = {"INTERNVL_SCORE_CHUNK": "8"}
+    # See TestZeroShotVLM.ENV — capped at 2 for CI-GPU safety headroom.
+    ENV = {"INTERNVL_SCORE_CHUNK": "2"}
 
     @pytest.fixture(autouse=True)
     def _require_vram(self):

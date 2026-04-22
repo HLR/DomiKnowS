@@ -31,6 +31,8 @@ declare -A ALL_SKIPPED_TESTS
 declare -A RUNNER_STATS
 declare -A RUNNER_ITEM_STATS
 declare -A TEST_ITEM_COUNTS
+declare -A TEST_FAILED_ITEM_NAMES
+declare -A TEST_SKIPPED_ITEM_NAMES
 
 # Process each result file
 for result_file in "$RESULTS_DIR"/*/test_results_*.txt; do
@@ -92,6 +94,20 @@ for result_file in "$RESULTS_DIR"/*/test_results_*.txt; do
 
   RUNNER_STATS["$runner_id"]="✅ $runner_passed | ❌ $runner_failed | ⚠️  $runner_skipped"
   RUNNER_ITEM_STATS["$runner_id"]="✅ $runner_items_passed | ❌ $runner_items_failed | ⏭️  $runner_items_skipped | 💥 $runner_items_errors"
+
+  # Item-names pass: read FAILED_ITEMS/SKIPPED_ITEMS lines without IFS=: splitting
+  # so that :: separators inside test node IDs are preserved.
+  while IFS= read -r _raw_line; do
+    if [[ "$_raw_line" == FAILED_ITEMS:* ]]; then
+      _sf=$(echo "$_raw_line" | cut -d: -f2)
+      _names=$(echo "$_raw_line" | cut -d: -f3-)
+      [ -n "$_names" ] && TEST_FAILED_ITEM_NAMES["$_sf"]="$_names"
+    elif [[ "$_raw_line" == SKIPPED_ITEMS:* ]]; then
+      _sf=$(echo "$_raw_line" | cut -d: -f2)
+      _names=$(echo "$_raw_line" | cut -d: -f3-)
+      [ -n "$_names" ] && TEST_SKIPPED_ITEM_NAMES["$_sf"]="$_names"
+    fi
+  done < "$result_file"
 done
 
 total_tests=$((total_passed + total_failed + total_skipped))
@@ -195,6 +211,66 @@ if [ ${#ALL_FAILED_TESTS[@]} -gt 0 ]; then
 
     report "| \`$subfolder\` | $runner | ${ip:-0} | ${ifa:-0} | ${is:-0} | ${ie:-0} | ${short_reason} |"
   done
+  report ""
+fi
+
+# ── Failed pytest items per directory ──
+
+_has_failed_items=0
+for _sf in "${!TEST_FAILED_ITEM_NAMES[@]}"; do
+  [ -n "${TEST_FAILED_ITEM_NAMES[$_sf]}" ] && _has_failed_items=1 && break
+done
+
+if [ $_has_failed_items -eq 1 ]; then
+  _total_fi=0
+  for _sf in "${!TEST_FAILED_ITEM_NAMES[@]}"; do
+    _n=$(echo "${TEST_FAILED_ITEM_NAMES[$_sf]}" | tr '|' '\n' | grep -c .)
+    ((_total_fi += _n)) || true
+  done
+  report "<details>"
+  report "<summary>❌ Failed pytest items per directory ($_total_fi total)</summary>"
+  report ""
+  for _sf in "${!TEST_FAILED_ITEM_NAMES[@]}"; do
+    _items="${TEST_FAILED_ITEM_NAMES[$_sf]}"
+    if [ -n "$_items" ]; then
+      report "**\`$_sf\`**:"
+      while IFS= read -r _item; do
+        [ -n "$_item" ] && report "- \`$_item\`"
+      done < <(echo "$_items" | tr '|' '\n')
+      report ""
+    fi
+  done
+  report "</details>"
+  report ""
+fi
+
+# ── Skipped/suspended pytest items per directory ──
+
+_has_skipped_items=0
+for _sf in "${!TEST_SKIPPED_ITEM_NAMES[@]}"; do
+  [ -n "${TEST_SKIPPED_ITEM_NAMES[$_sf]}" ] && _has_skipped_items=1 && break
+done
+
+if [ $_has_skipped_items -eq 1 ]; then
+  _total_si=0
+  for _sf in "${!TEST_SKIPPED_ITEM_NAMES[@]}"; do
+    _n=$(echo "${TEST_SKIPPED_ITEM_NAMES[$_sf]}" | tr '|' '\n' | grep -c .)
+    ((_total_si += _n)) || true
+  done
+  report "<details>"
+  report "<summary>⏭️ Skipped pytest items per directory ($_total_si total)</summary>"
+  report ""
+  for _sf in "${!TEST_SKIPPED_ITEM_NAMES[@]}"; do
+    _items="${TEST_SKIPPED_ITEM_NAMES[$_sf]}"
+    if [ -n "$_items" ]; then
+      report "**\`$_sf\`**:"
+      while IFS= read -r _item; do
+        [ -n "$_item" ] && report "- \`$_item\`"
+      done < <(echo "$_items" | tr '|' '\n')
+      report ""
+    fi
+  done
+  report "</details>"
   report ""
 fi
 

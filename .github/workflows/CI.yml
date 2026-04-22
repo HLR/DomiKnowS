@@ -87,7 +87,7 @@ jobs:
             'namedTree'
             'examples/iota'
             'examples/same_different'
-            'vizual',
+            'vizual'
             'fixes'
           )
           
