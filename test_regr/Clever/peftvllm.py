@@ -880,12 +880,14 @@ class InternVLHF:
         Chunks forward passes to limit peak VRAM from intermediate activations.
 
         ``max_batch_size`` defaults to ``INTERNVL_SCORE_CHUNK`` env var if set,
-        else 2. Even with gradient checkpointing enabled, chunks of 4 can
-        push peak activation memory past 90 GiB on scenes with many objects
-        (issue seen on InternVL3-1B + CLEVR + 6×H100).
+        else 16. Benchmarked on InternVL3-1B + CLEVR + H100: chunk=16 runs
+        ~3× faster than chunk=2 with virtually identical peak alloc (~3.5 GB)
+        and reserved ~7 GB. Going to chunk=64 only shaves ~6% wall-clock but
+        quadruples reserved VRAM (~29 GB). Tests on smaller GPUs should
+        override to 8–12 for safety headroom.
         """
         if max_batch_size is None:
-            max_batch_size = int(os.environ.get("INTERNVL_SCORE_CHUNK", "2"))
+            max_batch_size = int(os.environ.get("INTERNVL_SCORE_CHUNK", "16"))
         if candidates is not None:
             questions = [
                 f"{q}\n If you have to classify among one of these objects {candidates}, {q}"

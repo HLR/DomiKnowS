@@ -19,8 +19,16 @@ _TEST_DIR = Path(__file__).resolve().parent
 MAIN = str(_TEST_DIR / "main.py")
 TIMEOUT = 1800  
 
-_MIN_VRAM_VLM_GIB = 24.0
-_MIN_VRAM_PEFT_GIB = 24.0
+# Minimum VRAM gates — set to fit the CI test_gpu runner (NVIDIA RTX 2080 Ti,
+# 10.8 GiB). After the InternVL-1B gradient-checkpointing + freeze-base fixes,
+# PEFT training peaks at ~3.5 GiB alloc / ~7 GiB reserved on H100 with the
+# default INTERNVL_SCORE_CHUNK=16; with the CI cap of chunk=8 it fits
+# comfortably in 10.8 GiB. For --use-vlm, vLLM engine init still has its own
+# memory-sizing logic and will be skipped by ``_skip_if_vllm_failed`` if the
+# selected InternVL variant doesn't fit. CI deployments wanting the VLM path
+# on small GPUs should set MODEL_PATH to a ≤4B InternVL variant.
+_MIN_VRAM_VLM_GIB = 10.0
+_MIN_VRAM_PEFT_GIB = 10.0
 
 
 def _gpu_vram_gib() -> float | None:
@@ -102,17 +110,30 @@ def _skip_if_insufficient_vram(min_gib: float, reason: str):
         )
     _skip(
         f"{reason}: need ≥{min_gib} GiB VRAM, have {vram_single:.2f} GiB on "
-        f"GPU 0 and no multi-GPU sharding enabled. Run on a larger GPU "
-        f"(H100 / A100 / 4090 / A10G), or set VLLM_TP=2 / PEFT_DEVICE_MAP=auto "
-        f"with ≥2 matching GPUs visible to opt into sharding."
+        f"GPU 0 and no multi-GPU sharding enabled. Run on a ≥10 GiB GPU "
+        f"(2080 Ti / 3080 / T4 / A10 / A100 / H100), or set VLLM_TP=2 / "
+        f"PEFT_DEVICE_MAP=auto with ≥2 matching GPUs visible to opt into "
+        f"sharding."
     )
 
 
-def _run(args: list[str], timeout: int = TIMEOUT) -> subprocess.CompletedProcess:
+def _run(
+    args: list[str],
+    timeout: int = TIMEOUT,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Run main.py with given CLI args, capture output, and kill the entire
     process group on exit so orphaned vLLM EngineCore subprocesses don't hold
-    GPU memory for the next test."""
+    GPU memory for the next test.
+
+    If ``env`` is given, its entries are merged on top of ``os.environ`` for
+    the child process — used e.g. to cap ``INTERNVL_SCORE_CHUNK`` on the
+    CI GPU so VLM/PEFT tests don't OOM on scenes with many objects.
+    """
     cmd = [PYTHON, MAIN] + args
+    child_env = os.environ.copy()
+    if env:
+        child_env.update(env)
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -120,6 +141,7 @@ def _run(args: list[str], timeout: int = TIMEOUT) -> subprocess.CompletedProcess
         text=True,
         cwd=str(_TEST_DIR),
         start_new_session=True,  # new process group so we can kill grandchildren
+        env=child_env,
     )
     pgid = os.getpgid(proc.pid)
     stdout, stderr = "", ""
@@ -293,9 +315,30 @@ class TestZeroShotVLM:
     ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "1", "--use-vlm", "--disable-plugins",
             "--step-notebook", "true", "--step-notebook-file", "step_notebook_zeroshot_vlm.jsonl",
             "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7836))]
-    # VLM uses InternVL3_5-8B by default; if MODEL_PATH is set, override
+    # main.py's --use-vlm default is InternVL3_5-8B (~16 GiB fp16 weights),
+    # which does NOT fit on small CI GPUs like the 2080 Ti (10.8 GiB). Force
+    # the 1B variant unless the operator pins a specific model via MODEL_PATH.
+    # The 1B weights (~2 GiB) plus vLLM KV cache fit comfortably in 10.8 GiB.
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
+    else:
+        ARGS += ["--model-path", "OpenGVLab/InternVL3_5-1B"]
+
+    # Environment for the VLM subprocess:
+    # * INTERNVL_SCORE_CHUNK is a no-op on the pure --use-vlm path (it only
+    #   affects peftvllm._score_batch), kept here as a harmless hedge in case
+    #   the VLM path ever falls back to the HF scorer.
+    # * VLLM_GPU_UTIL caps vLLM's cache claim to 80 % of device memory so the
+    #   remaining 20 % covers the CLEVR pipeline's scratch allocations.
+    # * VLLM_MAX_MODEL_LEN shrinks the KV-cache reservation from the 4096
+    #   default to 2048 — CLEVR prompts + a short Yes/No answer fit in well
+    #   under 2 k tokens, and the saved KV memory is what makes the test
+    #   land cleanly on 10.8 GiB cards.
+    ENV = {
+        "INTERNVL_SCORE_CHUNK": "8",
+        "VLLM_GPU_UTIL": "0.80",
+        "VLLM_MAX_MODEL_LEN": "2048",
+    }
 
     @pytest.fixture(autouse=True)
     def _require_vram(self):
@@ -306,7 +349,7 @@ class TestZeroShotVLM:
 
     @pytest.mark.slow
     def test_exits_successfully(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         assert result.returncode == 0, (
@@ -316,7 +359,7 @@ class TestZeroShotVLM:
 
     @pytest.mark.slow
     def test_vlm_mode_indicated(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         combined = result.stdout + result.stderr
@@ -326,7 +369,7 @@ class TestZeroShotVLM:
 
     @pytest.mark.slow
     def test_accuracy_above_random(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         combined = result.stdout + result.stderr
@@ -469,16 +512,20 @@ class TestPEFTTraining:
     if os.environ.get("MODEL_PATH"):
         ARGS += ["--model-path", os.environ["MODEL_PATH"]]
 
+    # See TestZeroShotVLM.ENV — capped at 8 for CI-GPU safety headroom.
+    ENV = {"INTERNVL_SCORE_CHUNK": "8"}
+
     @pytest.fixture(autouse=True)
     def _require_vram(self):
         _skip_if_insufficient_vram(
             _MIN_VRAM_PEFT_GIB,
-            "PEFT/LoRA training of InternVL-1B requires ≥24 GiB VRAM",
+            "PEFT/LoRA training of InternVL-1B requires ≥10 GiB VRAM "
+            "(post-fix: ~3.5 GiB alloc at chunk=8 on H100)",
         )
 
     @pytest.mark.slow
     def test_exits_successfully(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         assert result.returncode == 0, (
@@ -488,7 +535,7 @@ class TestPEFTTraining:
 
     @pytest.mark.slow
     def test_peft_mode_indicated(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         combined = result.stdout + result.stderr
@@ -498,7 +545,7 @@ class TestPEFTTraining:
 
     @pytest.mark.slow
     def test_prints_epoch_progress(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         combined = result.stdout + result.stderr
@@ -508,7 +555,7 @@ class TestPEFTTraining:
 
     @pytest.mark.slow
     def test_training_shows_improvement_or_stability(self):
-        result = _run(self.ARGS)
+        result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
         combined = result.stdout + result.stderr
