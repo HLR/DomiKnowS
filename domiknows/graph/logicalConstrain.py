@@ -1,8 +1,9 @@
 from collections import namedtuple
-from domiknows.solver.ilpConfig import ilpConfig 
+from domiknows.solver.ilpConfig import ilpConfig
 from domiknows.graph import Concept
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 import logging
+import warnings
 import torch
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
@@ -1071,11 +1072,47 @@ class _CountBaseL(LogicalConstrain):
     Sub-classes set `limitOp` ('<=', '>=', '==').
     Optionally set `fixedLimit` (int) to hard-code a limit that
     *cannot* be overridden by a trailing integer.
+
+    The count/limit can be supplied in two mutually-exclusive ways:
+
+      * Explicit keyword — ``exactL(c1, c2, c3, limit=2)``.
+        Preferred: the intent is visible at the call site and the
+        element list is never accidentally conflated with the count.
+      * Trailing positional int — ``exactL(c1, c2, c3, 2)``.
+        Supported for backward compatibility. Mixing both raises
+        ``ValueError`` so the ambiguous form can never silently apply.
     """
     limitOp: str = None            # must be provided by subclass
     fixedLimit: int | None = None  # override in subclass for 'exists'-style LCs
 
-    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None,
+                 limit=None):
+        if limit is not None:
+            if self.fixedLimit is not None:
+                raise ValueError(
+                    f"{type(self).__name__}: does not accept an explicit "
+                    f"limit= — its count is fixed at {self.fixedLimit}."
+                )
+            if e and isinstance(e[-1], int):
+                raise ValueError(
+                    f"{type(self).__name__}: specify the count either as a "
+                    f"trailing int or via limit=, not both "
+                    f"(got trailing {e[-1]} and limit={limit})."
+                )
+        elif self.fixedLimit is None and e and isinstance(e[-1], int):
+            # Silent trailing-int form: exactL(c1, c2, c3, 2) means ==2, but
+            # a plain int in the element list is easy to mistake for another
+            # constraint. Warn loudly and nudge toward the explicit keyword.
+            warnings.warn(
+                f"{type(self).__name__}: passing the count as a trailing "
+                f"positional int is ambiguous — a plain int mixed into the "
+                f"element list is silently consumed as the limit. Use the "
+                f"explicit keyword form instead: "
+                f"{type(self).__name__}(..., limit={e[-1]}).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._explicitLimit = limit
         super().__init__(*e, p=p, active=active,
                          sampleEntries=sampleEntries, name=name)
 
@@ -1089,6 +1126,8 @@ class _CountBaseL(LogicalConstrain):
         # ── decide the numeric limit ───────────────────────────────────────
         if self.fixedLimit is not None:
             limit = self.fixedLimit
+        elif self._explicitLimit is not None:
+            limit = self._explicitLimit
         else:
             limit = (
                 self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 1
@@ -1118,12 +1157,37 @@ class existsL(_CountBaseL):
 class _AccumulatedCountBaseL(LogicalConstrain):
     """
     Global (accumulated) counting constraint.
-    Same parameters as _CountBaseL.
+    Same parameters as _CountBaseL, including the ``limit=`` keyword
+    for explicit-count form.
     """
     limitOp: str = None
     fixedLimit: int | None = None
 
-    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None,
+                 limit=None):
+        if limit is not None:
+            if self.fixedLimit is not None:
+                raise ValueError(
+                    f"{type(self).__name__}: does not accept an explicit "
+                    f"limit= — its count is fixed at {self.fixedLimit}."
+                )
+            if e and isinstance(e[-1], int):
+                raise ValueError(
+                    f"{type(self).__name__}: specify the count either as a "
+                    f"trailing int or via limit=, not both "
+                    f"(got trailing {e[-1]} and limit={limit})."
+                )
+        elif self.fixedLimit is None and e and isinstance(e[-1], int):
+            warnings.warn(
+                f"{type(self).__name__}: passing the count as a trailing "
+                f"positional int is ambiguous — a plain int mixed into the "
+                f"element list is silently consumed as the limit. Use the "
+                f"explicit keyword form instead: "
+                f"{type(self).__name__}(..., limit={e[-1]}).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._explicitLimit = limit
         super().__init__(*e, p=p, active=active,
                          sampleEntries=sampleEntries, name=name)
 
@@ -1136,6 +1200,8 @@ class _AccumulatedCountBaseL(LogicalConstrain):
 
         if self.fixedLimit is not None:
             limit = self.fixedLimit
+        elif self._explicitLimit is not None:
+            limit = self._explicitLimit
         else:
             limit = (
                 self.e[-1] if (self.e and isinstance(self.e[-1], int)) else 1

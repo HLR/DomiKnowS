@@ -455,9 +455,13 @@ class InternVLHF:
                 base_model.gradient_checkpointing_enable(
                     gradient_checkpointing_kwargs={"use_reentrant": False}
                 )
-                # Enable requires_grad for all blocks (LoRA will add trainable params on top)
+                # Freeze base model — LoRA will add its own trainable adapters on top.
+                # Setting requires_grad=True on the base (previous behaviour) did not
+                # actually train base weights — PEFT still reports only 2.5M trainable
+                # params — but it forced autograd to record saved tensors through every
+                # base-model op, which blew up activation memory on long sequences.
                 for block in [base_model.language_model, base_model.mlp1, base_model.vision_model]:
-                    freeze(block, True)
+                    freeze(block, False)
 
             # Enable input require grads and disable cache
             base_model.language_model.enable_input_require_grads()
@@ -902,10 +906,44 @@ class InternVLHF:
             _notebook_active = False
             record_vlm_call = None
 
+        # Gradient checkpoint each chunk's forward when training with grad enabled.
+        # A CLEVR scene with N objects produces N² QA pairs, chunked into ceil(N²/K)
+        # sub-forwards. Without checkpointing, every chunk's VLM activations stay in
+        # GPU memory until the single loss.backward() at end of step — peak scales
+        # linearly with the number of chunks. With checkpointing, only chunk boundary
+        # tensors are retained; activations are recomputed during backward.
+        use_checkpoint = (
+            torch.is_grad_enabled()
+            and getattr(self.model, 'training', False)
+        )
+
+        def _chunk_forward(img_paths_chunk, qs_chunk):
+            cl = self._next_token_logits(
+                image_paths=img_paths_chunk,
+                questions=qs_chunk,
+                input_size=input_size,
+                max_num=max_num,
+                use_thumbnail=False,
+            )  # [chunk, V]
+            sel_local = cl[:, token_ids] / self.softmax_temperature  # [chunk, K]
+            C_local = torch.logsumexp(sel_local, dim=-1, keepdim=True)  # [chunk, 1]
+            return sel_local - C_local
+
         all_probs = []
         B = len(image_paths)
         for start in range(0, B, max_batch_size):
             end = min(start + max_batch_size, B)
+            if use_checkpoint:
+                chunk_norm = torch.utils.checkpoint.checkpoint(
+                    _chunk_forward,
+                    image_paths[start:end],
+                    questions[start:end],
+                    use_reentrant=False,
+                )  # [chunk, K]
+                all_probs.append(chunk_norm)
+                continue
+
+            # Non-checkpointed path: keeps chunk_logits live for notebook dump or eval.
             chunk_logits = self._next_token_logits(
                 image_paths=image_paths[start:end],
                 questions=questions[start:end],
@@ -920,37 +958,40 @@ class InternVLHF:
             C = torch.logsumexp(sel, dim=-1, keepdim=True)  # [chunk, 1]
             all_probs.append(sel - C)
 
-            if _notebook_active and record_vlm_call is not None:
-                try:
-                    with torch.no_grad():
-                        raw_target = chunk_logits[:, token_ids].detach().float().cpu()
-                        full_probs = F.softmax(chunk_logits.detach().float(), dim=-1).cpu()
-                        norm_logp = (sel - C).detach().float().cpu()  # log P(target_i | target)
-                        k = min(topk, chunk_logits.shape[-1])
-                        topk_ids = chunk_logits.detach().float().topk(k, dim=-1).indices.cpu()
-                        topk_p = full_probs.gather(-1, topk_ids)
-                    for i_in_chunk in range(end - start):
-                        q_idx = start + i_in_chunk
-                        meta = call_metadata[q_idx] if call_metadata else {}
-                        topk_tokens = [
-                            self.tokenizer.decode([int(t)])
-                            for t in topk_ids[i_in_chunk].tolist()
-                        ]
-                        record_vlm_call(
-                            concept=meta.get('concept'),
-                            relation=meta.get('relation'),
-                            obj_i=meta.get('obj_i'),
-                            obj_j=meta.get('obj_j'),
-                            prompt=questions[q_idx],
-                            target_tokens=list(target_tokens),
-                            target_raw_logits=raw_target[i_in_chunk].tolist(),
-                            target_log_probs=norm_logp[i_in_chunk].tolist(),
-                            topk_tokens=topk_tokens,
-                            topk_probs=topk_p[i_in_chunk].tolist(),
-                        )
-                except Exception:
-                    # Notebook instrumentation must never break training.
-                    pass
+            # Notebook instrumentation disabled — the topk/prob dump keeps a full
+            # [chunk, V] logits tensor per chunk alive on the GPU, defeating the
+            # memory benefit of chunking. Re-enable only when actively debugging.
+            # if _notebook_active and record_vlm_call is not None:
+            #     try:
+            #         with torch.no_grad():
+            #             raw_target = chunk_logits[:, token_ids].detach().float().cpu()
+            #             full_probs = F.softmax(chunk_logits.detach().float(), dim=-1).cpu()
+            #             norm_logp = (sel - C).detach().float().cpu()  # log P(target_i | target)
+            #             k = min(topk, chunk_logits.shape[-1])
+            #             topk_ids = chunk_logits.detach().float().topk(k, dim=-1).indices.cpu()
+            #             topk_p = full_probs.gather(-1, topk_ids)
+            #         for i_in_chunk in range(end - start):
+            #             q_idx = start + i_in_chunk
+            #             meta = call_metadata[q_idx] if call_metadata else {}
+            #             topk_tokens = [
+            #                 self.tokenizer.decode([int(t)])
+            #                 for t in topk_ids[i_in_chunk].tolist()
+            #             ]
+            #             record_vlm_call(
+            #                 concept=meta.get('concept'),
+            #                 relation=meta.get('relation'),
+            #                 obj_i=meta.get('obj_i'),
+            #                 obj_j=meta.get('obj_j'),
+            #                 prompt=questions[q_idx],
+            #                 target_tokens=list(target_tokens),
+            #                 target_raw_logits=raw_target[i_in_chunk].tolist(),
+            #                 target_log_probs=norm_logp[i_in_chunk].tolist(),
+            #                 topk_tokens=topk_tokens,
+            #                 topk_probs=topk_p[i_in_chunk].tolist(),
+            #             )
+            #     except Exception:
+            #         # Notebook instrumentation must never break training.
+            #         pass
 
         logits_out = torch.cat(all_probs, dim=0)  # [B, K]
         return logits_out.to(self.device)
