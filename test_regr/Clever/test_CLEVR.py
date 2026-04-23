@@ -17,7 +17,14 @@ PYTHON = sys.executable
 # Resolve main.py relative to this test file so it works regardless of cwd
 _TEST_DIR = Path(__file__).resolve().parent
 MAIN = str(_TEST_DIR / "main.py")
-TIMEOUT = 1800  
+# Per-test subprocess timeout. The PEFT path on a 2080 Ti (CI test_gpu
+# runner) measures ~18 min for eval + ~26 min per training epoch on the
+# default 10-item splits, so even at the reduced 2-epoch CI configuration
+# a full run is ~60–70 min. 7200 s (2 h) gives comfortable headroom for
+# disk/network hiccups while still catching genuine hangs. Override via the
+# ``CLEVR_TEST_TIMEOUT`` env var (e.g. on slower hardware or for longer
+# training sweeps run out-of-CI).
+TIMEOUT = int(os.environ.get("CLEVR_TEST_TIMEOUT", "7200"))
 
 # Minimum VRAM gates — set to fit the CI test_gpu runner (NVIDIA RTX 2080 Ti,
 # 10.8 GiB). After the InternVL-1B gradient-checkpointing + freeze-base fixes,
@@ -267,25 +274,30 @@ class TestUntrainedBaseline:
             "--step-notebook", "true", "--step-notebook-file", "step_notebook_untrained.jsonl",
             "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
 
-    def test_exits_successfully(self):
-        result = _run(self.ARGS)
-        assert result.returncode == 0, (
-            f"main.py exited with code {result.returncode}\n"
-            f"STDERR:\n{result.stderr[-2000:]}"
+    @pytest.fixture(scope="class")
+    def run_result(self):
+        """Launch main.py once per class; share the CompletedProcess across
+        every test method. Prior design called ``_run`` inside each test —
+        that multiplied the subprocess cost by the number of test methods
+        (4× here, 4× in PEFT, etc.) for no additional coverage."""
+        return _run(self.ARGS)
+
+    def test_exits_successfully(self, run_result):
+        assert run_result.returncode == 0, (
+            f"main.py exited with code {run_result.returncode}\n"
+            f"STDERR:\n{run_result.stderr[-2000:]}"
         )
 
-    def test_prints_evaluation_accuracy(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_prints_evaluation_accuracy(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         acc = _parse_eval_accuracy(combined)
         assert acc is not None, (
             "Expected 'Accuracy on ...: XX.XX%' in output.\n"
-            f"STDOUT (last 2000 chars):\n{result.stdout[-2000:]}"
+            f"STDOUT (last 2000 chars):\n{run_result.stdout[-2000:]}"
         )
 
-    def test_accuracy_near_random(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_accuracy_near_random(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         acc = _parse_eval_accuracy(combined)
         assert acc is not None, "Could not parse accuracy from output"
         # Random baseline for binary: expect between 0% and 90%
@@ -294,10 +306,9 @@ class TestUntrainedBaseline:
             f"Untrained model accuracy {acc}% is suspiciously high for a random baseline"
         )
 
-    def test_no_training_output(self):
+    def test_no_training_output(self, run_result):
         """Infer-only should NOT print training epoch lines."""
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+        combined = run_result.stdout + run_result.stderr
         assert "Training epoch" not in combined, (
             "Found 'Training epoch' output in --infer-only mode"
         )
@@ -334,45 +345,50 @@ class TestZeroShotVLM:
         "VLLM_MAX_MODEL_LEN": "2048",
     }
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(autouse=True, scope="class")
     def _require_vram(self):
+        """Class-scoped so pytest evaluates it before the (class-scoped)
+        ``run_result`` fixture launches the vLLM subprocess — no point paying
+        to boot vLLM if the GPU can't fit the model."""
         _skip_if_insufficient_vram(
             _MIN_VRAM_VLM_GIB,
             "VLM inference (vLLM + InternVL) requires substantial VRAM",
         )
 
-    @pytest.mark.slow
-    def test_exits_successfully(self):
+    @pytest.fixture(scope="class")
+    def run_result(self, _require_vram):
+        """Launch main.py once per class and route every assertion through
+        the cached result. Also folds in the post-run skip checks so a
+        subprocess-level failure (vLLM engine died, SIGTERM'd on timeout)
+        propagates cleanly to all dependent tests."""
         result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
-        assert result.returncode == 0, (
-            f"main.py exited with code {result.returncode}\n"
-            f"STDERR:\n{result.stderr[-2000:]}"
+        return result
+
+    @pytest.mark.slow
+    def test_exits_successfully(self, run_result):
+        assert run_result.returncode == 0, (
+            f"main.py exited with code {run_result.returncode}\n"
+            f"STDERR:\n{run_result.stderr[-2000:]}"
         )
 
     @pytest.mark.slow
-    def test_vlm_mode_indicated(self):
-        result = _run(self.ARGS, env=self.ENV)
-        _skip_if_vllm_failed(result)
-        _skip_if_timed_out(result)
-        combined = result.stdout + result.stderr
+    def test_vlm_mode_indicated(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         assert "Use VLM:" in combined or "use_vlm" in combined.lower(), (
             "Expected VLM mode indication in output"
         )
 
     @pytest.mark.slow
-    def test_accuracy_above_random(self):
-        result = _run(self.ARGS, env=self.ENV)
-        _skip_if_vllm_failed(result)
-        _skip_if_timed_out(result)
-        combined = result.stdout + result.stderr
+    def test_accuracy_above_random(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         # Look for either final train accuracy or test accuracy
         acc = _parse_final_train_accuracy(combined)
         if acc is None:
             acc = _parse_eval_accuracy(combined)
         if acc is None:
-            tail = _tail(result.stderr) or _tail(combined)
+            tail = _tail(run_result.stderr) or _tail(combined)
             _skip(
                 "VLM run produced no parseable accuracy line — main.py "
                 f"likely crashed before eval completed. STDERR tail:\n{tail}"
@@ -395,23 +411,24 @@ class TestOracleMode:
             "--step-notebook", "true", "--step-notebook-file", "step_notebook_oracle.jsonl",
             "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
 
-    def test_exits_successfully(self):
-        result = _run(self.ARGS)
-        assert result.returncode == 0, (
-            f"main.py exited with code {result.returncode}\n"
-            f"STDERR:\n{result.stderr[-2000:]}"
+    @pytest.fixture(scope="class")
+    def run_result(self):
+        return _run(self.ARGS)
+
+    def test_exits_successfully(self, run_result):
+        assert run_result.returncode == 0, (
+            f"main.py exited with code {run_result.returncode}\n"
+            f"STDERR:\n{run_result.stderr[-2000:]}"
         )
 
-    def test_oracle_mode_indicated(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_oracle_mode_indicated(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         assert "Oracle mode" in combined or "oracle_mode" in combined.lower(), (
             "Expected oracle mode indication in config output"
         )
 
-    def test_accuracy_is_100(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_accuracy_is_100(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         # Oracle mode with 1 epoch: check final train acc or eval acc
         acc = _parse_final_train_accuracy(combined)
         if acc is None:
@@ -421,7 +438,7 @@ class TestOracleMode:
             acc = _parse_baseline_accuracy(combined)
         assert acc is not None, (
             "Could not parse accuracy from oracle mode output.\n"
-            f"STDOUT:\n{result.stdout[-3000:]}"
+            f"STDOUT:\n{run_result.stdout[-3000:]}"
         )
         assert acc == 100.0, (
             f"Oracle mode accuracy was {acc}%, but MUST be 100.0%"
@@ -442,49 +459,47 @@ class TestStandardTraining:
             "--step-notebook", "true", "--step-notebook-file", "step_notebook_standard.jsonl",
             "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
 
-    def test_exits_successfully(self):
-        result = _run(self.ARGS)
-        assert result.returncode == 0, (
-            f"main.py exited with code {result.returncode}\n"
-            f"STDERR:\n{result.stderr[-2000:]}"
+    @pytest.fixture(scope="class")
+    def run_result(self):
+        return _run(self.ARGS)
+
+    def test_exits_successfully(self, run_result):
+        assert run_result.returncode == 0, (
+            f"main.py exited with code {run_result.returncode}\n"
+            f"STDERR:\n{run_result.stderr[-2000:]}"
         )
 
-    def test_prints_epoch_progress(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_prints_epoch_progress(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         assert "Training epoch" in combined, (
             "Expected 'Training epoch' lines in training output"
         )
 
-    def test_multiple_epochs_executed(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_multiple_epochs_executed(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         epoch_accs = _parse_all_epoch_accuracies(combined)
         assert len(epoch_accs) >= 2, (
             f"Expected multiple epoch accuracies, got {len(epoch_accs)}.\n"
-            f"STDOUT:\n{result.stdout[-2000:]}"
+            f"STDOUT:\n{run_result.stdout[-2000:]}"
         )
 
-    def test_training_shows_improvement_or_stability(self):
+    def test_training_shows_improvement_or_stability(self, run_result):
         """The accuracy should not collapse to 0% — it should stay near
         baseline or improve over the 10 epochs."""
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+        combined = run_result.stdout + run_result.stderr
         baseline = _parse_baseline_accuracy(combined)
         final = _parse_final_train_accuracy(combined)
         assert final is not None, "Could not parse final train accuracy"
         # At minimum, accuracy should not be 0 after training
         assert final > 0.0, f"Final accuracy collapsed to {final}%"
 
-    def test_baseline_accuracy_printed(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_baseline_accuracy_printed(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         acc = _parse_baseline_accuracy(combined)
         assert acc is not None, "Expected 'Accuracy before training:' in output"
 
-    def test_final_accuracy_printed(self):
-        result = _run(self.ARGS)
-        combined = result.stdout + result.stderr
+    def test_final_accuracy_printed(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         acc = _parse_final_train_accuracy(combined)
         assert acc is not None, "Expected 'Train accuracy after training:' in output"
 
@@ -499,7 +514,14 @@ class TestPEFTTraining:
     from the logic solver into the VLM's LoRA adapters.
     """
 
-    ARGS = ["--train-size", "10", "--test-size", "10", "--epochs", "10", "--peft", "--disable-plugins",
+    # ``--epochs 2`` is sufficient to prove gradients flow (the
+    # ``test_training_shows_improvement_or_stability`` assertion only checks
+    # ``final > 0.0``). On the CI test_gpu 2080 Ti, each epoch is ~26 min;
+    # 10 epochs would blow past any reasonable CI budget. Override locally
+    # with CLEVR_PEFT_EPOCHS to run longer training sweeps.
+    ARGS = ["--train-size", "10", "--test-size", "10",
+            "--epochs", os.environ.get("CLEVR_PEFT_EPOCHS", "2"),
+            "--peft", "--disable-plugins",
             "--step-notebook", "true", "--step-notebook-file", "step_notebook_peft.jsonl",
             "--train-start", str(random.randint(0, 7846)), "--test-start", str(random.randint(0, 7846))]
     # PEFT uses InternVL3_5-1B by default; use local copy if available
@@ -509,53 +531,54 @@ class TestPEFTTraining:
     # See TestZeroShotVLM.ENV — capped at 2 for CI-GPU safety headroom.
     ENV = {"INTERNVL_SCORE_CHUNK": "2"}
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(autouse=True, scope="class")
     def _require_vram(self):
+        """Class-scoped so the gate evaluates before ``run_result`` spends
+        ~70 min running PEFT training on a GPU that can't hold it."""
         _skip_if_insufficient_vram(
             _MIN_VRAM_PEFT_GIB,
             "PEFT/LoRA training of InternVL-1B requires ≥10 GiB VRAM "
             "(post-fix: ~3.5 GiB alloc at chunk=8 on H100)",
         )
 
-    @pytest.mark.slow
-    def test_exits_successfully(self):
+    @pytest.fixture(scope="class")
+    def run_result(self, _require_vram):
+        """Launch main.py once per class. This is the expensive bit (one full
+        eval + N training epochs — ~70 min on the CI 2080 Ti); running it
+        four times for four assertions was wasted wall-clock. Skip checks
+        for vLLM / timeout live here so they propagate to all consumers."""
         result = _run(self.ARGS, env=self.ENV)
         _skip_if_vllm_failed(result)
         _skip_if_timed_out(result)
-        assert result.returncode == 0, (
-            f"main.py exited with code {result.returncode}\n"
-            f"STDERR:\n{result.stderr[-2000:]}"
+        return result
+
+    @pytest.mark.slow
+    def test_exits_successfully(self, run_result):
+        assert run_result.returncode == 0, (
+            f"main.py exited with code {run_result.returncode}\n"
+            f"STDERR:\n{run_result.stderr[-2000:]}"
         )
 
     @pytest.mark.slow
-    def test_peft_mode_indicated(self):
-        result = _run(self.ARGS, env=self.ENV)
-        _skip_if_vllm_failed(result)
-        _skip_if_timed_out(result)
-        combined = result.stdout + result.stderr
+    def test_peft_mode_indicated(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         assert "PEFT" in combined or "peft" in combined.lower() or "LoRA" in combined, (
             "Expected PEFT/LoRA mode indication in output"
         )
 
     @pytest.mark.slow
-    def test_prints_epoch_progress(self):
-        result = _run(self.ARGS, env=self.ENV)
-        _skip_if_vllm_failed(result)
-        _skip_if_timed_out(result)
-        combined = result.stdout + result.stderr
+    def test_prints_epoch_progress(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         assert "Training epoch" in combined, (
             "Expected 'Training epoch' lines in PEFT training output"
         )
 
     @pytest.mark.slow
-    def test_training_shows_improvement_or_stability(self):
-        result = _run(self.ARGS, env=self.ENV)
-        _skip_if_vllm_failed(result)
-        _skip_if_timed_out(result)
-        combined = result.stdout + result.stderr
+    def test_training_shows_improvement_or_stability(self, run_result):
+        combined = run_result.stdout + run_result.stderr
         final = _parse_final_train_accuracy(combined)
         if final is None:
-            tail = _tail(result.stderr) or _tail(combined)
+            tail = _tail(run_result.stderr) or _tail(combined)
             _skip(
                 "PEFT run produced no 'Train accuracy after training:' "
                 f"line — training did not reach completion. STDERR tail:\n{tail}"

@@ -86,10 +86,10 @@ for subfolder in "${TEST_LIST[@]}"; do
       K_ARG=(-k "$PYTEST_K")
       echo "   🔎 Applying -k filter: $PYTEST_K"
     fi
-    echo "   Command: uv run --no-sync pytest -v -s --tb=short --no-header ${K_ARG[*]} \"$test_path\""
+    echo "   Command: uv run --no-sync pytest -v -s -rs --tb=short --no-header ${K_ARG[*]} \"$test_path\""
 
     # Capture both stdout and stderr
-    test_output=$(uv run --no-sync pytest -v -s --tb=short --no-header "${K_ARG[@]}" "$test_path" 2>&1)
+    test_output=$(uv run --no-sync pytest -v -s -rs --tb=short --no-header "${K_ARG[@]}" "$test_path" 2>&1)
     test_exit_code=$?
     
     echo "   📊 Pytest exit code: $test_exit_code"
@@ -123,20 +123,31 @@ for subfolder in "${TEST_LIST[@]}"; do
     fi
 
     # ── Extract individual test item names for failed and skipped ──
-    # Failed items: from "short test summary info" lines starting with "FAILED "
+    # Both are parsed from the "short test summary info" section produced by
+    # -rs (skipped) and default (failed). With -s, verbose lines can have
+    # print() output interleaved before the SKIPPED/FAILED status token, so
+    # parsing the summary section is more reliable.
+    #
+    # Failed items: summary lines starting with "FAILED "
     failed_item_names=$(echo "$test_output" | \
       grep -E '^FAILED ' | sed 's/^FAILED //' | sed 's/ - .*//' | \
       tr '\n' '|' | sed 's/|$//')
-    # Fallback: verbose output lines containing " FAILED" (when summary section is absent)
+    # Fallback: verbose output lines (when summary section is absent)
     if [ -z "$failed_item_names" ] && [ "$items_failed" -gt 0 ]; then
       failed_item_names=$(echo "$test_output" | \
         grep -E '::.* FAILED' | sed 's/ FAILED.*//' | sed 's/^[[:space:]]*//' | \
         tr '\n' '|' | sed 's/|$//')
     fi
-    # Skipped items: verbose output lines containing " SKIPPED" (test node IDs contain "::")
+    # Skipped items: summary lines starting with "SKIPPED " (from -rs flag)
     skipped_item_names=$(echo "$test_output" | \
-      grep -E '::.* SKIPPED' | sed 's/ SKIPPED.*//' | sed 's/^[[:space:]]*//' | \
+      grep -E '^SKIPPED ' | sed 's/^SKIPPED //' | sed 's/ - .*//' | \
       tr '\n' '|' | sed 's/|$//')
+    # Fallback: verbose output lines (in case -rs summary is absent)
+    if [ -z "$skipped_item_names" ] && [ "$items_skipped" -gt 0 ]; then
+      skipped_item_names=$(echo "$test_output" | \
+        grep -E '::.* SKIPPED' | sed 's/ SKIPPED.*//' | sed 's/^[[:space:]]*//' | \
+        tr '\n' '|' | sed 's/|$//')
+    fi
 
     if [ $test_exit_code -eq 5 ]; then
       # Exit code 5: No tests collected - treat as warning, not failure

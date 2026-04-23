@@ -2,6 +2,7 @@ import sys
 from typing import Any
 import pytest
 
+import numpy as np
 import torch
 
 sys.path.append('.')
@@ -26,7 +27,7 @@ def test_edge_main():
 
         def forward(self, text) -> Any:
             text = self.spacy(text)
-            return torch.tensor([token.vector for token in text]).to(device=self.device)
+            return torch.tensor(np.array([token.vector for token in text])).to(device=self.device)
 #             return [token.vector for token in text]
         
         
