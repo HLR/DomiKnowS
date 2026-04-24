@@ -1,4 +1,5 @@
 import logging
+import os
 from unittest import result
 import torch
 import numpy as np
@@ -76,11 +77,19 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     - Boolean constraints (andL, atLeastAL, exactAL, etc.): Binary accuracy using 'local/argmax'
     - Counting constraints (sumL): Uses thresholded 'local/decision' key for verification
 
-    Uses AnswerSolver as the primary evaluation method — it performs an ILP
-    hypothesis search that correctly handles executable-constraint semantics
-    (iotaL selection, counting, etc.). verifySingleConstraint runs in parallel
-    as a diagnostic cross-check and any disagreement between the two is
-    logged. 
+    Primary evaluation path is ``datanode.verifySingleConstraint`` — this is
+    the historical code path that has been exercised for years across
+    multiple projects. ``AnswerSolver`` is an experimental ILP-based
+    alternative intended for executable-constraint semantics (iotaL
+    selection, counting, etc.), but it has not been proven out on CLEVR-style
+    relation graphs and has been observed to systematically return False on
+    existsL constraints, collapsing accuracy to the dataset's negative-class
+    fraction. It is therefore off by default and opt-in via the
+    ``DOMIKNOWS_USE_ANSWER_SOLVER=1`` environment variable. When enabled,
+    both paths run and the selection logic still prefers
+    ``verifySingleConstraint`` whenever it returns a non-None result; the
+    AnswerSolver output is used only as a fallback and recorded in the step
+    notebook for cross-checking.
 
     Args:
         evaluate_data: Dataset to evaluate on
@@ -93,7 +102,6 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         dict or float: Full results dictionary or primary metric value
     """
     from domiknows.graph.logicalConstrain import sumL
-    from domiknows.solver.answerModule import AnswerSolver
     from domiknows.step_notebook import (
         StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
     )
@@ -106,7 +114,15 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
     total = 0
 
-    answer_solver = AnswerSolver(program.graph)
+    # AnswerSolver opt-in: import + construct only when enabled, so a broken
+    # solver can't sabotage eval or burn wall-clock (its ILP hypothesis
+    # search takes 100 ms – 1.5 s per constraint on CLEVR scenes).
+    _use_answer_solver = os.environ.get("DOMIKNOWS_USE_ANSWER_SOLVER") == "1"
+    if _use_answer_solver:
+        from domiknows.solver.answerModule import AnswerSolver
+        answer_solver = AnswerSolver(program.graph)
+    else:
+        answer_solver = None
 
     _notebook_active = StepNotebook.active() is not None
     try:
@@ -162,25 +178,30 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
             is_counting = isinstance(lc.innerLC, sumL)
 
-            # ── AnswerSolver (primary) ──────────────────────────────
+            # ── AnswerSolver (experimental, opt-in) ─────────────────
+            # Only runs when DOMIKNOWS_USE_ANSWER_SOLVER=1. Kept here for
+            # diagnostic cross-checking of the verify path; results are
+            # consumed as a fallback only (see selection below).
             answer_correct = None
-            try:
-                answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
-            except Exception as e:
-                logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
-                answer_result = None
+            answer_result = None
+            if _use_answer_solver:
+                try:
+                    answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
+                except Exception as e:
+                    logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
+                    answer_result = None
 
-            if answer_result is not None:
-                if is_counting:
-                    # For sumL the label is the expected count
-                    expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
-                    answer_correct = (answer_result == expected_count)
-                else:
-                    # For boolean constraints the label is 1 (True) or 0 (False)
-                    expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
-                    answer_correct = (answer_result == expected_bool)
+                if answer_result is not None:
+                    if is_counting:
+                        # For sumL the label is the expected count
+                        expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
+                        answer_correct = (answer_result == expected_count)
+                    else:
+                        # For boolean constraints the label is 1 (True) or 0 (False)
+                        expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
+                        answer_correct = (answer_result == expected_bool)
 
-            # ── verifySingleConstraint (comparison) ─────────────────
+            # ── verifySingleConstraint (primary) ────────────────────
             verify_correct = None
             verify_result = None
             try:
