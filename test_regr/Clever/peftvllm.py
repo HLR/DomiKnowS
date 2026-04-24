@@ -86,15 +86,29 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 # --- Compatibility shim: newer transformers (>=4.50) bnb-4bit quantizer calls
 #     `model.all_tied_weights_keys`, but trust_remote_code models (like
-#     InternVLChatModel) only define `_tied_weights_keys`. Expose an alias on
-#     PreTrainedModel so the quantizer path resolves it without AttributeError.
+#     InternVLChatModel) only define `_tied_weights_keys`. Expose a writable
+#     alias on PreTrainedModel so both the quantizer read path and the
+#     `post_init` write path resolve without AttributeError. The setter stores
+#     the value in instance __dict__ so post_init's assignment wins; the getter
+#     falls back to _tied_weights_keys for legacy models that never set it.
 try:
     from transformers import PreTrainedModel as _PTM
     if not hasattr(_PTM, "all_tied_weights_keys"):
-        def _all_tied_weights_keys_compat(self):
+        _STORE_KEY = "_all_tied_weights_keys_store"
+
+        def _atwk_get(self):
+            if _STORE_KEY in self.__dict__:
+                return self.__dict__[_STORE_KEY]
             keys = getattr(self, "_tied_weights_keys", None)
             return list(keys) if keys else []
-        _PTM.all_tied_weights_keys = property(_all_tied_weights_keys_compat)
+
+        def _atwk_set(self, value):
+            self.__dict__[_STORE_KEY] = value
+
+        def _atwk_del(self):
+            self.__dict__.pop(_STORE_KEY, None)
+
+        _PTM.all_tied_weights_keys = property(_atwk_get, _atwk_set, _atwk_del)
 except Exception as _shim_err:
     logging.warning("Failed to install all_tied_weights_keys compat shim: %s", _shim_err)
 
