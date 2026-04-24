@@ -320,8 +320,16 @@ Examples:
                         help="Use PEFT (LoRA) fine-tuning with HuggingFace InternVL")
     parser.add_argument("--load-4bit", action="store_true",
                         help="Use QLoRA 4-bit quantization for VLM")
-    parser.add_argument("--softmax-temp", type=float, default=1.0,
-                        help="Temperature for VLM softmax output")
+    parser.add_argument("--softmax-temp", type=float, default=5.0,
+                        help="Temperature for VLM softmax output. >1 softens output; helps escape "
+                             "cold-start saturation where baseline P(Yes)≈0.001 on CLEVR yes/no atoms.")
+    parser.add_argument("--yes-bias", type=float, default=0.0,
+                        help="Additive bias on the Yes logit before logsumexp in _score_batch. "
+                             "Use a positive value (e.g. 3.0) to counter the VLM's strong No-prior "
+                             "so existsL product t-norm doesn't start fully saturated.")
+    parser.add_argument("--pos-weight", type=float, default=1.0,
+                        help="BCE pos_weight on the Yes (logic_label=1) class in InferenceModel. "
+                             "Use >1 to rebalance against majority-class collapse.")
     parser.add_argument("--oracle-mode", action="store_true",
                         help="Use ground truth answers instead of VLM/ResNet for debugging")
     parser.add_argument("--oracle-confidence", type=float, default=1.0,
@@ -355,8 +363,11 @@ Examples:
     
     # t-norm settings
     parser.add_argument("--tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
-                        default="default",
-                        help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, 'auto' = adaptive during training")
+                        default="L",
+                        help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, "
+                             "'auto' = adaptive during training. Default changed from 'default' (Product) "
+                             "to 'L' (Lukasiewicz): Product saturates existsL over N² pairs so BCE "
+                             "gradient dies; Lukasiewicz clips linearly, keeping gradient informative.")
     
     # Gumbel-Softmax settings
     parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, 
@@ -642,6 +653,7 @@ def program_declaration(train, dev, args, device='cpu'):
                 use_vision_lora=False,
                 load_4bit=args.load_4bit,
                 softmax_temperature=args.softmax_temp,
+                yes_bias=args.yes_bias,
                 lora_r=args.lora_r,
                 lora_alpha=args.lora_alpha,
                 max_num=args.max_num_patches,
@@ -711,6 +723,7 @@ def program_declaration(train, dev, args, device='cpu'):
         'poi': poi,
         'device': device,
         'tnorm': args.tnorm,
+        'pos_weight': args.pos_weight,
     }
     if args.use_gumbel:
         program_kwargs.update({
@@ -851,6 +864,9 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     print("\n[Constraints]")
     print(f"  T-norm:           {args.tnorm}")
     print(f"  Relation syntax:  {args.relation_syntax}")
+    print(f"  Softmax temp:     {args.softmax_temp}")
+    print(f"  Yes-bias:         {args.yes_bias}")
+    print(f"  Pos-weight:       {args.pos_weight}")
 
     print("\n[Logging]")
     print(f"  Production mode:  {args.production_log_mode}")

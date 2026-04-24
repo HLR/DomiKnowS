@@ -268,12 +268,13 @@ class InferenceModel(LossModel):
     """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, 
+    def __init__(self, graph,
                  tnorm='P',
                  loss=torch.nn.BCELoss,
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
-                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 pos_weight=1.0):
         """
         Initializes an instance of InferenceModel.
 
@@ -306,6 +307,11 @@ class InferenceModel(LossModel):
                          hard_gumbel=hard_gumbel)
 
         self.loss_func = loss()
+        # pos_weight rebalances BCE against majority-class collapse on existsL
+        # constraints. When the dataset's logic_label has a skewed Yes/No ratio
+        # the unweighted BCE will drift toward the majority direction — setting
+        # pos_weight > 1 up-weights the Yes (label=1) loss contribution.
+        self.pos_weight = float(pos_weight)
         self._setup_inference_logger()
 
     def _setup_inference_logger(self):
@@ -400,6 +406,14 @@ class InferenceModel(LossModel):
             #if torch.equal(constr_out, lbl):
             #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
             constraint_loss = self.loss_func(constr_out.float(), lbl)
+
+            # Up-weight the positive (label=1) class if pos_weight != 1.
+            # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
+            # scale the already-computed loss by the per-sample weight.
+            if self.pos_weight != 1.0:
+                lbl_scalar = lbl.float().mean()  # lbl is 0-d or 1-d singleton here
+                sample_weight = (self.pos_weight - 1.0) * lbl_scalar + 1.0
+                constraint_loss = constraint_loss * sample_weight
 
             losses.append(constraint_loss)
 

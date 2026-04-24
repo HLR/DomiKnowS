@@ -311,6 +311,9 @@ class InternVLHF:
         load_4bit: bool = False,
         # Temperature for softmax over target tokens (>1 = softer, prevents gradient vanishing)
         softmax_temperature: float = 1.0,
+        # Additive bias on the Yes logit (col 1 after _score_batch swap) to escape
+        # the extreme cold-start saturation where P(Yes)≈0.001 on CLEVR atoms.
+        yes_bias: float = 0.0,
     ):
         if getattr(self, "_initialized", False):
             return
@@ -320,6 +323,7 @@ class InternVLHF:
         self.max_num_patches = max_num_patches
         self.load_4bit = load_4bit
         self.softmax_temperature = softmax_temperature
+        self.yes_bias = yes_bias
 
         # Determine compute dtype based on GPU support
         if device.type == "cuda":
@@ -857,6 +861,11 @@ class InternVLHF:
         # C = log(exp(yes) + exp(no)) to match vLLM's normalization.
         # No softmax — inferLocal() applies the only softmax later.
         sel = next_logits[0, token_ids] / self.softmax_temperature  # [K]
+        if getattr(self, "yes_bias", 0.0) != 0.0:
+            for _i, _tok in enumerate(target_tokens):
+                if _tok == "Yes":
+                    sel = sel.clone()
+                    sel[_i] = sel[_i] + self.yes_bias
         C = torch.logsumexp(sel, dim=-1)  # scalar
         return (sel - C).to(self.device)
 
@@ -899,6 +908,19 @@ class InternVLHF:
 
         token_ids = [self.tokenizer.convert_tokens_to_ids(tok) for tok in target_tokens]
 
+        # Build a per-column additive bias vector so `yes_bias` shifts the
+        # "Yes" logit regardless of target_tokens order ([Yes,No] vs [No,Yes]).
+        # This is applied BEFORE logsumexp so the normalized log-prob reflects
+        # the intended Yes-prior — counters the extreme cold-start where
+        # baseline P(Yes) ≈ 0.001 for every CLEVR atom.
+        if self.yes_bias != 0.0:
+            bias_vec = torch.zeros(len(target_tokens), device=self.device, dtype=self.compute_dtype)
+            for _i, _tok in enumerate(target_tokens):
+                if _tok == "Yes":
+                    bias_vec[_i] = self.yes_bias
+        else:
+            bias_vec = None
+
         # Only import the step-notebook hook lazily so this module stays
         # importable when domiknows isn't on sys.path (e.g. standalone eval).
         try:
@@ -928,6 +950,8 @@ class InternVLHF:
                 use_thumbnail=False,
             )  # [chunk, V]
             sel_local = cl[:, token_ids] / self.softmax_temperature  # [chunk, K]
+            if bias_vec is not None:
+                sel_local = sel_local + bias_vec
             C_local = torch.logsumexp(sel_local, dim=-1, keepdim=True)  # [chunk, 1]
             return sel_local - C_local
 
@@ -1040,6 +1064,8 @@ class InternVLHF:
             # C = log(exp(yes) + exp(no)) to match vLLM's normalization.
             # No softmax — inferLocal() applies the only softmax later.
             sel = chunk_logits[:, token_ids] / self.softmax_temperature  # [chunk, K]
+            if bias_vec is not None:
+                sel = sel + bias_vec
             C = torch.logsumexp(sel, dim=-1, keepdim=True)  # [chunk, 1]
             all_probs.append(sel - C)
 
@@ -1145,6 +1171,8 @@ class InternVLSharedHF(nn.Module):
         load_4bit=False,
         # Temperature for softmax (>1 = softer outputs, prevents gradient vanishing)
         softmax_temperature=1.0,
+        # Additive bias on the Yes logit to counter CLEVR cold-start Yes≈0 saturation.
+        yes_bias=0.0,
         *args,
         **kwargs
     ):
@@ -1154,6 +1182,7 @@ class InternVLSharedHF(nn.Module):
         self.attr = attr
         self.device = device
         self.softmax_temperature = softmax_temperature
+        self.yes_bias = yes_bias
 
         if dtype is None:
             dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
@@ -1175,6 +1204,7 @@ class InternVLSharedHF(nn.Module):
                 max_num_patches=max_num,
                 load_4bit=load_4bit,
                 softmax_temperature=softmax_temperature,
+                yes_bias=yes_bias,
             )
             # Register the actual nn.Module only in first instance
             # so DomiKnowS can discover parameters for training
