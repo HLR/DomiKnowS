@@ -976,6 +976,36 @@ class InternVLHF:
                         # never changes → exact same accuracy per epoch.
                         self._debug_a = a_params[0] if a_params else None
                         self._debug_b = b_params[0] if b_params else None
+
+                        # Register hooks on the stashed A / B tensors so we
+                        # see whether autograd is delivering non-zero grads.
+                        # The A-update-is-stuck symptom from the earlier run
+                        # has three candidate explanations: grad never fires
+                        # on A, grad fires with zero norm, or grad fires
+                        # but the optimizer is not stepping. This hook
+                        # distinguishes (1) / (2) from (3).
+                        self._a_grad_snapshots = []
+                        self._b_grad_snapshots = []
+
+                        def _make_grad_hook(bucket, tag):
+                            def _hook(grad):
+                                if len(bucket) < 4:
+                                    bucket.append(grad.detach().float().norm().item())
+                                    print(
+                                        f"[grad_norm] {tag}.grad.norm={bucket[-1]:.6e} "
+                                        f"(seen={len(bucket)})",
+                                        flush=True,
+                                    )
+                            return _hook
+
+                        if self._debug_a is not None:
+                            self._debug_a[1].register_hook(
+                                _make_grad_hook(self._a_grad_snapshots, "A")
+                            )
+                        if self._debug_b is not None:
+                            self._debug_b[1].register_hook(
+                                _make_grad_hook(self._b_grad_snapshots, "B")
+                            )
                         self._grad_debug_printed = True
 
                     # Per-call weight-norm trace at sparse checkpoints so we
@@ -1049,6 +1079,29 @@ class InternVLHF:
             #         pass
 
         logits_out = torch.cat(all_probs, dim=0)  # [B, K]
+
+        # Sample a handful of rows on the very first and roughly the Nth
+        # training call so we can see whether VLM output is actually
+        # informative (spread across log-prob range) or collapsed toward a
+        # single class. The scorer returns log-softmax values — i.e. values
+        # in (-inf, 0] where 0 = certain and very negative = near-zero
+        # probability. If ``Yes_logprob`` rows are uniformly ≪ 0, every
+        # atom reads as "No" downstream and the solver returns False.
+        if os.environ.get("DOMIKNOWS_GRAD_DEBUG") == "1":
+            batch_call = getattr(self, "_debug_counter", 0)
+            if batch_call in (1, 300):
+                rows = logits_out.detach().float().cpu()
+                # K columns should line up with target_tokens; for binary
+                # Yes/No, col 0 = Yes, col 1 = No after this scorer's mask.
+                head = rows[: min(6, rows.shape[0])]
+                print(
+                    f"[prob_debug] call={batch_call} shape={tuple(rows.shape)} "
+                    f"log_softmax_head={head.tolist()} "
+                    f"mean={rows.mean().item():.4f} "
+                    f"col_mean={rows.mean(dim=0).tolist() if rows.ndim == 2 else '-'}",
+                    flush=True,
+                )
+
         return logits_out.to(self.device)
 
 
