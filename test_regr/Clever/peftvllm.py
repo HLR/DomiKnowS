@@ -84,6 +84,20 @@ from torchvision.transforms.functional import InterpolationMode
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig, get_scheduler
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
+# --- Compatibility shim: newer transformers (>=4.50) bnb-4bit quantizer calls
+#     `model.all_tied_weights_keys`, but trust_remote_code models (like
+#     InternVLChatModel) only define `_tied_weights_keys`. Expose an alias on
+#     PreTrainedModel so the quantizer path resolves it without AttributeError.
+try:
+    from transformers import PreTrainedModel as _PTM
+    if not hasattr(_PTM, "all_tied_weights_keys"):
+        def _all_tied_weights_keys_compat(self):
+            keys = getattr(self, "_tied_weights_keys", None)
+            return list(keys) if keys else []
+        _PTM.all_tied_weights_keys = property(_all_tied_weights_keys_compat)
+except Exception as _shim_err:
+    logging.warning("Failed to install all_tied_weights_keys compat shim: %s", _shim_err)
+
 # Optional imports for training with probabilistic tensors
 try:
     from probabilistic_tensor import ProbabilisticTensor, and_op, or_op
