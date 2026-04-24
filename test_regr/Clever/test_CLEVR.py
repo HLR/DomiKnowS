@@ -20,11 +20,11 @@ MAIN = str(_TEST_DIR / "main.py")
 # Per-test subprocess timeout. The PEFT path on a 2080 Ti (CI test_gpu
 # runner) measures ~18 min for eval + ~26 min per training epoch on the
 # default 10-item splits, so even at the reduced 2-epoch CI configuration
-# a full run is ~60–70 min. 7200 s (2 h) gives comfortable headroom for
+# a full run is ~60–70 min. 14400 s (4 h) gives comfortable headroom for
 # disk/network hiccups while still catching genuine hangs. Override via the
 # ``CLEVR_TEST_TIMEOUT`` env var (e.g. on slower hardware or for longer
 # training sweeps run out-of-CI).
-TIMEOUT = int(os.environ.get("CLEVR_TEST_TIMEOUT", "7200"))
+TIMEOUT = int(os.environ.get("CLEVR_TEST_TIMEOUT", "14400"))
 
 # Minimum VRAM gates — set to fit the CI test_gpu runner (NVIDIA RTX 2080 Ti,
 # 10.8 GiB). After the InternVL-1B gradient-checkpointing + freeze-base fixes,
@@ -176,6 +176,30 @@ def _tail(text: str, n: int = 3000) -> str:
     return text[-n:] if text else ""
 
 
+def _head(text: str, n: int = 2000) -> str:
+    """Return the first ``n`` characters of ``text``."""
+    return text[:n] if text else ""
+
+
+def _head_and_tail(text: str, head_n: int = 2000, tail_n: int = 3000) -> str:
+    """Return head + tail of ``text`` for skip messages.
+
+    vLLM engine-core failures print the *root cause* early in STDERR (worker
+    process crash output) then finish with the ``RuntimeError: Engine core
+    initialization failed`` traceback at the end.  Showing only the tail hides
+    the actual error; showing both surfaces it in CI logs.
+    """
+    if not text:
+        return ""
+    if len(text) <= head_n + tail_n:
+        return text
+    return (
+        _head(text, head_n)
+        + f"\n... [{len(text) - head_n - tail_n} chars omitted] ...\n"
+        + _tail(text, tail_n)
+    )
+
+
 def _skip_if_vllm_failed(result: subprocess.CompletedProcess):
     """Skip test if vLLM engine failed to initialize or died during execution
     (GPU too small, driver issue, EngineDeadError, etc.).
@@ -187,7 +211,8 @@ def _skip_if_vllm_failed(result: subprocess.CompletedProcess):
     tail = _tail(result.stderr) or _tail(combined)
 
     if "Engine core initialization failed" in combined:
-        _skip(f"vLLM engine core failed to initialize. STDERR tail:\n{tail}")
+        excerpt = _head_and_tail(result.stderr) or _head_and_tail(combined)
+        _skip(f"vLLM engine core failed to initialize. STDERR:\n{excerpt}")
     if "EngineDeadError" in combined or "EngineCore encountered an issue" in combined:
         _skip(f"vLLM EngineCore died during execution. STDERR tail:\n{tail}")
     if "ImportError" in combined and "timm" in combined:

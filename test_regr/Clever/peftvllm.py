@@ -942,6 +942,34 @@ class InternVLHF:
                     questions[start:end],
                     use_reentrant=False,
                 )  # [chunk, K]
+                # One-shot grad-flow diagnostic. Set DOMIKNOWS_GRAD_DEBUG=1 to
+                # verify checkpoint() is producing a live autograd edge back
+                # into the LoRA params. If this prints requires_grad=False or
+                # grad_fn=None during training, the graph is severed and LoRA
+                # never updates — i.e. root cause of the 50%/answer=False
+                # regression.
+                if (
+                    os.environ.get("DOMIKNOWS_GRAD_DEBUG") == "1"
+                    and not getattr(self, "_grad_debug_printed", False)
+                ):
+                    lora_trainable = [
+                        (n, p) for n, p in self.model.named_parameters()
+                        if p.requires_grad
+                    ]
+                    n_lora = len(lora_trainable)
+                    sample_name, sample_param = (
+                        lora_trainable[0] if lora_trainable else ("<none>", None)
+                    )
+                    print(
+                        f"[grad_debug] chunk_norm.requires_grad={chunk_norm.requires_grad} "
+                        f"grad_fn={type(chunk_norm.grad_fn).__name__ if chunk_norm.grad_fn else None} "
+                        f"is_leaf={chunk_norm.is_leaf} | "
+                        f"trainable_params={n_lora} | "
+                        f"sample={sample_name} "
+                        f"param.requires_grad={sample_param.requires_grad if sample_param is not None else None}",
+                        flush=True,
+                    )
+                    self._grad_debug_printed = True
                 all_probs.append(chunk_norm)
                 continue
 
