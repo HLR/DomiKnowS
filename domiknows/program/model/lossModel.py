@@ -312,6 +312,11 @@ class InferenceModel(LossModel):
         # the unweighted BCE will drift toward the majority direction — setting
         # pos_weight > 1 up-weights the Yes (label=1) loss contribution.
         self.pos_weight = float(pos_weight)
+        # Diagnostic: set DOMIKNOWS_INFER_DIAG=<N> to print (lbl, conversionSigmoid, loss)
+        # for the first N forward calls. Used to trace gradient-sign inversions.
+        import os
+        self._diag_budget = int(os.environ.get('DOMIKNOWS_INFER_DIAG', '0'))
+        self._diag_step = 0
         self._setup_inference_logger()
 
     def _setup_inference_logger(self):
@@ -407,6 +412,20 @@ class InferenceModel(LossModel):
             #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
             constraint_loss = self.loss_func(constr_out.float(), lbl)
 
+            if self._diag_step < self._diag_budget:
+                try:
+                    co = constr_out.detach().float().flatten()
+                    lb = lbl.detach().float().flatten()
+                    cl = constraint_loss.detach().float().flatten()
+                    print(
+                        f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
+                        f"convSig={co.tolist()} lbl={lb.tolist()} "
+                        f"loss={cl.tolist()} is_sumL={is_sumL}",
+                        flush=True,
+                    )
+                except Exception as e:
+                    print(f"[INFER_DIAG error] {e}", flush=True)
+
             # Up-weight the positive (label=1) class if pos_weight != 1.
             # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
             # scale the already-computed loss by the per-sample weight.
@@ -427,6 +446,28 @@ class InferenceModel(LossModel):
             log_memory() 
         
         self.inferenceLogger.info(f"Total loss: {loss.item()}")
+
+        if self._diag_step < self._diag_budget:
+            try:
+                concept_names = []
+                for c in getattr(self.graph, 'concepts', {}):
+                    concept_names.append(c)
+                for cname in concept_names[:3]:
+                    for dn in datanode.findDatanodes(select=cname):
+                        sm = dn.getAttribute(cname, 'local/softmax')
+                        if sm is None:
+                            continue
+                        sm_t = sm.detach().float().flatten().tolist()
+                        print(
+                            f"[INFER_DIAG step={self._diag_step} concept={cname}] "
+                            f"softmax={sm_t[:4]} (col0=False, col1=True)",
+                            flush=True,
+                        )
+                        break
+            except Exception as e:
+                print(f"[INFER_DIAG concept error] {e}", flush=True)
+            self._diag_step += 1
+
         return loss, datanode, builder
     
 class SampleLossModel(LossModel):
