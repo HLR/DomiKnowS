@@ -99,8 +99,13 @@ try:
         def _atwk_get(self):
             if _STORE_KEY in self.__dict__:
                 return self.__dict__[_STORE_KEY]
+            # Newer transformers expects a dict (callers use .keys()); older
+            # models only expose a list under `_tied_weights_keys`. Adapt:
+            # map each legacy key to itself so both access shapes work.
             keys = getattr(self, "_tied_weights_keys", None)
-            return list(keys) if keys else []
+            if not keys:
+                return {}
+            return {k: k for k in keys}
 
         def _atwk_set(self, value):
             self.__dict__[_STORE_KEY] = value
