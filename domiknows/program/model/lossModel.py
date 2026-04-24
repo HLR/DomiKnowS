@@ -410,6 +410,15 @@ class InferenceModel(LossModel):
             constr_out = loss_dict['conversionSigmoid']
             #if torch.equal(constr_out, lbl):
             #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
+            # Avoid BCELoss saturation cliff: with Product t-norm over many
+            # pair-atoms, convSig can hit exactly 0 or 1 at cold start, making
+            # BCELoss return the clipped 100.0 value and producing huge/
+            # unstable gradients. Clamp into (eps, 1-eps) to preserve a smooth,
+            # differentiable loss landscape. Disabled if DOMIKNOWS_INFER_NO_CLAMP=1.
+            import os as _os
+            if _os.environ.get('DOMIKNOWS_INFER_NO_CLAMP', '0') != '1':
+                _eps = 1e-6
+                constr_out = constr_out.clamp(_eps, 1.0 - _eps)
             constraint_loss = self.loss_func(constr_out.float(), lbl)
 
             if self._diag_step < self._diag_budget:
@@ -417,10 +426,32 @@ class InferenceModel(LossModel):
                     co = constr_out.detach().float().flatten()
                     lb = lbl.detach().float().flatten()
                     cl = constraint_loss.detach().float().flatten()
+                    # Dump a handful of atom probabilities that feed into this
+                    # LC via _prepareLcLossContext, so we can see how close to
+                    # saturation the atoms are on this step.
+                    atom_summary = ""
+                    try:
+                        probs_ctx = None
+                        for k in ('probs', 'predictions', 'softmax', 'localPredictions'):
+                            if isinstance(lc_context, dict) and k in lc_context:
+                                probs_ctx = lc_context[k]
+                                break
+                        if isinstance(probs_ctx, dict):
+                            keys = list(probs_ctx.keys())[:3]
+                            bits = []
+                            for k in keys:
+                                v = probs_ctx[k]
+                                if hasattr(v, 'detach'):
+                                    vv = v.detach().float().flatten()
+                                    bits.append(f"{k}:{vv[:4].tolist()}")
+                            if bits:
+                                atom_summary = " atoms=[" + "; ".join(bits) + "]"
+                    except Exception:
+                        pass
                     print(
                         f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
                         f"convSig={co.tolist()} lbl={lb.tolist()} "
-                        f"loss={cl.tolist()} is_sumL={is_sumL}",
+                        f"loss={cl.tolist()} is_sumL={is_sumL}{atom_summary}",
                         flush=True,
                     )
                 except Exception as e:
@@ -449,23 +480,41 @@ class InferenceModel(LossModel):
 
         if self._diag_step < self._diag_budget:
             try:
-                concept_names = []
-                for c in getattr(self.graph, 'concepts', {}):
-                    concept_names.append(c)
-                for cname in concept_names[:3]:
-                    for dn in datanode.findDatanodes(select=cname):
-                        sm = dn.getAttribute(cname, 'local/softmax')
-                        if sm is None:
+                # Walk every datanode reachable from the root and print any
+                # attribute whose key ends in '<local/softmax>'. Limit to the
+                # first few matches so output stays readable.
+                printed = 0
+                limit = 6
+                def _walk(dn, depth=0):
+                    nonlocal printed
+                    if printed >= limit:
+                        return
+                    attrs = getattr(dn, 'attributes', None) or {}
+                    for key, val in attrs.items():
+                        if printed >= limit:
+                            return
+                        if 'local/softmax' not in str(key):
                             continue
-                        sm_t = sm.detach().float().flatten().tolist()
+                        if not hasattr(val, 'detach'):
+                            continue
+                        vv = val.detach().float().flatten()
                         print(
-                            f"[INFER_DIAG step={self._diag_step} concept={cname}] "
-                            f"softmax={sm_t[:4]} (col0=False, col1=True)",
+                            f"[INFER_DIAG step={self._diag_step} dn={dn.getOntologyNode().name if dn.getOntologyNode() else '?'} "
+                            f"key={key}] softmax={vv[:6].tolist()}",
                             flush=True,
                         )
-                        break
+                        printed += 1
+                    for child in (getattr(dn, 'getChildDataNodes', lambda: [])() or []):
+                        _walk(child, depth + 1)
+                _walk(datanode)
+                if printed == 0:
+                    print(
+                        f"[INFER_DIAG step={self._diag_step} concept] "
+                        f"no 'local/softmax' attribute found on datanode tree",
+                        flush=True,
+                    )
             except Exception as e:
-                print(f"[INFER_DIAG concept error] {e}", flush=True)
+                print(f"[INFER_DIAG concept error] {type(e).__name__}: {e}", flush=True)
             self._diag_step += 1
 
         return loss, datanode, builder
