@@ -236,7 +236,7 @@ pillow==11.3.0
     #   matplotlib
     #   tensorboard
     #   torchvision
-pip==25.2
+pip==26.0.1
     # via pip-tools
 pip-tools==7.5.1
     # via domiknows
