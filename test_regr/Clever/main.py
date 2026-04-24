@@ -320,9 +320,10 @@ Examples:
                         help="Use PEFT (LoRA) fine-tuning with HuggingFace InternVL")
     parser.add_argument("--load-4bit", action="store_true",
                         help="Use QLoRA 4-bit quantization for VLM")
-    parser.add_argument("--softmax-temp", type=float, default=5.0,
+    parser.add_argument("--softmax-temp", type=float, default=2.0,
                         help="Temperature for VLM softmax output. >1 softens output; helps escape "
-                             "cold-start saturation where baseline P(Yes)≈0.001 on CLEVR yes/no atoms.")
+                             "cold-start saturation where baseline P(Yes)≈0.001 on CLEVR yes/no atoms. "
+                             "Too high over-saturates to the opposite pole (both kill BCE gradient).")
     parser.add_argument("--yes-bias", type=float, default=0.0,
                         help="Additive bias on the Yes logit before logsumexp in _score_batch. "
                              "Use a positive value (e.g. 3.0) to counter the VLM's strong No-prior "
@@ -363,11 +364,12 @@ Examples:
     
     # t-norm settings
     parser.add_argument("--tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
-                        default="L",
+                        default="P",
                         help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, "
-                             "'auto' = adaptive during training. Default changed from 'default' (Product) "
-                             "to 'L' (Lukasiewicz): Product saturates existsL over N² pairs so BCE "
-                             "gradient dies; Lukasiewicz clips linearly, keeping gradient informative.")
+                             "'auto' = adaptive during training. Product ('P') stays differentiable "
+                             "as conversionSigmoid → 1. Lukasiewicz ('L') hard-clips at min(1, Σp_i) "
+                             "and produces exact-zero gradient past the clip — bad for existsL over "
+                             "many atoms. Gumbel ('G') and SP are also smooth alternatives.")
     
     # Gumbel-Softmax settings
     parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, 
