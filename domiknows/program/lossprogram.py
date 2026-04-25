@@ -22,6 +22,18 @@ logger = setup_logger({
 })
 
 
+def _grad_clip_norm():
+    """Override the hard-coded clip_grad_norm_(max_norm=10.0) via env var.
+    Set DOMIKNOWS_GRAD_CLIP=1.0 to tighten the clip during cold-start training
+    on brittle stacks (PEFT + soft-logic) where a single update can produce
+    multi-nat logit shifts that collapse softmax outputs."""
+    import os as _os
+    try:
+        return float(_os.environ.get('DOMIKNOWS_GRAD_CLIP', '10.0'))
+    except (TypeError, ValueError):
+        return 10.0
+
+
 # =============================================================================
 # Gradient Utilities for Primal-Dual
 # =============================================================================
@@ -771,7 +783,7 @@ class PrimalDualProgram(LossProgram):
 
             if do_update:
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 
                 # Primal step: update model params
                 if self.opt is not None:
@@ -790,7 +802,7 @@ class PrimalDualProgram(LossProgram):
                 if should_update_dual:
                     # Reverse gradients for lambda (gradient ascent)
                     reverse_sign_grad(self.cmodel.parameters())
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
                     
                     c_update_iter = iter_count
@@ -936,7 +948,7 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
             scaled_loss.backward()
 
             if do_update:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 
                 if self.opt is not None:
                     self.opt.step()
@@ -952,7 +964,7 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
                 
                 if should_update_dual:
                     reverse_sign_grad(self.cmodel.parameters())
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
                     
                     c_update_iter = iter_count
@@ -1064,9 +1076,9 @@ class InferenceProgram(LossProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 if self.opt is not None:
                     self.opt.step()
@@ -1149,9 +1161,9 @@ class GumbelInferenceProgram(GumbelTemperatureMixin, InferenceProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 if self.opt is not None:
                     self.opt.step()
@@ -1237,9 +1249,9 @@ class SampleLossProgram(LossProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 self.opt.step()
                 iter_count += 1
@@ -1310,9 +1322,9 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 self.opt.step()
                 iter_count += 1
