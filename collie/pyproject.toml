@@ -1,0 +1,18 @@
+[project]
+name = "domiknows-collie-task"
+version = "0.1.0"
+description = "Collie constrained-generation task for DomiKnowS."
+requires-python = ">=3.12"
+dependencies = [
+    "domiknows[cpu]",
+    "ansicolors>=1.1.8",
+    "datasets>=4.0.0",
+    "tqdm>=4.66.0",
+    "transformers>=4.56.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+domiknows = { path = "../..", editable = true }

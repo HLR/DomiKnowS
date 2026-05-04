@@ -2,6 +2,7 @@ import torch
 from tokens import TokenMap
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from typing import Literal
+from domiknows.generation import mask_logits_for_dfa
 
 
 class TinyModel(torch.nn.Module):
@@ -13,7 +14,9 @@ class TinyModel(torch.nn.Module):
             vocab: list[str],
             eos_idx: int = 50256,
             pad_size: int = 48,
-            mode: Literal['tf', 'generate'] = 'generate'
+            mode: Literal['tf', 'generate'] = 'generate',
+            token_vocabulary=None,
+            constrained_dfa=None,
         ):
 
         super().__init__()
@@ -30,6 +33,8 @@ class TinyModel(torch.nn.Module):
 
         self.eos_idx = eos_idx
         self.pad_size = pad_size
+        self.token_vocabulary = token_vocabulary
+        self.constrained_dfa = constrained_dfa
 
     def forward(
             self,
@@ -56,16 +61,37 @@ class TinyModel(torch.nn.Module):
         elif self.mode == 'generate':
             input_ids = input_ids[0].tolist()
             generated_logits = []
+            dfa_state = self.constrained_dfa.start_state if self.constrained_dfa is not None else None
 
             for i in range(self.pad_size):
                 logits = self.model(torch.tensor(input_ids).unsqueeze(0)).logits[0]
                 target_logits = logits[-1, :]
 
+                if self.constrained_dfa is not None:
+                    if self.token_vocabulary is None:
+                        raise ValueError("token_vocabulary is required for constrained decoding")
+                    remaining_steps = self.pad_size - i
+                    allowed = {
+                        int(label)
+                        for label in self.constrained_dfa.allowed_tokens(
+                            dfa_state,
+                            remaining_steps=remaining_steps,
+                        )
+                    }
+                    target_logits = mask_logits_for_dfa(target_logits, allowed, self.token_vocabulary)
+
                 target_logits_subset = target_logits[self.lmap.label_list]
                 generated_logits.append(target_logits_subset.detach())
 
                 # generated id is the argmax within the subset of the vocabulary
-                next_id = self.lmap.inv_label_map[torch.argmax(target_logits_subset).item()]
+                if self.constrained_dfa is None:
+                    next_id = self.lmap.inv_label_map[torch.argmax(target_logits_subset).item()]
+                else:
+                    next_id = int(torch.argmax(target_logits).item())
+                    next_label = self.token_vocabulary.label_for_token_id(next_id)
+                    dfa_state = self.constrained_dfa.step(dfa_state, next_label)
+                    if dfa_state is None:
+                        raise RuntimeError("constrained decoder selected a token with no DFA transition")
                 input_ids.append(next_id)
 
                 # if next_id == self.eos_idx:
@@ -103,9 +129,6 @@ class TinyModel(torch.nn.Module):
             
             gen_probs_new[:, -1] = 1 - prob_sum
 
-            print(gen_probs_new.shape)
-            print(gen_probs_new)
-
-            gen_logprobs = torch.log(gen_probs_new)
+            gen_logprobs = torch.log(gen_probs_new.clamp_min(1e-12))
 
             return gen_logprobs

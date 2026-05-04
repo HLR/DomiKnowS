@@ -6,9 +6,13 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datasets import load_dataset
 from transformers import AutoTokenizer
+from pathlib import Path
 import pickle
 
 top_k = 10000
+task_dir = Path(__file__).resolve().parent
+output_dir = task_dir / "data"
+output_dir.mkdir(exist_ok=True)
 
 dataset = load_dataset("roneneldan/TinyStories", split="validation", streaming=True)
 
@@ -37,5 +41,5 @@ for t in reversed(vocab_subset):
 
 label_map = {token: i for i, token in enumerate(vocab_subset)}
 
-with open("data/vocab_val_10k.pkl", "wb") as f:
+with open(output_dir / "vocab_val_10k.pkl", "wb") as f:
     pickle.dump(label_map, f)

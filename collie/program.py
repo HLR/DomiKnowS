@@ -7,6 +7,7 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
+from domiknows.generation import constraints_to_dfa_from_graph
 
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from tokens import TokenMap, tokenize
@@ -14,7 +15,7 @@ import torch
 from typing import Literal
 from tqdm import tqdm
 
-from graph import build_graph
+from graph import build_generation_bundle
 from model import TinyModel
 
 
@@ -25,12 +26,26 @@ def build_program(
         vocab: list[str],
         pad_size: int = 32,
         model_mode: Literal['tf', 'generate'] = 'generate',
-        ilp: bool = False
+        ilp: bool = False,
+        constrained_decoding: bool = False,
     ) -> LearningBasedProgram:
 
     vocab_ids = [tokenizer.encode(v)[0] for v in vocab]
 
-    graph, (text, token, contains, generated_token, is_before_rel, first_token, second_token) = build_graph(label_map, tokenizer, vocab)
+    graph, bundle = build_generation_bundle(tokenizer, vocab)
+    text = bundle.text
+    token = bundle.token
+    contains = bundle.contains
+    generated_token = bundle.generated_token
+    is_before_rel = bundle.is_before_rel
+    first_token = bundle.first_token
+    second_token = bundle.second_token
+    token_vocabulary = bundle.vocabulary
+    constrained_dfa = (
+        constraints_to_dfa_from_graph(graph, bundle)
+        if constrained_decoding
+        else None
+    )
 
     text["instruction_tokens"] = ReaderSensor(keyword="instruction_tokens")
     text["target_tokens"] = ReaderSensor(keyword="target_tokens")
@@ -81,7 +96,9 @@ def build_program(
         vocab=vocab,
         eos_idx=tokenizer.eos_token_id,
         pad_size=pad_size,
-        mode=model_mode
+        mode=model_mode,
+        token_vocabulary=token_vocabulary,
+        constrained_dfa=constrained_dfa,
     )
 
     token[generated_token] = ModuleLearner(
@@ -149,11 +166,7 @@ def viz_inference(program, sample_data, ILP=False):
 
     constr_names = [
         'no non-EOS tokens can follow an EOS token',
-        'at most 16 tokens are generated',
-        'at most 32 tokens are generated',
-        'at least one of the " The" token is generated',
-        'at least one of the " slide" token is generated',
-        'if there is a token " The", then there are at most 16 tokens generated total'
+        'at most 4 non-EOS tokens are generated',
     ]
 
     # output constraint violations
@@ -174,6 +187,7 @@ if __name__ == "__main__":
     parser.add_argument('--vocab_file', type=str, default='vocab_val.pkl', help="Path to the vocabulary file, generated from build_vocab.py")
     parser.add_argument('--pad_size', type=int, default=32, help="Maximum length of generation")
     parser.add_argument('--model_mode', type=str, default='generate', choices=['tf', 'generate'], help="tf: Teacher-forcing during the forward pass, generate: Greedy decoding during the forward pass")
+    parser.add_argument('--constrained_decoding', default=False, action='store_true', help="Mask generation logits with the DFA compiled from the active constraints")
     parser.add_argument('--ILP', default=False, action='store_true', help="Add this flag to enable ILP inference")
     parser.add_argument('--max_vocab_size', type=int, default=None, required=False, help="Maximum size of the vocabulary")
 
@@ -208,7 +222,8 @@ if __name__ == "__main__":
         vocab,
         pad_size=args.pad_size,
         model_mode=args.model_mode,
-        ilp=args.ILP
+        ilp=args.ILP,
+        constrained_decoding=args.constrained_decoding,
     )
 
     # train

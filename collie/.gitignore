@@ -3,3 +3,4 @@
 *.ipynb
 data/
 logs/
+.venv/
