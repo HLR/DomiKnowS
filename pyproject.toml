@@ -76,6 +76,12 @@ peft = [
   "timm>=1.0.0",
 ]
 
+generation-guided = [
+  "interegular>=0.3.3",
+  "lm-format-enforcer>=0.10.0",
+  "openai>=1.0.0",
+]
+
 [tool.uv]
 conflicts = [
     # Torch flavors are mutually exclusive
