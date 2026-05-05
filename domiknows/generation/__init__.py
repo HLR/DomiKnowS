@@ -37,6 +37,13 @@ from .automata import (
     step_product_state,
     union_dfa,
 )
+from .automata_heads import (
+    HMMGenerationHead,
+    SpectralWFAGenerationHead,
+    allowed_mass_loss,
+    hmm_sequence_nll,
+    wfa_sequence_energy_loss,
+)
 from .decoder import (
     ConstrainedGenerationResult,
     constrained_beam_search_decode,
@@ -69,6 +76,13 @@ from .generation_constraints import (
     default_generation_constraints,
 )
 from .graph_discovery import constraints_to_dfa_from_graph, discover_generation_constraints
+from .hmm_factor import (
+    HMMFactorGraphBundle,
+    HMMFactorGraphContext,
+    HMMFactorGraphEncoder,
+    HMMFactorGraphHead,
+    hmm_factor_sequence_nll,
+)
 from .latent_constraints import (
     chain_exists_loss,
     implication_loss,
@@ -94,6 +108,11 @@ __all__ = [
     "GenerationConstraint",
     "GenerationEncoder",
     "GenerationResult",
+    "HMMGenerationHead",
+    "HMMFactorGraphBundle",
+    "HMMFactorGraphContext",
+    "HMMFactorGraphEncoder",
+    "HMMFactorGraphHead",
     "HuggingFaceGenerationAdapter",
     "LatentWindowSpec",
     "MaxNonEosConstraint",
@@ -103,6 +122,7 @@ __all__ = [
     "RequiredTokenConstraint",
     "SpectralBasis",
     "SpectralLearningResult",
+    "SpectralWFAGenerationHead",
     "TokenVocabulary",
     "WeightedFiniteAutomaton",
     "apply_all_constraints",
@@ -117,6 +137,7 @@ __all__ = [
     "apply_max_non_eos_constraint",
     "apply_required_token_constraint",
     "apply_required_token_constraints",
+    "allowed_mass_loss",
     "allowed_product_symbols",
     "build_spectral_basis",
     "chain_exists_loss",
@@ -132,6 +153,8 @@ __all__ = [
     "discover_generation_enforcement",
     "forbidden_token",
     "hankel_matrix",
+    "hmm_sequence_nll",
+    "hmm_factor_sequence_nll",
     "if_token_present_then_at_most_non_eos",
     "implication_loss",
     "max_non_eos",
@@ -153,6 +176,7 @@ __all__ = [
     "window_all_loss",
     "window_any_loss",
     "window_formula_loss",
+    "wfa_sequence_energy_loss",
     "start_product_state",
     "step_product_state",
     "union_dfa",

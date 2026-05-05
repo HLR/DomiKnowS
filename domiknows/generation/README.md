@@ -16,6 +16,7 @@ dependency-light; HuggingFace decoding uses `torch`; spectral learning uses
 | Tool | Purpose |
 | --- | --- |
 | `GenerationEncoder` | Builds the common `text -> token -> generated_token` DomiKnowS graph shape. |
+| `HMMFactorGraphEncoder` | Builds the opt-in `generated_token + latent_state + is_next_rel` HMM factor graph. |
 | `GenerationConstraint` classes | Declarative constraints such as EOS closure, max length, required tokens, forbidden tokens, ordered tokens, and conditional max length. |
 | `constraints_to_dfa(...)` | Compiles constraint objects into one product DFA. |
 | `discover_generation_constraints(...)` | Reads supported raw DomiKnowS graph constraints back into generation constraints. |
@@ -24,6 +25,8 @@ dependency-light; HuggingFace decoding uses `torch`; spectral learning uses
 | `OpenAIResponsesAdapter` | Calls the OpenAI Responses API, then encodes and verifies output post hoc. |
 | `latent_constraints.py` | Product t-norm soft losses over token/latent probability sequences. |
 | `automata` | DFA, HMM/PFA checker, Hankel projection, WFA, and spectral WFA learning utilities. |
+| `automata_heads.py` | Torch HMM/WFA compact-label heads and auxiliary losses for `PrimalDualProgram` task loops. |
+| `hmm_factor.py` | Explicit HMM factor-graph encoder, shared HMM head, and NLL helper. |
 
 ## Basic DFA Constraints
 
@@ -500,6 +503,94 @@ The learned WFA is signed. Negative transition weights or negative sequence
 scores are preserved and reported in `result.diagnostics`; they are not
 clamped into probabilities.
 
+### HMM/WFA Heads in PrimalDualProgram
+
+`HMMGenerationHead` and `SpectralWFAGenerationHead` make the automata tools
+usable as DomiKnowS learning modules. They output log-probabilities shaped
+`[seq_len, label_count]` for the `generated_token` enum concept, so they can be
+attached with `ModuleLearner` the same way as the compact HuggingFace head.
+
+```python
+from domiknows.generation import (
+    HMMGenerationHead,
+    hmm_sequence_nll,
+    constrained_label_greedy_decode,
+)
+from domiknows.sensor.pytorch.learners import ModuleLearner
+
+head = HMMGenerationHead(
+    label_count=bundle.vocabulary.label_count,
+    state_count=3,
+    label_to_token_id=label_token_id_map(bundle.vocabulary),
+    trainable=True,
+)
+
+token[bundle.generated_token] = ModuleLearner(
+    token[bundle.contains],
+    text["instruction_tokens"],
+    "target_labels",
+    module=head,
+)
+
+model_loss, _, *output = program.model(sample)
+constraint_loss, *_ = program.cmodel(output[1])
+aux_loss = hmm_sequence_nll(head, target_labels)
+total = model_loss + constraint_loss + aux_loss
+
+result = constrained_label_greedy_decode(
+    head,
+    prompt_ids,
+    bundle.vocabulary,
+    dfa,
+    max_new_tokens=4,
+)
+```
+
+For `SpectralWFAGenerationHead`, signed WFA next-symbol scores are treated as
+logits. Use `wfa_sequence_energy_loss(...)` as an auxiliary supervised signal.
+The optional `allowed_mass_loss(...)` can softly reward probability mass on
+DFA-allowed labels, but it is not a replacement for hard DFA decoding.
+
+### Explicit HMM Factor Graph
+
+`HMMFactorGraphEncoder` makes the HMM structure visible in the DomiKnowS graph:
+
+```text
+text -> token
+token -> generated_token
+token -> latent_state
+is_next_rel(token_t, token_t+1)
+```
+
+The shared `HMMFactorGraphHead` exposes two `ModuleLearner` projections: one
+for generated-token marginals and one for latent-state marginals. DomiKnowS can
+then apply logical constraints over both concepts, while Torch still owns the
+forward/backward HMM likelihood.
+
+```python
+from domiknows.generation import HMMFactorGraphEncoder, HMMFactorGraphHead
+
+encoder = HMMFactorGraphEncoder(
+    vocab=["<eos>", " cat", " mat"],
+    eos_token="<eos>",
+    state_names=["PER", "O", "LOC"],
+)
+graph, bundle = encoder.build_graph()
+
+head = HMMFactorGraphHead(
+    label_count=bundle.vocabulary.label_count,
+    state_names=bundle.state_names,
+    trainable=True,
+)
+
+token[bundle.generated_token] = ModuleLearner(..., module=head.generated_module())
+token[bundle.latent_state] = ModuleLearner(..., module=head.latent_module())
+```
+
+Use `hmm_factor_sequence_nll(head, labels)` as the probabilistic HMM loss and
+`program.cmodel(...)` for DomiKnowS symbolic constraints such as
+`PER(t) => not LOC(t+1)`.
+
 ## Collie Example
 
 `Tasks/collie` demonstrates the full bridge:
@@ -531,6 +622,12 @@ uv run --project Tasks/collie python Tasks/collie/latent_example.py
 - Learned compact-label heads can be trained through the DomiKnowS-style
   learning path and decoded with DFA-constrained greedy decoding. Learned-head
   beam search and sampling are not implemented yet.
+- HMM/WFA generation heads are compact-label automata modules for PMD
+  experiments. They do not replace large prompt-conditioned language models and
+  currently provide greedy DFA-constrained label decoding only.
+- The explicit HMM factor graph is opt-in and HMM-only. It exposes latent-state
+  marginals for DomiKnowS constraints, but it does not encode forward/backward
+  dynamic-programming factors as logical constraints.
 - OpenAI integration is generate-then-verify only; hosted APIs do not expose a
   per-token decoder hook for DFA masking.
 - Token constraints operate over tokenizer-token labels, not arbitrary
@@ -538,8 +635,8 @@ uv run --project Tasks/collie python Tasks/collie/latent_example.py
 - Latent constraints are explicit marked specs and soft losses. The module does
   not infer latent loss formulas from arbitrary DomiKnowS logic, and latent loss
   alone does not guarantee hard validity.
-- HMM/PFA, Hankel, and spectral WFA tools are finite toy/research utilities, not
-  production language model trainers.
+- HMM/PFA, Hankel, spectral WFA learning, and automata-head training are
+  finite toy/research utilities, not production language model trainers.
 
 ## TODOs and Enhancements
 
@@ -549,6 +646,9 @@ uv run --project Tasks/collie python Tasks/collie/latent_example.py
 - Add broader DomiKnowS-to-DFA compilation beyond the current generation-shaped
   boolean subset.
 - Add constrained beam search and sampling for learned compact-label heads.
+- Add prompt-conditioned automata heads, rather than the current compact toy
+  heads that mainly learn target label dynamics.
+- Add spectral-WFA factor graph structure analogous to `HMMFactorGraphEncoder`.
 - Add batched HuggingFace constrained decoding, including batched KV-cache
   reordering for beam search.
 - Add adapter-level verification helpers so OpenAI outputs can return

@@ -14,6 +14,188 @@ If you are new to any of these concepts, read the
 
 ---
 
+## Layers of a Generative Language Model — and Where These Tools Operate
+
+Modern autoregressive language models (GPT-style, LLaMA, etc.) process text
+through several distinct internal layers.  Understanding which layer each tool
+in this package touches is essential for knowing *when* and *how* to apply it.
+
+### The Five Layers (Numbered by Execution Order)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Layer 0 — PROMPT           (fixed input, before generation starts)  │
+│  The fixed input context; not generated, not modified.               │
+│  ← DFA is initialised at start_state before the prompt is consumed   │
+│  ← TokenVocabulary encodes prompt tokens into the label space        │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 1 — HIDDEN STATE     (transformer forward pass)               │
+│  Internal representation produced by the transformer blocks.         │
+│  ← WFA scoring can approximate distributions at this level           │
+│  ← Soft / latent constraints (latent_constraints.py) operate here    │
+│  ← Hankel matrix is built over hidden-state-derived probabilities    │
+│  ← Spectral learning recovers WFA parameters via SVD of Hankel       │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 2 — LOGITS           (LM head projection + DFA mask)          │
+│  Raw pre-softmax scores over the full tokenizer vocabulary.          │
+│  ← DFA masking operates here (mask_logits_for_dfa)                   │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 3 — GENERATED TOKEN  (argmax/sample → the response token)     │
+│  New tokens produced by the model, one per decoding step.            │
+│  ← DFA state is advanced one step per generated (response) token ID  │
+│  ← HMM learns a probabilistic model from observed token sequences    │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 4 — OUTPUT TEXT      (tokenizer decode)                       │
+│  Plain decoded string.  Post-hoc verification only.                  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+#### Layer 0 — Prompt
+
+The prompt is the fixed input text (or token-ID sequence) supplied by the
+caller before generation begins.  It is never modified by the constrained
+decoder — it is only read to initialise the model's context window.
+
+**What operates here:**
+
+- The DFA is reset to its **`start_state`** before any prompt token is
+  consumed.  Prompt tokens themselves are *not* stepped through the DFA; the
+  DFA starts constraining only from the first *generated* token onward.
+- `TokenVocabulary` can encode prompt text into label IDs for external
+  inspection, but the constrained decoder treats the prompt as an opaque
+  prefix and does not validate it against the constraint automaton.
+- The prompt length directly affects `remaining_steps` budgeting: every
+  decoding call receives `max_new_tokens` as a separate argument that counts
+  *generated* tokens only, not prompt tokens.
+
+---
+
+#### Layer 1 — Hidden States / Latent Representations
+
+Between the embedding layer and the final linear projection sit the transformer
+blocks.  Their output at each position is the *hidden state* — a
+high-dimensional float vector (`d_model` floats, typically 768–8192 depending
+on model size).  The hidden state encodes semantic context but is not yet a
+probability distribution.
+
+**What operates here:**
+
+- **WFA scoring** — a `WeightedFiniteAutomaton` learned via spectral methods
+  can approximate the marginal probability of a sequence suffix given a prefix
+  by operating over a compact state vector that mirrors the structure of the
+  hidden-state manifold.
+- **Soft / latent constraints** (`latent_constraints.py`) — instead of hard
+  masking, these compute a differentiable loss directly over token-probability
+  sequences derived from the hidden states, allowing gradient-based training to
+  *push* representations towards constraint satisfaction without blocking any
+  token outright.
+
+#### Layer 2 — Logits
+
+The transformer's final linear layer (the *language-model head*) projects each
+hidden state to a vector of `vocab_size` raw scores called **logits**.  Applying
+softmax converts logits to a probability distribution over the next token.
+
+**What operates here:**
+
+- **`mask_logits_for_dfa`** — sets logits of DFA-forbidden tokens to a large
+  negative value (default `-1e9`) *before* softmax, so those tokens receive
+  effectively zero probability.  This is the hard-constraint enforcement
+  mechanism used by every constrained decoder in `decoder.py`.
+- **Temperature / top-k / top-p filtering** — applied *after* the DFA mask and
+  *before* sampling in `constrained_sample_decode`.
+
+#### Layer 3 — Generated Token IDs (Response Tokens)
+
+Think of Layer 0 and Layer 3 as the two sides of a conversation:
+
+- **Layer 0 — Prompt** = what *you* send to the model (the request).
+- **Layer 3 — Generated token IDs** = what the *model sends back* (the response), emitted one integer at a time.
+
+In a chat example:
+
+```
+Layer 0  →  "Translate to French: Hello"   (prompt / request,  supplied by caller)
+Layer 3  ←  "Bon" | "jour"                 (response tokens,  produced by model)
+```
+
+Both layers are sequences of the same kind of integer (a tokenizer vocabulary index),
+but only Layer 3 tokens are *decided* during decoding — and therefore only they are
+subject to DFA masking and `max_new_tokens` budget counting.
+
+The `TokenVocabulary` class (in `vocabulary.py`) maps these raw IDs to the
+compact *label* space that the DFA understands, collapsing the large tokenizer
+vocabulary (~50 k entries) into a small alphabet of semantically meaningful
+labels plus a catch-all `other` label.
+
+#### Layer 4 — Output Text
+
+The decoded string produced by converting token IDs back through the tokenizer.
+At this point token choices are irrevocable.
+
+**What operates here:**
+
+- **`OpenAIResponsesAdapter`** — hosted APIs only return text; DFA constraints
+  can only be checked *post-hoc* by encoding the output back to label IDs and
+  running `dfa.accepts(labels)`.
+- **`encode_output`** — converts the string back to label IDs for verification.
+
+---
+
+### How Layers 1, 2, and 3 Relate Inside One Decoding Step
+
+The layers are numbered in **execution order** — L1 runs first and feeds L2,
+L2 feeds L3, and L3 is the result of the step:
+
+```
+  Within one decoding step
+  ─────────────────────────────────────────────────────────────────────
+  L1  Transformer blocks run a forward pass over the full context
+      → produce the hidden state  (d_model float vector)
+         │
+         ▼
+  L2  LM head projects hidden state → logits  (vocab_size float vector)
+      DFA mask  zeroes out forbidden tokens   (mask_logits_for_dfa)
+      Temperature / top-k / top-p applied
+         │
+         ▼
+  L3  argmax or sample picks ONE token ID  ← this is the response token
+         │
+         ▼
+      Token appended to context; loop repeats for next token
+```
+
+So L1 and L2 do **not** act on an already-generated token — they are the
+machinery that **decides which token to generate next**:
+
+| Layer | Role within one step |
+|---|---|
+| L1 — Hidden state | The model "thinks" — encodes all context into a float vector |
+| L2 — Logits | Converts that thought into a score for every possible next word; DFA masks illegal ones |
+| L3 — Token ID | The winning token is *selected* (argmax / sample) from the masked logits |
+
+Layer 3 is therefore the **output** of layers 1 and 2 for that step, not their
+input.
+
+---
+
+### Tool-to-Layer Mapping
+
+| Tool / Module | Layer | Hard or Soft? | When applied |
+|---|---|---|---|
+| `TokenVocabulary.labels_for_token_ids` | Prompt (L0) | Reference only | Encoding prompt for inspection |
+| `DFA` initialised to `start_state` | Prompt (L0) | Hard | Before first generated token |
+| `WeightedFiniteAutomaton.score` | Hidden / latent (L1) | Soft | Scoring during beam search |
+| `latent_constraints.py` losses | Hidden / latent (L1) | Soft | Training-time loss |
+| `spectral_learn_*` | Hidden / latent (L1) | Soft | One-shot learning pass |
+| `mask_logits_for_dfa` | Logits (L2) | Hard | Before argmax / sampling |
+| `mask_label_logits_for_dfa` | Logits (L2) | Hard | Compact-label head variant |
+| `DFA.step` / `DFA.allowed_tokens` | Generated Token IDs (L3) | Hard | During generation, per step |
+| `HMM` / `baum_welch_train` | Generated Token IDs (L3) | Soft (probabilistic) | Learning from sequences |
+| `OpenAIResponsesAdapter.encode_output` | Output text (L4) | Post-hoc check | After generation completes |
+
+---
+
 ## Background: Key Concepts
 
 ### What is a Deterministic Finite Automaton (DFA)?
