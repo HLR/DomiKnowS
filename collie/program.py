@@ -215,6 +215,12 @@ if __name__ == "__main__":
     print(color('Vocabulary size:', fg='green'), len(label_map))
 
     # build program
+    print(color('Learning path:', fg='green'), 'PrimalDualProgram/cmodel uses DomiKnowS graph constraint loss')
+    print(
+        color('Enforcement path:', fg='green'),
+        'DFA logits masking is ' + ('enabled' if args.constrained_decoding else 'disabled') +
+        ' via --constrained_decoding'
+    )
     program = build_program(
         label_map,
         model,
@@ -251,7 +257,17 @@ if __name__ == "__main__":
         closs, *_ = program.cmodel(output[1])
 
         loss = mloss * 0 + (closs if torch.is_tensor(closs) else 0)
-        print("Loss", loss.item())
+        model_loss_value = mloss.detach().item() if torch.is_tensor(mloss) else mloss
+        constraint_loss_value = closs.detach().item() if torch.is_tensor(closs) else closs
+        print(
+            "Loss",
+            loss.item(),
+            "(optimized = constraint_loss only; model_loss disabled)",
+            "model_loss=",
+            model_loss_value,
+            "constraint_loss=",
+            constraint_loss_value,
+        )
         if loss.item() < 0:
             print("Negative loss", loss.item())
             break

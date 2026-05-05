@@ -24,6 +24,28 @@ decoding. Latent constraint encoding is the next soft internal-bias concept: it
 would reshape hidden-state or transition probabilities before decoding, while
 the DFA layer still provides exact constraint enforcement when needed.
 
+## Learning vs Enforcement Paths
+
+The same graph constraints are used in two different ways:
+
+```text
+graph logical constraints
+    |-> PrimalDualProgram / cmodel: soft DomiKnowS constraint loss
+    |-> DFA compiler: hard token masking when --constrained_decoding is enabled
+```
+
+The DFA is not a differentiable loss in Collie. During PMD training,
+`program.cmodel(...)` evaluates the DomiKnowS logical constraints over the
+populated token DataNodes. During constrained generation, the supported graph
+constraints are compiled to a DFA and used to mask invalid next-token logits.
+
+Collie's current `generate` mode returns detached generated logits, so the
+constraint loss can be measured but does not cleanly backpropagate through the
+autoregressive generation decisions. Use this task as a bridge/diagnostic
+example; see `Tasks/hf_generation/learn_demo.py` for a smaller learning path
+where a compact generation head is trained with supervised plus PMD constraint
+loss and then decoded with DFA enforcement.
+
 ## Latent Constraint Example
 
 `graph.py` also includes one simple latent-only generation constraint:

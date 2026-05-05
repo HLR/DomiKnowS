@@ -78,6 +78,7 @@ class TinyModel(torch.nn.Module):
                             remaining_steps=remaining_steps,
                         )
                     }
+                    # mask out disallowed tokens by setting their logits to a large negative value
                     target_logits = mask_logits_for_dfa(target_logits, allowed, self.token_vocabulary)
 
                 target_logits_subset = target_logits[self.lmap.label_list]
