@@ -1,4 +1,13 @@
-"""Projection helpers for graph-constrained HMM distributions."""
+"""Constraint and projection utilities for graph-constrained HMM models.
+
+This module centralizes small, reusable helpers that validate masks,
+combine static constraint sources, and project probability distributions
+or matrices onto legal support.
+
+It is intentionally framework-light so higher-level HMM and spectral
+components can rely on consistent numeric behavior and clear constraint
+reporting semantics.
+"""
 
 from __future__ import annotations
 
@@ -16,12 +25,15 @@ class ConstraintApplicationReport:
     unsupported: list[str] = field(default_factory=list)
 
     def add_applied(self, message: str) -> None:
+        """Record one successfully compiled constraint fragment."""
         self.applied.append(message)
 
     def add_unsupported(self, message: str) -> None:
+        """Record one graph/constraint fragment that could not be compiled."""
         self.unsupported.append(message)
 
     def extend(self, other: "ConstraintApplicationReport") -> None:
+        """Merge another report into this instance."""
         self.applied.extend(other.applied)
         self.unsupported.extend(other.unsupported)
 
@@ -117,18 +129,20 @@ def validate_mask(
 
 
 def _fallback_distribution(mask: torch.Tensor, smoothing: float) -> torch.Tensor:
+    """Build a deterministic recovery distribution for degenerate mask rows."""
     allowed = mask > 0
     if allowed.any():
+        # Keep support strictly on allowed entries and add a tiny floor.
         return allowed.to(dtype=mask.dtype) + smoothing * allowed.to(dtype=mask.dtype)
-    return torch.ones_like(mask)
+    # Preserve strict semantics: a fully forbidden row stays fully forbidden.
+    return torch.zeros_like(mask)
 
 
 def project_distribution(probs, mask, smoothing: float = 1e-6) -> torch.Tensor:
     """Project a distribution through a non-negative mask and normalize.
 
     Forbidden entries remain zero whenever the mask has at least one allowed
-    entry. If a mask row is entirely zero, the function falls back to a uniform
-    row so callers can recover from malformed graph structure deterministically.
+    entry. If a mask row is entirely zero, the returned row remains all zeros.
     """
 
     if smoothing < 0:
@@ -147,8 +161,13 @@ def project_distribution(probs, mask, smoothing: float = 1e-6) -> torch.Tensor:
     masked = probs_t * mask_t
     total = masked.sum()
     if total <= 0:
+        # Degenerate case: no allowed mass survives masking.
         masked = _fallback_distribution(mask_t, smoothing)
         total = masked.sum()
+    if total <= 0:
+        # All-zero masks remain all-zero to preserve strict forbidden support.
+        return masked
+    # Clamp the denominator for numerical stability in low-precision regimes.
     return masked / total.clamp_min(torch.finfo(masked.dtype).tiny)
 
 
@@ -161,6 +180,7 @@ def project_matrix_rows(matrix, mask, smoothing: float = 1e-6) -> torch.Tensor:
         raise ValueError("matrix and mask must be rank-2 tensors")
     if matrix_t.shape != mask_t.shape:
         raise ValueError(f"matrix and mask must have the same shape, got {matrix_t.shape} and {mask_t.shape}")
+    # Row-wise projection keeps transition/emission semantics intact.
     rows = [project_distribution(row, row_mask, smoothing=smoothing) for row, row_mask in zip(matrix_t, mask_t)]
     return torch.stack(rows, dim=0)
 
@@ -182,6 +202,8 @@ def normalize_matrix_rows(matrix) -> torch.Tensor:
     if (matrix_t < 0).any():
         raise ValueError("matrix must be non-negative")
     totals = matrix_t.sum(dim=1, keepdim=True)
+    # Preserve all-zero rows exactly (instead of forcing a fallback), which is
+    # important when a caller intentionally represents blocked transitions.
     return torch.where(totals > 0, matrix_t / totals.clamp_min(torch.finfo(matrix_t.dtype).tiny), matrix_t)
 
 
@@ -199,5 +221,6 @@ def combine_masks(
     for index, mask in enumerate(masks):
         if mask is None:
             continue
+        # Validation enforces shared shape, finite values, and non-negativity.
         combined = combined * validate_mask(mask, shape, name=f"{name}[{index}]", device=device, dtype=dtype)
     return combined

@@ -155,11 +155,3 @@ def test_reconstruct_hankel_supports_dynamic_traversal():
 
     assert static_hankel.shape == dynamic_hankel.shape
     assert not torch.allclose(static_hankel, dynamic_hankel)
-        return base
-
-    automaton = _fit_dynamic_spectral(operator_transform=operator_transform)
-    static_hankel = automaton.reconstruct_hankel(dynamic=False)
-    dynamic_hankel = automaton.reconstruct_hankel(dynamic=True)
-
-    assert static_hankel.shape == dynamic_hankel.shape
-    assert not torch.allclose(static_hankel, dynamic_hankel)

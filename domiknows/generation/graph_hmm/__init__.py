@@ -25,6 +25,7 @@ from .constraints import (
 from .dynamic import (
     DynamicConstraintContext,
     FactorizedStateSpace,
+    FiniteStateDynamicConstraint,
     apply_transition_energy,
     transition_energy_matrix,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "DynamicConstraintContext",
     "EmissionMaskSpec",
     "FactorizedStateSpace",
+    "FiniteStateDynamicConstraint",
     "ForbiddenEmissionsSpec",
     "ForbiddenTransitionsSpec",
     "GraphSpectralAutomaton",

@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Literal, Mapping, Sequence
 
 import torch
 
-from .constraints import combine_masks, normalize_matrix_rows, project_distribution, project_matrix, project_matrix_rows, validate_mask
-from .dynamic import DynamicConstraintContext, FactorizedStateSpace, apply_transition_energy, transition_energy_matrix
+from .constraints import combine_masks, project_distribution, project_matrix, project_matrix_rows, validate_mask
+from .dynamic import DynamicConstraintContext, FactorizedStateSpace, FiniteStateDynamicConstraint, apply_transition_energy, transition_energy_matrix
 from .graph_adapter import DomiKnowSGraphAdapter
 from .spectral import masked_empirical_initialization
 
 
 @dataclass
 class HMMFitResult:
+    """Summary of EM optimization progress."""
     log_likelihoods: list[float]
     iterations: int
     converged: bool
@@ -22,6 +24,7 @@ class HMMFitResult:
 
 @dataclass
 class ViterbiResult:
+    """Decoded latent path and associated log score."""
     state_ids: tuple[int, ...]
     states: tuple[str, ...]
     score: float
@@ -118,6 +121,7 @@ class DomiKnowSAwareHMM:
         tol: float = 1e-6,
         init: str | dict[str, Any] | None = None,
     ) -> "DomiKnowSAwareHMM":
+        """Fit parameters with constrained Baum-Welch under static/dynamic masks."""
         encoded = self._prepare_training_sequences(sequences)
         self._build_masks(symbol_count=len(self.id_to_symbol))
         self._validate_training_observations(encoded)
@@ -132,6 +136,8 @@ class DomiKnowSAwareHMM:
             total_log_likelihood = 0.0
 
             for sequence in encoded:
+                # Forward-backward already applies dynamic transition constraints
+                # step-by-step, so expected counts are constraint-consistent.
                 factors = self._forward_backward_encoded(sequence)
                 if factors is None:
                     raise ValueError("training sequence has zero probability under the current graph masks")
@@ -144,6 +150,7 @@ class DomiKnowSAwareHMM:
                 total_log_likelihood += float(log_likelihood)
 
             self.initial_ = project_distribution(pi_counts + self.smoothing, torch.ones_like(pi_counts), smoothing=self.smoothing)
+            # Re-project M-step estimates so forbidden support remains exactly zero.
             self.transition_ = project_matrix_rows(
                 transition_counts + self.smoothing * self.transition_mask_,
                 self.transition_mask_,
@@ -176,6 +183,7 @@ class DomiKnowSAwareHMM:
         return scores[0] if single else scores
 
     def viterbi(self, sequence: Sequence[Any]) -> ViterbiResult:
+        """Decode the most likely hidden-state sequence under constraints."""
         self._require_fitted()
         encoded = self._encode_sequence(sequence, allow_unknown=False)
         if not encoded:
@@ -194,6 +202,7 @@ class DomiKnowSAwareHMM:
         prefix = [self.id_to_symbol[encoded[0]]]
         raw_sequence = tuple(self.id_to_symbol[idx] for idx in encoded)
         for step, symbol_id in enumerate(encoded[1:]):
+            # Convert log-scores into a belief proxy for dynamic hook context.
             belief = _belief_from_log_scores(delta)
             transition = self._transition_for_context(
                 step=step,
@@ -223,6 +232,7 @@ class DomiKnowSAwareHMM:
         return ViterbiResult(tuple(states), names, float(best_score.item()))
 
     def sample(self, length: int, *, generator: torch.Generator | None = None) -> list[Any]:
+        """Sample an observable sequence while enforcing all active constraints."""
         self._require_fitted()
         if length < 1:
             raise ValueError("length must be at least 1")
@@ -242,40 +252,151 @@ class DomiKnowSAwareHMM:
                     sequence=None,
                 )
                 if transition[state].sum() <= 0:
+                    # Dynamic constraints can invalidate all outgoing edges from a row.
                     raise RuntimeError(f"no dynamically allowed outgoing transition from state {state} at step {step}")
                 state = int(torch.multinomial(transition[state], 1, generator=generator).item())
         return sequence
 
-    def to_constraint_dfa(self):
-        """Export an approximate hard DFA over observable symbols.
+    def to_constraint_dfa(
+        self,
+        *,
+        finite_state_dynamic: FiniteStateDynamicConstraint | None = None,
+        on_unsupported_dynamic: Literal["error", "static"] = "error",
+        support_threshold: float = 0.0,
+    ):
+        """Export a hard-support DFA over observable symbols.
 
-        DFA states are hidden states plus a dead sink. A transition emits a
-        symbol and moves to the most likely next hidden state that can emit it.
+        The exported language contains exactly the observable strings that have
+        at least one positive-probability hidden-state path under the current
+        projected initial, transition, and emission supports. DFA states are
+        reachable sets of HMM states, optionally paired with a caller-supplied
+        finite dynamic-constraint state.
         """
 
         self._require_fitted()
+        if on_unsupported_dynamic not in {"error", "static"}:
+            raise ValueError("on_unsupported_dynamic must be 'error' or 'static'")
+        if support_threshold < 0:
+            raise ValueError("support_threshold must be non-negative")
+        if finite_state_dynamic is None and on_unsupported_dynamic == "error":
+            if self.dynamic_transition is not None:
+                raise ValueError(
+                    "dynamic_transition cannot be exported exactly as a DFA without "
+                    "finite_state_dynamic; pass finite_state_dynamic=... or "
+                    "on_unsupported_dynamic='static' to intentionally ignore dynamic callbacks"
+                )
+            if self.transition_energy is not None:
+                raise ValueError(
+                    "transition_energy is a soft scoring bias, not a hard support constraint; "
+                    "pass finite_state_dynamic=... after converting it to a hard finite-state "
+                    "mask, or on_unsupported_dynamic='static' to intentionally ignore it"
+                )
+
         from domiknows.generation.automata import DFA
 
-        states = set(range(self.n_hidden_states)) | {"start", "dead"}
-        alphabet = set(self.id_to_symbol)
-        transitions: dict[tuple[Any, Any], Any] = {}
         transition, emission = self._projected_dynamics()
+        transition_support = transition > support_threshold
+        emission_support = (emission > support_threshold) & (self.emission_mask_ > 0)
+        initial_support = self.initial_ > support_threshold
 
-        for symbol_id, symbol in enumerate(self.id_to_symbol):
-            start_scores = self.initial_ * emission[:, symbol_id] * self.emission_mask_[:, symbol_id]
-            transitions[("start", symbol)] = _argmax_state_or_dead(start_scores)
-            transitions[("dead", symbol)] = "dead"
-            for state in range(self.n_hidden_states):
-                scores = transition[state] * emission[:, symbol_id] * self.emission_mask_[:, symbol_id]
-                transitions[(state, symbol)] = _argmax_state_or_dead(scores)
+        alphabet = tuple(self.id_to_symbol)
+        start = "start"
+        dead = frozenset()
+        states: set[Any] = {start, dead}
+        transitions: dict[tuple[Any, Any], Any] = {}
+        metadata = {
+            "state_names": self.state_names,
+            "symbols": self.id_to_symbol,
+            "state_space": self.state_space,
+            "support_threshold": support_threshold,
+            **self.dynamic_metadata,
+        }
+
+        def ensure_hashable(value: Any, *, name: str) -> Any:
+            try:
+                hash(value)
+            except TypeError as exc:
+                raise ValueError(f"{name} must be hashable for DFA export, got {value!r}") from exc
+            return value
+
+        if finite_state_dynamic is not None:
+            ensure_hashable(finite_state_dynamic.start_state, name="finite_state_dynamic.start_state")
+
+        def dynamic_mask(dynamic_state: Any, reachable_states: frozenset[int]) -> torch.Tensor:
+            if finite_state_dynamic is None:
+                return transition_support
+            mask = validate_mask(
+                finite_state_dynamic.transition_mask(dynamic_state, reachable_states, metadata),
+                (self.n_hidden_states, self.n_hidden_states),
+                name="finite_state_dynamic.transition_mask",
+                device=self.device,
+                dtype=self.dtype,
+            )
+            return transition_support & (mask > support_threshold)
+
+        def advance_dynamic(dynamic_state: Any, symbol: Any, reachable_states: frozenset[int]) -> Any:
+            if finite_state_dynamic is None:
+                return None
+            next_dynamic = finite_state_dynamic.advance(dynamic_state, symbol, reachable_states, metadata)
+            return ensure_hashable(next_dynamic, name="finite_state_dynamic.advance(...)")
+
+        def next_reachable(current: Any, symbol_id: int) -> frozenset[int]:
+            if current == start:
+                reachable = initial_support & emission_support[:, symbol_id]
+            else:
+                current_reachable = current[0] if finite_state_dynamic is not None else current
+                current_dynamic = current[1] if finite_state_dynamic is not None else None
+                current_mask = torch.zeros(self.n_hidden_states, dtype=torch.bool, device=self.device)
+                for state in current_reachable:
+                    current_mask[int(state)] = True
+                support = dynamic_mask(current_dynamic, current_reachable)
+                reachable = (current_mask.to(dtype=self.dtype) @ support.to(dtype=self.dtype)) > 0
+                reachable = reachable & emission_support[:, symbol_id]
+            ids = torch.nonzero(reachable, as_tuple=False).flatten().tolist()
+            return frozenset(int(state) for state in ids)
+
+        def next_dfa_state(current: Any, symbol_id: int, symbol: Any) -> Any:
+            reachable = next_reachable(current, symbol_id)
+            if not reachable:
+                return dead
+            if finite_state_dynamic is None:
+                return reachable
+            if current == start:
+                current_dynamic = finite_state_dynamic.start_state
+            else:
+                current_dynamic = current[1]
+            return (reachable, advance_dynamic(current_dynamic, symbol, reachable))
+
+        def is_accepting_dfa_state(state: Any) -> bool:
+            if state == start or state == dead:
+                return False
+            if finite_state_dynamic is None:
+                return True
+            return finite_state_dynamic.accepts(state[1])
+
+        queue = deque([start])
+        accepting: set[Any] = set()
+        while queue:
+            state = queue.popleft()
+            for symbol_id, symbol in enumerate(alphabet):
+                next_state = next_dfa_state(state, symbol_id, symbol)
+                transitions[(state, symbol)] = next_state
+                if next_state not in states:
+                    states.add(next_state)
+                    if is_accepting_dfa_state(next_state):
+                        accepting.add(next_state)
+                    queue.append(next_state)
+
+        for symbol in alphabet:
+            transitions[(dead, symbol)] = dead
 
         return DFA(
             states=frozenset(states),
             alphabet=frozenset(alphabet),
             transitions=transitions,
-            start_state="start",
-            accepting_states=frozenset(range(self.n_hidden_states)) | {"start"},
-            dead_states=frozenset({"dead"}),
+            start_state=start,
+            accepting_states=frozenset(accepting),
+            dead_states=frozenset({dead}),
         )
 
     def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
@@ -290,6 +411,7 @@ class DomiKnowSAwareHMM:
         )
 
     def _prepare_training_sequences(self, sequences: Sequence[Sequence[Any]]) -> list[list[int]]:
+        """Build a stable symbol vocabulary and encode all training sequences."""
         if not sequences:
             raise ValueError("training data must not be empty")
         symbols = list(self.symbols) if self.symbols is not None else []
@@ -309,6 +431,7 @@ class DomiKnowSAwareHMM:
         return [self._encode_sequence(sequence, allow_unknown=False) for sequence in sequences]
 
     def _encode_sequence(self, sequence: Sequence[Any], *, allow_unknown: bool) -> list[int]:
+        """Map symbols to integer ids; optionally skip unknown symbols."""
         encoded: list[int] = []
         for symbol in sequence:
             if symbol not in self.symbol_to_id:
@@ -321,6 +444,7 @@ class DomiKnowSAwareHMM:
         return encoded
 
     def _build_masks(self, *, symbol_count: int) -> None:
+        """Compile/combine masks and apply optional soft constraint weighting."""
         transition_shape = (self.n_hidden_states, self.n_hidden_states)
         emission_shape = (self.n_hidden_states, symbol_count)
         graph_transition = self.adapter.allowed_transition_mask()
@@ -339,12 +463,19 @@ class DomiKnowSAwareHMM:
             device=self.device,
             dtype=self.dtype,
         )
+        if self.constraint_weight != 1.0:
+            self.transition_mask_ = _apply_constraint_weight(self.transition_mask_, self.constraint_weight)
+            self.emission_mask_ = _apply_constraint_weight(self.emission_mask_, self.constraint_weight)
+            self.constraint_report.add_applied(
+                f"applied soft mask weighting with constraint_weight={self.constraint_weight}"
+            )
         if (self.transition_mask_.sum(dim=1) == 0).any():
-            self.constraint_report.add_unsupported("one or more transition mask rows are all zero; projection will use fallback rows")
+            self.constraint_report.add_unsupported("one or more transition mask rows are all zero; projected rows will remain zero")
         if (self.emission_mask_.sum(dim=1) == 0).any():
-            self.constraint_report.add_unsupported("one or more emission mask rows are all zero; projection will use fallback rows")
+            self.constraint_report.add_unsupported("one or more emission mask rows are all zero; projected rows will remain zero")
 
     def _validate_training_observations(self, encoded: list[list[int]]) -> None:
+        """Fail early when observed symbols are globally forbidden by emission masks."""
         for symbol_id, symbol in enumerate(self.id_to_symbol):
             if (self.emission_mask_[:, symbol_id] > 0).any():
                 continue
@@ -353,6 +484,7 @@ class DomiKnowSAwareHMM:
                 raise ValueError(f"symbol {symbol!r} is forbidden for every hidden state by emission_mask")
 
     def _initialize_parameters(self, encoded: list[list[int]], *, init: str | dict[str, Any] | None) -> None:
+        """Initialize parameters from user values, spectral init, or seeded random init."""
         if isinstance(init, dict):
             initial = torch.as_tensor(init["initial"], dtype=self.dtype, device=self.device)
             transition = validate_mask(init["transition"], (self.n_hidden_states, self.n_hidden_states), name="initial transition", device=self.device, dtype=self.dtype)
@@ -387,6 +519,11 @@ class DomiKnowSAwareHMM:
         self.emission_ = project_matrix_rows(emission, self.emission_mask_, smoothing=self.smoothing)
 
     def _forward_backward_encoded(self, sequence: list[int]):
+        """Run scaled forward-backward for one encoded sequence.
+
+        Returns normalized alpha/beta, posterior gamma/xi, and sequence log-likelihood.
+        Returns None when constraints make the sequence impossible.
+        """
         _, emission = self._projected_dynamics()
         length = len(sequence)
         alpha = torch.zeros((length, self.n_hidden_states), dtype=self.dtype, device=self.device)
@@ -397,6 +534,7 @@ class DomiKnowSAwareHMM:
         alpha[0] = self.initial_ * emission[:, sequence[0]] * self.emission_mask_[:, sequence[0]]
         scales[0] = alpha[0].sum()
         if scales[0] <= 0:
+            # No legal starting state can emit the first symbol.
             return None
         alpha[0] = alpha[0] / scales[0]
 
@@ -411,6 +549,7 @@ class DomiKnowSAwareHMM:
             alpha[t] = (alpha[t - 1] @ transition_t) * emission[:, sequence[t]] * self.emission_mask_[:, sequence[t]]
             scales[t] = alpha[t].sum()
             if scales[t] <= 0:
+                # Dynamic/static constraints block all paths at this step.
                 return None
             alpha[t] = alpha[t] / scales[t]
 
@@ -434,6 +573,7 @@ class DomiKnowSAwareHMM:
         return alpha, beta, gamma, xi, log_likelihood
 
     def _projected_dynamics(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return transition/emission matrices projected onto legal support."""
         transition = project_matrix(self.transition_, self.transition_mask_, smoothing=self.smoothing)
         emission = project_matrix(self.emission_, self.emission_mask_, smoothing=self.smoothing)
         return transition, emission
@@ -446,6 +586,7 @@ class DomiKnowSAwareHMM:
         belief: torch.Tensor | None,
         sequence: tuple[Any, ...] | None,
     ) -> torch.Tensor:
+        """Build the per-step transition matrix under dynamic hard/soft constraints."""
         transition, _ = self._projected_dynamics()
         if self.dynamic_transition is None and self.transition_energy is None:
             return transition
@@ -463,6 +604,7 @@ class DomiKnowSAwareHMM:
             },
         )
         weighted = transition
+        effective_mask = self.transition_mask_
         if self.dynamic_transition is not None:
             dynamic = self.dynamic_transition(context)
             if dynamic is not None:
@@ -474,9 +616,14 @@ class DomiKnowSAwareHMM:
                     dtype=self.dtype,
                 )
                 weighted = weighted * factor
+                # Dynamic hard zeros must remain hard zeros.  A dynamic
+                # compatibility matrix may use positive non-binary weights, so
+                # only its positive support participates in the projection mask.
+                effective_mask = effective_mask * (factor > 0).to(dtype=self.dtype)
         if self.transition_energy is not None:
             energy = self.transition_energy(context)
             if energy is not None:
+                # Soft energy downweights transitions via exp(-weight * energy).
                 weighted = apply_transition_energy(
                     weighted,
                     transition_energy_matrix(
@@ -487,14 +634,20 @@ class DomiKnowSAwareHMM:
                     ),
                     weight=self.energy_weight,
                 )
-        return normalize_matrix_rows(weighted * self.transition_mask_)
+        # Project onto the combined static + dynamic hard support.  Using only
+        # the static mask here would let project_distribution recover a
+        # dynamically all-zero row from the static support, reintroducing
+        # transitions that the runtime hook explicitly blocked.
+        return project_matrix_rows(weighted, effective_mask, smoothing=self.smoothing)
 
     def _require_fitted(self) -> None:
+        """Guard operations that require learned parameters."""
         if self.initial_ is None or self.transition_ is None or self.emission_ is None:
             raise RuntimeError("DomiKnowSAwareHMM must be fit before this operation")
 
 
 def _is_single_sequence(value) -> bool:
+    """Heuristic to distinguish one sequence from a batch of sequences."""
     if isinstance(value, (str, bytes)):
         return True
     if not isinstance(value, Sequence):
@@ -505,13 +658,23 @@ def _is_single_sequence(value) -> bool:
     return not isinstance(first, Sequence) or isinstance(first, (str, bytes))
 
 
-def _argmax_state_or_dead(scores: torch.Tensor):
-    if scores.numel() == 0 or scores.max() <= 0:
-        return "dead"
-    return int(scores.argmax().item())
+def _apply_constraint_weight(mask: torch.Tensor, weight: float) -> torch.Tensor:
+    """Apply soft weighting to positive mask entries while preserving hard zeros.
+
+    - Entries equal to 0 stay 0 (forbidden support remains forbidden).
+    - Positive entries are transformed as ``entry ** weight``.
+      This lets non-binary masks express softer/stronger preferences.
+    """
+    positive = mask > 0
+    if not positive.any():
+        return mask
+    weighted = torch.zeros_like(mask)
+    weighted[positive] = torch.pow(mask[positive], weight)
+    return weighted
 
 
 def _belief_from_log_scores(scores: torch.Tensor) -> torch.Tensor:
+    """Convert unnormalized log-scores into a probability belief vector."""
     finite = torch.isfinite(scores)
     if not finite.any():
         return torch.zeros_like(scores)

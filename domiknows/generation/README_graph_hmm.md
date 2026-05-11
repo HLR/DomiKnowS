@@ -514,13 +514,41 @@ print(learner.score(["person_token", "object_token"]))
 print(learner.viterbi(["person_token", "object_token"]).states)
 ```
 
-The learner can export an approximate observable DFA for debugging or hard
-constraint inspection:
+The learner can export a hard-support observable DFA for debugging or hard
+constraint inspection.  The DFA uses subset construction: each DFA state is the
+set of HMM hidden states reachable after an observed prefix, so it accepts an
+observable string whenever at least one legal positive-probability hidden path
+can emit that string.
 
 ```python
 dfa = learner.to_constraint_dfa()
 print(dfa.accepts(["person_token", "object_token"]))
 ```
+
+This exact export applies to static projected HMM support. If the HMM has an
+arbitrary `dynamic_transition` callback or `transition_energy`, `to_constraint_dfa()`
+raises by default rather than returning a misleading automaton. Use
+`on_unsupported_dynamic="static"` only when you intentionally want to ignore
+dynamic/soft behavior and export the static support language.
+
+Dynamic hard constraints can be exported exactly when the caller supplies a
+finite-state abstraction:
+
+```python
+from domiknows.generation.graph_hmm import FiniteStateDynamicConstraint
+
+monitor = FiniteStateDynamicConstraint(
+    start_state="open",
+    transition_mask=lambda monitor_state, reachable_hmm_states, metadata: transition_mask,
+    advance=lambda monitor_state, symbol, next_hmm_states, metadata: monitor_state,
+)
+
+dfa = learner.to_constraint_dfa(finite_state_dynamic=monitor)
+```
+
+The product DFA state is `(reachable_hmm_states, monitor_state)`. A positive
+`support_threshold` can prune low-probability support, but that is an
+engineering approximation rather than the exact positive-support language.
 
 ### Graph-Constrained Spectral Automaton
 
@@ -556,6 +584,21 @@ The Hankel matrix zeroes graph-invalid entries before SVD:
 ```python
 H = spectral.build_hankel()
 ```
+
+That makes spectral learning constraint-aware, but the recovered low-rank WFA
+is still a signed scorer. Low-rank reconstruction can assign a non-zero signed
+score to strings that were filtered out of the constrained Hankel block. Use
+hard scoring or DFA/legality filtering when invalid strings must stay invalid:
+
+```python
+soft_score = spectral.score(["object_token", "person_token"])
+hard_score = spectral.score(["object_token", "person_token"], enforce_constraints=True)
+
+assert hard_score == spectral.hard_score(["object_token", "person_token"])
+```
+
+For decoding-style code, use `allowed_symbols(prefix)` or an external DFA
+wrapper to filter candidate continuations before applying the WFA score.
 
 ## State Meaning
 
@@ -610,12 +653,21 @@ graph-constrained automata.
   optional DFA acceptance affect HMM/WFA learning automatically.
 - Dynamic relational constraints are opt-in hooks over compact HMM states; the
   package does not execute arbitrary DomiKnowS logical state updates by itself.
+  DFA export is exact for dynamic constraints only when callers provide a
+  finite-state dynamic monitor.
 - Spectral learning is finite-basis and compact-symbol.  It is not
   open-vocabulary language model training.
 - Spectral fitting is static/fixed-basis, while dynamic spectral operators are
   opt-in traversal-time hooks over the learned base operators.
+- Graph/DFA filters constrain spectral Hankel queries during learning.  The
+  learned WFA remains a signed scorer at inference time unless callers use
+  `score(..., enforce_constraints=True)`, `hard_score(...)`, `allowed_symbols`,
+  or an external DFA wrapper.
 - Graph-invalid paths are removed from the modeled probability mass rather
   than learned as possible worlds.
-- The exported DFA is an approximate observable automaton derived from learned
-  HMM probabilities and masks; it is meant for debugging and enforcement
-  inspection, not exact recovery of all DomiKnowS logic.
+- The exported DFA is exact for the fitted static HMM positive-support
+  language under projected initial, transition, and emission supports. With a
+  finite-state dynamic monitor it is exact for the corresponding product
+  language. Soft energies, thresholds, belief-dependent callbacks, and
+  infinite-memory prefix callbacks are not exact DFA constraints unless the
+  caller supplies a finite-state hard abstraction.

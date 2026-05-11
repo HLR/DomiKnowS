@@ -202,3 +202,61 @@ def test_graph_spectral_to_torch_learner_factory():
 
     assert isinstance(head, GraphSpectralGenerationHead)
     assert head.trainable_parameter_names()
+
+
+def test_graph_hmm_sequence_log_probs_respects_lengths_mask():
+    head = GraphHMMGenerationHead(
+        n_hidden_states=2,
+        label_count=2,
+        pad_size=4,
+        trainable=False,
+    )
+
+    outputs = head.sequence_log_probs(torch.tensor([[1, 1, 0, 0]]), lengths=torch.tensor([2]))
+
+    assert outputs.shape == (1, 4, 2)
+    assert torch.allclose(outputs[0, 2], torch.zeros(2, dtype=outputs.dtype))
+    assert torch.allclose(outputs[0, 3], torch.zeros(2, dtype=outputs.dtype))
+
+
+def test_graph_hmm_head_dynamic_all_zero_row_stays_blocked():
+    """Torch head transition projection must preserve dynamic hard blocks."""
+
+    def dynamic_transition(context):
+        if context.prefix == (0,):
+            return torch.tensor([[0.0, 0.0], [1.0, 1.0]], dtype=torch.float32)
+        return None
+
+    head = GraphHMMGenerationHead(
+        n_hidden_states=2,
+        label_count=2,
+        symbols=[0, 1],
+        transition=torch.tensor([[0.5, 0.5], [0.5, 0.5]], dtype=torch.float32),
+        emission=torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float32),
+        initial=torch.tensor([1.0, 0.0], dtype=torch.float32),
+        dynamic_transition=dynamic_transition,
+        trainable=False,
+    )
+
+    transition = head._transition_for_prefix(
+        step=0,
+        prefix=(0,),
+        belief=torch.tensor([1.0, 0.0], dtype=torch.float32),
+    )
+
+    assert torch.allclose(transition[0], torch.zeros(2, dtype=transition.dtype))
+
+
+def test_graph_spectral_sequence_log_probs_respects_lengths_mask():
+    head = GraphSpectralGenerationHead(
+        label_count=2,
+        state_count=2,
+        pad_size=4,
+        trainable=False,
+    )
+
+    outputs = head.sequence_log_probs(torch.tensor([[1, 1, 0, 0]]), lengths=torch.tensor([2]))
+
+    assert outputs.shape == (1, 4, 2)
+    assert torch.allclose(outputs[0, 2], torch.zeros(2, dtype=outputs.dtype))
+    assert torch.allclose(outputs[0, 3], torch.zeros(2, dtype=outputs.dtype))

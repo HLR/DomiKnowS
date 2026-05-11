@@ -34,6 +34,15 @@ def test_project_distribution_falls_back_on_zero_allowed_mass():
     assert projected[1].item() == 1.0
 
 
+def test_project_distribution_preserves_all_zero_mask_row():
+    """Test that fully forbidden rows remain zero instead of being re-enabled."""
+    projected = project_distribution(
+        torch.tensor([0.2, 0.8], dtype=torch.float64),
+        torch.tensor([0.0, 0.0], dtype=torch.float64),
+    )
+    assert torch.allclose(projected, torch.tensor([0.0, 0.0], dtype=torch.float64))
+
+
 def test_project_matrix_rows_projects_each_row():
     """Test that project_matrix_rows applies projection independently to each row."""
     projected = project_matrix_rows(

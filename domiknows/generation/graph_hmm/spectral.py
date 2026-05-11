@@ -1,4 +1,11 @@
-"""Torch spectral learning utilities for graph-constrained sequence models."""
+"""Spectral-learning utilities for graph-constrained sequence models.
+
+This module implements a compact weighted automaton learned from finite Hankel
+blocks, with optional graph and DFA constraints that zero invalid queries.
+
+It also includes helper utilities used by HMM/Spectral initialization and
+sequence-validity checks under transition/emission masks.
+"""
 
 from __future__ import annotations
 
@@ -89,6 +96,7 @@ class GraphSpectralAutomaton:
         graph_adapter=None,
         dfa=None,
     ) -> "GraphSpectralAutomaton":
+        """Fit a finite-rank signed WFA from constrained Hankel blocks."""
         if rank < 1:
             raise ValueError("rank must be at least 1")
         if not sequences:
@@ -111,6 +119,7 @@ class GraphSpectralAutomaton:
         self._encoded_counts = Counter(encoded_sequences)
         self._sample_total = sum(self._encoded_counts.values())
         probability = self._empirical_probability_oracle(encoded_sequences)
+        # Base Hankel block H(.,.) used for truncated SVD factorization.
         hankel, valid_queries, total_queries = self._build_hankel(probability, middle=())
         max_rank = min(hankel.shape)
         if rank > max_rank:
@@ -133,10 +142,12 @@ class GraphSpectralAutomaton:
         h_epsilon_s = hankel[epsilon_prefix_index, :]
         h_p_epsilon = hankel[:, epsilon_suffix_index]
 
+        # Standard finite-rank WFA recovery from truncated Hankel factors.
         self.initial = h_epsilon_s @ V_r @ inv_sqrt
         self.final = inv_sqrt @ U_r.T @ h_p_epsilon
         self.operators = {}
         for symbol in self.id_to_symbol:
+            # Shifted Hankel block H(., symbol, .) gives the symbol operator.
             shifted, _, _ = self._build_hankel(probability, middle=(symbol,))
             self.operators[symbol] = inv_sqrt @ U_r.T @ shifted @ V_r @ inv_sqrt
 
@@ -157,12 +168,28 @@ class GraphSpectralAutomaton:
         )
         return self
 
-    def score(self, sequence: Sequence[Any]) -> float:
+    def score(self, sequence: Sequence[Any], *, enforce_constraints: bool = False) -> float:
+        """Return scalar sequence score under the fitted signed WFA.
+
+        Spectral fitting uses graph/DFA legality to filter Hankel queries, but
+        the low-rank signed WFA reconstruction itself is not a hard constraint
+        mechanism.  Set ``enforce_constraints=True`` when the score is being
+        used as a constrained inference value; invalid completed strings then
+        receive score ``0.0`` instead of the unconstrained signed WFA score.
+        """
         self._require_fitted()
+        if enforce_constraints and not self.is_sequence_allowed(sequence):
+            return 0.0
         state = self.prefix_state(sequence)
         return float((state @ self.final).item())
 
+    def hard_score(self, sequence: Sequence[Any]) -> float:
+        """Return score with graph/DFA legality filtering enabled."""
+
+        return self.score(sequence, enforce_constraints=True)
+
     def prefix_state(self, sequence: Sequence[Any]) -> torch.Tensor:
+        """Traverse operators for a prefix and return the resulting state row."""
         self._require_fitted()
         state = self.initial.clone()
         prefix: list[Any] = []
@@ -176,6 +203,7 @@ class GraphSpectralAutomaton:
         return state
 
     def operator(self, symbol: Any) -> torch.Tensor:
+        """Return the static learned operator for one symbol."""
         self._require_fitted()
         if symbol not in self.operators:
             raise ValueError(f"unknown symbol {symbol!r}")
@@ -187,10 +215,12 @@ class GraphSpectralAutomaton:
         base = self.operator(symbol)
         operator = base
         if self.operator_transform is not None:
+            # Optional hard transform hook (context-aware operator override).
             transformed = self.operator_transform(context, symbol, base)
             if transformed is not None:
                 operator = self._validate_operator(transformed, name="operator_transform")
         if self.operator_energy is not None:
+            # Optional soft penalty hook: multiply by exp(-weight * energy).
             energy = self.operator_energy(context, symbol)
             if energy is not None:
                 penalty = transition_energy_matrix(
@@ -203,6 +233,7 @@ class GraphSpectralAutomaton:
         return self._validate_operator(operator, name="dynamic operator")
 
     def allowed_symbols(self, state_or_prefix: torch.Tensor | Sequence[Any] | None = None) -> tuple[Any, ...]:
+        """Return symbols allowed globally or from a specific prefix."""
         if state_or_prefix is None or isinstance(state_or_prefix, torch.Tensor):
             return self.id_to_symbol
         prefix = tuple(state_or_prefix)
@@ -212,7 +243,16 @@ class GraphSpectralAutomaton:
                 allowed.append(symbol)
         return tuple(allowed)
 
+    def is_sequence_allowed(self, sequence: Sequence[Any]) -> bool:
+        """Return whether a completed string satisfies active graph/DFA filters."""
+
+        self._require_fitted()
+        raw = tuple(sequence)
+        encoded = self._encode_sequence(raw)
+        return self._encoded_sequence_allowed(encoded, raw)
+
     def build_hankel(self, middle: Sequence[Any] = ()) -> torch.Tensor:
+        """Build empirical constrained Hankel block for an optional middle token."""
         self._require_basis()
         probability = self._empirical_probability_oracle()
         return self._build_hankel(probability, middle=tuple(middle))[0]
@@ -227,6 +267,7 @@ class GraphSpectralAutomaton:
             prefix_state = self.prefix_state(prefix) if dynamic else self._static_prefix_state(prefix)
             for j, suffix in enumerate(self.suffixes):
                 if dynamic:
+                    # Dynamic mode recomputes full traversal with context hooks.
                     state = self.prefix_state(prefix + suffix)
                 else:
                     state = prefix_state.clone()
@@ -252,6 +293,7 @@ class GraphSpectralAutomaton:
         prefixes: Sequence[tuple[Any, ...]],
         suffixes: Sequence[tuple[Any, ...]],
     ) -> None:
+        """Infer symbol vocabulary from data and basis (unless explicitly provided)."""
         symbols = list(self.symbols) if self.symbols is not None else []
         seen = set(symbols)
         for sequence in list(sequences) + list(prefixes) + list(suffixes):
@@ -267,6 +309,7 @@ class GraphSpectralAutomaton:
             self.graph_adapter.set_symbols(self.id_to_symbol)
 
     def _encode_sequence(self, sequence: Sequence[Any]) -> tuple[int, ...]:
+        """Map a symbol sequence to integer ids using the learned table."""
         encoded = []
         for symbol in sequence:
             if symbol not in self.symbol_to_id:
@@ -275,6 +318,7 @@ class GraphSpectralAutomaton:
         return tuple(encoded)
 
     def _build_masks(self) -> None:
+        """Combine adapter/external masks for legality filtering of Hankel queries."""
         emission_shape = None
         graph_transition = None
         graph_emission = None
@@ -291,6 +335,7 @@ class GraphSpectralAutomaton:
         elif emission_shape is None and explicit_transition is not None:
             emission_shape = (explicit_transition.shape[0], len(self.id_to_symbol))
         elif emission_shape is None:
+            # No masks configured: all strings are legal unless DFA rejects them.
             self.transition_mask_ = None
             self.emission_mask_ = None
             return
@@ -315,6 +360,7 @@ class GraphSpectralAutomaton:
         )
 
     def _empirical_probability_oracle(self, encoded_sequences: list[tuple[int, ...]] | None = None):
+        """Return a callable empirical probability oracle over encoded strings."""
         counts = Counter(encoded_sequences) if encoded_sequences is not None else self._encoded_counts
         total = sum(counts.values()) if encoded_sequences is not None else self._sample_total
 
@@ -323,12 +369,14 @@ class GraphSpectralAutomaton:
                 return torch.tensor(0.0, dtype=self.dtype, device=self.device)
             count = counts.get(encoded, 0)
             if count == 0 and self.smoothing > 0:
+                # Optional additive smoothing for unseen strings.
                 return torch.tensor(self.smoothing / (total + self.smoothing), dtype=self.dtype, device=self.device)
             return torch.tensor(count / total, dtype=self.dtype, device=self.device)
 
         return probability
 
     def _build_hankel(self, probability, *, middle: tuple[Any, ...]) -> tuple[torch.Tensor, int, int]:
+        """Assemble a Hankel block and track valid vs total constrained queries."""
         middle_encoded = tuple(self.symbol_to_id[symbol] for symbol in middle)
         hankel = torch.zeros((len(self.prefixes), len(self.suffixes)), dtype=self.dtype, device=self.device)
         valid_queries = 0
@@ -346,10 +394,12 @@ class GraphSpectralAutomaton:
         return hankel, valid_queries, total_queries
 
     def _sequence_allowed(self, sequence: tuple[Any, ...]) -> bool:
+        """Check legality for a raw symbol sequence under DFA/masks."""
         encoded = tuple(self.symbol_to_id[symbol] for symbol in sequence)
         return self._encoded_sequence_allowed(encoded, sequence)
 
     def _encoded_sequence_allowed(self, encoded: tuple[int, ...], raw: tuple[Any, ...]) -> bool:
+        """Check legality for an encoded sequence under active constraints."""
         if self.dfa is not None and not self.dfa.accepts(raw):
             return False
         if self.transition_mask_ is None or self.emission_mask_ is None:
@@ -357,6 +407,7 @@ class GraphSpectralAutomaton:
         return sequence_has_legal_path(encoded, self.transition_mask_, self.emission_mask_)
 
     def _static_prefix_state(self, sequence: Sequence[Any]) -> torch.Tensor:
+        """Traverse prefix with static operators only (no dynamic hooks)."""
         state = self.initial.clone()
         for symbol in sequence:
             state = state @ self.operator(symbol)
@@ -370,6 +421,7 @@ class GraphSpectralAutomaton:
         belief: torch.Tensor,
         sequence: tuple[Any, ...] | None,
     ) -> DynamicConstraintContext:
+        """Build dynamic hook context with defensive copies and metadata."""
         return DynamicConstraintContext(
             step=step,
             prefix=prefix,
@@ -384,6 +436,7 @@ class GraphSpectralAutomaton:
         )
 
     def _validate_operator(self, operator, *, name: str) -> torch.Tensor:
+        """Validate operator shape/finiteness for robust dynamic overrides."""
         tensor = torch.as_tensor(operator, dtype=self.dtype, device=self.device)
         rank = None if self.initial is None else int(self.initial.numel())
         expected = None if rank is None else (rank, rank)
@@ -419,6 +472,7 @@ def sequence_has_legal_path(
         return False
     possible = emission[:, encoded_sequence[0]]
     for symbol_id in encoded_sequence[1:]:
+        # Propagate reachable states through allowed transitions.
         next_possible = (possible.to(dtype=torch.float64) @ transition.to(dtype=torch.float64)) > 0
         possible = next_possible & emission[:, symbol_id]
         if not possible.any():
@@ -466,6 +520,7 @@ def masked_empirical_initialization(
         bigram_counts.update(zip(sequence, sequence[1:]))
 
     for state in range(n_hidden_states):
+        # Bias each state toward frequently observed compatible symbols.
         compatible = torch.nonzero(emission_mask[state] > 0, as_tuple=False).flatten().tolist()
         if not compatible:
             continue
@@ -481,6 +536,7 @@ def masked_empirical_initialization(
         emitters_by_symbol[symbol] = emitters or list(range(n_hidden_states))
 
     for (left_symbol, right_symbol), count in bigram_counts.items():
+        # Distribute observed bigram mass across compatible latent emitters.
         left_states = emitters_by_symbol[left_symbol]
         right_states = emitters_by_symbol[right_symbol]
         share = count / max(1, len(left_states) * len(right_states))
@@ -489,12 +545,14 @@ def masked_empirical_initialization(
                 transition[left_state, right_state] += share
 
     initial = initial / initial.sum().clamp_min(torch.finfo(dtype).tiny)
+    # Final projection guarantees exact support compliance with masks.
     transition = project_matrix_rows(transition, transition_mask, smoothing=smoothing)
     emission = project_matrix_rows(emission, emission_mask, smoothing=smoothing)
     return initial, transition, emission
 
 
 def _normalize_basis(values: Sequence[Sequence[Any]], *, name: str) -> tuple[tuple[Any, ...], ...]:
+    """Normalize prefix/suffix basis to hashable tuples and validate uniqueness."""
     if not values:
         raise ValueError(f"{name} must not be empty")
     normalized = tuple(tuple(value) for value in values)

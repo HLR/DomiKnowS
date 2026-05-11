@@ -108,6 +108,37 @@ def test_graph_spectral_optional_dfa_filters_hankel_entries():
     assert automaton.allowed_symbols(()) == ("x",)
 
 
+def test_graph_spectral_hard_score_filters_invalid_reconstruction_leakage():
+    """Hard spectral inference must use legality checks, not only WFA scores."""
+    dfa = DFA(
+        states=frozenset({"start", "seen_x", "dead"}),
+        alphabet=frozenset({"x", "y"}),
+        transitions={
+            ("start", "x"): "seen_x",
+            ("start", "y"): "dead",
+            ("seen_x", "x"): "seen_x",
+            ("seen_x", "y"): "seen_x",
+            ("dead", "x"): "dead",
+            ("dead", "y"): "dead",
+        },
+        start_state="start",
+        accepting_states=frozenset({"seen_x"}),
+        dead_states=frozenset({"dead"}),
+    )
+    automaton = GraphSpectralAutomaton(symbols=["x", "y"], dfa=dfa)
+    automaton.fit(
+        [["x"], ["x", "y"], ["x", "x"], ["y"]],
+        prefixes=[(), ("x",), ("y",)],
+        suffixes=[(), ("x",), ("y",)],
+        rank=1,
+    )
+
+    assert not automaton.is_sequence_allowed(["y"])
+    assert automaton.score(["y"], enforce_constraints=True) == 0.0
+    assert automaton.hard_score(["y"]) == 0.0
+    assert automaton.score(["x"], enforce_constraints=True) == automaton.score(["x"])
+
+
 def test_graph_spectral_rejects_invalid_basis_and_rank():
     """Test that invalid prefix/suffix basis or rank values are rejected with clear errors."""
     automaton = GraphSpectralAutomaton(symbols=["x"])

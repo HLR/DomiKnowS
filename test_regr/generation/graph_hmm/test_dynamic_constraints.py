@@ -10,6 +10,7 @@ Dynamic constraints enable complex reasoning where allowed behaviors depend on w
 observed so far in the sequence.
 """
 import torch
+import pytest
 
 from domiknows.generation.graph_hmm import (
     DomiKnowSAwareHMM,
@@ -72,6 +73,31 @@ def test_sampling_never_uses_dynamically_blocked_transition():
     generator.manual_seed(9)
 
     assert model.sample(4, generator=generator) == ["x", "x", "x", "x"]
+
+
+def test_dynamic_all_zero_row_stays_blocked_during_score_viterbi_and_sampling():
+    """A dynamically all-zero outgoing row must not be revived by static projection."""
+
+    def dynamic_transition(context: DynamicConstraintContext):
+        if context.prefix == ("x",):
+            return torch.tensor([[0.0, 0.0], [1.0, 1.0]], dtype=torch.float64)
+        return None
+
+    init = {
+        "initial": torch.tensor([1.0, 0.0], dtype=torch.float64),
+        "transition": torch.tensor([[0.5, 0.5], [0.5, 0.5]], dtype=torch.float64),
+        "emission": torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64),
+    }
+    model = _identity_emission_model(dynamic_transition=dynamic_transition).fit(
+        [["x", "x"]],
+        max_iter=0,
+        init=init,
+    )
+
+    assert model.score(["x", "x"]) == float("-inf")
+    assert model.viterbi(["x", "x"]).score == float("-inf")
+    with pytest.raises(RuntimeError, match="no dynamically allowed outgoing transition"):
+        model.sample(2, generator=torch.Generator().manual_seed(0))
 
 
 def test_soft_transition_energy_penalizes_without_forcing_zero():
@@ -137,3 +163,20 @@ def test_factorized_state_space_maps_states_and_builds_masks():
     dst = space.state_id(entity="Cup", relation="on_table")
     assert no_holding_to_table[src, dst].item() == 0.0
     assert no_holding_to_table[dst, src].item() == 1.0
+
+
+def test_dynamic_identity_constraint_matches_static_projection_semantics():
+    """Ensure static and dynamic paths use equivalent transition projection behavior."""
+
+    init = {
+        "initial": torch.tensor([1.0, 0.0], dtype=torch.float64),
+        "transition": torch.tensor([[0.0, 0.0], [0.5, 0.5]], dtype=torch.float64),
+        "emission": torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64),
+    }
+
+    static_model = _identity_emission_model().fit([["x", "x"]], max_iter=0, init=init)
+    dynamic_model = _identity_emission_model(
+        dynamic_transition=lambda context: torch.ones((2, 2), dtype=torch.float64)
+    ).fit([["x", "x"]], max_iter=0, init=init)
+
+    assert static_model.score(["x", "x"]) == dynamic_model.score(["x", "x"])

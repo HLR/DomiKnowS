@@ -1,4 +1,20 @@
-"""Adapters from DomiKnowS graph declarations to HMM masks."""
+"""Bridge DomiKnowS graph declarations to static HMM-compatible masks.
+
+This module translates selected graph concepts, relation edges, explicit
+constraint specs, and a conservative subset of logical constraints into
+transition/emission masks used by graph-aware HMM components.
+
+The adapter is intentionally conservative: if a constraint cannot be mapped
+exactly to local mask structure, it is reported as unsupported rather than
+silently approximated.
+Logical constraints that can be compiled (conservative subset):
+
+    ifL implications
+    andL combinations
+    orL combinations
+    notL inside supported formulas
+Atom names must map to known state names (and symbol names for emission typing)
+"""
 
 from __future__ import annotations
 
@@ -23,10 +39,12 @@ from .dynamic import FactorizedStateSpace
 
 
 def _name(obj: Any) -> str:
+    """Return a stable readable name for graph/spec objects."""
     return str(getattr(obj, "name", obj))
 
 
 def _dedupe_names(items: Iterable[Any]) -> list[str]:
+    """Deduplicate objects by normalized name while preserving order."""
     names: list[str] = []
     seen: set[str] = set()
     for item in items:
@@ -38,6 +56,7 @@ def _dedupe_names(items: Iterable[Any]) -> list[str]:
 
 
 def _domain_concept_names(items: Iterable[Any]) -> list[str]:
+    """Filter out synthetic/internal concept entries from concept names."""
     return [name for name in _dedupe_names(items) if name != "constraint"]
 
 
@@ -77,6 +96,7 @@ class DomiKnowSGraphAdapter:
         self.report = ConstraintApplicationReport()
 
     def concepts(self) -> list[str]:
+        """Return candidate concept names usable as HMM state names."""
         if self._explicit_concepts is not None:
             return _dedupe_names(self._explicit_concepts)
         graph_concepts = getattr(self.graph, "concepts", {}) if self.graph is not None else {}
@@ -85,9 +105,11 @@ class DomiKnowSGraphAdapter:
         return _domain_concept_names(graph_concepts)
 
     def relations(self) -> list[str]:
+        """Return normalized relation names for diagnostics/reporting."""
         return [_relation_name(rel) for rel in self._relation_objects()]
 
     def constraints(self) -> list[Any]:
+        """Return active top-level constraints from explicit input or graph."""
         if self._explicit_constraints is not None:
             return list(self._explicit_constraints)
         graph_constraints = getattr(self.graph, "logicalConstrains", {}) if self.graph is not None else {}
@@ -99,15 +121,19 @@ class DomiKnowSGraphAdapter:
         ]
 
     def set_symbols(self, symbols: Iterable[Any]) -> None:
+        """Update emission symbol universe after learner vocabulary is known."""
         self.symbols = tuple(symbols)
 
     def allowed_transition_mask(self) -> torch.Tensor:
+        """Compile transition compatibility mask from relations and constraints."""
         state_names = self._state_names()
         shape = (len(state_names), len(state_names))
         mask = torch.ones(shape, dtype=self.dtype, device=self.device)
 
         relation_pairs = self._mapped_relation_pairs(state_names)
         if relation_pairs:
+            # If relation endpoints map to states, treat them as explicit allowed
+            # transitions instead of unconstrained all-to-all connectivity.
             mask = torch.zeros(shape, dtype=self.dtype, device=self.device)
             for src, dst in relation_pairs:
                 mask[src, dst] = 1.0
@@ -118,6 +144,7 @@ class DomiKnowSGraphAdapter:
         return mask
 
     def emission_type_mask(self) -> torch.Tensor:
+        """Compile emission compatibility mask from explicit/logical specs."""
         state_names = self._state_names()
         symbols = self.symbols or ()
         shape = (len(state_names), len(symbols))
@@ -129,6 +156,7 @@ class DomiKnowSGraphAdapter:
         return mask
 
     def _state_names(self) -> tuple[str, ...]:
+        """Resolve final state-name list from explicit names/space/graph concepts."""
         if self.state_names is not None:
             names = tuple(map(str, self.state_names))
         elif self.state_space is not None:
@@ -150,6 +178,7 @@ class DomiKnowSGraphAdapter:
         return names
 
     def _relation_objects(self) -> list[Any]:
+        """Collect relation objects from explicit config or graph concept edges."""
         if self._explicit_relations is not None:
             return list(self._explicit_relations)
         graph_concepts = getattr(self.graph, "concepts", {}) if self.graph is not None else {}
@@ -167,6 +196,7 @@ class DomiKnowSGraphAdapter:
         return relations
 
     def _mapped_relation_pairs(self, state_names: tuple[str, ...]) -> list[tuple[int, int]]:
+        """Map relation endpoints to state-id pairs when names align."""
         state_index = {name: idx for idx, name in enumerate(state_names)}
         pairs: list[tuple[int, int]] = []
         for rel in self._relation_objects():
@@ -182,6 +212,7 @@ class DomiKnowSGraphAdapter:
         return pairs
 
     def _apply_transition_constraint(self, mask: torch.Tensor, constraint: Any, state_names: tuple[str, ...]) -> torch.Tensor:
+        """Apply one constraint object/spec to the transition mask."""
         specs = _normalize_constraint_specs(constraint)
         compiled = _compile_lc_to_transition_specs(constraint, state_names, device=mask.device, dtype=mask.dtype)
         if compiled is not None:
@@ -200,6 +231,7 @@ class DomiKnowSGraphAdapter:
         for spec in specs:
             if isinstance(spec, TransitionMaskSpec):
                 self.report.add_applied(_spec_message("applied transition mask", spec))
+                # Multiplicative composition preserves earlier constraints.
                 mask = mask * validate_mask(spec.mask, tuple(mask.shape), name="transition_mask", device=mask.device, dtype=mask.dtype)
             elif isinstance(spec, AllowedTransitionsSpec):
                 new_mask = torch.zeros_like(mask)
@@ -225,6 +257,7 @@ class DomiKnowSGraphAdapter:
                 if self.state_space is None:
                     self.report.add_unsupported(_spec_message("StatePredicateTransitionSpec requires a FactorizedStateSpace", spec))
                     continue
+                # Evaluate predicate in factorized space, then project to flat ids.
                 predicate_mask = self.state_space.transition_mask(spec.predicate, dtype=mask.dtype, device=mask.device)
                 self.report.add_applied(_spec_message("applied factorized-state transition predicate", spec))
                 mask = mask * predicate_mask
@@ -243,6 +276,7 @@ class DomiKnowSGraphAdapter:
         state_names: tuple[str, ...],
         symbols: tuple[str, ...],
     ) -> torch.Tensor:
+        """Apply one constraint object/spec to the emission mask."""
         specs = _normalize_constraint_specs(constraint)
         compiled = _compile_lc_to_emission_specs(constraint, state_names, symbols, device=mask.device, dtype=mask.dtype)
         if compiled is not None:
@@ -283,6 +317,7 @@ class DomiKnowSGraphAdapter:
         return mask
 
 def _relation_name(rel: Any) -> str:
+    """Human-readable relation name, preferring ``src->dst`` when available."""
     pair = _relation_pair(rel)
     if pair is not None:
         return f"{pair[0]}->{pair[1]}"
@@ -290,6 +325,7 @@ def _relation_name(rel: Any) -> str:
 
 
 def _relation_pair(rel: Any) -> tuple[str, str] | None:
+    """Extract a ``(src, dst)`` relation pair from tuple/list/object forms."""
     if isinstance(rel, (tuple, list)) and len(rel) >= 2:
         return _name(rel[0]), _name(rel[1])
     src = getattr(rel, "src", None)
@@ -300,6 +336,7 @@ def _relation_pair(rel: Any) -> tuple[str, str] | None:
 
 
 def _normalize_constraint_specs(constraint: Any) -> list[Any]:
+    """Normalize typed/object/dict constraints into typed spec instances."""
     typed = (
         TransitionMaskSpec,
         EmissionMaskSpec,
@@ -346,6 +383,7 @@ def _compile_lc_to_transition_specs(
     device=None,
     dtype: torch.dtype = torch.float64,
 ) -> list[Any] | None:
+    """Compile supported logical-constraint fragments into transition specs."""
     if not _looks_like_logical_constraint(constraint):
         return None
     mask = _compile_lc_to_transition_mask(constraint, set(state_names))
@@ -362,6 +400,7 @@ def _compile_lc_to_emission_specs(
     device=None,
     dtype: torch.dtype = torch.float64,
 ) -> list[Any] | None:
+    """Compile supported logical-constraint fragments into emission specs."""
     if not symbols or not _looks_like_logical_constraint(constraint):
         return None
     mask = _compile_lc_to_emission_mask(constraint, set(state_names), set(symbols))
@@ -371,6 +410,7 @@ def _compile_lc_to_emission_specs(
 
 
 def _compile_lc_to_transition_mask(constraint: Any, state_universe: set[str]) -> set[tuple[str, str]] | None:
+    """Compile a limited boolean LC fragment into allowed transition pairs."""
     name = _lc_name(constraint)
     children = _logical_children(constraint)
     if name == "ifL" and len(children) >= 2:
@@ -399,6 +439,7 @@ def _compile_lc_to_transition_mask(constraint: Any, state_universe: set[str]) ->
 
 
 def _compile_lc_to_emission_mask(constraint: Any, state_universe: set[str], symbol_universe: set[str]) -> set[tuple[str, str]] | None:
+    """Compile a limited boolean LC fragment into allowed emission pairs."""
     name = _lc_name(constraint)
     children = _logical_children(constraint)
     if name == "ifL" and len(children) >= 2:
@@ -427,6 +468,7 @@ def _compile_lc_to_emission_mask(constraint: Any, state_universe: set[str], symb
 
 
 def _compile_implication_mask(constraint: Any, source_universe: set[str], dest_universe: set[str]) -> set[tuple[str, str]] | None:
+    """Compile ``ifL(A, B)`` into allowed ``(source, destination)`` pairs."""
     if _lc_name(constraint) != "ifL":
         return None
     children = _logical_children(constraint)
@@ -438,6 +480,8 @@ def _compile_implication_mask(constraint: Any, source_universe: set[str], dest_u
         return None
     allowed: set[tuple[str, str]] = set()
     for src in source_universe:
+        # Only sources that satisfy the premise are restricted to the
+        # implication destination set.
         destinations = dest_set if src in source_set else dest_universe
         for dst in destinations:
             allowed.add((src, dst))
@@ -445,12 +489,14 @@ def _compile_implication_mask(constraint: Any, source_universe: set[str], dest_u
 
 
 def _formula_from_children(children: list[Any]) -> Any:
+    """Pack N>1 consequent children as synthetic OR for set compilation."""
     if len(children) == 1:
         return children[0]
     return ("__or__", tuple(children))
 
 
 def _name_set_from_formula(expr: Any, universe: set[str]) -> set[str] | None:
+    """Resolve formula atoms/boolean ops to a concrete name subset."""
     if isinstance(expr, tuple) and len(expr) == 2 and expr[0] == "__or__":
         result: set[str] = set()
         for child in expr[1]:
@@ -500,6 +546,7 @@ def _mask_from_allowed(
     device=None,
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
+    """Convert allowed pair set to dense 0/1 mask with fixed row/column order."""
     row_index = {name: idx for idx, name in enumerate(rows)}
     column_index = {name: idx for idx, name in enumerate(columns)}
     mask = torch.zeros((len(rows), len(columns)), dtype=dtype, device=device)
@@ -510,6 +557,7 @@ def _mask_from_allowed(
 
 
 def _logical_children(constraint: Any) -> list[Any]:
+    """Return logical children while skipping variable reference placeholders."""
     children: list[Any] = []
     for item in getattr(constraint, "e", ()):
         if _is_variable_ref(item):
@@ -519,18 +567,22 @@ def _logical_children(constraint: Any) -> list[Any]:
 
 
 def _is_variable_ref(item: Any) -> bool:
+    """Heuristic check for DomiKnowS logical variable reference nodes."""
     return item.__class__.__name__ == "V" or hasattr(item, "relVarInfo")
 
 
 def _looks_like_logical_constraint(value: Any) -> bool:
+    """Best-effort check for logical-constraint-like objects."""
     return hasattr(value, "e") and value.__class__.__name__.endswith("L")
 
 
 def _lc_name(value: Any) -> str:
+    """Return the logical constraint class name."""
     return value.__class__.__name__
 
 
 def _atom_name(value: Any) -> str | None:
+    """Extract atom/concept-like names from parsed logical expressions."""
     if isinstance(value, tuple) and len(value) >= 2:
         return str(value[1])
     if isinstance(value, list) and value:
@@ -542,11 +594,13 @@ def _atom_name(value: Any) -> str | None:
 
 
 def _spec_message(prefix: str, spec: Any) -> str:
+    """Attach optional spec name to report messages."""
     name = getattr(spec, "name", None)
     return f"{prefix}: {name}" if name else prefix
 
 
 def _constraint_mapping(constraint: Any) -> dict[str, Any] | None:
+    """Read legacy dict/object constraint fields into a mapping."""
     if isinstance(constraint, dict):
         result = dict(constraint)
     else:
@@ -575,6 +629,7 @@ def _constraint_mapping(constraint: Any) -> dict[str, Any] | None:
 
 
 def _append_pair_value(mapping: dict[str, Any], target_key: str, source_key: str) -> None:
+    """Normalize singular pair aliases into plural pair-list fields."""
     if source_key not in mapping:
         return
     existing = list(_as_pairs(mapping.get(target_key, ())))
@@ -583,6 +638,7 @@ def _append_pair_value(mapping: dict[str, Any], target_key: str, source_key: str
 
 
 def _as_pairs(value: Any) -> list[tuple[Any, Any]]:
+    """Normalize one pair or many pairs to a list of 2-tuples."""
     if value is None:
         return []
     if isinstance(value, tuple) and len(value) == 2 and not isinstance(value[0], (tuple, list)):
