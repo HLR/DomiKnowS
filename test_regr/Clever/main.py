@@ -248,6 +248,157 @@ def str2bool(v):
     raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
 
 
+QUESTION_TYPE_CHOICES = (
+    "relation",
+    "query",
+    "query_relation",
+    "exist",
+    "complex_relation",
+    "counting",
+)
+
+QUESTION_TYPE_QUERY_MODES = {"query", "query_relation"}
+
+
+def _parse_question_type_arg(value):
+    raw = str(value).replace(",", "+")
+    parts = []
+    seen = set()
+    for token in raw.split("+"):
+        normalized = token.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        parts.append(normalized)
+
+    if not parts:
+        raise argparse.ArgumentTypeError("question-type must contain at least one value")
+    if len(parts) > 2:
+        raise argparse.ArgumentTypeError(
+            f"At most two merged question types are supported, got: {parts}"
+        )
+
+    invalid = [q for q in parts if q not in QUESTION_TYPE_CHOICES]
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f"Unsupported question type(s): {invalid}. Supported: {QUESTION_TYPE_CHOICES}"
+        )
+
+    return "+".join(parts)
+
+
+def _split_question_types(question_type_value):
+    return [q for q in str(question_type_value).split("+") if q]
+
+
+def _includes_query_type(question_type_value):
+    return any(q in QUESTION_TYPE_QUERY_MODES for q in _split_question_types(question_type_value))
+
+
+# LEFT-style curriculum schedule: (start_epoch, max_scene_size, max_program_size)
+# Active bucket is selected by: start < epoch <= next_start
+CURRICULUM_STRATEGY = [
+    (0, 3, 4),
+    (5, 3, 6),
+    (10, 3, 8),
+    (15, 4, 8),
+    (25, 4, 12),
+    (35, 5, 12),
+    (45, 6, 12),
+    (55, 7, 16),
+    (65, 8, 20),
+    (75, 9, 22),
+    (90, 10, 25),
+    (10**9, None, None),
+]
+
+
+def _scene_size(sample):
+    objs = sample.get("all_objects")
+    if isinstance(objs, (list, tuple)):
+        return len(objs)
+    objs_raw = sample.get("objects_raw")
+    if isinstance(objs_raw, (list, tuple)):
+        return len(objs_raw)
+    return 0
+
+
+def _program_size(sample):
+    prog = sample.get("program")
+    if isinstance(prog, (list, tuple)):
+        return len(prog)
+    return 0
+
+
+def _get_curriculum_limits(epoch):
+    for i in range(len(CURRICULUM_STRATEGY) - 1):
+        start, max_scene_size, max_program_size = CURRICULUM_STRATEGY[i]
+        next_start = CURRICULUM_STRATEGY[i + 1][0]
+        if start < epoch <= next_start:
+            return max_scene_size, max_program_size
+    return None, None
+
+
+def _select_curriculum_train_raw(train_raw, epoch, mode):
+    max_scene_size, max_program_size = _get_curriculum_limits(epoch)
+
+    filtered = train_raw
+    scene_limit = max_scene_size if mode in ("scene", "all") else None
+    program_limit = max_program_size if mode in ("program", "all") else None
+
+    if scene_limit is not None:
+        filtered = [s for s in filtered if _scene_size(s) <= scene_limit]
+    if program_limit is not None:
+        filtered = [s for s in filtered if _program_size(s) <= program_limit]
+
+    fallback_kind = "none"
+    min_violation = None
+
+    if len(filtered) == 0 and mode == "all" and scene_limit is not None and program_limit is not None:
+        # Relax all-mode from strict AND to OR before giving up.
+        relaxed = [
+            s for s in train_raw
+            if _scene_size(s) <= scene_limit or _program_size(s) <= program_limit
+        ]
+        if len(relaxed) > 0:
+            filtered = relaxed
+            fallback_kind = "relaxed_or"
+
+    if len(filtered) == 0 and len(train_raw) > 0:
+        # Pick the nearest bucket by minimum limit violation.
+        def _violation(sample):
+            v = 0
+            if scene_limit is not None:
+                v += max(0, _scene_size(sample) - scene_limit)
+            if program_limit is not None:
+                v += max(0, _program_size(sample) - program_limit)
+            return v
+
+        min_violation = min(_violation(s) for s in train_raw)
+        filtered = [s for s in train_raw if _violation(s) == min_violation]
+        if len(filtered) > 0:
+            fallback_kind = "nearest"
+
+    if len(filtered) == 0:
+        filtered = train_raw
+        fallback_kind = "full"
+
+    fallback = fallback_kind != "none"
+
+    info = {
+        "mode": mode,
+        "scene_limit": scene_limit,
+        "program_limit": program_limit,
+        "selected": len(filtered),
+        "total": len(train_raw),
+        "fallback": fallback,
+        "fallback_kind": fallback_kind,
+        "min_violation": min_violation,
+    }
+    key = (mode, scene_limit, program_limit, fallback_kind)
+    return filtered, key, info
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Logic-guided VQA training / evaluation using DomiKnows framework",
@@ -288,6 +439,10 @@ Examples:
                         help="Learning rate for optimizer (default: 1e-3)")
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Mini-batch size for training (default: 1)")
+    parser.add_argument("--curriculum", type=str, default="all",
+                        choices=["none", "scene", "program", "all"],
+                        help="Curriculum learning mode using LEFT staged limits "
+                             "on scene size and/or program size")
     parser.add_argument("--subset", type=int, default=-1,
                         help="Subset index 1-6 for memory-efficient training (default: -1)")
     parser.add_argument("--load-epoch", type=int, default=0,
@@ -307,9 +462,10 @@ Examples:
     parser.add_argument("--load_previous_save", action="store_true",
                         help="Load checkpoint from previous subset/epoch before training")
     parser.add_argument("--question-type",
-                        choices=["relation", "query", "query_relation", "exist", "complex_relation", "counting"],
+                        type=_parse_question_type_arg,
                         default="relation",
-                        help="Type of questions to train on (default: relation)")
+                        help="Type of questions to train on. Supports one type, or merge two "
+                             "types with '+' (example: relation+exist).")
     parser.add_argument("--relation-syntax",
                         choices=["legacy", "binary"],
                         default="binary",
@@ -419,6 +575,7 @@ Examples:
     plugin_manager.add_arguments_to_parser(parser)
     
     args = parser.parse_args()
+    args.question_type = _parse_question_type_arg(args.question_type)
     if args.lora_alpha is None:
         args.lora_alpha = 2 * args.lora_r
     if args.peft:
@@ -451,7 +608,7 @@ def program_declaration(train, dev, args, device='cpu'):
 
     # Build graph/logic over the full set used in this run so both train/dev can compile.
     dataset = train + (dev if dev is not None else [])
-    include_query = args.question_type in ['query', 'query_relation']
+    include_query = _includes_query_type(args.question_type)
     results = create_graph(
         dataset,
         include_query_questions=include_query,
@@ -778,7 +935,7 @@ def _print_constraints_and_exit(args):
     print(f"Relation syntax: {args.relation_syntax}")
     print()
 
-    include_query = args.question_type in ("query", "query_relation")
+    include_query = _includes_query_type(args.question_type)
 
     # Compile one at a time so a single unsupported op doesn't kill the run
     print("=" * 70)
@@ -838,6 +995,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     print("\n[Training]")
     print(f"  Epochs:           {args.epochs}")
     print(f"  Batch size:       {args.batch_size}")
+    print(f"  Curriculum:       {args.curriculum}")
     print(f"  Learning rate:    {args.lr}")
     print(f"  Device:           {args.device}")
     print(f"  Dummy mode:       {args.dummy}")
@@ -1090,7 +1248,13 @@ def main(args):
             # Install gradient chain diagnostic
             diagnostic = GradChainDiagnostic(program, _models['classifiers'])
             diagnostic.install()
-            
+
+            cached_curriculum_key = None
+            cached_curriculum_dataset = train_dataset
+            active_train_dataset = train_dataset
+            active_train_raw = train_raw
+            active_train_label = "train"
+
             # Training loop
             for i in range(args.epochs):
                 print(f"Training epoch {i + 1}/{args.epochs}")
@@ -1098,34 +1262,115 @@ def main(args):
                 # tqdm descriptions and plugin logs show the true epoch
                 # instead of the reset inner-1 from train_epoch_num=1.
                 program.global_epoch = i + 1
+
+                epoch_train_dataset = train_dataset
+                epoch_train_raw = train_raw
+                if args.curriculum != "none":
+                    epoch_train_raw, curriculum_key, curriculum_info = _select_curriculum_train_raw(
+                        train_raw, i + 1, args.curriculum
+                    )
+                    if curriculum_key != cached_curriculum_key:
+                        if cached_curriculum_key is None:
+                            print(
+                                f"[curriculum] CURRICULUM_STRATEGY initial stage at epoch {i + 1}: "
+                                f"mode={curriculum_info['mode']}, "
+                                f"scene<={curriculum_info['scene_limit']}, "
+                                f"program<={curriculum_info['program_limit']}"
+                            )
+                        else:
+                            _, prev_scene_limit, prev_program_limit, _ = cached_curriculum_key
+                            print(
+                                f"[curriculum] CURRICULUM_STRATEGY updated at epoch {i + 1}: "
+                                f"scene<={prev_scene_limit}, program<={prev_program_limit} "
+                                f"-> scene<={curriculum_info['scene_limit']}, "
+                                f"program<={curriculum_info['program_limit']}"
+                            )
+                        if curriculum_info["fallback_kind"] == "full":
+                            cached_curriculum_dataset = train_dataset
+                            print(
+                                f"[curriculum] Epoch {i + 1}: mode={curriculum_info['mode']}, "
+                                f"scene<={curriculum_info['scene_limit']}, "
+                                f"program<={curriculum_info['program_limit']} yielded 0 samples "
+                                "even after relaxation; using full training set"
+                            )
+                        else:
+                            cached_curriculum_dataset = program.graph.compile_executable(
+                                epoch_train_raw,
+                                logic_keyword='logic_str',
+                                logic_label_keyword='logic_label',
+                                extra_namespace_values=attribute_names_dict,
+                            )
+                            if curriculum_info["fallback_kind"] == "relaxed_or":
+                                print(
+                                    f"[curriculum] Epoch {i + 1}: strict bucket empty; using relaxed "
+                                    f"scene/program OR filter, samples={curriculum_info['selected']}/"
+                                    f"{curriculum_info['total']}"
+                                )
+                            elif curriculum_info["fallback_kind"] == "nearest":
+                                print(
+                                    f"[curriculum] Epoch {i + 1}: strict bucket empty; using nearest "
+                                    f"bucket (violation={curriculum_info['min_violation']}), "
+                                    f"samples={curriculum_info['selected']}/{curriculum_info['total']}"
+                                )
+                            else:
+                                print(
+                                    f"[curriculum] Epoch {i + 1}: mode={curriculum_info['mode']}, "
+                                    f"scene<={curriculum_info['scene_limit']}, "
+                                    f"program<={curriculum_info['program_limit']}, "
+                                    f"samples={curriculum_info['selected']}/{curriculum_info['total']}"
+                                )
+                        cached_curriculum_key = curriculum_key
+                    epoch_train_dataset = cached_curriculum_dataset
+                    print(
+                        f"[curriculum] Epoch {i + 1}: training on "
+                        f"{len(epoch_train_raw)}/{len(train_raw)} examples"
+                    )
+
+                active_train_dataset = epoch_train_dataset
+                active_train_raw = epoch_train_raw
+                active_train_label = "curriculum train" if args.curriculum != "none" else "train"
+                epoch_logging_plugin = plugin_manager.get_plugin('EpochLogging')
+                if (
+                    epoch_logging_plugin is not None
+                    and hasattr(epoch_logging_plugin, "_create_eval_subset")
+                    and hasattr(epoch_logging_plugin, "args")
+                ):
+                    epoch_logging_plugin.dataset = active_train_dataset
+                    epoch_logging_plugin._create_eval_subset(
+                        active_train_dataset,
+                        eval_fraction=epoch_logging_plugin.args.eval_fraction,
+                        min_samples=epoch_logging_plugin.args.eval_min_samples,
+                        seed=epoch_logging_plugin.args.eval_seed,
+                    )
+
                 save_file = ckpt_path(args.lr, i + 1, args.load_epoch, args.batch_size,
                                      args.tnorm, args.subset, args.question_type,
                                      **_ckpt_extra)
-                program.train(train_dataset, Optim=Optim, train_epoch_num=1, c_lr=args.lr,
-                              c_warmup_iters=0, batch_size=args.batch_size, device=device, 
+                program.train(epoch_train_dataset, Optim=Optim, train_epoch_num=1, c_lr=args.lr,
+                              c_warmup_iters=0, batch_size=args.batch_size, device=device,
                               print_loss=False)
                 program.save(save_file)
                 print(f"Saved to {save_file}")
 
                 with torch.no_grad():
-                    epoch_train_acc = program.evaluate_condition(train_dataset, device=device)
-                print(f"Epoch {i + 1} train accuracy: {epoch_train_acc :.2f}%")
+                    epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
+                print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
                 if test_dataset is not None:
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
-            
+
             # Final evaluation
             with torch.no_grad():
-                final_train_acc = program.evaluate_condition(train_dataset, device=device)
+                final_train_acc = program.evaluate_condition(active_train_dataset, device=device)
                 final_test_acc = program.evaluate_condition(test_dataset, device=device) if test_dataset is not None else None
                 final_test_acc_filtered = (
                     program.evaluate_condition(test_dataset_filtered, device=device)
                     if test_dataset_filtered is not None else None
                 )
-                final_eval = program.evaluate_condition(train_dataset, device=device, 
+                final_eval = program.evaluate_condition(train_dataset, device=device,
                                                        threshold=0.5, return_dict=True)
-            print(f"Train accuracy after training: {final_train_acc:.2f}%")
+            print(f"{active_train_label.capitalize()} accuracy after training: {final_train_acc:.2f}%")
             if final_test_acc is not None:
                 print(f"Test accuracy after training: {final_test_acc:.2f}%")
             if final_test_acc_filtered is not None:
@@ -1142,9 +1387,10 @@ def main(args):
                 print(f"Epochs: {args.epochs}", file=f)
                 print(f"Learning rate: {args.lr}", file=f)
                 print(f"Train examples: {len(train_raw)}", file=f)
+                print(f"Active train examples (final epoch): {len(active_train_raw)}", file=f)
                 print(f"Test examples: {len(test_raw) if test_raw is not None else 0}", file=f)
                 print(f"Baseline accuracy: {baseline_acc:.2f}%", file=f)
-                print(f"Train accuracy: {final_train_acc:.2f}%", file=f)
+                print(f"{active_train_label.capitalize()} accuracy: {final_train_acc:.2f}%", file=f)
                 if final_test_acc is not None:
                     print(f"Test accuracy: {final_test_acc:.2f}%", file=f)
                 if final_test_acc_filtered is not None:

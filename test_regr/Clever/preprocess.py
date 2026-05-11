@@ -1,4 +1,5 @@
 import sys
+import copy
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -9,6 +10,69 @@ try:
 except ImportError:
     from dataset import make_dataset, default_image_transform
 
+
+QUESTION_TYPE_CHOICES = (
+    'relation',
+    'query',
+    'query_relation',
+    'exist',
+    'complex_relation',
+    'counting',
+)
+
+
+def _parse_question_types(question_type):
+    if isinstance(question_type, str):
+        raw_tokens = question_type.replace(',', '+').split('+')
+    elif isinstance(question_type, (list, tuple, set)):
+        raw_tokens = list(question_type)
+    else:
+        raw_tokens = [str(question_type)]
+
+    parsed = []
+    seen = set()
+    for token in raw_tokens:
+        normalized = str(token).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        parsed.append(normalized)
+
+    if not parsed:
+        raise ValueError('question_type must contain at least one value.')
+    if len(parsed) > 2:
+        raise ValueError(
+            f"At most two merged question types are supported, got: {parsed}"
+        )
+
+    invalid = [qt for qt in parsed if qt not in QUESTION_TYPE_CHOICES]
+    if invalid:
+        raise ValueError(
+            f"Unsupported question_type value(s): {invalid}. "
+            f"Supported: {QUESTION_TYPE_CHOICES}"
+        )
+
+    return parsed
+
+
+def _apply_question_type_filter(ds, q_type):
+    if q_type == 'relation':
+        ds.filter_one_relation()
+    elif q_type == 'query':
+        ds.filter_query_no_same()
+    elif q_type == 'query_relation':
+        ds.filter_query_with_relations(max_relations=2)
+    elif q_type == 'exist':
+        ds.filter_relational_type()
+    elif q_type == 'counting':
+        ds.filter_atmostlatleastlequal()
+    elif q_type == 'complex_relation':
+        ds.filter_complex_relation()
+    else:
+        raise ValueError(f"Unsupported question_type: {q_type}")
+
+    return ds
+
 def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
     """
     Preprocess dataset with configurable question type filtering.
@@ -17,36 +81,47 @@ def preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation')
         args: Command line arguments
         NUM_INSTANCES: Number of instances for dummy mode
         CACHE_DIR: Cache directory path
-        question_type: One of 'relation', 'query', 'query_relation', 'exist'
+        question_type: One type, or a merge of two types with '+' (e.g.,
+            'relation+exist')
     """
     def build_dataset(q_type='relation'):
-        ds = make_dataset(
-            scenes_json=osp.join("train", "scenes.json"),
-            questions_json=osp.join("train", "questions.json"),
-            image_root=osp.join("train", "images"),
-            image_transform=default_image_transform,
-            vocab_json=osp.join("train", "vocab.json"),
-            output_vocab_json=osp.join("train", "output-vocab.json"),
-            incl_scene=True,
-            incl_raw_scene=True,
-        )
+        requested_types = _parse_question_types(q_type)
 
-        if q_type == 'relation':
-            ds.filter_one_relation()
-        elif q_type == 'query':
-            ds.filter_query_no_same()
-        elif q_type == 'query_relation':
-            ds.filter_query_with_relations(max_relations=2)
-        elif q_type == 'exist':
-            ds.filter_relational_type()
-        elif q_type == 'counting':
-            ds.filter_atmostlatleastlequal()
-        elif q_type == 'complex_relation':
-            ds.filter_complex_relation()
-        elif q_type == 'counting':
-            ds.filter_counting()
-        
-        return ds
+        def _make_and_filter(single_type):
+            ds = make_dataset(
+                scenes_json=osp.join("train", "scenes.json"),
+                questions_json=osp.join("train", "questions.json"),
+                image_root=osp.join("train", "images"),
+                image_transform=default_image_transform,
+                vocab_json=osp.join("train", "vocab.json"),
+                output_vocab_json=osp.join("train", "output-vocab.json"),
+                incl_scene=True,
+                incl_raw_scene=True,
+            )
+            return _apply_question_type_filter(ds, single_type)
+
+        if len(requested_types) == 1:
+            return _make_and_filter(requested_types[0])
+
+        merged = []
+        seen = set()
+        for single_type in requested_types:
+            filtered_ds = _make_and_filter(single_type)
+            for i in range(len(filtered_ds)):
+                sample = filtered_ds[i]
+                sample_key = (
+                    sample.get('question_raw'),
+                    sample.get('image_index'),
+                    str(sample.get('program')),
+                    str(sample.get('answer')),
+                )
+                if sample_key in seen:
+                    continue
+                seen.add(sample_key)
+                merged.append(sample)
+
+        print(f"Merged question types {requested_types}: {len(merged)} samples")
+        return merged
 
     dataset = []
 
@@ -144,6 +219,20 @@ def load_full_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
     the test slice can come from a different region of the same cached
     dataset than the training slice.
     """
+    def _unsliced_args(src_args):
+        full_args = copy.copy(src_args)
+        # Ensure helper loads the complete dataset regardless of train/eval flags.
+        for name, value in (
+            ('eval_only', False),
+            ('train_size', None),
+            ('train_start', 0),
+            ('test_size', None),
+            ('test_start', None),
+            ('subset', -1),
+        ):
+            setattr(full_args, name, value)
+        return full_args
+
     cache_file = CACHE_DIR / f"dataset_{question_type}.pkl"
     if cache_file.exists():
         with cache_file.open("rb") as f:
@@ -166,12 +255,22 @@ def load_full_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type='relation'):
                 )
                 cache_file.unlink()
                 # Delegate to preprocess_dataset which will rebuild and re-cache
-                return preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=question_type)
+                return preprocess_dataset(
+                    _unsliced_args(args),
+                    NUM_INSTANCES,
+                    CACHE_DIR,
+                    question_type=question_type,
+                )
         return dataset
 
     # Fall back to the regular builder if no cache yet — don't duplicate
     # the dummy-mode caching logic (that path is only used for small tests).
-    return preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=question_type)
+    return preprocess_dataset(
+        _unsliced_args(args),
+        NUM_INSTANCES,
+        CACHE_DIR,
+        question_type=question_type,
+    )
 
 
 def preprocess_folders_and_files(dummy):
