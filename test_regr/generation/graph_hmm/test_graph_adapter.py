@@ -15,7 +15,7 @@ automatically converted to precise HMM constraints.
 import torch
 
 from domiknows.graph import Concept, Graph, Relation
-from domiknows.graph.logicalConstrain import andL, ifL, notL, orL
+from domiknows.graph.logicalConstrain import V, andL, atLeastAL, atMostAL, atMostL, equivalenceL, ifL, notL, orL
 from domiknows.generation.graph_hmm import (
     AllowedEmissionsSpec,
     AllowedTransitionsSpec,
@@ -182,6 +182,73 @@ def test_graph_adapter_compiles_boolean_transition_lcs():
     assert mask[2, 1].item() == 0.0
 
 
+def test_graph_adapter_compiles_reversed_variable_binding_transition_lc():
+    """Destination/source variable bindings should affect the correct axis."""
+    Graph.clear()
+    Concept.clear()
+    Relation.clear()
+    with Graph("hmm_lc_reverse_vars") as graph:
+        a = Concept(name="A")
+        b = Concept(name="B")
+        Concept(name="C")
+        ifL(a("y"), notL(b("x")))
+
+    adapter = DomiKnowSGraphAdapter(graph, n_hidden_states=3, state_names=["A", "B", "C"], symbols=["x"])
+    mask = adapter.allowed_transition_mask()
+
+    assert mask[1, 0].item() == 0.0
+    assert mask[0, 1].item() == 1.0
+    assert mask[2, 0].item() == 1.0
+
+
+def test_graph_adapter_compiles_relation_path_endpoint_transition_lc():
+    """Single-hop path endpoints are treated as next/destination bindings."""
+    fake_if_l = type("ifL", (), {})
+    lc = fake_if_l()
+    lc.e = [
+        (None, "A", None, 1),
+        V(name="x"),
+        (None, "B", None, 1),
+        V(name="z", v=("x", "next", "y")),
+    ]
+    adapter = DomiKnowSGraphAdapter(
+        graph=None,
+        constraints=[lc],
+        n_hidden_states=3,
+        state_names=["A", "B", "C"],
+        symbols=["x"],
+    )
+
+    mask = adapter.allowed_transition_mask()
+
+    assert mask[0, 0].item() == 0.0
+    assert mask[0, 1].item() == 1.0
+    assert mask[0, 2].item() == 0.0
+
+
+def test_graph_adapter_compiles_local_count_and_equivalence_lcs():
+    """Local count and equivalence operators compile over finite state pairs."""
+    Graph.clear()
+    Concept.clear()
+    Relation.clear()
+    with Graph("hmm_lc_count_equiv") as graph:
+        a = Concept(name="A")
+        b = Concept(name="B")
+        c = Concept(name="C")
+        andL(
+            atMostL(a("x"), b("y"), limit=1),
+            equivalenceL(c("x"), c("y")),
+        )
+
+    adapter = DomiKnowSGraphAdapter(graph, n_hidden_states=3, state_names=["A", "B", "C"], symbols=["x"])
+    mask = adapter.allowed_transition_mask()
+
+    assert mask[0, 1].item() == 0.0
+    assert mask[2, 2].item() == 1.0
+    assert mask[2, 0].item() == 0.0
+    assert mask[0, 2].item() == 0.0
+
+
 def test_graph_adapter_compiles_static_emission_typing_lc():
     """Test that logical constraints on emission types are correctly compiled to masks."""
     Graph.clear()
@@ -205,6 +272,49 @@ def test_graph_adapter_compiles_static_emission_typing_lc():
     assert emission_mask[0, 1].item() == 0.0
     assert emission_mask[1, 0].item() == 1.0
     assert emission_mask[1, 1].item() == 1.0
+
+
+def test_graph_adapter_compiles_accumulated_zero_forbid_as_static_masks():
+    """atMostAL(..., 0) is a safe static global forbiddance fragment."""
+    Graph.clear()
+    Concept.clear()
+    Relation.clear()
+    with Graph("hmm_lc_accum_zero") as graph:
+        bad_state = Concept(name="BAD")
+        bad_token = Concept(name="bad_token")
+        atMostAL(bad_state("x"), limit=0)
+        atMostAL(bad_token("y"), limit=0)
+
+    adapter = DomiKnowSGraphAdapter(
+        graph,
+        n_hidden_states=2,
+        state_names=["OK", "BAD"],
+        symbols=["good_token", "bad_token"],
+    )
+
+    transition_mask = adapter.allowed_transition_mask()
+    emission_mask = adapter.emission_type_mask()
+
+    assert torch.all(transition_mask[1, :] == 0)
+    assert torch.all(transition_mask[:, 1] == 0)
+    assert torch.all(emission_mask[1, :] == 0)
+    assert torch.all(emission_mask[:, 1] == 0)
+
+
+def test_graph_adapter_registers_nonlocal_accumulated_lc_for_dfa_export():
+    """Non-zero accumulated counts are not approximated as local matrices."""
+    Graph.clear()
+    Concept.clear()
+    Relation.clear()
+    with Graph("hmm_lc_accum_nonlocal") as graph:
+        required = Concept(name="REQUIRED")
+        atLeastAL(required("x"), limit=1)
+
+    adapter = DomiKnowSGraphAdapter(graph, n_hidden_states=2, state_names=["A", "B"], symbols=["x"])
+    mask = adapter.allowed_transition_mask()
+
+    assert torch.allclose(mask, torch.ones((2, 2), dtype=torch.float64))
+    assert any("DFA-export constraint spec" in message for message in adapter.report.applied)
 
 
 def test_graph_adapter_reports_unsupported_static_lc():

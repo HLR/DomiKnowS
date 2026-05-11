@@ -9,16 +9,20 @@ exactly to local mask structure, it is reported as unsupported rather than
 silently approximated.
 Logical constraints that can be compiled (conservative subset):
 
-    ifL implications
-    andL combinations
-    orL combinations
-    notL inside supported formulas
-Atom names must map to known state names (and symbol names for emission typing)
+    ifL/forAllL implications
+    andL/orL/notL/nandL/norL/xorL/iffL/equivalenceL combinations
+    local existsL/atLeastL/atMostL/exactL over supported formula children
+    atMostAL(..., 0) / exactAL(..., 0) as global forbiddance masks
+    relation-path endpoint hints such as path=("x", "rel", "y")
+Atom names must map to known state names (and symbol names for emission typing).
+Accumulated multi-token constraints that are not static masks are registered as
+``ConstraintDFAExportSpec`` diagnostics instead of being approximated.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 import torch
@@ -36,6 +40,15 @@ from .constraints import (
     validate_mask,
 )
 from .dynamic import FactorizedStateSpace
+
+
+@dataclass(frozen=True)
+class _Atom:
+    """Normalized concept predicate with variable/path binding metadata."""
+
+    name: str
+    variable: str | None = None
+    path: tuple[Any, ...] | None = None
 
 
 def _name(obj: Any) -> str:
@@ -388,7 +401,8 @@ def _compile_lc_to_transition_specs(
         return None
     mask = _compile_lc_to_transition_mask(constraint, set(state_names))
     if mask is None:
-        return None
+        dfa_specs = _compile_lc_to_dfa_export_specs(constraint)
+        return dfa_specs or None
     return [TransitionMaskSpec(_mask_from_allowed(mask, state_names, state_names, device=device, dtype=dtype), name=f"lc:{_lc_name(constraint)}")]
 
 
@@ -411,131 +425,387 @@ def _compile_lc_to_emission_specs(
 
 def _compile_lc_to_transition_mask(constraint: Any, state_universe: set[str]) -> set[tuple[str, str]] | None:
     """Compile a limited boolean LC fragment into allowed transition pairs."""
-    name = _lc_name(constraint)
-    children = _logical_children(constraint)
-    if name == "ifL" and len(children) >= 2:
-        return _compile_implication_mask(constraint, state_universe, state_universe)
-    if name == "andL":
-        child_masks = [_compile_lc_to_transition_mask(child, state_universe) for child in children]
-        if any(child_mask is None for child_mask in child_masks):
+    if not _is_supported_mask_root(constraint):
+        return None
+    if _is_accumulated_zero_forbid(constraint):
+        atoms = _atoms_in_expr(_first_formula_operand(constraint))
+        if not atoms or any(atom.name not in state_universe for atom in atoms):
             return None
-        iterator = iter(child_masks)
-        first = next(iterator, None)
-        if first is None:
-            return None
-        allowed = set(first)
-        for child_mask in iterator:
-            allowed &= set(child_mask)
-        return allowed
-    if name == "orL":
-        child_masks = [_compile_lc_to_transition_mask(child, state_universe) for child in children]
-        if any(child_mask is None for child_mask in child_masks):
-            return None
-        allowed: set[tuple[str, str]] = set()
-        for child_mask in child_masks:
-            allowed |= set(child_mask)
-        return allowed
-    return None
+        forbidden = {atom.name for atom in atoms}
+        return {
+            (src, dst)
+            for src in state_universe
+            for dst in state_universe
+            if src not in forbidden and dst not in forbidden
+        }
+    allowed: set[tuple[str, str]] = set()
+    saw_supported = False
+    for src in state_universe:
+        for dst in state_universe:
+            value = _eval_transition_formula(constraint, src, dst, state_universe)
+            if value is None:
+                return None
+            saw_supported = True
+            if value:
+                allowed.add((src, dst))
+    return allowed if saw_supported else None
 
 
 def _compile_lc_to_emission_mask(constraint: Any, state_universe: set[str], symbol_universe: set[str]) -> set[tuple[str, str]] | None:
     """Compile a limited boolean LC fragment into allowed emission pairs."""
-    name = _lc_name(constraint)
-    children = _logical_children(constraint)
-    if name == "ifL" and len(children) >= 2:
-        return _compile_implication_mask(constraint, state_universe, symbol_universe)
-    if name == "andL":
-        child_masks = [_compile_lc_to_emission_mask(child, state_universe, symbol_universe) for child in children]
-        if any(child_mask is None for child_mask in child_masks):
-            return None
-        iterator = iter(child_masks)
-        first = next(iterator, None)
-        if first is None:
-            return None
-        allowed = set(first)
-        for child_mask in iterator:
-            allowed &= set(child_mask)
-        return allowed
-    if name == "orL":
-        child_masks = [_compile_lc_to_emission_mask(child, state_universe, symbol_universe) for child in children]
-        if any(child_mask is None for child_mask in child_masks):
-            return None
-        allowed: set[tuple[str, str]] = set()
-        for child_mask in child_masks:
-            allowed |= set(child_mask)
-        return allowed
-    return None
-
-
-def _compile_implication_mask(constraint: Any, source_universe: set[str], dest_universe: set[str]) -> set[tuple[str, str]] | None:
-    """Compile ``ifL(A, B)`` into allowed ``(source, destination)`` pairs."""
-    if _lc_name(constraint) != "ifL":
+    if not _is_supported_mask_root(constraint):
         return None
-    children = _logical_children(constraint)
-    if len(children) < 2:
-        return None
-    source_set = _name_set_from_formula(children[0], source_universe)
-    dest_set = _name_set_from_formula(_formula_from_children(children[1:]), dest_universe)
-    if source_set is None or dest_set is None:
-        return None
+    if _is_accumulated_zero_forbid(constraint):
+        atoms = _atoms_in_expr(_first_formula_operand(constraint))
+        if not atoms:
+            return None
+        forbidden_states = {atom.name for atom in atoms if atom.name in state_universe}
+        forbidden_symbols = {atom.name for atom in atoms if atom.name in symbol_universe}
+        if not forbidden_states and not forbidden_symbols:
+            return None
+        return {
+            (state, symbol)
+            for state in state_universe
+            for symbol in symbol_universe
+            if state not in forbidden_states and symbol not in forbidden_symbols
+        }
     allowed: set[tuple[str, str]] = set()
-    for src in source_universe:
-        # Only sources that satisfy the premise are restricted to the
-        # implication destination set.
-        destinations = dest_set if src in source_set else dest_universe
-        for dst in destinations:
-            allowed.add((src, dst))
-    return allowed
-
-
-def _formula_from_children(children: list[Any]) -> Any:
-    """Pack N>1 consequent children as synthetic OR for set compilation."""
-    if len(children) == 1:
-        return children[0]
-    return ("__or__", tuple(children))
-
-
-def _name_set_from_formula(expr: Any, universe: set[str]) -> set[str] | None:
-    """Resolve formula atoms/boolean ops to a concrete name subset."""
-    if isinstance(expr, tuple) and len(expr) == 2 and expr[0] == "__or__":
-        result: set[str] = set()
-        for child in expr[1]:
-            child_set = _name_set_from_formula(child, universe)
-            if child_set is None:
+    saw_supported = False
+    for state in state_universe:
+        for symbol in symbol_universe:
+            value = _eval_emission_formula(constraint, state, symbol, state_universe, symbol_universe)
+            if value is None:
                 return None
-            result |= child_set
-        return result
-    atom_name = _atom_name(expr)
-    if atom_name is not None:
-        return {atom_name} if atom_name in universe else None
+            saw_supported = True
+            if value:
+                allowed.add((state, symbol))
+    return allowed if saw_supported else None
+
+
+def _is_supported_mask_root(expr: Any) -> bool:
+    """Return true for LC roots that form complete local/static mask rules."""
+
+    if not _looks_like_logical_constraint(expr):
+        return False
+    name = _lc_name(expr)
+    return name in {
+        "ifL",
+        "forAllL",
+        "andL",
+        "orL",
+        "nandL",
+        "norL",
+        "xorL",
+        "equivalenceL",
+        "iffL",
+        "existsL",
+        "atLeastL",
+        "atMostL",
+        "exactL",
+        "atMostAL",
+        "exactAL",
+    }
+
+
+def _eval_transition_formula(expr: Any, src: str, dst: str, universe: set[str]) -> bool | None:
+    """Evaluate a supported LC formula against one transition pair."""
+
+    atom = _atom_from_expr(expr)
+    if atom is not None:
+        if not _atom_has_supported_local_path(atom):
+            return None
+        if atom.name not in universe:
+            return None
+        role = _atom_transition_role(atom)
+        if role == "src":
+            return src == atom.name
+        if role == "dst":
+            return dst == atom.name
+        return src == atom.name or dst == atom.name
+    return _eval_boolean_formula(
+        expr,
+        lambda child: _eval_transition_formula(child, src, dst, universe),
+    )
+
+
+def _eval_emission_formula(
+    expr: Any,
+    state: str,
+    symbol: str,
+    state_universe: set[str],
+    symbol_universe: set[str],
+) -> bool | None:
+    """Evaluate a supported LC formula against one state/symbol emission pair."""
+
+    atom = _atom_from_expr(expr)
+    if atom is not None:
+        if not _atom_has_supported_local_path(atom):
+            return None
+        if atom.name in symbol_universe and atom.name not in state_universe:
+            return symbol == atom.name
+        if atom.name in state_universe and atom.name not in symbol_universe:
+            return state == atom.name
+        if atom.name in state_universe and atom.name in symbol_universe:
+            role = _atom_transition_role(atom)
+            return symbol == atom.name if role == "dst" else state == atom.name
+        return None
+    return _eval_boolean_formula(
+        expr,
+        lambda child: _eval_emission_formula(child, state, symbol, state_universe, symbol_universe),
+    )
+
+
+def _eval_boolean_formula(expr: Any, child_eval) -> bool | None:
+    """Evaluate supported boolean/count logical operators using child_eval."""
+
     if not _looks_like_logical_constraint(expr):
         return None
     name = _lc_name(expr)
-    children = _logical_children(expr)
-    if name == "notL" and len(children) == 1:
-        child_set = _name_set_from_formula(children[0], universe)
-        return None if child_set is None else set(universe) - child_set
+    operands = _formula_operands(expr)
+    if name == "notL" and len(operands) == 1:
+        value = child_eval(operands[0])
+        return None if value is None else not value
     if name == "andL":
-        child_sets = [_name_set_from_formula(child, universe) for child in children]
-        if any(child_set is None for child_set in child_sets):
-            return None
-        iterator = iter(child_sets)
-        first = next(iterator, None)
-        if first is None:
-            return None
-        result = set(first)
-        for child_set in iterator:
-            result &= set(child_set)
-        return result
+        values = [child_eval(child) for child in operands]
+        return None if any(value is None for value in values) else all(values)
     if name == "orL":
-        result: set[str] = set()
-        for child in children:
-            child_set = _name_set_from_formula(child, universe)
-            if child_set is None:
-                return None
-            result |= child_set
-        return result
+        values = [child_eval(child) for child in operands]
+        return None if any(value is None for value in values) else any(values)
+    if name == "nandL":
+        value = _eval_synthetic("andL", operands, child_eval)
+        return None if value is None else not value
+    if name == "norL":
+        value = _eval_synthetic("orL", operands, child_eval)
+        return None if value is None else not value
+    if name == "xorL":
+        values = [child_eval(child) for child in operands]
+        return None if any(value is None for value in values) else sum(bool(value) for value in values) == 1
+    if name in {"equivalenceL", "iffL"}:
+        values = [child_eval(child) for child in operands]
+        return None if any(value is None for value in values) or not values else all(value == values[0] for value in values)
+    if name in {"ifL", "forAllL"} and len(operands) >= 2:
+        premise = child_eval(operands[0])
+        consequents = [child_eval(child) for child in operands[1:]]
+        if premise is None or any(value is None for value in consequents):
+            return None
+        return (not premise) or all(consequents)
+    if name in {"existsL", "atLeastL", "atMostL", "exactL"}:
+        values = [child_eval(child) for child in operands]
+        if any(value is None for value in values):
+            return None
+        count = sum(bool(value) for value in values)
+        limit = _count_limit(expr)
+        if limit is None:
+            return None
+        if name == "existsL":
+            return count >= 1
+        if name == "atLeastL":
+            return count >= limit
+        if name == "atMostL":
+            return count <= limit
+        return count == limit
+    if name in {"existsAL", "atLeastAL", "atMostAL", "exactAL"}:
+        # Accumulated/global counts are not local pair/emission formulas except
+        # for the zero-forbiddance special case handled before evaluation.
+        return None
     return None
+
+
+def _compile_lc_to_dfa_export_specs(constraint: Any) -> list[Any] | None:
+    """Register non-local regular/window-like LCs for external DFA handling."""
+
+    if not _looks_like_logical_constraint(constraint):
+        return None
+    name = _lc_name(constraint)
+    if name in {"existsAL", "atLeastAL", "atMostAL", "exactAL"}:
+        return [
+            ConstraintDFAExportSpec(
+                name=f"lc:{name}",
+                description=(
+                    f"{name} is an accumulated/multi-token constraint; "
+                    "graph_hmm registered it for DFA/export diagnostics rather "
+                    "than approximating it as a local HMM matrix"
+                ),
+            )
+        ]
+    atoms = _atoms_in_expr(constraint)
+    if any(atom.path and len(atom.path) > 3 for atom in atoms):
+        return [
+            ConstraintDFAExportSpec(
+                name=f"lc:{name}:path",
+                description=(
+                    "multi-hop relation path/window constraint requires a "
+                    "finite-state DFA or dynamic monitor outside static HMM masks"
+                ),
+            )
+        ]
+    return None
+
+
+def _eval_synthetic(name: str, operands: list[Any], child_eval) -> bool | None:
+    """Evaluate a simple synthetic boolean form for derived operators."""
+
+    values = [child_eval(child) for child in operands]
+    if any(value is None for value in values):
+        return None
+    if name == "andL":
+        return all(values)
+    if name == "orL":
+        return any(values)
+    return None
+
+
+def _formula_operands(expr: Any) -> list[Any]:
+    """Return LC operands with atom tuples bound to their following V node."""
+
+    if not _looks_like_logical_constraint(expr):
+        return []
+    return _group_atom_operands(getattr(expr, "e", ()), skip_count_limits=True)
+
+
+def _group_atom_operands(items: Iterable[Any], *, skip_count_limits: bool) -> list[Any]:
+    """Group flattened ``(concept tuple, V)`` pairs into _Atom objects."""
+
+    values = list(items)
+    result: list[Any] = []
+    index = 0
+    while index < len(values):
+        item = values[index]
+        if skip_count_limits and isinstance(item, int):
+            index += 1
+            continue
+        if isinstance(item, list):
+            atom = _atom_from_sequence(item)
+            if atom is not None:
+                result.append(atom)
+            else:
+                result.extend(_group_atom_operands(item, skip_count_limits=skip_count_limits))
+            index += 1
+            continue
+        if _is_atom_tuple(item):
+            variable = values[index + 1] if index + 1 < len(values) and _is_variable_ref(values[index + 1]) else None
+            result.append(_atom_from_parts(item, variable))
+            index += 2 if variable is not None else 1
+            continue
+        if _is_variable_ref(item):
+            index += 1
+            continue
+        result.append(item)
+        index += 1
+    return result
+
+
+def _atom_from_expr(expr: Any) -> _Atom | None:
+    """Return a normalized atom if expr is a concept predicate."""
+
+    if isinstance(expr, _Atom):
+        return expr
+    if isinstance(expr, list):
+        return _atom_from_sequence(expr)
+    if _is_atom_tuple(expr):
+        return _atom_from_parts(expr, None)
+    return None
+
+
+def _atom_from_sequence(values: list[Any]) -> _Atom | None:
+    """Normalize list-style concept call output to an atom."""
+
+    for index, item in enumerate(values):
+        if _is_atom_tuple(item):
+            variable = values[index + 1] if index + 1 < len(values) and _is_variable_ref(values[index + 1]) else None
+            return _atom_from_parts(item, variable)
+    return None
+
+
+def _atom_from_parts(atom_tuple: Any, variable: Any | None) -> _Atom:
+    """Build an _Atom from the flattened DomiKnowS concept tuple and V."""
+
+    return _Atom(
+        name=str(atom_tuple[1]),
+        variable=None if variable is None else getattr(variable, "name", None),
+        path=None if variable is None or getattr(variable, "v", None) is None else tuple(getattr(variable, "v")),
+    )
+
+
+def _atoms_in_expr(expr: Any) -> list[_Atom]:
+    """Collect normalized atoms from an expression tree."""
+
+    atom = _atom_from_expr(expr)
+    if atom is not None:
+        return [atom]
+    if not _looks_like_logical_constraint(expr):
+        return []
+    atoms: list[_Atom] = []
+    for child in _formula_operands(expr):
+        atoms.extend(_atoms_in_expr(child))
+    return atoms
+
+
+def _atom_transition_role(atom: _Atom) -> str | None:
+    """Infer whether an atom is bound to source/current or destination/next."""
+
+    path_role = _path_endpoint_role(atom.path)
+    if path_role is not None:
+        return path_role
+    variable = str(atom.variable) if atom.variable is not None else ""
+    if variable in {"y", "dst", "dest", "to", "next", "second", "t1", "t_next"}:
+        return "dst"
+    if variable in {"x", "src", "source", "from", "current", "first", "t", "t0"}:
+        return "src"
+    return None
+
+
+def _atom_has_supported_local_path(atom: _Atom) -> bool:
+    """Keep path support to one relation/window hop for static masks."""
+
+    return atom.path is None or len(atom.path) <= 3
+
+
+def _path_endpoint_role(path: tuple[Any, ...] | None) -> str | None:
+    """Infer source/destination role from a DomiKnowS path tuple."""
+
+    if not path:
+        return None
+    path_values = [str(getattr(item, "name", item)) for item in path]
+    if path_values[-1] in {"y", "dst", "dest", "to", "next", "second", "t1", "t_next"}:
+        return "dst"
+    if path_values[-1] in {"x", "src", "source", "from", "current", "first", "t", "t0"}:
+        return "src"
+    if path_values[0] in {"y", "dst", "dest", "to", "next", "second"}:
+        return "dst"
+    if path_values[0] in {"x", "src", "source", "from", "current", "first"}:
+        return "src"
+    return None
+
+
+def _first_formula_operand(expr: Any) -> Any | None:
+    operands = _formula_operands(expr)
+    return operands[0] if operands else None
+
+
+def _is_accumulated_zero_forbid(expr: Any) -> bool:
+    """Return true for accumulated count forms that statically forbid atoms."""
+
+    if not _looks_like_logical_constraint(expr):
+        return False
+    name = _lc_name(expr)
+    limit = _count_limit(expr)
+    return name in {"atMostAL", "exactAL"} and limit == 0
+
+
+def _count_limit(expr: Any) -> int | None:
+    """Extract explicit/trailing count limits from DomiKnowS count constraints."""
+
+    fixed = getattr(expr, "fixedLimit", None)
+    if fixed is not None:
+        return int(fixed)
+    explicit = getattr(expr, "_explicitLimit", None)
+    if explicit is not None:
+        return int(explicit)
+    for item in reversed(getattr(expr, "e", ())):
+        if isinstance(item, int):
+            return int(item)
+    return 1
 
 
 def _mask_from_allowed(
@@ -564,6 +834,12 @@ def _logical_children(constraint: Any) -> list[Any]:
             continue
         children.append(item)
     return children
+
+
+def _is_atom_tuple(item: Any) -> bool:
+    """Return true for flattened DomiKnowS concept predicate tuples."""
+
+    return isinstance(item, tuple) and len(item) >= 2 and not isinstance(item[0], str)
 
 
 def _is_variable_ref(item: Any) -> bool:

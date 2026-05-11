@@ -42,6 +42,9 @@ The package has three related automata layers:
 - **Core automata** in `domiknows.generation.automata` provide reusable DFA, HMM/PFA, WFA, Hankel, spectral, and visualization primitives.
 - **Graph-aware HMM/spectral learning** in `domiknows.generation.graph_hmm` learns `P(x_1:T | G, C)` from compact sequences typed and restricted by DomiKnowS graph structure.
 
+For automata focused guide,
+see ['automata/README.md'](automata/README.md) 
+
 ## Basic DFA Constraints
 
 Start with a generation vocabulary. The vocabulary is a compact label space

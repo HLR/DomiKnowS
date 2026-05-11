@@ -453,11 +453,24 @@ fragment when it can be interpreted exactly as a local HMM mask:
 
 - `ifL(A(t), notL(B(t+1)))` becomes a forbidden transition from `A` to `B`.
 - `ifL(A(t), orL(B(t+1), C(t+1)))` restricts `A` rows to `B` or `C`.
-- Nested `andL` / `orL` combinations over supported transition implications
-  become mask intersection / union.
+- Variable bindings select the axis: `x`, `src`, `current`, or `t` bind to
+  the source/current HMM state; `y`, `dst`, `next`, or `t1` bind to the
+  destination/next state.
+- Single-hop relation paths such as `path=("x", relation, "y")` are treated
+  as destination/next-state endpoint bindings when they map to known states.
+- Nested `andL` / `orL` combinations over supported transition implications,
+  plus `notL`, `nandL`, `norL`, `xorL`, and `equivalenceL` inside supported
+  local formulas, become exact finite-domain mask logic.
+- Local `existsL`, `atLeastL`, `atMostL`, and `exactL` over supported formula
+  children are evaluated over each transition/emission pair.
+- `atMostAL(predicate, 0)` and `exactAL(predicate, 0)` compile to static
+  global forbiddance masks when the predicate maps to known states or symbols.
 - Static emission typing such as `ifL(LOC(t), location_token(t))` restricts
   the `LOC` emission row to matching symbols when state and symbol names are
   provided explicitly.
+- Non-zero accumulated count/window constraints such as `atLeastAL(A(t), 1)`
+  are registered as DFA-export diagnostics rather than approximated as local
+  HMM matrices.
 
 Unsupported logical constraints are reported through
 `adapter.report.unsupported`; they are not approximated silently.
@@ -646,8 +659,9 @@ graph-constrained automata.
 
 - Arbitrary DomiKnowS logical constraints are not reverse-compiled into HMM or
   WFA structure. The built-in compiler is limited to static, local,
-  mask-compilable state/emission predicates and boolean combinations over
-  those supported fragments.
+  mask-compilable state/emission predicates, one-hop relation-path endpoint
+  hints, local count formulas, accumulated zero-forbiddance, and boolean
+  combinations over those supported fragments.
 - Only graph structure, explicit typed/dict specs, the supported static
   DomiKnowS logical fragment, dynamic hooks, soft transition energies, and
   optional DFA acceptance affect HMM/WFA learning automatically.
