@@ -18,6 +18,9 @@ Constraint classes
 - :class:`ForbiddenTokenConstraint` — forbids a specific token.
 - :class:`OrderedTokensConstraint` — enforces an appearance ordering over a list of tokens.
 - :class:`ConditionalMaxNonEosConstraint` — caps non-EOS count only when a trigger token appears.
+- :class:`TokenSetCountConstraint` — counts tokens matching a finite token set or its complement.
+- :class:`AfterTokenAllowedConstraint` — after a trigger token, only an allowed token set may appear.
+- :class:`ComplementGenerationConstraint` — accepts exactly when its child rejects.
 - :class:`AllOfGenerationConstraint` — accepts sequences satisfying every child constraint.
 - :class:`AnyOfGenerationConstraint` — accepts sequences satisfying at least one child constraint.
 
@@ -35,7 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Protocol
 
-from .automata import DFA, product_dfa, union_dfa
+from .automata import DFA, complement_dfa, product_dfa, union_dfa
 from .vocabulary import TokenVocabulary
 
 
@@ -607,6 +610,173 @@ class ConditionalMaxNonEosConstraint(GenerationConstraint):
             existsAL(context.token_value(self.token, "x")),
             atMostAL(context.non_eos("y"), self.max_count),
         )
+
+
+@dataclass(frozen=True)
+class TokenSetCountConstraint(GenerationConstraint):
+    """Count occurrences of a token-set predicate.
+
+    The counted predicate is ``symbol in tokens`` by default, or
+    ``symbol not in tokens`` when ``negated=True``.  Any combination of
+    ``min_count`` and ``max_count`` may be supplied; ``exact_count`` is a
+    convenience that sets both bounds to the same value.
+    """
+
+    tokens: tuple[str, ...]
+    min_count: int | None = None
+    max_count: int | None = None
+    negated: bool = False
+    name: str | None = None
+    supports_domiknows = False
+
+    def __init__(
+        self,
+        tokens: Iterable[str],
+        *,
+        min_count: int | None = None,
+        max_count: int | None = None,
+        exact_count: int | None = None,
+        negated: bool = False,
+        name: str | None = None,
+    ):
+        tokens = tuple(tokens)
+        if exact_count is not None:
+            if min_count is not None or max_count is not None:
+                raise ValueError("exact_count cannot be combined with min_count or max_count")
+            min_count = exact_count
+            max_count = exact_count
+        if min_count is None and max_count is None:
+            raise ValueError("at least one count bound is required")
+        if min_count is not None and min_count < 0:
+            raise ValueError("min_count must be non-negative")
+        if max_count is not None and max_count < 0:
+            raise ValueError("max_count must be non-negative")
+        if min_count is not None and max_count is not None and min_count > max_count:
+            raise ValueError("min_count cannot exceed max_count")
+        object.__setattr__(self, "tokens", tokens)
+        object.__setattr__(self, "min_count", min_count)
+        object.__setattr__(self, "max_count", max_count)
+        object.__setattr__(self, "negated", negated)
+        if name is None:
+            predicate = f"not in {tokens!r}" if negated else f"in {tokens!r}"
+            bounds = []
+            if min_count is not None:
+                bounds.append(f"at least {min_count}")
+            if max_count is not None:
+                bounds.append(f"at most {max_count}")
+            name = f"{' and '.join(bounds)} token(s) {predicate}"
+        object.__setattr__(self, "name", name)
+
+    def to_dfa(self, vocabulary: TokenVocabulary) -> DFA:
+        """Build a finite counter DFA for this token-set predicate."""
+        token_labels = frozenset(vocabulary.label_for_token(token) for token in self.tokens)
+        alphabet = frozenset(vocabulary.alphabet)
+        max_count = self.max_count
+        min_count = self.min_count or 0
+        if max_count is None:
+            max_state = min_count
+            dead = None
+        else:
+            max_state = max_count + 1
+            dead = max_state
+        states = frozenset(range(max_state + 1))
+
+        def matches(symbol):
+            in_set = symbol in token_labels
+            return not in_set if self.negated else in_set
+
+        def step(state, symbol):
+            if dead is not None and state == dead:
+                return dead
+            if not matches(symbol):
+                return state
+            if max_count is None:
+                return min(state + 1, min_count)
+            return min(state + 1, dead)
+
+        accepting = {
+            state
+            for state in states
+            if state >= min_count and (max_count is None or state <= max_count)
+        }
+        return DFA(
+            states=states,
+            alphabet=alphabet,
+            transitions=_complete_transitions(states, alphabet, step),
+            start_state=0,
+            accepting_states=frozenset(accepting),
+            dead_states=frozenset({dead}) if dead is not None else frozenset(),
+        )
+
+
+@dataclass(frozen=True)
+class AfterTokenAllowedConstraint(GenerationConstraint):
+    """Require all tokens after a trigger token to be in an allowed set."""
+
+    trigger_tokens: tuple[str, ...]
+    allowed_tokens: tuple[str, ...]
+    name: str | None = None
+    supports_domiknows = False
+
+    def __init__(
+        self,
+        trigger_tokens: Iterable[str],
+        allowed_tokens: Iterable[str],
+        name: str | None = None,
+    ):
+        trigger_tokens = tuple(trigger_tokens)
+        allowed_tokens = tuple(allowed_tokens)
+        if not trigger_tokens:
+            raise ValueError("trigger_tokens must not be empty")
+        if not allowed_tokens:
+            raise ValueError("allowed_tokens must not be empty")
+        object.__setattr__(self, "trigger_tokens", trigger_tokens)
+        object.__setattr__(self, "allowed_tokens", allowed_tokens)
+        object.__setattr__(
+            self,
+            "name",
+            name or f"after {trigger_tokens!r}, only {allowed_tokens!r} may appear",
+        )
+
+    def to_dfa(self, vocabulary: TokenVocabulary) -> DFA:
+        """Build a three-state DFA for this suffix restriction."""
+        triggers = frozenset(vocabulary.label_for_token(token) for token in self.trigger_tokens)
+        allowed = frozenset(vocabulary.label_for_token(token) for token in self.allowed_tokens)
+        alphabet = frozenset(vocabulary.alphabet)
+        states = frozenset({"open", "after", "dead"})
+
+        def step(state, symbol):
+            if state == "dead":
+                return "dead"
+            if state == "after":
+                return "after" if symbol in allowed else "dead"
+            return "after" if symbol in triggers else "open"
+
+        return DFA(
+            states=states,
+            alphabet=alphabet,
+            transitions=_complete_transitions(states, alphabet, step),
+            start_state="open",
+            accepting_states=frozenset({"open", "after"}),
+            dead_states=frozenset({"dead"}),
+        )
+
+
+@dataclass(frozen=True)
+class ComplementGenerationConstraint(GenerationConstraint):
+    """Negation of a DFA-compilable child generation constraint."""
+
+    child: GenerationConstraint
+    name: str | None = None
+    supports_domiknows = False
+
+    def __init__(self, child: GenerationConstraint, name: str | None = None):
+        object.__setattr__(self, "child", child)
+        object.__setattr__(self, "name", name or f"not ({child.name})")
+
+    def to_dfa(self, vocabulary: TokenVocabulary) -> DFA:
+        """Compile the child DFA and complement it."""
+        return complement_dfa(self.child.to_dfa(vocabulary))
 
 
 @dataclass(frozen=True)

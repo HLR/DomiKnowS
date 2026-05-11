@@ -1,4 +1,5 @@
 import pytest
+import torch
 
 from domiknows.generation.automata import (
     DFA,
@@ -8,6 +9,7 @@ from domiknows.generation.automata import (
     constrained_hankel_matrix,
     hankel_matrix,
     spectral_learn_from_oracle,
+    spectral_learn_from_counts,
     spectral_learn_from_samples,
     start_product_state,
     step_product_state,
@@ -52,9 +54,8 @@ def test_oracle_learning_recovers_known_wfa_hankel_values():
 
     assert result.rank == 2
     assert len(result.singular_values) == min(len(basis.prefixes), len(basis.suffixes))
-    assert result.diagnostics["relative_reconstruction_error"] < 1e-10
-    for expected_row, learned_row in zip(expected, learned):
-        assert learned_row == pytest.approx(expected_row, abs=1e-9)
+    assert result.diagnostics["relative_reconstruction_error"] < 1e-8
+    assert torch.allclose(learned, expected.to(dtype=learned.dtype), atol=1e-8)
 
 
 def test_sample_learning_scores_frequent_strings_above_rare_strings():
@@ -72,6 +73,28 @@ def test_sample_learning_scores_frequent_strings_above_rare_strings():
     assert result.diagnostics["max_score"] >= result.diagnostics["min_score"]
 
 
+def test_count_learning_matches_repeated_sample_learning():
+    basis = build_spectral_basis(["a", "b"], max_prefix_len=1, max_suffix_len=1)
+    from_counts = spectral_learn_from_counts(
+        {("a",): 5, ("b",): 2, ("a", "b"): 1},
+        symbols=["a", "b"],
+        rank=2,
+        basis=basis,
+    )
+    from_samples = spectral_learn_from_samples(
+        [("a",), ("a",), ("a",), ("a",), ("a",), ("b",), ("b",), ("a", "b")],
+        symbols=["a", "b"],
+        rank=2,
+        basis=basis,
+    )
+
+    assert torch.allclose(
+        hankel_matrix(from_counts.model, basis.prefixes, basis.suffixes),
+        hankel_matrix(from_samples.model, basis.prefixes, basis.suffixes),
+        atol=1e-6,
+    )
+
+
 def test_learned_wfa_works_with_hankel_projection_and_product_state():
     source = build_known_wfa()
     basis = build_spectral_basis(["a", "b"], max_prefix_len=1, max_suffix_len=1)
@@ -82,7 +105,7 @@ def test_learned_wfa_works_with_hankel_projection_and_product_state():
     state = start_product_state(result.model, dfa)
     after_a = step_product_state(result.model, dfa, state, "a")
 
-    assert projected[basis.prefixes.index(("a",))][basis.suffixes.index(("b",))] == 0.0
+    assert float(projected[basis.prefixes.index(("a",)), basis.suffixes.index(("b",))]) == 0.0
     assert after_a is not None
     assert after_a.dfa_state == "ok"
     assert step_product_state(result.model, dfa, after_a, "b") is None

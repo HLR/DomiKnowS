@@ -15,6 +15,10 @@ def test_hmm_factor_program_builds_and_compiles_dfa():
     artifacts = hmm_factor_program.build_hmm_factor_program(pad_size=4)
 
     assert artifacts.bundle.state_names == ("PER", "O", "LOC")
+    assert artifacts.bundle.include_dp_factors
+    assert artifacts.bundle.forward_state is not None
+    assert artifacts.bundle.backward_state is not None
+    assert artifacts.bundle.transition_pair is not None
     assert artifacts.dfa.accepts([1, 2, 3, 0])
     assert not artifacts.dfa.accepts([1, 4, 2, 0])
 
@@ -40,10 +44,15 @@ def test_hmm_factor_program_returns_finite_losses():
         artifacts.head,
         hmm_factor_program.target_labels_for_sample(artifacts),
     )
+    dp_loss = hmm_factor_program.hmm_dp_factor_consistency_loss(
+        artifacts.head,
+        hmm_factor_program.target_labels_for_sample(artifacts),
+    )
 
     assert torch.isfinite(model_loss)
     assert torch.isfinite(constraint_loss)
     assert torch.isfinite(hmm_loss)
+    assert torch.isfinite(dp_loss)
 
 
 def test_hmm_factor_training_step_updates_shared_parameters():
@@ -53,7 +62,13 @@ def test_hmm_factor_training_step_updates_shared_parameters():
 
     losses = hmm_factor_program.run_one_hmm_factor_step(artifacts, lr=0.5)
 
-    assert set(losses) == {"model_loss", "constraint_loss", "hmm_factor_nll", "total_loss"}
+    assert set(losses) == {
+        "model_loss",
+        "constraint_loss",
+        "hmm_factor_nll",
+        "hmm_dp_factor_loss",
+        "total_loss",
+    }
     assert all(torch.isfinite(torch.tensor(value)) for value in losses.values())
     assert not torch.allclose(before, artifacts.head.initial_logits.detach())
 
@@ -77,6 +92,8 @@ def test_hmm_factor_demo_runs_short_loop(capsys):
     captured = capsys.readouterr().out
 
     assert "HMM factor graph path" in captured
+    assert "DP factor DataNodes: enabled" in captured
     assert "latent_preds=" in captured
+    assert "hmm_dp_factor_loss" in captured
     assert "Step 1:" in captured
     assert "After DFA-constrained:" in captured

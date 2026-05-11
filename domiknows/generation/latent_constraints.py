@@ -44,14 +44,47 @@ Example: ``("and", 3, ("or", 5, 7))`` means
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TypeAlias
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, TypeAlias
 
 import torch
 
-#: A recursive formula over integer label ids.  Either a bare label ``int``
-#: or a nested ``("and" | "or", operand, ...)`` tuple.
-Formula: TypeAlias = int | tuple[object, ...]
+@dataclass(frozen=True)
+class LabelRef:
+    """Reference to a label in a named probability concept.
+
+    Plain integer formula leaves continue to refer to the default concept,
+    usually ``"generated_token"``.  Use ``LabelRef("latent_state", 2)`` when
+    evaluating formulas over a dictionary of probability tensors.
+    """
+
+    concept: str
+    label: int
+
+
+@dataclass(frozen=True)
+class LatentLossItem:
+    """Diagnostics for one latent window-loss term."""
+
+    name: str
+    raw_loss: torch.Tensor
+    weighted_loss: torch.Tensor
+    weight: float
+    top_violations: tuple[tuple[int, int, float], ...]
+
+
+@dataclass(frozen=True)
+class LatentLossBreakdown:
+    """Total latent loss plus per-spec diagnostics."""
+
+    total: torch.Tensor
+    items: tuple[LatentLossItem, ...]
+
+
+#: A recursive formula over label ids.  Leaves are either bare integer labels
+#: in the default concept or :class:`LabelRef` values for cross-concept rules.
+Formula: TypeAlias = int | LabelRef | tuple[object, ...]
 
 
 def soft_not(value: torch.Tensor) -> torch.Tensor:
@@ -151,6 +184,66 @@ def soft_exists(probs: torch.Tensor, label: int, start: int, end: int) -> torch.
     return result if was_batched else result.squeeze(0)
 
 
+def evaluate_latent_loss(
+    specs: Sequence[Any],
+    probs: torch.Tensor | Mapping[str, torch.Tensor],
+    *,
+    mask: torch.Tensor | None = None,
+    lengths: torch.Tensor | Sequence[int] | None = None,
+    eos_label: int | LabelRef | None = None,
+    top_k: int = 3,
+) -> LatentLossBreakdown:
+    """Evaluate latent window specs and return weighted diagnostics.
+
+    ``specs`` are intentionally duck-typed so callers can pass
+    :class:`domiknows.generation.enforcement.LatentWindowSpec` without creating
+    an import cycle.  Each spec should expose ``if_label``, ``formula``,
+    ``window``, ``weight``, ``reduction``, and optionally ``name`` /
+    ``concept`` / ``empty_window_policy``.
+    """
+    reference = _reference_tensor(probs)
+    if not specs:
+        return LatentLossBreakdown(reference.new_zeros(()), ())
+
+    items: list[LatentLossItem] = []
+    total = reference.new_zeros(())
+    for index, spec in enumerate(specs):
+        concept = getattr(spec, "concept", "generated_token")
+        empty_window_policy = getattr(spec, "empty_window_policy", "penalize")
+        per_position = window_formula_penalty_tensor(
+            probs,
+            getattr(spec, "if_label"),
+            getattr(spec, "formula"),
+            getattr(spec, "window"),
+            concept=concept,
+            mask=mask,
+            lengths=lengths,
+            eos_label=eos_label,
+            empty_window_policy=empty_window_policy,
+        )
+        raw_loss = _reduce_loss(
+            per_position.loss,
+            getattr(spec, "reduction", "mean"),
+            per_position.was_batched,
+            position_mask=per_position.position_mask,
+        )
+        weighted = raw_loss * float(getattr(spec, "weight", 1.0))
+        if weighted.dim() > 0:
+            total = total + weighted.mean()
+        else:
+            total = total + weighted
+        items.append(
+            LatentLossItem(
+                name=getattr(spec, "name", None) or f"latent_{index}",
+                raw_loss=raw_loss,
+                weighted_loss=weighted,
+                weight=float(getattr(spec, "weight", 1.0)),
+                top_violations=_top_violations(per_position.loss, per_position.position_mask, top_k),
+            )
+        )
+    return LatentLossBreakdown(total, tuple(items))
+
+
 def implication_loss(lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
     """Element-wise product-logic implication penalty: p * (1 - q).
 
@@ -175,6 +268,10 @@ def chain_exists_loss(
     window: int,
     *,
     reduction: str = "mean",
+    mask: torch.Tensor | None = None,
+    lengths: torch.Tensor | Sequence[int] | None = None,
+    eos_label: int | None = None,
+    empty_window_policy: str = "penalize",
 ) -> torch.Tensor:
     """Soft loss for: IF token_t == if_label THEN EXISTS then_label in [t+1, t+window].
 
@@ -204,11 +301,18 @@ def chain_exists_loss(
     _validate_label(if_label, probs.shape[-1])
     _validate_label(then_label, probs.shape[-1])
 
-    # LHS: probability of if_label at each position — shape [batch, seq_len].
+    position_mask = _build_position_mask(
+        probs,
+        mask=mask,
+        lengths=lengths,
+        eos_label=eos_label,
+        was_batched=was_batched,
+    )
     lhs = probs[:, :, int(if_label)]
-    # RHS: soft existence of then_label in the forward window — same shape.
-    rhs = _window_exists(probs, int(then_label), window)
-    return _reduce_loss(implication_loss(lhs, rhs), reduction, was_batched)
+    rhs = _window_exists(probs, int(then_label), window, position_mask=position_mask)
+    losses = implication_loss(lhs, rhs)
+    position_mask = _apply_empty_window_policy(position_mask, window, empty_window_policy)
+    return _reduce_loss(losses, reduction, was_batched, position_mask=position_mask)
 
 
 def window_all_loss(
@@ -218,6 +322,10 @@ def window_all_loss(
     window: int,
     *,
     reduction: str = "mean",
+    mask: torch.Tensor | None = None,
+    lengths: torch.Tensor | Sequence[int] | None = None,
+    eos_label: int | None = None,
+    empty_window_policy: str = "penalize",
 ) -> torch.Tensor:
     """Soft loss for: IF token_t == if_label THEN ALL required_labels appear in [t+1, t+window].
 
@@ -243,7 +351,17 @@ def window_all_loss(
         raise ValueError("required_labels must not be empty")
     # Build an AND formula over all required labels.
     formula: Formula = ("and", *[int(label) for label in required_labels])
-    return window_formula_loss(probs, if_label, formula, window, reduction=reduction)
+    return window_formula_loss(
+        probs,
+        if_label,
+        formula,
+        window,
+        reduction=reduction,
+        mask=mask,
+        lengths=lengths,
+        eos_label=eos_label,
+        empty_window_policy=empty_window_policy,
+    )
 
 
 def window_any_loss(
@@ -253,6 +371,10 @@ def window_any_loss(
     window: int,
     *,
     reduction: str = "mean",
+    mask: torch.Tensor | None = None,
+    lengths: torch.Tensor | Sequence[int] | None = None,
+    eos_label: int | None = None,
+    empty_window_policy: str = "penalize",
 ) -> torch.Tensor:
     """Soft loss for: IF token_t == if_label THEN ANY candidate_label appears in [t+1, t+window].
 
@@ -278,16 +400,31 @@ def window_any_loss(
         raise ValueError("candidate_labels must not be empty")
     # Build an OR formula over all candidate labels.
     formula: Formula = ("or", *[int(label) for label in candidate_labels])
-    return window_formula_loss(probs, if_label, formula, window, reduction=reduction)
+    return window_formula_loss(
+        probs,
+        if_label,
+        formula,
+        window,
+        reduction=reduction,
+        mask=mask,
+        lengths=lengths,
+        eos_label=eos_label,
+        empty_window_policy=empty_window_policy,
+    )
 
 
 def window_formula_loss(
-    probs: torch.Tensor,
-    if_label: int,
+    probs: torch.Tensor | Mapping[str, torch.Tensor],
+    if_label: int | LabelRef,
     formula: Formula,
     window: int,
     *,
     reduction: str = "mean",
+    concept: str = "generated_token",
+    mask: torch.Tensor | None = None,
+    lengths: torch.Tensor | Sequence[int] | None = None,
+    eos_label: int | LabelRef | None = None,
+    empty_window_policy: str = "penalize",
 ) -> torch.Tensor:
     """Soft loss for: IF token_t == if_label THEN formula is satisfied in [t+1, t+window].
 
@@ -315,16 +452,70 @@ def window_formula_loss(
         ValueError: If *window* < 1, *if_label* is out of range, or
             *formula* contains an unknown operator.
     """
-    probs, was_batched = _as_batched_probs(probs)
-    _validate_window(window)
-    _validate_label(if_label, probs.shape[-1])
+    per_position = window_formula_penalty_tensor(
+        probs,
+        if_label,
+        formula,
+        window,
+        concept=concept,
+        mask=mask,
+        lengths=lengths,
+        eos_label=eos_label,
+        empty_window_policy=empty_window_policy,
+    )
+    return _reduce_loss(
+        per_position.loss,
+        reduction,
+        per_position.was_batched,
+        position_mask=per_position.position_mask,
+    )
 
-    # LHS: antecedent probability at each position.
-    lhs = probs[:, :, int(if_label)]
-    # RHS: recursive evaluation of the formula over the forward window.
-    rhs = _evaluate_window_formula(probs, formula, window)
-    # Implication loss: IF lhs THEN rhs
-    return _reduce_loss(implication_loss(lhs, rhs), reduction, was_batched)
+
+@dataclass(frozen=True)
+class _PerPositionLoss:
+    loss: torch.Tensor
+    position_mask: torch.Tensor | None
+    was_batched: bool
+
+
+def window_formula_penalty_tensor(
+    probs: torch.Tensor | Mapping[str, torch.Tensor],
+    if_label: int | LabelRef,
+    formula: Formula,
+    window: int,
+    *,
+    concept: str = "generated_token",
+    mask: torch.Tensor | None = None,
+    lengths: torch.Tensor | Sequence[int] | None = None,
+    eos_label: int | LabelRef | None = None,
+    empty_window_policy: str = "penalize",
+) -> _PerPositionLoss:
+    """Return per-position implication penalties for a latent window formula."""
+    tensors, was_batched = _normalise_prob_mapping(probs, default_concept=concept)
+    _validate_window(window)
+    default_probs = tensors[str(concept)]
+    position_mask = _build_position_mask(
+        default_probs,
+        mask=mask,
+        lengths=lengths,
+        eos_label=eos_label,
+        was_batched=was_batched,
+        probs_by_concept=tensors,
+        default_concept=concept,
+    )
+    lhs_ref = _coerce_label_ref(if_label, concept)
+    lhs_probs = _probs_for_ref(tensors, lhs_ref)
+    lhs = lhs_probs[:, :, lhs_ref.label]
+    rhs = _evaluate_window_formula(
+        tensors,
+        formula,
+        window,
+        default_concept=concept,
+        position_mask=position_mask,
+    )
+    losses = implication_loss(lhs, rhs)
+    position_mask = _apply_empty_window_policy(position_mask, window, empty_window_policy)
+    return _PerPositionLoss(losses, position_mask, was_batched)
 
 
 def _as_batched_probs(probs: torch.Tensor) -> tuple[torch.Tensor, bool]:
@@ -347,6 +538,53 @@ def _as_batched_probs(probs: torch.Tensor) -> tuple[torch.Tensor, bool]:
     if probs.dim() == 3:
         return probs, True
     raise ValueError("probs must have shape [seq_len, label_count] or [batch, seq_len, label_count]")
+
+
+def _reference_tensor(probs: torch.Tensor | Mapping[str, torch.Tensor]) -> torch.Tensor:
+    if isinstance(probs, Mapping):
+        if not probs:
+            raise ValueError("probs mapping must not be empty")
+        first = next(iter(probs.values()))
+        return first if isinstance(first, torch.Tensor) else torch.as_tensor(first, dtype=torch.float32)
+    return probs if isinstance(probs, torch.Tensor) else torch.as_tensor(probs, dtype=torch.float32)
+
+
+def _normalise_prob_mapping(
+    probs: torch.Tensor | Mapping[str, torch.Tensor],
+    *,
+    default_concept: str,
+) -> tuple[dict[str, torch.Tensor], bool]:
+    if isinstance(probs, Mapping):
+        tensors: dict[str, torch.Tensor] = {}
+        was_batched: bool | None = None
+        shape: tuple[int, int] | None = None
+        for name, value in probs.items():
+            batched, current_was_batched = _as_batched_probs(value)
+            if was_batched is None:
+                was_batched = current_was_batched
+                shape = (batched.shape[0], batched.shape[1])
+            elif shape != (batched.shape[0], batched.shape[1]):
+                raise ValueError("all probability concepts must share batch and sequence dimensions")
+            tensors[str(name)] = batched
+        if default_concept not in tensors:
+            raise ValueError(f"probability mapping is missing default concept {default_concept!r}")
+        return tensors, bool(was_batched)
+    batched, was_batched = _as_batched_probs(probs)
+    return {str(default_concept): batched}, was_batched
+
+
+def _coerce_label_ref(label: int | LabelRef, default_concept: str) -> LabelRef:
+    if isinstance(label, LabelRef):
+        return label
+    return LabelRef(str(default_concept), int(label))
+
+
+def _probs_for_ref(tensors: Mapping[str, torch.Tensor], ref: LabelRef) -> torch.Tensor:
+    if ref.concept not in tensors:
+        raise ValueError(f"probability mapping is missing concept {ref.concept!r}")
+    probs = tensors[ref.concept]
+    _validate_label(int(ref.label), probs.shape[-1])
+    return probs
 
 
 def _validate_label(label: int, label_count: int) -> None:
@@ -379,7 +617,75 @@ def _validate_window(window: int) -> None:
         raise ValueError("window must be at least 1")
 
 
-def _window_exists(probs: torch.Tensor, label: int, window: int) -> torch.Tensor:
+def _build_position_mask(
+    probs: torch.Tensor,
+    *,
+    mask: torch.Tensor | None,
+    lengths: torch.Tensor | Sequence[int] | None,
+    eos_label: int | LabelRef | None,
+    was_batched: bool,
+    probs_by_concept: Mapping[str, torch.Tensor] | None = None,
+    default_concept: str = "generated_token",
+) -> torch.Tensor | None:
+    batch_size, seq_len, _label_count = probs.shape
+    result = None
+    if lengths is not None:
+        lengths_t = torch.as_tensor(lengths, dtype=torch.long, device=probs.device)
+        if lengths_t.dim() == 0:
+            lengths_t = lengths_t.view(1)
+        if not was_batched and lengths_t.numel() == 1:
+            pass
+        elif lengths_t.numel() != batch_size:
+            raise ValueError("lengths must have one value per batch item")
+        positions = torch.arange(seq_len, device=probs.device).unsqueeze(0)
+        result = positions < lengths_t.view(-1, 1).clamp_min(0).clamp_max(seq_len)
+    if mask is not None:
+        mask_t = torch.as_tensor(mask, dtype=torch.bool, device=probs.device)
+        if mask_t.dim() == 1:
+            mask_t = mask_t.unsqueeze(0)
+        if mask_t.shape != (batch_size, seq_len):
+            raise ValueError("mask must have shape [seq_len] or [batch, seq_len]")
+        result = mask_t if result is None else (result & mask_t)
+    if eos_label is not None:
+        ref = _coerce_label_ref(eos_label, default_concept)
+        source = _probs_for_ref(probs_by_concept or {default_concept: probs}, ref)
+        eos_positions = torch.argmax(source, dim=-1) == ref.label
+        eos_seen = torch.cumsum(eos_positions.to(torch.int64), dim=1) > 0
+        before_or_at_first_eos = ~torch.roll(eos_seen, shifts=1, dims=1)
+        before_or_at_first_eos[:, 0] = True
+        eos_mask = before_or_at_first_eos | eos_positions
+        result = eos_mask if result is None else (result & eos_mask)
+    return result
+
+
+def _apply_empty_window_policy(
+    position_mask: torch.Tensor | None,
+    window: int,
+    empty_window_policy: str,
+) -> torch.Tensor | None:
+    if empty_window_policy not in {"penalize", "ignore"}:
+        raise ValueError("empty_window_policy must be 'penalize' or 'ignore'")
+    if empty_window_policy == "penalize":
+        return position_mask
+    if position_mask is None:
+        return None
+    batch_size, seq_len = position_mask.shape
+    has_future = torch.zeros_like(position_mask)
+    for pos in range(seq_len):
+        start = pos + 1
+        end = min(seq_len, pos + 1 + int(window))
+        if start < end:
+            has_future[:, pos] = position_mask[:, start:end].any(dim=1)
+    return position_mask & has_future
+
+
+def _window_exists(
+    probs: torch.Tensor,
+    label: int,
+    window: int,
+    *,
+    position_mask: torch.Tensor | None = None,
+) -> torch.Tensor:
     """Compute the soft existence of *label* in each position's forward window.
 
     For every position *t* in ``[0, seq_len)``, fills
@@ -403,11 +709,21 @@ def _window_exists(probs: torch.Tensor, label: int, window: int) -> torch.Tensor
         end = min(seq_len, pos + 1 + int(window))
         # Only fill positions where at least one future step exists.
         if start < end:
-            values[:, pos] = soft_exists(probs, label, start, end)
+            window_probs = probs[:, start:end, int(label)]
+            if position_mask is not None:
+                window_probs = window_probs * position_mask[:, start:end].to(dtype=probs.dtype)
+            values[:, pos] = soft_not(torch.prod(soft_not(window_probs), dim=1))
     return values
 
 
-def _evaluate_window_formula(probs: torch.Tensor, formula: Formula, window: int) -> torch.Tensor:
+def _evaluate_window_formula(
+    probs_by_concept: Mapping[str, torch.Tensor],
+    formula: Formula,
+    window: int,
+    *,
+    default_concept: str,
+    position_mask: torch.Tensor | None = None,
+) -> torch.Tensor:
     """Recursively evaluate a :data:`Formula` over each position's forward window.
 
     Base case: an integer label id maps to :func:`_window_exists`.
@@ -426,9 +742,11 @@ def _evaluate_window_formula(probs: torch.Tensor, formula: Formula, window: int)
     Raises:
         ValueError: If *formula* has an unrecognised operator or is malformed.
     """
-    if isinstance(formula, int):
+    if isinstance(formula, (int, LabelRef)):
         # Leaf node: soft existence of this label in the window.
-        return _window_exists(probs, formula, window)
+        ref = _coerce_label_ref(formula, default_concept)
+        probs = _probs_for_ref(probs_by_concept, ref)
+        return _window_exists(probs, ref.label, window, position_mask=position_mask)
     if not isinstance(formula, tuple) or len(formula) < 2:
         raise ValueError("formula must be a label id or a non-empty ('and'/'or', ...) tuple")
 
@@ -436,11 +754,26 @@ def _evaluate_window_formula(probs: torch.Tensor, formula: Formula, window: int)
     if op not in {"and", "or"}:
         raise ValueError("formula operator must be 'and' or 'or'")
     # Recurse into each child operand.
-    values = [_evaluate_window_formula(probs, child, window) for child in formula[1:]]
+    values = [
+        _evaluate_window_formula(
+            probs_by_concept,
+            child,
+            window,
+            default_concept=default_concept,
+            position_mask=position_mask,
+        )
+        for child in formula[1:]
+    ]
     return soft_and(*values) if op == "and" else soft_or(*values)
 
 
-def _reduce_loss(per_position_loss: torch.Tensor, reduction: str, was_batched: bool) -> torch.Tensor:
+def _reduce_loss(
+    per_position_loss: torch.Tensor,
+    reduction: str,
+    was_batched: bool,
+    *,
+    position_mask: torch.Tensor | None = None,
+) -> torch.Tensor:
     """Average per-position losses to per-sequence, then apply batch reduction.
 
     Reduction is always applied first over the sequence dimension (``dim=1``)
@@ -461,8 +794,13 @@ def _reduce_loss(per_position_loss: torch.Tensor, reduction: str, was_batched: b
     Raises:
         ValueError: If *reduction* is not one of the accepted values.
     """
-    # Average per-position penalties into a single value per sequence.
-    per_sequence = per_position_loss.mean(dim=1)
+    if position_mask is not None:
+        weighted = per_position_loss * position_mask.to(dtype=per_position_loss.dtype)
+        denom = position_mask.to(dtype=per_position_loss.dtype).sum(dim=1).clamp_min(1.0)
+        per_sequence = weighted.sum(dim=1) / denom
+    else:
+        # Average per-position penalties into a single value per sequence.
+        per_sequence = per_position_loss.mean(dim=1)
     if reduction == "none":
         # Return per-sequence losses; squeeze batch dim for unbatched inputs.
         return per_sequence if was_batched else per_sequence.squeeze(0)
@@ -471,3 +809,27 @@ def _reduce_loss(per_position_loss: torch.Tensor, reduction: str, was_batched: b
     if reduction == "sum":
         return per_sequence.sum()
     raise ValueError("reduction must be 'none', 'mean', or 'sum'")
+
+
+def _top_violations(
+    per_position_loss: torch.Tensor,
+    position_mask: torch.Tensor | None,
+    top_k: int,
+) -> tuple[tuple[int, int, float], ...]:
+    if top_k <= 0:
+        return ()
+    values = per_position_loss.detach()
+    if position_mask is not None:
+        values = values.masked_fill(~position_mask, 0.0)
+    flat = values.flatten()
+    if flat.numel() == 0:
+        return ()
+    count = min(int(top_k), flat.numel())
+    top = torch.topk(flat, k=count)
+    seq_len = values.shape[1]
+    out = []
+    for flat_index, score in zip(top.indices.tolist(), top.values.tolist(), strict=False):
+        if score <= 0:
+            continue
+        out.append((int(flat_index // seq_len), int(flat_index % seq_len), float(score)))
+    return tuple(out)

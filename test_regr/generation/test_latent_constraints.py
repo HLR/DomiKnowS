@@ -2,7 +2,10 @@ import pytest
 import torch
 
 from domiknows.generation import (
+    LabelRef,
+    LatentWindowSpec,
     chain_exists_loss,
+    evaluate_latent_loss,
     implication_loss,
     soft_and,
     soft_exists,
@@ -124,3 +127,44 @@ def test_batched_latent_losses_support_none_and_mean_reductions():
     assert per_batch[0].item() == pytest.approx(0.018, abs=1e-6)
     assert per_batch[1].item() == pytest.approx(0.18, abs=1e-6)
     assert mean_loss.item() == pytest.approx(per_batch.mean().item(), abs=1e-6)
+
+
+def test_latent_loss_supports_lengths_and_empty_window_ignore():
+    probs = empty_probs(seq_len=4)
+    probs[2, PER] = 1.0
+
+    penalized = window_formula_loss(probs, PER, ORG, window=2, lengths=[3])
+    ignored = window_formula_loss(
+        probs,
+        PER,
+        ORG,
+        window=2,
+        lengths=[3],
+        empty_window_policy="ignore",
+    )
+
+    assert penalized.item() > 0
+    assert ignored.item() == pytest.approx(0.0)
+
+
+def test_latent_loss_supports_cross_concept_label_refs_and_breakdown():
+    generated = empty_probs(seq_len=3)
+    latent = torch.zeros((3, 3), dtype=torch.float32)
+    latent[:, 1] = 1.0
+    generated[0, PER] = 0.9
+    latent[1, 2] = 0.8
+
+    specs = [
+        LatentWindowSpec(
+            if_label=LabelRef("generated_token", PER),
+            formula=LabelRef("latent_state", 2),
+            window=1,
+            weight=0.5,
+            name="per_then_state2",
+        )
+    ]
+    breakdown = evaluate_latent_loss(specs, {"generated_token": generated, "latent_state": latent})
+
+    assert breakdown.total.item() == pytest.approx(0.5 * (0.9 * 0.2 / 3.0), abs=1e-6)
+    assert breakdown.items[0].name == "per_then_state2"
+    assert breakdown.items[0].top_violations

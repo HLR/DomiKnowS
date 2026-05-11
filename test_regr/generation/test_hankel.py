@@ -1,4 +1,5 @@
 import pytest
+import torch
 
 from domiknows.generation.automata import (
     DFA,
@@ -41,10 +42,27 @@ def build_no_b_after_a_dfa():
 def test_wfa_probability_matches_manual_matrix_multiplication():
     wfa = build_toy_wfa()
 
-    assert wfa.prefix_state(()) == pytest.approx((1.0, 0.0))
-    assert wfa.prefix_state(("a",)) == pytest.approx((0.5, 0.5))
-    assert wfa.prefix_state(("a", "b")) == pytest.approx((0.2, 0.2))
+    assert torch.allclose(wfa.prefix_state(()), torch.tensor([1.0, 0.0]))
+    assert torch.allclose(wfa.prefix_state(("a",)), torch.tensor([0.5, 0.5]))
+    assert torch.allclose(wfa.prefix_state(("a", "b")), torch.tensor([0.2, 0.2]))
     assert wfa.sequence_probability(("a", "b")) == pytest.approx(0.2)
+
+
+def test_wfa_batched_scoring_hankel_tensor_and_serialization(tmp_path):
+    wfa = build_toy_wfa()
+    observations, lengths = wfa.encode([("a", "b"), ("b",)])
+
+    scores = wfa.score_batch(observations, lengths)
+    matrix = hankel_matrix(wfa, [(), ("a",)], [(), ("b",)])
+
+    assert scores.shape == (2,)
+    assert float(scores[0]) == pytest.approx(wfa.sequence_probability(("a", "b")))
+    assert matrix.shape == (2, 2)
+    assert matrix.device == wfa.device
+    wfa.save_pretrained(tmp_path)
+    loaded = WeightedFiniteAutomaton.from_pretrained(tmp_path)
+    assert loaded.symbols == wfa.symbols
+    assert torch.allclose(loaded.transition_tensor, wfa.transition_tensor)
 
 
 def test_hankel_matrix_entries_are_prefix_suffix_probabilities():
@@ -54,9 +72,9 @@ def test_hankel_matrix_entries_are_prefix_suffix_probabilities():
 
     matrix = hankel_matrix(wfa, prefixes, suffixes)
 
-    assert matrix[0][0] == pytest.approx(wfa.sequence_probability(()))
-    assert matrix[1][2] == pytest.approx(wfa.sequence_probability(("a", "b")))
-    assert matrix[2][1] == pytest.approx(wfa.sequence_probability(("b", "a")))
+    assert float(matrix[0, 0]) == pytest.approx(wfa.sequence_probability(()))
+    assert float(matrix[1, 2]) == pytest.approx(wfa.sequence_probability(("a", "b")))
+    assert float(matrix[2, 1]) == pytest.approx(wfa.sequence_probability(("b", "a")))
 
 
 def test_constrained_hankel_projects_rejected_strings_to_zero():
@@ -68,9 +86,9 @@ def test_constrained_hankel_projects_rejected_strings_to_zero():
     original = hankel_matrix(wfa, prefixes, suffixes)
     constrained = constrained_hankel_matrix(wfa, dfa, prefixes, suffixes)
 
-    assert constrained[1][2] == 0.0
-    assert original[1][2] == pytest.approx(wfa.sequence_probability(("a", "b")))
-    assert constrained[2][1] == pytest.approx(wfa.sequence_probability(("b", "a")))
+    assert float(constrained[1, 2]) == 0.0
+    assert float(original[1, 2]) == pytest.approx(wfa.sequence_probability(("a", "b")))
+    assert float(constrained[2, 1]) == pytest.approx(wfa.sequence_probability(("b", "a")))
 
 
 def test_projection_summary_reports_retained_mass_and_nonzero_counts():
@@ -94,10 +112,10 @@ def test_product_state_advances_wfa_and_dfa_together():
     start = start_product_state(wfa, dfa)
     after_a = step_product_state(wfa, dfa, start, "a")
 
-    assert start.wfa_state == pytest.approx(wfa.initial)
+    assert torch.allclose(start.wfa_state, wfa.initial)
     assert start.dfa_state == "start"
     assert after_a is not None
-    assert after_a.wfa_state == pytest.approx(wfa.prefix_state(("a",)))
+    assert torch.allclose(after_a.wfa_state, wfa.prefix_state(("a",)))
     assert after_a.dfa_state == "seen_a"
     assert after_a.score == pytest.approx(wfa.sequence_probability(("a",)))
 

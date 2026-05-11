@@ -1,6 +1,8 @@
 import pytest
+import torch
 
 from domiknows.generation.automata.hmm import (
+    DiscreteHMM,
     ProbabilisticAutomaton,
     all_sequences,
     baum_welch_train,
@@ -24,6 +26,35 @@ def test_toy_hmm_extracts_argmax_dfa_and_compares_sequences():
     assert summary["mean_hmm_probability"] > 0.0
 
 
+def test_discrete_hmm_batched_forward_backward_viterbi_and_serialization(tmp_path):
+    hmm = DiscreteHMM(
+        transition=[[0.8, 0.2], [0.3, 0.7]],
+        emission=[[0.9, 0.1], [0.2, 0.8]],
+        initial=[0.9, 0.1],
+        symbols=["a", "b"],
+        state_names=["hot", "cold"],
+        dtype=torch.float64,
+    )
+    observations, lengths = hmm.encode([["a", "b", "a"], ["b"]])
+
+    factors = hmm.forward_backward(observations, lengths)
+    log_probs = hmm.log_prob(observations, lengths)
+    paths, scores = hmm.viterbi(observations, lengths)
+
+    assert factors.alpha.shape == (2, 3, 2)
+    assert factors.xi.shape == (2, 2, 2, 2)
+    assert torch.isfinite(log_probs).all()
+    assert paths.shape == observations.shape
+    assert scores.shape == (2,)
+    assert hmm.sequence_probability(["a", "b"]) == pytest.approx(float(torch.exp(hmm.log_prob(torch.tensor([[0, 1]])))[0]))
+
+    hmm.save_pretrained(tmp_path)
+    loaded = DiscreteHMM.from_pretrained(tmp_path, dtype=torch.float64)
+    assert loaded.symbols == ("a", "b")
+    assert loaded.state_names == ("hot", "cold")
+    assert torch.allclose(loaded.transition, hmm.transition)
+
+
 def test_baum_welch_likelihood_is_non_decreasing_and_rows_are_stochastic():
     result = baum_welch_train(
         [["a", "a", "a"], ["a", "a", "b"], ["b", "b", "b"], ["b", "b", "a"]],
@@ -40,11 +71,9 @@ def test_baum_welch_likelihood_is_non_decreasing_and_rows_are_stochastic():
         for before, after in zip(result.log_likelihoods, result.log_likelihoods[1:])
     )
 
-    assert sum(result.model.initial) == pytest.approx(1.0)
-    for row in result.model.transition:
-        assert sum(row) == pytest.approx(1.0)
-    for row in result.model.emission:
-        assert sum(row) == pytest.approx(1.0)
+    assert float(result.model.initial.sum()) == pytest.approx(1.0)
+    assert torch.allclose(result.model.transition.sum(dim=-1), torch.ones(2, dtype=result.model.transition.dtype))
+    assert torch.allclose(result.model.emission.sum(dim=-1), torch.ones(2, dtype=result.model.emission.dtype))
 
 
 def test_baum_welch_fixed_seed_is_deterministic():
@@ -53,9 +82,9 @@ def test_baum_welch_fixed_seed_is_deterministic():
     second = baum_welch_train(sequences, ["a", "b"], 2, max_iter=5, random_seed=3)
 
     assert second.log_likelihoods == first.log_likelihoods
-    assert second.model.initial == first.model.initial
-    assert second.model.transition == first.model.transition
-    assert second.model.emission == first.model.emission
+    assert torch.allclose(second.model.initial, first.model.initial)
+    assert torch.allclose(second.model.transition, first.model.transition)
+    assert torch.allclose(second.model.emission, first.model.emission)
 
 
 def test_baum_welch_accepts_explicit_initial_model():
@@ -75,8 +104,8 @@ def test_baum_welch_accepts_explicit_initial_model():
     )
 
     assert result.model.symbols == ("a", "b")
-    assert result.model.emission[0][0] > result.model.emission[0][1]
-    assert result.model.emission[1][1] > result.model.emission[1][0]
+    assert result.model.emission[0, 0] > result.model.emission[0, 1]
+    assert result.model.emission[1, 1] > result.model.emission[1, 0]
 
 
 def test_trained_model_still_extracts_dfa_and_compares_with_checker():

@@ -1,20 +1,29 @@
+import warnings
+
 import pytest
 import torch
 
 from domiknows.generation import (
     AnyOfGenerationConstraint,
+    HMMFactorGraphEncoder,
+    LabelRef,
     GenerationEncoder,
+    GraphLatentCompilerResult,
     LatentWindowSpec,
+    LatentTransitionPotential,
     RequiredTokenConstraint,
     constraints_to_dfa,
     discover_generation_enforcement,
+    discover_latent_window_specs,
+    discover_transition_potentials,
+    graph_latent_compiler_result,
     mark_for_both,
     mark_for_dfa,
     mark_for_latent,
     required_token,
     window_formula_loss,
 )
-from domiknows.graph.logicalConstrain import andL, atLeastAL, existsAL, ifL, orL
+from domiknows.graph.logicalConstrain import andL, atLeastAL, existsAL, ifL, notL, orL
 
 
 class FakeTokenizer:
@@ -162,3 +171,206 @@ def test_unsupported_unmarked_generation_constraint_still_warns_or_errors():
 
     with pytest.raises(ValueError, match="not supported by generation DFA discovery"):
         discover_generation_enforcement(graph, bundle, on_unsupported="error")
+
+
+def test_auto_latent_discovery_compiles_adjacent_factor_rule():
+    encoder = HMMFactorGraphEncoder(
+        ["<eos>", "A", "B"],
+        eos_token="<eos>",
+        tokenizer=FakeTokenizer(),
+        state_names=("S0", "S1"),
+        include_dp_factors=False,
+    )
+    graph, bundle = encoder.build_graph()
+    with graph:
+        ifL(
+            bundle.context.is_next_rel("next"),
+            ifL(
+                bundle.context.latent_state_value("S0", "x", path=("next", bundle.context.current_token)),
+                bundle.context.latent_state_value("S1", "y", path=("next", bundle.context.next_token)),
+            ),
+        )
+
+    specs = discover_latent_window_specs(graph, bundle, mode="auto", on_unsupported="ignore")
+
+    assert len(specs) == 1
+    assert specs[0].if_label == LabelRef("latent_state", 0)
+    assert specs[0].formula == LabelRef("latent_state", 1)
+    assert specs[0].window == 1
+
+
+def test_transition_potential_discovery_compiles_forbidden_adjacent_state():
+    encoder = HMMFactorGraphEncoder(
+        ["<eos>", "A", "B"],
+        eos_token="<eos>",
+        tokenizer=FakeTokenizer(),
+        state_names=("S0", "S1"),
+        include_dp_factors=False,
+    )
+    graph, bundle = encoder.build_graph()
+    with graph:
+        ifL(
+            bundle.context.is_next_rel("next"),
+            ifL(
+                bundle.context.latent_state_value("S0", "x", path=("next", bundle.context.current_token)),
+                notL(bundle.context.latent_state_value("S1", "y", path=("next", bundle.context.next_token))),
+            ),
+        )
+
+    potentials = discover_transition_potentials(graph, bundle)
+
+    assert len(potentials) == 1
+    values = potentials[0].tensor_for(torch.ones((2, 2)))
+    assert values[0, 1].item() == pytest.approx(0.0)
+    assert values[1, 1].item() == pytest.approx(1.0)
+
+
+def test_custom_latent_compiler_adds_window_spec_to_enforcement():
+    graph, bundle = build_bundle()
+    a = bundle.vocabulary.label_for_token("A")
+    b = bundle.vocabulary.label_for_token("B")
+    custom_spec = LatentWindowSpec(if_label=a, formula=b, window=2, name="custom_a_then_b")
+    with graph:
+        andL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
+
+    def compiler(lc, bundle):
+        if lc.__class__.__name__ != "andL":
+            return None
+        return graph_latent_compiler_result(latent_specs=custom_spec, compiler_name="project")
+
+    enforcement = discover_generation_enforcement(
+        graph,
+        bundle,
+        on_unsupported="ignore",
+        extra_latent_compilers=[compiler],
+    )
+
+    assert enforcement.latent_specs == (custom_spec,)
+
+
+def test_custom_latent_compiler_adds_transition_potential_to_enforcement():
+    graph, bundle = build_bundle()
+    custom_potential = LatentTransitionPotential(torch.eye(2), name="custom_transition_bias")
+    with graph:
+        andL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
+
+    def compiler(lc, bundle):
+        if lc.__class__.__name__ != "andL":
+            return None
+        return graph_latent_compiler_result(
+            transition_potentials=custom_potential,
+            compiler_name="project",
+        )
+
+    enforcement = discover_generation_enforcement(
+        graph,
+        bundle,
+        on_unsupported="ignore",
+        extra_latent_compilers=[compiler],
+    )
+
+    assert enforcement.transition_potentials == (custom_potential,)
+
+
+def test_builtin_latent_compiler_wins_over_custom_compiler():
+    encoder = HMMFactorGraphEncoder(
+        ["<eos>", "A", "B"],
+        eos_token="<eos>",
+        tokenizer=FakeTokenizer(),
+        state_names=("S0", "S1"),
+        include_dp_factors=False,
+    )
+    graph, bundle = encoder.build_graph()
+    with graph:
+        ifL(
+            bundle.context.is_next_rel("next"),
+            ifL(
+                bundle.context.latent_state_value("S0", "x", path=("next", bundle.context.current_token)),
+                bundle.context.latent_state_value("S1", "y", path=("next", bundle.context.next_token)),
+            ),
+        )
+
+    custom_spec = LatentWindowSpec(if_label=0, formula=0, window=3, name="should_not_appear")
+    calls = []
+
+    def compiler(lc, bundle):
+        calls.append(lc)
+        return graph_latent_compiler_result(latent_specs=custom_spec, compiler_name="project")
+
+    specs = discover_latent_window_specs(
+        graph,
+        bundle,
+        mode="auto",
+        on_unsupported="ignore",
+        extra_compilers=[compiler],
+    )
+
+    assert calls == []
+    assert len(specs) == 1
+    assert specs[0].name != "should_not_appear"
+    assert specs[0].if_label == LabelRef("latent_state", 0)
+
+
+def test_custom_latent_compiler_deduplicates_specs():
+    graph, bundle = build_bundle()
+    a = bundle.vocabulary.label_for_token("A")
+    b = bundle.vocabulary.label_for_token("B")
+    custom_spec = LatentWindowSpec(if_label=a, formula=b, window=2, name="duplicate")
+    with graph:
+        andL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
+
+    def compiler(lc, bundle):
+        return graph_latent_compiler_result(
+            latent_specs=(custom_spec, custom_spec),
+            compiler_name="project",
+        )
+
+    specs = discover_latent_window_specs(
+        graph,
+        bundle,
+        on_unsupported="ignore",
+        extra_compilers=[compiler],
+    )
+
+    assert specs == (custom_spec,)
+
+
+def test_custom_latent_compiler_relevant_unsupported_warns_or_errors():
+    graph, bundle = build_bundle()
+    with graph:
+        andL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
+
+    def compiler(lc, bundle):
+        return GraphLatentCompilerResult(
+            relevant=True,
+            supported=False,
+            reason="project path requires runtime context",
+            compiler_name="project",
+        )
+
+    with pytest.warns(RuntimeWarning, match="project path requires runtime context"):
+        discover_latent_window_specs(graph, bundle, extra_compilers=[compiler], on_unsupported="warn")
+
+    with pytest.raises(ValueError, match="project path requires runtime context"):
+        discover_latent_window_specs(graph, bundle, extra_compilers=[compiler], on_unsupported="error")
+
+
+def test_custom_latent_compiler_irrelevant_result_is_ignored():
+    graph, bundle = build_bundle()
+    with graph:
+        andL(bundle.context.token_value("A", "x"), bundle.context.token_value("B", "x"))
+
+    def compiler(lc, bundle):
+        return graph_latent_compiler_result(
+            relevant=False,
+            supported=False,
+            reason="ignored",
+            compiler_name="project",
+        )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        specs = discover_latent_window_specs(graph, bundle, extra_compilers=[compiler], on_unsupported="warn")
+
+    assert specs == ()
+    assert caught == []

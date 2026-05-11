@@ -1,10 +1,12 @@
 """Hidden Markov Model (HMM) training and inference utilities.
 
 Provides:
-- ``ProbabilisticAutomaton``: a discrete HMM that can score observation
-  sequences and be extracted into a deterministic finite automaton (DFA).
+- ``DiscreteHMM``: a Torch-backed discrete HMM that can score batched
+  observation sequences, expose forward/backward factors, run Viterbi, sample,
+  serialize, and be extracted into a deterministic finite automaton (DFA).
+- ``ProbabilisticAutomaton``: a legacy compatibility wrapper for examples.
 - ``HMMParameters`` / ``BaumWelchResult``: lightweight data containers.
-- ``baum_welch_train``: dependency-free Baum-Welch EM training with scaled
+- ``baum_welch_train``: batched Torch Baum-Welch EM training with scaled
   forward-backward to avoid floating-point underflow.
 - ``compare_hmm_dfa``: evaluation helper that compares HMM acceptance against
   a reference DFA over a corpus of sequences.
@@ -12,17 +14,427 @@ Provides:
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from itertools import product
+from pathlib import Path
 from random import Random
 from typing import Iterable, Sequence
 
+import torch
+
 from .dfa import DFA
+from ..latent_potentials import LatentTransitionPotential, apply_hmm_transition_potential
+
+
+@dataclass(frozen=True)
+class HMMForwardBackward:
+    """Batched HMM dynamic-programming factors."""
+
+    alpha: torch.Tensor
+    beta: torch.Tensor
+    gamma: torch.Tensor
+    xi: torch.Tensor
+    scales: torch.Tensor
+    log_likelihood: torch.Tensor
+    mask: torch.Tensor
+
+
+class DiscreteHMM:
+    """Torch-backed discrete HMM/PFA for production scoring and training.
+
+    Parameters are stored as row-stochastic tensors and all sequence APIs accept
+    batched integer observations shaped ``[batch, seq]`` plus optional lengths.
+    Small string-sequence helpers remain available for inspection and examples.
+    """
+
+    def __init__(
+        self,
+        transition: torch.Tensor | Sequence[Sequence[float]],
+        emission: torch.Tensor | Sequence[Sequence[float]],
+        initial: torch.Tensor | Sequence[float],
+        symbols: Sequence[object],
+        *,
+        state_names: Sequence[str] | None = None,
+        normalize: bool = True,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        symbols = tuple(symbols)
+        _validate_symbol_tuple(symbols)
+        dtype = dtype or torch.float32
+        transition_t = torch.as_tensor(transition, dtype=dtype, device=device)
+        emission_t = torch.as_tensor(emission, dtype=dtype, device=device)
+        initial_t = torch.as_tensor(initial, dtype=dtype, device=device)
+        if normalize:
+            initial_t = _normalize_tensor(initial_t, dim=0)
+            transition_t = _normalize_tensor(transition_t, dim=-1)
+            emission_t = _normalize_tensor(emission_t, dim=-1)
+        _validate_hmm_tensors(initial_t, transition_t, emission_t, len(symbols))
+        if state_names is None:
+            state_names = tuple(f"S{i}" for i in range(initial_t.numel()))
+        else:
+            state_names = tuple(str(name) for name in state_names)
+            if len(state_names) != initial_t.numel():
+                raise ValueError("state_names length must match state count")
+            if len(set(state_names)) != len(state_names):
+                raise ValueError("state_names must be unique")
+        self.initial_probs = initial_t
+        self.transition_probs = transition_t
+        self.emission_probs = emission_t
+        self.symbols = symbols
+        self.state_names = tuple(state_names)
+        self._symbol_index = {symbol: i for i, symbol in enumerate(symbols)}
+
+    @property
+    def state_count(self) -> int:
+        return int(self.initial_probs.numel())
+
+    @property
+    def symbol_count(self) -> int:
+        return len(self.symbols)
+
+    @property
+    def device(self) -> torch.device:
+        return self.initial_probs.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.initial_probs.dtype
+
+    @property
+    def initial(self) -> torch.Tensor:
+        return self.initial_probs
+
+    @property
+    def transition(self) -> torch.Tensor:
+        return self.transition_probs
+
+    @property
+    def emission(self) -> torch.Tensor:
+        return self.emission_probs
+
+    def transition_with_potential(
+        self,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
+    ) -> torch.Tensor:
+        """Return transitions after optional latent-potential reweighting."""
+        return apply_hmm_transition_potential(self.transition_probs, transition_potential)
+
+    def with_transition_potential(
+        self,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]],
+    ) -> "DiscreteHMM":
+        """Return a new HMM with transition dynamics reweighted by *transition_potential*."""
+        return DiscreteHMM(
+            self.transition_with_potential(transition_potential),
+            self.emission_probs,
+            self.initial_probs,
+            self.symbols,
+            state_names=self.state_names,
+            normalize=False,
+        )
+
+    def to(self, device: torch.device | str | None = None, dtype: torch.dtype | None = None) -> "DiscreteHMM":
+        return DiscreteHMM(
+            self.transition_probs.to(device=device, dtype=dtype or self.dtype),
+            self.emission_probs.to(device=device, dtype=dtype or self.dtype),
+            self.initial_probs.to(device=device, dtype=dtype or self.dtype),
+            self.symbols,
+            state_names=self.state_names,
+            normalize=False,
+        )
+
+    def encode(self, sequences: Sequence[Sequence[object]]) -> tuple[torch.Tensor, torch.Tensor]:
+        if not sequences:
+            raise ValueError("sequences must not be empty")
+        encoded: list[list[int]] = []
+        lengths: list[int] = []
+        for seq_idx, sequence in enumerate(sequences):
+            if not sequence:
+                raise ValueError("empty sequences are not supported")
+            row = []
+            for symbol in sequence:
+                if symbol not in self._symbol_index:
+                    raise ValueError(f"unknown symbol {symbol!r} in sequence {seq_idx}")
+                row.append(self._symbol_index[symbol])
+            encoded.append(row)
+            lengths.append(len(row))
+        max_len = max(lengths)
+        padded = torch.zeros((len(encoded), max_len), dtype=torch.long, device=self.device)
+        for idx, row in enumerate(encoded):
+            padded[idx, : len(row)] = torch.tensor(row, dtype=torch.long, device=self.device)
+        return padded, torch.tensor(lengths, dtype=torch.long, device=self.device)
+
+    def _prepare_observations(
+        self,
+        observations: torch.Tensor | Sequence[Sequence[int]],
+        lengths: torch.Tensor | Sequence[int] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        obs = torch.as_tensor(observations, dtype=torch.long, device=self.device)
+        if obs.dim() == 1:
+            obs = obs.unsqueeze(0)
+        if obs.dim() != 2:
+            raise ValueError("observations must have shape [seq] or [batch, seq]")
+        if obs.shape[1] == 0:
+            raise ValueError("observations must contain at least one timestep")
+        if torch.any((obs < 0) | (obs >= self.symbol_count)):
+            raise ValueError("observations contain labels outside the symbol vocabulary")
+        if lengths is None:
+            lengths_t = torch.full((obs.shape[0],), obs.shape[1], dtype=torch.long, device=self.device)
+        else:
+            lengths_t = torch.as_tensor(lengths, dtype=torch.long, device=self.device).reshape(-1)
+        if lengths_t.numel() != obs.shape[0]:
+            raise ValueError("lengths must contain one value per batch item")
+        if torch.any(lengths_t < 1) or torch.any(lengths_t > obs.shape[1]):
+            raise ValueError("lengths must be in [1, seq_len]")
+        mask = torch.arange(obs.shape[1], device=self.device).unsqueeze(0) < lengths_t.unsqueeze(1)
+        return obs, lengths_t, mask
+
+    def log_prob(
+        self,
+        observations: torch.Tensor | Sequence[Sequence[int]],
+        lengths: torch.Tensor | Sequence[int] | None = None,
+        *,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
+    ) -> torch.Tensor:
+        factors = self.forward_backward(observations, lengths, transition_potential=transition_potential)
+        return factors.log_likelihood
+
+    def sequence_probability(
+        self,
+        sequence: Sequence[object],
+        *,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
+    ) -> float:
+        if not sequence:
+            return 1.0
+        obs, lengths = self.encode([sequence])
+        return float(torch.exp(self.log_prob(obs, lengths, transition_potential=transition_potential))[0].item())
+
+    def forward_backward(
+        self,
+        observations: torch.Tensor | Sequence[Sequence[int]],
+        lengths: torch.Tensor | Sequence[int] | None = None,
+        *,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
+    ) -> HMMForwardBackward:
+        obs, lengths_t, mask = self._prepare_observations(observations, lengths)
+        batch, seq_len = obs.shape
+        state_count = self.state_count
+        eps = torch.finfo(self.dtype).eps
+        transition = self.transition_with_potential(transition_potential)
+        alpha_rows = []
+        scale_rows = []
+        first = self.initial_probs.unsqueeze(0) * self.emission_probs[:, obs[:, 0]].transpose(0, 1)
+        scale = first.sum(dim=-1).clamp_min(eps)
+        alpha_t = first / scale.unsqueeze(-1)
+        alpha_rows.append(alpha_t)
+        scale_rows.append(scale)
+        for t in range(1, seq_len):
+            current = torch.matmul(alpha_t, transition) * self.emission_probs[:, obs[:, t]].transpose(0, 1)
+            scale = current.sum(dim=-1).clamp_min(eps)
+            current = current / scale.unsqueeze(-1)
+            alpha_t = torch.where(mask[:, t].unsqueeze(-1), current, alpha_t)
+            alpha_rows.append(alpha_t)
+            scale_rows.append(torch.where(mask[:, t], scale, torch.ones_like(scale)))
+        alpha = torch.stack(alpha_rows, dim=1)
+        scales = torch.stack(scale_rows, dim=1)
+
+        beta_rows: list[torch.Tensor | None] = [None] * seq_len
+        beta_t = torch.ones((batch, state_count), dtype=self.dtype, device=self.device)
+        beta_rows[-1] = beta_t
+        for t in range(seq_len - 2, -1, -1):
+            next_emit = self.emission_probs[:, obs[:, t + 1]].transpose(0, 1)
+            current = torch.matmul(transition.unsqueeze(0), (next_emit * beta_t).unsqueeze(-1)).squeeze(-1)
+            current = current / scales[:, t + 1].clamp_min(eps).unsqueeze(-1)
+            beta_t = torch.where(mask[:, t + 1].unsqueeze(-1), current, beta_t)
+            beta_rows[t] = beta_t
+        beta = torch.stack([row for row in beta_rows if row is not None], dim=1)
+
+        gamma = alpha * beta
+        gamma = gamma / gamma.sum(dim=-1, keepdim=True).clamp_min(eps)
+        gamma = torch.where(mask.unsqueeze(-1), gamma, torch.zeros_like(gamma))
+
+        xi_rows = []
+        for t in range(seq_len - 1):
+            next_emit = self.emission_probs[:, obs[:, t + 1]].transpose(0, 1)
+            pair = alpha[:, t, :, None] * transition.unsqueeze(0) * (next_emit * beta[:, t + 1, :])[:, None, :]
+            pair = pair / pair.sum(dim=(1, 2), keepdim=True).clamp_min(eps)
+            xi_rows.append(torch.where(mask[:, t + 1].view(batch, 1, 1), pair, torch.zeros_like(pair)))
+        xi = (
+            torch.stack(xi_rows, dim=1)
+            if xi_rows
+            else torch.zeros((batch, 0, state_count, state_count), dtype=self.dtype, device=self.device)
+        )
+
+        log_likelihood = torch.log(scales.clamp_min(eps)).masked_fill(~mask, 0.0).sum(dim=-1)
+        return HMMForwardBackward(alpha=alpha, beta=beta, gamma=gamma, xi=xi, scales=scales, log_likelihood=log_likelihood, mask=mask)
+
+    def viterbi(
+        self,
+        observations: torch.Tensor | Sequence[Sequence[int]],
+        lengths: torch.Tensor | Sequence[int] | None = None,
+        *,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        obs, lengths_t, _mask = self._prepare_observations(observations, lengths)
+        batch, seq_len = obs.shape
+        log_initial = torch.log(self.initial_probs.clamp_min(torch.finfo(self.dtype).eps))
+        transition = self.transition_with_potential(transition_potential)
+        log_transition = torch.log(transition.clamp_min(torch.finfo(self.dtype).eps))
+        log_emission = torch.log(self.emission_probs.clamp_min(torch.finfo(self.dtype).eps))
+        delta = log_initial.unsqueeze(0) + log_emission[:, obs[:, 0]].transpose(0, 1)
+        backpointers = torch.zeros((batch, seq_len, self.state_count), dtype=torch.long, device=self.device)
+        deltas = [delta]
+        for t in range(1, seq_len):
+            scores = delta.unsqueeze(2) + log_transition.unsqueeze(0)
+            best, arg = scores.max(dim=1)
+            delta = best + log_emission[:, obs[:, t]].transpose(0, 1)
+            deltas.append(delta)
+            backpointers[:, t, :] = arg
+        paths = torch.zeros((batch, seq_len), dtype=torch.long, device=self.device)
+        log_scores = torch.empty((batch,), dtype=self.dtype, device=self.device)
+        stacked = torch.stack(deltas, dim=1)
+        for b in range(batch):
+            last = int(lengths_t[b].item()) - 1
+            score, state = stacked[b, last].max(dim=0)
+            log_scores[b] = score
+            paths[b, last] = state
+            for t in range(last, 0, -1):
+                state = backpointers[b, t, state]
+                paths[b, t - 1] = state
+        return paths, log_scores
+
+    def sample(
+        self,
+        batch_size: int,
+        max_length: int,
+        *,
+        generator: torch.Generator | None = None,
+        transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
+    ) -> torch.Tensor:
+        if batch_size < 1:
+            raise ValueError("batch_size must be at least 1")
+        if max_length < 1:
+            raise ValueError("max_length must be at least 1")
+        transition = self.transition_with_potential(transition_potential)
+        states = torch.multinomial(self.initial_probs, batch_size, replacement=True, generator=generator)
+        outputs = []
+        for _ in range(max_length):
+            probs = self.emission_probs.index_select(0, states)
+            symbol = torch.multinomial(probs, 1, generator=generator).squeeze(-1)
+            outputs.append(symbol)
+            next_probs = transition.index_select(0, states)
+            states = torch.multinomial(next_probs, 1, generator=generator).squeeze(-1)
+        return torch.stack(outputs, dim=1)
+
+    def extract_argmax_dfa(self, accept_probability_threshold: float = 0.0) -> DFA:
+        alphabet = frozenset(self.symbols)
+        states = frozenset(range(self.state_count))
+        transitions = {}
+        scores = self.transition_probs.unsqueeze(-1) * self.emission_probs.transpose(0, 1).unsqueeze(0)
+        for state in states:
+            for sym_idx, symbol in enumerate(self.symbols):
+                transitions[(state, symbol)] = int(torch.argmax(scores[state, :, sym_idx]).item())
+        start = int(torch.argmax(self.initial_probs).item())
+        accepting = {
+            state
+            for state in states
+            if float(torch.max(self.emission_probs[state]).item()) >= accept_probability_threshold
+        }
+        if not accepting:
+            accepting = set(states)
+        return DFA(states=states, alphabet=alphabet, transitions=transitions, start_state=start, accepting_states=frozenset(accepting))
+
+    def save_pretrained(self, path: str | Path) -> None:
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        config = {"symbols": list(self.symbols), "state_names": list(self.state_names), "dtype": str(self.dtype).replace("torch.", "")}
+        (path / "config.json").write_text(json.dumps(config, indent=2), encoding="utf8")
+        torch.save(
+            {"initial": self.initial_probs.detach().cpu(), "transition": self.transition_probs.detach().cpu(), "emission": self.emission_probs.detach().cpu()},
+            path / "model.pt",
+        )
+
+    @classmethod
+    def from_pretrained(cls, path: str | Path, *, device: torch.device | str | None = None, dtype: torch.dtype | None = None) -> "DiscreteHMM":
+        path = Path(path)
+        config = json.loads((path / "config.json").read_text(encoding="utf8"))
+        weights = torch.load(path / "model.pt", map_location=device or "cpu", weights_only=True)
+        return cls(weights["transition"], weights["emission"], weights["initial"], config["symbols"], state_names=config.get("state_names"), normalize=False, device=device, dtype=dtype)
+
+    @classmethod
+    def baum_welch(
+        cls,
+        sequences: Sequence[Sequence[object]],
+        symbols: Sequence[object],
+        state_count: int,
+        *,
+        max_iter: int = 100,
+        tol: float = 1e-6,
+        smoothing: float = 1e-9,
+        init: "DiscreteHMM | ProbabilisticAutomaton | HMMParameters | None" = None,
+        random_seed: int = 0,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype = torch.float64,
+    ) -> "BaumWelchResult":
+        encoded, symbols = _validate_and_encode_sequences(sequences, symbols, state_count)
+        if max_iter < 1:
+            raise ValueError("max_iter must be at least 1")
+        if tol < 0:
+            raise ValueError("tol must be non-negative")
+        if smoothing < 0:
+            raise ValueError("smoothing must be non-negative")
+        lengths = torch.tensor([len(seq) for seq in encoded], dtype=torch.long, device=device)
+        max_len = int(lengths.max().item())
+        obs = torch.zeros((len(encoded), max_len), dtype=torch.long, device=device)
+        for idx, seq in enumerate(encoded):
+            obs[idx, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=device)
+        if init is None:
+            gen_device = torch.device(device) if device is not None else torch.device("cpu")
+            gen = torch.Generator(device=gen_device).manual_seed(int(random_seed))
+            initial = _normalize_tensor(torch.rand(state_count, generator=gen, dtype=dtype, device=device) + 0.1, dim=0)
+            transition = _normalize_tensor(torch.rand((state_count, state_count), generator=gen, dtype=dtype, device=device) + 0.1, dim=-1)
+            emission = _normalize_tensor(torch.rand((state_count, len(symbols)), generator=gen, dtype=dtype, device=device) + 0.1, dim=-1)
+            model = cls(transition, emission, initial, symbols, normalize=False)
+        elif isinstance(init, DiscreteHMM):
+            if init.symbols != tuple(symbols) or init.state_count != state_count:
+                raise ValueError("init must match symbols and state_count")
+            model = init.to(device=device, dtype=dtype)
+        else:
+            params = _coerce_init(init, symbols, state_count)
+            model = cls(params.transition, params.emission, params.initial, symbols, device=device, dtype=dtype)
+
+        log_likelihoods: list[float] = []
+        converged = False
+        for iteration in range(max_iter):
+            factors = model.forward_backward(obs, lengths)
+            mask = factors.mask
+            init_counts = factors.gamma[:, 0, :].sum(dim=0)
+            trans_counts = factors.xi.sum(dim=(0, 1))
+            emit_counts = torch.zeros((state_count, len(symbols)), dtype=model.dtype, device=model.device)
+            for symbol_idx in range(len(symbols)):
+                symbol_mask = (obs == symbol_idx) & mask
+                emit_counts[:, symbol_idx] = (factors.gamma * symbol_mask.unsqueeze(-1)).sum(dim=(0, 1))
+            initial = _normalize_tensor(init_counts + smoothing, dim=0)
+            transition = _normalize_tensor(trans_counts + smoothing, dim=-1)
+            emission = _normalize_tensor(emit_counts + smoothing, dim=-1)
+            total_ll = float(factors.log_likelihood.sum().item())
+            log_likelihoods.append(total_ll)
+            model = cls(transition, emission, initial, symbols, state_names=model.state_names, normalize=False)
+            if len(log_likelihoods) > 1 and log_likelihoods[-1] - log_likelihoods[-2] < tol:
+                converged = True
+                break
+        return BaumWelchResult(model=model, log_likelihoods=tuple(log_likelihoods), iterations=iteration + 1, converged=converged)
 
 
 @dataclass(frozen=True)
 class ProbabilisticAutomaton:
-    """An immutable discrete Hidden Markov Model (HMM).
+    """Legacy immutable discrete Hidden Markov Model (HMM) wrapper.
+
+    Prefer :class:`DiscreteHMM` for new production code. This frozen dataclass
+    remains for source compatibility with older examples and tests.
 
     Attributes:
         transition: Square matrix of shape ``(S, S)`` where
@@ -166,7 +578,7 @@ class BaumWelchResult:
         converged: ``True`` if the log-likelihood improvement fell below
             ``tol`` before ``max_iter`` was reached.
     """
-    model: ProbabilisticAutomaton
+    model: DiscreteHMM
     log_likelihoods: tuple[float, ...]
     iterations: int
     converged: bool
@@ -180,88 +592,24 @@ def baum_welch_train(
     max_iter: int = 100,
     tol: float = 1e-6,
     smoothing: float = 1e-9,
-    init: ProbabilisticAutomaton | HMMParameters | None = None,
+    init: DiscreteHMM | ProbabilisticAutomaton | HMMParameters | None = None,
     random_seed: int = 0,
 ) -> BaumWelchResult:
     """Train a discrete HMM with Baum-Welch expectation maximization.
 
-    This is intentionally dependency-free and aimed at small research/test
-    examples. It uses scaled forward-backward to avoid probability underflow.
+    Production implementation backed by batched Torch forward/backward. String
+    sequences are encoded once, then EM updates are vectorized across the
+    training batch.
     """
-
-    # Validate inputs and encode symbol strings to integer indices for speed.
-    encoded_sequences, symbols = _validate_and_encode_sequences(sequences, symbols, state_count)
-    if max_iter < 1:
-        raise ValueError("max_iter must be at least 1")
-    if tol < 0:
-        raise ValueError("tol must be non-negative")
-    if smoothing < 0:
-        raise ValueError("smoothing must be non-negative")
-
-    if init is None:
-        # Randomly initialise parameters when no warm-start is provided.
-        initial = _random_stochastic_vector(state_count, Random(random_seed))
-        rng = Random(random_seed + 1)
-        transition = _random_stochastic_matrix(state_count, state_count, rng)
-        emission = _random_stochastic_matrix(state_count, len(symbols), rng)
-    else:
-        # Coerce and normalise the provided warm-start parameters.
-        params = _coerce_init(init, symbols, state_count)
-        transition = [list(row) for row in params.transition]
-        emission = [list(row) for row in params.emission]
-        initial = list(params.initial)
-
-    log_likelihoods: list[float] = []
-    converged = False
-
-    for iteration in range(max_iter):
-        # --- E-step accumulators ---
-        init_counts = [0.0 for _ in range(state_count)]
-        trans_counts = [[0.0 for _ in range(state_count)] for _ in range(state_count)]
-        emit_counts = [[0.0 for _ in range(len(symbols))] for _ in range(state_count)]
-        total_log_likelihood = 0.0
-
-        for obs in encoded_sequences:
-            # Run the scaled forward-backward algorithm for this sequence.
-            alpha, scales, log_likelihood = _forward_scaled(obs, initial, transition, emission)
-            beta = _backward_scaled(obs, transition, emission, scales)
-            # Compute state-occupation (gamma) and transition (xi) posteriors.
-            gamma, xi = _expectations(obs, alpha, beta, transition, emission)
-            total_log_likelihood += log_likelihood
-
-            # Accumulate expected counts for the M-step.
-            for state in range(state_count):
-                init_counts[state] += gamma[0][state]  # initial state usage
-            for t, symbol_idx in enumerate(obs):
-                for state in range(state_count):
-                    emit_counts[state][symbol_idx] += gamma[t][state]  # emission usage
-            for t in range(len(obs) - 1):
-                for src in range(state_count):
-                    for dst in range(state_count):
-                        trans_counts[src][dst] += xi[t][src][dst]  # transition usage
-
-        # --- M-step: re-estimate parameters from accumulated counts ---
-        initial = _normalize_row(init_counts, smoothing)
-        transition = [_normalize_row(row, smoothing) for row in trans_counts]
-        emission = [_normalize_row(row, smoothing) for row in emit_counts]
-        log_likelihoods.append(total_log_likelihood)
-
-        # Check convergence: stop if the log-likelihood gain is negligible.
-        if len(log_likelihoods) > 1 and log_likelihoods[-1] - log_likelihoods[-2] < tol:
-            converged = True
-            break
-
-    model = ProbabilisticAutomaton(
-        transition=transition,
-        emission=emission,
-        initial=initial,
-        symbols=symbols,
-    )
-    return BaumWelchResult(
-        model=model,
-        log_likelihoods=tuple(log_likelihoods),
-        iterations=iteration + 1,
-        converged=converged,
+    return DiscreteHMM.baum_welch(
+        sequences,
+        symbols,
+        state_count,
+        max_iter=max_iter,
+        tol=tol,
+        smoothing=smoothing,
+        init=init,
+        random_seed=random_seed,
     )
 
 
@@ -340,6 +688,38 @@ def all_sequences(symbols: Sequence[str], max_length: int) -> list[tuple[str, ..
     return output
 
 
+def _validate_symbol_tuple(symbols: tuple[object, ...]) -> None:
+    if not symbols:
+        raise ValueError("symbols must not be empty")
+    if len(set(symbols)) != len(symbols):
+        raise ValueError("symbols must be unique")
+
+
+def _normalize_tensor(values: torch.Tensor, dim: int) -> torch.Tensor:
+    if not torch.isfinite(values).all():
+        raise ValueError("probability tensors must contain only finite values")
+    values = values.clamp_min(0)
+    total = values.sum(dim=dim, keepdim=True)
+    if torch.any(total <= 0):
+        size = values.shape[dim]
+        return torch.full_like(values, 1.0 / float(size))
+    return values / total
+
+
+def _validate_hmm_tensors(initial: torch.Tensor, transition: torch.Tensor, emission: torch.Tensor, symbol_count: int) -> None:
+    if initial.dim() != 1 or initial.numel() < 1:
+        raise ValueError("initial must be a non-empty vector")
+    state_count = initial.numel()
+    if transition.shape != (state_count, state_count):
+        raise ValueError("transition must have shape [state_count, state_count]")
+    if emission.shape != (state_count, symbol_count):
+        raise ValueError("emission must have shape [state_count, symbol_count]")
+    if not torch.isfinite(initial).all() or not torch.isfinite(transition).all() or not torch.isfinite(emission).all():
+        raise ValueError("HMM parameters must be finite")
+    if torch.any(initial < 0) or torch.any(transition < 0) or torch.any(emission < 0):
+        raise ValueError("HMM probability parameters must be non-negative")
+
+
 def _validate_and_encode_sequences(
     sequences: Sequence[Sequence[str]],
     symbols: Sequence[str],
@@ -385,7 +765,7 @@ def _validate_and_encode_sequences(
 
 
 def _coerce_init(
-    init: ProbabilisticAutomaton | HMMParameters,
+    init: DiscreteHMM | ProbabilisticAutomaton | HMMParameters,
     symbols: tuple[str, ...],
     state_count: int,
 ) -> HMMParameters:
@@ -399,14 +779,22 @@ def _coerce_init(
         ValueError: If shapes are inconsistent or symbols don't match.
         TypeError: If *init* is neither of the expected types.
     """
-    if isinstance(init, ProbabilisticAutomaton):
+    if isinstance(init, DiscreteHMM):
+        if init.symbols != symbols:
+            raise ValueError("init symbols must match symbols")
+        params = HMMParameters(
+            tuple(tuple(float(v) for v in row.tolist()) for row in init.transition_probs.detach().cpu()),
+            tuple(tuple(float(v) for v in row.tolist()) for row in init.emission_probs.detach().cpu()),
+            tuple(float(v) for v in init.initial_probs.detach().cpu().tolist()),
+        )
+    elif isinstance(init, ProbabilisticAutomaton):
         if init.symbols != symbols:
             raise ValueError("init symbols must match symbols")
         params = HMMParameters(init.transition, init.emission, init.initial)
     elif isinstance(init, HMMParameters):
         params = init
     else:
-        raise TypeError("init must be ProbabilisticAutomaton, HMMParameters, or None")
+        raise TypeError("init must be DiscreteHMM, ProbabilisticAutomaton, HMMParameters, or None")
 
     if len(params.initial) != state_count:
         raise ValueError("init initial length must match state_count")

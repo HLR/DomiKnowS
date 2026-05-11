@@ -20,13 +20,13 @@ Requires PyTorch for SVD computation (``torch.linalg.svd``).
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Hashable, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from itertools import product
 
 import torch
 
-from .hankel import WeightedFiniteAutomaton
+from .hankel import WeightedFiniteAutomaton, hankel_matrix
 
 # Type aliases used throughout this module.
 Symbol = Hashable
@@ -229,12 +229,13 @@ def spectral_learn_from_samples(
     """
     symbols = tuple(symbols)
     _validate_symbols(symbols)
+    sequences = tuple(tuple(sequence) for sequence in sequences)
     if not sequences:
         raise ValueError("sequences must not be empty")
     if smoothing < 0.0:
         raise ValueError("smoothing must be non-negative")
 
-    encoded = tuple(tuple(sequence) for sequence in sequences)
+    encoded = sequences
     _validate_sequences(encoded, symbols, "sequence")
     if basis is None:
         basis = build_spectral_basis(symbols, max_prefix_len, max_suffix_len)
@@ -252,6 +253,47 @@ def spectral_learn_from_samples(
             return (float(counts.get(sequence, 0)) + float(smoothing)) / denominator
         # Unsmoothed empirical frequency.
         return float(counts.get(sequence, 0)) / float(len(encoded))
+
+    return _spectral_learn(probability, basis, rank, singular_tolerance)
+
+
+def spectral_learn_from_counts(
+    counts: Mapping[Sequence[Symbol], int | float],
+    symbols: Sequence[Symbol],
+    rank: int,
+    *,
+    basis: SpectralBasis | None = None,
+    max_prefix_len: int = 2,
+    max_suffix_len: int = 2,
+    smoothing: float = 0.0,
+    singular_tolerance: float = 1e-10,
+) -> SpectralLearningResult:
+    """Learn a signed WFA from pre-aggregated sequence counts.
+
+    This is the production entrypoint for streamed data: callers can aggregate
+    counts externally without retaining every sample sequence in memory.
+    """
+    symbols = tuple(symbols)
+    _validate_symbols(symbols)
+    if not counts:
+        raise ValueError("counts must not be empty")
+    if smoothing < 0.0:
+        raise ValueError("smoothing must be non-negative")
+    encoded_counts = {tuple(sequence): float(count) for sequence, count in counts.items()}
+    if any(count < 0.0 for count in encoded_counts.values()):
+        raise ValueError("counts must be non-negative")
+    _validate_sequences(tuple(encoded_counts), symbols, "sequence")
+    if basis is None:
+        basis = build_spectral_basis(symbols, max_prefix_len, max_suffix_len)
+    _validate_basis_for_learning(basis, symbols)
+    support = _query_support(basis)
+    denominator = sum(encoded_counts.values()) + float(smoothing) * len(support)
+    if denominator <= 0.0:
+        raise ValueError("total count mass must be positive")
+
+    def probability(sequence: tuple[Symbol, ...]) -> float:
+        _validate_sequences((sequence,), symbols, "sequence")
+        return (encoded_counts.get(sequence, 0.0) + float(smoothing)) / denominator
 
     return _spectral_learn(probability, basis, rank, singular_tolerance)
 
@@ -331,13 +373,14 @@ def _spectral_learn(
             middle=(symbol,),
         )
         transition = inv_sqrt @ u_r.transpose(0, 1) @ h_symbol @ v_r @ inv_sqrt
-        transitions[symbol] = _matrix_to_lists(transition)
+        transitions[symbol] = transition
 
     model = WeightedFiniteAutomaton(
-        initial=_vector_to_list(initial),
+        initial=initial,
         transitions=transitions,
-        final=_vector_to_list(final),
+        final=final,
         symbols=basis.symbols,
+        dtype=h.dtype,
     )
     diagnostics = _diagnostics(model, h, singular_values, rank, basis)
     return SpectralLearningResult(
@@ -379,13 +422,7 @@ def _diagnostics(
           retained by the rank-*k* approximation.
     """
     # Reconstruct the Hankel matrix from the learned model for error analysis.
-    reconstructed = torch.tensor(
-        [
-            [model.sequence_probability(prefix + suffix) for suffix in basis.suffixes]
-            for prefix in basis.prefixes
-        ],
-        dtype=torch.float64,
-    )
+    reconstructed = hankel_matrix(model, basis.prefixes, basis.suffixes).to(dtype=torch.float64)
     diff = original_hankel - reconstructed
     original_norm = float(torch.linalg.norm(original_hankel).item())
     reconstruction_error = float(torch.linalg.norm(diff).item())

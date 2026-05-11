@@ -89,6 +89,7 @@ jobs:
             'examples/same_different'
             'vizual'
             'fixes'
+            'generation'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"

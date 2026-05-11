@@ -9,13 +9,16 @@ into a single combined DFA for token-level hard decoding.
 
 Recognised DomiKnowS constraint shapes
 ----------------------------------------
-- ``ifL(is_before_rel, ifL(eos, eos))``          → :class:`~.constraints.EosClosureConstraint`
+- ``ifL(is_before_rel, ifL(eos, eos))``           → :class:`~.constraints.EosClosureConstraint`
 - ``atMostAL(notL(eos), N)``                      → :class:`~.constraints.MaxNonEosConstraint`
-- ``atLeastAL(token_value, N)``                   → :class:`~.constraints.RequiredTokenConstraint`
+- ``atLeastAL(token_value, N)`` / ``existsAL``    → required-token/count constraints
 - ``atMostAL(token_value, 0)``                    → :class:`~.constraints.ForbiddenTokenConstraint`
+- ``exactAL`` / ``atLeastAL`` / ``atMostAL`` over token sets or negated tokens
 - ``ifL(existsAL(token), atMostAL(notL(eos), N))``→ :class:`~.constraints.ConditionalMaxNonEosConstraint`
-- ``andL(...)`` over supported leaves             → intersection/conjunction
-- ``orL(...)`` over supported leaves              → union/disjunction
+- regular boolean forms: ``andL``, ``orL``, ``notL``, ``nandL``, ``norL``,
+  ``xorL``, ``iffL``/``equivalenceL``, and ``ifL(A, B)`` when both sides are regular
+- supported ``is_before_rel`` endpoint paths for after-trigger restrictions
+  and simple ordered-token existence patterns
 
 Any other shape that still references generation concepts is considered
 *unsupported* and handled according to the ``on_unsupported`` policy.
@@ -28,21 +31,30 @@ Public API
 :func:`constraints_to_dfa_from_graph`
     Convenience wrapper that discovers constraints and immediately compiles
     them into a single DFA.
+
+:func:`analyze_generation_constraints`
+    Debugging entry point — reports supported constraints and unsupported
+    reasons without changing the discovery APIs.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import warnings
 from typing import Iterable
 
 from .constraints import (
+    AfterTokenAllowedConstraint,
     AllOfGenerationConstraint,
     AnyOfGenerationConstraint,
+    ComplementGenerationConstraint,
     ConditionalMaxNonEosConstraint,
     EosClosureConstraint,
     ForbiddenTokenConstraint,
     GenerationConstraint,
     MaxNonEosConstraint,
+    OrderedTokensConstraint,
     RequiredTokenConstraint,
+    TokenSetCountConstraint,
     all_of_constraints,
     any_of_constraints,
     constraints_to_dfa,
@@ -52,6 +64,18 @@ from .constraints import (
     no_token_after_eos,
     required_token,
 )
+
+
+@dataclass(frozen=True)
+class GenerationConstraintAnalysis:
+    """Analysis record for one head DomiKnowS logical constraint."""
+
+    lc_name: str
+    lc_type: str
+    relevant: bool
+    supported: bool
+    constraints: tuple[GenerationConstraint, ...] = ()
+    reason: str | None = None
 
 
 def discover_generation_constraints(
@@ -110,28 +134,82 @@ def discover_generation_constraints(
     for constraint in getattr(bundle, "constraints", ()):
         _append_unique(constraints, seen, constraint)
 
-    # Pass 2: walk head logical constraints in the graph.
-    for lc_name, lc in graph.logicalConstrains.items():
-        # Skip non-head (child/sub-expression) constraints.
-        if not getattr(lc, "headLC", True):
-            continue
-        # Try the explicit DFA marker first; fall back to structural matching.
-        discovered = _marked_dfa_constraints(lc, bundle)
-        if discovered is False:
-            # No marker — attempt pattern-based recognition.
-            discovered = _match_lc_many(lc, bundle)
-        if not discovered:
-            # Not recognised as a DFA constraint; check if it needs a warning.
-            if _is_latent_marked(lc):
-                # Latent-only constraint; not applicable to hard decoding.
-                continue
-            if _is_generation_relevant(lc, bundle):
-                _handle_unsupported(lc_name, lc, on_unsupported)
-            continue
-        for constraint in discovered:
+    for analysis in analyze_generation_constraints(graph, bundle, on_unsupported=on_unsupported):
+        for constraint in analysis.constraints:
             _append_unique(constraints, seen, constraint)
 
     return tuple(constraints)
+
+
+def analyze_generation_constraints(
+    graph,
+    bundle,
+    *,
+    on_unsupported: str = "warn",
+) -> tuple[GenerationConstraintAnalysis, ...]:
+    """Analyze head graph constraints for DFA-enforceable generation fragments.
+
+    The analysis is intentionally conservative: it reports supported regular
+    sequence fragments as :class:`GenerationConstraint` objects and gives a
+    reason for generation-relevant constraints that are not faithfully
+    compilable to DFA.
+    """
+    if on_unsupported not in {"ignore", "warn", "error"}:
+        raise ValueError("on_unsupported must be 'ignore', 'warn', or 'error'")
+
+    analyses: list[GenerationConstraintAnalysis] = []
+    for lc_name, lc in graph.logicalConstrains.items():
+        if not getattr(lc, "headLC", True):
+            continue
+        relevant = _is_generation_relevant(lc, bundle)
+        if _is_latent_marked(lc) and not hasattr(lc, "_generation_dfa_constraint"):
+            analyses.append(
+                GenerationConstraintAnalysis(
+                    lc_name=lc_name,
+                    lc_type=lc.__class__.__name__,
+                    relevant=relevant,
+                    supported=False,
+                    reason="constraint is marked for latent enforcement only",
+                )
+            )
+            continue
+        discovered = _marked_dfa_constraints(lc, bundle)
+        if discovered is False:
+            discovered = _match_lc_many(lc, bundle)
+        if discovered:
+            analyses.append(
+                GenerationConstraintAnalysis(
+                    lc_name=lc_name,
+                    lc_type=lc.__class__.__name__,
+                    relevant=relevant,
+                    supported=True,
+                    constraints=tuple(discovered),
+                )
+            )
+            continue
+        if relevant:
+            reason = _unsupported_reason(lc, bundle)
+            _handle_unsupported(lc_name, lc, on_unsupported, reason=reason)
+            analyses.append(
+                GenerationConstraintAnalysis(
+                    lc_name=lc_name,
+                    lc_type=lc.__class__.__name__,
+                    relevant=True,
+                    supported=False,
+                    reason=reason,
+                )
+            )
+        else:
+            analyses.append(
+                GenerationConstraintAnalysis(
+                    lc_name=lc_name,
+                    lc_type=lc.__class__.__name__,
+                    relevant=False,
+                    supported=False,
+                    reason="constraint does not reference generation concepts",
+                )
+            )
+    return tuple(analyses)
 
 
 def constraints_to_dfa_from_graph(graph, bundle, *, on_unsupported: str = "warn"):
@@ -202,6 +280,20 @@ def _constraint_key(constraint: GenerationConstraint):
         return ("forbidden", constraint.token)
     if isinstance(constraint, ConditionalMaxNonEosConstraint):
         return ("conditional_max_non_eos", constraint.token, constraint.max_count)
+    if isinstance(constraint, TokenSetCountConstraint):
+        return (
+            "token_set_count",
+            tuple(sorted(constraint.tokens)),
+            constraint.min_count,
+            constraint.max_count,
+            constraint.negated,
+        )
+    if isinstance(constraint, AfterTokenAllowedConstraint):
+        return ("after_allowed", constraint.trigger_tokens, constraint.allowed_tokens)
+    if isinstance(constraint, OrderedTokensConstraint):
+        return ("ordered", constraint.tokens)
+    if isinstance(constraint, ComplementGenerationConstraint):
+        return ("not", _constraint_key(constraint.child))
     if isinstance(constraint, AllOfGenerationConstraint):
         return ("all_of", tuple(sorted((_constraint_key(child) for child in constraint.children), key=repr)))
     if isinstance(constraint, AnyOfGenerationConstraint):
@@ -233,12 +325,26 @@ def _match_lc_many(lc, bundle) -> tuple[GenerationConstraint, ...] | None:
         return _match_and_lc(lc, bundle)
     if cls_name == "orL":
         return _match_or_lc(lc, bundle)
+    if cls_name == "notL":
+        return _match_not_lc(lc, bundle)
+    if cls_name == "nandL":
+        matched = _match_and_lc(lc, bundle)
+        return _negate_many(matched) if matched else None
+    if cls_name == "norL":
+        matched = _match_or_lc(lc, bundle)
+        return _negate_many(matched) if matched else None
+    if cls_name == "xorL":
+        return _match_xor_lc(lc, bundle)
+    if cls_name in {"equivalenceL", "iffL"}:
+        return _match_equivalence_lc(lc, bundle)
     if cls_name == "ifL":
         return _as_constraint_tuple(_match_if_lc(lc, bundle))
     if cls_name == "atMostAL":
         return _as_constraint_tuple(_match_at_most_lc(lc, bundle))
     if cls_name == "atLeastAL":
         return _as_constraint_tuple(_match_at_least_lc(lc, bundle))
+    if cls_name == "exactAL":
+        return _as_constraint_tuple(_match_exact_lc(lc, bundle))
     if cls_name == "existsAL":
         return _as_constraint_tuple(_match_exists_lc(lc, bundle))
     return None
@@ -334,6 +440,62 @@ def _match_or_lc(lc, bundle) -> tuple[GenerationConstraint, ...] | None:
     return (any_of_constraints(branches),)
 
 
+def _match_not_lc(lc, bundle) -> tuple[GenerationConstraint, ...] | None:
+    """Match a regular negation by complementing the child DFA."""
+    children = [child for child in getattr(lc, "e", ()) if hasattr(child, "e")]
+    if len(children) != 1:
+        return None
+    matched = _match_lc_many(children[0], bundle)
+    return _negate_many(matched) if matched else None
+
+
+def _negate_many(matched: tuple[GenerationConstraint, ...] | None) -> tuple[GenerationConstraint, ...] | None:
+    if not matched:
+        return None
+    child = matched[0] if len(matched) == 1 else all_of_constraints(matched)
+    return (ComplementGenerationConstraint(child),)
+
+
+def _match_xor_lc(lc, bundle) -> tuple[GenerationConstraint, ...] | None:
+    branches = []
+    for child in getattr(lc, "e", ()):
+        child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
+        if not child_match:
+            return None
+        branches.append(child_match[0] if len(child_match) == 1 else all_of_constraints(child_match))
+    if len(branches) != 2:
+        return None
+    left, right = branches
+    return (
+        any_of_constraints(
+            (
+                all_of_constraints((left, ComplementGenerationConstraint(right))),
+                all_of_constraints((ComplementGenerationConstraint(left), right)),
+            )
+        ),
+    )
+
+
+def _match_equivalence_lc(lc, bundle) -> tuple[GenerationConstraint, ...] | None:
+    branches = []
+    for child in getattr(lc, "e", ()):
+        child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
+        if not child_match:
+            return None
+        branches.append(child_match[0] if len(child_match) == 1 else all_of_constraints(child_match))
+    if len(branches) != 2:
+        return None
+    left, right = branches
+    return (
+        any_of_constraints(
+            (
+                all_of_constraints((left, right)),
+                all_of_constraints((ComplementGenerationConstraint(left), ComplementGenerationConstraint(right))),
+            )
+        ),
+    )
+
+
 def _match_if_lc(lc, bundle) -> GenerationConstraint | None:
     """Try to match an ``ifL`` constraint to a known generation shape.
 
@@ -351,12 +513,22 @@ def _match_if_lc(lc, bundle) -> GenerationConstraint | None:
     # Check for the EOS-closure pattern first.
     if _is_eos_closure(lc, bundle):
         return no_token_after_eos()
+    after_allowed = _match_before_implication(lc, bundle)
+    if after_allowed is not None:
+        return after_allowed
     # Check for: ifL(existsAL(trigger_token), atMostAL(notL(eos), N))
     if len(lc.e) == 2:
         token = _exists_token(lc.e[0], bundle)
         max_count = _non_eos_at_most_count(lc.e[1], bundle)
         if token is not None and max_count is not None:
             return if_token_present_then_at_most_non_eos(token, max_count)
+    if len(lc.e) == 2:
+        antecedent = _match_lc_many(lc.e[0], bundle) if hasattr(lc.e[0], "e") else None
+        consequent = _match_lc_many(lc.e[1], bundle) if hasattr(lc.e[1], "e") else None
+        if antecedent and consequent:
+            a = antecedent[0] if len(antecedent) == 1 else all_of_constraints(antecedent)
+            b = consequent[0] if len(consequent) == 1 else all_of_constraints(consequent)
+            return any_of_constraints((ComplementGenerationConstraint(a), b))
     return None
 
 
@@ -383,6 +555,10 @@ def _match_at_most_lc(lc, bundle) -> GenerationConstraint | None:
     limit = _last_int(lc.e)
     if token is not None and limit == 0:
         return forbidden_token(token)
+    predicate = _token_predicate_from_count_lc(lc, bundle)
+    if predicate is not None and limit is not None:
+        tokens, negated = predicate
+        return TokenSetCountConstraint(tokens, max_count=limit, negated=negated)
     return None
 
 
@@ -403,7 +579,23 @@ def _match_at_least_lc(lc, bundle) -> GenerationConstraint | None:
     min_count = _last_int(lc.e)
     if token is not None and min_count is not None and min_count >= 1:
         return required_token(token, min_count)
+    predicate = _token_predicate_from_count_lc(lc, bundle)
+    if predicate is not None and min_count is not None:
+        tokens, negated = predicate
+        return TokenSetCountConstraint(tokens, min_count=min_count, negated=negated)
     return None
+
+
+def _match_exact_lc(lc, bundle) -> GenerationConstraint | None:
+    """Match ``exactAL(predicate, N)`` for regular token predicates."""
+    limit = _last_int(lc.e)
+    if limit is None:
+        return None
+    predicate = _token_predicate_from_count_lc(lc, bundle)
+    if predicate is None:
+        return None
+    tokens, negated = predicate
+    return TokenSetCountConstraint(tokens, exact_count=limit, negated=negated)
 
 
 def _match_exists_lc(lc, bundle) -> GenerationConstraint | None:
@@ -423,6 +615,13 @@ def _match_exists_lc(lc, bundle) -> GenerationConstraint | None:
     token = _exists_token(lc, bundle)
     if token is not None:
         return required_token(token, 1)
+    ordered = _match_ordered_pair_exists(lc, bundle)
+    if ordered is not None:
+        return ordered
+    predicate = _token_predicate_from_count_lc(lc, bundle)
+    if predicate is not None:
+        tokens, negated = predicate
+        return TokenSetCountConstraint(tokens, min_count=1, negated=negated)
     return None
 
 
@@ -506,6 +705,167 @@ def _exists_token(lc, bundle) -> str | None:
     return _direct_token(lc.e, bundle)
 
 
+def _token_predicate_from_count_lc(lc, bundle) -> tuple[tuple[str, ...], bool] | None:
+    """Return a token-set predicate from an accumulated counting LC."""
+    elements = [item for item in getattr(lc, "e", ()) if not isinstance(item, int)]
+    if len(elements) == 1 and hasattr(elements[0], "e"):
+        return _token_predicate_from_expr(elements[0], bundle)
+    return _token_predicate_from_elements(elements, bundle)
+
+
+def _token_predicate_from_expr(expr, bundle) -> tuple[tuple[str, ...], bool] | None:
+    """Parse regular token predicates used inside count constraints."""
+    cls_name = getattr(expr, "__class__", None).__name__
+    if cls_name == "notL":
+        children = [child for child in getattr(expr, "e", ()) if hasattr(child, "e") or _concept_tuple(child)]
+        if len(children) == 1 and hasattr(children[0], "e"):
+            child = _token_predicate_from_expr(children[0], bundle)
+        else:
+            child = _token_predicate_from_elements(getattr(expr, "e", ()), bundle)
+        if child is None:
+            return None
+        tokens, negated = child
+        return tokens, not negated
+    if cls_name == "orL":
+        if not any(hasattr(child, "e") for child in getattr(expr, "e", ())):
+            tokens = _tokens_from_flat_elements(getattr(expr, "e", ()), bundle)
+            return (tuple(sorted(tokens)), False) if tokens is not None else None
+        sets = []
+        for child in getattr(expr, "e", ()):
+            child_pred = _token_predicate_from_expr(child, bundle) if hasattr(child, "e") else None
+            if child_pred is None:
+                return None
+            sets.append(_predicate_token_set(child_pred, bundle))
+        return tuple(sorted(set().union(*sets))), False
+    if cls_name == "andL":
+        if not any(hasattr(child, "e") for child in getattr(expr, "e", ())):
+            tokens = _tokens_from_flat_elements(getattr(expr, "e", ()), bundle)
+            if tokens is None:
+                return None
+            if not tokens:
+                return (), False
+            current = {tokens[0]}
+            for token in tokens[1:]:
+                current &= {token}
+            return tuple(sorted(current)), False
+        sets = []
+        for child in getattr(expr, "e", ()):
+            child_pred = _token_predicate_from_expr(child, bundle) if hasattr(child, "e") else None
+            if child_pred is None:
+                return None
+            sets.append(_predicate_token_set(child_pred, bundle))
+        if not sets:
+            return None
+        current = set(sets[0])
+        for token_set in sets[1:]:
+            current &= set(token_set)
+        return tuple(sorted(current)), False
+    if cls_name in {"atLeastAL", "atMostAL", "exactAL", "existsAL"}:
+        return None
+    return _token_predicate_from_elements(getattr(expr, "e", ()), bundle)
+
+
+def _predicate_token_set(predicate: tuple[tuple[str, ...], bool], bundle) -> set[str]:
+    tokens, negated = predicate
+    token_set = set(tokens)
+    all_tokens = set(bundle.vocabulary.labels)
+    return all_tokens - token_set if negated else token_set
+
+
+def _token_predicate_from_elements(elements: Iterable, bundle) -> tuple[tuple[str, ...], bool] | None:
+    """Return a pathless positive token predicate from raw LC elements."""
+    elements = list(elements)
+    if _has_any_path(elements):
+        return None
+    tokens = [_token_from_tuple(item, bundle) for item in elements if _concept_tuple(item) is not None]
+    tokens = [token for token in tokens if token is not None]
+    if len(tokens) != 1:
+        return None
+    return (tokens[0],), False
+
+
+def _match_before_implication(lc, bundle) -> GenerationConstraint | None:
+    """Match ``ifL(before, ifL(trigger(first), allowed(second)))``."""
+    before_var = _before_relation_variable(lc, bundle)
+    if before_var is None:
+        return None
+    nested = next((item for item in lc.e if getattr(item, "__class__", None).__name__ == "ifL"), None)
+    if nested is None:
+        return None
+    trigger = _path_token_predicate_from_flat(nested.e, bundle, before_var, bundle.first_token)
+    allowed = _path_token_predicate_from_flat(nested.e, bundle, before_var, bundle.second_token)
+    if trigger is None or allowed is None:
+        return None
+    trigger_tokens, trigger_negated = trigger
+    allowed_tokens, allowed_negated = allowed
+    if trigger_negated or allowed_negated:
+        return None
+    return AfterTokenAllowedConstraint(trigger_tokens, allowed_tokens)
+
+
+def _match_ordered_pair_exists(lc, bundle) -> GenerationConstraint | None:
+    """Match ``existsAL(andL(before, A(first), B(second)))``."""
+    children = [item for item in getattr(lc, "e", ()) if hasattr(item, "e")]
+    if len(children) != 1 or getattr(children[0], "__class__", None).__name__ != "andL":
+        return None
+    and_lc = children[0]
+    before_var = _before_relation_variable(and_lc, bundle)
+    if before_var is None:
+        return None
+    first_pred = _path_token_predicate_from_flat(and_lc.e, bundle, before_var, bundle.first_token)
+    second_pred = _path_token_predicate_from_flat(and_lc.e, bundle, before_var, bundle.second_token)
+    if first_pred is None or second_pred is None:
+        return None
+    first_tokens, first_negated = first_pred
+    second_tokens, second_negated = second_pred
+    if first_negated or second_negated or len(first_tokens) != 1 or len(second_tokens) != 1:
+        return None
+    first = first_tokens[0]
+    second = second_tokens[0]
+    return OrderedTokensConstraint((first, second))
+
+
+def _before_relation_variable(lc, bundle) -> str | None:
+    """Return the relation variable name if *lc* contains ``is_before_rel``."""
+    elements = list(getattr(lc, "e", ()))
+    for index, item in enumerate(elements):
+        concept_tuple = _concept_tuple(item)
+        if concept_tuple is None or concept_tuple[0] is not bundle.is_before_rel:
+            continue
+        if index + 1 < len(elements) and _is_v(elements[index + 1]):
+            return elements[index + 1].name
+    return None
+
+
+def _path_token_predicate(expr, bundle, before_var: str, role) -> tuple[tuple[str, ...], bool] | None:
+    """Parse a generated-token predicate at a specific before-relation endpoint."""
+    elements = list(getattr(expr, "e", ())) if hasattr(expr, "e") else [expr]
+    path = _single_path(elements)
+    if path != (before_var, role):
+        return None
+    tokens = [_token_from_tuple(item, bundle) for item in elements if _concept_tuple(item) is not None]
+    tokens = [token for token in tokens if token is not None]
+    if len(tokens) != 1:
+        return None
+    return (tokens[0],), False
+
+
+def _path_token_predicate_from_flat(elements, bundle, before_var: str, role) -> tuple[tuple[str, ...], bool] | None:
+    """Parse one or more token predicates in a flat LC element list by path role."""
+    elements = list(elements)
+    tokens = []
+    for index, item in enumerate(elements):
+        token = _token_from_tuple(item, bundle)
+        if token is None:
+            continue
+        next_item = elements[index + 1] if index + 1 < len(elements) else None
+        if _is_v(next_item) and next_item.v == (before_var, role):
+            tokens.append(token)
+    if not tokens:
+        return None
+    return tuple(sorted(set(tokens))), False
+
+
 def _direct_token(elements: Iterable, bundle) -> str | None:
     """Return the single token referenced by *elements*, or ``None``.
 
@@ -520,12 +880,42 @@ def _direct_token(elements: Iterable, bundle) -> str | None:
     Returns:
         A surface-form token string, or ``None``.
     """
+    elements = list(elements)
+    if _has_any_path(elements):
+        return None
     tokens = [_token_from_tuple(item, bundle) for item in elements if _concept_tuple(item) is not None]
     # Filter out items that didn't resolve to a known token.
     tokens = [token for token in tokens if token is not None]
     if len(tokens) != 1:
         return None
     return tokens[0]
+
+
+def _tokens_from_flat_elements(elements: Iterable, bundle) -> list[str] | None:
+    elements = list(elements)
+    if _has_any_path(elements):
+        return None
+    tokens = [_token_from_tuple(item, bundle) for item in elements if _concept_tuple(item) is not None]
+    tokens = [token for token in tokens if token is not None]
+    return tokens if tokens else None
+
+
+def _has_any_path(elements: Iterable) -> bool:
+    return any(_is_v(item) and item.v is not None for item in elements)
+
+
+def _single_path(elements: Iterable):
+    paths = [item.v for item in elements if _is_v(item) and item.v is not None]
+    if len(paths) != 1:
+        return None
+    return paths[0]
+
+
+def _is_v(item) -> bool:
+    return (
+        hasattr(item, "_fields")
+        and set(getattr(item, "_fields", ())) >= {"name", "v", "relVarInfo"}
+    )
 
 
 def _token_from_tuple(item, bundle) -> str | None:
@@ -642,7 +1032,29 @@ def _walk_lc(lc):
             yield from _walk_lc(item)
 
 
-def _handle_unsupported(lc_name: str, lc, on_unsupported: str) -> None:
+def _unsupported_reason(lc, bundle) -> str:
+    """Return a compact reason why a generation-relevant LC is unsupported."""
+    cls_name = getattr(lc, "__class__", None).__name__
+    if cls_name in {"sumL", "iotaL", "queryL", "sameL", "differentL"}:
+        return f"{cls_name} depends on numeric selection/query semantics, not a regular token language"
+    if cls_name in {"greaterL", "greaterEqL", "lessL", "lessEqL", "equalCountsL", "notEqualCountsL"}:
+        return f"{cls_name} comparative count semantics are not compiled to DFA in this pass"
+    for item in _walk_lc(lc):
+        if getattr(item, "__class__", None).__name__ == "eqL":
+            return "eqL path filters require DataNode/path execution outside DFA decoding"
+        if _is_v(item) and item.v is not None and not _is_supported_generation_path(item.v, bundle):
+            return f"path {item.v!r} is outside supported generation sequence paths"
+    return "constraint is generation-relevant but outside the supported regular DFA fragment"
+
+
+def _is_supported_generation_path(path, bundle) -> bool:
+    if not isinstance(path, tuple) or len(path) != 2:
+        return False
+    _var_name, role = path
+    return role is bundle.first_token or role is bundle.second_token
+
+
+def _handle_unsupported(lc_name: str, lc, on_unsupported: str, *, reason: str | None = None) -> None:
     """Emit a warning or raise an error for an unrecognised generation constraint.
 
     Args:
@@ -657,6 +1069,8 @@ def _handle_unsupported(lc_name: str, lc, on_unsupported: str) -> None:
         f"DomiKnowS logical constraint {lc_name} ({lc.__class__.__name__}) references "
         "generation concepts but is not supported by generation DFA discovery"
     )
+    if reason:
+        message = f"{message}: {reason}"
     if on_unsupported == "error":
         raise ValueError(message)
     if on_unsupported == "warn":

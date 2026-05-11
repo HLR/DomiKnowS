@@ -1,7 +1,10 @@
 from domiknows.generation import (
+    AfterTokenAllowedConstraint,
+    ComplementGenerationConstraint,
     all_of_constraints,
     any_of_constraints,
     TokenVocabulary,
+    TokenSetCountConstraint,
     constraints_to_dfa,
     forbidden_token,
     max_non_eos,
@@ -9,7 +12,7 @@ from domiknows.generation import (
     ordered_tokens,
     required_token,
 )
-from domiknows.generation.automata import union_dfa
+from domiknows.generation.automata import complement_dfa, union_dfa
 
 
 def test_dfa_accepts_and_rejects_basic_sequences():
@@ -91,3 +94,55 @@ def test_union_dfa_preserves_acceptance_and_allowed_tokens():
     assert dfa.accepts([b])
     assert not dfa.accepts([eos])
     assert dfa.allowed_tokens(dfa.start_state, remaining_steps=1) == {a, b}
+
+
+def test_complement_dfa_flips_acceptance_without_dead_state_pruning():
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
+    base = required_token("A").to_dfa(vocab)
+    dfa = complement_dfa(base)
+
+    eos = vocab.label_for_token("<eos>")
+    a = vocab.label_for_token("A")
+    b = vocab.label_for_token("B")
+
+    assert dfa.accepts([eos])
+    assert dfa.accepts([b, eos])
+    assert not dfa.accepts([a])
+    allowed = dfa.allowed_tokens(dfa.start_state, remaining_steps=1)
+    assert a not in allowed
+    assert {eos, b} <= allowed
+
+
+def test_complement_generation_constraint_wraps_child_dfa():
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
+    dfa = ComplementGenerationConstraint(required_token("A")).to_dfa(vocab)
+
+    assert dfa.accepts([vocab.label_for_token("B")])
+    assert not dfa.accepts([vocab.label_for_token("A")])
+
+
+def test_token_set_count_constraint_counts_token_sets():
+    vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>")
+    dfa = TokenSetCountConstraint(("A", "B"), min_count=2).to_dfa(vocab)
+
+    eos = vocab.label_for_token("<eos>")
+    a = vocab.label_for_token("A")
+    b = vocab.label_for_token("B")
+    c = vocab.label_for_token("C")
+
+    assert dfa.accepts([a, b, eos])
+    assert dfa.accepts([a, a])
+    assert not dfa.accepts([a, c, eos])
+
+
+def test_after_token_allowed_constraint_blocks_later_tokens():
+    vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>")
+    dfa = AfterTokenAllowedConstraint(("A",), ("B",)).to_dfa(vocab)
+
+    a = vocab.label_for_token("A")
+    b = vocab.label_for_token("B")
+    c = vocab.label_for_token("C")
+
+    assert dfa.accepts([a, b, b])
+    assert dfa.accepts([b, a])
+    assert not dfa.accepts([a, b, c])

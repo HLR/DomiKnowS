@@ -73,6 +73,7 @@ def test_hf_generation_demo_runs_mock_modes_without_downloads():
         result = results[mode]
         assert result.accepted
         assert dfa.accepts(result.labels)
+    assert len({tuple(results[mode].labels) for mode in ("greedy", "beam", "sample")}) == 3
 
 
 def test_hf_generation_cli_main_runs_in_mock_mode(capsys):
@@ -82,7 +83,16 @@ def test_hf_generation_cli_main_runs_in_mock_mode(capsys):
     captured = capsys.readouterr().out
 
     assert "Discovered DFA constraints" in captured
+    assert "Initial prompt" in captured
+    assert "text: 'Once'" in captured
+    assert "max_new_tokens: 4" in captured
     assert "greedy" in captured
     assert "beam" in captured
     assert "sample" in captured
+    assert "intentionally branchy" in captured
+    assert "Decoder spaces" in captured
+    assert "greedy space" in captured
+    assert "beam space" in captured
+    assert "sample space" in captured
+    assert "blocked=" in captured
     assert "accepted: True" in captured

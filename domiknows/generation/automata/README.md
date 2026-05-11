@@ -9,6 +9,21 @@ Spectral / Hankel learning algorithm — that together let you define hard
 token-level rules, learn soft sequence distributions, and enforce both during
 text generation.
 
+## Production API Scope
+
+The probabilistic automata layer is Torch-backed. `DiscreteHMM` supports batched
+integer-label scoring, forward/backward factors, Viterbi paths, sampling,
+Baum-Welch fitting, DFA extraction, and `save_pretrained(...)` serialization.
+`WeightedFiniteAutomaton` stores Torch tensors, scores batched integer-label
+sequences, returns Torch Hankel matrices, supports WFA x DFA product decoding,
+and serializes with the same config-plus-weights pattern.
+
+Spectral learning remains finite-basis learning, but the production path now
+uses Torch SVD and can learn from exact oracles, raw samples, or pre-aggregated
+sequence counts. These utilities are production library components for compact
+alphabets and mid-scale CPU/GPU workflows; they are not standalone large
+language model trainers.
+
 If you are new to any of these concepts, read the
 [Background: Key Concepts](#background-key-concepts) section first.
 
@@ -179,6 +194,94 @@ input.
 
 ---
 
+### Beam Search and Sampling in the Layer Pipeline
+
+**Beam search** and **sampling** are two alternative strategies for selecting which
+token to emit at Layer 3.  Both operate within the same L1→L2→L3 pipeline, but
+they differ in how they explore the candidate space:
+
+#### Greedy Decoding (baseline)
+
+At Layer 3, pick the single highest-logit token (deterministic):
+
+```
+L1 → L2 (logits)
+       ↓
+L3: argmax(masked_logits)  ← always picks the same token
+```
+
+**Single sequence, single DFA state.**
+
+#### Beam Search
+
+Maintain *k* parallel candidates (beams), each with its own sequence history
+and DFA state. At Layer 3, instead of picking one token, expand each beam
+by selecting its top-*m* candidates (where *m* is a parameter), then rank
+all *k × m* resulting sequences and keep only the top *k*:
+
+```
+For each of k beams:
+  L1 (forward pass with beam's history) → L2 (logits)
+     ↓
+  L2: DFA mask (using beam's current DFA state)
+     ↓
+  L3: top-m candidates (not just argmax)
+     ↓
+  Rank all k×m candidates by score (length-adjusted log-probability)
+  ↓
+  Keep top-k, discard the rest
+  ↓
+  Each surviving beam advances its DFA state via the selected token
+```
+
+**Multiple sequences, multiple DFA states (one per beam).**
+
+Because each beam carries its own DFA state, no beam can ever violate the
+constraint — the DFA mask is applied *before* candidate selection at every step.
+
+#### Sampling (stochastic decoding)
+
+Instead of deterministic ranking, apply temperature and filtering at Layer 2,
+then *randomly draw* one token from the resulting distribution at Layer 3:
+
+```
+L1 → L2 (logits)
+     ↓
+  Apply DFA mask (filter disallowed tokens to fill_value)
+     ↓
+  Apply temperature scaling: logits / temperature
+     ↓
+  (Optional) Apply top-k: keep only highest-k logits
+     ↓
+  (Optional) Apply nucleus (top-p): keep enough top logits to reach p probability mass
+     ↓
+  L3: sample one token via softmax + multinomial
+```
+
+**Single sequence, single DFA state, but non-deterministic token choice.**
+
+Temperature tuning:
+- **Temperature < 1** → sharper distribution, favour high-logit tokens
+- **Temperature > 1** → flatter distribution, more exploration
+- **Temperature = 1** → standard softmax
+
+Top-k and top-p limit the effective vocabulary before sampling, preventing
+unlikely tokens from being selected.
+
+#### Summary: Where DFA constraints apply
+
+| Strategy | L1 | L2 | L3 | Constraint timing |
+|---|---|---|---|---|
+| Greedy | 1 forward pass | Mask logits | Pick argmax | Before argmax |
+| Beam search | *k* forward passes | Mask logits (per beam) | Pick top-*m* per beam | Before ranking candidates |
+| Sampling | 1 forward pass | Mask + temperature + filtering | Sample from softmax | Before softmax |
+
+All three strategies enforce DFA constraints **at Layer 2** by masking logits
+before the token decision is made at Layer 3.  The difference is in how many
+candidates are explored and how they are ranked or sampled.
+
+---
+
 ### Tool-to-Layer Mapping
 
 | Tool / Module | Layer | Hard or Soft? | When applied |
@@ -340,7 +443,7 @@ structure of the distribution.
 |---|---|---|
 | [`dfa.py`](#dfapy) | `DFA`, `product_dfa`, `union_dfa` | Core Deterministic Finite Automaton (DFA) primitives — stepping, acceptance, reachability, allowed-token masking, intersection and union |
 | [`hankel.py`](#hankelpy) | `WeightedFiniteAutomaton`, `hankel_matrix`, `ProductDecoderState` | Weighted Finite Automaton (WFA) scoring and Hankel matrix construction for learning |
-| [`hmm.py`](#hmmpy) | `ProbabilisticAutomaton`, `baum_welch_train`, `compare_hmm_dfa` | Hidden Markov Model (HMM) training (Baum–Welch EM) and acceptance comparison against a DFA |
+| [`hmm.py`](#hmmpy) | `DiscreteHMM`, legacy `ProbabilisticAutomaton`, `baum_welch_train`, `compare_hmm_dfa` | Hidden Markov Model (HMM) training (Baum–Welch EM) and acceptance comparison against a DFA |
 | [`spectral.py`](#spectralpy) | `SpectralBasis`, `spectral_learn_from_oracle`, `spectral_learn_from_samples` | Spectral / Hankel-SVD learning of WFAs from probability oracles or sample corpora |
 
 All four modules are re-exported from `__init__.py`, so you can import
@@ -442,8 +545,10 @@ probability distribution over short token sequences.  See
 [What is an HMM?](#what-is-a-hidden-markov-model-hmm) for a conceptual
 introduction.
 
-**`ProbabilisticAutomaton`** — frozen dataclass that stores the learned HMM
+**`ProbabilisticAutomaton`** — legacy frozen dataclass that stores learned HMM
 parameters (`transition`, `emission`, `initial`, `symbols`) as nested tuples.
+Use `DiscreteHMM` for new production code; this wrapper remains for older
+examples and source compatibility.
 It can:
 - Score any sequence via the forward algorithm.
 - Be converted to a DFA by treating states whose forward probability exceeds a

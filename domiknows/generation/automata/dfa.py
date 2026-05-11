@@ -7,6 +7,7 @@ Provides:
   alphabet via the standard product-construction algorithm.
 - ``union_dfa``: take the union of an arbitrary number of DFAs over a shared
   alphabet via a product construction with accepting-if-any semantics.
+- ``complement_dfa``: complete a DFA and flip accepting states.
 
 Type aliases ``State`` and ``Symbol`` are both ``Hashable``; any hashable
 Python object can serve as a state identifier or an alphabet symbol.
@@ -299,4 +300,44 @@ def union_dfa(dfas: Iterable[DFA]) -> DFA:
         start_state=start,
         accepting_states=frozenset(accepting),
         dead_states=frozenset(dead),
+    )
+
+
+def complement_dfa(dfa: DFA) -> DFA:
+    """Return the language complement of *dfa* over its existing alphabet.
+
+    Undefined transitions are first completed with a fresh rejecting sink state
+    so complementing partial DFAs is exact over ``dfa.alphabet``.
+
+    Args:
+        dfa: The automaton to complement.
+
+    Returns:
+        A complete DFA that accepts exactly the strings rejected by *dfa*.
+    """
+    sink = ("__complement_sink__",)
+    while sink in dfa.states:
+        sink = (sink,)
+
+    states = set(dfa.states)
+    transitions = dict(dfa.transitions)
+    needs_sink = False
+    for state in dfa.states:
+        for symbol in dfa.alphabet:
+            if (state, symbol) not in transitions:
+                transitions[(state, symbol)] = sink
+                needs_sink = True
+    if needs_sink:
+        states.add(sink)
+        for symbol in dfa.alphabet:
+            transitions[(sink, symbol)] = sink
+
+    accepting = states - set(dfa.accepting_states)
+    return DFA(
+        states=frozenset(states),
+        alphabet=dfa.alphabet,
+        transitions=transitions,
+        start_state=dfa.start_state,
+        accepting_states=frozenset(accepting),
+        dead_states=frozenset(),
     )

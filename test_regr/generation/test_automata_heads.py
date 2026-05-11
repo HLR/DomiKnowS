@@ -26,6 +26,18 @@ def test_hmm_head_returns_valid_log_probs():
     assert torch.allclose(log_probs.exp().sum(dim=-1), torch.ones(3), atol=1e-5)
 
 
+def test_hmm_head_exposes_batched_production_core():
+    head = HMMGenerationHead(label_count=4, state_count=2, pad_size=3, trainable=True)
+
+    batched = head.sequence_log_probs(torch.tensor([[1, 2, 0], [2, 0, 0]]), lengths=torch.tensor([3, 2]))
+    core = head.production_hmm()
+
+    assert batched.shape == (2, 3, 4)
+    assert torch.isfinite(batched).all()
+    assert core.symbols == (0, 1, 2, 3)
+    assert torch.allclose(core.transition, head.transition_probs)
+
+
 def test_hmm_head_can_wrap_existing_probabilistic_automaton():
     hmm = ProbabilisticAutomaton(
         transition=((0.7, 0.3), (0.2, 0.8)),
@@ -60,6 +72,18 @@ def test_wfa_head_returns_finite_log_probs_for_signed_scores():
     assert torch.isfinite(logits).all()
     assert log_probs.shape == (3, 3)
     assert torch.isfinite(log_probs).all()
+
+
+def test_wfa_head_exposes_batched_production_core():
+    head = SpectralWFAGenerationHead(label_count=4, state_count=2, pad_size=3, trainable=True)
+
+    batched = head.sequence_log_probs(torch.tensor([[1, 2, 0], [2, 0, 0]]), lengths=torch.tensor([3, 2]))
+    core = head.production_wfa()
+
+    assert batched.shape == (2, 3, 4)
+    assert torch.isfinite(batched).all()
+    assert core.symbols == (0, 1, 2, 3)
+    assert torch.allclose(core.transition_tensor, head.transitions)
 
 
 def test_frozen_and_trainable_head_parameters():

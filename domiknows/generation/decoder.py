@@ -391,13 +391,20 @@ def _clone_cached_state_for_branch(cache_state: CachedDecoderState, token_id: in
     )
 
 
-def _next_label_logits(model, ids: list[int], device: torch.device) -> torch.Tensor:
+def _next_label_logits(
+    model,
+    ids: list[int],
+    device: torch.device,
+    *,
+    model_kwargs: dict | None = None,
+    next_label_kwargs: dict | None = None,
+) -> torch.Tensor:
     """Run a compact-label model and return logits for the next label."""
     model_input = torch.tensor(ids, dtype=torch.long, device=device).unsqueeze(0)
     if hasattr(model, "next_label_logits"):
-        logits = model.next_label_logits(model_input)
+        logits = model.next_label_logits(model_input, **(next_label_kwargs or {}))
     else:
-        output = model(model_input)
+        output = model(model_input, **(model_kwargs or {}))
         logits = output.logits[0, -1, :] if hasattr(output, "logits") else output
     if logits.dim() != 1:
         raise ValueError(f"expected compact label logits to be 1D, got shape {tuple(logits.shape)}")
@@ -565,98 +572,6 @@ def constrained_greedy_decode(
         labels=labels,
         final_state=state,
         accepted=dfa.is_accepting(state),
-    )
-
-
-def constrained_label_greedy_decode(
-    model,
-    input_ids: torch.Tensor | Sequence[int],
-    vocabulary: TokenVocabulary,
-    dfa: DFA,
-    max_new_tokens: int,
-    eos_label: int | None = None,
-) -> ConstrainedGenerationResult:
-    """Run DFA-constrained greedy decoding for compact-label generation heads.
-
-    Unlike :func:`constrained_greedy_decode`, *model* is expected to emit logits
-    directly over ``vocabulary.label_count`` labels rather than over the full
-    tokenizer vocabulary.  The chosen label is mapped back to a concrete
-    tokenizer ID and appended to the model input for the next autoregressive step.
-
-    At each step:
-
-    1. Query the DFA for allowed labels at the current state.
-    2. Intersect with the set of *emittable* labels (those that have a
-       corresponding concrete token ID).
-    3. Call the model's compact-label head to get per-label logits.
-    4. Mask and select the highest-logit permitted label (greedy ``argmax``).
-    5. Advance the DFA state and append the resolved token ID.
-    6. Stop early when the EOS label is selected in an accepting DFA state.
-
-    Args:
-        model: A model that exposes either a ``next_label_logits(input_ids)``
-            method or a standard HuggingFace forward pass returning logits of
-            shape ``(1, seq_len, label_count)``.
-        input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
-            :class:`torch.Tensor` or a plain Python sequence of ints.
-        vocabulary: :class:`~.vocabulary.TokenVocabulary` providing the
-            label ↔ token-ID mapping.
-        dfa: Constraint :class:`~.automata.DFA` whose alphabet must cover
-            the vocabulary's label set.
-        max_new_tokens: Hard upper bound on the number of tokens that may be
-            generated (not counting the prompt).
-        eos_label: Label ID treated as end-of-sequence.  Defaults to
-            ``vocabulary.eos_label``.
-
-    Returns:
-        A :class:`ConstrainedGenerationResult` containing the full token ID
-        list, the generated label sequence, the final DFA state, whether that
-        state is accepting, the cumulative log-probability score, and per-step
-        log-probabilities.
-
-    Raises:
-        RuntimeError: If the DFA has no transition from the current state on
-            the selected label.
-        ValueError: Propagated from :func:`mask_label_logits_for_dfa` if
-            masking removes all labels at any step.
-    """
-    _validate_common(max_new_tokens)
-    ids, device = _normalise_input_ids(input_ids)
-    eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
-    state = dfa.start_state
-    labels: list[int] = []
-    token_scores: list[float] = []
-    total_score = 0.0
-    emittable = _emittable_labels(model, vocabulary)
-
-    for step_idx in range(max_new_tokens):
-        remaining_steps = max_new_tokens - step_idx
-        allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
-        allowed &= emittable
-        logits = _next_label_logits(model, ids, device)
-        masked = mask_label_logits_for_dfa(logits, allowed)
-        log_probs = torch.log_softmax(masked, dim=-1)
-        next_label = int(torch.argmax(masked).item())
-        next_state = _advance_dfa(dfa, state, next_label)
-        next_id = _token_id_for_generated_label(model, vocabulary, next_label)
-        log_prob = float(log_probs[next_label].item())
-
-        ids.append(next_id)
-        labels.append(next_label)
-        token_scores.append(log_prob)
-        total_score += log_prob
-        state = next_state
-
-        if next_label == eos_label and dfa.is_accepting(state):
-            break
-
-    return ConstrainedGenerationResult(
-        token_ids=ids,
-        labels=labels,
-        final_state=state,
-        accepted=dfa.is_accepting(state),
-        score=total_score,
-        scores=token_scores,
     )
 
 
@@ -930,3 +845,289 @@ def constrained_sample_decode(
         score=total_score,
         scores=token_scores,
     )
+
+
+def constrained_label_greedy_decode(
+    model,
+    input_ids: torch.Tensor | Sequence[int],
+    vocabulary: TokenVocabulary,
+    dfa: DFA,
+    max_new_tokens: int,
+    eos_label: int | None = None,
+    model_kwargs: dict | None = None,
+    next_label_kwargs: dict | None = None,
+) -> ConstrainedGenerationResult:
+    """Run DFA-constrained greedy decoding for compact-label generation heads.
+
+    Unlike :func:`constrained_greedy_decode`, *model* is expected to emit logits
+    directly over ``vocabulary.label_count`` labels rather than over the full
+    tokenizer vocabulary.  The chosen label is mapped back to a concrete
+    tokenizer ID and appended to the model input for the next autoregressive step.
+
+    At each step:
+
+    1. Query the DFA for allowed labels at the current state.
+    2. Intersect with the set of *emittable* labels (those that have a
+       corresponding concrete token ID).
+    3. Call the model's compact-label head to get per-label logits.
+    4. Mask and select the highest-logit permitted label (greedy ``argmax``).
+    5. Advance the DFA state and append the resolved token ID.
+    6. Stop early when the EOS label is selected in an accepting DFA state.
+
+    Args:
+        model: A model that exposes either a ``next_label_logits(input_ids)``
+            method or a standard HuggingFace forward pass returning logits of
+            shape ``(1, seq_len, label_count)``.
+        input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
+            :class:`torch.Tensor` or a plain Python sequence of ints.
+        vocabulary: :class:`~.vocabulary.TokenVocabulary` providing the
+            label ↔ token-ID mapping.
+        dfa: Constraint :class:`~.automata.DFA` whose alphabet must cover
+            the vocabulary's label set.
+        max_new_tokens: Hard upper bound on the number of tokens that may be
+            generated (not counting the prompt).
+        eos_label: Label ID treated as end-of-sequence.  Defaults to
+            ``vocabulary.eos_label``.
+
+    Returns:
+        A :class:`ConstrainedGenerationResult` containing the full token ID
+        list, the generated label sequence, the final DFA state, whether that
+        state is accepting, the cumulative log-probability score, and per-step
+        log-probabilities.
+
+    Raises:
+        RuntimeError: If the DFA has no transition from the current state on
+            the selected label.
+        ValueError: Propagated from :func:`mask_label_logits_for_dfa` if
+            masking removes all labels at any step.
+    """
+    _validate_common(max_new_tokens)
+    ids, device = _normalise_input_ids(input_ids)
+    eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
+    state = dfa.start_state
+    labels: list[int] = []
+    token_scores: list[float] = []
+    total_score = 0.0
+    emittable = _emittable_labels(model, vocabulary)
+
+    for step_idx in range(max_new_tokens):
+        remaining_steps = max_new_tokens - step_idx
+        allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
+        allowed &= emittable
+        logits = _next_label_logits(
+            model,
+            ids,
+            device,
+            model_kwargs=model_kwargs,
+            next_label_kwargs=next_label_kwargs,
+        )
+        masked = mask_label_logits_for_dfa(logits, allowed)
+        log_probs = torch.log_softmax(masked, dim=-1)
+        next_label = int(torch.argmax(masked).item())
+        next_state = _advance_dfa(dfa, state, next_label)
+        next_id = _token_id_for_generated_label(model, vocabulary, next_label)
+        log_prob = float(log_probs[next_label].item())
+
+        ids.append(next_id)
+        labels.append(next_label)
+        token_scores.append(log_prob)
+        total_score += log_prob
+        state = next_state
+
+        if next_label == eos_label and dfa.is_accepting(state):
+            break
+
+    return ConstrainedGenerationResult(
+        token_ids=ids,
+        labels=labels,
+        final_state=state,
+        accepted=dfa.is_accepting(state),
+        score=total_score,
+        scores=token_scores,
+    )
+
+
+def constrained_label_beam_search_decode(
+    model,
+    input_ids: torch.Tensor | Sequence[int],
+    vocabulary: TokenVocabulary,
+    dfa: DFA,
+    max_new_tokens: int,
+    eos_label: int | None = None,
+    beam_size: int = 4,
+    length_penalty: float = 1.0,
+    early_stopping: bool = True,
+    num_return_sequences: int = 1,
+    model_kwargs: dict | None = None,
+    next_label_kwargs: dict | None = None,
+) -> ConstrainedGenerationResult:
+    """Run DFA-constrained beam search for compact-label generation heads.
+
+    Each beam carries its own generated compact labels, concrete tokenizer IDs,
+    DFA state, and cumulative log-probability score.  Logits are produced over
+    ``vocabulary.label_count`` labels, masked by the active DFA state, and only
+    then expanded by beam search.  Selected labels are converted back to raw
+    tokenizer IDs through ``model.token_id_for_label(...)`` when available, or
+    :class:`TokenVocabulary` otherwise.
+    """
+    _validate_common(max_new_tokens)
+    if beam_size < 1:
+        raise ValueError("beam_size must be at least 1")
+    if length_penalty <= 0.0:
+        raise ValueError("length_penalty must be positive")
+    if num_return_sequences < 1:
+        raise ValueError("num_return_sequences must be at least 1")
+
+    ids, device = _normalise_input_ids(input_ids)
+    eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
+    emittable = _emittable_labels(model, vocabulary)
+    beams = [BeamCandidate(token_ids=ids, labels=[], state=dfa.start_state, score=0.0)]
+    finished: list[BeamCandidate] = []
+
+    for step_idx in range(max_new_tokens):
+        expanded: list[BeamCandidate] = []
+        remaining_steps = max_new_tokens - step_idx
+
+        for candidate in beams:
+            if candidate.finished:
+                expanded.append(candidate)
+                continue
+
+            allowed = {int(label) for label in dfa.allowed_tokens(candidate.state, remaining_steps=remaining_steps)}
+            allowed &= emittable
+            try:
+                logits = _next_label_logits(
+                    model,
+                    candidate.token_ids,
+                    device,
+                    model_kwargs=model_kwargs,
+                    next_label_kwargs=next_label_kwargs,
+                )
+                masked = mask_label_logits_for_dfa(logits, allowed)
+            except ValueError:
+                continue
+
+            log_probs = torch.log_softmax(masked, dim=-1)
+            valid_labels = torch.nonzero(masked > -5e8, as_tuple=False).flatten()
+            if valid_labels.numel() == 0:
+                continue
+            local_beam = min(beam_size, int(valid_labels.numel()))
+            local_scores, local_positions = torch.topk(log_probs[valid_labels], local_beam)
+
+            for score_delta, position in zip(local_scores.tolist(), local_positions.tolist()):
+                next_label = int(valid_labels[int(position)].item())
+                next_state = _advance_dfa(dfa, candidate.state, next_label)
+                next_id = _token_id_for_generated_label(model, vocabulary, next_label)
+                next_candidate = BeamCandidate(
+                    token_ids=candidate.token_ids + [next_id],
+                    labels=candidate.labels + [next_label],
+                    state=next_state,
+                    score=float(candidate.score + score_delta),
+                    finished=next_label == eos_label and dfa.is_accepting(next_state),
+                )
+                expanded.append(next_candidate)
+                if next_candidate.finished:
+                    finished.append(next_candidate)
+
+        if not expanded:
+            break
+
+        expanded.sort(key=lambda item: _candidate_rank(item, length_penalty), reverse=True)
+        beams = expanded[:beam_size]
+        if early_stopping and len(finished) >= num_return_sequences:
+            break
+
+    accepted_candidates = [candidate for candidate in finished + beams if dfa.is_accepting(candidate.state)]
+    ranked = accepted_candidates if accepted_candidates else beams
+    ranked = sorted(ranked, key=lambda item: _candidate_rank(item, length_penalty), reverse=True)
+    if not ranked:
+        ranked = [BeamCandidate(token_ids=ids, labels=[], state=dfa.start_state, score=0.0)]
+    returned = ranked[:num_return_sequences]
+    best = returned[0]
+
+    return ConstrainedGenerationResult(
+        token_ids=best.token_ids,
+        labels=best.labels,
+        final_state=best.state,
+        accepted=dfa.is_accepting(best.state),
+        score=best.score,
+        scores=[candidate.score for candidate in returned],
+        candidates=returned,
+    )
+
+
+def constrained_label_sample_decode(
+    model,
+    input_ids: torch.Tensor | Sequence[int],
+    vocabulary: TokenVocabulary,
+    dfa: DFA,
+    max_new_tokens: int,
+    eos_label: int | None = None,
+    temperature: float = 1.0,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    generator: torch.Generator | None = None,
+    model_kwargs: dict | None = None,
+    next_label_kwargs: dict | None = None,
+) -> ConstrainedGenerationResult:
+    """Run DFA-constrained sampling for compact-label generation heads.
+
+    DFA masking is applied before temperature, top-k, and top-p filtering.  If
+    filtering removes every currently constrained label, sampling falls back to
+    the unfiltered DFA-masked logits so an invalid label is never emitted just
+    because stochastic filtering was too aggressive.
+    """
+    _validate_common(max_new_tokens)
+    if temperature <= 0.0:
+        raise ValueError("temperature must be positive")
+
+    ids, device = _normalise_input_ids(input_ids)
+    eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
+    state = dfa.start_state
+    labels: list[int] = []
+    token_scores: list[float] = []
+    total_score = 0.0
+    emittable = _emittable_labels(model, vocabulary)
+
+    for step_idx in range(max_new_tokens):
+        remaining_steps = max_new_tokens - step_idx
+        allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
+        allowed &= emittable
+        logits = _next_label_logits(
+            model,
+            ids,
+            device,
+            model_kwargs=model_kwargs,
+            next_label_kwargs=next_label_kwargs,
+        )
+        masked = mask_label_logits_for_dfa(logits, allowed)
+        constrained_logits = masked / float(temperature)
+        filtered = _filter_sampling_logits(constrained_logits, top_k=top_k, top_p=top_p)
+        if torch.all(filtered <= -5e8):
+            filtered = constrained_logits
+
+        probs = torch.softmax(filtered, dim=-1)
+        next_label = int(torch.multinomial(probs, num_samples=1, generator=generator).item())
+        next_state = _advance_dfa(dfa, state, next_label)
+        next_id = _token_id_for_generated_label(model, vocabulary, next_label)
+        log_prob = float(torch.log(probs[next_label].clamp_min(torch.finfo(probs.dtype).tiny)).item())
+
+        ids.append(next_id)
+        labels.append(next_label)
+        token_scores.append(log_prob)
+        total_score += log_prob
+        state = next_state
+
+        if next_label == eos_label and dfa.is_accepting(state):
+            break
+
+    return ConstrainedGenerationResult(
+        token_ids=ids,
+        labels=labels,
+        final_state=state,
+        accepted=dfa.is_accepting(state),
+        score=total_score,
+        scores=token_scores,
+    )
+
+

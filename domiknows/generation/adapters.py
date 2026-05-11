@@ -25,7 +25,7 @@ from typing import Any
 
 import torch
 
-from .automata import DFA
+from .automata import DFA, explain_dfa_rejection
 from .decoder import (
     ConstrainedGenerationResult,
     constrained_beam_search_decode,
@@ -52,12 +52,16 @@ class GenerationResult:
             check was performed.
         raw: The unmodified backend response object, preserved for debugging
             or downstream inspection.
+        rejection: Optional human-readable DFA rejection explanation. Populated
+            only by verification helpers when requested and the output is not
+            accepted.
     """
     text: str
     token_ids: list[int] | None = None
     labels: list[int] | None = None
     accepted: bool | None = None
     raw: Any = None
+    rejection: str | None = None
 
 
 class HuggingFaceGenerationAdapter:
@@ -242,8 +246,8 @@ class OpenAIResponsesAdapter:
 
     Typical usage:
     1. Call :meth:`generate` to obtain a text response from the model.
-    2. Call :meth:`encode_output` to map the text to DomiKnowS label IDs.
-    3. Verify the label sequence against a DFA externally.
+    2. Call :meth:`verify_result` or :meth:`generate_and_verify` to map the
+       text into DomiKnowS labels and check it against a DFA.
 
     Class attributes:
         supports_training_loss (bool): ``False`` — no gradient access.
@@ -307,6 +311,71 @@ class OpenAIResponsesAdapter:
             token_ids = list(self.tokenizer.encode(text))
         return GenerationResult(text=text, token_ids=token_ids, raw=response)
 
+    def verify_result(
+        self,
+        result: GenerationResult,
+        vocabulary: TokenVocabulary,
+        dfa: DFA,
+        *,
+        explain: bool = False,
+    ) -> GenerationResult:
+        """Encode and verify an OpenAI output against a constraint DFA.
+
+        This is the adapter-level generate-then-verify bridge for hosted
+        OpenAI and OpenAI-compatible servers.  It does not mutate *result*;
+        instead it returns a new :class:`GenerationResult` with compact labels
+        and ``accepted`` populated.
+
+        Args:
+            result: A previously generated OpenAI result.
+            vocabulary: Compact generation vocabulary used by the DFA.
+            dfa: Constraint DFA over compact vocabulary label IDs.
+            explain: When ``True``, include a human-readable rejection reason
+                for rejected outputs.
+
+        Returns:
+            A verified :class:`GenerationResult`.
+        """
+        tokenizer = self._encoding_tokenizer(vocabulary)
+        token_ids = list(tokenizer.encode(result.text))
+        labels = vocabulary.labels_for_token_ids(token_ids)
+        accepted = dfa.accepts(labels)
+        rejection = explain_dfa_rejection(dfa, labels) if explain and not accepted else None
+        return GenerationResult(
+            text=result.text,
+            token_ids=token_ids,
+            labels=labels,
+            accepted=accepted,
+            raw=result.raw,
+            rejection=rejection,
+        )
+
+    def generate_and_verify(
+        self,
+        prompt: str,
+        vocabulary: TokenVocabulary,
+        dfa: DFA,
+        *,
+        max_output_tokens: int | None = None,
+        explain: bool = False,
+        **kwargs,
+    ) -> GenerationResult:
+        """Generate text, then encode and verify it against *dfa*.
+
+        Args:
+            prompt: User input / instruction string.
+            vocabulary: Compact generation vocabulary used by the DFA.
+            dfa: Constraint DFA over compact vocabulary label IDs.
+            max_output_tokens: Optional cap forwarded to :meth:`generate`.
+            explain: When ``True``, include a rejection reason on failure.
+            **kwargs: Additional request fields forwarded to ``generate``.
+
+        Returns:
+            A verified :class:`GenerationResult` with ``accepted`` populated.
+        """
+        result = self.generate(prompt, max_output_tokens=max_output_tokens, **kwargs)
+        return self.verify_result(result, vocabulary, dfa, explain=explain)
+
     def encode_output(self, text: str, vocabulary: TokenVocabulary) -> list[int]:
         """Encode *text* into DomiKnowS vocabulary label IDs.
 
@@ -328,14 +397,16 @@ class OpenAIResponsesAdapter:
             ValueError: If no tokenizer is available on the adapter or in
                 *vocabulary*.
         """
-        # Prefer the adapter-level tokenizer; fall back to vocabulary's own.
-        if self.tokenizer is None:
-            if vocabulary.tokenizer is None:
-                raise ValueError("a tokenizer is required to encode OpenAI output")
-            tokenizer = vocabulary.tokenizer
-        else:
-            tokenizer = self.tokenizer
+        tokenizer = self._encoding_tokenizer(vocabulary)
         return vocabulary.labels_for_token_ids(tokenizer.encode(text))
+
+    def _encoding_tokenizer(self, vocabulary: TokenVocabulary):
+        """Return the tokenizer used for OpenAI output encoding."""
+        if self.tokenizer is not None:
+            return self.tokenizer
+        if vocabulary.tokenizer is not None:
+            return vocabulary.tokenizer
+        raise ValueError("a tokenizer is required to encode OpenAI output")
 
     @staticmethod
     def _extract_output_text(response) -> str:
