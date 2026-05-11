@@ -1,8 +1,13 @@
 import torch
 from tokens import TokenMap
-from transformers import PreTrainedModel, PreTrainedTokenizer
-from typing import Literal
+from typing import Any, Literal, TYPE_CHECKING
 from domiknows.generation import mask_logits_for_dfa
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel, PreTrainedTokenizer
+else:
+    PreTrainedModel = Any
+    PreTrainedTokenizer = Any
 
 
 class TinyModel(torch.nn.Module):

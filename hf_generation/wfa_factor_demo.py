@@ -1,4 +1,4 @@
-"""Run the explicit HMM factor-graph generation demo."""
+"""Run the explicit spectral-WFA factor-graph generation demo."""
 from __future__ import annotations
 
 import argparse
@@ -6,20 +6,20 @@ import argparse
 import torch
 
 try:
-    from .hmm_factor_program import (
-        build_hmm_factor_program,
+    from .wfa_factor_program import (
+        build_wfa_factor_program,
         constrained_decode,
         make_optimizers,
-        run_one_hmm_factor_step,
+        run_one_wfa_factor_step,
         target_labels_for_sample,
     )
     from .loss_logging import format_loss_log, print_loss_log_note
 except ImportError:
-    from hmm_factor_program import (
-        build_hmm_factor_program,
+    from wfa_factor_program import (
+        build_wfa_factor_program,
         constrained_decode,
         make_optimizers,
-        run_one_hmm_factor_step,
+        run_one_wfa_factor_step,
         target_labels_for_sample,
     )
     from loss_logging import format_loss_log, print_loss_log_note
@@ -29,12 +29,12 @@ def _prediction_summary(artifacts) -> str:
     labels = target_labels_for_sample(artifacts)
     with torch.no_grad():
         generated = artifacts.generated_model(None, artifacts.sample_data["instruction_tokens"], labels)
-        latent = artifacts.latent_model(None, artifacts.sample_data["instruction_tokens"], labels)
+        states = artifacts.state_model(None, artifacts.sample_data["instruction_tokens"], labels)
     generated_preds = [int(torch.argmax(row).item()) for row in generated]
-    latent_preds = [artifacts.bundle.state_names[int(torch.argmax(row).item())] for row in latent]
+    state_preds = [artifacts.bundle.state_names[int(torch.argmax(row).item())] for row in states]
     return (
         f"labels={labels.tolist()} generated_preds={generated_preds} "
-        f"latent_preds={latent_preds} accepted={artifacts.dfa.accepts(generated_preds)}"
+        f"wfa_state_preds={state_preds} accepted={artifacts.dfa.accepts(generated_preds)}"
     )
 
 
@@ -54,29 +54,29 @@ def main(argv=None) -> int:
     parser.add_argument("--steps", type=int, default=3)
     parser.add_argument("--pad-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=0.5)
-    parser.add_argument("--state-names", nargs="+", default=["PER", "O", "LOC"])
+    parser.add_argument("--state-names", nargs="+", default=["A", "B", "C"])
     parser.add_argument("--supervised-weight", type=float, default=3.0)
     parser.add_argument("--constraint-weight", type=float, default=1.0)
-    parser.add_argument("--hmm-weight", type=float, default=1.0)
-    parser.add_argument("--dp-weight", type=float, default=1.0)
+    parser.add_argument("--wfa-weight", type=float, default=1.0)
+    parser.add_argument("--factor-weight", type=float, default=1.0)
     parser.add_argument("--latent-weight", type=float, default=0.0)
     parser.add_argument("--allowed-mass-weight", type=float, default=0.0)
     parser.add_argument("--latent-mode", choices=("marked", "auto", "marked-and-auto"), default="marked")
     parser.add_argument("--latent-diagnostics", action="store_true")
-    parser.add_argument("--no-dp-factors", action="store_true")
+    parser.add_argument("--no-transition-pairs", action="store_true")
     args = parser.parse_args(argv)
 
-    artifacts = build_hmm_factor_program(
+    artifacts = build_wfa_factor_program(
         pad_size=args.pad_size,
         state_names=tuple(args.state_names),
         trainable=True,
-        include_dp_factors=not args.no_dp_factors,
+        include_transition_pairs=not args.no_transition_pairs,
         latent_mode=args.latent_mode,
     )
 
-    dp_status = "enabled" if artifacts.bundle.include_dp_factors else "disabled"
-    print("HMM factor graph path: generated_token + latent_state DataNodes")
-    print(f"DP factor DataNodes: {dp_status}")
+    pair_status = "enabled" if artifacts.bundle.include_transition_pairs else "disabled"
+    print("Spectral WFA factor graph path: generated_token + wfa_state DataNodes")
+    print(f"Transition-pair factor DataNodes: {pair_status}")
     print("Enforcement path: generated_token projection -> graph-discovered DFA")
     print("State names:", artifacts.bundle.state_names)
     print("Trainable parameters:", artifacts.head.trainable_parameter_names())
@@ -84,14 +84,14 @@ def main(argv=None) -> int:
     print_loss_log_note()
     optimizers = make_optimizers(artifacts, lr=args.lr)
     for step in range(args.steps):
-        losses = run_one_hmm_factor_step(
+        losses = run_one_wfa_factor_step(
             artifacts,
             lr=args.lr,
             optimizers=optimizers,
             supervised_weight=args.supervised_weight,
             constraint_weight=args.constraint_weight,
-            hmm_weight=args.hmm_weight,
-            dp_weight=args.dp_weight,
+            wfa_weight=args.wfa_weight,
+            factor_weight=args.factor_weight,
             latent_weight=args.latent_weight,
             allowed_mass_weight=args.allowed_mass_weight,
             latent_diagnostics=args.latent_diagnostics,

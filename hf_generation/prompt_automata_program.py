@@ -1,4 +1,4 @@
-"""PMD learning helpers for HMM/WFA generation heads in hf_generation."""
+"""Prompt-conditioned HMM/WFA learning helpers for hf_generation."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,6 +8,8 @@ import torch
 from domiknows.generation import (
     GenerationLossWeights,
     HMMGenerationHead,
+    PromptConditionedHMMGenerationHead,
+    PromptConditionedSpectralWFAGenerationHead,
     SpectralWFAGenerationHead,
     allowed_mass_loss,
     compute_generation_training_loss,
@@ -28,41 +30,47 @@ from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, Read
 
 try:
     from .graph import build_generation_graph
-    from .learning_program import label_token_id_map, make_sample_data
-    from .mock_hf import MockTokenizer
+    from .learning_program import _build_backbone, label_token_id_map, make_sample_data
+    from .run_demo import generation_vocab_for_tokenizer
 except ImportError:
     from graph import build_generation_graph
-    from learning_program import label_token_id_map, make_sample_data
-    from mock_hf import MockTokenizer
+    from learning_program import _build_backbone, label_token_id_map, make_sample_data
+    from run_demo import generation_vocab_for_tokenizer
 
 
-AutomataHead = HMMGenerationHead | SpectralWFAGenerationHead
+PromptAutomataHead = PromptConditionedHMMGenerationHead | PromptConditionedSpectralWFAGenerationHead
+BaselineAutomataHead = HMMGenerationHead | SpectralWFAGenerationHead
 
 
 @dataclass
-class AutomataLearningArtifacts:
-    """Objects produced by ``build_automata_learning_program``."""
+class PromptAutomataLearningArtifacts:
+    """Objects produced by ``build_prompt_automata_learning_program``."""
 
     program: PrimalDualProgram
     graph: object
     bundle: object
-    tokenizer: MockTokenizer
-    model: AutomataHead
+    tokenizer: object
+    model: PromptAutomataHead
+    baseline_model: BaselineAutomataHead
     sample_data: dict
     dfa: object
     kind: str
+    encoder_kind: str
+    dynamics_conditioning: str
+    step_dynamics_conditioning: str
     enforcement: object
+    backbone: torch.nn.Module | None = None
 
 
 @dataclass
-class AutomataLearningOptimizers:
-    """Optimizers for the automata head and PMD constraint model."""
+class PromptAutomataLearningOptimizers:
+    """Optimizers for the prompt-conditioned automata head and PMD model."""
 
     head: torch.optim.Optimizer
     constraints: torch.optim.Optimizer
 
 
-def target_labels_for_sample(artifacts: AutomataLearningArtifacts) -> torch.Tensor:
+def target_labels_for_sample(artifacts: PromptAutomataLearningArtifacts) -> torch.Tensor:
     """Return padded compact target labels for the demo sample."""
     target_ids = artifacts.sample_data["target_token_ids"][0][: artifacts.model.pad_size]
     labels = [artifacts.bundle.vocabulary.label_for_token_id(int(token_id)) for token_id in target_ids]
@@ -71,22 +79,39 @@ def target_labels_for_sample(artifacts: AutomataLearningArtifacts) -> torch.Tens
     return torch.tensor(labels, dtype=torch.long)
 
 
-def build_automata_learning_program(
+def build_prompt_automata_learning_program(
     *,
     kind: str = "hmm",
+    encoder_kind: str = "embedding",
+    real_hf: bool = False,
+    model_name: str = "roneneldan/TinyStories-1M",
     pad_size: int = 4,
     state_count: int = 3,
+    dynamics_conditioning: str = "none",
+    dynamics_expert_count: int = 2,
+    step_dynamics_conditioning: str = "none",
     trainable: bool = True,
     random_seed: int = 0,
+    quiet_transformers: bool = True,
     latent_mode: str = "marked",
-) -> AutomataLearningArtifacts:
-    """Build a tiny DomiKnowS PMD program with an HMM or spectral WFA head."""
+) -> PromptAutomataLearningArtifacts:
+    """Build a tiny PMD program with prompt-conditioned HMM/WFA head."""
     kind = kind.lower()
     if kind not in {"hmm", "wfa"}:
         raise ValueError("kind must be 'hmm' or 'wfa'")
+    encoder_kind = encoder_kind.lower().replace("-", "_")
+    if encoder_kind not in {"embedding", "frozen_backbone"}:
+        raise ValueError("encoder_kind must be 'embedding' or 'frozen_backbone'")
+    dynamics_conditioning = dynamics_conditioning.lower().replace("-", "_")
+    if dynamics_conditioning not in {"none", "gated"}:
+        raise ValueError("dynamics_conditioning must be 'none' or 'gated'")
+    step_dynamics_conditioning = step_dynamics_conditioning.lower().replace("-", "_")
+    if step_dynamics_conditioning not in {"none", "prefix_gated"}:
+        raise ValueError("step_dynamics_conditioning must be 'none' or 'prefix_gated'")
 
-    tokenizer = MockTokenizer()
-    graph, bundle = build_generation_graph(tokenizer)
+    tokenizer, backbone = _build_backbone(real_hf, model_name, quiet_transformers)
+    vocab, eos_token = generation_vocab_for_tokenizer(tokenizer, real_hf=real_hf)
+    graph, bundle = build_generation_graph(tokenizer, vocab, eos_token=eos_token)
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error", latent_mode=latent_mode)
     dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
 
@@ -104,9 +129,8 @@ def build_automata_learning_program(
     def add_sequence(target_token_ids):
         flat = target_token_ids[0] if getattr(target_token_ids, "dim", lambda: 0)() == 2 else target_token_ids
         labels = [bundle.vocabulary.label_for_token_id(int(token_id)) for token_id in flat[:pad_size]]
-        eos_label = bundle.vocabulary.eos_label
         if len(labels) < pad_size:
-            labels.extend([eos_label] * (pad_size - len(labels)))
+            labels.extend([bundle.vocabulary.eos_label] * (pad_size - len(labels)))
         return torch.ones((pad_size, 1)), torch.tensor(labels, dtype=torch.long), torch.arange(pad_size)
 
     token[contains, "target_labels", "token_index"] = JointSensor(
@@ -129,9 +153,27 @@ def build_automata_learning_program(
         "random_seed": random_seed,
     }
     if kind == "hmm":
-        model: AutomataHead = HMMGenerationHead(**common_kwargs)
+        baseline_model: BaselineAutomataHead = HMMGenerationHead(**common_kwargs)
+        model_cls = PromptConditionedHMMGenerationHead
     else:
-        model = SpectralWFAGenerationHead(**common_kwargs)
+        baseline_model = SpectralWFAGenerationHead(**common_kwargs)
+        model_cls = PromptConditionedSpectralWFAGenerationHead
+
+    prompt_kwargs = dict(common_kwargs)
+    if encoder_kind == "embedding":
+        prompt_kwargs.update(
+            prompt_encoder_type="embedding",
+            prompt_vocab_size=_tokenizer_vocab_size(tokenizer),
+            prompt_hidden_size=8,
+        )
+    else:
+        prompt_kwargs.update(prompt_encoder_type="frozen_backbone", backbone=backbone)
+    prompt_kwargs.update(
+        dynamics_conditioning=dynamics_conditioning,
+        dynamics_expert_count=dynamics_expert_count,
+        step_dynamics_conditioning=step_dynamics_conditioning,
+    )
+    model: PromptAutomataHead = model_cls(**prompt_kwargs)
 
     token[generated_token] = ModuleLearner(
         token[contains],
@@ -160,45 +202,51 @@ def build_automata_learning_program(
         counting_tnorm="P",
     )
 
-    return AutomataLearningArtifacts(
+    return PromptAutomataLearningArtifacts(
         program=program,
         graph=graph,
         bundle=bundle,
         tokenizer=tokenizer,
         model=model,
+        baseline_model=baseline_model,
         sample_data=make_sample_data(tokenizer),
         dfa=dfa,
         kind=kind,
+        encoder_kind=encoder_kind,
+        dynamics_conditioning=dynamics_conditioning,
+        step_dynamics_conditioning=step_dynamics_conditioning,
         enforcement=enforcement,
+        backbone=backbone,
     )
 
 
 def make_optimizers(
-    artifacts: AutomataLearningArtifacts,
+    artifacts: PromptAutomataLearningArtifacts,
     lr: float = 1e-2,
-) -> AutomataLearningOptimizers:
-    """Create optimizers for the automata head and PMD constraint model."""
+) -> PromptAutomataLearningOptimizers:
+    """Create optimizers for the trainable prompt-conditioned head and PMD model."""
     trainable_params = [p for p in artifacts.model.parameters() if p.requires_grad]
     if not trainable_params:
-        raise ValueError("automata head has no trainable parameters")
-    return AutomataLearningOptimizers(
+        raise ValueError("prompt-conditioned automata head has no trainable parameters")
+    return PromptAutomataLearningOptimizers(
         head=torch.optim.Adam(trainable_params, lr=lr),
         constraints=torch.optim.Adam(artifacts.program.cmodel.parameters(), lr=lr),
     )
 
 
-def automata_auxiliary_loss(artifacts: AutomataLearningArtifacts) -> torch.Tensor:
-    """Return the HMM/WFA auxiliary sequence loss for the demo sample."""
+def prompt_automata_auxiliary_loss(artifacts: PromptAutomataLearningArtifacts) -> torch.Tensor:
+    """Return the prompt-conditioned HMM/WFA supervised auxiliary loss."""
     labels = target_labels_for_sample(artifacts)
-    if isinstance(artifacts.model, HMMGenerationHead):
-        return hmm_sequence_nll(artifacts.model, labels)
-    return wfa_sequence_energy_loss(artifacts.model, labels)
+    instruction_tokens = artifacts.sample_data["instruction_tokens"]
+    if isinstance(artifacts.model, PromptConditionedHMMGenerationHead):
+        return hmm_sequence_nll(artifacts.model, labels, instruction_tokens=instruction_tokens)
+    return wfa_sequence_energy_loss(artifacts.model, labels, instruction_tokens=instruction_tokens)
 
 
-def run_one_automata_training_step(
-    artifacts: AutomataLearningArtifacts,
+def run_one_prompt_automata_training_step(
+    artifacts: PromptAutomataLearningArtifacts,
     lr: float = 1e-2,
-    optimizers: AutomataLearningOptimizers | None = None,
+    optimizers: PromptAutomataLearningOptimizers | None = None,
     *,
     supervised_weight: float = 1.0,
     constraint_weight: float = 1.0,
@@ -207,7 +255,7 @@ def run_one_automata_training_step(
     allowed_mass_weight: float = 0.0,
     latent_diagnostics: bool = False,
 ) -> dict[str, float]:
-    """Run one PMD-style optimization step with automata auxiliary loss."""
+    """Run one PMD-style step with prompt-conditioned automata auxiliary loss."""
     weights = GenerationLossWeights(
         supervised=supervised_weight,
         pmd=constraint_weight,
@@ -222,7 +270,7 @@ def run_one_automata_training_step(
 
     model_loss, _, *output = artifacts.program.model(artifacts.sample_data)
     constraint_loss, *_ = artifacts.program.cmodel(output[1])
-    aux_loss = automata_auxiliary_loss(artifacts)
+    aux_loss = prompt_automata_auxiliary_loss(artifacts)
     labels = target_labels_for_sample(artifacts)
     log_probs = artifacts.model(None, artifacts.sample_data["instruction_tokens"], labels)
     probs = token_probs_from_log_probs(log_probs)
@@ -263,8 +311,8 @@ def run_one_automata_training_step(
     return values
 
 
-def constrained_decode(artifacts: AutomataLearningArtifacts):
-    """Decode the automata head with graph-discovered DFA enforcement."""
+def constrained_decode(artifacts: PromptAutomataLearningArtifacts):
+    """Decode the prompt-conditioned head with graph-discovered DFA enforcement."""
     return constrained_label_greedy_decode(
         artifacts.model,
         artifacts.sample_data["instruction_tokens"],
@@ -272,6 +320,18 @@ def constrained_decode(artifacts: AutomataLearningArtifacts):
         artifacts.dfa,
         max_new_tokens=artifacts.model.pad_size,
     )
+
+
+def _tokenizer_vocab_size(tokenizer) -> int:
+    if hasattr(tokenizer, "token_to_id"):
+        return len(tokenizer.token_to_id)
+    value = getattr(tokenizer, "vocab_size", None)
+    if value is not None:
+        return int(value)
+    try:
+        return len(tokenizer.get_vocab())
+    except AttributeError:
+        return 1024
 
 
 def _as_float(value) -> float:

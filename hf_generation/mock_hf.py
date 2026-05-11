@@ -63,8 +63,11 @@ class MockCausalLM:
     """Deterministic causal LM with HuggingFace-compatible call semantics.
 
     The raw model prefers ``" dog"`` early, but graph constraints forbid that
-    token and require ``" cat"``.  This makes the DFA masking visible across
-    greedy, beam, and sampling runs.
+    token and require ``" cat"``.  The allowed logits are intentionally
+    branchy: greedy follows the strongest local continuation, beam search
+    finds a better globally accepted path, and seeded sampling takes another
+    valid path.  This makes the decoding modes visually different while all
+    still obey the same DFA mask.
     """
 
     def __init__(self, vocab_size: int = 6):
@@ -81,18 +84,39 @@ class MockCausalLM:
 
         if not generated:
             logits[0, -1, 4] = 9.0   # dog: forbidden by graph constraint
-            logits[0, -1, 1] = 7.0   # The
-            logits[0, -1, 2] = 6.0   # cat
-            logits[0, -1, 3] = 1.0   # mat
-        elif 2 not in generated:
+            logits[0, -1, 1] = 7.00  # The: greedy's first legal choice
+            logits[0, -1, 2] = 6.99  # cat: nearly tied, useful for beam
+            logits[0, -1, 3] = 6.60  # mat: sampled with seed 0
+        elif generated == [1]:
             logits[0, -1, 4] = 9.0
             logits[0, -1, 2] = 8.0
-            logits[0, -1, 3] = 3.0
-            logits[0, -1, 0] = 0.5
-        else:
-            logits[0, -1, 3] = 6.0
-            logits[0, -1, 0] = 5.0
+            logits[0, -1, 3] = 2.0
+            logits[0, -1, 0] = -2.0
+        elif generated == [1, 2]:
+            logits[0, -1, 4] = 9.0
+            logits[0, -1, 3] = 6.1   # greedy keeps going by a narrow margin
+            logits[0, -1, 0] = 6.0   # beam considers shorter finish
+        elif generated == [1, 2, 3]:
+            logits[0, -1, 0] = 9.0
+        elif generated == [2]:
+            logits[0, -1, 4] = 9.0
+            logits[0, -1, 3] = 10.0  # beam-favored global path
+            logits[0, -1, 1] = 2.0
+        elif generated == [2, 3]:
+            logits[0, -1, 0] = 10.0
             logits[0, -1, 1] = 1.0
+        elif generated == [3]:
+            logits[0, -1, 4] = 9.0
+            logits[0, -1, 2] = 8.0   # sampled path repairs by adding cat
+            logits[0, -1, 1] = 2.0
+        elif generated == [3, 2]:
+            logits[0, -1, 0] = 8.0
+            logits[0, -1, 1] = 1.0
+        elif 2 in generated:
+            logits[0, -1, 0] = 8.0
+            logits[0, -1, 3] = 2.0
+        else:
+            logits[0, -1, 2] = 8.0
 
         return MockOutput(logits=logits)
 

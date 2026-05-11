@@ -1,4 +1,4 @@
-"""DomiKnowS PMD program using an explicit HMM factor graph."""
+"""DomiKnowS PMD program using an explicit spectral-WFA factor graph."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,17 +7,17 @@ import torch
 
 from domiknows.generation import (
     GenerationLossWeights,
-    HMMFactorGraphEncoder,
-    HMMFactorGraphHead,
+    SpectralWFAFactorGraphEncoder,
+    SpectralWFAFactorGraphHead,
     allowed_mass_loss,
-    apply_hmm_dp_consistency_constraints,
+    apply_wfa_factor_consistency_constraints,
     compute_generation_training_loss,
     constrained_label_greedy_decode,
     constraints_to_dfa,
     discover_generation_enforcement,
-    hmm_dp_factor_consistency_loss,
-    hmm_factor_sequence_nll,
     token_probs_from_log_probs,
+    wfa_factor_consistency_loss,
+    wfa_factor_sequence_energy_loss,
 )
 from domiknows.graph.logicalConstrain import ifL, notL
 from domiknows.program.loss import NBCrossEntropyLoss
@@ -39,18 +39,16 @@ except ImportError:
 
 
 @dataclass
-class HMMFactorArtifacts:
-    """Objects produced by ``build_hmm_factor_program``."""
+class WFAFactorArtifacts:
+    """Objects produced by ``build_wfa_factor_program``."""
 
     program: PrimalDualProgram
     graph: object
     bundle: object
     tokenizer: MockTokenizer
-    head: HMMFactorGraphHead
+    head: SpectralWFAFactorGraphHead
     generated_model: torch.nn.Module
-    latent_model: torch.nn.Module
-    forward_model: torch.nn.Module | None
-    backward_model: torch.nn.Module | None
+    state_model: torch.nn.Module
     transition_pair_model: torch.nn.Module | None
     sample_data: dict
     dfa: object
@@ -58,54 +56,55 @@ class HMMFactorArtifacts:
 
 
 @dataclass
-class HMMFactorOptimizers:
-    """Optimizers for the shared HMM parameters and PMD constraints."""
+class WFAFactorOptimizers:
+    """Optimizers for the shared WFA parameters and PMD constraints."""
 
     head: torch.optim.Optimizer
     constraints: torch.optim.Optimizer
 
 
-def apply_hmm_factor_constraints(bundle) -> None:
-    """Add toy latent-state constraints over adjacent token positions."""
+def apply_wfa_factor_constraints(bundle) -> None:
+    """Add toy WFA-state constraints over adjacent token positions."""
     ctx = bundle.context
 
-    # PER(t) => not LOC(t + 1)
+    # A(t) => not C(t + 1). These are constraints over normalized projections
+    # of signed WFA features, not exact recurrence equations.
     ifL(
         ctx.is_next_rel("next"),
         ifL(
-            ctx.latent_state_value("PER", "x", path=("next", ctx.current_token)),
-            notL(ctx.latent_state_value("LOC", "y", path=("next", ctx.next_token))),
+            ctx.wfa_state_value("A", "x", path=("next", ctx.current_token)),
+            notL(ctx.wfa_state_value("C", "y", path=("next", ctx.next_token))),
         ),
     )
 
-    # LOC(t) => generated token is " mat" in this tiny toy vocabulary.
+    # C(t) => generated token is " mat" in this tiny toy vocabulary.
     ifL(
-        ctx.latent_state_value("LOC", "x"),
+        ctx.wfa_state_value("C", "x"),
         ctx.token_value(" mat", "x"),
     )
 
 
-def build_hmm_factor_graph(tokenizer=None, state_names=("PER", "O", "LOC"), include_dp_factors: bool = True):
-    """Build the hf_generation graph with generated-token and HMM latent nodes."""
+def build_wfa_factor_graph(tokenizer=None, state_names=("A", "B", "C"), include_transition_pairs: bool = True):
+    """Build the hf_generation graph with generated-token and WFA factor nodes."""
     tokenizer = tokenizer or MockTokenizer()
-    encoder = HMMFactorGraphEncoder(
+    encoder = SpectralWFAFactorGraphEncoder(
         vocab=VOCAB,
         eos_token=EOS_TOKEN,
         tokenizer=tokenizer,
         state_names=state_names,
-        graph_name="hf_generation_hmm_factor",
-        include_dp_factors=include_dp_factors,
+        graph_name="hf_generation_wfa_factor",
+        include_transition_pairs=include_transition_pairs,
     )
     graph, bundle = encoder.build_graph()
     with graph:
         apply_graph_constraints(bundle)
-        apply_hmm_factor_constraints(bundle)
-        if include_dp_factors:
-            apply_hmm_dp_consistency_constraints(bundle)
+        apply_wfa_factor_constraints(bundle)
+        if include_transition_pairs:
+            apply_wfa_factor_consistency_constraints(bundle)
     return graph, bundle
 
 
-def target_labels_for_sample(artifacts: HMMFactorArtifacts) -> torch.Tensor:
+def target_labels_for_sample(artifacts: WFAFactorArtifacts) -> torch.Tensor:
     """Return padded compact generated-token labels for the demo sample."""
     target_ids = artifacts.sample_data["target_token_ids"][0][: artifacts.head.pad_size]
     labels = [artifacts.bundle.vocabulary.label_for_token_id(int(token_id)) for token_id in target_ids]
@@ -114,24 +113,22 @@ def target_labels_for_sample(artifacts: HMMFactorArtifacts) -> torch.Tensor:
     return torch.tensor(labels, dtype=torch.long)
 
 
-def build_hmm_factor_program(
+def build_wfa_factor_program(
     *,
     pad_size: int = 4,
-    state_names=("PER", "O", "LOC"),
+    state_names=("A", "B", "C"),
     trainable: bool = True,
     random_seed: int = 0,
-    include_dp_factors: bool = True,
+    include_transition_pairs: bool = True,
     latent_mode: str = "marked",
-) -> HMMFactorArtifacts:
-    """Build the opt-in HMM factor-graph PMD demo."""
+) -> WFAFactorArtifacts:
+    """Build the opt-in spectral-WFA factor-graph PMD demo."""
     tokenizer = MockTokenizer()
-    graph, bundle = build_hmm_factor_graph(
+    graph, bundle = build_wfa_factor_graph(
         tokenizer,
         state_names=state_names,
-        include_dp_factors=include_dp_factors,
+        include_transition_pairs=include_transition_pairs,
     )
-    # Latent-state constraints are for PMD/cmodel, not DFA token masking. The
-    # DFA bridge should therefore ignore those non-token factor constraints.
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="ignore", latent_mode=latent_mode)
     dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
 
@@ -139,7 +136,7 @@ def build_hmm_factor_program(
     token = bundle.token
     contains = bundle.contains
     generated_token = bundle.generated_token
-    latent_state = bundle.latent_state
+    wfa_state = bundle.wfa_state
     is_before_rel = bundle.is_before_rel
     first_token = bundle.first_token
     second_token = bundle.second_token
@@ -169,7 +166,7 @@ def build_hmm_factor_program(
         label=True,
     )
 
-    head = HMMFactorGraphHead(
+    head = SpectralWFAFactorGraphHead(
         label_count=bundle.vocabulary.label_count,
         state_names=bundle.state_names,
         pad_size=pad_size,
@@ -178,35 +175,21 @@ def build_hmm_factor_program(
         random_seed=random_seed,
     )
     generated_model = head.generated_module()
-    latent_model = head.latent_module()
-    forward_model = head.forward_module() if include_dp_factors else None
-    backward_model = head.backward_module() if include_dp_factors else None
-    transition_pair_model = head.transition_pair_module() if include_dp_factors else None
+    state_model = head.state_module()
+    transition_pair_model = head.transition_pair_module() if include_transition_pairs else None
+
     token[generated_token] = ModuleLearner(
         token[contains],
         text["instruction_tokens"],
         "target_labels",
         module=generated_model,
     )
-    token[latent_state] = ModuleLearner(
+    token[wfa_state] = ModuleLearner(
         token[contains],
         text["instruction_tokens"],
         "target_labels",
-        module=latent_model,
+        module=state_model,
     )
-    if include_dp_factors:
-        token[bundle.forward_state] = ModuleLearner(
-            token[contains],
-            text["instruction_tokens"],
-            "target_labels",
-            module=forward_model,
-        )
-        token[bundle.backward_state] = ModuleLearner(
-            token[contains],
-            text["instruction_tokens"],
-            "target_labels",
-            module=backward_model,
-        )
 
     def before_edges(*_args, **candidates):
         arg1, arg2 = _candidate_pair(candidates)
@@ -224,8 +207,8 @@ def build_hmm_factor_program(
         relations=(current_token.reversed, next_token.reversed),
         forward=next_edges,
     )
-    if include_dp_factors:
-        is_next_rel[bundle.transition_pair] = ModuleLearner(
+    if include_transition_pairs:
+        is_next_rel[bundle.wfa_transition_pair] = ModuleLearner(
             token[contains],
             text["instruction_tokens"],
             token["target_labels"],
@@ -244,16 +227,14 @@ def build_hmm_factor_program(
         counting_tnorm="P",
     )
 
-    return HMMFactorArtifacts(
+    return WFAFactorArtifacts(
         program=program,
         graph=graph,
         bundle=bundle,
         tokenizer=tokenizer,
         head=head,
         generated_model=generated_model,
-        latent_model=latent_model,
-        forward_model=forward_model,
-        backward_model=backward_model,
+        state_model=state_model,
         transition_pair_model=transition_pair_model,
         sample_data=make_sample_data(tokenizer),
         dfa=dfa,
@@ -261,28 +242,28 @@ def build_hmm_factor_program(
     )
 
 
-def make_optimizers(artifacts: HMMFactorArtifacts, lr: float = 1e-2) -> HMMFactorOptimizers:
-    """Create optimizers for shared HMM parameters and PMD constraints."""
-    return HMMFactorOptimizers(
+def make_optimizers(artifacts: WFAFactorArtifacts, lr: float = 1e-2) -> WFAFactorOptimizers:
+    """Create optimizers for shared WFA parameters and PMD constraints."""
+    return WFAFactorOptimizers(
         head=torch.optim.Adam((p for p in artifacts.head.parameters() if p.requires_grad), lr=lr),
         constraints=torch.optim.Adam(artifacts.program.cmodel.parameters(), lr=lr),
     )
 
 
-def run_one_hmm_factor_step(
-    artifacts: HMMFactorArtifacts,
+def run_one_wfa_factor_step(
+    artifacts: WFAFactorArtifacts,
     lr: float = 1e-2,
-    optimizers: HMMFactorOptimizers | None = None,
+    optimizers: WFAFactorOptimizers | None = None,
     *,
     supervised_weight: float = 1.0,
     constraint_weight: float = 1.0,
-    hmm_weight: float = 1.0,
-    dp_weight: float = 1.0,
+    wfa_weight: float = 1.0,
+    factor_weight: float = 1.0,
     latent_weight: float = 0.0,
     allowed_mass_weight: float = 0.0,
     latent_diagnostics: bool = False,
 ) -> dict[str, float]:
-    """Run one optimization step with supervised, PMD, and HMM NLL losses."""
+    """Run one optimization step with supervised, PMD, and WFA energy losses."""
     optimizers = optimizers or make_optimizers(artifacts, lr=lr)
     optimizers.head.zero_grad()
     optimizers.constraints.zero_grad()
@@ -290,19 +271,11 @@ def run_one_hmm_factor_step(
     model_loss, _, *output = artifacts.program.model(artifacts.sample_data)
     constraint_loss, *_ = artifacts.program.cmodel(output[1])
     labels = target_labels_for_sample(artifacts)
-    hmm_loss = hmm_factor_sequence_nll(artifacts.head, labels)
-    dp_loss = hmm_dp_factor_consistency_loss(artifacts.head, labels)
+    wfa_loss = wfa_factor_sequence_energy_loss(artifacts.head, labels)
+    factor_loss = wfa_factor_consistency_loss(artifacts.head, labels)
     generated = token_probs_from_log_probs(artifacts.generated_model(None, artifacts.sample_data["instruction_tokens"], labels))
-    latent = token_probs_from_log_probs(artifacts.latent_model(None, artifacts.sample_data["instruction_tokens"], labels))
-    probs = {"generated_token": generated, "latent_state": latent}
-    if artifacts.forward_model is not None:
-        probs["forward_state"] = token_probs_from_log_probs(
-            artifacts.forward_model(None, artifacts.sample_data["instruction_tokens"], labels)
-        )
-    if artifacts.backward_model is not None:
-        probs["backward_state"] = token_probs_from_log_probs(
-            artifacts.backward_model(None, artifacts.sample_data["instruction_tokens"], labels)
-        )
+    state = token_probs_from_log_probs(artifacts.state_model(None, artifacts.sample_data["instruction_tokens"], labels))
+    probs = {"generated_token": generated, "wfa_state": state}
     latent_breakdown = artifacts.enforcement.latent_breakdown(
         probs,
         eos_label=artifacts.bundle.vocabulary.eos_label,
@@ -313,7 +286,7 @@ def run_one_hmm_factor_step(
         pmd_loss=constraint_loss,
         latent_loss=latent_breakdown.total,
         allowed_mass_loss_value=mass_loss,
-        automata_aux_loss=hmm_weight * hmm_loss + dp_weight * dp_loss,
+        automata_aux_loss=wfa_weight * wfa_loss + factor_weight * factor_loss,
         weights=GenerationLossWeights(
             supervised=supervised_weight,
             pmd=constraint_weight,
@@ -334,23 +307,23 @@ def run_one_hmm_factor_step(
     values = {
         "model_loss": all_values["model_loss"],
         "constraint_loss": all_values["constraint_loss"],
-        "hmm_factor_nll": _as_float(hmm_loss),
-        "hmm_dp_factor_loss": _as_float(dp_loss),
+        "wfa_factor_energy": _as_float(wfa_loss),
+        "wfa_factor_consistency": _as_float(factor_loss),
         "total_loss": all_values["total_loss"],
     }
     if latent_weight or latent_diagnostics:
         values["latent_loss"] = all_values["latent_loss"]
     if allowed_mass_weight:
         values["allowed_mass_loss"] = all_values["allowed_mass_loss"]
-    values["hmm_factor_nll"] = _as_float(hmm_loss)
-    values["hmm_dp_factor_loss"] = _as_float(dp_loss)
+    values["wfa_factor_energy"] = _as_float(wfa_loss)
+    values["wfa_factor_consistency"] = _as_float(factor_loss)
     if latent_diagnostics:
         values["latent_terms"] = float(len(latent_breakdown.items))
         values["transition_potentials"] = float(len(artifacts.enforcement.transition_potentials))
     return values
 
 
-def constrained_decode(artifacts: HMMFactorArtifacts):
+def constrained_decode(artifacts: WFAFactorArtifacts):
     """Decode the generated-token projection with graph-discovered DFA enforcement."""
     return constrained_label_greedy_decode(
         artifacts.generated_model,

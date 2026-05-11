@@ -43,14 +43,17 @@ def build_latent_example():
     graph, bundle = build_generation_bundle(ExampleTokenizer(), EXAMPLE_VOCAB)
     enforcement = discover_generation_enforcement(graph, bundle)
     probs = build_example_probabilities(bundle)
-    loss = enforcement.latent_loss(probs)
-    return graph, bundle, enforcement, probs, loss
+    breakdown = enforcement.latent_breakdown(probs, eos_label=bundle.vocabulary.eos_label)
+    return graph, bundle, enforcement, probs, breakdown.total
 
 
 def main():
-    _, _, enforcement, _, loss = build_latent_example()
+    graph, bundle, enforcement, probs, loss = build_latent_example()
+    breakdown = enforcement.latent_breakdown(probs, eos_label=bundle.vocabulary.eos_label)
     print(f"latent specs: {enforcement.latent_specs}")
     print(f"latent loss: {loss.item():.6f}")
+    for item in breakdown.items:
+        print(f"  {item.name}: raw={item.raw_loss.item():.6f} weighted={item.weighted_loss.item():.6f}")
 
 
 if __name__ == "__main__":

@@ -4,11 +4,17 @@ from __future__ import annotations
 import argparse
 
 import torch
-from domiknows.generation import constrained_label_greedy_decode
+from domiknows.generation import (
+    constrained_label_beam_search_decode,
+    constrained_label_greedy_decode,
+    constrained_label_sample_decode,
+)
 
 try:
+    from .loss_logging import format_loss_log, print_loss_log_note
     from .learning_program import build_learning_program, make_optimizers, run_one_training_step
 except ImportError:
+    from loss_logging import format_loss_log, print_loss_log_note
     from learning_program import build_learning_program, make_optimizers, run_one_training_step
 
 
@@ -27,22 +33,50 @@ def _prediction_summary(artifacts) -> str:
     return f"labels={labels} preds={preds} accepted={artifacts.dfa.accepts(preds)}"
 
 
-def _constrained_decode_summary(artifacts) -> str:
+def _format_decode_result(artifacts, result) -> str:
     prompt_ids = artifacts.sample_data["instruction_tokens"]
-    result = constrained_label_greedy_decode(
-        artifacts.model,
-        prompt_ids,
-        artifacts.bundle.vocabulary,
-        artifacts.dfa,
-        max_new_tokens=artifacts.model.pad_size,
-    )
     prompt_len = int(prompt_ids.shape[-1])
     generated_token_ids = result.token_ids[prompt_len:]
     text = artifacts.tokenizer.decode(generated_token_ids)
+    score = "" if result.score is None else f" score={result.score:.4f}"
     return (
         f"labels={result.labels} token_ids={generated_token_ids} "
-        f"text={text!r} accepted={result.accepted}"
+        f"text={text!r} accepted={result.accepted}{score}"
     )
+
+
+def _constrained_decode_summary(artifacts, mode: str = "greedy") -> str:
+    prompt_ids = artifacts.sample_data["instruction_tokens"]
+    if mode == "greedy":
+        result = constrained_label_greedy_decode(
+            artifacts.model,
+            prompt_ids,
+            artifacts.bundle.vocabulary,
+            artifacts.dfa,
+            max_new_tokens=artifacts.model.pad_size,
+        )
+    elif mode == "beam":
+        result = constrained_label_beam_search_decode(
+            artifacts.model,
+            prompt_ids,
+            artifacts.bundle.vocabulary,
+            artifacts.dfa,
+            max_new_tokens=artifacts.model.pad_size,
+            beam_size=3,
+            early_stopping=True,
+        )
+    elif mode == "sample":
+        result = constrained_label_sample_decode(
+            artifacts.model,
+            prompt_ids,
+            artifacts.bundle.vocabulary,
+            artifacts.dfa,
+            max_new_tokens=artifacts.model.pad_size,
+            generator=torch.Generator().manual_seed(7),
+        )
+    else:
+        raise ValueError(f"unknown constrained decode mode: {mode}")
+    return _format_decode_result(artifacts, result)
 
 
 def main(argv=None) -> int:
@@ -54,6 +88,10 @@ def main(argv=None) -> int:
     parser.add_argument("--lr", type=float, default=0.5)
     parser.add_argument("--supervised-weight", type=float, default=3.0)
     parser.add_argument("--constraint-weight", type=float, default=1.0)
+    parser.add_argument("--latent-weight", type=float, default=0.0)
+    parser.add_argument("--allowed-mass-weight", type=float, default=0.0)
+    parser.add_argument("--latent-mode", choices=("marked", "auto", "marked-and-auto"), default="marked")
+    parser.add_argument("--latent-diagnostics", action="store_true")
     parser.add_argument("--constrained-decoding", action="store_true")
     parser.add_argument("--show-transformers-load-report", action="store_true")
     args = parser.parse_args(argv)
@@ -64,12 +102,14 @@ def main(argv=None) -> int:
         pad_size=args.pad_size,
         constrained_decoding=args.constrained_decoding,
         quiet_transformers=not args.show_transformers_load_report,
+        latent_mode=args.latent_mode,
     )
 
     print("Learning path: supervised compact-label loss + DomiKnowS PMD constraint loss")
     print("Enforcement path: graph constraints -> DFA mask for final learned-head decoding")
     print("Trainable parameters:", artifacts.model.trainable_parameter_names())
     print("Before:", _prediction_summary(artifacts))
+    print_loss_log_note()
     optimizers = make_optimizers(artifacts, lr=args.lr)
     for step in range(args.steps):
         losses = run_one_training_step(
@@ -78,10 +118,15 @@ def main(argv=None) -> int:
             optimizers=optimizers,
             supervised_weight=args.supervised_weight,
             constraint_weight=args.constraint_weight,
+            latent_weight=args.latent_weight,
+            allowed_mass_weight=args.allowed_mass_weight,
+            latent_diagnostics=args.latent_diagnostics,
         )
-        print(f"Step {step + 1}: {losses}")
+        print(f"Step {step + 1}: {format_loss_log(losses)}")
     print("After unconstrained:", _prediction_summary(artifacts))
     print("After DFA-constrained:", _constrained_decode_summary(artifacts))
+    print("After DFA-constrained beam:", _constrained_decode_summary(artifacts, mode="beam"))
+    print("After DFA-constrained sample:", _constrained_decode_summary(artifacts, mode="sample"))
     print("Vocabulary:", artifacts.bundle.vocabulary.labels)
     return 0
 

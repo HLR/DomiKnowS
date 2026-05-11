@@ -72,3 +72,26 @@ to put probability mass on `" slide"` within the next two generated positions.
 Run `uv run python Tasks/collie/latent_example.py` from the repository root to
 see the generation module discover the latent spec from the graph and compute a
 toy loss.
+
+## Graph-HMM PMD Learner Path
+
+Collie can also use `domiknows.generation.graph_hmm` as the trainable
+`ModuleLearner` attached to `token[generated_token]`:
+
+```bash
+uv run --project Tasks/collie python Tasks/collie/program.py --vocab_file data/vocab_val.pkl --graph_hmm_learner hmm
+uv run --project Tasks/collie python Tasks/collie/program.py --vocab_file data/vocab_val.pkl --graph_hmm_learner spectral
+```
+
+With `--graph_hmm_learner hmm`, Collie uses `GraphHMMGenerationHead`: a
+trainable compact-label HMM whose transition and emission probabilities are
+projected through graph-aware masks before PMD sees them.
+
+With `--graph_hmm_learner spectral`, Collie uses
+`GraphSpectralGenerationHead`: a trainable signed WFA-style head whose scores
+are exposed as compact-label logits.
+
+Both heads populate DomiKnowS token DataNodes, so `PrimalDualProgram.cmodel(...)`
+receives ordinary `generated_token` probabilities and computes the same graph
+constraint loss. DFA decoding remains the hard enforcement path; graph-HMM
+heads provide trainable graph-aware probabilities for PMD.

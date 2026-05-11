@@ -5,7 +5,14 @@ from dataclasses import dataclass
 
 import torch
 
-from domiknows.generation import constraints_to_dfa, discover_generation_enforcement
+from domiknows.generation import (
+    GenerationLossWeights,
+    allowed_mass_loss,
+    compute_generation_training_loss,
+    constraints_to_dfa,
+    discover_generation_enforcement,
+    token_probs_from_log_probs,
+)
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
 from domiknows.program.metric import MacroAverageTracker
@@ -37,6 +44,7 @@ class LearningArtifacts:
     model: FrozenBackboneGenerationHead
     sample_data: dict
     dfa: object
+    enforcement: object
 
 
 @dataclass
@@ -89,12 +97,13 @@ def build_learning_program(
     constrained_decoding: bool = False,
     quiet_transformers: bool = True,
     random_seed: int | None = 0,
+    latent_mode: str = "marked",
 ) -> LearningArtifacts:
     """Build a small Collie-style PMD program for generation learning."""
     tokenizer, backbone = _build_backbone(real_hf, model_name, quiet_transformers)
     vocab, eos_token = generation_vocab_for_tokenizer(tokenizer, real_hf=real_hf)
     graph, bundle = build_generation_graph(tokenizer, vocab, eos_token=eos_token)
-    enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
+    enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error", latent_mode=latent_mode)
     dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
 
     text = bundle.text
@@ -184,6 +193,7 @@ def build_learning_program(
         model=model,
         sample_data=make_sample_data(tokenizer),
         dfa=dfa,
+        enforcement=enforcement,
     )
 
 
@@ -202,12 +212,17 @@ def run_one_training_step(
     *,
     supervised_weight: float = 1.0,
     constraint_weight: float = 1.0,
+    latent_weight: float = 0.0,
+    allowed_mass_weight: float = 0.0,
+    latent_diagnostics: bool = False,
 ) -> dict[str, float]:
     """Run one PMD-style optimization step and return loss scalars."""
-    if supervised_weight < 0:
-        raise ValueError("supervised_weight must be non-negative")
-    if constraint_weight < 0:
-        raise ValueError("constraint_weight must be non-negative")
+    weights = GenerationLossWeights(
+        supervised=supervised_weight,
+        pmd=constraint_weight,
+        latent=latent_weight,
+        allowed_mass=allowed_mass_weight,
+    )
 
     optimizers = optimizers or make_optimizers(artifacts, lr=lr)
     optimizers.head.zero_grad()
@@ -215,21 +230,47 @@ def run_one_training_step(
 
     model_loss, _, *output = artifacts.program.model(artifacts.sample_data)
     constraint_loss, *_ = artifacts.program.cmodel(output[1])
-    total = supervised_weight * model_loss
-    if torch.is_tensor(constraint_loss):
-        total = total + constraint_weight * constraint_loss
+    labels = output_labels_for_sample(artifacts)
+    log_probs = artifacts.model(None, artifacts.sample_data["instruction_tokens"], labels)
+    probs = token_probs_from_log_probs(log_probs)
+    latent_breakdown = artifacts.enforcement.latent_breakdown(
+        probs,
+        eos_label=artifacts.bundle.vocabulary.eos_label,
+    )
+    mass_loss = allowed_mass_loss(probs, artifacts.dfa) if allowed_mass_weight else probs.new_zeros(())
+    breakdown = compute_generation_training_loss(
+        supervised_loss=model_loss,
+        pmd_loss=constraint_loss,
+        latent_loss=latent_breakdown.total,
+        allowed_mass_loss_value=mass_loss,
+        weights=weights,
+        latent_items=latent_breakdown.items,
+    )
+    total = breakdown.total
 
     if torch.is_tensor(total) and total.requires_grad:
         total.backward()
         optimizers.head.step()
         optimizers.constraints.step()
 
-    return {
-        "model_loss": float(model_loss.detach().item()) if torch.is_tensor(model_loss) else float(model_loss or 0.0),
-        "constraint_loss": (
-            float(constraint_loss.detach().item())
-            if torch.is_tensor(constraint_loss)
-            else float(constraint_loss or 0.0)
-        ),
-        "total_loss": float(total.detach().item()) if torch.is_tensor(total) else float(total or 0.0),
+    values = {
+        "model_loss": breakdown.as_float_dict()["model_loss"],
+        "constraint_loss": breakdown.as_float_dict()["constraint_loss"],
+        "total_loss": breakdown.as_float_dict()["total_loss"],
     }
+    if latent_weight or latent_diagnostics:
+        values["latent_loss"] = breakdown.as_float_dict()["latent_loss"]
+    if allowed_mass_weight:
+        values["allowed_mass_loss"] = breakdown.as_float_dict()["allowed_mass_loss"]
+    if latent_diagnostics:
+        values["latent_terms"] = float(len(latent_breakdown.items))
+    return values
+
+
+def output_labels_for_sample(artifacts: LearningArtifacts) -> torch.Tensor:
+    """Return padded target labels for the current learning sample."""
+    target_ids = artifacts.sample_data["target_token_ids"][0][: artifacts.model.pad_size]
+    labels = [artifacts.bundle.vocabulary.label_for_token_id(int(token_id)) for token_id in target_ids]
+    if len(labels) < artifacts.model.pad_size:
+        labels.extend([artifacts.bundle.vocabulary.eos_label] * (artifacts.model.pad_size - len(labels)))
+    return torch.tensor(labels, dtype=torch.long)
