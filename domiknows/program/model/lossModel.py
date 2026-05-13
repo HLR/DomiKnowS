@@ -377,7 +377,7 @@ class InferenceModel(LossModel):
         for lcName, lc in self.constr.items():
             if f'{lcName}/label' not in read_labels:
                 continue
-            
+
             if not lc.active:
                 continue
 
@@ -487,7 +487,8 @@ class InferenceModel(LossModel):
                 # attribute whose key ends in '<local/softmax>'. Limit to the
                 # first few matches so output stays readable.
                 printed = 0
-                limit = 6
+                import os as _os_diag
+                limit = int(_os_diag.environ.get('DOMIKNOWS_INFER_DIAG_LIMIT', '6'))
                 def _walk(dn, depth=0):
                     nonlocal printed
                     if printed >= limit:

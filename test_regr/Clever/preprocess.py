@@ -40,10 +40,6 @@ def _parse_question_types(question_type):
 
     if not parsed:
         raise ValueError('question_type must contain at least one value.')
-    if len(parsed) > 2:
-        raise ValueError(
-            f"At most two merged question types are supported, got: {parsed}"
-        )
 
     invalid = [qt for qt in parsed if qt not in QUESTION_TYPE_CHOICES]
     if invalid:

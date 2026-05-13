@@ -234,6 +234,67 @@ class GumbelInferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, Gumb
         self._init_callback_hooks()
 
 
+class _RunningTrainAccTracker:
+    """Accumulate constraint-verify accuracy on each training step's datanode.
+    Eliminates the separate per-epoch train-eval pass — training already forwarded
+    the data, we just verify the result post-step instead of rerunning forward.
+    Also logs per-step loss and per-epoch train acc to a TensorBoard writer if set."""
+
+    def __init__(self, tb_writer=None):
+        self.correct = 0
+        self.total = 0
+        self.tb_writer = tb_writer
+        self.global_step = 0
+        self.epoch = 0
+
+    def reset(self, *_args, **_kwargs):
+        self.correct = 0
+        self.total = 0
+
+    def after_step(self, output=None, **_kwargs):
+        if not output or len(output) < 3:
+            return
+        # Log step loss to TB regardless of verify success.
+        loss = output[0]
+        if self.tb_writer is not None and torch.is_tensor(loss):
+            try:
+                self.tb_writer.add_scalar("train/step_loss", float(loss.detach()), self.global_step)
+            except Exception:
+                pass
+            self.global_step += 1
+        datanode = output[2]
+        if datanode is None:
+            return
+        try:
+            active = datanode.getActiveExecutableConstraintNames()
+        except Exception:
+            return
+        for lc_name in active:
+            try:
+                label = datanode.getExecutableConstraintLabel(lc_name)
+                if label is None:
+                    continue
+                result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
+                if result is None:
+                    continue
+                is_satisfied = result["satisfied"] == 100.0
+                expected = int(label.item() if torch.is_tensor(label) else label) == 1
+                if is_satisfied == expected:
+                    self.correct += 1
+                self.total += 1
+            except Exception:
+                continue
+
+    def report_and_reset(self, *_args, **_kwargs):
+        if self.total > 0:
+            acc = 100.0 * self.correct / self.total
+            print(f"[running-train-acc] {self.correct}/{self.total} = {acc:.2f}%")
+            if self.tb_writer is not None:
+                self.tb_writer.add_scalar("train/acc", acc, self.epoch)
+        self.epoch += 1
+        self.reset()
+
+
 def str2bool(v):
     """Convert string to boolean for argparse."""
     if isinstance(v, bool):
@@ -273,10 +334,6 @@ def _parse_question_type_arg(value):
 
     if not parts:
         raise argparse.ArgumentTypeError("question-type must contain at least one value")
-    if len(parts) > 2:
-        raise argparse.ArgumentTypeError(
-            f"At most two merged question types are supported, got: {parts}"
-        )
 
     invalid = [q for q in parts if q not in QUESTION_TYPE_CHOICES]
     if invalid:
@@ -298,17 +355,14 @@ def _includes_query_type(question_type_value):
 # LEFT-style curriculum schedule: (start_epoch, max_scene_size, max_program_size)
 # Active bucket is selected by: start < epoch <= next_start
 CURRICULUM_STRATEGY = [
-    (0, 3, 4),
-    (5, 3, 6),
-    (10, 3, 8),
+    (0, 3, 3),    # scene≤3 AND program≤3 — simplest scene, simplest existL
+    (5, 3, 4),
+    (10, 3, 6),
     (15, 4, 8),
     (25, 4, 12),
-    (35, 5, 12),
-    (45, 6, 12),
-    (55, 7, 16),
-    (65, 8, 20),
-    (75, 9, 22),
-    (90, 10, 25),
+    (40, 5, 16),
+    (60, 7, 20),
+    (80, 9, 25),
     (10**9, None, None),
 ]
 
@@ -487,6 +541,29 @@ Examples:
     parser.add_argument("--pos-weight", type=float, default=1.0,
                         help="BCE pos_weight on the Yes (logic_label=1) class in InferenceModel. "
                              "Use >1 to rebalance against majority-class collapse.")
+    parser.add_argument("--tensorboard", type=str2bool, nargs='?', const=True, default=True,
+                        help="Write per-step train loss and per-epoch acc to TensorBoard. "
+                             "Log dir: logs/tb/<exp_tag or timestamp>")
+    parser.add_argument("--running-train-acc", type=str2bool, nargs='?', const=True, default=True,
+                        help="Accumulate per-step constraint-verify accuracy during training "
+                             "and print at end of each epoch. Free signal (training already "
+                             "did the forward pass); replaces the costly separate train-eval.")
+    parser.add_argument("--skip-train-eval", action="store_true",
+                        help="Skip the per-epoch evaluation pass over the training set "
+                             "(and the pre-training baseline on train). Use test set as the "
+                             "only signal each epoch. Massive speedup at scale where train-eval "
+                             "dominates pickle-deserialize time.")
+    parser.add_argument("--simple-only", action="store_true",
+                        help="Pre-filter dataset to samples with scene_size <= 3 AND "
+                             "program_size <= 3 before --train-size slicing. Use to "
+                             "guarantee the training set consists of the simplest existL "
+                             "questions on the smallest scenes.")
+    parser.add_argument("--shuffle-labels", action="store_true",
+                        help="Sanity check: randomly permute train-set answers before "
+                             "logic_label is computed. If the model still overfits, "
+                             "labels are leaking through the constraint loss.")
+    parser.add_argument("--shuffle-seed", type=int, default=0xdeadbeef,
+                        help="Seed for --shuffle-labels permutation")
     parser.add_argument("--oracle-mode", action="store_true",
                         help="Use ground truth answers instead of VLM/ResNet for debugging")
     parser.add_argument("--oracle-confidence", type=float, default=1.0,
@@ -520,12 +597,14 @@ Examples:
     
     # t-norm settings
     parser.add_argument("--tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
-                        default="P",
+                        default="G",
                         help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, "
-                             "'auto' = adaptive during training. Product ('P') stays differentiable "
-                             "as conversionSigmoid → 1. Lukasiewicz ('L') hard-clips at min(1, Σp_i) "
-                             "and produces exact-zero gradient past the clip — bad for existsL over "
-                             "many atoms. Gumbel ('G') and SP are also smooth alternatives.")
+                             "'auto' = adaptive during training. Gödel ('G', default) uses min/max — "
+                             "exact at any arity, focused gradient on the argmin/argmax atom. "
+                             "Product ('P') stays differentiable as conversionSigmoid → 1 but its OR "
+                             "shortcut is only correct for n=2. Lukasiewicz ('L') hard-clips at "
+                             "min(1, Σp_i) and produces exact-zero gradient past the clip — bad for "
+                             "existsL over many atoms.")
     
     # Gumbel-Softmax settings
     parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, 
@@ -1063,8 +1142,22 @@ def main(args):
     device = args.device
 
     # Load dataset
-    dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
-    
+    if getattr(args, 'simple_only', False):
+        # Filter to scene<=3 AND program<=3 BEFORE train-size slice
+        full_ds = load_full_dataset(args, NUM_INSTANCES, CACHE_DIR,
+                                     question_type=args.question_type)
+        before = len(full_ds)
+        filtered = [d for d in full_ds
+                    if _scene_size(d) <= 3 and _program_size(d) <= 3]
+        print(f"[simple-only] Filtered {before} → {len(filtered)} samples "
+              f"(scene<=3 AND program<=3)")
+        if args.train_size is not None:
+            dataset = filtered[: args.train_size]
+        else:
+            dataset = filtered
+    else:
+        dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
+
     if args.print_constraints is not None:
         _print_constraints_and_exit(args)
         return 0
@@ -1120,6 +1213,18 @@ def main(args):
     
     print(f"Dataset length: {len(train_raw)}")
     print(f"Question type: {args.question_type}")
+
+    if getattr(args, 'shuffle_labels', False) and len(train_raw) > 1:
+        import random
+        rng = random.Random(args.shuffle_seed)
+        answers = [d.get('answer') for d in train_raw]
+        permuted = list(answers)
+        rng.shuffle(permuted)
+        n_changed = sum(1 for a, b in zip(answers, permuted) if a != b)
+        for d, a in zip(train_raw, permuted):
+            d['answer'] = a
+        print(f"[shuffle-labels] Permuted {len(train_raw)} train answers "
+              f"(seed={args.shuffle_seed}, {n_changed} changed)")
 
     # Print samples
     if len(train_raw) > 0:
@@ -1240,14 +1345,44 @@ def main(args):
                 if previous_save.exists():
                     program.load(previous_save)
 
+            # TensorBoard writer
+            _tb_writer = None
+            if getattr(args, 'tensorboard', False):
+                from torch.utils.tensorboard import SummaryWriter
+                _tb_tag = args.exp_tag or datetime.now().strftime("%Y%m%d_%H%M%S")
+                _tb_dir = RUN_DIR / "logs" / "tb" / _tb_tag
+                _tb_dir.mkdir(parents=True, exist_ok=True)
+                _tb_writer = SummaryWriter(log_dir=str(_tb_dir))
+                print(f"[tb] writing to {_tb_dir}")
+
             # Baseline evaluation before training for quick sanity-check.
-            with torch.no_grad():
-                baseline_acc = program.evaluate_condition(train_dataset, device=device)
-            print(f"Accuracy before training: {baseline_acc :.2f}%")
+            if getattr(args, 'skip_train_eval', False):
+                baseline_acc = float('nan')
+                print("Accuracy before training: <skipped>")
+                if test_dataset is not None:
+                    with torch.no_grad():
+                        test_baseline_acc = program.evaluate_condition(test_dataset, device=device)
+                    print(f"Test accuracy before training: {test_baseline_acc :.2f}%")
+                    if _tb_writer is not None:
+                        _tb_writer.add_scalar("test/acc", test_baseline_acc, 0)
+            else:
+                with torch.no_grad():
+                    baseline_acc = program.evaluate_condition(train_dataset, device=device)
+                print(f"Accuracy before training: {baseline_acc :.2f}%")
+                if _tb_writer is not None:
+                    _tb_writer.add_scalar("train/acc", baseline_acc, 0)
 
             # Install gradient chain diagnostic
             diagnostic = GradChainDiagnostic(program, _models['classifiers'])
             diagnostic.install()
+
+            # Running per-step train-acc: replaces the costly separate train-eval
+            _train_acc_tracker = None
+            if getattr(args, 'running_train_acc', False):
+                _train_acc_tracker = _RunningTrainAccTracker(tb_writer=_tb_writer)
+                program.before_train_epoch.append(_train_acc_tracker.reset)
+                program.after_train_step.append(_train_acc_tracker.after_step)
+                program.after_train_epoch.append(_train_acc_tracker.report_and_reset)
 
             cached_curriculum_key = None
             cached_curriculum_dataset = train_dataset
@@ -1352,25 +1487,38 @@ def main(args):
                 program.save(save_file)
                 print(f"Saved to {save_file}")
 
-                with torch.no_grad():
-                    epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
-                print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
+                if getattr(args, 'skip_train_eval', False):
+                    print(f"Epoch {i + 1} {active_train_label} accuracy: <skipped>")
+                else:
+                    with torch.no_grad():
+                        epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
+                    print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
                 if test_dataset is not None:
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
+                    if _tb_writer is not None:
+                        _tb_writer.add_scalar("test/acc", epoch_test_acc, i + 1)
 
             # Final evaluation
+            _skip_train_eval = getattr(args, 'skip_train_eval', False)
             with torch.no_grad():
-                final_train_acc = program.evaluate_condition(active_train_dataset, device=device)
+                if _skip_train_eval:
+                    final_train_acc = float('nan')
+                    final_eval = {}
+                else:
+                    final_train_acc = program.evaluate_condition(active_train_dataset, device=device)
+                    final_eval = program.evaluate_condition(train_dataset, device=device,
+                                                            threshold=0.5, return_dict=True)
                 final_test_acc = program.evaluate_condition(test_dataset, device=device) if test_dataset is not None else None
                 final_test_acc_filtered = (
                     program.evaluate_condition(test_dataset_filtered, device=device)
                     if test_dataset_filtered is not None else None
                 )
-                final_eval = program.evaluate_condition(train_dataset, device=device,
-                                                       threshold=0.5, return_dict=True)
-            print(f"{active_train_label.capitalize()} accuracy after training: {final_train_acc:.2f}%")
+            if _skip_train_eval:
+                print(f"{active_train_label.capitalize()} accuracy after training: <skipped>")
+            else:
+                print(f"{active_train_label.capitalize()} accuracy after training: {final_train_acc:.2f}%")
             if final_test_acc is not None:
                 print(f"Test accuracy after training: {final_test_acc:.2f}%")
             if final_test_acc_filtered is not None:

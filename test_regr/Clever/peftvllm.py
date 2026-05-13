@@ -1287,6 +1287,23 @@ class InternVLSharedHF(nn.Module):
             draw.rectangle(box, outline=color, width=3)
         return img
 
+    def _crop_to_boxes(self, base_pil: Image.Image, boxes, pad_frac=0.2):
+        """Crop the image to the tight union of all `boxes` with `pad_frac` padding,
+        so the VLM physically can't attend to anything else. Removes the
+        "global-prior shortcut" the bbox-drawing approach lets the model take.
+        """
+        W, H = base_pil.size
+        bs = [b.detach().cpu().tolist() if isinstance(b, torch.Tensor) else list(b) for b in boxes]
+        x1 = min(b[0] for b in bs); y1 = min(b[1] for b in bs)
+        x2 = max(b[2] for b in bs); y2 = max(b[3] for b in bs)
+        bw, bh = x2 - x1, y2 - y1
+        px, py = bw * pad_frac, bh * pad_frac
+        x1 = max(0, int(x1 - px)); y1 = max(0, int(y1 - py))
+        x2 = min(W, int(x2 + px)); y2 = min(H, int(y2 + py))
+        if x2 <= x1 or y2 <= y1:
+            return base_pil.copy()
+        return base_pil.crop((x1, y1, x2, y2))
+
     def _build_call_metadata(self, n_boxes):
         """Per-question metadata matching the order produced by
         ``_prepare_images_questions``. Consumed by the step-notebook to
@@ -1323,8 +1340,12 @@ class InternVLSharedHF(nn.Module):
             )
         base = self._to_pil(image)
 
+        import os as _os
+        use_crop = _os.environ.get("INTERNVL_CROP_TO_BOX", "0") == "1"
+
         images, questions = [], []
         if self.relation == 2:
+            # Relation queries need both objects visible in context — never crop.
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
                     img = self._draw_and_resize(base, [box1, box2], ["red", "green"])
@@ -1333,8 +1354,12 @@ class InternVLSharedHF(nn.Module):
                     questions.append(q)
         else:
             for box in bounding_boxes:
-                img = self._draw_and_resize(base, [box], ["red"])
-                q = f"Is the object in the red bounding box {self.attr}? answer with only Yes or No."
+                if use_crop:
+                    img = self._crop_to_boxes(base, [box])
+                    q = f"Is this object {self.attr}? answer with only Yes or No."
+                else:
+                    img = self._draw_and_resize(base, [box], ["red"])
+                    q = f"Is the object in the red bounding box {self.attr}? answer with only Yes or No."
                 images.append(img)
                 questions.append(q)
         return images, questions
