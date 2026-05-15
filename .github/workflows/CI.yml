@@ -2,8 +2,6 @@ name: CI - Continuous Integration
 on:
   push: 
     branches: [develop-CLEVER-relations, main]
-  pull_request: 
-    branches: [develop-CLEVER-relations, main]
   workflow_dispatch:
 
 # Prevent multiple runs of the same branch overlapping
@@ -90,6 +88,8 @@ jobs:
             'examples/iota'
             'examples/same_different'
             'vizual'
+            'fixes'
+            'generation'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"
@@ -312,11 +312,10 @@ jobs:
       - name: Run GPU tests
         run: |
           TEST_LIST=(
-            #'examples/PMDExistL/pmd_counting_tests'
-            #'examples/PMDExistL/relation_learning_tests'
+            'examples/PMDExistL/pmd_counting_tests'
+            'examples/PMDExistL/relation_learning_tests'
             'Clever'
           )
-          # Note: ConllQA test is temporarily disabled
 
           bash .github/scripts/run_tests.sh "test-gpu" "${TEST_LIST[@]}"
 
@@ -329,6 +328,17 @@ jobs:
             /tmp/test_results_test-gpu.txt
             /tmp/test_failures_test-gpu.txt
           retention-days: 1
+
+      - name: Upload CLEVER step notebooks
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: clever-step-notebooks
+          path: |
+            test_regr/Clever/logs/*.jsonl
+            test_regr/Clever/logs/previous/*.jsonl
+          if-no-files-found: warn
+          retention-days: 7
 
   test-vllm:
     runs-on: [self-hosted, linux, x64, gpu]

@@ -53,18 +53,22 @@ def setup_console_log():
     sys.stderr = _TeeWriter(sys.stderr, log_file)
 
 try:
-    from monitor.constraint_monitor import (# type: ignore 
+    from monitor.constraint_monitor import (# type: ignore
         next_step,enable_monitoring, start_new_epoch, finish_experiment, disable_monitoring
     )
     MONITORING_AVAILABLE = True
-    
-    if MONITORING_AVAILABLE and '--help' not in sys.argv and '-h' not in sys.argv:
+
+    # Monitoring is OFF by default. Set CLEVR_ENABLE_MONITOR=1 to opt in.
+    if (MONITORING_AVAILABLE
+            and '--help' not in sys.argv
+            and '-h' not in sys.argv
+            and os.environ.get("CLEVR_ENABLE_MONITOR") == "1"):
         enable_monitoring(slave_mode=True, master_url="http://localhost:8080")
         #enable_monitoring(port=8080, slave_mode=False)  # Master mode with web server
 except ImportError:
     MONITORING_AVAILABLE = False
 
-from domiknows import setProductionLogMode
+from domiknows import setProductionLogMode, setup_step_notebook, StepNotebook
 
 from domiknows.program import CallbackProgram
 from domiknows.program.lossprogram import GumbelInferenceProgram, InferenceProgram
@@ -230,6 +234,67 @@ class GumbelInferenceProgramWithCallbacks(_CallbacksMixin, CallbackProgram, Gumb
         self._init_callback_hooks()
 
 
+class _RunningTrainAccTracker:
+    """Accumulate constraint-verify accuracy on each training step's datanode.
+    Eliminates the separate per-epoch train-eval pass — training already forwarded
+    the data, we just verify the result post-step instead of rerunning forward.
+    Also logs per-step loss and per-epoch train acc to a TensorBoard writer if set."""
+
+    def __init__(self, tb_writer=None):
+        self.correct = 0
+        self.total = 0
+        self.tb_writer = tb_writer
+        self.global_step = 0
+        self.epoch = 0
+
+    def reset(self, *_args, **_kwargs):
+        self.correct = 0
+        self.total = 0
+
+    def after_step(self, output=None, **_kwargs):
+        if not output or len(output) < 3:
+            return
+        # Log step loss to TB regardless of verify success.
+        loss = output[0]
+        if self.tb_writer is not None and torch.is_tensor(loss):
+            try:
+                self.tb_writer.add_scalar("train/step_loss", float(loss.detach()), self.global_step)
+            except Exception:
+                pass
+            self.global_step += 1
+        datanode = output[2]
+        if datanode is None:
+            return
+        try:
+            active = datanode.getActiveExecutableConstraintNames()
+        except Exception:
+            return
+        for lc_name in active:
+            try:
+                label = datanode.getExecutableConstraintLabel(lc_name)
+                if label is None:
+                    continue
+                result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
+                if result is None:
+                    continue
+                is_satisfied = result["satisfied"] == 100.0
+                expected = int(label.item() if torch.is_tensor(label) else label) == 1
+                if is_satisfied == expected:
+                    self.correct += 1
+                self.total += 1
+            except Exception:
+                continue
+
+    def report_and_reset(self, *_args, **_kwargs):
+        if self.total > 0:
+            acc = 100.0 * self.correct / self.total
+            print(f"[running-train-acc] {self.correct}/{self.total} = {acc:.2f}%")
+            if self.tb_writer is not None:
+                self.tb_writer.add_scalar("train/acc", acc, self.epoch)
+        self.epoch += 1
+        self.reset()
+
+
 def str2bool(v):
     """Convert string to boolean for argparse."""
     if isinstance(v, bool):
@@ -242,6 +307,150 @@ def str2bool(v):
         elif v.lower() in ('no', 'false', 'f', 'n', '0'):
             return False
     raise argparse.ArgumentTypeError(f'Boolean value expected, got: {v}')
+
+
+QUESTION_TYPE_CHOICES = (
+    "relation",
+    "query",
+    "query_relation",
+    "exist",
+    "complex_relation",
+    "counting",
+)
+
+QUESTION_TYPE_QUERY_MODES = {"query", "query_relation"}
+
+
+def _parse_question_type_arg(value):
+    raw = str(value).replace(",", "+")
+    parts = []
+    seen = set()
+    for token in raw.split("+"):
+        normalized = token.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        parts.append(normalized)
+
+    if not parts:
+        raise argparse.ArgumentTypeError("question-type must contain at least one value")
+
+    invalid = [q for q in parts if q not in QUESTION_TYPE_CHOICES]
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f"Unsupported question type(s): {invalid}. Supported: {QUESTION_TYPE_CHOICES}"
+        )
+
+    return "+".join(parts)
+
+
+def _split_question_types(question_type_value):
+    return [q for q in str(question_type_value).split("+") if q]
+
+
+def _includes_query_type(question_type_value):
+    return any(q in QUESTION_TYPE_QUERY_MODES for q in _split_question_types(question_type_value))
+
+
+# LEFT-style curriculum schedule: (start_epoch, max_scene_size, max_program_size)
+# Active bucket is selected by: start < epoch <= next_start
+CURRICULUM_STRATEGY = [
+    (0, 3, 3),    # scene≤3 AND program≤3 — simplest scene, simplest existL
+    (5, 3, 4),
+    (10, 3, 6),
+    (15, 4, 8),
+    (25, 4, 12),
+    (40, 5, 16),
+    (60, 7, 20),
+    (80, 9, 25),
+    (10**9, None, None),
+]
+
+
+def _scene_size(sample):
+    objs = sample.get("all_objects")
+    if isinstance(objs, (list, tuple)):
+        return len(objs)
+    objs_raw = sample.get("objects_raw")
+    if isinstance(objs_raw, (list, tuple)):
+        return len(objs_raw)
+    return 0
+
+
+def _program_size(sample):
+    prog = sample.get("program")
+    if isinstance(prog, (list, tuple)):
+        return len(prog)
+    return 0
+
+
+def _get_curriculum_limits(epoch):
+    for i in range(len(CURRICULUM_STRATEGY) - 1):
+        start, max_scene_size, max_program_size = CURRICULUM_STRATEGY[i]
+        next_start = CURRICULUM_STRATEGY[i + 1][0]
+        if start < epoch <= next_start:
+            return max_scene_size, max_program_size
+    return None, None
+
+
+def _select_curriculum_train_raw(train_raw, epoch, mode):
+    max_scene_size, max_program_size = _get_curriculum_limits(epoch)
+
+    filtered = train_raw
+    scene_limit = max_scene_size if mode in ("scene", "all") else None
+    program_limit = max_program_size if mode in ("program", "all") else None
+
+    if scene_limit is not None:
+        filtered = [s for s in filtered if _scene_size(s) <= scene_limit]
+    if program_limit is not None:
+        filtered = [s for s in filtered if _program_size(s) <= program_limit]
+
+    fallback_kind = "none"
+    min_violation = None
+
+    if len(filtered) == 0 and mode == "all" and scene_limit is not None and program_limit is not None:
+        # Relax all-mode from strict AND to OR before giving up.
+        relaxed = [
+            s for s in train_raw
+            if _scene_size(s) <= scene_limit or _program_size(s) <= program_limit
+        ]
+        if len(relaxed) > 0:
+            filtered = relaxed
+            fallback_kind = "relaxed_or"
+
+    if len(filtered) == 0 and len(train_raw) > 0:
+        # Pick the nearest bucket by minimum limit violation.
+        def _violation(sample):
+            v = 0
+            if scene_limit is not None:
+                v += max(0, _scene_size(sample) - scene_limit)
+            if program_limit is not None:
+                v += max(0, _program_size(sample) - program_limit)
+            return v
+
+        min_violation = min(_violation(s) for s in train_raw)
+        filtered = [s for s in train_raw if _violation(s) == min_violation]
+        if len(filtered) > 0:
+            fallback_kind = "nearest"
+
+    if len(filtered) == 0:
+        filtered = train_raw
+        fallback_kind = "full"
+
+    fallback = fallback_kind != "none"
+
+    info = {
+        "mode": mode,
+        "scene_limit": scene_limit,
+        "program_limit": program_limit,
+        "selected": len(filtered),
+        "total": len(train_raw),
+        "fallback": fallback,
+        "fallback_kind": fallback_kind,
+        "min_violation": min_violation,
+    }
+    key = (mode, scene_limit, program_limit, fallback_kind)
+    return filtered, key, info
 
 
 def parse_arguments():
@@ -284,6 +493,10 @@ Examples:
                         help="Learning rate for optimizer (default: 1e-3)")
     parser.add_argument("--batch-size", type=int, default=1,
                         help="Mini-batch size for training (default: 1)")
+    parser.add_argument("--curriculum", type=str, default="all",
+                        choices=["none", "scene", "program", "all"],
+                        help="Curriculum learning mode using LEFT staged limits "
+                             "on scene size and/or program size")
     parser.add_argument("--subset", type=int, default=-1,
                         help="Subset index 1-6 for memory-efficient training (default: -1)")
     parser.add_argument("--load-epoch", type=int, default=0,
@@ -303,9 +516,10 @@ Examples:
     parser.add_argument("--load_previous_save", action="store_true",
                         help="Load checkpoint from previous subset/epoch before training")
     parser.add_argument("--question-type",
-                        choices=["relation", "query", "query_relation", "exist", "complex_relation", "counting"],
+                        type=_parse_question_type_arg,
                         default="relation",
-                        help="Type of questions to train on (default: relation)")
+                        help="Type of questions to train on. Supports one type, or merge two "
+                             "types with '+' (example: relation+exist).")
     parser.add_argument("--relation-syntax",
                         choices=["legacy", "binary"],
                         default="binary",
@@ -316,8 +530,40 @@ Examples:
                         help="Use PEFT (LoRA) fine-tuning with HuggingFace InternVL")
     parser.add_argument("--load-4bit", action="store_true",
                         help="Use QLoRA 4-bit quantization for VLM")
-    parser.add_argument("--softmax-temp", type=float, default=1.0,
-                        help="Temperature for VLM softmax output")
+    parser.add_argument("--softmax-temp", type=float, default=2.0,
+                        help="Temperature for VLM softmax output. >1 softens output; helps escape "
+                             "cold-start saturation where baseline P(Yes)≈0.001 on CLEVR yes/no atoms. "
+                             "Too high over-saturates to the opposite pole (both kill BCE gradient).")
+    parser.add_argument("--yes-bias", type=float, default=0.0,
+                        help="Additive bias on the Yes logit before logsumexp in _score_batch. "
+                             "Use a positive value (e.g. 3.0) to counter the VLM's strong No-prior "
+                             "so existsL product t-norm doesn't start fully saturated.")
+    parser.add_argument("--pos-weight", type=float, default=1.0,
+                        help="BCE pos_weight on the Yes (logic_label=1) class in InferenceModel. "
+                             "Use >1 to rebalance against majority-class collapse.")
+    parser.add_argument("--tensorboard", type=str2bool, nargs='?', const=True, default=True,
+                        help="Write per-step train loss and per-epoch acc to TensorBoard. "
+                             "Log dir: logs/tb/<exp_tag or timestamp>")
+    parser.add_argument("--running-train-acc", type=str2bool, nargs='?', const=True, default=True,
+                        help="Accumulate per-step constraint-verify accuracy during training "
+                             "and print at end of each epoch. Free signal (training already "
+                             "did the forward pass); replaces the costly separate train-eval.")
+    parser.add_argument("--skip-train-eval", action="store_true",
+                        help="Skip the per-epoch evaluation pass over the training set "
+                             "(and the pre-training baseline on train). Use test set as the "
+                             "only signal each epoch. Massive speedup at scale where train-eval "
+                             "dominates pickle-deserialize time.")
+    parser.add_argument("--simple-only", action="store_true",
+                        help="Pre-filter dataset to samples with scene_size <= 3 AND "
+                             "program_size <= 3 before --train-size slicing. Use to "
+                             "guarantee the training set consists of the simplest existL "
+                             "questions on the smallest scenes.")
+    parser.add_argument("--shuffle-labels", action="store_true",
+                        help="Sanity check: randomly permute train-set answers before "
+                             "logic_label is computed. If the model still overfits, "
+                             "labels are leaking through the constraint loss.")
+    parser.add_argument("--shuffle-seed", type=int, default=0xdeadbeef,
+                        help="Seed for --shuffle-labels permutation")
     parser.add_argument("--oracle-mode", action="store_true",
                         help="Use ground truth answers instead of VLM/ResNet for debugging")
     parser.add_argument("--oracle-confidence", type=float, default=1.0,
@@ -351,8 +597,14 @@ Examples:
     
     # t-norm settings
     parser.add_argument("--tnorm", choices=["G", "P", "L", "SP", "default", "auto"],
-                        default="default",
-                        help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, 'auto' = adaptive during training")
+                        default="G",
+                        help="T-norm mode: G/P/L/SP = fixed t-norm, 'default' = per-type defaults, "
+                             "'auto' = adaptive during training. Gödel ('G', default) uses min/max — "
+                             "exact at any arity, focused gradient on the argmin/argmax atom. "
+                             "Product ('P') stays differentiable as conversionSigmoid → 1 but its OR "
+                             "shortcut is only correct for n=2. Lukasiewicz ('L') hard-clips at "
+                             "min(1, Σp_i) and produces exact-zero gradient past the clip — bad for "
+                             "existsL over many atoms.")
     
     # Gumbel-Softmax settings
     parser.add_argument("--use_gumbel", type=str2bool, nargs='?', const=True, default=False, 
@@ -373,6 +625,18 @@ Examples:
                              "Supports standard CLEVR format or [{question, program, answer}, ...]")
     parser.add_argument("--print-limit", type=int, default=70,
                         help="Max number of questions to print with --print-constraints")
+    parser.add_argument("--disable-plugins", action="store_true",
+                        help="Skip all callback plugins (AdaptiveTNorm, GradientFlow, "
+                             "EpochLogging, GumbelMonitoring). Useful in tests where "
+                             "plugin diagnostics are noise and their extra forward "
+                             "passes add memory pressure.")
+    parser.add_argument("--step-notebook", type=str2bool, nargs='?', const=True, default=True,
+                        help="Write a per-step JSONL notebook (logs/step_notebook.jsonl) "
+                             "with the question, GT answer, predicted answer and per-concept "
+                             "softmax/argmax tensors for each evaluated example.")
+    parser.add_argument("--step-notebook-file", type=str, default=None,
+                        help="Override the step-notebook output filename "
+                             "(default: step_notebook[_<exp_tag>].jsonl in logs/).")
 
     # Register callback plugin arguments (exclude BERT unfreezing)
     from domiknows.program.plugins.callback_plugin_manager import CallbackPluginManager
@@ -390,6 +654,7 @@ Examples:
     plugin_manager.add_arguments_to_parser(parser)
     
     args = parser.parse_args()
+    args.question_type = _parse_question_type_arg(args.question_type)
     if args.lora_alpha is None:
         args.lora_alpha = 2 * args.lora_r
     if args.peft:
@@ -422,7 +687,7 @@ def program_declaration(train, dev, args, device='cpu'):
 
     # Build graph/logic over the full set used in this run so both train/dev can compile.
     dataset = train + (dev if dev is not None else [])
-    include_query = args.question_type in ['query', 'query_relation']
+    include_query = _includes_query_type(args.question_type)
     results = create_graph(
         dataset,
         include_query_questions=include_query,
@@ -626,6 +891,7 @@ def program_declaration(train, dev, args, device='cpu'):
                 use_vision_lora=False,
                 load_4bit=args.load_4bit,
                 softmax_temperature=args.softmax_temp,
+                yes_bias=args.yes_bias,
                 lora_r=args.lora_r,
                 lora_alpha=args.lora_alpha,
                 max_num=args.max_num_patches,
@@ -695,6 +961,7 @@ def program_declaration(train, dev, args, device='cpu'):
         'poi': poi,
         'device': device,
         'tnorm': args.tnorm,
+        'pos_weight': args.pos_weight,
     }
     if args.use_gumbel:
         program_kwargs.update({
@@ -747,7 +1014,7 @@ def _print_constraints_and_exit(args):
     print(f"Relation syntax: {args.relation_syntax}")
     print()
 
-    include_query = args.question_type in ("query", "query_relation")
+    include_query = _includes_query_type(args.question_type)
 
     # Compile one at a time so a single unsupported op doesn't kill the run
     print("=" * 70)
@@ -807,6 +1074,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     print("\n[Training]")
     print(f"  Epochs:           {args.epochs}")
     print(f"  Batch size:       {args.batch_size}")
+    print(f"  Curriculum:       {args.curriculum}")
     print(f"  Learning rate:    {args.lr}")
     print(f"  Device:           {args.device}")
     print(f"  Dummy mode:       {args.dummy}")
@@ -835,6 +1103,9 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     print("\n[Constraints]")
     print(f"  T-norm:           {args.tnorm}")
     print(f"  Relation syntax:  {args.relation_syntax}")
+    print(f"  Softmax temp:     {args.softmax_temp}")
+    print(f"  Yes-bias:         {args.yes_bias}")
+    print(f"  Pos-weight:       {args.pos_weight}")
 
     print("\n[Logging]")
     print(f"  Production mode:  {args.production_log_mode}")
@@ -851,7 +1122,7 @@ def log_training_config(args, models=None, train=None, dev=None, test=None, plug
     else:
         print(f"  Enabled:          No")
     
-    if plugin_manager:
+    if plugin_manager and not getattr(args, 'disable_plugins', False):
         plugin_manager.log_all_configs(args)
     
     print("\n[Mode]")
@@ -871,8 +1142,22 @@ def main(args):
     device = args.device
 
     # Load dataset
-    dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
-    
+    if getattr(args, 'simple_only', False):
+        # Filter to scene<=3 AND program<=3 BEFORE train-size slice
+        full_ds = load_full_dataset(args, NUM_INSTANCES, CACHE_DIR,
+                                     question_type=args.question_type)
+        before = len(full_ds)
+        filtered = [d for d in full_ds
+                    if _scene_size(d) <= 3 and _program_size(d) <= 3]
+        print(f"[simple-only] Filtered {before} → {len(filtered)} samples "
+              f"(scene<=3 AND program<=3)")
+        if args.train_size is not None:
+            dataset = filtered[: args.train_size]
+        else:
+            dataset = filtered
+    else:
+        dataset = preprocess_dataset(args, NUM_INSTANCES, CACHE_DIR, question_type=args.question_type)
+
     if args.print_constraints is not None:
         _print_constraints_and_exit(args)
         return 0
@@ -929,6 +1214,18 @@ def main(args):
     print(f"Dataset length: {len(train_raw)}")
     print(f"Question type: {args.question_type}")
 
+    if getattr(args, 'shuffle_labels', False) and len(train_raw) > 1:
+        import random
+        rng = random.Random(args.shuffle_seed)
+        answers = [d.get('answer') for d in train_raw]
+        permuted = list(answers)
+        rng.shuffle(permuted)
+        n_changed = sum(1 for a, b in zip(answers, permuted) if a != b)
+        for d, a in zip(train_raw, permuted):
+            d['answer'] = a
+        print(f"[shuffle-labels] Permuted {len(train_raw)} train answers "
+              f"(seed={args.shuffle_seed}, {n_changed} changed)")
+
     # Print samples
     if len(train_raw) > 0:
         for i in range(min(3, len(train_raw))):
@@ -980,6 +1277,29 @@ def main(args):
     log_training_config(args, _models, train=train_raw, dev=None,
                        test=test_raw if test_raw is not None else train_raw,
                        plugin_manager=plugin_manager)
+
+    if getattr(args, 'step_notebook', False):
+        notebook_dir = RUN_DIR / "logs"
+        notebook_file = args.step_notebook_file or (
+            f"step_notebook_{args.exp_tag}.jsonl" if args.exp_tag else "step_notebook.jsonl"
+        )
+        setup_step_notebook(
+            log_dir=str(notebook_dir),
+            filename=notebook_file,
+            run_tag=args.exp_tag,
+            metadata={
+                'question_type': args.question_type,
+                'use_vlm': args.use_vlm,
+                'peft': args.peft,
+                'oracle_mode': args.oracle_mode,
+                'oracle_confidence': args.oracle_confidence if args.oracle_mode else None,
+                'infer_only': args.infer_only,
+                'tnorm': args.tnorm,
+                'train_size': len(train_raw),
+                'test_size': len(test_raw) if test_raw is not None else 0,
+                'epochs': args.epochs,
+            },
+        )
     
     save_file = ckpt_path(args.lr, 1, args.load_epoch, args.batch_size, args.tnorm,
                          args.subset, args.question_type, **_ckpt_extra)
@@ -999,7 +1319,7 @@ def main(args):
     else:
         if not args.eval_only:
             # Configure plugins (no BERT-specific optimizer factory needed)
-            if not args.oracle_mode and not args.use_vlm:
+            if not args.oracle_mode and not args.use_vlm and not args.disable_plugins:
                 plugin_manager.configure_all(
                     program=program,
                     models=_models,
@@ -1025,15 +1345,51 @@ def main(args):
                 if previous_save.exists():
                     program.load(previous_save)
 
+            # TensorBoard writer
+            _tb_writer = None
+            if getattr(args, 'tensorboard', False):
+                from torch.utils.tensorboard import SummaryWriter
+                _tb_tag = args.exp_tag or datetime.now().strftime("%Y%m%d_%H%M%S")
+                _tb_dir = RUN_DIR / "logs" / "tb" / _tb_tag
+                _tb_dir.mkdir(parents=True, exist_ok=True)
+                _tb_writer = SummaryWriter(log_dir=str(_tb_dir))
+                print(f"[tb] writing to {_tb_dir}")
+
             # Baseline evaluation before training for quick sanity-check.
-            with torch.no_grad():
-                baseline_acc = program.evaluate_condition(train_dataset, device=device)
-            print(f"Accuracy before training: {baseline_acc :.2f}%")
+            if getattr(args, 'skip_train_eval', False):
+                baseline_acc = float('nan')
+                print("Accuracy before training: <skipped>")
+                if test_dataset is not None:
+                    with torch.no_grad():
+                        test_baseline_acc = program.evaluate_condition(test_dataset, device=device)
+                    print(f"Test accuracy before training: {test_baseline_acc :.2f}%")
+                    if _tb_writer is not None:
+                        _tb_writer.add_scalar("test/acc", test_baseline_acc, 0)
+            else:
+                with torch.no_grad():
+                    baseline_acc = program.evaluate_condition(train_dataset, device=device)
+                print(f"Accuracy before training: {baseline_acc :.2f}%")
+                if _tb_writer is not None:
+                    _tb_writer.add_scalar("train/acc", baseline_acc, 0)
 
             # Install gradient chain diagnostic
             diagnostic = GradChainDiagnostic(program, _models['classifiers'])
             diagnostic.install()
-            
+
+            # Running per-step train-acc: replaces the costly separate train-eval
+            _train_acc_tracker = None
+            if getattr(args, 'running_train_acc', False):
+                _train_acc_tracker = _RunningTrainAccTracker(tb_writer=_tb_writer)
+                program.before_train_epoch.append(_train_acc_tracker.reset)
+                program.after_train_step.append(_train_acc_tracker.after_step)
+                program.after_train_epoch.append(_train_acc_tracker.report_and_reset)
+
+            cached_curriculum_key = None
+            cached_curriculum_dataset = train_dataset
+            active_train_dataset = train_dataset
+            active_train_raw = train_raw
+            active_train_label = "train"
+
             # Training loop
             for i in range(args.epochs):
                 print(f"Training epoch {i + 1}/{args.epochs}")
@@ -1041,41 +1397,136 @@ def main(args):
                 # tqdm descriptions and plugin logs show the true epoch
                 # instead of the reset inner-1 from train_epoch_num=1.
                 program.global_epoch = i + 1
+
+                epoch_train_dataset = train_dataset
+                epoch_train_raw = train_raw
+                if args.curriculum != "none":
+                    epoch_train_raw, curriculum_key, curriculum_info = _select_curriculum_train_raw(
+                        train_raw, i + 1, args.curriculum
+                    )
+                    if curriculum_key != cached_curriculum_key:
+                        if cached_curriculum_key is None:
+                            print(
+                                f"[curriculum] CURRICULUM_STRATEGY initial stage at epoch {i + 1}: "
+                                f"mode={curriculum_info['mode']}, "
+                                f"scene<={curriculum_info['scene_limit']}, "
+                                f"program<={curriculum_info['program_limit']}"
+                            )
+                        else:
+                            _, prev_scene_limit, prev_program_limit, _ = cached_curriculum_key
+                            print(
+                                f"[curriculum] CURRICULUM_STRATEGY updated at epoch {i + 1}: "
+                                f"scene<={prev_scene_limit}, program<={prev_program_limit} "
+                                f"-> scene<={curriculum_info['scene_limit']}, "
+                                f"program<={curriculum_info['program_limit']}"
+                            )
+                        if curriculum_info["fallback_kind"] == "full":
+                            cached_curriculum_dataset = train_dataset
+                            print(
+                                f"[curriculum] Epoch {i + 1}: mode={curriculum_info['mode']}, "
+                                f"scene<={curriculum_info['scene_limit']}, "
+                                f"program<={curriculum_info['program_limit']} yielded 0 samples "
+                                "even after relaxation; using full training set"
+                            )
+                        else:
+                            cached_curriculum_dataset = program.graph.compile_executable(
+                                epoch_train_raw,
+                                logic_keyword='logic_str',
+                                logic_label_keyword='logic_label',
+                                extra_namespace_values=attribute_names_dict,
+                            )
+                            if curriculum_info["fallback_kind"] == "relaxed_or":
+                                print(
+                                    f"[curriculum] Epoch {i + 1}: strict bucket empty; using relaxed "
+                                    f"scene/program OR filter, samples={curriculum_info['selected']}/"
+                                    f"{curriculum_info['total']}"
+                                )
+                            elif curriculum_info["fallback_kind"] == "nearest":
+                                print(
+                                    f"[curriculum] Epoch {i + 1}: strict bucket empty; using nearest "
+                                    f"bucket (violation={curriculum_info['min_violation']}), "
+                                    f"samples={curriculum_info['selected']}/{curriculum_info['total']}"
+                                )
+                            else:
+                                print(
+                                    f"[curriculum] Epoch {i + 1}: mode={curriculum_info['mode']}, "
+                                    f"scene<={curriculum_info['scene_limit']}, "
+                                    f"program<={curriculum_info['program_limit']}, "
+                                    f"samples={curriculum_info['selected']}/{curriculum_info['total']}"
+                                )
+                        cached_curriculum_key = curriculum_key
+                    epoch_train_dataset = cached_curriculum_dataset
+                    print(
+                        f"[curriculum] Epoch {i + 1}: training on "
+                        f"{len(epoch_train_raw)}/{len(train_raw)} examples"
+                    )
+
+                active_train_dataset = epoch_train_dataset
+                active_train_raw = epoch_train_raw
+                active_train_label = "curriculum train" if args.curriculum != "none" else "train"
+                epoch_logging_plugin = plugin_manager.get_plugin('EpochLogging')
+                if (
+                    epoch_logging_plugin is not None
+                    and hasattr(epoch_logging_plugin, "_create_eval_subset")
+                    and hasattr(epoch_logging_plugin, "args")
+                ):
+                    epoch_logging_plugin.dataset = active_train_dataset
+                    epoch_logging_plugin._create_eval_subset(
+                        active_train_dataset,
+                        eval_fraction=epoch_logging_plugin.args.eval_fraction,
+                        min_samples=epoch_logging_plugin.args.eval_min_samples,
+                        seed=epoch_logging_plugin.args.eval_seed,
+                    )
+
                 save_file = ckpt_path(args.lr, i + 1, args.load_epoch, args.batch_size,
                                      args.tnorm, args.subset, args.question_type,
                                      **_ckpt_extra)
-                program.train(train_dataset, Optim=Optim, train_epoch_num=1, c_lr=args.lr,
-                              c_warmup_iters=0, batch_size=args.batch_size, device=device, 
+                program.train(epoch_train_dataset, Optim=Optim, train_epoch_num=1, c_lr=args.lr,
+                              c_warmup_iters=0, batch_size=args.batch_size, device=device,
                               print_loss=False)
                 program.save(save_file)
                 print(f"Saved to {save_file}")
 
-                with torch.no_grad():
-                    epoch_train_acc = program.evaluate_condition(train_dataset, device=device)
-                print(f"Epoch {i + 1} train accuracy: {epoch_train_acc :.2f}%")
+                if getattr(args, 'skip_train_eval', False):
+                    print(f"Epoch {i + 1} {active_train_label} accuracy: <skipped>")
+                else:
+                    with torch.no_grad():
+                        epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
+                    print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
                 if test_dataset is not None:
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
-            
+                    if _tb_writer is not None:
+                        _tb_writer.add_scalar("test/acc", epoch_test_acc, i + 1)
+
             # Final evaluation
+            _skip_train_eval = getattr(args, 'skip_train_eval', False)
             with torch.no_grad():
-                final_train_acc = program.evaluate_condition(train_dataset, device=device)
+                if _skip_train_eval:
+                    final_train_acc = float('nan')
+                    final_eval = {}
+                else:
+                    final_train_acc = program.evaluate_condition(active_train_dataset, device=device)
+                    final_eval = program.evaluate_condition(train_dataset, device=device,
+                                                            threshold=0.5, return_dict=True)
                 final_test_acc = program.evaluate_condition(test_dataset, device=device) if test_dataset is not None else None
                 final_test_acc_filtered = (
                     program.evaluate_condition(test_dataset_filtered, device=device)
                     if test_dataset_filtered is not None else None
                 )
-                final_eval = program.evaluate_condition(train_dataset, device=device, 
-                                                       threshold=0.5, return_dict=True)
-            print(f"Train accuracy after training: {final_train_acc:.2f}%")
+            if _skip_train_eval:
+                print(f"{active_train_label.capitalize()} accuracy after training: <skipped>")
+            else:
+                print(f"{active_train_label.capitalize()} accuracy after training: {final_train_acc:.2f}%")
             if final_test_acc is not None:
                 print(f"Test accuracy after training: {final_test_acc:.2f}%")
             if final_test_acc_filtered is not None:
                 print(f"Test accuracy (<={args.max_objects} objects): {final_test_acc_filtered:.2f}%")
             
             # Display plugin summaries
-            plugin_manager.final_display_all(final_eval=final_eval)
+            if not args.disable_plugins:
+                plugin_manager.final_display_all(final_eval=final_eval)
 
             with open(_results_file, 'a') as f:
                 print(f"=== {args.exp_tag or 'training_run'} ===", file=f)
@@ -1084,9 +1535,10 @@ def main(args):
                 print(f"Epochs: {args.epochs}", file=f)
                 print(f"Learning rate: {args.lr}", file=f)
                 print(f"Train examples: {len(train_raw)}", file=f)
+                print(f"Active train examples (final epoch): {len(active_train_raw)}", file=f)
                 print(f"Test examples: {len(test_raw) if test_raw is not None else 0}", file=f)
                 print(f"Baseline accuracy: {baseline_acc:.2f}%", file=f)
-                print(f"Train accuracy: {final_train_acc:.2f}%", file=f)
+                print(f"{active_train_label.capitalize()} accuracy: {final_train_acc:.2f}%", file=f)
                 if final_test_acc is not None:
                     print(f"Test accuracy: {final_test_acc:.2f}%", file=f)
                 if final_test_acc_filtered is not None:
@@ -1119,6 +1571,10 @@ def main(args):
     if MONITORING_AVAILABLE:
         finish_experiment(label="run_1")
         disable_monitoring()
+
+    _nb = StepNotebook.active()
+    if _nb is not None:
+        _nb.close()
 
     return 0
 

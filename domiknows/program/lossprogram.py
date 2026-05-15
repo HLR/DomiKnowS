@@ -1,4 +1,5 @@
 import logging
+import os
 from unittest import result
 import torch
 import numpy as np
@@ -19,6 +20,18 @@ logger = setup_logger({
     'log_backupCount': 5,
     'log_fileMode': 'a',
 })
+
+
+def _grad_clip_norm():
+    """Override the hard-coded clip_grad_norm_(max_norm=10.0) via env var.
+    Set DOMIKNOWS_GRAD_CLIP=1.0 to tighten the clip during cold-start training
+    on brittle stacks (PEFT + soft-logic) where a single update can produce
+    multi-nat logit shifts that collapse softmax outputs."""
+    import os as _os
+    try:
+        return float(_os.environ.get('DOMIKNOWS_GRAD_CLIP', '10.0'))
+    except (TypeError, ValueError):
+        return 10.0
 
 
 # =============================================================================
@@ -76,11 +89,19 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     - Boolean constraints (andL, atLeastAL, exactAL, etc.): Binary accuracy using 'local/argmax'
     - Counting constraints (sumL): Uses thresholded 'local/decision' key for verification
 
-    Uses AnswerSolver as the primary evaluation method — it performs an ILP
-    hypothesis search that correctly handles executable-constraint semantics
-    (iotaL selection, counting, etc.). verifySingleConstraint runs in parallel
-    as a diagnostic cross-check and any disagreement between the two is
-    logged. 
+    Primary evaluation path is ``datanode.verifySingleConstraint`` — this is
+    the historical code path that has been exercised for years across
+    multiple projects. ``AnswerSolver`` is an experimental ILP-based
+    alternative intended for executable-constraint semantics (iotaL
+    selection, counting, etc.), but it has not been proven out on CLEVR-style
+    relation graphs and has been observed to systematically return False on
+    existsL constraints, collapsing accuracy to the dataset's negative-class
+    fraction. It is therefore off by default and opt-in via the
+    ``DOMIKNOWS_USE_ANSWER_SOLVER=1`` environment variable. When enabled,
+    both paths run and the selection logic still prefers
+    ``verifySingleConstraint`` whenever it returns a non-None result; the
+    AnswerSolver output is used only as a fallback and recorded in the step
+    notebook for cross-checking.
 
     Args:
         evaluate_data: Dataset to evaluate on
@@ -93,7 +114,9 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         dict or float: Full results dictionary or primary metric value
     """
     from domiknows.graph.logicalConstrain import sumL
-    from domiknows.solver.answerModule import AnswerSolver
+    from domiknows.step_notebook import (
+        StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
+    )
 
     boolean_correct = 0
     boolean_total = 0
@@ -103,15 +126,39 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
     total = 0
 
-    answer_solver = AnswerSolver(program.graph)
+    # AnswerSolver opt-in: import + construct only when enabled, so a broken
+    # solver can't sabotage eval or burn wall-clock (its ILP hypothesis
+    # search takes 100 ms – 1.5 s per constraint on CLEVR scenes).
+    _use_answer_solver = os.environ.get("DOMIKNOWS_USE_ANSWER_SOLVER") == "1"
+    if _use_answer_solver:
+        from domiknows.solver.answerModule import AnswerSolver
+        answer_solver = AnswerSolver(program.graph)
+    else:
+        answer_solver = None
 
-    for datanode in tqdm(
-        program.populate(evaluate_data, device=device),
+    _notebook_active = StepNotebook.active() is not None
+    try:
+        _evaluate_data_indexable = hasattr(evaluate_data, '__getitem__')
+    except Exception:
+        _evaluate_data_indexable = False
+
+    def _populate_with_vlm_buffer():
+        # Clear once at entry so a step's buffer only contains that step's
+        # VLM calls, then drain after every yielded datanode.
+        if _notebook_active:
+            reset_vlm_buffer()
+        for _dn in program.populate(evaluate_data, device=device):
+            _calls = drain_vlm_buffer() if _notebook_active else None
+            yield _dn, _calls
+
+    for _step_idx, (datanode, _vlm_calls) in enumerate(tqdm(
+        _populate_with_vlm_buffer(),
         total=len(evaluate_data),
         desc="Evaluating",
         position=0,
         leave=True
-    ):
+    )):
+        _step_results = {} if _notebook_active else None
         constraint_labels_dict = datanode.getExecutableConstraintLabels()
         if not constraint_labels_dict:
             continue
@@ -143,26 +190,32 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
             is_counting = isinstance(lc.innerLC, sumL)
 
-            # ── AnswerSolver (primary) ──────────────────────────────
+            # ── AnswerSolver (experimental, opt-in) ─────────────────
+            # Only runs when DOMIKNOWS_USE_ANSWER_SOLVER=1. Kept here for
+            # diagnostic cross-checking of the verify path; results are
+            # consumed as a fallback only (see selection below).
             answer_correct = None
-            try:
-                answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
-            except Exception as e:
-                logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
-                answer_result = None
+            answer_result = None
+            if _use_answer_solver:
+                try:
+                    answer_result = answer_solver.answer(f"execute({lc_name})", datanode)
+                except Exception as e:
+                    logger.exception("AnswerSolver failed for %s: %s", lc_name, e)
+                    answer_result = None
 
-            if answer_result is not None:
-                if is_counting:
-                    # For sumL the label is the expected count
-                    expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
-                    answer_correct = (answer_result == expected_count)
-                else:
-                    # For boolean constraints the label is 1 (True) or 0 (False)
-                    expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
-                    answer_correct = (answer_result == expected_bool)
+                if answer_result is not None:
+                    if is_counting:
+                        # For sumL the label is the expected count
+                        expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
+                        answer_correct = (answer_result == expected_count)
+                    else:
+                        # For boolean constraints the label is 1 (True) or 0 (False)
+                        expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
+                        answer_correct = (answer_result == expected_bool)
 
-            # ── verifySingleConstraint (comparison) ─────────────────
+            # ── verifySingleConstraint (primary) ────────────────────
             verify_correct = None
+            verify_result = None
             try:
                 if is_counting:
                     verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
@@ -195,6 +248,33 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                 if use_correct:
                     boolean_correct += 1
                 boolean_total += 1
+
+            if _step_results is not None:
+                _step_results[lc_name] = {
+                    'answer_result': answer_result,
+                    'verify_result': verify_result,
+                    'correct': bool(use_correct),
+                    'is_counting': bool(is_counting),
+                }
+
+        if _notebook_active:
+            _data_item = None
+            if _evaluate_data_indexable:
+                try:
+                    _data_item = evaluate_data[_step_idx]
+                except Exception:
+                    _data_item = None
+            _extras = {'threshold': threshold}
+            if _vlm_calls:
+                _extras['vlm_calls'] = _vlm_calls
+            write_active_step(
+                datanode, program,
+                data_item=_data_item,
+                phase='eval',
+                step_idx=_step_idx,
+                precomputed_constraints=_step_results,
+                extras=_extras,
+            )
 
     # Build results
     results = {
@@ -242,6 +322,55 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     results["counting_total"] = counting_total
 
     return results if return_dict else results['accuracy']
+
+
+def _write_training_step_record(program, data, data_idx, builder,
+                                 mloss, closs, total_loss,
+                                 iter_count, epoch, training_mode,
+                                 device='cpu'):
+    """Write one step record during training, mirroring the eval hook.
+
+    Captures per-concept softmax/argmax (so the trajectory of a given
+    example across epochs is readable), the classification loss
+    (``mloss``), the constraint loss (``closs``, may be None before the
+    warmup boundary), and enough training state (epoch, global step,
+    training mode) to order the records. Silent no-op when no
+    StepNotebook is active. All work guarded by try/except so a bad
+    datanode extraction can never break training.
+    """
+    from domiknows.step_notebook import StepNotebook, write_active_step
+    if StepNotebook.active() is None:
+        return
+    try:
+        datanode = builder.getDataNode(device=device)
+    except Exception:
+        return
+    try:
+        def _scalar(x):
+            if x is None:
+                return None
+            try:
+                return float(x.item()) if torch.is_tensor(x) else float(x)
+            except Exception:
+                return None
+        extras = {
+            'epoch': epoch,
+            'global_step': iter_count,
+            'training_mode': training_mode,
+            'mloss': _scalar(mloss),
+            'closs': _scalar(closs),
+            'total_loss': _scalar(total_loss),
+        }
+        write_active_step(
+            datanode, program,
+            data_item=data if isinstance(data, dict) else None,
+            phase='train',
+            step_idx=data_idx,
+            extras=extras,
+        )
+    except Exception:
+        pass
+
 
 ################################################################################
 # LossProgram Base Class
@@ -642,8 +771,9 @@ class PrimalDualProgram(LossProgram):
                 import traceback
                 traceback.print_exc()
                 raise
-            
+
             # Compute loss based on training mode
+            closs = None
             if training_mode == 'warmup':
                 loss = mloss
             elif constraint_only:
@@ -665,6 +795,13 @@ class PrimalDualProgram(LossProgram):
             if not loss:
                 continue
 
+            _write_training_step_record(
+                self, data, data_idx, output[1],
+                mloss=mloss, closs=closs, total_loss=loss,
+                iter_count=iter_count, epoch=self.epoch,
+                training_mode=training_mode, device=self.device,
+            )
+
             batch_pos = data_idx % batch_size
             do_update = (batch_pos == batch_size - 1) or (data_idx == num_data_iters - 1)
 
@@ -675,7 +812,7 @@ class PrimalDualProgram(LossProgram):
 
             if do_update:
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 
                 # Primal step: update model params
                 if self.opt is not None:
@@ -694,7 +831,7 @@ class PrimalDualProgram(LossProgram):
                 if should_update_dual:
                     # Reverse gradients for lambda (gradient ascent)
                     reverse_sign_grad(self.cmodel.parameters())
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
                     
                     c_update_iter = iter_count
@@ -802,7 +939,8 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
                 import traceback
                 traceback.print_exc()
                 raise
-            
+
+            closs = None
             if training_mode == 'warmup':
                 loss = mloss
             elif constraint_only:
@@ -824,6 +962,13 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
             if not loss:
                 continue
 
+            _write_training_step_record(
+                self, data, data_idx, output[1],
+                mloss=mloss, closs=closs, total_loss=loss,
+                iter_count=iter_count, epoch=self.epoch,
+                training_mode=training_mode, device=self.device,
+            )
+
             batch_pos = data_idx % batch_size
             do_update = (batch_pos == batch_size - 1) or (data_idx == num_data_iters - 1)
 
@@ -832,7 +977,7 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
             scaled_loss.backward()
 
             if do_update:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 
                 if self.opt is not None:
                     self.opt.step()
@@ -848,7 +993,7 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
                 
                 if should_update_dual:
                     reverse_sign_grad(self.cmodel.parameters())
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
                     
                     c_update_iter = iter_count
@@ -1037,6 +1182,11 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                             training_mode='standard', **kwargs):
         """Original (non-PD) inference training loop."""
         self._update_temperature_for_epoch()
+        """Simple training: model loss + constraint loss."""
+
+        import os as _os
+        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = c_session.get('_mem_step', 0)
 
         self.model.mode(Mode.TRAIN)
         self.model.train()
@@ -1070,9 +1220,9 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 if self.opt is not None:
                     self.opt.step()
@@ -1084,6 +1234,16 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
 
         c_session['iter'] = iter_count
         self._increment_epoch()
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
+
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter_count
+        c_session['_mem_step'] = _mem_step
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
         return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
@@ -1102,6 +1262,66 @@ class GumbelInferenceProgram(InferenceProgram):
     """
 
     logger = logging.getLogger(__name__)
+    def train_epoch(self, dataset, c_session={}, batch_size=1,
+                    dataset_size=None, print_loss=True,
+                    training_mode='standard', **kwargs):
+        """Inference training epoch with Gumbel-Softmax."""
+        import os as _os
+        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = c_session.get('_mem_step', 0)
+
+        self._update_temperature_for_epoch()
+
+        self.model.mode(Mode.TRAIN)
+        self.model.train()
+        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
+
+        iter_count = c_session.get('iter', 0)
+
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+
+            mloss, metric, *output = self.model(data)
+
+            if training_mode == 'warmup':
+                loss = mloss
+            else:
+                closs, *_ = self._call_cmodel_with_gumbel(output[1])
+                if torch.is_tensor(closs):
+                    loss = mloss + self.beta * closs
+                else:
+                    loss = mloss
+
+            if torch.is_tensor(loss) and loss.requires_grad:
+                loss.backward()
+
+                # Gradient clipping to prevent explosion (e.g. constraint losses)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
+                if self.copt is not None:
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+
+                if self.opt is not None:
+                    self.opt.step()
+                if self.copt is not None:
+                    self.copt.step()
+                iter_count += 1
+
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
+
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter_count
+        c_session['_mem_step'] = _mem_step
+        self._increment_epoch()
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
         return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
@@ -1166,9 +1386,9 @@ class SampleLossProgram(LossProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 self.opt.step()
                 iter_count += 1
@@ -1239,9 +1459,9 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
                 loss.backward()
 
                 # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
                 if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=10.0)
+                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
 
                 self.opt.step()
                 iter_count += 1

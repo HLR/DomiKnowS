@@ -268,12 +268,13 @@ class InferenceModel(LossModel):
     """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, 
+    def __init__(self, graph,
                  tnorm='P',
                  loss=torch.nn.BCELoss,
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
-                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 pos_weight=1.0):
         """
         Initializes an instance of InferenceModel.
 
@@ -306,6 +307,16 @@ class InferenceModel(LossModel):
                          hard_gumbel=hard_gumbel)
 
         self.loss_func = loss()
+        # pos_weight rebalances BCE against majority-class collapse on existsL
+        # constraints. When the dataset's logic_label has a skewed Yes/No ratio
+        # the unweighted BCE will drift toward the majority direction — setting
+        # pos_weight > 1 up-weights the Yes (label=1) loss contribution.
+        self.pos_weight = float(pos_weight)
+        # Diagnostic: set DOMIKNOWS_INFER_DIAG=<N> to print (lbl, conversionSigmoid, loss)
+        # for the first N forward calls. Used to trace gradient-sign inversions.
+        import os
+        self._diag_budget = int(os.environ.get('DOMIKNOWS_INFER_DIAG', '0'))
+        self._diag_step = 0
         self._setup_inference_logger()
 
     def _setup_inference_logger(self):
@@ -366,7 +377,7 @@ class InferenceModel(LossModel):
         for lcName, lc in self.constr.items():
             if f'{lcName}/label' not in read_labels:
                 continue
-            
+
             if not lc.active:
                 continue
 
@@ -399,7 +410,63 @@ class InferenceModel(LossModel):
             constr_out = loss_dict['conversionSigmoid']
             #if torch.equal(constr_out, lbl):
             #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
+            # Avoid BCELoss saturation cliff using a STRAIGHT-THROUGH clamp:
+            # forward sees a clamped value (no -inf log), but the gradient
+            # flows back as if no clamp existed. A vanilla `tensor.clamp(...)`
+            # would zero the gradient at saturation — which kills the recovery
+            # gradient when convSig=0 with lbl=1 (the most informative case
+            # for pushing atoms back up). Disabled if DOMIKNOWS_INFER_NO_CLAMP=1.
+            import os as _os
+            if _os.environ.get('DOMIKNOWS_INFER_NO_CLAMP', '0') != '1':
+                _eps = 1e-6
+                _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
+                # Straight-through: forward = clamped, backward = identity.
+                constr_out = constr_out + (_co_clamped - constr_out).detach()
             constraint_loss = self.loss_func(constr_out.float(), lbl)
+
+            if self._diag_step < self._diag_budget:
+                try:
+                    co = constr_out.detach().float().flatten()
+                    lb = lbl.detach().float().flatten()
+                    cl = constraint_loss.detach().float().flatten()
+                    # Dump a handful of atom probabilities that feed into this
+                    # LC via _prepareLcLossContext, so we can see how close to
+                    # saturation the atoms are on this step.
+                    atom_summary = ""
+                    try:
+                        probs_ctx = None
+                        for k in ('probs', 'predictions', 'softmax', 'localPredictions'):
+                            if isinstance(lc_context, dict) and k in lc_context:
+                                probs_ctx = lc_context[k]
+                                break
+                        if isinstance(probs_ctx, dict):
+                            keys = list(probs_ctx.keys())[:3]
+                            bits = []
+                            for k in keys:
+                                v = probs_ctx[k]
+                                if hasattr(v, 'detach'):
+                                    vv = v.detach().float().flatten()
+                                    bits.append(f"{k}:{vv[:4].tolist()}")
+                            if bits:
+                                atom_summary = " atoms=[" + "; ".join(bits) + "]"
+                    except Exception:
+                        pass
+                    print(
+                        f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
+                        f"convSig={co.tolist()} lbl={lb.tolist()} "
+                        f"loss={cl.tolist()} is_sumL={is_sumL}{atom_summary}",
+                        flush=True,
+                    )
+                except Exception as e:
+                    print(f"[INFER_DIAG error] {e}", flush=True)
+
+            # Up-weight the positive (label=1) class if pos_weight != 1.
+            # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
+            # scale the already-computed loss by the per-sample weight.
+            if self.pos_weight != 1.0:
+                lbl_scalar = lbl.float().mean()  # lbl is 0-d or 1-d singleton here
+                sample_weight = (self.pos_weight - 1.0) * lbl_scalar + 1.0
+                constraint_loss = constraint_loss * sample_weight
 
             losses.append(constraint_loss)
 
@@ -413,6 +480,47 @@ class InferenceModel(LossModel):
             log_memory() 
         
         self.inferenceLogger.info(f"Total loss: {loss.item()}")
+
+        if self._diag_step < self._diag_budget:
+            try:
+                # Walk every datanode reachable from the root and print any
+                # attribute whose key ends in '<local/softmax>'. Limit to the
+                # first few matches so output stays readable.
+                printed = 0
+                import os as _os_diag
+                limit = int(_os_diag.environ.get('DOMIKNOWS_INFER_DIAG_LIMIT', '6'))
+                def _walk(dn, depth=0):
+                    nonlocal printed
+                    if printed >= limit:
+                        return
+                    attrs = getattr(dn, 'attributes', None) or {}
+                    for key, val in attrs.items():
+                        if printed >= limit:
+                            return
+                        if 'local/softmax' not in str(key):
+                            continue
+                        if not hasattr(val, 'detach'):
+                            continue
+                        vv = val.detach().float().flatten()
+                        print(
+                            f"[INFER_DIAG step={self._diag_step} dn={dn.getOntologyNode().name if dn.getOntologyNode() else '?'} "
+                            f"key={key}] softmax={vv[:6].tolist()}",
+                            flush=True,
+                        )
+                        printed += 1
+                    for child in (getattr(dn, 'getChildDataNodes', lambda: [])() or []):
+                        _walk(child, depth + 1)
+                _walk(datanode)
+                if printed == 0:
+                    print(
+                        f"[INFER_DIAG step={self._diag_step} concept] "
+                        f"no 'local/softmax' attribute found on datanode tree",
+                        flush=True,
+                    )
+            except Exception as e:
+                print(f"[INFER_DIAG concept error] {type(e).__name__}: {e}", flush=True)
+            self._diag_step += 1
+
         return loss, datanode, builder
     
 class SampleLossModel(LossModel):

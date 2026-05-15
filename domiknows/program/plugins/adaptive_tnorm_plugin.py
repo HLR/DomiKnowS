@@ -60,6 +60,13 @@ class AdaptiveTNormPlugin:
             default=20,
             help="Minimum observations before making t-norm recommendations"
         )
+        parser.add_argument(
+            "--tnorm_monitor_interval",
+            type=int,
+            default=100,
+            help="Steps between monitoring passes (each pass runs an extra "
+                 "calculateLcLoss forward). Higher = less overhead/memory."
+        )
 
     def configure(self, program, models, args):
         """
@@ -173,6 +180,13 @@ class AdaptiveTNormPlugin:
     def _on_step_end(self, output):
         """Track metrics grouped by constraint type."""
         self.step_counter[0] += 1
+
+        monitor_interval = getattr(self.args, 'tnorm_monitor_interval', None)
+        monitor_interval = int(monitor_interval) if monitor_interval else 100
+        # Skip the extra calculateLcLoss forward except every Nth step to
+        # cap plugin overhead/memory on long runs.
+        if monitor_interval > 1 and self.step_counter[0] % monitor_interval != 0:
+            return
 
         datanode = None
         if isinstance(output, (tuple, list)):

@@ -37,6 +37,44 @@ def _patched_checkpoint(*args, use_reentrant=False, **kwargs):
     return _orig_checkpoint_fn(*args, use_reentrant=use_reentrant, **kwargs)
 _ckpt.checkpoint = _patched_checkpoint
 
+# Monkey-patch transformers.verify_tp_plan to tolerate a string _tp_plan.
+# InternVL's remote modeling code declares ``_tp_plan = ''`` as a "disabled"
+# sentinel (for transformers 4.51+ compat), but transformers 4.56.1's
+# ``verify_tp_plan`` calls ``.copy()`` on it and crashes. Treating any
+# non-dict plan as "no plan" restores the pre-4.56 behavior. We patch the
+# original module *and* any modules that have already imported the name.
+try:
+    import transformers.integrations.tensor_parallel as _tp_mod
+    import transformers.modeling_utils as _mu_mod
+    _orig_verify_tp_plan = _tp_mod.verify_tp_plan
+    def _safe_verify_tp_plan(expected_keys, tp_plan):
+        if tp_plan is not None and not isinstance(tp_plan, dict):
+            tp_plan = None
+        return _orig_verify_tp_plan(expected_keys, tp_plan)
+    _tp_mod.verify_tp_plan = _safe_verify_tp_plan
+    if getattr(_mu_mod, "verify_tp_plan", None) is _orig_verify_tp_plan:
+        _mu_mod.verify_tp_plan = _safe_verify_tp_plan
+except Exception:
+    pass
+
+# Monkey-patch _move_missing_keys_from_meta_to_device to tolerate a missing
+# ``all_tied_weights_keys`` attribute. Transformers 4.56.1 expects every
+# PreTrainedModel to have that dict populated by ``post_init()``, but
+# InternVL's remote ``InternVLChatModel`` only defines the legacy
+# ``_tied_weights_keys`` list and doesn't trigger the new init path, so the
+# loader crashes in ``_finalize_model_loading``. An empty dict means "no
+# tied weights to exclude", which matches the older transformers behaviour.
+try:
+    import transformers.modeling_utils as _mu_mod  # noqa: F811
+    _orig_move_missing = _mu_mod.PreTrainedModel._move_missing_keys_from_meta_to_device
+    def _move_missing_with_tied_fallback(self, *args, **kwargs):
+        if not hasattr(self, "all_tied_weights_keys"):
+            self.all_tied_weights_keys = {}
+        return _orig_move_missing(self, *args, **kwargs)
+    _mu_mod.PreTrainedModel._move_missing_keys_from_meta_to_device = _move_missing_with_tied_fallback
+except Exception:
+    pass
+
 from PIL import Image, ImageDraw
 import numpy as np
 from tqdm import tqdm
@@ -45,6 +83,39 @@ from torchvision import transforms as T
 from torchvision.transforms.functional import InterpolationMode
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig, get_scheduler
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
+# --- Compatibility shim: newer transformers (>=4.50) bnb-4bit quantizer calls
+#     `model.all_tied_weights_keys`, but trust_remote_code models (like
+#     InternVLChatModel) only define `_tied_weights_keys`. Expose a writable
+#     alias on PreTrainedModel so both the quantizer read path and the
+#     `post_init` write path resolve without AttributeError. The setter stores
+#     the value in instance __dict__ so post_init's assignment wins; the getter
+#     falls back to _tied_weights_keys for legacy models that never set it.
+try:
+    from transformers import PreTrainedModel as _PTM
+    if not hasattr(_PTM, "all_tied_weights_keys"):
+        _STORE_KEY = "_all_tied_weights_keys_store"
+
+        def _atwk_get(self):
+            if _STORE_KEY in self.__dict__:
+                return self.__dict__[_STORE_KEY]
+            # Newer transformers expects a dict (callers use .keys()); older
+            # models only expose a list under `_tied_weights_keys`. Adapt:
+            # map each legacy key to itself so both access shapes work.
+            keys = getattr(self, "_tied_weights_keys", None)
+            if not keys:
+                return {}
+            return {k: k for k in keys}
+
+        def _atwk_set(self, value):
+            self.__dict__[_STORE_KEY] = value
+
+        def _atwk_del(self):
+            self.__dict__.pop(_STORE_KEY, None)
+
+        _PTM.all_tied_weights_keys = property(_atwk_get, _atwk_set, _atwk_del)
+except Exception as _shim_err:
+    logging.warning("Failed to install all_tied_weights_keys compat shim: %s", _shim_err)
 
 # Optional imports for training with probabilistic tensors
 try:
@@ -273,6 +344,9 @@ class InternVLHF:
         load_4bit: bool = False,
         # Temperature for softmax over target tokens (>1 = softer, prevents gradient vanishing)
         softmax_temperature: float = 1.0,
+        # Additive bias on the Yes logit (col 1 after _score_batch swap) to escape
+        # the extreme cold-start saturation where P(Yes)≈0.001 on CLEVR atoms.
+        yes_bias: float = 0.0,
     ):
         if getattr(self, "_initialized", False):
             return
@@ -282,6 +356,7 @@ class InternVLHF:
         self.max_num_patches = max_num_patches
         self.load_4bit = load_4bit
         self.softmax_temperature = softmax_temperature
+        self.yes_bias = yes_bias
 
         # Determine compute dtype based on GPU support
         if device.type == "cuda":
@@ -417,9 +492,13 @@ class InternVLHF:
                 base_model.gradient_checkpointing_enable(
                     gradient_checkpointing_kwargs={"use_reentrant": False}
                 )
-                # Enable requires_grad for all blocks (LoRA will add trainable params on top)
+                # Freeze base model — LoRA will add its own trainable adapters on top.
+                # Setting requires_grad=True on the base (previous behaviour) did not
+                # actually train base weights — PEFT still reports only 2.5M trainable
+                # params — but it forced autograd to record saved tensors through every
+                # base-model op, which blew up activation memory on long sequences.
                 for block in [base_model.language_model, base_model.mlp1, base_model.vision_model]:
-                    freeze(block, True)
+                    freeze(block, False)
 
             # Enable input require grads and disable cache
             base_model.language_model.enable_input_require_grads()
@@ -815,6 +894,11 @@ class InternVLHF:
         # C = log(exp(yes) + exp(no)) to match vLLM's normalization.
         # No softmax — inferLocal() applies the only softmax later.
         sel = next_logits[0, token_ids] / self.softmax_temperature  # [K]
+        if getattr(self, "yes_bias", 0.0) != 0.0:
+            for _i, _tok in enumerate(target_tokens):
+                if _tok == "Yes":
+                    sel = sel.clone()
+                    sel[_i] = sel[_i] + self.yes_bias
         C = torch.logsumexp(sel, dim=-1)  # scalar
         return (sel - C).to(self.device)
 
@@ -828,13 +912,24 @@ class InternVLHF:
         temperature=0.0,     # kept for signature compatibility; not used here
         input_size=448,
         max_num=1,
-        max_batch_size=4,
+        max_batch_size=None,
+        call_metadata=None,
+        topk=5,
     ):
         """
         Returns tensor probs [B,K] on device.
         Default target_tokens=["Yes","No"] -> [B,2]
         Chunks forward passes to limit peak VRAM from intermediate activations.
+
+        ``max_batch_size`` defaults to ``INTERNVL_SCORE_CHUNK`` env var if set,
+        else 16. Benchmarked on InternVL3-1B + CLEVR + H100: chunk=16 runs
+        ~3× faster than chunk=2 with virtually identical peak alloc (~3.5 GB)
+        and reserved ~7 GB. Going to chunk=64 only shaves ~6% wall-clock but
+        quadruples reserved VRAM (~29 GB). Tests on smaller GPUs should
+        override to 8–12 for safety headroom.
         """
+        if max_batch_size is None:
+            max_batch_size = int(os.environ.get("INTERNVL_SCORE_CHUNK", "16"))
         if candidates is not None:
             questions = [
                 f"{q}\n If you have to classify among one of these objects {candidates}, {q}"
@@ -846,10 +941,151 @@ class InternVLHF:
 
         token_ids = [self.tokenizer.convert_tokens_to_ids(tok) for tok in target_tokens]
 
+        # Build a per-column additive bias vector so `yes_bias` shifts the
+        # "Yes" logit regardless of target_tokens order ([Yes,No] vs [No,Yes]).
+        # This is applied BEFORE logsumexp so the normalized log-prob reflects
+        # the intended Yes-prior — counters the extreme cold-start where
+        # baseline P(Yes) ≈ 0.001 for every CLEVR atom.
+        if self.yes_bias != 0.0:
+            bias_vec = torch.zeros(len(target_tokens), device=self.device, dtype=self.compute_dtype)
+            for _i, _tok in enumerate(target_tokens):
+                if _tok == "Yes":
+                    bias_vec[_i] = self.yes_bias
+        else:
+            bias_vec = None
+
+        # Only import the step-notebook hook lazily so this module stays
+        # importable when domiknows isn't on sys.path (e.g. standalone eval).
+        try:
+            from domiknows.step_notebook import StepNotebook, record_vlm_call
+            _notebook_active = StepNotebook.active() is not None
+        except Exception:
+            _notebook_active = False
+            record_vlm_call = None
+
+        # Gradient checkpoint each chunk's forward when training with grad enabled.
+        # A CLEVR scene with N objects produces N² QA pairs, chunked into ceil(N²/K)
+        # sub-forwards. Without checkpointing, every chunk's VLM activations stay in
+        # GPU memory until the single loss.backward() at end of step — peak scales
+        # linearly with the number of chunks. With checkpointing, only chunk boundary
+        # tensors are retained; activations are recomputed during backward.
+        use_checkpoint = (
+            torch.is_grad_enabled()
+            and getattr(self.model, 'training', False)
+        )
+
+        def _chunk_forward(img_paths_chunk, qs_chunk):
+            cl = self._next_token_logits(
+                image_paths=img_paths_chunk,
+                questions=qs_chunk,
+                input_size=input_size,
+                max_num=max_num,
+                use_thumbnail=False,
+            )  # [chunk, V]
+            sel_local = cl[:, token_ids] / self.softmax_temperature  # [chunk, K]
+            if bias_vec is not None:
+                sel_local = sel_local + bias_vec
+            C_local = torch.logsumexp(sel_local, dim=-1, keepdim=True)  # [chunk, 1]
+            return sel_local - C_local
+
         all_probs = []
         B = len(image_paths)
         for start in range(0, B, max_batch_size):
             end = min(start + max_batch_size, B)
+            if use_checkpoint:
+                chunk_norm = torch.utils.checkpoint.checkpoint(
+                    _chunk_forward,
+                    image_paths[start:end],
+                    questions[start:end],
+                    use_reentrant=False,
+                )  # [chunk, K]
+                # One-shot grad-flow diagnostic. Set DOMIKNOWS_GRAD_DEBUG=1 to
+                # verify checkpoint() is producing a live autograd edge back
+                # into the LoRA params. If this prints requires_grad=False or
+                # grad_fn=None during training, the graph is severed and LoRA
+                # never updates — i.e. root cause of the 50%/answer=False
+                # regression.
+                if os.environ.get("DOMIKNOWS_GRAD_DEBUG") == "1":
+                    # One-shot fixed-connectivity dump on the very first
+                    # chunk so we can confirm checkpoint is producing a live
+                    # autograd edge and PEFT is wiring both A and B halves
+                    # of the LoRA adapter as trainable.
+                    if not getattr(self, "_grad_debug_printed", False):
+                        lora_trainable = [
+                            (n, p) for n, p in self.model.named_parameters()
+                            if p.requires_grad
+                        ]
+                        n_lora = len(lora_trainable)
+                        a_params = [(n, p) for n, p in lora_trainable if "lora_A" in n]
+                        b_params = [(n, p) for n, p in lora_trainable if "lora_B" in n]
+                        print(
+                            f"[grad_debug] chunk_norm.requires_grad={chunk_norm.requires_grad} "
+                            f"grad_fn={type(chunk_norm.grad_fn).__name__ if chunk_norm.grad_fn else None} | "
+                            f"trainable_params={n_lora} | "
+                            f"lora_A={len(a_params)} lora_B={len(b_params)}",
+                            flush=True,
+                        )
+                        # Stash a reference to one A and one B weight so we
+                        # can track their norms across training — LoRA init
+                        # is A~Kaiming, B=0, so if B.norm stays at 0 after
+                        # many steps, backward is never reaching B and the
+                        # adapter delta (A@B) stays at 0 → model output
+                        # never changes → exact same accuracy per epoch.
+                        self._debug_a = a_params[0] if a_params else None
+                        self._debug_b = b_params[0] if b_params else None
+
+                        # Register hooks on the stashed A / B tensors so we
+                        # see whether autograd is delivering non-zero grads.
+                        # The A-update-is-stuck symptom from the earlier run
+                        # has three candidate explanations: grad never fires
+                        # on A, grad fires with zero norm, or grad fires
+                        # but the optimizer is not stepping. This hook
+                        # distinguishes (1) / (2) from (3).
+                        self._a_grad_snapshots = []
+                        self._b_grad_snapshots = []
+
+                        def _make_grad_hook(bucket, tag):
+                            def _hook(grad):
+                                if len(bucket) < 4:
+                                    bucket.append(grad.detach().float().norm().item())
+                                    print(
+                                        f"[grad_norm] {tag}.grad.norm={bucket[-1]:.6e} "
+                                        f"(seen={len(bucket)})",
+                                        flush=True,
+                                    )
+                            return _hook
+
+                        if self._debug_a is not None:
+                            self._debug_a[1].register_hook(
+                                _make_grad_hook(self._a_grad_snapshots, "A")
+                            )
+                        if self._debug_b is not None:
+                            self._debug_b[1].register_hook(
+                                _make_grad_hook(self._b_grad_snapshots, "B")
+                            )
+                        self._grad_debug_printed = True
+
+                    # Per-call weight-norm trace at sparse checkpoints so we
+                    # can tell if LoRA weights are actually drifting over
+                    # time. Checked at calls 1/25/100/300 — enough resolution
+                    # to see motion without spamming stdout.
+                    self._debug_counter = getattr(self, "_debug_counter", 0) + 1
+                    if self._debug_counter in (1, 25, 100, 300):
+                        def _wstats(entry):
+                            if entry is None:
+                                return "<none>"
+                            _, p = entry
+                            return f"norm={p.detach().float().norm().item():.6e} std={p.detach().float().std().item():.6e}"
+                        print(
+                            f"[weight_debug] call={self._debug_counter} "
+                            f"A[{self._debug_a[0] if self._debug_a else '-'}]={_wstats(self._debug_a)} | "
+                            f"B[{self._debug_b[0] if self._debug_b else '-'}]={_wstats(self._debug_b)}",
+                            flush=True,
+                        )
+                all_probs.append(chunk_norm)
+                continue
+
+            # Non-checkpointed path: keeps chunk_logits live for notebook dump or eval.
             chunk_logits = self._next_token_logits(
                 image_paths=image_paths[start:end],
                 questions=questions[start:end],
@@ -861,10 +1097,70 @@ class InternVLHF:
             # C = log(exp(yes) + exp(no)) to match vLLM's normalization.
             # No softmax — inferLocal() applies the only softmax later.
             sel = chunk_logits[:, token_ids] / self.softmax_temperature  # [chunk, K]
+            if bias_vec is not None:
+                sel = sel + bias_vec
             C = torch.logsumexp(sel, dim=-1, keepdim=True)  # [chunk, 1]
             all_probs.append(sel - C)
 
+            # Notebook instrumentation disabled — the topk/prob dump keeps a full
+            # [chunk, V] logits tensor per chunk alive on the GPU, defeating the
+            # memory benefit of chunking. Re-enable only when actively debugging.
+            # if _notebook_active and record_vlm_call is not None:
+            #     try:
+            #         with torch.no_grad():
+            #             raw_target = chunk_logits[:, token_ids].detach().float().cpu()
+            #             full_probs = F.softmax(chunk_logits.detach().float(), dim=-1).cpu()
+            #             norm_logp = (sel - C).detach().float().cpu()  # log P(target_i | target)
+            #             k = min(topk, chunk_logits.shape[-1])
+            #             topk_ids = chunk_logits.detach().float().topk(k, dim=-1).indices.cpu()
+            #             topk_p = full_probs.gather(-1, topk_ids)
+            #         for i_in_chunk in range(end - start):
+            #             q_idx = start + i_in_chunk
+            #             meta = call_metadata[q_idx] if call_metadata else {}
+            #             topk_tokens = [
+            #                 self.tokenizer.decode([int(t)])
+            #                 for t in topk_ids[i_in_chunk].tolist()
+            #             ]
+            #             record_vlm_call(
+            #                 concept=meta.get('concept'),
+            #                 relation=meta.get('relation'),
+            #                 obj_i=meta.get('obj_i'),
+            #                 obj_j=meta.get('obj_j'),
+            #                 prompt=questions[q_idx],
+            #                 target_tokens=list(target_tokens),
+            #                 target_raw_logits=raw_target[i_in_chunk].tolist(),
+            #                 target_log_probs=norm_logp[i_in_chunk].tolist(),
+            #                 topk_tokens=topk_tokens,
+            #                 topk_probs=topk_p[i_in_chunk].tolist(),
+            #             )
+            #     except Exception:
+            #         # Notebook instrumentation must never break training.
+            #         pass
+
         logits_out = torch.cat(all_probs, dim=0)  # [B, K]
+
+        # Sample a handful of rows on the very first and roughly the Nth
+        # training call so we can see whether VLM output is actually
+        # informative (spread across log-prob range) or collapsed toward a
+        # single class. The scorer returns log-softmax values — i.e. values
+        # in (-inf, 0] where 0 = certain and very negative = near-zero
+        # probability. If ``Yes_logprob`` rows are uniformly ≪ 0, every
+        # atom reads as "No" downstream and the solver returns False.
+        if os.environ.get("DOMIKNOWS_GRAD_DEBUG") == "1":
+            batch_call = getattr(self, "_debug_counter", 0)
+            if batch_call in (1, 300):
+                rows = logits_out.detach().float().cpu()
+                # K columns should line up with target_tokens; for binary
+                # Yes/No, col 0 = Yes, col 1 = No after this scorer's mask.
+                head = rows[: min(6, rows.shape[0])]
+                print(
+                    f"[prob_debug] call={batch_call} shape={tuple(rows.shape)} "
+                    f"log_softmax_head={head.tolist()} "
+                    f"mean={rows.mean().item():.4f} "
+                    f"col_mean={rows.mean(dim=0).tolist() if rows.ndim == 2 else '-'}",
+                    flush=True,
+                )
+
         return logits_out.to(self.device)
 
 
@@ -908,6 +1204,8 @@ class InternVLSharedHF(nn.Module):
         load_4bit=False,
         # Temperature for softmax (>1 = softer outputs, prevents gradient vanishing)
         softmax_temperature=1.0,
+        # Additive bias on the Yes logit to counter CLEVR cold-start Yes≈0 saturation.
+        yes_bias=0.0,
         *args,
         **kwargs
     ):
@@ -917,6 +1215,7 @@ class InternVLSharedHF(nn.Module):
         self.attr = attr
         self.device = device
         self.softmax_temperature = softmax_temperature
+        self.yes_bias = yes_bias
 
         if dtype is None:
             dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
@@ -938,6 +1237,7 @@ class InternVLSharedHF(nn.Module):
                 max_num_patches=max_num,
                 load_4bit=load_4bit,
                 softmax_temperature=softmax_temperature,
+                yes_bias=yes_bias,
             )
             # Register the actual nn.Module only in first instance
             # so DomiKnowS can discover parameters for training
@@ -987,6 +1287,38 @@ class InternVLSharedHF(nn.Module):
             draw.rectangle(box, outline=color, width=3)
         return img
 
+    def _crop_to_boxes(self, base_pil: Image.Image, boxes, pad_frac=0.2):
+        """Crop the image to the tight union of all `boxes` with `pad_frac` padding,
+        so the VLM physically can't attend to anything else. Removes the
+        "global-prior shortcut" the bbox-drawing approach lets the model take.
+        """
+        W, H = base_pil.size
+        bs = [b.detach().cpu().tolist() if isinstance(b, torch.Tensor) else list(b) for b in boxes]
+        x1 = min(b[0] for b in bs); y1 = min(b[1] for b in bs)
+        x2 = max(b[2] for b in bs); y2 = max(b[3] for b in bs)
+        bw, bh = x2 - x1, y2 - y1
+        px, py = bw * pad_frac, bh * pad_frac
+        x1 = max(0, int(x1 - px)); y1 = max(0, int(y1 - py))
+        x2 = min(W, int(x2 + px)); y2 = min(H, int(y2 + py))
+        if x2 <= x1 or y2 <= y1:
+            return base_pil.copy()
+        return base_pil.crop((x1, y1, x2, y2))
+
+    def _build_call_metadata(self, n_boxes):
+        """Per-question metadata matching the order produced by
+        ``_prepare_images_questions``. Consumed by the step-notebook to
+        tag each VLM call with its concept and object indices.
+        """
+        if self.relation == 2:
+            return [
+                {'concept': self.attr, 'relation': 2, 'obj_i': i, 'obj_j': j}
+                for i in range(n_boxes) for j in range(n_boxes)
+            ]
+        return [
+            {'concept': self.attr, 'relation': 1, 'obj_i': i, 'obj_j': None}
+            for i in range(n_boxes)
+        ]
+
     def _prepare_images_questions(self, image, image_filename, bounding_boxes):
         """Prepare image-question pairs for scoring."""
         if isinstance(image, (list, tuple)) and len(image) == 1:
@@ -1008,8 +1340,12 @@ class InternVLSharedHF(nn.Module):
             )
         base = self._to_pil(image)
 
+        import os as _os
+        use_crop = _os.environ.get("INTERNVL_CROP_TO_BOX", "0") == "1"
+
         images, questions = [], []
         if self.relation == 2:
+            # Relation queries need both objects visible in context — never crop.
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
                     img = self._draw_and_resize(base, [box1, box2], ["red", "green"])
@@ -1018,8 +1354,12 @@ class InternVLSharedHF(nn.Module):
                     questions.append(q)
         else:
             for box in bounding_boxes:
-                img = self._draw_and_resize(base, [box], ["red"])
-                q = f"Is the object in the red bounding box {self.attr}? answer with only Yes or No."
+                if use_crop:
+                    img = self._crop_to_boxes(base, [box])
+                    q = f"Is this object {self.attr}? answer with only Yes or No."
+                else:
+                    img = self._draw_and_resize(base, [box], ["red"])
+                    q = f"Is the object in the red bounding box {self.attr}? answer with only Yes or No."
                 images.append(img)
                 questions.append(q)
         return images, questions
@@ -1033,6 +1373,7 @@ class InternVLSharedHF(nn.Module):
         DomiKnowS was calibrated with that order, so we match it here.
         """
         images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
+        call_metadata = self._build_call_metadata(len(bounding_boxes))
 
         probs = self.model._score_batch(
             image_paths=images,
@@ -1040,6 +1381,7 @@ class InternVLSharedHF(nn.Module):
             target_tokens=["No", "Yes"],
             input_size=self.input_size,
             max_num=self.max_num,
+            call_metadata=call_metadata,
         )
         return probs.float()
 

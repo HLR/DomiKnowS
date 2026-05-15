@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 
 from ..utils import consume, detuple
@@ -43,12 +44,14 @@ class LearningBasedProgram():
         self.amp_dtype = kwargs.pop('amp_dtype', 'bfloat16')
         # CPU autocast is opt-in: set amp_on_cpu=True to enable it.
         self.amp_on_cpu = kwargs.pop('amp_on_cpu', False)
-        # torch.compile — compiles each TorchLearner sub-module by default.
-        # Sub-module compilation avoids graph breaks from the dynamic
-        # DataNode/sensor orchestration in TorchModel.forward. Pass
-        # compile_model=False to disable, or compile_submodules=False to
-        # compile the top-level model instead (expect graph breaks).
-        self.compile_model = kwargs.pop('compile_model', True)
+        # torch.compile — opt-in. Sub-module compilation avoids graph breaks
+        # from the dynamic DataNode/sensor orchestration in
+        # TorchModel.forward, but interacts badly with PEFT/LoRA + AMP on
+        # large vision-language backbones (caches + activations retained
+        # across steps → OOM on 90+ GiB GPUs). Default off; pass
+        # compile_model=True to enable, or compile_submodules=False to
+        # compile the top-level model (expect graph breaks).
+        self.compile_model = kwargs.pop('compile_model', False)
         self.compile_backend = kwargs.pop('compile_backend', 'inductor')
         self.compile_mode = kwargs.pop('compile_mode', None)
         self.compile_submodules = kwargs.pop('compile_submodules', True)
@@ -365,12 +368,20 @@ class LearningBasedProgram():
         """
         self.model.mode(Mode.TRAIN)
         self.model.reset()
+        _mem_probe = os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
+        _mem_step = 0
         for data_item in dataset:
             with self._autocast_ctx():
                 loss, metric, *output = self.model(data_item)
             # _backward_and_step is a no-op when self.opt is None or loss
             # isn't differentiable, and handles AMP scaling when enabled.
             self._backward_and_step(loss)
+
+            if _mem_probe and torch.cuda.is_available():
+                _mem_step += 1
+                _alloc = torch.cuda.memory_allocated() / 1e9
+                _res = torch.cuda.memory_reserved() / 1e9
+                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
 
             yield (loss, metric, *output[:1])
 

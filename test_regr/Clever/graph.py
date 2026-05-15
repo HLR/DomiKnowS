@@ -6,10 +6,28 @@ except ImportError:
     from execution import create_execution_for_question
 
 from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import exactL
 from domiknows.graph.visual.visual_constraints import (
     apply_opposite_constraints,
     apply_inverse_constraints,
 )
+
+
+def apply_mutual_exclusivity_constraints(attribute_names_dict):
+    """For each attribute group (color, shape, material, size), require
+    exactly one value to be True per object. Breaks the 'uniform Yes-prior'
+    collapse mode by making it a constraint violation: an object cannot
+    simultaneously be all 8 colors or all 3 shapes."""
+    for attr_group, values in g_attribute_concepts.items():
+        concepts = [
+            attribute_names_dict.get(v) for v in values
+            if attribute_names_dict.get(v) is not None
+        ]
+        if len(concepts) < 2:
+            continue
+        # exactly 1 of the K attribute values is True for any object 'x'
+        bound = [c('x') for c in concepts]
+        exactL(*bound, 1, name=f"mutex_{attr_group}")
 
 
 # Map CLEVR relation names to visual_constraints ctx keys

@@ -365,7 +365,8 @@ class InternVL():
                 return torch.tensor(probs, device=self.device)
 
     def _score_batch(self, image_paths: List[str], questions: List[str], candidates: List[str] = None,
-                     target_tokens: Optional[List[str]] = None, target_token="Yes", temperature=0.5):
+                     target_tokens: Optional[List[str]] = None, target_token="Yes", temperature=0.5,
+                     call_metadata: Optional[List[dict]] = None, topk: int = 5):
         """
         1) Loads the image,
         2) builds a prompt with a single turn,
@@ -428,10 +429,18 @@ class InternVL():
             )
             outputs = self.model.generate(batch_inputs, sampling_params=sampling_params, use_tqdm=False)
 
-            for o in outputs:
+            try:
+                from domiknows.step_notebook import StepNotebook, record_vlm_call
+                _notebook_active = StepNotebook.active() is not None
+            except Exception:
+                _notebook_active = False
+                record_vlm_call = None
+
+            for q_idx, o in enumerate(outputs):
+                lp = o.outputs[0].logprobs[-1]
                 # Extract logits for Yes and No tokens
-                no_logit = o.outputs[0].logprobs[-1][self.yes_token_id].logprob
-                yes_logit = o.outputs[0].logprobs[-1][self.no_token_id].logprob
+                no_logit = lp[self.yes_token_id].logprob
+                yes_logit = lp[self.no_token_id].logprob
                 # Convert from logit (log-space) to logits
                 logits = np.array([yes_logit, no_logit])
 
@@ -439,6 +448,45 @@ class InternVL():
                 exp_logits = np.exp(logits - np.max(logits))  # numerical stability
                 temp_probs = exp_logits / exp_logits.sum()
                 probs.append(torch.tensor(temp_probs))
+
+                if _notebook_active and record_vlm_call is not None:
+                    try:
+                        # lp is dict[token_id -> Logprob(logprob, decoded_token, ...)]
+                        # Target tokens recorded in the same [No, Yes] order as peftvllm.
+                        no_lp = lp.get(self.no_token_id)
+                        yes_lp = lp.get(self.yes_token_id)
+                        target_log_probs = [
+                            float(no_lp.logprob) if no_lp is not None else float('-inf'),
+                            float(yes_lp.logprob) if yes_lp is not None else float('-inf'),
+                        ]
+                        items = sorted(
+                            lp.items(), key=lambda kv: kv[1].logprob, reverse=True
+                        )[:topk]
+                        topk_tokens = []
+                        topk_probs = []
+                        for tid, lpo in items:
+                            tok = getattr(lpo, 'decoded_token', None)
+                            if tok is None:
+                                try:
+                                    tok = self.tokenizer.decode([int(tid)])
+                                except Exception:
+                                    tok = str(tid)
+                            topk_tokens.append(tok)
+                            topk_probs.append(float(np.exp(lpo.logprob)))
+                        meta = call_metadata[q_idx] if call_metadata else {}
+                        record_vlm_call(
+                            concept=meta.get('concept'),
+                            relation=meta.get('relation'),
+                            obj_i=meta.get('obj_i'),
+                            obj_j=meta.get('obj_j'),
+                            prompt=questions[q_idx],
+                            target_tokens=['No', 'Yes'],
+                            target_log_probs=target_log_probs,
+                            topk_tokens=topk_tokens,
+                            topk_probs=topk_probs,
+                        )
+                    except Exception:
+                        pass
             return probs
             # return torch.tensor(probs[0], device=self.device)
             # return torch.stack(probs).to(self.device)
@@ -513,7 +561,18 @@ class InternVLShared(torch.nn.Module):
         
         # --- Execute Model Normally ---
         # We run the batch first so we have the answers to show you
-        results = self.model._score_batch(images, questions)
+        n_boxes = len(bounding_boxes)
+        if self.relation == 2:
+            call_metadata = [
+                {'concept': self.attr, 'relation': 2, 'obj_i': i, 'obj_j': j}
+                for i in range(n_boxes) for j in range(n_boxes)
+            ]
+        else:
+            call_metadata = [
+                {'concept': self.attr, 'relation': 1, 'obj_i': i, 'obj_j': None}
+                for i in range(n_boxes)
+            ]
+        results = self.model._score_batch(images, questions, call_metadata=call_metadata)
 
         # --- Debug Visualization ---
         if False:

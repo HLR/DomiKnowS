@@ -12,7 +12,7 @@ dependencies = [
     "gurobipy>=12.0.3",
     "huggingface-hub>=0.35.0",
     "networkx>=3.5",
-    "nltk>=3.9.1",
+    "nltk>=3.9.4",
     "ordered-set>=4.1.0",
     "owlready2>=0.50",
     "pandas>=2.3.2",
@@ -74,6 +74,12 @@ peft = [
   "peft>=0.13.0",
   "bitsandbytes>=0.43.0; sys_platform != 'darwin'",
   "timm>=1.0.0",
+]
+
+generation-guided = [
+  "interegular>=0.3.3",
+  "lm-format-enforcer>=0.10.0",
+  "openai>=1.0.0",
 ]
 
 [tool.uv]

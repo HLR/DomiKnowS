@@ -86,10 +86,10 @@ for subfolder in "${TEST_LIST[@]}"; do
       K_ARG=(-k "$PYTEST_K")
       echo "   🔎 Applying -k filter: $PYTEST_K"
     fi
-    echo "   Command: uv run --no-sync pytest -v -s --tb=short --no-header ${K_ARG[*]} \"$test_path\""
+    echo "   Command: uv run --no-sync pytest -v -s -rs --tb=short --no-header ${K_ARG[*]} \"$test_path\""
 
     # Capture both stdout and stderr
-    test_output=$(uv run --no-sync pytest -v -s --tb=short --no-header "${K_ARG[@]}" "$test_path" 2>&1)
+    test_output=$(uv run --no-sync pytest -v -s -rs --tb=short --no-header "${K_ARG[@]}" "$test_path" 2>&1)
     test_exit_code=$?
     
     echo "   📊 Pytest exit code: $test_exit_code"
@@ -122,6 +122,33 @@ for subfolder in "${TEST_LIST[@]}"; do
       echo "   📈 Pytest items: $items_passed passed, $items_failed failed, $items_skipped skipped, $items_errors errors"
     fi
 
+    # ── Extract individual test item names for failed and skipped ──
+    # Both are parsed from the "short test summary info" section produced by
+    # -rs (skipped) and default (failed). With -s, verbose lines can have
+    # print() output interleaved before the SKIPPED/FAILED status token, so
+    # parsing the summary section is more reliable.
+    #
+    # Failed items: summary lines starting with "FAILED "
+    failed_item_names=$(echo "$test_output" | \
+      grep -E '^FAILED ' | sed 's/^FAILED //' | sed 's/ - .*//' | \
+      tr '\n' '|' | sed 's/|$//')
+    # Fallback: verbose output lines (when summary section is absent)
+    if [ -z "$failed_item_names" ] && [ "$items_failed" -gt 0 ]; then
+      failed_item_names=$(echo "$test_output" | \
+        grep -E '::.* FAILED' | sed 's/ FAILED.*//' | sed 's/^[[:space:]]*//' | \
+        tr '\n' '|' | sed 's/|$//')
+    fi
+    # Skipped items: summary lines starting with "SKIPPED " (from -rs flag)
+    skipped_item_names=$(echo "$test_output" | \
+      grep -E '^SKIPPED ' | sed 's/^SKIPPED //' | sed 's/ - .*//' | \
+      tr '\n' '|' | sed 's/|$//')
+    # Fallback: verbose output lines (in case -rs summary is absent)
+    if [ -z "$skipped_item_names" ] && [ "$items_skipped" -gt 0 ]; then
+      skipped_item_names=$(echo "$test_output" | \
+        grep -E '::.* SKIPPED' | sed 's/ SKIPPED.*//' | sed 's/^[[:space:]]*//' | \
+        tr '\n' '|' | sed 's/|$//')
+    fi
+
     if [ $test_exit_code -eq 5 ]; then
       # Exit code 5: No tests collected - treat as warning, not failure
       echo "   ⚠️  Exit code 5: No tests collected"
@@ -135,6 +162,8 @@ for subfolder in "${TEST_LIST[@]}"; do
       SKIPPED_TESTS["$subfolder"]="$skip_reason"
       echo "SKIP:$subfolder:$skip_reason" >> "$RESULTS_FILE"
       echo "ITEMS:$subfolder:0:0:0:0" >> "$RESULTS_FILE"
+      echo "FAILED_ITEMS:$subfolder:" >> "$RESULTS_FILE"
+      echo "SKIPPED_ITEMS:$subfolder:" >> "$RESULTS_FILE"
       echo "   ✅ Treating as SKIP (not failure)"
     elif [ $test_exit_code -ne 0 ]; then
       echo "   ❌ Exit code $test_exit_code: Test failure"
@@ -154,6 +183,8 @@ for subfolder in "${TEST_LIST[@]}"; do
       FAILED_TESTS["$subfolder"]="$failure_summary"
       echo "FAIL:$subfolder:$failure_summary" >> "$RESULTS_FILE"
       echo "ITEMS:$subfolder:$items_passed:$items_failed:$items_skipped:$items_errors" >> "$RESULTS_FILE"
+      echo "FAILED_ITEMS:$subfolder:$failed_item_names" >> "$RESULTS_FILE"
+      echo "SKIPPED_ITEMS:$subfolder:$skipped_item_names" >> "$RESULTS_FILE"
       echo "   🔍 Failure details preview:"
       echo "$failure_summary" | head -3
 
@@ -172,6 +203,8 @@ for subfolder in "${TEST_LIST[@]}"; do
       echo "   ✅ Exit code 0: Tests PASSED"
       echo "PASS:$subfolder:" >> "$RESULTS_FILE"
       echo "ITEMS:$subfolder:$items_passed:$items_failed:$items_skipped:$items_errors" >> "$RESULTS_FILE"
+      echo "FAILED_ITEMS:$subfolder:" >> "$RESULTS_FILE"
+      echo "SKIPPED_ITEMS:$subfolder:$skipped_item_names" >> "$RESULTS_FILE"
     fi
   else
     echo "   ❌ Directory does not exist: $test_path"
