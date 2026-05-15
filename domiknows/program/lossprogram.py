@@ -980,6 +980,11 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
         # two modes stay consistent with the standalone programs they mirror.
         copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
         self.copt = self._make_copt(copt_lr)
+        if list(self.cmodel.parameters()):
+            copt_lr = c_lr if self.training_style == 'primal_dual' else 0.01
+            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=copt_lr)
+        else:
+            self.copt = None
 
         self._c_freq = c_freq
         self._auto_set_anneal_epochs(num_epochs)

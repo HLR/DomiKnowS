@@ -1210,11 +1210,71 @@ class forAllL(LogicalConstrain):
 # ----------------- Auxiliary
      
 class eqL(LogicalConstrain):
-    def __init__(self, *e, active = True, sampleEntries = False, name = None):
-        #if e is len 2 and element index 1 is of type String
+    """Value-filtering logical constraint (issue #372).
+
+    Selects data nodes of a concept where a given attribute matches a
+    given value (or one of several values). Typically used inside a
+    ``path=`` tuple to pick a specific side of a relation:
+
+        # "the location whose 'text' attribute equals 'l2'"
+        ifL(
+            andL(
+                entity('e1'),
+                step('s1'),
+                action_label.destroy(
+                    'a1',
+                    path=(('s1', action_step.reversed),
+                          ('e1', action_entity.reversed)),
+                ),
+            ),
+            location(path=('e1', location_rel,
+                           eqL(location, 'text', 'l2'))),
+        )
+
+    Supported forms::
+
+        eqL(concept, value)                # equivalent to
+                                           #   eqL(concept, 'instanceID', value)
+        eqL(concept, 'attr', value)        # attr == value
+        eqL(concept, 'attr', {v1, v2, v3}) # attr in {v1, v2, v3}
+
+    Behaviour notes (also see #372):
+
+    * A scalar value in the third position is auto-wrapped in a
+      single-element set so matching is always **exact equality**.
+      Before this fix, ``eqL(location, 'text', 'l2')`` used Python's
+      ``in`` operator on the string ``'l2'`` directly, which silently
+      matched any substring (e.g. ``'l'``).
+    * ``active``, ``sampleEntries``, ``name`` and ``p`` are now
+      forwarded to the :class:`LogicalConstrain` base class, so
+      ``eqL(..., active=False)`` or a named ``eqL`` actually take
+      effect.
+    """
+
+    def __init__(self, *e, p=100, active=True, sampleEntries=False, name=None):
+        # 2-arg form: eqL(concept, value) → filter on instanceID.
         if len(e) == 2 and isinstance(e[1], str):
-            e = (e[0],  "instanceID", e[1])  
-        LogicalConstrain.__init__(self, *e, p=100)
+            e = (e[0], "instanceID", e[1])
+
+        # Auto-wrap / coerce the required-value into a ``set`` so the
+        # downstream ``attributeValue in requiredValue`` check performs
+        # exact-equality, not substring containment (issue #372).  The
+        # ``LcElement`` validator also requires position 2 to be a
+        # ``set`` — by coercing common containers here the user can pass
+        # a scalar, list, tuple, frozenset or set interchangeably.
+        if len(e) == 3:
+            required = e[2]
+            if isinstance(required, set):
+                pass
+            elif isinstance(required, (frozenset, list, tuple)):
+                e = (e[0], e[1], set(required))
+            else:
+                e = (e[0], e[1], {required})
+
+        LogicalConstrain.__init__(
+            self, *e, p=p, active=active,
+            sampleEntries=sampleEntries, name=name,
+        )
         self.headLC = False
     
 class fixedL(LogicalConstrain):
