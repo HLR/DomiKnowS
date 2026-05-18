@@ -14,6 +14,7 @@ from typing import Any
 import torch
 
 from .dfa import DFA, State, Symbol
+from .hmm import DiscreteHMM
 from .hankel import WeightedFiniteAutomaton, start_product_state, step_product_state
 
 Labeler = Callable[[Any], str]
@@ -175,6 +176,103 @@ class ProductReachabilityGraph:
             "edges": list(self.edges),
             "truncated": self.truncated,
         }
+
+
+def trace_discrete_hmm(
+    hmm: DiscreteHMM,
+    sequence: Sequence[object],
+    *,
+    support_threshold: float = 0.0,
+) -> dict[str, Any]:
+    """Trace real :class:`DiscreteHMM` factors for one observation sequence.
+
+    The returned object is JSON-friendly and intended for educational/debug UI:
+    it includes forward/backward factors from ``DiscreteHMM.forward_backward``,
+    a Viterbi path, support masks, and per-step filtering diagnostics.  When a
+    prefix has no positive support, the trace marks the blocked step and emits
+    ``"-inf"`` for the displayed likelihood rather than non-standard JSON
+    infinities.
+    """
+
+    if support_threshold < 0:
+        raise ValueError("support_threshold must be non-negative")
+    symbols = tuple(sequence)
+    observations, lengths = hmm.encode([symbols])
+    labels = observations[0, : int(lengths[0].item())].detach().cpu().tolist()
+    transition = hmm.transition_with_potential()
+    emission = hmm.emission_probs
+    transition_support = transition > support_threshold
+    emission_support = emission > support_threshold
+
+    support_steps: list[dict[str, Any]] = []
+    alpha_support = None
+    blocked_index = None
+    for index, label_id in enumerate(labels):
+        prior = hmm.initial_probs if alpha_support is None else alpha_support @ transition
+        emit = emission[:, label_id]
+        unnormalized = prior * emit
+        normalizer = float(unnormalized.sum().detach().cpu().item())
+        if normalizer <= support_threshold and blocked_index is None:
+            blocked_index = index
+            belief = torch.zeros_like(unnormalized)
+        else:
+            belief = unnormalized / unnormalized.sum().clamp_min(torch.finfo(hmm.dtype).tiny)
+        alpha_support = belief
+        support_steps.append(
+            {
+                "index": index,
+                "symbol": _label(hmm.symbols[label_id]),
+                "prior": _named_tensor(hmm.state_names, prior),
+                "emission_likelihood": _named_tensor(hmm.state_names, emit),
+                "unnormalized_belief": _named_tensor(hmm.state_names, unnormalized),
+                "filtering_belief": _named_tensor(hmm.state_names, belief),
+                "normalizer": _json_number(normalizer),
+                "support_blocked": blocked_index == index,
+            }
+        )
+
+    factors = hmm.forward_backward(observations, lengths)
+    viterbi_paths, viterbi_scores = hmm.viterbi(observations, lengths)
+    viterbi_ids = viterbi_paths[0, : int(lengths[0].item())].detach().cpu().tolist()
+    viterbi_names = [hmm.state_names[int(state)] for state in viterbi_ids]
+    log_likelihood = float(factors.log_likelihood[0].detach().cpu().item())
+    if blocked_index is not None:
+        log_likelihood_value: float | str = "-inf"
+    else:
+        log_likelihood_value = _json_number(log_likelihood)
+
+    steps = []
+    for index, support in enumerate(support_steps):
+        steps.append(
+            {
+                **support,
+                "alpha": _named_tensor(hmm.state_names, factors.alpha[0, index]),
+                "beta": _named_tensor(hmm.state_names, factors.beta[0, index]),
+                "gamma": _named_tensor(hmm.state_names, factors.gamma[0, index]),
+                "scale": _json_number(float(factors.scales[0, index].detach().cpu().item())),
+                "viterbi_state": viterbi_names[index],
+            }
+        )
+
+    xi = factors.xi[0].detach().cpu()
+    return {
+        "symbols": [_label(symbol) for symbol in symbols],
+        "states": list(hmm.state_names),
+        "log_likelihood": log_likelihood_value,
+        "viterbi_path": viterbi_names,
+        "viterbi_score": _json_number(float(viterbi_scores[0].detach().cpu().item())),
+        "support_blocked": blocked_index is not None,
+        "blocked_index": blocked_index,
+        "transition_mask": _matrix_tensor(hmm.state_names, hmm.state_names, transition_support.to(dtype=hmm.dtype)),
+        "emission_mask": _matrix_tensor(hmm.state_names, tuple(_label(symbol) for symbol in hmm.symbols), emission_support.to(dtype=hmm.dtype)),
+        "transition_probs": _matrix_tensor(hmm.state_names, hmm.state_names, transition),
+        "emission_probs": _matrix_tensor(hmm.state_names, tuple(_label(symbol) for symbol in hmm.symbols), emission),
+        "xi": [
+            _matrix_tensor(hmm.state_names, hmm.state_names, xi_step)
+            for xi_step in xi
+        ],
+        "steps": steps,
+    }
 
 
 def trace_dfa(dfa: DFA, sequence: Sequence[Symbol], *, remaining_steps: int | None = None) -> DFATrace:
@@ -471,6 +569,32 @@ def _highlight_states(highlight_path: Sequence[State] | DFATrace | None) -> set[
 
 def _tensor_to_tuple(value: torch.Tensor) -> tuple[float, ...]:
     return tuple(float(item) for item in value.detach().cpu().reshape(-1).tolist())
+
+
+def _json_number(value: float) -> float | str:
+    if value == float("-inf"):
+        return "-inf"
+    if value == float("inf"):
+        return "inf"
+    if value != value:
+        return "nan"
+    return float(value)
+
+
+def _named_tensor(names: Sequence[str], values: torch.Tensor) -> dict[str, float | str]:
+    flat = values.detach().cpu().reshape(-1).tolist()
+    return {str(name): _json_number(round(float(value), 6)) for name, value in zip(names, flat)}
+
+
+def _matrix_tensor(rows: Sequence[str], columns: Sequence[str], values: torch.Tensor) -> dict[str, dict[str, float | str]]:
+    cpu = values.detach().cpu()
+    return {
+        str(row): {
+            str(column): _json_number(round(float(cpu[row_index, col_index].item()), 6))
+            for col_index, column in enumerate(columns)
+        }
+        for row_index, row in enumerate(rows)
+    }
 
 
 def _sorted_values(values):

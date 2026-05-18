@@ -22,6 +22,12 @@ from .constraints import (
     project_matrix_rows,
     validate_mask,
 )
+from .constraint_compiler import (
+    ConstraintHMMCompilation,
+    ConstraintHMMState,
+    compile_generation_constraints_to_hmm_support,
+    domiknows_hmm_from_generation_constraints,
+)
 from .dynamic import (
     DynamicConstraintContext,
     FactorizedStateSpace,
@@ -39,6 +45,8 @@ __all__ = [
     "AllowedTransitionsSpec",
     "ConstraintApplicationReport",
     "ConstraintDFAExportSpec",
+    "ConstraintHMMCompilation",
+    "ConstraintHMMState",
     "DomiKnowSAwareHMM",
     "DomiKnowSGraphAdapter",
     "DynamicConstraintContext",
@@ -57,6 +65,8 @@ __all__ = [
     "ViterbiResult",
     "apply_transition_energy",
     "combine_masks",
+    "compile_generation_constraints_to_hmm_support",
+    "domiknows_hmm_from_generation_constraints",
     "masked_empirical_initialization",
     "normalize_matrix_rows",
     "project_distribution",

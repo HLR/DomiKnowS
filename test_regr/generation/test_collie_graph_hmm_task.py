@@ -45,6 +45,27 @@ class DummyBackbone(torch.nn.Module):
         raise AssertionError("graph_hmm learner path should not call the HF backbone")
 
 
+class ScriptedBackbone(torch.nn.Module):
+    def __init__(self, generated_token_ids=(1, 2, 0, 0), vocab_size=128, prompt_len=2):
+        super().__init__()
+        self.generated_token_ids = tuple(generated_token_ids)
+        self.vocab_size = int(vocab_size)
+        self.prompt_len = int(prompt_len)
+
+    def forward(self, input_ids, *_args, **_kwargs):
+        generated_index = max(0, int(input_ids.shape[1]) - self.prompt_len)
+        token_id = self.generated_token_ids[min(generated_index, len(self.generated_token_ids) - 1)]
+        logits = torch.full((1, int(input_ids.shape[1]), self.vocab_size), -20.0)
+        logits[0, -1, int(token_id)] = 20.0
+
+        class Output:
+            pass
+
+        output = Output()
+        output.logits = logits
+        return output
+
+
 def import_collie_program():
     sys.path.insert(0, str(COLLIE_DIR))
     try:
@@ -56,17 +77,18 @@ def import_collie_program():
             pass
 
 
-def build_collie_program(kind):
+def build_collie_program(kind, *, graph_hmm_source="target", backbone=None):
     program, tokens = import_collie_program()
     tokenizer = FakeTokenizer()
     label_map = tokens.TokenMap({0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 99: 6})
     return program.build_program(
         label_map,
-        DummyBackbone(),
+        backbone if backbone is not None else DummyBackbone(),
         tokenizer,
         ["<|endoftext|>", " The", " slide"],
         pad_size=4,
         graph_hmm_learner=kind,
+        graph_hmm_source=graph_hmm_source,
     )
 
 
@@ -92,6 +114,32 @@ def test_collie_can_attach_graph_hmm_generation_head():
     assert collie_program.graph_hmm_learner == "hmm"
     assert any(isinstance(module, GraphHMMGenerationHead) for module in collie_program.model.modules())
     assert_pmd_step_is_finite(collie_program)
+
+
+def test_collie_graph_hmm_can_learn_from_hf_generated_labels():
+    collie_program = build_collie_program("hmm", graph_hmm_source="generated", backbone=ScriptedBackbone())
+
+    output = collie_program.model(sample_data())
+    generated_loss = collie_program.graph_hmm_model.last_imitation_loss
+
+    assert collie_program.graph_hmm_source == "generated"
+    assert any(isinstance(module, GraphHMMGenerationHead) for module in collie_program.model.modules())
+    assert collie_program.graph_hmm_model.last_teacher_labels.tolist() == [1, 2, 0, 0]
+    assert torch.isfinite(output[0])
+    assert torch.isfinite(generated_loss)
+
+
+def test_collie_graph_spectral_can_learn_from_hf_generated_labels():
+    collie_program = build_collie_program("spectral", graph_hmm_source="generated", backbone=ScriptedBackbone())
+
+    output = collie_program.model(sample_data())
+    generated_loss = collie_program.graph_hmm_model.last_imitation_loss
+
+    assert collie_program.graph_hmm_source == "generated"
+    assert any(isinstance(module, GraphSpectralGenerationHead) for module in collie_program.model.modules())
+    assert collie_program.graph_hmm_model.last_teacher_labels.tolist() == [1, 2, 0, 0]
+    assert torch.isfinite(output[0])
+    assert torch.isfinite(generated_loss)
 
 
 def test_collie_can_attach_graph_spectral_generation_head():

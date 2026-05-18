@@ -33,6 +33,14 @@ class ViterbiResult:
 class DomiKnowSAwareHMM:
     """A discrete HMM whose probabilities are projected through graph masks."""
 
+    @classmethod
+    def from_generation_constraints(cls, graph, bundle, **kwargs) -> "DomiKnowSAwareHMM":
+        """Build an initialized HMM whose hidden states come from generation DFA support."""
+
+        from .constraint_compiler import domiknows_hmm_from_generation_constraints
+
+        return domiknows_hmm_from_generation_constraints(graph, bundle, **kwargs)
+
     def __init__(
         self,
         graph=None,

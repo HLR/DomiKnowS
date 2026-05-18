@@ -130,11 +130,18 @@ class GenerationGraphContext:
         Returns:
             A DomiKnowS concept-call expression ``generated_token.<label>(variable)``.
         """
-        # Look up the enum attribute by label index (stored as a string name).
-        token_concept = getattr(self.generated_token, str(self.vocabulary.label_for_token(token)))
+        token_concept = getattr(self.generated_token, self._enum_name_for_token(token))
         if path is None:
             return token_concept(variable)
         return token_concept(variable, path=path)
+
+    def _enum_name_for_token(self, token: str) -> str:
+        """Return the generated-token enum value name for a vocabulary token."""
+        label = self.vocabulary.label_for_token(token)
+        enum_values = tuple(getattr(self.generated_token, "enum", ()))
+        if 0 <= label < len(enum_values):
+            return enum_values[label]
+        return str(label)
 
     def non_eos(self, variable: str):
         """Return a DomiKnowS predicate asserting *variable* is not the EOS token.
@@ -150,6 +157,143 @@ class GenerationGraphContext:
         from domiknows.graph.logicalConstrain import notL
 
         return notL(self.token_value(self.vocabulary.eos_token, variable))
+
+
+def generation_bundle_from_graph(
+    graph,
+    *,
+    vocab: Sequence[str],
+    eos_token: str,
+    tokenizer: object | None = None,
+    text_name: str = "text",
+    token_name: str = "token",
+    generated_token_name: str = "generated_token",
+    before_relation_name: str = "is_before_rel",
+    first_role_name: str = "arg1",
+    second_role_name: str = "arg2",
+    constraints: Sequence[GenerationConstraint] = (),
+) -> GenerationBundle:
+    """Wrap an existing traditional DomiKnowS graph as a generation bundle.
+
+    The graph must already contain the standard generation shape:
+
+    .. code-block:: text
+
+        text  --contains-->  token
+        token --is_a-->      generated_token(EnumConcept)
+
+        is_before_rel --has_a(arg1)--> token
+                      --has_a(arg2)--> token
+
+    Unlike :class:`GenerationEncoder`, this helper does not create graph
+    objects.  It resolves the existing objects by name, validates that they
+    match the compact :class:`TokenVocabulary`, and returns a
+    :class:`GenerationBundle` pointing at those original graph objects.
+
+    Args:
+        graph: Existing DomiKnowS graph.
+        vocab: Ordered known token strings.  ``_other`` is added by
+            :class:`TokenVocabulary` and must be present in the graph enum as
+            the final compact label.  Enum values may be either numeric label
+            names (``"0"``, ``"1"``, ...) or readable semantic names ordered
+            exactly like ``vocab + [_other]``.
+        eos_token: End-of-sequence token string.
+        tokenizer: Optional tokenizer for token-id mappings.
+        text_name: Name of the sequence/root concept.
+        token_name: Name of the per-position token concept.
+        generated_token_name: Name of the token enum concept.
+        before_relation_name: Name of the pairwise ordering relation concept.
+        first_role_name: Role name for the first endpoint of
+            ``before_relation_name``.
+        second_role_name: Role name for the second endpoint of
+            ``before_relation_name``.
+        constraints: Optional generation constraint objects to store in the
+            bundle for discovery seeding.  The helper assumes graph-level raw
+            constraints are already written on *graph*.
+
+    Returns:
+        A :class:`GenerationBundle` backed by the existing graph objects.
+
+    Raises:
+        ValueError: If a required concept/relation is missing or if the
+            generated-token enum does not exactly match the compact label
+            space.
+    """
+    vocabulary = TokenVocabulary(vocab, eos_token=eos_token, tokenizer=tokenizer)
+
+    text = _required_concept(graph, text_name)
+    token = _required_concept(graph, token_name)
+    generated_token = _required_concept(graph, generated_token_name)
+    is_before_rel = _required_concept(graph, before_relation_name)
+
+    contains = _find_contains_relation(text, token)
+    first_token = _find_has_a_role(is_before_rel, first_role_name, token)
+    second_token = _find_has_a_role(is_before_rel, second_role_name, token)
+    _validate_generated_token_enum(generated_token, vocabulary)
+
+    context = GenerationGraphContext(
+        vocabulary,
+        generated_token,
+        is_before_rel,
+        first_token,
+        second_token,
+    )
+    return GenerationBundle(
+        text=text,
+        token=token,
+        contains=contains,
+        generated_token=generated_token,
+        is_before_rel=is_before_rel,
+        first_token=first_token,
+        second_token=second_token,
+        context=context,
+        constraints=tuple(constraints),
+        vocabulary=vocabulary,
+    )
+
+
+def _required_concept(graph, name: str):
+    concept = graph.findConcept(name) if hasattr(graph, "findConcept") else None
+    if concept is None:
+        raise ValueError(f"generation graph is missing required concept {name!r}")
+    return concept
+
+
+def _find_contains_relation(text, token):
+    relations = list(text.contains())
+    matches = [relation for relation in relations if relation.dst is token]
+    if len(matches) != 1:
+        raise ValueError(
+            "generation graph must contain exactly one "
+            f"{text.name}.contains({token.name}) relation; found {len(matches)}"
+        )
+    return matches[0]
+
+
+def _find_has_a_role(relation_concept, role_name: str, token):
+    relations = list(relation_concept.has_a())
+    matches = [relation for relation in relations if relation.name == role_name and relation.dst is token]
+    if len(matches) != 1:
+        raise ValueError(
+            "generation graph must contain exactly one "
+            f"{relation_concept.name}.has_a({role_name}={token.name}) role; found {len(matches)}"
+        )
+    return matches[0]
+
+
+def _validate_generated_token_enum(generated_token, vocabulary: TokenVocabulary) -> None:
+    enum_values = tuple(getattr(generated_token, "enum", ()))
+    expected_numeric = tuple(str(label) for label in range(vocabulary.label_count))
+    if enum_values == expected_numeric:
+        return
+    if len(enum_values) == vocabulary.label_count:
+        return
+    if enum_values != expected_numeric:
+        raise ValueError(
+            f"generated_token enum must contain {vocabulary.label_count} ordered labels "
+            f"for {vocabulary.labels}; got {enum_values}. Include the reserved "
+            f"{vocabulary.other_token!r} label."
+        )
 
 
 class GenerationEncoder:

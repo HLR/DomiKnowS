@@ -36,6 +36,7 @@ from .visualization import (
     explain_dfa_rejection,
     product_trace_to_dot,
     reachable_product_graph,
+    trace_discrete_hmm,
     trace_dfa,
     trace_product_automaton,
 )
@@ -74,6 +75,7 @@ __all__ = [
     "spectral_learn_from_samples",
     "start_product_state",
     "step_product_state",
+    "trace_discrete_hmm",
     "trace_dfa",
     "trace_product_automaton",
     "union_dfa",

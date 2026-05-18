@@ -8,6 +8,7 @@ from domiknows.generation import (
     constraints_to_dfa_from_graph,
     discover_generation_constraints,
     discover_generation_enforcement,
+    generation_bundle_from_graph,
 )
 
 
@@ -29,7 +30,7 @@ def load_collie_graph():
     return load_collie_module("graph.py", "collie_graph_for_generation_test")
 
 
-def test_collie_build_graph_uses_generation_encoder():
+def test_collie_build_graph_uses_traditional_graph_bundle_adapter():
     collie_graph = load_collie_graph()
 
     class FakeTokenizer:
@@ -44,19 +45,28 @@ def test_collie_build_graph_uses_generation_encoder():
 
     assert graph is not None
     assert bundle[3].name == "generated_token"
+    assert bundle[3].enum == ["0", "1", "2", "3"]
     assert len(graph.logicalConstrains) >= 5
 
 
-def test_collie_generation_bundle_exposes_vocabulary_and_constraints():
+def test_collie_program_style_bundle_adapter_exposes_vocabulary_and_constraints():
     collie_graph = load_collie_graph()
 
     class FakeTokenizer:
         def encode(self, token):
             return {"<|endoftext|>": [0], " The": [1], " slide": [2]}[token]
 
-    graph, bundle = collie_graph.build_generation_bundle(
-        tokenizer=FakeTokenizer(),
+    tokenizer = FakeTokenizer()
+    graph, _graph_parts = collie_graph.build_graph(
+        lm=None,
+        tokenizer=tokenizer,
         vocab=["<|endoftext|>", " The", " slide"],
+    )
+    bundle = generation_bundle_from_graph(
+        graph,
+        vocab=["<|endoftext|>", " The", " slide"],
+        eos_token=collie_graph.EOS_TOKEN,
+        tokenizer=tokenizer,
     )
 
     discovered_constraints = discover_generation_constraints(graph, bundle)

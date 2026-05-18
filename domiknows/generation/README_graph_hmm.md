@@ -75,6 +75,43 @@ spectral = GraphSpectralAutomaton(...).fit(sequences, prefixes, suffixes, rank=2
 wfa_head = spectral.to_torch_learner(trainable=True, pad_size=pad_size)
 ```
 
+`GraphSpectralGenerationHead` preserves the learned constrained WFA operators,
+but hard graph/DFA legality filtering remains on `GraphSpectralAutomaton` via
+`score(..., enforce_constraints=True)`, `hard_score(...)`,
+`allowed_symbols(...)`, or an external DFA wrapper.
+
+## Automatic Constraint-DFA HMM State Spaces
+
+For generation-shaped graphs, regular DomiKnowS constraints can now create an
+HMM state space automatically by reusing the graph-discovered DFA:
+
+```python
+from domiknows.generation.graph_hmm import domiknows_hmm_from_generation_constraints
+
+learner = domiknows_hmm_from_generation_constraints(graph, bundle)
+```
+
+The compiler builds one hidden HMM state per productive DFA edge:
+
+```text
+(dfa_state_before, emitted_symbol, dfa_state_after)
+```
+
+Emissions are tied to the edge symbol, and HMM transitions connect edges whose
+DFA endpoints line up. This means beliefs are no longer necessarily hand-named
+states like `before_B`; for a rule set such as “B at most once” and “C at least
+once,” the compiler creates readable edge-state names such as:
+
+```text
+need_C_no_B__emit_B__to_need_C_seen_B
+seen_C_seen_B__emit_END
+```
+
+This is exact for finite DFA-compiled constraints under the compact generation
+vocabulary. If an EOS token is known, EOS-emitting states are only created when
+the DFA successor is accepting, so ending before required constraints are
+satisfied has no HMM support.
+
 ## What The Graph Contributes
 
 DomiKnowS graphs declare domain knowledge with `Graph`, `Concept`,
@@ -128,6 +165,25 @@ A DomiKnowS-aware HMM learns:
 ```text
 P(s_t+1 | s_t, G, C)
 ```
+
+Equivalently, in the HMM / probabilistic-automata setting, constraints can be
+read as conditioning the transition law:
+
+```text
+P(s_t | s_t-1, C)
+```
+
+The constrained transition matrix is a reshaped version of the learned base
+matrix:
+
+```text
+A^(C) = g(A, C)
+```
+
+In this view, DomiKnowS constraints act as priors over transitions.  The result
+is effectively a conditional HMM: the automaton still learns transition
+probabilities, but graph semantics and logical constraints determine which
+transition mass is legal or preferred.
 
 The transition matrix is projected through graph and constraint masks:
 
@@ -685,3 +741,23 @@ graph-constrained automata.
   language. Soft energies, thresholds, belief-dependent callbacks, and
   infinite-memory prefix callbacks are not exact DFA constraints unless the
   caller supplies a finite-state hard abstraction.
+
+## Future Research
+
+The graph-HMM layer is also a useful bridge toward richer neuro-symbolic
+learning systems:
+
+- neuro-symbolic models;
+- energy-based constraint learning;
+- differentiable logic layers;
+- posterior regularization.
+
+A compact objective for that direction is:
+
+```text
+min_theta E_x[-log P_theta(x)] + lambda * L_constraint(z)
+```
+
+Here the probabilistic model learns from observed sequences while the
+constraint term regularizes latent structures or outputs toward DomiKnowS
+logical semantics.
