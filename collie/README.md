@@ -95,3 +95,16 @@ Both heads populate DomiKnowS token DataNodes, so `PrimalDualProgram.cmodel(...)
 receives ordinary `generated_token` probabilities and computes the same graph
 constraint loss. DFA decoding remains the hard enforcement path; graph-HMM
 heads provide trainable graph-aware probabilities for PMD.
+
+By default the graph-HMM heads learn from compact labels derived from the target
+sequence. To make the head learn from real TinyStories-generated tokens instead,
+use the hybrid source:
+
+```bash
+uv run --project Tasks/collie python Tasks/collie/program.py --vocab_file data/vocab_val.pkl --graph_hmm_learner hmm --graph_hmm_source generated
+```
+
+In that mode, a frozen `TinyModel`/TinyStories backbone generates raw tokenizer
+ids, Collie maps them into the compact `TokenVocabulary` labels, and the
+graph-HMM head is trained with an imitation loss on those generated labels while
+PMD still receives graph-HMM probabilities for the DomiKnowS constraint loss.

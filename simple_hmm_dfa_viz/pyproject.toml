@@ -1,0 +1,14 @@
+[project]
+name = "domiknows-simple-hmm-dfa-viz-task"
+version = "0.1.0"
+description = "JSON-driven HMM and DFA visualization demo for DomiKnowS generation."
+requires-python = ">=3.12"
+dependencies = [
+    "domiknows[cpu]",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+domiknows = { path = "../..", editable = true }

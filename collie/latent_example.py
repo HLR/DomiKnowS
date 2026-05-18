@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import torch
 
-from domiknows.generation import discover_generation_enforcement
+from domiknows.generation import discover_generation_enforcement, generation_bundle_from_graph
 
-from graph import EOS_TOKEN, build_generation_bundle
+from graph import EOS_TOKEN, build_graph
 
 
 EXAMPLE_VOCAB = [EOS_TOKEN, " The", " slide"]
@@ -40,7 +40,13 @@ def build_example_probabilities(bundle):
 
 
 def build_latent_example():
-    graph, bundle = build_generation_bundle(ExampleTokenizer(), EXAMPLE_VOCAB)
+    graph, _graph_parts = build_graph(None, ExampleTokenizer(), EXAMPLE_VOCAB)
+    bundle = generation_bundle_from_graph(
+        graph,
+        vocab=EXAMPLE_VOCAB,
+        eos_token=EOS_TOKEN,
+        tokenizer=ExampleTokenizer(),
+    )
     enforcement = discover_generation_enforcement(graph, bundle)
     probs = build_example_probabilities(bundle)
     breakdown = enforcement.latent_breakdown(probs, eos_label=bundle.vocabulary.eos_label)

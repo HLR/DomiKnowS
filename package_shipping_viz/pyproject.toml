@@ -1,0 +1,15 @@
+[project]
+name = "package-shipping-viz"
+version = "0.1.0"
+description = "JSON-driven visualization of package-shipping DFA and graph-HMM planning flow"
+requires-python = ">=3.12"
+dependencies = [
+    "domiknows",
+    "torch",
+]
+
+[tool.uv.sources]
+domiknows = { path = "../..", editable = true }
+
+[tool.uv]
+package = false

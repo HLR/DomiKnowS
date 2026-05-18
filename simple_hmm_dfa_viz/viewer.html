@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple HMM + DFA Trace</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --ink: #1f2933;
+      --muted: #5f6b76;
+      --line: #d6d9dc;
+      --panel: #ffffff;
+      --accent: #0f766e;
+      --accent-soft: #d9f3ef;
+      --bad: #b42318;
+      --bad-soft: #fde7e4;
+      --good: #157347;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header {
+      padding: 24px clamp(18px, 4vw, 48px) 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(24px, 3vw, 36px);
+      letter-spacing: 0;
+    }
+    p { line-height: 1.55; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+      gap: 18px;
+      padding: 18px clamp(18px, 4vw, 48px) 40px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .side {
+      position: sticky;
+      top: 12px;
+      align-self: start;
+    }
+    .sequence {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .token {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #fff;
+      font-weight: 650;
+    }
+    .step-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .step-button {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .step-button[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .status.good { color: var(--good); background: #e7f5ed; }
+    .status.bad { color: var(--bad); background: var(--bad-soft); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    h2, h3 {
+      margin: 0 0 10px;
+      letter-spacing: 0;
+    }
+    h2 { font-size: 22px; }
+    h3 { font-size: 16px; }
+    .help-term {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px dotted var(--muted);
+      cursor: help;
+      position: relative;
+    }
+    .help-term::after {
+      content: attr(data-help);
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      z-index: 5;
+      width: min(320px, 70vw);
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #17212b;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.45;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+    .help-term:hover::after,
+    .help-term:focus::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .help-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #eef2f5;
+      color: #46515c;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 8px 12px;
+      font-size: 14px;
+    }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 7px 8px;
+      text-align: right;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th { background: #f1f3f5; }
+    td.on { background: #e7f5ed; font-weight: 700; }
+    td.off { background: #f8f9fa; color: #9aa3aa; }
+    .belief-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: #e6e8ea;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .belief-fill {
+      height: 100%;
+      background: var(--accent);
+    }
+    .notice {
+      border-left: 4px solid var(--accent);
+      padding: 10px 12px;
+      background: #eef8f6;
+      border-radius: 6px;
+      color: #24423e;
+    }
+    .panel-note {
+      margin: -4px 0 12px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    @media (max-width: 860px) {
+      main, .grid { grid-template-columns: 1fr; }
+      .side { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <script id="flow-data" type="application/json">__FLOW_JSON__</script>
+  <header>
+    <h1 id="title">Simple HMM + DFA Trace</h1>
+    <p id="audience-note"></p>
+  </header>
+  <main>
+    <aside class="panel side">
+      <h2><span class="help-term" tabindex="0" data-help="The mock generator proposes a string. It does not know the rule; the DFA checks the rule afterward and the HMM scores the flow.">Generator Output <span class="help-icon">?</span></span></h2>
+      <div id="sequence" class="sequence"></div>
+      <p><strong>Constraint:</strong> <span id="constraint"></span></p>
+      <p id="final-status"></p>
+      <h3>Click A Step</h3>
+      <div id="step-list" class="step-list"></div>
+    </aside>
+
+    <section>
+      <div class="panel">
+        <h2 id="step-title">Step</h2>
+        <p id="step-explanation" class="notice"></p>
+      </div>
+
+      <div class="grid" style="margin-top:14px">
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="The DFA is the strict checker. At each step it lists which symbols still keep the string legal. If the generator picks a blocked symbol, the DFA rejects immediately.">DFA Hard Check <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Exact rule tracking for the current prefix.</p>
+          <dl class="kv" id="dfa-kv"></dl>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="Belief is the HMM's current probability over hidden states after seeing the symbols so far. Larger bars mean the model thinks that hidden state is more likely right now.">HMM Belief <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Soft hidden-state probabilities after this step.</p>
+          <dl class="kv" id="hmm-kv"></dl>
+          <div id="belief-bars"></div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:14px">
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="The transition mask says which hidden-state moves are structurally allowed. A 1 means the HMM may move between those states; a 0 means that move is impossible.">Transition Mask <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Allowed hidden-state moves.</p>
+          <div id="transition-mask"></div>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="The emission mask says which visible symbols each hidden state may produce. Here, the state after B cannot emit another B, which mirrors the simple rule.">Emission Mask <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Allowed visible symbols per hidden state.</p>
+          <div id="emission-mask"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h2><span class="help-term" tabindex="0" data-help="Prior is what the HMM expected before reading this symbol. Emission is how compatible the symbol is with each hidden state. Belief is the updated probability after combining both.">Step Probabilities <span class="help-icon">?</span></span></h2>
+        <p class="panel-note">How the HMM combines expectation and symbol compatibility.</p>
+        <div id="probabilities"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let flow = null;
+    let selectedStep = 0;
+
+    async function loadFlow() {
+      const embedded = document.getElementById("flow-data").textContent.trim();
+      if (embedded && embedded !== "__FLOW_JSON__") {
+        return JSON.parse(embedded);
+      }
+      const response = await fetch("flow.json");
+      return response.json();
+    }
+
+    function fmt(value) {
+      if (value === null || value === undefined) return "none";
+      if (typeof value === "number") {
+        if (!Number.isFinite(value)) return String(value);
+        return value.toFixed(4);
+      }
+      if (Array.isArray(value)) return value.join(", ");
+      return String(value);
+    }
+
+    function renderKV(target, entries) {
+      target.innerHTML = "";
+      for (const [key, value] of entries) {
+        const dt = document.createElement("dt");
+        dt.textContent = key;
+        const dd = document.createElement("dd");
+        dd.textContent = fmt(value);
+        target.append(dt, dd);
+      }
+    }
+
+    function renderMatrix(target, matrix, columns, mode) {
+      let html = "<table><thead><tr><th>state</th>";
+      for (const col of columns) html += `<th>${col}</th>`;
+      html += "</tr></thead><tbody>";
+      for (const [row, values] of Object.entries(matrix)) {
+        html += `<tr><th>${row}</th>`;
+        for (const col of columns) {
+          const value = values[col];
+          const cls = mode === "mask" ? (value ? "on" : "off") : "";
+          html += `<td class="${cls}">${fmt(value)}</td>`;
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+      target.innerHTML = html;
+    }
+
+    function renderBeliefs(belief) {
+      const target = document.getElementById("belief-bars");
+      target.innerHTML = "";
+      for (const [state, value] of Object.entries(belief)) {
+        const wrap = document.createElement("div");
+        wrap.style.marginTop = "10px";
+        wrap.innerHTML = `<strong>${state}</strong> ${fmt(value)}`;
+        const bar = document.createElement("div");
+        bar.className = "belief-bar";
+        const fill = document.createElement("div");
+        fill.className = "belief-fill";
+        fill.style.width = `${Math.max(0, Math.min(1, value)) * 100}%`;
+        bar.appendChild(fill);
+        wrap.appendChild(bar);
+        target.appendChild(wrap);
+      }
+    }
+
+    function selectStep(index) {
+      selectedStep = index;
+      document.querySelectorAll(".step-button").forEach((button, i) => {
+        button.setAttribute("aria-selected", i === index ? "true" : "false");
+      });
+      const step = flow.steps[index];
+      document.getElementById("step-title").textContent = `Step ${index + 1}: generator emits ${step.symbol}`;
+      document.getElementById("step-explanation").textContent = step.explanation;
+      renderKV(document.getElementById("dfa-kv"), [
+        ["from state", step.dfa?.from_state],
+        ["to state", step.dfa?.to_state],
+        ["allowed symbols", step.dfa?.allowed_symbols || []],
+        ["blocked", step.dfa?.blocked],
+        ["reason", step.dfa?.reason],
+      ]);
+      renderKV(document.getElementById("hmm-kv"), [
+        ["most likely state", step.hmm.most_likely_state],
+        ["normalizer", step.hmm.normalizer],
+        ["log likelihood", step.hmm.log_likelihood_so_far],
+        ["support blocked", step.hmm.support_blocked],
+      ]);
+      renderBeliefs(step.hmm.belief);
+      renderMatrix(document.getElementById("transition-mask"), flow.hmm.transition_mask, flow.hmm.states, "mask");
+      renderMatrix(document.getElementById("emission-mask"), flow.hmm.emission_mask, flow.vocabulary, "mask");
+      renderMatrix(document.getElementById("probabilities"), {
+        prior: step.hmm.prior,
+        emission: step.hmm.emission_likelihood,
+        belief: step.hmm.belief,
+      }, flow.hmm.states, "probs");
+    }
+
+    function render() {
+      document.getElementById("title").textContent = flow.title;
+      document.getElementById("audience-note").textContent = flow.audience_note;
+      document.getElementById("constraint").textContent = flow.constraint.text;
+      document.getElementById("final-status").innerHTML = flow.dfa.accepted
+        ? `<span class="status good">DFA accepted</span>`
+        : `<span class="status bad">DFA rejected</span>`;
+
+      const seq = document.getElementById("sequence");
+      seq.innerHTML = "";
+      for (const symbol of flow.generator.sequence) {
+        const item = document.createElement("span");
+        item.className = "token";
+        item.textContent = symbol;
+        seq.appendChild(item);
+      }
+
+      const steps = document.getElementById("step-list");
+      steps.innerHTML = "";
+      flow.steps.forEach((step, index) => {
+        const button = document.createElement("button");
+        button.className = "step-button";
+        button.type = "button";
+        button.textContent = `${index + 1}. ${step.symbol}`;
+        button.addEventListener("click", () => selectStep(index));
+        steps.appendChild(button);
+      });
+      selectStep(0);
+    }
+
+    loadFlow().then(data => {
+      flow = data;
+      render();
+    }).catch(error => {
+      document.body.innerHTML = `<main><section class="panel"><h1>Could not load flow JSON</h1><p>${error}</p></section></main>`;
+    });
+  </script>
+</body>
+</html>

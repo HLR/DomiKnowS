@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Package Shipping Planning Flow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #627084;
+      --line: #d7dde7;
+      --soft: #f6f8fb;
+      --accent: #0f766e;
+      --danger: #b42318;
+      --ok: #1a7f37;
+      --warn: #b35c00;
+      --panel: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #eef2f7;
+    }
+    header {
+      padding: 28px 32px 20px;
+      background: #0f172a;
+      color: white;
+    }
+    h1, h2, h3 { margin: 0; letter-spacing: 0; }
+    h1 { font-size: 30px; line-height: 1.15; }
+    h2 { font-size: 18px; margin-bottom: 12px; }
+    h3 { font-size: 14px; margin-bottom: 8px; }
+    p { margin: 8px 0; color: var(--muted); line-height: 1.45; }
+    header p { color: #cbd5e1; max-width: 1050px; }
+    main { padding: 22px 28px 40px; max-width: 1480px; margin: 0 auto; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .value { font-size: 16px; font-weight: 750; overflow-wrap: anywhere; }
+    .status-ok { color: var(--ok); }
+    .status-bad { color: var(--danger); }
+    .layout {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .step-list {
+      display: grid;
+      gap: 8px;
+      position: sticky;
+      top: 12px;
+    }
+    button.step {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    button.step[aria-selected="true"] {
+      border-color: var(--accent);
+      box-shadow: inset 4px 0 0 var(--accent);
+    }
+    button.step.blocked {
+      border-color: #f3b4ad;
+      box-shadow: inset 4px 0 0 var(--danger);
+    }
+    .step-index { color: var(--muted); font-size: 12px; }
+    .step-action { display: block; font-weight: 760; margin-top: 3px; }
+    .panels {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .wide { grid-column: 1 / -1; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--soft);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: #334155;
+    }
+    .chip.bad { border-color: #f3b4ad; background: #fff1f0; color: var(--danger); }
+    .chip.good { border-color: #a7d8b8; background: #f0fff4; color: var(--ok); }
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 6px 7px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    th {
+      background: #f8fafc;
+      color: #334155;
+      font-weight: 700;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    td.zero { color: #94a3b8; background: #fbfdff; }
+    td.hot { background: #dff7f2; font-weight: 750; color: #0f766e; }
+    pre {
+      overflow: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      max-height: 360px;
+    }
+    .help {
+      cursor: help;
+      border-bottom: 1px dotted currentColor;
+    }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    @media (max-width: 980px) {
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .layout { grid-template-columns: 1fr; }
+      .step-list { position: static; }
+      .panels { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <script id="flow-data" type="application/json">__FLOW_JSON__</script>
+  <header>
+    <h1>Package Shipping Planning Flow</h1>
+    <p id="purpose"></p>
+  </header>
+  <main>
+    <section class="summary">
+      <div class="card" id="task-card"><span class="label">Task</span><div id="task" class="value"></div></div>
+      <div class="card" id="candidate-card"><span class="label">Candidate</span><div id="candidate" class="value"></div></div>
+      <div class="card" id="dfa-card"><span class="label">DFA Result</span><div id="dfa-status" class="value"></div></div>
+      <div class="card" id="hmm-score-card"><span class="label">Graph-HMM Score</span><div id="hmm-score" class="value mono"></div></div>
+    </section>
+
+    <section class="card wide" style="margin-bottom:16px">
+      <h2>Domain Facts From The Graph</h2>
+      <div class="grid2">
+        <div>
+          <span class="label">Reference Plan</span>
+          <div id="reference-plan" class="chips"></div>
+        </div>
+        <div>
+          <span class="label">Required Actions</span>
+          <div id="required-actions" class="chips"></div>
+        </div>
+      </div>
+      <p id="rejection" class="status-bad"></p>
+    </section>
+
+    <section class="layout">
+      <aside class="card">
+        <h2>Click A Step</h2>
+        <div id="step-list" class="step-list"></div>
+      </aside>
+
+      <section class="panels">
+        <article class="card wide">
+          <h2>Selected Step</h2>
+          <p id="step-explanation"></p>
+          <div id="prefix" class="chips"></div>
+        </article>
+
+        <article class="card">
+          <h2><span class="help" id="dfa-help">DFA Hard Rule</span></h2>
+          <div id="dfa-panel"></div>
+        </article>
+
+        <article class="card">
+          <h2><span class="help" id="hmm-help">Graph-HMM Phase Belief</span></h2>
+          <div id="hmm-panel"></div>
+        </article>
+
+        <article class="card">
+          <h2><span class="help" id="required-help">Plan Diagnostics</span></h2>
+          <div id="diag-panel"></div>
+        </article>
+
+        <article class="card">
+          <h2><span class="help" id="viterbi-help">Viterbi Phase Path</span></h2>
+          <div id="viterbi-panel"></div>
+        </article>
+
+        <article class="card wide">
+          <h2><span class="help" id="emission-help">Emission Mask</span></h2>
+          <div id="emission-mask"></div>
+        </article>
+
+        <article class="card wide">
+          <h2><span class="help" id="transition-help">Transition Mask</span></h2>
+          <div id="transition-mask"></div>
+        </article>
+
+        <article class="card wide">
+          <h2>Candidate Options</h2>
+          <div id="candidate-options"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const flow = JSON.parse(document.getElementById("flow-data").textContent);
+    let selected = 0;
+
+    const $ = (id) => document.getElementById(id);
+    const help = flow.help || {};
+
+    function init() {
+      $("purpose").textContent = flow.purpose;
+      $("task").textContent = flow.task.selected;
+      $("candidate").textContent = flow.candidate.source;
+      $("dfa-status").innerHTML = flow.dfa.accepted
+        ? '<span class="status-ok">accepted</span>'
+        : '<span class="status-bad">rejected</span>';
+      $("hmm-score").textContent = flow.graph_hmm.log_likelihood;
+      $("task-card").title = "The selected shipping task from the declarative DomiKnowS graph.";
+      $("candidate-card").title = help.candidate_option || "";
+      $("dfa-card").title = help.dfa || "";
+      $("hmm-score-card").title = help.hmm_score || "";
+      $("rejection").textContent = flow.dfa.rejection_reason || "";
+      renderChips($("reference-plan"), flow.task.reference_plan);
+      renderChips($("required-actions"), flow.task.required_actions, "good");
+      setHelp();
+      renderSteps();
+      renderMasks();
+      renderCandidateOptions();
+      renderSelected(0);
+    }
+
+    function setHelp() {
+      $("dfa-help").title = help.dfa || "";
+      $("hmm-help").title = help.graph_hmm || "";
+      $("emission-help").title = help.emission_mask || "";
+      $("transition-help").title = help.transition_mask || "";
+      $("required-help").title = help.required || "";
+      $("viterbi-help").title = help.viterbi || "";
+    }
+
+    function renderSteps() {
+      const root = $("step-list");
+      root.innerHTML = "";
+      flow.steps.forEach((step, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "step" + ((step.dfa.blocked || step.graph_hmm.support_blocked) ? " blocked" : "");
+        btn.setAttribute("aria-selected", index === selected ? "true" : "false");
+        btn.title = `${help.action_step || ""}\nAction: ${step.action}`;
+        btn.innerHTML = `<span class="step-index">Step ${index + 1}</span><span class="step-action">${escapeHtml(step.action)}</span>`;
+        btn.addEventListener("click", () => renderSelected(index));
+        root.appendChild(btn);
+      });
+    }
+
+    function renderSelected(index) {
+      selected = index;
+      document.querySelectorAll("button.step").forEach((btn, idx) => {
+        btn.setAttribute("aria-selected", idx === selected ? "true" : "false");
+      });
+      const step = flow.steps[index];
+      $("step-explanation").textContent = step.explanation;
+      renderChips($("prefix"), step.prefix);
+      renderDfa(step);
+      renderHmm(step);
+      renderDiagnostics(step);
+      renderViterbi(index);
+    }
+
+    function renderDfa(step) {
+      const dfa = step.dfa;
+      $("dfa-panel").innerHTML = `
+        <p title="${escapeHtml(help.dfa_state || "")}"><span class="label">From State</span><span class="mono">${escapeHtml(dfa.from_state)}</span></p>
+        <p title="${escapeHtml(help.dfa_state || "")}"><span class="label">To State</span><span class="mono">${escapeHtml(dfa.to_state || "blocked")}</span></p>
+        <p><span class="label help" title="${escapeHtml(help.allowed_actions || "")}">Allowed Actions Before This Step</span></p>
+        <div class="chips">${chipsHtml(dfa.allowed_actions, "", help.allowed_actions)}</div>
+        ${dfa.blocked ? `<p class="status-bad"><strong>Blocked:</strong> ${escapeHtml(dfa.reason || "")}</p>` : `<p class="status-ok">This action keeps the plan on a productive DFA path.</p>`}
+      `;
+    }
+
+    function renderHmm(step) {
+      const hmm = step.graph_hmm;
+      $("hmm-panel").innerHTML = `
+        <p title="${escapeHtml(help.phase || "")}"><span class="label">Most Likely Phase</span>${escapeHtml(hmm.most_likely_phase || "none")}</p>
+        <p title="${escapeHtml(help.normalizer || "")}"><span class="label">Step Normalizer</span><span class="mono">${escapeHtml(hmm.normalizer)}</span></p>
+        <p><span class="label help" title="${escapeHtml(help.emission_mask || "")}">Allowed Emitting Phases</span></p>
+        <div class="chips">${chipsHtml(hmm.allowed_emitting_phases, "", help.emission_mask)}</div>
+        ${hmm.support_blocked ? `<p class="status-bad">The graph-HMM has zero legal probability mass for this action at this prefix.</p>` : ""}
+        <h3><span class="help" title="${escapeHtml(help.belief || "")}">Belief Over Phases</span></h3>
+        ${smallTable(hmm.belief)}
+      `;
+    }
+
+    function renderDiagnostics(step) {
+      const counts = step.diagnostics.action_counts || {};
+      $("diag-panel").innerHTML = `
+        <p><span class="label">Remaining Required Actions</span></p>
+        <div class="chips">${chipsHtml(step.diagnostics.remaining_required_actions, "", help.remaining_required)}</div>
+        <p><span class="label">Count-Limited Actions</span></p>
+        <div class="chips">${Object.entries(counts).map(([name, value]) => `<span class="chip" title="${escapeHtml(help.count_limited_action || "")}">${escapeHtml(name)}: ${value}</span>`).join("") || '<span class="chip">none</span>'}</div>
+        <p><span class="label">Done Seen</span>${step.diagnostics.terminal_seen ? "yes" : "no"}</p>
+      `;
+    }
+
+    function renderViterbi(index) {
+      const path = flow.graph_hmm.viterbi_path || [];
+      if (!path.length) {
+        $("viterbi-panel").innerHTML = '<p class="status-bad">No legal Viterbi path exists for this full candidate.</p>';
+        return;
+      }
+      $("viterbi-panel").innerHTML = `<div class="chips">${path.map((phase, idx) => `<span class="chip ${idx === index ? "good" : ""}" title="${escapeHtml(help.viterbi || "")}">${idx + 1}: ${escapeHtml(phase)}</span>`).join("")}</div>`;
+    }
+
+    function renderMasks() {
+      $("emission-mask").innerHTML = matrixTable(flow.graph_hmm.emission_mask, flow.graph_hmm.symbols);
+      $("transition-mask").innerHTML = matrixTable(flow.graph_hmm.transition_mask, flow.graph_hmm.states);
+    }
+
+    function renderCandidateOptions() {
+      const rows = flow.candidate_options.map((item) => `
+        <tr>
+          <td title="${escapeHtml(help.candidate_option || "")}">${escapeHtml(item.source)}</td>
+          <td>${item.accepted ? '<span class="status-ok">yes</span>' : '<span class="status-bad">no</span>'}</td>
+          <td class="mono" title="${escapeHtml(help.hmm_score || "")}">${escapeHtml(item.hmm_log_likelihood)}</td>
+          <td title="${escapeHtml(help.action_step || "")}">${escapeHtml(item.actions.join(" -> "))}</td>
+        </tr>
+      `).join("");
+      $("candidate-options").innerHTML = `<table><thead><tr><th>source</th><th>accepted</th><th>HMM score</th><th>actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderChips(root, items, cls = "") {
+      root.innerHTML = chipsHtml(items, cls);
+    }
+
+    function chipsHtml(items, cls = "", title = "") {
+      if (!items || !items.length) return '<span class="chip">none</span>';
+      return items.map((item) => `<span class="chip ${cls}" title="${escapeHtml(title || help.action_step || "")}">${escapeHtml(item)}</span>`).join("");
+    }
+
+    function smallTable(obj) {
+      const rows = Object.entries(obj || {}).map(([name, value]) => {
+        const hot = Number(value) > 0.4 ? "hot" : (Number(value) === 0 ? "zero" : "");
+        return `<tr><td title="${escapeHtml(help.phase || "")}">${escapeHtml(name)}</td><td class="${hot}" title="${escapeHtml(help.belief_cell || "")}">${escapeHtml(value)}</td></tr>`;
+      }).join("");
+      return `<table><tbody>${rows}</tbody></table>`;
+    }
+
+    function matrixTable(matrix, columns) {
+      const header = `<tr><th>phase</th>${columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("")}</tr>`;
+      const rows = Object.entries(matrix).map(([row, values]) => {
+        const cells = columns.map((col) => {
+          const value = values[col];
+          const cls = Number(value) === 0 ? "zero" : "hot";
+          return `<td class="${cls}" title="${escapeHtml(help.mask_cell || "")}">${escapeHtml(value)}</td>`;
+        }).join("");
+        return `<tr><th title="${escapeHtml(help.phase || "")}">${escapeHtml(row)}</th>${cells}</tr>`;
+      }).join("");
+      return `<div style="overflow:auto"><table><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    init();
+  </script>
+</body>
+</html>

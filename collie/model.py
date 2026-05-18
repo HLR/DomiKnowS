@@ -40,6 +40,8 @@ class TinyModel(torch.nn.Module):
         self.pad_size = pad_size
         self.token_vocabulary = token_vocabulary
         self.constrained_dfa = constrained_dfa
+        self.last_generated_token_ids = None
+        self.last_generated_labels = None
 
     def forward(
             self,
@@ -52,6 +54,8 @@ class TinyModel(torch.nn.Module):
         assert target_tokens.shape[0] == self.pad_size, 'ground truth tokens must have size (pad_size,)'
 
         if self.mode == 'tf':
+            self.last_generated_token_ids = None
+            self.last_generated_labels = None
             input_vals = torch.cat([input_ids[0], target_tokens.long()], dim=0).unsqueeze(0)
 
             logits = self.model(input_vals).logits[0]
@@ -66,6 +70,7 @@ class TinyModel(torch.nn.Module):
         elif self.mode == 'generate':
             input_ids = input_ids[0].tolist()
             generated_logits = []
+            generated_token_ids = []
             dfa_state = self.constrained_dfa.start_state if self.constrained_dfa is not None else None
 
             for i in range(self.pad_size):
@@ -99,6 +104,7 @@ class TinyModel(torch.nn.Module):
                     if dfa_state is None:
                         raise RuntimeError("constrained decoder selected a token with no DFA transition")
                 input_ids.append(next_id)
+                generated_token_ids.append(next_id)
 
                 # if next_id == self.eos_idx:
                 #     print('Model: hit EOS, breaking')
@@ -107,6 +113,7 @@ class TinyModel(torch.nn.Module):
 
             gen_logits = torch.stack(generated_logits)
             gen_ids = torch.argmax(gen_logits, dim=-1)
+            generated_labels = self._compact_labels_for_token_ids(generated_token_ids)
 
             # pad to pad_size
             if gen_logits.shape[0] < self.pad_size:
@@ -122,6 +129,13 @@ class TinyModel(torch.nn.Module):
                     gen_ids,
                     torch.ones((self.pad_size - gen_ids.shape[0],), dtype=torch.long) * self.lmap.label_map[self.eos_idx]
                 ], dim=0)
+                generated_token_ids.extend([self.eos_idx] * (self.pad_size - len(generated_token_ids)))
+                generated_labels = torch.cat([
+                    generated_labels,
+                    torch.ones((self.pad_size - generated_labels.shape[0],), dtype=torch.long) * self._label_for_token_id(self.eos_idx)
+                ], dim=0)
+            self.last_generated_token_ids = torch.tensor(generated_token_ids[:self.pad_size], dtype=torch.long)
+            self.last_generated_labels = generated_labels[:self.pad_size].long()
             
             gen_probs = torch.softmax(gen_logits, dim=-1)
             
@@ -138,3 +152,13 @@ class TinyModel(torch.nn.Module):
             gen_logprobs = torch.log(gen_probs_new.clamp_min(1e-12))
 
             return gen_logprobs
+
+    def _label_for_token_id(self, token_id: int) -> int:
+        if self.token_vocabulary is not None:
+            return int(self.token_vocabulary.label_for_token_id(int(token_id)))
+        if int(token_id) in self.vocab_ids:
+            return self.vocab_ids.index(int(token_id))
+        return len(self.vocab_ids)
+
+    def _compact_labels_for_token_ids(self, token_ids: list[int]) -> torch.Tensor:
+        return torch.tensor([self._label_for_token_id(token_id) for token_id in token_ids], dtype=torch.long)

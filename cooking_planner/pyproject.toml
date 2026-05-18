@@ -1,0 +1,15 @@
+[project]
+name = "domiknows-cooking-planner-task"
+version = "0.1.0"
+description = "Declarative cooking planner graph-HMM demo for DomiKnowS."
+requires-python = ">=3.12"
+dependencies = [
+    "domiknows[cpu]",
+    "torch>=2.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+domiknows = { path = "../..", editable = true }

@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Real HMM Comparison Trace</title>
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --panel: #fff;
+      --ink: #1f2933;
+      --muted: #66717c;
+      --line: #d7dbe0;
+      --accent: #0f766e;
+      --accent-soft: #ddf3ef;
+      --bad: #b42318;
+      --bad-soft: #fde7e4;
+      --good: #157347;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--bg); }
+    header { padding: 24px clamp(18px, 4vw, 48px); background: #fff; border-bottom: 1px solid var(--line); }
+    h1 { margin: 0 0 10px; font-size: clamp(24px, 3vw, 36px); letter-spacing: 0; }
+    h2 { margin: 0 0 10px; font-size: 20px; letter-spacing: 0; }
+    h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0; }
+    p, li { line-height: 1.5; }
+    main { padding: 18px clamp(18px, 4vw, 48px) 44px; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+    .side { position: sticky; top: 12px; align-self: start; }
+    .sequence { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .token { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-weight: 750; background: #fff; }
+    .step-list { display: grid; gap: 8px; }
+    .step-button { width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #fff; cursor: pointer; font: inherit; }
+    .step-button[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+    .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .status { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 14px; font-weight: 750; }
+    .status.good { color: var(--good); background: #e7f5ed; }
+    .status.bad { color: var(--bad); background: var(--bad-soft); }
+    .notice { border-left: 4px solid var(--accent); padding: 10px 12px; background: #eef8f6; border-radius: 6px; color: #24423e; }
+    .panel-note { color: var(--muted); font-size: 14px; margin: -4px 0 12px; }
+    .kv { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 8px 10px; font-size: 13px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid var(--line); padding: 6px 7px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { background: #f1f3f5; }
+    td.on { background: #e7f5ed; font-weight: 800; }
+    td.off { background: #f8f9fa; color: #9aa3aa; }
+    .bar { height: 9px; border-radius: 999px; background: #e6e8ea; overflow: hidden; margin: 4px 0 10px; }
+    .bar-fill { height: 100%; background: var(--accent); }
+    .support-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .support-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafb;
+      padding: 10px;
+    }
+    .support-box strong { display: block; margin-bottom: 4px; }
+    .pill-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; background: #f8fafb; font-size: 12px; font-weight: 700; }
+    .explain-list { margin: 0; padding-left: 20px; }
+    .explain-list li { margin: 6px 0; }
+    .state-help {
+      border-bottom: 1px dotted var(--muted);
+      cursor: help;
+      position: relative;
+    }
+    .state-help::after {
+      content: attr(data-help);
+      position: absolute;
+      left: 0;
+      top: calc(100% + 6px);
+      z-index: 9;
+      width: min(280px, 70vw);
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #17212b;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-3px);
+      transition: opacity 120ms ease, transform 120ms ease;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    }
+    .state-help:hover::after,
+    .state-help:focus::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .help-term { display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px dotted var(--muted); cursor: help; position: relative; }
+    .help-term::after {
+      content: attr(data-help);
+      position: absolute; left: 0; top: calc(100% + 8px); z-index: 8;
+      width: min(330px, 72vw); padding: 10px 12px; border-radius: 8px;
+      background: #17212b; color: #fff; font-size: 13px; font-weight: 500; line-height: 1.45;
+      opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity 120ms ease, transform 120ms ease;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    }
+    .help-term:hover::after, .help-term:focus::after { opacity: 1; transform: translateY(0); }
+    .help-icon { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #eef2f5; color: #46515c; font-size: 12px; font-weight: 900; }
+    @media (max-width: 1180px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 1050px) { main, .grid3, .grid2, .grid4 { grid-template-columns: 1fr; } .side { position: static; } }
+  </style>
+</head>
+<body>
+  <script id="flow-data" type="application/json">__FLOW_JSON__</script>
+  <header>
+    <h1 id="title">Real HMM Comparison Trace</h1>
+    <ul id="summary"></ul>
+  </header>
+  <main>
+    <aside class="panel side">
+      <h2>Candidate</h2>
+      <div id="sequence" class="sequence"></div>
+      <p><strong>Constraint:</strong> <span id="constraint"></span></p>
+      <p id="final-status"></p>
+      <h3>Click A Step</h3>
+      <div id="step-list" class="step-list"></div>
+    </aside>
+
+    <section>
+      <div class="panel">
+        <h2 id="step-title">Step</h2>
+        <p id="step-explanation" class="notice"></p>
+      </div>
+
+      <div class="grid3" style="margin-top:14px">
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="The DFA is the strict rule checker compiled from the DomiKnowS graph. It accepts or rejects; it does not assign probabilities.">DFA Hard Rule <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Exact constraint state.</p>
+          <dl class="kv" id="dfa-kv"></dl>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="DiscreteHMM is a plain probabilistic HMM. Its neutral states S0, S1, and S2 are generic latent clusters, not rule phases. Every symbol has positive emission support.">Plain DiscreteHMM <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Generic latent clusters with broad emissions.</p>
+          <dl class="kv" id="plain-kv"></dl>
+          <div id="plain-bars"></div>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="DomiKnowSAwareHMM projects HMM probabilities through graph/constraint masks. Forbidden paths have zero probability instead of merely low probability.">DomiKnowS-Aware HMM <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Probability model with graph masks.</p>
+          <dl class="kv" id="graph-kv"></dl>
+          <div id="graph-bars"></div>
+        </div>
+      </div>
+
+      <div class="grid3" style="margin-top:14px">
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="The plain HMM's masks are static support summaries, not constraints. In this demo they are all positive, so the interesting internal state is the changing belief over S0/S1/S2.">Plain HMM Static Support <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Unrestricted support; belief is the meaningful changing state.</p>
+          <div class="support-summary">
+            <div class="support-box">
+              <strong>Transitions</strong>
+              all positive
+            </div>
+            <div class="support-box">
+              <strong>Emissions</strong>
+              all tokens from every state
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="This is the DomiKnowS-aware HMM's own emission mask. A zero is prescriptive: projection makes that symbol impossible from that hidden state.">Graph-HMM Emission Mask <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">What the graph-aware HMM is permitted to emit.</p>
+          <div id="graph-emission-mask"></div>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="This is the DomiKnowS-aware HMM's own transition mask. Projection renormalizes legal rows while preserving these hard zeros.">Graph-HMM Transition Mask <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">What the graph-aware HMM is permitted to transition through.</p>
+          <div id="graph-transition-mask"></div>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:14px">
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="This panel explains how the DomiKnowS-aware HMM state space was generated automatically from the graph-discovered DFA, instead of hand-written hidden states.">How Constraints Became HMM States <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Automatic DFA-edge state construction.</p>
+          <div id="auto-hmm"></div>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="Alpha, beta, and gamma are standard HMM dynamic-programming factors. They are computed separately for the plain HMM and for the graph-aware HMM.">What Alpha, Beta, Gamma Mean <span class="help-icon">?</span></span></h2>
+          <ul class="explain-list">
+            <li><strong>alpha</strong>: forward evidence. After reading the prefix up to this step, how much probability mass reaches each hidden state?</li>
+            <li><strong>beta</strong>: backward evidence. From this hidden state, how compatible is the remaining suffix?</li>
+            <li><strong>gamma</strong>: posterior state belief. It combines alpha and beta: given the whole sequence, how likely is each state at this step?</li>
+            <li><strong>xi</strong>: transition-pair belief between adjacent steps. This page focuses on alpha/beta/gamma because they are easier to inspect.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h2><span class="help-term" tabindex="0" data-help="The DFA and DomiKnowS-aware HMM are related but not the same object. The DFA gives hard yes/no validity. The HMM learns probabilities over legal hidden paths.">What Is Learning, What Is Enforcing? <span class="help-icon">?</span></span></h2>
+        <div class="grid3">
+          <div class="support-box">
+            <strong>DFA</strong>
+            Hard verifier. It is compiled from graph constraints and answers whether a sequence is accepted or rejected. It does not learn probabilities.
+          </div>
+          <div class="support-box">
+            <strong>DomiKnowS-Aware HMM</strong>
+            Probabilistic scorer. It learns or stores initial, transition, and emission probabilities over graph-compatible hidden paths.
+          </div>
+          <div class="support-box">
+            <strong>Together</strong>
+            The DFA can reject invalid outputs exactly. The graph-HMM can rank, explain, train, or decode among legal paths using learned likelihoods.
+          </div>
+        </div>
+        <p class="panel-note" style="margin-top:12px">
+          In this teaching demo the graph-HMM support is initialized from the DFA so illegal strings get zero HMM support too.
+          In training use, the HMM parameters can learn which legal paths are more likely, while the DFA remains the hard correctness layer.
+        </p>
+      </div>
+
+      <div class="grid2" style="margin-top:14px">
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="These factors are computed inside the plain DiscreteHMM only. Alpha is forward/filtering evidence, beta is backward/future evidence, gamma is posterior state belief, and xi is transition-pair belief.">Plain DiscreteHMM Factors <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Probability flow for the unconstrained HMM.</p>
+          <div id="plain-factors"></div>
+        </div>
+        <div class="panel">
+          <h2><span class="help-term" tabindex="0" data-help="These factors are computed inside the DomiKnowS-aware HMM after graph masks are applied. When support is blocked, the factor rows collapse to zero for teaching clarity.">DomiKnowS-Aware HMM Factors <span class="help-icon">?</span></span></h2>
+          <p class="panel-note">Probability flow after graph projection.</p>
+          <div id="graph-factors"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h2><span class="help-term" tabindex="0" data-help="Hard rejection is a yes/no language decision. Soft probability is a score. HMM factors are always per-model; there is no shared global factor table.">Hard vs Soft <span class="help-icon">?</span></span></h2>
+        <div id="global-summary"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let flow = null;
+
+    async function loadFlow() {
+      const embedded = document.getElementById("flow-data").textContent.trim();
+      if (embedded && embedded !== "__FLOW_JSON__") return JSON.parse(embedded);
+      const response = await fetch("flow.json");
+      return response.json();
+    }
+
+    function fmt(value) {
+      if (value === null || value === undefined) return "none";
+      if (typeof value === "number") return Number.isFinite(value) ? value.toFixed(4) : String(value);
+      if (Array.isArray(value)) return value.join(", ");
+      return String(value);
+    }
+
+    function kv(target, entries) {
+      target.innerHTML = "";
+      for (const [key, value] of entries) {
+        const dt = document.createElement("dt");
+        dt.textContent = key;
+        const dd = document.createElement("dd");
+        dd.textContent = fmt(value);
+        target.append(dt, dd);
+      }
+    }
+
+    function matrix(target, data, columns, mode = "values") {
+      let html = "<table><thead><tr><th>state</th>";
+      for (const col of columns) html += `<th>${col}</th>`;
+      html += "</tr></thead><tbody>";
+      for (const [row, values] of Object.entries(data)) {
+        html += `<tr><th>${row}</th>`;
+        for (const col of columns) {
+          const value = values[col];
+          const cls = mode === "mask" ? (value ? "on" : "off") : "";
+          html += `<td class="${cls}">${fmt(value)}</td>`;
+        }
+        html += "</tr>";
+      }
+      target.innerHTML = `${html}</tbody></table>`;
+    }
+
+    const plainStateHelp = {
+      S0: "S0 is a generic hidden pattern the plain HMM uses to explain common symbols. It is not a rule state.",
+      S1: "S1 is another learned/statistical hidden pattern. It can be useful around B-like observations, but it does not enforce the B rule.",
+      S2: "S2 is a generic hidden pattern for later or different symbol contexts. It is not the same as after_B."
+    };
+
+    function stateLabel(state, helpMap = {}) {
+      const help = helpMap[state];
+      if (!help) return state;
+      return `<span class="state-help" tabindex="0" data-help="${help}">${state}</span>`;
+    }
+
+    function graphStateHelpMap() {
+      const states = flow.domiknows_hmm.auto_compilation?.states || [];
+      return Object.fromEntries(states.map(item => [item.name, item.explanation]));
+    }
+
+    function bars(target, belief, helpMap = {}) {
+      target.innerHTML = "";
+      for (const [state, value] of Object.entries(belief || {})) {
+        const wrap = document.createElement("div");
+        wrap.innerHTML = `<strong>${stateLabel(state, helpMap)}</strong> ${fmt(value)}`;
+        const bar = document.createElement("div");
+        bar.className = "bar";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${Math.max(0, Math.min(1, Number(value) || 0)) * 100}%`;
+        bar.appendChild(fill);
+        wrap.appendChild(bar);
+        target.appendChild(wrap);
+      }
+    }
+
+    function selectStep(index) {
+      document.querySelectorAll(".step-button").forEach((button, i) => button.setAttribute("aria-selected", i === index ? "true" : "false"));
+      const step = flow.steps[index];
+      document.getElementById("step-title").textContent = `Step ${index + 1}: generator emits ${step.symbol}`;
+      document.getElementById("step-explanation").textContent = step.explanation;
+      kv(document.getElementById("dfa-kv"), [
+        ["from state", step.dfa.from_state],
+        ["to state", step.dfa.to_state],
+        ["allowed symbols", step.dfa.allowed_symbols],
+        ["blocked", step.dfa.blocked],
+        ["reason", step.dfa.reason],
+      ]);
+      kv(document.getElementById("plain-kv"), [
+        ["viterbi state", step.discrete_hmm.viterbi_state],
+        ["scale", step.discrete_hmm.scale],
+        ["log likelihood", flow.discrete_hmm.log_likelihood],
+        ["support blocked", step.discrete_hmm.support_blocked],
+      ]);
+      bars(document.getElementById("plain-bars"), step.discrete_hmm.gamma, plainStateHelp);
+      kv(document.getElementById("graph-kv"), [
+        ["most likely state", step.domiknows_hmm.most_likely_state],
+        ["normalizer", step.domiknows_hmm.normalizer],
+        ["log likelihood", step.domiknows_hmm.log_likelihood_so_far],
+        ["support blocked", step.domiknows_hmm.support_blocked],
+      ]);
+      bars(document.getElementById("graph-bars"), step.domiknows_hmm.belief, graphStateHelpMap());
+      matrix(document.getElementById("graph-emission-mask"), flow.domiknows_hmm.emission_mask, flow.vocabulary, "mask");
+      matrix(document.getElementById("graph-transition-mask"), flow.domiknows_hmm.transition_mask, flow.domiknows_hmm.states, "mask");
+      matrix(document.getElementById("plain-factors"), {
+        alpha: step.discrete_hmm.alpha,
+        beta: step.discrete_hmm.beta,
+        gamma: step.discrete_hmm.gamma,
+      }, flow.discrete_hmm.states);
+      matrix(document.getElementById("graph-factors"), {
+        alpha: step.domiknows_hmm.alpha,
+        beta: step.domiknows_hmm.beta,
+        gamma: step.domiknows_hmm.gamma,
+      }, flow.domiknows_hmm.states);
+    }
+
+    function render() {
+      document.getElementById("title").textContent = flow.title;
+      const summary = document.getElementById("summary");
+      summary.innerHTML = "";
+      for (const item of flow.summary) {
+        const li = document.createElement("li");
+        li.textContent = item;
+        summary.appendChild(li);
+      }
+      document.getElementById("constraint").textContent = flow.constraint.text;
+      document.getElementById("final-status").innerHTML = flow.dfa.accepted
+        ? `<span class="status good">DFA accepted</span>`
+        : `<span class="status bad">DFA rejected</span>`;
+      const sequence = document.getElementById("sequence");
+      sequence.innerHTML = "";
+      for (const symbol of flow.candidate.sequence) {
+        const item = document.createElement("span");
+        item.className = "token";
+        item.textContent = symbol;
+        sequence.appendChild(item);
+      }
+      const steps = document.getElementById("step-list");
+      steps.innerHTML = "";
+      flow.steps.forEach((step, index) => {
+        const button = document.createElement("button");
+        button.className = "step-button";
+        button.type = "button";
+        button.textContent = `${index + 1}. ${step.symbol}`;
+        button.addEventListener("click", () => selectStep(index));
+        steps.appendChild(button);
+      });
+      document.getElementById("global-summary").innerHTML = `
+        <dl class="kv">
+          <dt>DFA</dt><dd>${flow.dfa.accepted ? "accepted" : "rejected"}</dd>
+          <dt>DiscreteHMM</dt><dd>${fmt(flow.discrete_hmm.log_likelihood)}</dd>
+          <dt>DomiKnowS-aware HMM</dt><dd>${fmt(flow.domiknows_hmm.log_likelihood)}</dd>
+        </dl>`;
+      renderAutoHmm();
+      selectStep(0);
+    }
+
+    function renderAutoHmm() {
+      const target = document.getElementById("auto-hmm");
+      const auto = flow.domiknows_hmm.auto_compilation;
+      if (!auto) {
+        target.innerHTML = "<p>No automatic compilation metadata is available for this flow.</p>";
+        return;
+      }
+      const preview = auto.states.slice(0, 8).map(item => `
+        <span class="pill" title="${item.explanation}">${item.name}</span>
+      `).join("");
+      const more = auto.states.length > 8
+        ? `<p class="panel-note">Showing 8 of ${auto.states.length} generated states. The mask tables contain the full generated state set.</p>`
+        : "";
+      target.innerHTML = `
+        <p>${auto.explanation}</p>
+        <dl class="kv">
+          <dt>compiler</dt><dd>${auto.method}</dd>
+          <dt>state count</dt><dd>${auto.state_count}</dd>
+          <dt>constraints</dt><dd>${auto.constraints.join("; ")}</dd>
+        </dl>
+        <div class="pill-list">${preview}</div>
+        ${more}
+        <p class="panel-note">Hover a generated state chip or a graph-HMM belief state to see the DFA before/after transition that created it.</p>
+      `;
+    }
+
+    loadFlow().then(data => {
+      flow = data;
+      render();
+    }).catch(error => {
+      document.body.innerHTML = `<main><section class="panel"><h1>Could not load flow JSON</h1><p>${error}</p></section></main>`;
+    });
+  </script>
+</body>
+</html>
