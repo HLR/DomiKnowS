@@ -116,7 +116,7 @@ huggingface-hub==0.35.0
     #   domiknows
     #   tokenizers
     #   transformers
-idna==3.10
+idna==3.15
     # via requests
 inflate64==1.0.3
     # via py7zr
