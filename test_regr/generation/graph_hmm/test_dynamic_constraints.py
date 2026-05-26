@@ -12,7 +12,7 @@ observed so far in the sequence.
 import torch
 import pytest
 
-from domiknows.generation.graph_hmm import (
+from domiknows.generation.learners import (
     DomiKnowSAwareHMM,
     DynamicConstraintContext,
     FactorizedStateSpace,

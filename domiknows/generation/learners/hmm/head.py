@@ -5,10 +5,10 @@ from collections.abc import Mapping, Sequence
 
 import torch
 
-from ...automata import DiscreteHMM, ProbabilisticAutomaton
-from ..compact import CompactLabelGenerationHead
+from .core import DiscreteHMM
 from ...latent_potentials import LatentTransitionPotential, apply_hmm_transition_potential
-from .utils import (
+from ..common.base import CompactLabelGenerationHead
+from ..common.utils import (
     TransitionPotentialInput,
     _coerce_label_to_token_id,
     _empty_or_prompt,
@@ -40,7 +40,7 @@ class HMMGenerationHead(CompactLabelGenerationHead):
 
     def __init__(
         self,
-        model: DiscreteHMM | ProbabilisticAutomaton | None = None,
+        model: DiscreteHMM | None = None,
         *,
         label_count: int | None = None,
         state_count: int | None = None,

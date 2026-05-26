@@ -16,7 +16,7 @@ from domiknows.generation import (
     wfa_sequence_energy_loss,
     hmm_sequence_nll,
 )
-from domiknows.generation.automata import DiscreteHMM
+from domiknows.generation.learners import DiscreteHMM
 
 
 def test_hmm_hard_potential_masks_and_renormalizes_transition_row():

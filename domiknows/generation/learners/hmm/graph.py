@@ -11,7 +11,7 @@ import torch
 from .constraints import combine_masks, project_distribution, project_matrix, project_matrix_rows, validate_mask
 from .dynamic import DynamicConstraintContext, FactorizedStateSpace, FiniteStateDynamicConstraint, apply_transition_energy, transition_energy_matrix
 from .graph_adapter import DomiKnowSGraphAdapter
-from .spectral import masked_empirical_initialization
+from ..wfa.graph import masked_empirical_initialization
 
 
 @dataclass
@@ -300,7 +300,7 @@ class DomiKnowSAwareHMM:
                     "mask, or on_unsupported_dynamic='static' to intentionally ignore it"
                 )
 
-        from domiknows.generation.automata import DFA
+        from ..dfa import DFA
 
         transition, emission = self._projected_dynamics()
         transition_support = transition > support_threshold
@@ -409,7 +409,7 @@ class DomiKnowSAwareHMM:
 
     def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
         """Return a PMD-compatible Torch head initialized from this fitted HMM."""
-        from ..learners.graph_hmm import GraphHMMGenerationHead
+        from .graph_head import GraphHMMGenerationHead
 
         return GraphHMMGenerationHead.from_graph_hmm(
             self,

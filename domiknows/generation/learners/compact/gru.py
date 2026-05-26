@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 import torch
 
-from .base import CompactLabelGenerationHead
+from ..common.base import CompactLabelGenerationHead
 from .utils import (
     _coerce_label_to_token_id,
     _empty_prompt,

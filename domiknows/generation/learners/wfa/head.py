@@ -6,10 +6,10 @@ from collections.abc import Mapping, Sequence
 import torch
 import torch.nn.functional as F
 
-from ...automata import WeightedFiniteAutomaton
-from ..compact import CompactLabelGenerationHead
+from .hankel import WeightedFiniteAutomaton
+from ..common.base import CompactLabelGenerationHead
 from ...latent_potentials import LatentTransitionPotential, apply_wfa_transition_potential
-from .utils import (
+from ..common.utils import (
     TransitionPotentialInput,
     _coerce_label_to_token_id,
     _empty_or_prompt,

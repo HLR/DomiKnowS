@@ -6,11 +6,11 @@ from collections.abc import Sequence
 import torch
 import torch.nn.functional as F
 
-from ...automata import DFA, ProbabilisticAutomaton
-from .hmm import HMMGenerationHead
-from .prompt_conditioned_hmm import PromptConditionedHMMGenerationHead
-from .prompt_conditioned_spectral_wfa import PromptConditionedSpectralWFAGenerationHead
-from .spectral_wfa import SpectralWFAGenerationHead
+from ..dfa import DFA
+from ..hmm.head import HMMGenerationHead
+from ..hmm.prompt_conditioned_head import PromptConditionedHMMGenerationHead
+from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead
+from ..wfa.head import SpectralWFAGenerationHead
 from .utils import TransitionPotentialInput, _empty_or_prompt, _target_labels
 
 __all__ = ["allowed_mass_loss", "hmm_sequence_nll", "wfa_sequence_energy_loss"]

@@ -23,8 +23,8 @@ from typing import Iterable, Sequence
 
 import torch
 
-from .dfa import DFA
-from ..latent_potentials import LatentTransitionPotential, apply_hmm_transition_potential
+from ..dfa import DFA
+from ...latent_potentials import LatentTransitionPotential, apply_hmm_transition_potential
 
 
 @dataclass(frozen=True)

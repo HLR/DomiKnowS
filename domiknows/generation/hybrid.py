@@ -16,7 +16,8 @@ from typing import Any
 import torch
 
 from .adapters import GenerationResult, HuggingFaceGenerationAdapter, OpenAIResponsesAdapter
-from .automata import DFA, explain_dfa_rejection
+from .learners.dfa.core import DFA
+from .learners.dfa.visualization import explain_dfa_rejection
 from .constraints import (
     ConditionalMaxNonEosConstraint,
     EosClosureConstraint,

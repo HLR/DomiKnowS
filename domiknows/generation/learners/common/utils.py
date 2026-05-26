@@ -5,7 +5,6 @@ from collections.abc import Mapping, Sequence
 
 import torch
 
-from ...automata import ProbabilisticAutomaton
 from ...latent_potentials import LatentTransitionPotential
 from .prompt_encoders import FrozenBackbonePromptEncoder, PromptEmbeddingEncoder
 
@@ -167,7 +166,7 @@ def _empty_or_prompt(
         return torch.zeros((1, 1), dtype=torch.long, device=device)
     return _normalise_prompt_ids(instruction_tokens, device=device)
 
-def _resolve_label_count(model: ProbabilisticAutomaton | None, label_count: int | None) -> int:
+def _resolve_label_count(model: object | None, label_count: int | None) -> int:
     if model is not None:
         inferred = len(model.symbols)
         if label_count is not None and int(label_count) != inferred:
@@ -177,7 +176,7 @@ def _resolve_label_count(model: ProbabilisticAutomaton | None, label_count: int 
         raise ValueError("label_count is required when no HMM model is supplied")
     return _positive_int(label_count, "label_count")
 
-def _resolve_state_count(model: ProbabilisticAutomaton | None, state_count: int | None) -> int:
+def _resolve_state_count(model: object | None, state_count: int | None) -> int:
     if model is not None:
         inferred = model.state_count
         if state_count is not None and int(state_count) != inferred:

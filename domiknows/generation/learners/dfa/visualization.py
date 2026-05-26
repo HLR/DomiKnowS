@@ -13,9 +13,9 @@ from typing import Any
 
 import torch
 
-from .dfa import DFA, State, Symbol
-from .hmm import DiscreteHMM
-from .hankel import WeightedFiniteAutomaton, start_product_state, step_product_state
+from .core import DFA, State, Symbol
+from ..hmm import DiscreteHMM
+from ..wfa import WeightedFiniteAutomaton, start_product_state, step_product_state
 
 Labeler = Callable[[Any], str]
 

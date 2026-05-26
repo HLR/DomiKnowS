@@ -5,6 +5,32 @@ import torch
 
 __all__ = ["FrozenBackbonePromptEncoder", "PromptEmbeddingEncoder"]
 
+
+def _positive_int(value: int | None, name: str) -> int:
+    value = int(value) if value is not None else 0
+    if value < 1:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _infer_backbone_hidden_size(backbone: torch.nn.Module) -> int:
+    config = getattr(backbone, "config", None)
+    for attr in ("hidden_size", "d_model", "n_embd"):
+        value = getattr(config, attr, None) if config is not None else None
+        if value is not None:
+            return int(value)
+    for attr in ("hidden_size", "embedding_dim"):
+        value = getattr(backbone, attr, None)
+        if value is not None:
+            return int(value)
+    for module in backbone.modules():
+        if isinstance(module, torch.nn.Embedding):
+            return int(module.embedding_dim)
+        if isinstance(module, torch.nn.Linear):
+            return int(module.out_features)
+    raise ValueError("could not infer backbone hidden size; pass backbone_hidden_size")
+
+
 class PromptEmbeddingEncoder(torch.nn.Module):
     """Small trainable prompt encoder for offline prompt-conditioned heads."""
 

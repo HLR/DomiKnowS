@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from domiknows.generation.automata import (
+from domiknows.generation.learners import (
     DFA,
     SpectralBasis,
     WeightedFiniteAutomaton,

@@ -14,10 +14,10 @@ dependency-light; HuggingFace decoding uses `torch`; spectral learning uses
 ## Main Pieces
 
 For a focused guide to training compact heads and using them after training,
-see [`README_learning.md`](README_learning.md).
+see [`learners/README_learning.md`](learners/README_learning.md).
 
 For graph-aware HMM and graph-constrained spectral automata learning, see
-[`README_graph_hmm.md`](README_graph_hmm.md).
+[`learners/README_graph_hmm.md`](learners/README_graph_hmm.md).
 
 | Tool | Purpose |
 | --- | --- |
@@ -31,20 +31,17 @@ For graph-aware HMM and graph-constrained spectral automata learning, see
 | `OpenAIResponsesAdapter` | Calls the OpenAI Responses API, then encodes and verifies output post hoc. |
 | `latent_constraints.py` | Product t-norm soft losses over token/latent probability sequences. |
 | `learners/compact/` | Shared compact-label head protocol plus GRU, Transformer, neural n-gram, local energy, and CRF heads for PMD, DFA-constrained label decoding, and hybrid scoring. |
-| `automata` | DFA plus Torch-backed HMM/PFA, Hankel projection, WFA, and spectral WFA learning utilities. |
-| `graph_hmm` | DomiKnowS-aware constrained HMM/spectral learners plus PMD-compatible Torch heads that compile graph structure, static specs, dynamic hooks, and graph-valid Hankel projection into compact-symbol automata. |
-| `learners/automata/` | Production Torch HMM/WFA compact-label heads, prompt-conditioned HMM/WFA heads, and auxiliary losses for `PrimalDualProgram` task loops. |
+| `learners/dfa/` | DFA/product automata, tracing, reachability, DOT/export helpers, and decoder-facing support utilities. |
+| `learners/hmm/` | Canonical HMM tensors, graph-aware constrained HMM support, HMM Torch heads, and HMM factor projections. |
+| `learners/wfa/` | WFA/spectral learning, graph spectral automata, WFA Torch heads, prompt-conditioned heads, and WFA factor projections. |
+| `learners/common/` | Shared tensor utilities, prompt encoders, transition potential types, and auxiliary losses for `PrimalDualProgram` task loops. |
 | `hybrid.py` | Large-generator plus compact-head controller/scorer for candidate reranking, risk, repair, soft preferences, and constraint selection. |
-| `learners/factors/` | Explicit HMM and WFA factor-graph encoders, shared learner heads, DP/factor projections, and NLL/diagnostic helpers. |
 
 The package has three related automata layers:
 
 - **Hard DFA decoding** masks invalid local HuggingFace tokens or compact labels during generation.
-- **Core automata** in `domiknows.generation.automata` provide reusable DFA, HMM/PFA, WFA, Hankel, spectral, and visualization primitives.
-- **Graph-aware HMM/spectral learning** in `domiknows.generation.graph_hmm` learns `P(x_1:T | G, C)` from compact sequences typed and restricted by DomiKnowS graph structure.
-
-For automata focused guide,
-see ['automata/README.md'](automata/README.md) 
+- **Core automata** in `domiknows.generation.learners` provide reusable DFA, HMM/PFA, WFA, Hankel, spectral, and visualization primitives.
+- **Graph-aware HMM/spectral learning** in `domiknows.generation.learners.hmm` and `domiknows.generation.learners.wfa` learns `P(x_1:T | G, C)` from compact sequences typed and restricted by DomiKnowS graph structure.
 
 ## Basic DFA Constraints
 
@@ -646,13 +643,13 @@ side of constrained generation research.
 ### HMM/PFA Checker
 
 ```python
-from domiknows.generation.automata import (
-    ProbabilisticAutomaton,
+from domiknows.generation.learners import (
+    DiscreteHMM,
     all_sequences,
     compare_hmm_dfa,
 )
 
-hmm = ProbabilisticAutomaton(
+hmm = DiscreteHMM(
     transition=[[0.8, 0.2], [0.3, 0.7]],
     emission=[[0.9, 0.1], [0.2, 0.8]],
     initial=[0.9, 0.1],
@@ -666,7 +663,7 @@ summary = compare_hmm_dfa(hmm, dfa, all_sequences(["a", "b"], max_length=3))
 Full discrete Baum-Welch training is available:
 
 ```python
-from domiknows.generation.automata import baum_welch_train
+from domiknows.generation.learners import baum_welch_train
 
 result = baum_welch_train(
     [["a", "a", "b"], ["b", "b", "a"]],
@@ -692,7 +689,7 @@ H_C(u, v) = 1[uv accepted by DFA] * P(uv)
 ```
 
 ```python
-from domiknows.generation.automata import (
+from domiknows.generation.learners import (
     WeightedFiniteAutomaton,
     constrained_hankel_matrix,
     hankel_matrix,
@@ -749,7 +746,7 @@ run_generation_debug_server(
 
 The viewer exposes `/`, `/api/trace`, `/api/summary`, `/api/dot`, and
 `/api/svg`. It is a local debugging utility, not a production service.
-See `README_vizualization.md` for a shorter runbook focused only on this
+See `learners/README_visualization.md` for a shorter runbook focused only on this
 debug viewer.
 
 ### Spectral WFA Learning
@@ -758,7 +755,7 @@ Spectral learning reconstructs a signed WFA from finite Hankel blocks using
 Torch SVD.
 
 ```python
-from domiknows.generation.automata import (
+from domiknows.generation.learners import (
     build_spectral_basis,
     spectral_learn_from_oracle,
     spectral_learn_from_samples,

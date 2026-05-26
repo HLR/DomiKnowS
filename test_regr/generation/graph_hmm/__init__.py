@@ -1,5 +1,5 @@
 """
-Regression tests for domiknows.generation.graph_hmm.
+Regression tests for domiknows.generation.learners.
 
 This package contains comprehensive test suites for the graph_hmm module, which provides:
 - DomiKnowSAwareHMM: Hidden Markov Models integrated with DomiKnows knowledge graphs

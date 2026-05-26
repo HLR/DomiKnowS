@@ -17,8 +17,8 @@ import math
 import pytest
 import torch
 
-from domiknows.generation.automata import DFA
-from domiknows.generation.graph_hmm import GraphSpectralAutomaton, sequence_has_legal_path
+from domiknows.generation.learners import DFA
+from domiknows.generation.learners import GraphSpectralAutomaton, sequence_has_legal_path
 
 
 def test_sequence_has_legal_path_respects_transition_and_emission_masks():

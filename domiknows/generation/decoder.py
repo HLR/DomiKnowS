@@ -35,7 +35,7 @@ from typing import Sequence
 
 import torch
 
-from .automata import DFA
+from .learners.dfa.core import DFA
 from .vocabulary import TokenVocabulary
 
 
@@ -515,7 +515,7 @@ def constrained_greedy_decode(
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs used by the DFA.
-        dfa: Constraint :class:`~.automata.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated (not counting the prompt).
@@ -602,7 +602,7 @@ def constrained_beam_search_decode(
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs.
-        dfa: Constraint :class:`~.automata.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated per beam.
@@ -767,7 +767,7 @@ def constrained_sample_decode(
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs.
-        dfa: Constraint :class:`~.automata.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated.
@@ -882,7 +882,7 @@ def constrained_label_greedy_decode(
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.vocabulary.TokenVocabulary` providing the
             label ↔ token-ID mapping.
-        dfa: Constraint :class:`~.automata.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated (not counting the prompt).

@@ -1,6 +1,6 @@
 """Compact-label learner heads."""
 
-from .base import CompactLabelGenerationHead, CompactLabelSequenceModel
+from ..common.base import CompactLabelGenerationHead, CompactLabelSequenceModel
 from .crf import CRFCompactLabelScorer
 from .energy import EnergyCompactLabelGenerationHead
 from .gru import GRUCompactLabelGenerationHead

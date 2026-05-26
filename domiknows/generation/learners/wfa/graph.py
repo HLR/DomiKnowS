@@ -15,8 +15,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import torch
 
-from .constraints import combine_masks, project_matrix_rows, validate_mask
-from .dynamic import DynamicConstraintContext, transition_energy_matrix
+from ..hmm.constraints import combine_masks, project_matrix_rows, validate_mask
+from ..hmm.dynamic import DynamicConstraintContext, transition_energy_matrix
 
 
 @dataclass
@@ -278,7 +278,7 @@ class GraphSpectralAutomaton:
 
     def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
         """Return a PMD-compatible Torch head initialized from this fitted WFA."""
-        from ..learners.graph_hmm import GraphSpectralGenerationHead
+        from .graph_head import GraphSpectralGenerationHead
 
         return GraphSpectralGenerationHead.from_graph_spectral(
             self,

@@ -16,7 +16,7 @@ import torch
 
 from domiknows.graph import Concept, Graph, Relation
 from domiknows.graph.logicalConstrain import V, andL, atLeastAL, atMostAL, atMostL, equivalenceL, ifL, notL, orL
-from domiknows.generation.graph_hmm import (
+from domiknows.generation.learners import (
     AllowedEmissionsSpec,
     AllowedTransitionsSpec,
     DomiKnowSGraphAdapter,

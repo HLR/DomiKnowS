@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 
 import torch
 
-from ...graph_hmm.constraints import project_matrix_rows
+from .constraints import project_matrix_rows
 
 __all__ = [
     '_random_hmm_parameters',

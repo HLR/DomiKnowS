@@ -6,9 +6,9 @@ from typing import Mapping
 
 import torch
 
-from ..compact import CompactLabelGenerationHead
-from ...graph_hmm.constraints import validate_mask
-from .utils import (
+from ..common.base import CompactLabelGenerationHead
+from ..hmm.constraints import validate_mask
+from ..hmm.graph_head_utils import (
     _coerce_label_to_token_id,
     _flat_input_ids,
     _invert_label_to_token_id,

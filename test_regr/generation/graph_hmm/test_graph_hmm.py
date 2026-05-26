@@ -17,7 +17,7 @@ import math
 import torch
 import pytest
 
-from domiknows.generation.graph_hmm import DomiKnowSAwareHMM, FiniteStateDynamicConstraint
+from domiknows.generation.learners import DomiKnowSAwareHMM, FiniteStateDynamicConstraint
 
 
 def _learner(**kwargs):

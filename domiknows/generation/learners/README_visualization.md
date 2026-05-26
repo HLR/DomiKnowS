@@ -1,8 +1,18 @@
 # Product-Automaton Visualization
 
-This note explains how to use the generation visualization tools added under
-`domiknows.generation`. They help debug why a DFA constraint accepts, rejects,
-or blocks a generated sequence.
+This note explains the DFA and product-automaton visualization utilities that
+now live conceptually with the learner stack under
+`domiknows.generation.learners`, while remaining re-exported from
+`domiknows.generation` for convenience.
+
+The ownership split is:
+
+- core trace and DOT helpers live in `domiknows.generation.learners.dfa.visualization`
+- the optional Flask web viewer lives in `domiknows.generation.visual_server`
+- `domiknows.generation` re-exports both layers for easier user-facing imports
+
+These tools help debug why a DFA constraint accepts, rejects, or blocks a
+generated sequence.
 
 ## What It Shows
 
@@ -10,22 +20,20 @@ The tools can inspect:
 
 - DFA-only constraint traces.
 - WFA x DFA product traces.
-- Per-step allowed symbols from the active DFA state.
-- The first rejection reason.
+- per-step allowed symbols from the active DFA state.
+- the first rejection reason.
 - Graphviz DOT text for the DFA or product trace.
-- A local Flask web page for interactive inspection.
+- a local Flask web page for interactive inspection.
 
 The core trace and DOT helpers do not require Flask. Flask is only imported
 when the web viewer is created.
 
 ## Python API
 
+Use package-level imports when you want the shortest path:
+
 ```python
-from domiknows.generation import (
-    dfa_to_dot,
-    explain_dfa_rejection,
-    trace_dfa,
-)
+from domiknows.generation import dfa_to_dot, explain_dfa_rejection, trace_dfa
 
 trace = trace_dfa(dfa, [1, 2, 3, 0])
 
@@ -37,13 +45,16 @@ dot = dfa_to_dot(dfa, highlight_path=trace)
 print(dot)
 ```
 
+Use learner-level imports when you want the owning implementation surface:
+
+```python
+from domiknows.generation.learners import dfa_to_dot, explain_dfa_rejection, trace_dfa
+```
+
 For WFA x DFA product-state debugging:
 
 ```python
-from domiknows.generation import (
-    product_trace_to_dot,
-    trace_product_automaton,
-)
+from domiknows.generation import product_trace_to_dot, trace_product_automaton
 
 trace = trace_product_automaton(wfa, dfa, [1, 2, 3, 0])
 
@@ -54,7 +65,9 @@ print(product_trace_to_dot(trace))
 
 ## Run the Flask Viewer
 
-Use the package-level helper:
+Use the generation-level helper. The viewer lives one package level above the
+learners modules because it is an optional application wrapper around the trace
+primitives.
 
 ```python
 from domiknows.generation import run_generation_debug_server
@@ -77,8 +90,9 @@ The server exposes:
 
 - `/` - HTML debug view.
 - `/api/trace` - JSON trace.
-- `/api/summary` - compact acceptance/rejection summary.
+- `/api/summary` - compact acceptance or rejection summary.
 - `/api/dot` - Graphviz DOT text.
+- `/api/svg` - rendered SVG when Graphviz support is available.
 
 ## HuggingFace Task Example
 
@@ -109,8 +123,7 @@ uv run --project Tasks/hf_generation python Tasks/hf_generation/visualize_constr
 Important fields in `/api/trace`:
 
 - `accepted`: whether the full sequence satisfies the DFA.
-- `blocked`: whether decoding hit a symbol that was not allowed from the
-  current state.
+- `blocked`: whether decoding hit a symbol that was not allowed from the current state.
 - `rejection_reason`: the first clear reason for rejection.
 - `steps`: one entry per consumed symbol.
 - `allowed_symbols`: symbols that the decoder could legally emit at that step.
@@ -123,8 +136,7 @@ For WFA x DFA traces, the JSON also includes:
 
 ## Notes
 
-- This is a local debugging utility, not a production web service.
-- DOT text is generated, but PNG/SVG rendering is not bundled.
-- If Flask is not installed, the trace and DOT helpers still work.
-- The visualization does not change decoding behavior; it explains the same
-  DFA constraints used by hard constrained decoding.
+- this is a local debugging utility, not a production web service;
+- DOT text is generated, but PNG or SVG rendering depends on optional Graphviz support;
+- if Flask is not installed, the trace and DOT helpers still work;
+- the visualization does not change decoding behavior; it explains the same DFA constraints used by hard constrained decoding.

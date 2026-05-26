@@ -16,8 +16,8 @@ Generation heads enable constraint-respecting neural text generation by combinin
 import torch
 
 from domiknows.generation import constrained_label_greedy_decode
-from domiknows.generation.automata import DFA
-from domiknows.generation.graph_hmm import (
+from domiknows.generation.learners import DFA
+from domiknows.generation.learners import (
     DomiKnowSAwareHMM,
     GraphHMMGenerationHead,
     GraphSpectralAutomaton,

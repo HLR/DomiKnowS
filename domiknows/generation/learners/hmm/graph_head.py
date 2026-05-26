@@ -6,11 +6,11 @@ from typing import Any, Callable, Mapping
 
 import torch
 
-from ..compact import CompactLabelGenerationHead
-from ...graph_hmm.constraints import combine_masks, project_matrix_rows, validate_mask
-from ...graph_hmm.dynamic import DynamicConstraintContext, FactorizedStateSpace, apply_transition_energy, transition_energy_matrix
-from ...graph_hmm.graph_adapter import DomiKnowSGraphAdapter
-from .utils import (
+from ..common.base import CompactLabelGenerationHead
+from .constraints import combine_masks, project_matrix_rows, validate_mask
+from .dynamic import DynamicConstraintContext, FactorizedStateSpace, apply_transition_energy, transition_energy_matrix
+from .graph_adapter import DomiKnowSGraphAdapter
+from .graph_head_utils import (
     _coerce_label_to_token_id,
     _first_generated_index,
     _flat_input_ids,

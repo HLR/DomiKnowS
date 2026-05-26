@@ -230,7 +230,7 @@ def constraints_to_dfa_from_graph(graph, bundle, *, on_unsupported: str = "warn"
         on_unsupported: Forwarded to :func:`discover_generation_constraints`.
 
     Returns:
-        A :class:`~.automata.DFA` accepting all sequences that satisfy every
+        A :class:`~.learners.DFA` accepting all sequences that satisfy every
         discovered constraint.
     """
     return constraints_to_dfa(

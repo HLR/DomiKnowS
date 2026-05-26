@@ -7,8 +7,8 @@ from typing import Sequence
 import torch
 import torch.nn.functional as F
 
-from ...automata import WeightedFiniteAutomaton
-from ..compact import CompactLabelGenerationHead
+from .hankel import WeightedFiniteAutomaton
+from ..common.base import CompactLabelGenerationHead
 from ...constraints import GenerationConstraint
 from ...encoder import GenerationBundle, GenerationGraphContext
 from ...vocabulary import TokenVocabulary

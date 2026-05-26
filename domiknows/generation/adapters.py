@@ -25,7 +25,8 @@ from typing import Any
 
 import torch
 
-from .automata import DFA, explain_dfa_rejection
+from .learners.dfa.core import DFA
+from .learners.dfa.visualization import explain_dfa_rejection
 from .decoder import (
     ConstrainedGenerationResult,
     constrained_beam_search_decode,
@@ -109,7 +110,7 @@ class HuggingFaceGenerationAdapter:
 
         Args:
             input_ids: Prompt token IDs as a ``(1, T)`` or ``(T,)`` tensor.
-            dfa: Constraint :class:`~.automata.DFA` whose alphabet must be
+            dfa: Constraint :class:`~.learners.DFA` whose alphabet must be
                 compatible with ``self.vocabulary``.
             max_new_tokens: Hard upper bound on generated tokens.
             use_cache: Whether to use ``past_key_values`` caching.  Set to
@@ -150,7 +151,7 @@ class HuggingFaceGenerationAdapter:
 
         Args:
             input_ids: Prompt token IDs as a ``(1, T)`` or ``(T,)`` tensor.
-            dfa: Constraint :class:`~.automata.DFA` compatible with
+            dfa: Constraint :class:`~.learners.DFA` compatible with
                 ``self.vocabulary``.
             max_new_tokens: Hard upper bound on generated tokens per beam.
             beam_size: Number of active beams to maintain at each step.
@@ -204,7 +205,7 @@ class HuggingFaceGenerationAdapter:
 
         Args:
             input_ids: Prompt token IDs as a ``(1, T)`` or ``(T,)`` tensor.
-            dfa: Constraint :class:`~.automata.DFA` compatible with
+            dfa: Constraint :class:`~.learners.DFA` compatible with
                 ``self.vocabulary``.
             max_new_tokens: Hard upper bound on generated tokens.
             temperature: Softmax temperature.  Values < 1 sharpen the

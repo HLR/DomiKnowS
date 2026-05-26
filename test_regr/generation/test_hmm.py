@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from domiknows.generation.automata.hmm import (
+from domiknows.generation.learners.hmm.core import (
     DiscreteHMM,
     ProbabilisticAutomaton,
     all_sequences,

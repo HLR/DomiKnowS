@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch
 
-from domiknows.generation.graph_hmm import GraphHMMGenerationHead, GraphSpectralGenerationHead
+from domiknows.generation.learners import GraphHMMGenerationHead, GraphSpectralGenerationHead
 
 
 COLLIE_DIR = Path(__file__).resolve().parents[2] / "Tasks" / "collie"

@@ -6,8 +6,8 @@ from typing import Sequence
 
 import torch
 
-from ...automata import DiscreteHMM
-from ..compact import CompactLabelGenerationHead
+from .core import DiscreteHMM
+from ..common.base import CompactLabelGenerationHead
 from ...constraints import GenerationConstraint
 from ...encoder import GenerationBundle, GenerationGraphContext
 from ...vocabulary import TokenVocabulary

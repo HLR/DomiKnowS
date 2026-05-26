@@ -10,9 +10,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .automata.dfa import DFA, Symbol
-from .automata.hankel import WeightedFiniteAutomaton
-from .automata.visualization import (
+from .learners.dfa import DFA, Symbol
+from .learners.wfa import WeightedFiniteAutomaton
+from .learners.dfa.visualization import (
     dfa_to_dot,
     explain_dfa_rejection,
     product_trace_to_dot,

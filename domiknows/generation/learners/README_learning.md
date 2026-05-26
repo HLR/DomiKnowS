@@ -1,14 +1,15 @@
 # Learning and Using Learned Generation Models
 
-This note explains the learned-model side of `domiknows.generation`.
+This note explains the learned-model side of `domiknows.generation.learners`
+and how those learner heads are used by the higher-level generation package.
 
 The short version:
 
 ```text
-large generator = fluent open-vocabulary text producer
-DFA             = hard rule enforcer / verifier
-compact head    = learned DomiKnowS-aware scorer, proposal model, or controller
-PMD / latent loss = training signals for symbolic and soft preferences
+large generator    = fluent open-vocabulary text producer
+DFA                = hard rule enforcer / verifier
+compact head       = learned DomiKnowS-aware scorer, proposal model, or controller
+PMD / latent loss  = training signals for symbolic and soft preferences
 ```
 
 The compact learned model does not need to mimic the full size or behavior of a
@@ -21,8 +22,7 @@ Depending on the path, the learned component can learn one or more of these:
 
 - `prompt -> compact output labels`, as in the frozen-backbone compact head;
 - compact sequence dynamics, as in HMM/WFA generation heads;
-- prompt-conditioned automata dynamics, including gated and step-adaptive
-  prompt/prefix conditioning;
+- prompt-conditioned automata dynamics, including gated and step-adaptive prompt/prefix conditioning;
 - latent-state or factor-graph projections for PMD-visible constraints;
 - soft preferences that are awkward or impossible to encode as a DFA;
 - candidate scoring, repair/risk estimation, or constraint-bundle selection.
@@ -67,13 +67,10 @@ consistent way.
 Common terms:
 
 - `supervised_loss`: fits known target compact labels.
-- `pmd_constraint_loss`: comes from `PrimalDualProgram.cmodel(...)` over graph
-  DataNodes.
-- `latent_loss`: comes from graph-marked or graph-discovered
-  `LatentWindowSpec` rules.
-- `allowed_mass_loss`: softly encourages model probability mass on
-  DFA-productive labels.
-- `automata_aux_loss`: HMM NLL, WFA energy loss, or factor-graph diagnostics.
+- `pmd_constraint_loss`: comes from `PrimalDualProgram.cmodel(...)` over graph DataNodes.
+- `latent_loss`: comes from graph-marked or graph-discovered `LatentWindowSpec` rules.
+- `allowed_mass_loss`: softly encourages model probability mass on DFA-productive labels.
+- `automata_aux_loss`: HMM NLL, WFA energy loss, CRF loss, or factor-graph diagnostics.
 
 In the HF task demos, `constraint_loss` is printed as
 `pmd_constraint_objective` because it is a signed primal-dual objective from
@@ -105,9 +102,11 @@ uv run --project Tasks/hf_generation python Tasks/hf_generation/learn_demo.py --
 
 ### HMM / WFA Compact Automata Heads
 
-`HMMGenerationHead` and `SpectralWFAGenerationHead` are Torch compact-label
-modules. They can be attached to `token[generated_token]` and trained by normal
-Torch optimizers together with PMD constraint loss.
+`HMMGenerationHead`, `SpectralWFAGenerationHead`,
+`PromptConditionedHMMGenerationHead`, and
+`PromptConditionedSpectralWFAGenerationHead` are Torch compact-label modules.
+They can be attached to `token[generated_token]` and trained by normal Torch
+optimizers together with PMD constraint loss.
 
 Use this path when you want inspectable compact sequence dynamics rather than a
 black-box head.
@@ -134,8 +133,9 @@ diagnostics. It still exposes local `next_label_logits(...)` for compatibility
 with the current DFA-masked compact decoders.
 
 Exact constrained CRF decoding is different from local DFA masking: it requires
-Viterbi/search over product states `(CRF previous label, DFA state)`. That future
-feature is planned as a separate `constrained_crf_viterbi_decode(...)` path.
+Viterbi/search over product states `(CRF previous label, DFA state)`. That
+future feature is planned as a separate `constrained_crf_viterbi_decode(...)`
+path.
 
 `EnergyCompactLabelGenerationHead` is a local energy model over prompt,
 generated-prefix context, and the next compact label. It exposes
@@ -170,10 +170,8 @@ uv run --project Tasks/hf_generation python Tasks/hf_generation/prompt_automata_
 
 Factor-graph paths expose more internal structure to DomiKnowS:
 
-- HMM: `latent_state`, adjacency, optional `forward_state`, `backward_state`,
-  and `transition_pair` DP factors.
-- WFA: normalized projections of signed `wfa_state` and optional
-  `wfa_transition_pair` factors.
+- HMM: `latent_state`, adjacency, optional `forward_state`, `backward_state`, and `transition_pair` DP factors.
+- WFA: normalized projections of signed `wfa_state` and optional `wfa_transition_pair` factors.
 
 Torch still owns exact numeric HMM/WFA recurrences. DomiKnowS sees graph
 concepts and symbolic consistency constraints over their projections.
@@ -215,7 +213,7 @@ prompt ids -> compact head -> compact-label logits -> DFA mask -> token ids
 This is useful for small controlled generators, diagnostics, and automata-based
 experiments.
 
-### Mode B: Compact Head as Hybrid Controller/Scorer
+### Mode B: Compact Head as Hybrid Controller / Scorer
 
 Use this when a large generator remains responsible for fluent text.
 
@@ -277,7 +275,7 @@ OpenAI-compatible API -> text -> tokenizer -> compact labels -> DFA verify
 
 With a trained compact head, use `HybridController` to rerank or diagnose these
 outputs after generation. This does not become hard per-token DFA decoding
-unless the backend exposes a native logits/guided-decoding hook.
+unless the backend exposes a native logits or guided-decoding hook.
 
 ## Choosing the Right Path
 
@@ -292,11 +290,7 @@ unless the backend exposes a native logits/guided-decoding hook.
 
 ## Current Limits
 
-- Learned heads operate over compact `TokenVocabulary` labels, not arbitrary
-  open-vocabulary text.
-- DFA constraints remain the hard guarantee mechanism; PMD and latent losses are
-  soft training signals.
-- Generic OpenAI-compatible APIs remain generate-then-verify/rerank unless a
-  backend-specific guided-decoding adapter is added.
-- Batched compact-head decoding and batched HF cache reordering remain future
-  work.
+- learned heads operate over compact `TokenVocabulary` labels, not arbitrary open-vocabulary text;
+- DFA constraints remain the hard guarantee mechanism; PMD and latent losses are soft training signals;
+- generic OpenAI-compatible APIs remain generate-then-verify or rerank unless a backend-specific guided-decoding adapter is added;
+- batched compact-head decoding and batched HF cache reordering remain future work.

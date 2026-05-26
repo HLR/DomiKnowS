@@ -15,7 +15,7 @@ import torch
 
 from domiknows.generation.graph_discovery import constraints_to_dfa_from_graph, discover_generation_constraints
 
-from .graph_hmm import DomiKnowSAwareHMM
+from .graph import DomiKnowSAwareHMM
 
 
 @dataclass(frozen=True)

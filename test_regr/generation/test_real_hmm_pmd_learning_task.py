@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from domiknows.generation import EnergyCompactLabelGenerationHead, constraints_to_dfa_from_graph, discover_generation_constraints
-from domiknows.generation.graph_hmm import GraphHMMGenerationHead
+from domiknows.generation.learners import GraphHMMGenerationHead
 
 
 def import_task_module(name: str):

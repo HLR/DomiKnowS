@@ -2,7 +2,7 @@
 
 Each constraint can be compiled into one of two representations:
 
-* **DFA** (default) — a :class:`~.automata.DFA` over the vocabulary's label
+* **DFA** (default) — a :class:`~.learners.DFA` over the vocabulary's label
   alphabet that accepts exactly the sequences satisfying the constraint.  DFA
   constraints can be combined via :func:`constraints_to_dfa`, which takes their
   product (intersection).
@@ -38,7 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Protocol
 
-from .automata import DFA, complement_dfa, product_dfa, union_dfa
+from .learners.dfa.core import DFA, complement_dfa, product_dfa, union_dfa
 from .vocabulary import TokenVocabulary
 
 
@@ -84,14 +84,14 @@ class GenerationConstraint:
     name = "generation constraint"
 
     def to_dfa(self, vocabulary: TokenVocabulary) -> DFA:
-        """Compile this constraint into a :class:`~.automata.DFA`.
+        """Compile this constraint into a :class:`~.learners.DFA`.
 
         Args:
             vocabulary: The vocabulary whose label alphabet the DFA should
                 operate over.
 
         Returns:
-            A :class:`~.automata.DFA` that accepts all and only the label
+            A :class:`~.learners.DFA` that accepts all and only the label
             sequences satisfying this constraint.
 
         Raises:
@@ -894,7 +894,7 @@ def constraints_to_dfa(constraints: Iterable[GenerationConstraint], vocabulary: 
     """Combine multiple constraints into a single intersection DFA.
 
     Compiles each constraint that supports DFA representation and takes their
-    product (intersection) via :func:`~.automata.product_dfa`.  A sequence is
+    product (intersection) via :func:`~.learners.product_dfa`.  A sequence is
     accepted by the resulting DFA if and only if it satisfies *all* constraints.
 
     When no constraints support DFA compilation, returns a trivial
@@ -906,7 +906,7 @@ def constraints_to_dfa(constraints: Iterable[GenerationConstraint], vocabulary: 
         vocabulary: Token vocabulary providing the shared label alphabet.
 
     Returns:
-        A single :class:`~.automata.DFA` accepting sequences that satisfy all
+        A single :class:`~.learners.DFA` accepting sequences that satisfy all
         DFA-compilable constraints in *constraints*.
     """
     dfas = [constraint.to_dfa(vocabulary) for constraint in constraints if constraint.supports_dfa]

@@ -1,7 +1,9 @@
 # DomiKnowS-Aware HMM and Spectral Automata
 
-This package learns sequence models that are shaped by a DomiKnowS graph.  The
-learner is not only estimating a raw sequence distribution:
+This note explains the graph-aware HMM and spectral automata stack under
+`domiknows.generation.learners.hmm` and `domiknows.generation.learners.wfa`.
+
+The learner is not only estimating a raw sequence distribution:
 
 ```text
 P(x_1:T)
@@ -16,27 +18,22 @@ P(x_1:T | G, C)
 where:
 
 - `G` is the DomiKnowS relational graph.
-- `C` is the logical or semantic constraint layer that can be compiled into
-  masks, projections, DFA restrictions, or constrained Hankel filtering.
+- `C` is the logical or semantic constraint layer that can be compiled into masks, projections, DFA restrictions, or constrained Hankel filtering.
 
 In this view, the result is closer to a typed weighted automaton over a
 relational state space than to a plain unconstrained HMM.
 
 ## PMD-Compatible Torch Learners
 
-`graph_hmm` has two layers:
+The graph-aware learner code under `domiknows.generation.learners` has two layers:
 
-- **EM / spectral learners** such as `DomiKnowSAwareHMM` and
-  `GraphSpectralAutomaton`, which fit, score, decode, initialize, and diagnose
-  graph-constrained compact sequences.
-- **Torch learner heads** such as `GraphHMMGenerationHead` and
-  `GraphSpectralGenerationHead`, which are `torch.nn.Module` objects designed
-  to plug directly into DomiKnowS `ModuleLearner`.
+- EM or spectral learners such as `DomiKnowSAwareHMM` and `GraphSpectralAutomaton`, which fit, score, decode, initialize, and diagnose graph-constrained compact sequences.
+- Torch learner heads such as `GraphHMMGenerationHead` and `GraphSpectralGenerationHead`, which are `torch.nn.Module` objects designed to plug directly into DomiKnowS `ModuleLearner`.
 
 The Torch heads are the first-class PMD integration path:
 
 ```python
-from domiknows.generation.graph_hmm import GraphHMMGenerationHead
+from domiknows.generation.learners import GraphHMMGenerationHead
 from domiknows.sensor.pytorch.learners import ModuleLearner
 
 head = GraphHMMGenerationHead(
@@ -76,8 +73,8 @@ wfa_head = spectral.to_torch_learner(trainable=True, pad_size=pad_size)
 ```
 
 `GraphSpectralGenerationHead` preserves the learned constrained WFA operators,
-but hard graph/DFA legality filtering remains on `GraphSpectralAutomaton` via
-`score(..., enforce_constraints=True)`, `hard_score(...)`,
+but hard graph or DFA legality filtering remains on `GraphSpectralAutomaton`
+via `score(..., enforce_constraints=True)`, `hard_score(...)`,
 `allowed_symbols(...)`, or an external DFA wrapper.
 
 ## Automatic Constraint-DFA HMM State Spaces
@@ -86,7 +83,7 @@ For generation-shaped graphs, regular DomiKnowS constraints can now create an
 HMM state space automatically by reusing the graph-discovered DFA:
 
 ```python
-from domiknows.generation.graph_hmm import domiknows_hmm_from_generation_constraints
+from domiknows.generation.learners import domiknows_hmm_from_generation_constraints
 
 learner = domiknows_hmm_from_generation_constraints(graph, bundle)
 ```
@@ -99,8 +96,8 @@ The compiler builds one hidden HMM state per productive DFA edge:
 
 Emissions are tied to the edge symbol, and HMM transitions connect edges whose
 DFA endpoints line up. This means beliefs are no longer necessarily hand-named
-states like `before_B`; for a rule set such as “B at most once” and “C at least
-once,” the compiler creates readable edge-state names such as:
+states like `before_B`; for a rule set such as "B at most once" and "C at least
+once," the compiler creates readable edge-state names such as:
 
 ```text
 need_C_no_B__emit_B__to_need_C_seen_B
@@ -114,11 +111,11 @@ satisfied has no HMM support.
 
 ## What The Graph Contributes
 
-DomiKnowS graphs declare domain knowledge with `Graph`, `Concept`,
-`Property`, `Relation`, and `LogicalConstrain` objects.  The graph is a
-declarative structure, not an executable probabilistic model by itself.  The
-HMM adapter turns the graph pieces that are safe to interpret as sequence
-structure into probabilistic constraints.
+DomiKnowS graphs declare domain knowledge with `Graph`, `Concept`, `Property`,
+`Relation`, and `LogicalConstrain` objects. The graph is a declarative
+structure, not an executable probabilistic model by itself. The HMM adapter
+turns the graph pieces that are safe to interpret as sequence structure into
+probabilistic constraints.
 
 Concepts and entity types can become hidden-state types:
 
@@ -139,7 +136,7 @@ inside(Object, Container)
 ```
 
 Logical constraints can become hard projections when they are faithfully
-compiled.  For example, a rule such as:
+compiled. For example, a rule such as:
 
 ```text
 inside(x, y) => not outside(x, y)
@@ -148,9 +145,9 @@ inside(x, y) => not outside(x, y)
 can remove incompatible transitions from a transition operator and redistribute
 probability mass over legal alternatives.
 
-Unsupported arbitrary DomiKnowS logic is not approximated silently.  It remains
+Unsupported arbitrary DomiKnowS logic is not approximated silently. It remains
 available to DomiKnowS solvers and PMD-style losses, while this package reports
-that it was not compiled into an HMM/WFA mask.
+that it was not compiled into an HMM or WFA mask.
 
 ## Classical vs DomiKnowS-Aware HMM
 
@@ -166,8 +163,7 @@ A DomiKnowS-aware HMM learns:
 P(s_t+1 | s_t, G, C)
 ```
 
-Equivalently, in the HMM / probabilistic-automata setting, constraints can be
-read as conditioning the transition law:
+Equivalently, constraints can be read as conditioning the transition law:
 
 ```text
 P(s_t | s_t-1, C)
@@ -180,7 +176,7 @@ matrix:
 A^(C) = g(A, C)
 ```
 
-In this view, DomiKnowS constraints act as priors over transitions.  The result
+In this view, DomiKnowS constraints act as priors over transitions. The result
 is effectively a conditional HMM: the automaton still learns transition
 probabilities, but graph semantics and logical constraints determine which
 transition mass is legal or preferred.
@@ -192,14 +188,14 @@ A = project_matrix(A, transition_mask)
 B = project_matrix(B, emission_mask)
 ```
 
-Forbidden graph or constraint transitions have probability zero.  Forward /
+Forbidden graph or constraint transitions have probability zero. Forward,
 backward, Baum-Welch, Viterbi, scoring, sampling, and DFA export all use the
 projected transition and emission distributions, so impossible paths never
 receive probability mass.
 
 ## Dynamic Relational State Constraints
 
-Static masks are useful when graph topology alone decides what is legal.  Many
+Static masks are useful when graph topology alone decides what is legal. Many
 relational systems need a stronger form:
 
 ```text
@@ -216,16 +212,14 @@ if holding(Person, Cup)
 then Cup cannot simultaneously be_on(Table)
 ```
 
-This cannot always be represented by one fixed transition matrix.  The
-validity of the next transition depends on the current inferred world state.
+This cannot always be represented by one fixed transition matrix. The validity
+of the next transition depends on the current inferred world state.
 `DomiKnowSAwareHMM` supports this with opt-in hooks:
 
 ```python
-from domiknows.generation.graph_hmm import DomiKnowSAwareHMM, DynamicConstraintContext
+from domiknows.generation.learners import DomiKnowSAwareHMM, DynamicConstraintContext
 
 def dynamic_transition(context: DynamicConstraintContext):
-    # context.step, context.prefix, context.belief, context.sequence,
-    # and context.metadata describe the current sequence-local state.
     if context.prefix == ("holding_cup",):
         return [
             [1.0, 0.0],
@@ -242,7 +236,7 @@ learner = DomiKnowSAwareHMM(
 ```
 
 During forward/backward, Viterbi, scoring, and sampling, each transition step
-can receive a different projected matrix.  If a dynamic hard mask removes every
+can receive a different projected matrix. If a dynamic hard mask removes every
 outgoing transition for a row, that row stays zero for that step, so the
 corresponding path receives no probability mass.
 
@@ -265,7 +259,7 @@ This gives compositional state metadata while preserving ordinary HMM tensor
 operations.
 
 ```python
-from domiknows.generation.graph_hmm import FactorizedStateSpace
+from domiknows.generation.learners import FactorizedStateSpace
 
 state_space = FactorizedStateSpace.from_factors({
     "entity": ["Person", "Cup"],
@@ -303,12 +297,12 @@ Soft constraints instead penalize violations without eliminating them:
 P(z_t+1 | z_t) proportional to exp(HMM score - lambda E_C)
 ```
 
-where `E_C` is a logical violation energy.  This connects the HMM package to
+where `E_C` is a logical violation energy. This connects the HMM package to
 DomiKnowS PMD losses, t-norm losses, and differentiable logic.
 
 ```python
 import torch
-from domiknows.generation.graph_hmm import DynamicConstraintContext
+from domiknows.generation.learners import DynamicConstraintContext, DomiKnowSAwareHMM
 
 def transition_energy(context: DynamicConstraintContext):
     energy = torch.zeros((2, 2), dtype=torch.float64)
@@ -330,7 +324,7 @@ At a transition step, the effective matrix is:
 A_t = normalize_rows(A * dynamic_factor * exp(-lambda E_C))
 ```
 
-followed by the static graph mask.  Hard masks still provide guarantees; soft
+followed by the static graph mask. Hard masks still provide guarantees; soft
 energies provide preferences.
 
 ## Typed Transition Operators
@@ -354,12 +348,12 @@ Sequence evolution becomes:
 h_t+1 = h_t M_r
 ```
 
-where `r` is a relation or emitted symbol.  This connects the implementation to
+where `r` is a relation or emitted symbol. This connects the implementation to
 relational message passing, graph automata, and typed weighted automata.
 
 ## Spectral Interpretation
 
-The spectral learner builds a finite Hankel matrix.  In a raw sequence model:
+The spectral learner builds a finite Hankel matrix. In a raw sequence model:
 
 ```text
 H(u, v) = P(uv)
@@ -372,11 +366,12 @@ H_G(u, v) = P(uv | G, C)
 ```
 
 Entries whose concatenated prefix/suffix string has no legal hidden path under
-the graph masks, or is rejected by an optional DFA, are set to zero.  Prefixes
+the graph masks, or is rejected by an optional DFA, are set to zero. Prefixes
 and suffixes are therefore interpreted as compact typed walks or operator
 chains, not arbitrary strings alone.
 
-The learned spectral automaton is a finite-rank weighted operator system recovered from constrained Hankel factorization:
+The learned spectral automaton is a finite-rank weighted operator system
+recovered from constrained Hankel factorization:
 
 ```text
 score(x_1:T) = alpha M_x1 M_x2 ... M_xT omega
@@ -387,9 +382,8 @@ Hankel blocks.
 
 ### Dynamic Spectral Operators
 
-Spectral fitting is finite-basis and static: SVD recovers base operators
-`M_a`.  At traversal time, those operators can be adapted with opt-in dynamic
-hooks:
+Spectral fitting is finite-basis and static: SVD recovers base operators `M_a`.
+At traversal time, those operators can be adapted with opt-in dynamic hooks:
 
 ```text
 h_t+1 = h_t M_t
@@ -400,7 +394,7 @@ This keeps the learned base operator inspectable while allowing the scoring
 path to depend on prefix state, graph metadata, or soft constraint energy.
 
 ```python
-from domiknows.generation.graph_hmm import DynamicConstraintContext, GraphSpectralAutomaton
+from domiknows.generation.learners import DynamicConstraintContext, GraphSpectralAutomaton
 
 def operator_transform(context: DynamicConstraintContext, symbol, base):
     if symbol == "object_token" and context.prefix == ("holding_cup",):
@@ -408,7 +402,6 @@ def operator_transform(context: DynamicConstraintContext, symbol, base):
     return base
 
 def operator_energy(context: DynamicConstraintContext, symbol):
-    # Return a rank x rank non-negative energy matrix, or None.
     return None
 
 spectral = GraphSpectralAutomaton(
@@ -419,7 +412,7 @@ spectral = GraphSpectralAutomaton(
 )
 ```
 
-`operator(symbol)` still returns the static learned `M_a`.  The dynamic path is
+`operator(symbol)` still returns the static learned `M_a`. The dynamic path is
 used by `score(...)`, `prefix_state(...)`, and `reconstruct_hankel(dynamic=True)`.
 
 ## Constraint Geometry
@@ -439,7 +432,7 @@ strings.
 used as HMM constraints:
 
 ```python
-from domiknows.generation.graph_hmm import DomiKnowSGraphAdapter
+from domiknows.generation.learners import DomiKnowSGraphAdapter
 
 adapter = DomiKnowSGraphAdapter(
     graph,
@@ -457,7 +450,7 @@ does not contain enough information for an automatic mapping.
 
 ### Supported Constraint Specs
 
-The HMM adapter now normalizes explicit dict/object constraints and typed spec
+The HMM adapter normalizes explicit dict or object constraints and typed spec
 objects into one static compilation path. Static specs are best for constraints
 that can be represented before inference as transition masks, emission masks,
 or observable DFA metadata.
@@ -485,7 +478,7 @@ constraints = [
 The typed form is clearer for reusable code:
 
 ```python
-from domiknows.generation.graph_hmm import (
+from domiknows.generation.learners import (
     ForbiddenEmissionsSpec,
     ForbiddenTransitionsSpec,
     StatePredicateTransitionSpec,
@@ -505,28 +498,7 @@ constraints = [
 ```
 
 The graph adapter also compiles a conservative static DomiKnowS logical
-fragment when it can be interpreted exactly as a local HMM mask:
-
-- `ifL(A(t), notL(B(t+1)))` becomes a forbidden transition from `A` to `B`.
-- `ifL(A(t), orL(B(t+1), C(t+1)))` restricts `A` rows to `B` or `C`.
-- Variable bindings select the axis: `x`, `src`, `current`, or `t` bind to
-  the source/current HMM state; `y`, `dst`, `next`, or `t1` bind to the
-  destination/next state.
-- Single-hop relation paths such as `path=("x", relation, "y")` are treated
-  as destination/next-state endpoint bindings when they map to known states.
-- Nested `andL` / `orL` combinations over supported transition implications,
-  plus `notL`, `nandL`, `norL`, `xorL`, and `equivalenceL` inside supported
-  local formulas, become exact finite-domain mask logic.
-- Local `existsL`, `atLeastL`, `atMostL`, and `exactL` over supported formula
-  children are evaluated over each transition/emission pair.
-- `atMostAL(predicate, 0)` and `exactAL(predicate, 0)` compile to static
-  global forbiddance masks when the predicate maps to known states or symbols.
-- Static emission typing such as `ifL(LOC(t), location_token(t))` restricts
-  the `LOC` emission row to matching symbols when state and symbol names are
-  provided explicitly.
-- Non-zero accumulated count/window constraints such as `atLeastAL(A(t), 1)`
-  are registered as DFA-export diagnostics rather than approximated as local
-  HMM matrices.
+fragment when it can be interpreted exactly as a local HMM mask.
 
 Unsupported logical constraints are reported through
 `adapter.report.unsupported`; they are not approximated silently.
@@ -553,7 +525,7 @@ each update:
 
 ```python
 import torch
-from domiknows.generation.graph_hmm import DomiKnowSAwareHMM
+from domiknows.generation.learners import DomiKnowSAwareHMM
 
 transition_mask = torch.tensor([
     [1.0, 1.0],
@@ -584,7 +556,7 @@ print(learner.viterbi(["person_token", "object_token"]).states)
 ```
 
 The learner can export a hard-support observable DFA for debugging or hard
-constraint inspection.  The DFA uses subset construction: each DFA state is the
+constraint inspection. The DFA uses subset construction: each DFA state is the
 set of HMM hidden states reachable after an observed prefix, so it accepts an
 observable string whenever at least one legal positive-probability hidden path
 can emit that string.
@@ -595,16 +567,16 @@ print(dfa.accepts(["person_token", "object_token"]))
 ```
 
 This exact export applies to static projected HMM support. If the HMM has an
-arbitrary `dynamic_transition` callback or `transition_energy`, `to_constraint_dfa()`
-raises by default rather than returning a misleading automaton. Use
-`on_unsupported_dynamic="static"` only when you intentionally want to ignore
-dynamic/soft behavior and export the static support language.
+arbitrary `dynamic_transition` callback or `transition_energy`,
+`to_constraint_dfa()` raises by default rather than returning a misleading
+automaton. Use `on_unsupported_dynamic="static"` only when you intentionally
+want to ignore dynamic or soft behavior and export the static support language.
 
 Dynamic hard constraints can be exported exactly when the caller supplies a
 finite-state abstraction:
 
 ```python
-from domiknows.generation.graph_hmm import FiniteStateDynamicConstraint
+from domiknows.generation.learners import FiniteStateDynamicConstraint
 
 monitor = FiniteStateDynamicConstraint(
     start_state="open",
@@ -625,7 +597,7 @@ engineering approximation rather than the exact positive-support language.
 operator per symbol:
 
 ```python
-from domiknows.generation.graph_hmm import GraphSpectralAutomaton
+from domiknows.generation.learners import GraphSpectralAutomaton
 
 spectral = GraphSpectralAutomaton(
     symbols=["person_token", "object_token"],
@@ -657,7 +629,7 @@ H = spectral.build_hankel()
 That makes spectral learning constraint-aware, but the recovered low-rank WFA
 is still a signed scorer. Low-rank reconstruction can assign a non-zero signed
 score to strings that were filtered out of the constrained Hankel block. Use
-hard scoring or DFA/legality filtering when invalid strings must stay invalid:
+hard scoring or DFA or legality filtering when invalid strings must stay invalid:
 
 ```python
 soft_score = spectral.score(["object_token", "person_token"])
@@ -699,7 +671,7 @@ probabilistic graph state and the logical consistency state:
 where:
 
 - `h_t` is the probabilistic graph latent state.
-- `q_t` is the DFA/logical consistency state.
+- `q_t` is the DFA or logical consistency state.
 
 Transitions must satisfy both:
 
@@ -713,51 +685,8 @@ graph-constrained automata.
 
 ## Current Limits
 
-- Arbitrary DomiKnowS logical constraints are not reverse-compiled into HMM or
-  WFA structure. The built-in compiler is limited to static, local,
-  mask-compilable state/emission predicates, one-hop relation-path endpoint
-  hints, local count formulas, accumulated zero-forbiddance, and boolean
-  combinations over those supported fragments.
-- Only graph structure, explicit typed/dict specs, the supported static
-  DomiKnowS logical fragment, dynamic hooks, soft transition energies, and
-  optional DFA acceptance affect HMM/WFA learning automatically.
-- Dynamic relational constraints are opt-in hooks over compact HMM states; the
-  package does not execute arbitrary DomiKnowS logical state updates by itself.
-  DFA export is exact for dynamic constraints only when callers provide a
-  finite-state dynamic monitor.
-- Spectral learning is finite-basis and compact-symbol.  It is not
-  open-vocabulary language model training.
-- Spectral fitting is static/fixed-basis, while dynamic spectral operators are
-  opt-in traversal-time hooks over the learned base operators.
-- Graph/DFA filters constrain spectral Hankel queries during learning.  The
-  learned WFA remains a signed scorer at inference time unless callers use
-  `score(..., enforce_constraints=True)`, `hard_score(...)`, `allowed_symbols`,
-  or an external DFA wrapper.
-- Graph-invalid paths are removed from the modeled probability mass rather
-  than learned as possible worlds.
-- The exported DFA is exact for the fitted static HMM positive-support
-  language under projected initial, transition, and emission supports. With a
-  finite-state dynamic monitor it is exact for the corresponding product
-  language. Soft energies, thresholds, belief-dependent callbacks, and
-  infinite-memory prefix callbacks are not exact DFA constraints unless the
-  caller supplies a finite-state hard abstraction.
-
-## Future Research
-
-The graph-HMM layer is also a useful bridge toward richer neuro-symbolic
-learning systems:
-
-- neuro-symbolic models;
-- energy-based constraint learning;
-- differentiable logic layers;
-- posterior regularization.
-
-A compact objective for that direction is:
-
-```text
-min_theta E_x[-log P_theta(x)] + lambda * L_constraint(z)
-```
-
-Here the probabilistic model learns from observed sequences while the
-constraint term regularizes latent structures or outputs toward DomiKnowS
-logical semantics.
+- arbitrary DomiKnowS logical constraints are not reverse-compiled into HMM or WFA structure;
+- only graph structure, explicit typed or dict specs, the supported static logical fragment, dynamic hooks, soft transition energies, and optional DFA acceptance affect HMM/WFA learning automatically;
+- dynamic relational constraints are opt-in hooks over compact HMM states;
+- spectral learning is finite-basis and compact-symbol, not open-vocabulary language model training;
+- graph or DFA filters constrain spectral Hankel queries during learning, but the learned WFA remains a signed scorer at inference time unless callers use `score(..., enforce_constraints=True)`, `hard_score(...)`, `allowed_symbols(...)`, or an external DFA wrapper.
