@@ -75,6 +75,19 @@ or:
 uv run --project Tasks/real_hmm_comparison_viz python Tasks/real_hmm_comparison_viz/run_demo.py --demo two --candidate missing_c
 ```
 
+For a code-first version without the HTML flow and without the plain
+`DiscreteHMM` baseline, read/run:
+
+```bash
+uv run --project Tasks/real_hmm_comparison_viz python Tasks/real_hmm_comparison_viz/run_domiknows_hmm_demo.py --demo two --candidate two_b --show-states
+```
+
+That script is intentionally small and commented. It shows only:
+
+```text
+DomiKnowS graph -> GenerationBundle -> DFA -> DomiKnowS-aware HMM
+```
+
 Then open the generated clickable HTML link, or open:
 
 ```text
