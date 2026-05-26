@@ -15,7 +15,7 @@ from domiknows.generation import (
     generation_bundle_from_graph,
     trace_discrete_hmm,
 )
-from domiknows.generation.graph_hmm import project_matrix
+from domiknows.generation.learners import project_matrix
 
 try:
     from .graph import EOS_TOKEN, VOCAB, build_graph, build_two_constraint_graph

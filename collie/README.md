@@ -75,7 +75,7 @@ toy loss.
 
 ## Graph-HMM PMD Learner Path
 
-Collie can also use `domiknows.generation.graph_hmm` as the trainable
+Collie can also use graph-aware heads from `domiknows.generation.learners` as the trainable
 `ModuleLearner` attached to `token[generated_token]`:
 
 ```bash

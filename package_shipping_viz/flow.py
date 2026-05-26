@@ -9,7 +9,7 @@ from typing import Any
 import torch
 
 from domiknows.generation import explain_dfa_rejection
-from domiknows.generation.graph_hmm import project_matrix
+from domiknows.generation.learners import project_matrix
 from domiknows.generation.planning import planning_bundle_from_graph, planning_dfa_from_graph
 
 

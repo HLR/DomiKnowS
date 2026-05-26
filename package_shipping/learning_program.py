@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import torch
 
-from domiknows.generation.graph_hmm import DomiKnowSAwareHMM, GraphHMMGenerationHead
+from domiknows.generation.learners import DomiKnowSAwareHMM, GraphHMMGenerationHead
 from domiknows.generation.planning import PlanningBundle, encode_plan, planning_hmm_masks_from_graph
 
 
