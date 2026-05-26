@@ -38,7 +38,18 @@ from .dynamic import (
 from .graph_adapter import DomiKnowSGraphAdapter
 from .graph_hmm import DomiKnowSAwareHMM, HMMFitResult, ViterbiResult
 from .spectral import GraphSpectralAutomaton, GraphSpectralFitResult, masked_empirical_initialization, sequence_has_legal_path
-from .torch_learners import GraphHMMGenerationHead, GraphSpectralGenerationHead
+
+
+def __getattr__(name):
+    if name == "GraphHMMGenerationHead":
+        from ..learners.graph_hmm import GraphHMMGenerationHead
+
+        return GraphHMMGenerationHead
+    if name == "GraphSpectralGenerationHead":
+        from ..learners.graph_hmm import GraphSpectralGenerationHead
+
+        return GraphSpectralGenerationHead
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "AllowedEmissionsSpec",

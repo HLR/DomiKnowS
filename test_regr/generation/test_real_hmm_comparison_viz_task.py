@@ -16,6 +16,7 @@ from Tasks.real_hmm_comparison_viz.flow import (
 )
 from Tasks.real_hmm_comparison_viz.graph import ENUM_VALUES, build_graph, build_two_constraint_graph
 from Tasks.real_hmm_comparison_viz.run_demo import main as run_demo_main
+from Tasks.real_hmm_comparison_viz.run_domiknows_hmm_demo import main as minimal_demo_main, run_demo as run_minimal_demo
 
 
 def _labels(bundle, symbols):
@@ -176,3 +177,13 @@ def test_real_hmm_comparison_run_demo_two_constraint_variant(tmp_path):
     assert flow["dfa"]["accepted"] is False
     assert flow["domiknows_hmm"]["log_likelihood"] == "-inf"
     assert flow["steps"][3]["symbol"] == "B"
+
+
+def test_real_hmm_minimal_domiknows_demo_runs_without_flow_or_plain_hmm():
+    result = run_minimal_demo(demo="two", candidate_name="two_b")
+
+    assert result["dfa_accepted"] is False
+    assert result["hmm_score"] == float("-inf")
+    assert result["hmm_state_count"] > 0
+    assert any("need_C_no_B" in state for state in result["generated_hmm_states"])
+    assert minimal_demo_main(["--demo", "two", "--candidate", "two_b"]) == 0

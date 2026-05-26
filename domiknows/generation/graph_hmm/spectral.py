@@ -278,7 +278,7 @@ class GraphSpectralAutomaton:
 
     def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
         """Return a PMD-compatible Torch head initialized from this fitted WFA."""
-        from .torch_learners import GraphSpectralGenerationHead
+        from ..learners.graph_hmm import GraphSpectralGenerationHead
 
         return GraphSpectralGenerationHead.from_graph_spectral(
             self,

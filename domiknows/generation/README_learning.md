@@ -30,6 +30,23 @@ Depending on the path, the learned component can learn one or more of these:
 Hard validity still comes from the DFA. Learned losses and learned heads improve
 proposal quality, ranking, and task preference.
 
+## Compact Head Contract
+
+All learned compact-label generators use the same small interface:
+
+```python
+next_label_logits(input_ids)          # logits over TokenVocabulary labels
+sequence_log_probs(target_labels)     # teacher-forced scoring/reranking
+token_id_for_label(label)             # compact label -> concrete token id
+forward(_contains, prompt, labels)    # ModuleLearner / PMD path
+```
+
+`HMMGenerationHead`, WFA/spectral heads, graph-HMM heads, and the neural
+`GRUCompactLabelGenerationHead`, `TransformerCompactLabelGenerationHead`,
+`NeuralNGramCompactLabelGenerationHead`, `EnergyCompactLabelGenerationHead`,
+and `CRFCompactLabelScorer` all fit this contract. The decoder does not require
+an HMM; it only requires the next compact-label logits that the DFA can mask.
+
 ## Training Signals
 
 The usual DomiKnowS generation training loop combines:
@@ -101,6 +118,35 @@ Run:
 uv run --project Tasks/hf_generation python Tasks/hf_generation/automata_demo.py --kind hmm --steps 3
 uv run --project Tasks/hf_generation python Tasks/hf_generation/automata_demo.py --kind wfa --steps 3
 ```
+
+### Neural Compact Heads
+
+`GRUCompactLabelGenerationHead`, `TransformerCompactLabelGenerationHead`, and
+`NeuralNGramCompactLabelGenerationHead` are non-HMM Torch sequence models over
+the same compact label space. Use them when you want a familiar neural sequence
+model to populate DomiKnowS probabilities, while keeping DFA decoding as the
+hard validity layer.
+
+`CRFCompactLabelScorer` is a compact linear-chain CRF with exact global
+normalization for training. Use `crf_nll(...)`, `log_partition(...)`,
+`marginal_log_probs(...)`, and `sequence_score(...)` for CRF training and
+diagnostics. It still exposes local `next_label_logits(...)` for compatibility
+with the current DFA-masked compact decoders.
+
+Exact constrained CRF decoding is different from local DFA masking: it requires
+Viterbi/search over product states `(CRF previous label, DFA state)`. That future
+feature is planned as a separate `constrained_crf_viterbi_decode(...)` path.
+
+`EnergyCompactLabelGenerationHead` is a local energy model over prompt,
+generated-prefix context, and the next compact label. It exposes
+`sequence_energy(...)` for low-is-better sequence scoring,
+`sequence_score(...)` as `-sequence_energy(...)`, and `next_label_logits(...)`
+as negative next-step energy. It is useful for learned preferences and
+reranking, while the DFA remains the hard validity mechanism.
+
+These heads are intentionally not open-vocabulary language models. They learn
+compact label dynamics and can be used by `ModuleLearner`,
+`constrained_label_*`, and `HybridController` just like the automata heads.
 
 ### Prompt-Conditioned Automata Heads
 

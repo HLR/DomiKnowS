@@ -94,6 +94,39 @@ def test_graph_hmm_to_torch_learner_factory():
     assert head.trainable_parameter_names()
 
 
+def test_graph_hmm_generation_head_can_condition_initial_state_on_prompt():
+    """Prompt-conditioned graph-HMM heads should let prompt ids change label probabilities."""
+    head = GraphHMMGenerationHead(
+        n_hidden_states=2,
+        label_count=2,
+        initial=torch.tensor([0.5, 0.5]),
+        transition=torch.eye(2),
+        emission=torch.eye(2),
+        emission_mask=torch.eye(2),
+        pad_size=2,
+        trainable=True,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        label_to_token_id=(0, 1),
+    )
+    with torch.no_grad():
+        head.prompt_initial_projector.weight.zero_()
+        head.prompt_initial_projector.bias.zero_()
+        head.prompt_embedding.weight.zero_()
+        head.prompt_embedding.weight[2, 0] = 10.0
+        head.prompt_embedding.weight[3, 0] = -10.0
+        head.prompt_initial_projector.weight[0, 0] = 1.0
+        head.prompt_initial_projector.weight[1, 0] = -1.0
+
+    prompt_two = head.next_label_logits(torch.tensor([2]))
+    prompt_three = head.next_label_logits(torch.tensor([3]))
+
+    assert prompt_two[0] > prompt_two[1]
+    assert prompt_three[1] > prompt_three[0]
+    assert "prompt_embedding.weight" in head.trainable_parameter_names()
+
+
 def test_graph_hmm_generation_head_decodes_with_label_dfa():
     """
     Test constrained decoding using a DFA that filters generated sequences.

@@ -1234,16 +1234,6 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
 
         c_session['iter'] = iter_count
         self._increment_epoch()
-            if _mem_probe and torch.cuda.is_available():
-                _mem_step += 1
-                _alloc = torch.cuda.memory_allocated() / 1e9
-                _res = torch.cuda.memory_reserved() / 1e9
-                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
-
-            yield (loss, metric, *output[:1])
-
-        c_session['iter'] = iter_count
-        c_session['_mem_step'] = _mem_step
 
     def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
         return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)

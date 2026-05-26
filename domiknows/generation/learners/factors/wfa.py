@@ -7,10 +7,11 @@ from typing import Sequence
 import torch
 import torch.nn.functional as F
 
-from .automata import WeightedFiniteAutomaton
-from .constraints import GenerationConstraint
-from .encoder import GenerationBundle, GenerationGraphContext
-from .vocabulary import TokenVocabulary
+from ...automata import WeightedFiniteAutomaton
+from ..compact import CompactLabelGenerationHead
+from ...constraints import GenerationConstraint
+from ...encoder import GenerationBundle, GenerationGraphContext
+from ...vocabulary import TokenVocabulary
 
 
 @dataclass
@@ -198,7 +199,7 @@ class SpectralWFAFactorGraphEncoder:
         return graph, bundle
 
 
-class SpectralWFAFactorGraphHead(torch.nn.Module):
+class SpectralWFAFactorGraphHead(CompactLabelGenerationHead):
     """Differentiable signed WFA exposing graph-visible normalized projections."""
 
     def __init__(

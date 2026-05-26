@@ -6,10 +6,11 @@ from typing import Sequence
 
 import torch
 
-from .automata import DiscreteHMM
-from .constraints import GenerationConstraint
-from .encoder import GenerationBundle, GenerationGraphContext
-from .vocabulary import TokenVocabulary
+from ...automata import DiscreteHMM
+from ..compact import CompactLabelGenerationHead
+from ...constraints import GenerationConstraint
+from ...encoder import GenerationBundle, GenerationGraphContext
+from ...vocabulary import TokenVocabulary
 
 
 @dataclass
@@ -226,7 +227,7 @@ class HMMFactorGraphEncoder:
         return graph, bundle
 
 
-class HMMFactorGraphHead(torch.nn.Module):
+class HMMFactorGraphHead(CompactLabelGenerationHead):
     """Differentiable HMM that exposes generated-token and latent-state marginals."""
 
     def __init__(

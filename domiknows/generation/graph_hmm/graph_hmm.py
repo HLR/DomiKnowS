@@ -409,7 +409,7 @@ class DomiKnowSAwareHMM:
 
     def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
         """Return a PMD-compatible Torch head initialized from this fitted HMM."""
-        from .torch_learners import GraphHMMGenerationHead
+        from ..learners.graph_hmm import GraphHMMGenerationHead
 
         return GraphHMMGenerationHead.from_graph_hmm(
             self,

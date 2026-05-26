@@ -30,11 +30,12 @@ For graph-aware HMM and graph-constrained spectral automata learning, see
 | `HuggingFaceGenerationAdapter` | Runs true hard constrained decoding by masking logits with a DFA. |
 | `OpenAIResponsesAdapter` | Calls the OpenAI Responses API, then encodes and verifies output post hoc. |
 | `latent_constraints.py` | Product t-norm soft losses over token/latent probability sequences. |
+| `learners/compact/` | Shared compact-label head protocol plus GRU, Transformer, neural n-gram, local energy, and CRF heads for PMD, DFA-constrained label decoding, and hybrid scoring. |
 | `automata` | DFA plus Torch-backed HMM/PFA, Hankel projection, WFA, and spectral WFA learning utilities. |
 | `graph_hmm` | DomiKnowS-aware constrained HMM/spectral learners plus PMD-compatible Torch heads that compile graph structure, static specs, dynamic hooks, and graph-valid Hankel projection into compact-symbol automata. |
-| `automata_heads.py` | Production Torch HMM/WFA compact-label heads, prompt-conditioned HMM/WFA heads, and auxiliary losses for `PrimalDualProgram` task loops. |
+| `learners/automata/` | Production Torch HMM/WFA compact-label heads, prompt-conditioned HMM/WFA heads, and auxiliary losses for `PrimalDualProgram` task loops. |
 | `hybrid.py` | Large-generator plus compact-head controller/scorer for candidate reranking, risk, repair, soft preferences, and constraint selection. |
-| `hmm_factor.py` | Explicit HMM factor-graph encoder, shared HMM head, DP factor projections, and NLL/diagnostic helpers. |
+| `learners/factors/` | Explicit HMM and WFA factor-graph encoders, shared learner heads, DP/factor projections, and NLL/diagnostic helpers. |
 
 The package has three related automata layers:
 
@@ -377,6 +378,22 @@ Learned compact-label heads use the same DFA language but decode over
 `TokenVocabulary` labels directly. Greedy, beam search, and sampling all append
 the concrete tokenizer id for the chosen label before asking the head for the
 next label logits.
+
+The compact-label decoder is model-agnostic. Any head implementing the
+`CompactLabelSequenceModel` contract can be used here: HMM, WFA/spectral,
+graph-HMM, GRU, Transformer, neural n-gram, local energy scorer, exact CRF scorer, or a
+project-specific compact sequence model. The head supplies logits; the DFA
+supplies the hard validity mask.
+
+`EnergyCompactLabelGenerationHead` is a local energy model: lower sequence
+energy means a better candidate, and `next_label_logits(...)` returns negative
+next-step energy for decoder compatibility.
+
+`CRFCompactLabelScorer` trains with exact global normalization, but
+`constrained_label_*` still uses its local next-label proposal interface.
+Exact constrained CRF decoding would require product-state Viterbi over
+`(CRF previous label, DFA state)`, for example a future
+`constrained_crf_viterbi_decode(...)`.
 
 ```python
 import torch
@@ -776,11 +793,8 @@ usable as DomiKnowS learning modules. They output log-probabilities shaped
 attached with `ModuleLearner` the same way as the compact HuggingFace head.
 
 ```python
-from domiknows.generation import (
-    HMMGenerationHead,
-    hmm_sequence_nll,
-    constrained_label_greedy_decode,
-)
+from domiknows.generation import constrained_label_greedy_decode
+from domiknows.generation.learners import HMMGenerationHead, hmm_sequence_nll
 from domiknows.sensor.pytorch.learners import ModuleLearner
 
 head = HMMGenerationHead(
@@ -838,7 +852,7 @@ recompute expert weights at each generated step from prompt features plus a
 mean-pooled learned embedding of generated labels seen so far.
 
 ```python
-from domiknows.generation import PromptConditionedHMMGenerationHead, hmm_sequence_nll
+from domiknows.generation.learners import PromptConditionedHMMGenerationHead, hmm_sequence_nll
 
 head = PromptConditionedHMMGenerationHead(
     label_count=bundle.vocabulary.label_count,
@@ -914,7 +928,7 @@ logical consistency rules over these visible concepts, while Torch still owns
 the exact numeric forward/backward recurrence and likelihood.
 
 ```python
-from domiknows.generation import (
+from domiknows.generation.learners import (
     HMMFactorGraphEncoder,
     HMMFactorGraphHead,
     apply_hmm_dp_consistency_constraints,
@@ -973,7 +987,7 @@ use normalized `log_softmax(...)` projections of signed state and pair scores.
 Exact WFA recurrence and energy scoring remain in Torch.
 
 ```python
-from domiknows.generation import (
+from domiknows.generation.learners import (
     SpectralWFAFactorGraphEncoder,
     SpectralWFAFactorGraphHead,
     apply_wfa_factor_consistency_constraints,
@@ -1060,6 +1074,10 @@ bridges around generation workflows.
 - Learned compact-label heads can be trained through the DomiKnowS-style
   learning path and decoded with DFA-constrained greedy, beam search, and
   sampling. Batched learned-head decoding remains out of scope.
+- `CRFCompactLabelScorer` supports exact globally normalized CRF training and
+  exact token marginals for PMD/DataNodes. Exact constrained CRF decoding is
+  future work because it needs CRF x DFA product-state Viterbi, not only local
+  next-label masking.
 - Hybrid controller/scorer support is implemented for HuggingFace,
   OpenAI-compatible, and precomputed candidates. It reranks and diagnoses
   candidates with compact heads, but does not turn hosted APIs into hard
