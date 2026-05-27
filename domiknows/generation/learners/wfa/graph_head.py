@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Mapping
+from typing import Any, Mapping
 
 import torch
 
@@ -32,7 +32,7 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
         trainable: bool = True,
-        random_seed: int = 0,
+        random_seed: int | None = 0,
         initial=None,
         final=None,
         operators: Sequence[Any] | Mapping[Any, Any] | None = None,
@@ -50,7 +50,7 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
             raise ValueError("symbols length must match label_count")
         self.label_to_token_id = _coerce_label_to_token_id(label_to_token_id, self.label_count)
         self._token_id_to_label = _invert_label_to_token_id(self.label_to_token_id)
-        generator = torch.Generator().manual_seed(int(random_seed))
+        generator = None if random_seed is None else torch.Generator().manual_seed(int(random_seed))
         if initial is None:
             # Bias state 0 so random init starts with a mild anchor.
             initial_t = torch.randn(self.state_count, generator=generator) * 0.1
@@ -82,9 +82,10 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
         trainable: bool = True,
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
+        random_seed: int | None = None,
     ) -> "GraphSpectralGenerationHead":
         automaton._require_fitted()
-        return cls(
+        head = cls(
             label_count=len(automaton.id_to_symbol),
             state_count=int(automaton.initial.numel()),
             pad_size=pad_size,
@@ -95,6 +96,18 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
             operators=automaton.operators,
             symbols=automaton.id_to_symbol,
         )
+        head.apply_seeded_parameter_jitter(random_seed)
+        return head
+
+    def apply_seeded_parameter_jitter(self, random_seed: int | None, *, scale: float = 0.01) -> None:
+        """Apply deterministic small parameter noise for seeded trainable starts."""
+        if random_seed is None:
+            return
+        with torch.no_grad(), torch.random.fork_rng(devices=[]):
+            torch.manual_seed(int(random_seed))
+            self.initial.add_(float(scale) * torch.randn_like(self.initial))
+            self.final.add_(float(scale) * torch.randn_like(self.final))
+            self.operators.add_(float(scale) * torch.randn_like(self.operators))
 
     def token_id_for_label(self, label: int) -> int:
         """Resolve tokenizer id for a label; fail for non 1-to-1 mappings."""

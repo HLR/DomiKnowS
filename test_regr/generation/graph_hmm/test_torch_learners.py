@@ -78,6 +78,55 @@ def test_graph_hmm_generation_head_from_fitted_hmm_copies_parameters():
     assert head.trainable_parameter_names() == []
 
 
+def test_graph_hmm_generation_head_from_fitted_hmm_accepts_random_seed():
+    learner = DomiKnowSAwareHMM(
+        graph=None,
+        n_hidden_states=2,
+        state_names=["A", "B"],
+        symbols=[0, 1],
+        transition_mask=torch.tensor([[1.0, 1.0], [0.0, 1.0]], dtype=torch.float64),
+        emission_mask=torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64),
+        random_seed=3,
+    ).fit([[0, 1], [0, 1, 1]], max_iter=2)
+
+    first = GraphHMMGenerationHead.from_graph_hmm(
+        learner,
+        trainable=True,
+        pad_size=3,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        random_seed=7,
+    )
+    second = GraphHMMGenerationHead.from_graph_hmm(
+        learner,
+        trainable=True,
+        pad_size=3,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        random_seed=7,
+    )
+    other = GraphHMMGenerationHead.from_graph_hmm(
+        learner,
+        trainable=True,
+        pad_size=3,
+        prompt_conditioning="initial",
+        prompt_vocab_size=8,
+        prompt_hidden_size=4,
+        random_seed=8,
+    )
+
+    assert torch.allclose(first.initial_logits, second.initial_logits)
+    assert torch.allclose(first.transition_logits, second.transition_logits)
+    assert torch.allclose(first.emission_logits, second.emission_logits)
+    assert torch.allclose(first.prompt_embedding.weight, second.prompt_embedding.weight)
+    assert not torch.allclose(first.initial_logits, other.initial_logits)
+    assert not torch.allclose(first.transition_logits, other.transition_logits)
+    assert not torch.allclose(first.emission_logits, other.emission_logits)
+    assert not torch.allclose(first.prompt_embedding.weight, other.prompt_embedding.weight)
+
+
 def test_graph_hmm_to_torch_learner_factory():
     """Test the factory method that converts DomiKnowSAwareHMM directly to GraphHMMGenerationHead."""
     learner = DomiKnowSAwareHMM(
@@ -219,6 +268,27 @@ def test_graph_spectral_generation_head_from_fitted_automaton():
     assert torch.allclose(head.final, automaton.final.float())
     assert head.operators.shape == (2, 2, 2)
     assert head.trainable_parameter_names() == []
+
+
+def test_graph_spectral_generation_head_from_fitted_automaton_accepts_random_seed():
+    automaton = GraphSpectralAutomaton(symbols=[0, 1])
+    automaton.fit(
+        [[0], [1], [0, 1], [0, 1]],
+        prefixes=[(), (0,), (1,)],
+        suffixes=[(), (0,), (1,)],
+        rank=2,
+    )
+
+    first = GraphSpectralGenerationHead.from_graph_spectral(automaton, trainable=True, pad_size=3, random_seed=7)
+    second = GraphSpectralGenerationHead.from_graph_spectral(automaton, trainable=True, pad_size=3, random_seed=7)
+    other = GraphSpectralGenerationHead.from_graph_spectral(automaton, trainable=True, pad_size=3, random_seed=8)
+
+    assert torch.allclose(first.initial, second.initial)
+    assert torch.allclose(first.final, second.final)
+    assert torch.allclose(first.operators, second.operators)
+    assert not torch.allclose(first.initial, other.initial)
+    assert not torch.allclose(first.final, other.final)
+    assert not torch.allclose(first.operators, other.operators)
 
 
 def test_graph_spectral_to_torch_learner_factory():

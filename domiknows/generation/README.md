@@ -13,11 +13,15 @@ dependency-light; HuggingFace decoding uses `torch`; spectral learning uses
 
 ## Main Pieces
 
-For a focused guide to training compact heads and using them after training,
-see [`learners/README_learning.md`](learners/README_learning.md).
+### Documentation Map
+The learner package overview is in [`learners/README.md`](learners/README.md).
 
-For graph-aware HMM and graph-constrained spectral automata learning, see
-[`learners/README_graph_hmm.md`](learners/README_graph_hmm.md).
+The detail learner-focused notes are:
+
+- model training and compact-head usage: [`learners/README_learning.md`](learners/README_learning.md)
+- graph-aware HMM and spectral automata: [`learners/README_graph_hmm.md`](learners/README_graph_hmm.md)
+- DFA and product-automaton tracing + debug server: [`learners/README_visualization.md`](learners/README_visualization.md)
+
 
 | Tool | Purpose |
 | --- | --- |
@@ -381,6 +385,12 @@ The compact-label decoder is model-agnostic. Any head implementing the
 graph-HMM, GRU, Transformer, neural n-gram, local energy scorer, exact CRF scorer, or a
 project-specific compact sequence model. The head supplies logits; the DFA
 supplies the hard validity mask.
+
+`NeuralNGramCompactLabelGenerationHead` is a fixed-window autoregressive model:
+it predicts the next compact label from the prompt summary plus the last
+`context_size` generated labels. It is lightweight and fast for local sequence
+patterns, but it does not directly model dependencies beyond that context
+window.
 
 `EnergyCompactLabelGenerationHead` is a local energy model: lower sequence
 energy means a better candidate, and `next_label_logits(...)` returns negative
@@ -746,7 +756,7 @@ run_generation_debug_server(
 
 The viewer exposes `/`, `/api/trace`, `/api/summary`, `/api/dot`, and
 `/api/svg`. It is a local debugging utility, not a production service.
-See `learners/README_visualization.md` for a shorter runbook focused only on this
+See [`learners/README_visualization.md`](learners/README_visualization.md) for a shorter runbook focused only on this
 debug viewer.
 
 ### Spectral WFA Learning

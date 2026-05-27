@@ -407,7 +407,7 @@ class DomiKnowSAwareHMM:
             dead_states=frozenset({dead}),
         )
 
-    def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
+    def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None, random_seed: int | None = None):
         """Return a PMD-compatible Torch head initialized from this fitted HMM."""
         from .graph_head import GraphHMMGenerationHead
 
@@ -416,6 +416,7 @@ class DomiKnowSAwareHMM:
             trainable=trainable,
             pad_size=pad_size,
             label_to_token_id=label_to_token_id,
+            random_seed=random_seed,
         )
 
     def _prepare_training_sequences(self, sequences: Sequence[Sequence[Any]]) -> list[list[int]]:

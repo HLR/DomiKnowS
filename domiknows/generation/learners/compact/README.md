@@ -53,12 +53,33 @@ Prompt tokens are embedded with a learned prompt embedding table. Generated labe
 
 | Module | Main class | Modeling idea | Best fit |
 | --- | --- | --- | --- |
-| `neural_ngram.py` | `NeuralNGramCompactLabelGenerationHead` | Fixed-width Markov context + MLP | fast local dependencies |
+| `neural_ngram.py` | `NeuralNGramCompactLabelGenerationHead` | Fixed-width Markov context + multi-layer perceptron (MLP) | fast local dependencies |
 | `energy.py` | `EnergyCompactLabelGenerationHead` | Local energy model over context and candidate label | scoring and preference modeling |
 | `gru.py` | `GRUCompactLabelGenerationHead` | Recurrent autoregressive model | ordered dependencies beyond fixed context |
 | `transformer.py` | `TransformerCompactLabelGenerationHead` | Causal self-attention over compact labels | richer prefix interactions |
 | `crf.py` | `CRFCompactLabelScorer` | Linear-chain CRF with exact normalization | structured sequence scoring and exact marginals |
 | `utils.py` | helper functions | shared validation, shaping, and mapping | internal support |
+
+### How an MLP Works
+
+MLP means multi-layer perceptron. In this package, it is a small feed-forward
+neural network used to map feature vectors to either logits or energies.
+
+At inference time, an MLP does three simple steps:
+
+1. Apply a linear layer to mix input features (weighted sum + bias).
+2. Apply a non-linear activation (for example GELU) so the model can learn
+    non-linear patterns.
+3. Optionally repeat step 1 and 2, then apply a final linear layer to produce
+    outputs.
+
+For compact heads:
+
+- in `neural_ngram.py`, the MLP outputs next-label logits
+- in `energy.py`, the MLP outputs one scalar energy per candidate label
+
+The key intuition is that embeddings create useful numeric features, and the
+MLP learns how to combine those features into a next-label preference.
 
 ## How Each Module Works
 
@@ -67,6 +88,8 @@ Prompt tokens are embedded with a learned prompt embedding table. Generated labe
 Class: `NeuralNGramCompactLabelGenerationHead`
 
 This is the simplest learned autoregressive head in the package. It behaves like a neural n-gram model over compact labels.
+* Classic n-gram: counts how often the next token follows the last n-1 tokens.
+* Neural n-gram: replaces count tables with embeddings + a small neural net, so it generalizes better to unseen combinations.
 
 How it works:
 

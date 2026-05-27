@@ -26,12 +26,12 @@ __all__ = [
 def _random_hmm_parameters(
     state_count: int,
     label_count: int,
-    random_seed: int,
+    random_seed: int | None,
     transition_mask: torch.Tensor,
     emission_mask: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Sample random positive HMM parameters and project through legal masks."""
-    generator = torch.Generator().manual_seed(int(random_seed))
+    generator = None if random_seed is None else torch.Generator().manual_seed(int(random_seed))
     initial = torch.rand(state_count, generator=generator) + 0.1
     transition = torch.rand(state_count, state_count, generator=generator) + 0.1
     emission = torch.rand(state_count, label_count, generator=generator) + 0.1

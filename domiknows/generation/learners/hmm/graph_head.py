@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping
 import torch
 
 from ..common.base import CompactLabelGenerationHead
+from ..common.utils import _seeded_torch_rng
 from .constraints import combine_masks, project_matrix_rows, validate_mask
 from .dynamic import DynamicConstraintContext, FactorizedStateSpace, apply_transition_energy, transition_energy_matrix
 from .graph_adapter import DomiKnowSGraphAdapter
@@ -46,7 +47,7 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
         trainable: bool = True,
-        random_seed: int = 0,
+        random_seed: int | None = 0,
         initial=None,
         transition=None,
         emission=None,
@@ -99,8 +100,9 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
                 raise ValueError("prompt_vocab_size must be positive")
             if self.prompt_hidden_size < 1:
                 raise ValueError("prompt_hidden_size must be positive")
-            self.prompt_embedding = torch.nn.Embedding(self.prompt_vocab_size, self.prompt_hidden_size)
-            self.prompt_initial_projector = torch.nn.Linear(self.prompt_hidden_size, self.n_hidden_states)
+            with _seeded_torch_rng(random_seed):
+                self.prompt_embedding = torch.nn.Embedding(self.prompt_vocab_size, self.prompt_hidden_size)
+                self.prompt_initial_projector = torch.nn.Linear(self.prompt_hidden_size, self.n_hidden_states)
             torch.nn.init.zeros_(self.prompt_initial_projector.weight)
             torch.nn.init.zeros_(self.prompt_initial_projector.bias)
             for parameter in self.prompt_embedding.parameters():
@@ -176,10 +178,11 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         prompt_conditioning: str = "none",
         prompt_vocab_size: int = 128,
         prompt_hidden_size: int = 16,
+        random_seed: int | None = None,
     ) -> "GraphHMMGenerationHead":
         """Create a PMD head initialized from a fitted ``DomiKnowSAwareHMM``."""
         learner._require_fitted()
-        return cls(
+        head = cls(
             graph=learner.graph,
             n_hidden_states=learner.n_hidden_states,
             label_count=len(learner.id_to_symbol),
@@ -201,8 +204,27 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
             prompt_conditioning=prompt_conditioning,
             prompt_vocab_size=prompt_vocab_size,
             prompt_hidden_size=prompt_hidden_size,
+            random_seed=random_seed,
             dtype=learner.dtype,
         )
+        head.apply_seeded_logit_jitter(random_seed)
+        return head
+
+    def apply_seeded_logit_jitter(self, random_seed: int | None, *, scale: float = 0.01) -> None:
+        """Apply deterministic small logit noise for seeded trainable starts.
+
+        ``from_graph_hmm`` initializes from graph-constrained fitted tensors,
+        so the constructor's random parameter path is not used. This method
+        gives callers the same single-argument seeding ergonomics as the neural
+        compact heads while keeping ``random_seed=None`` exactly deterministic.
+        """
+        if random_seed is None:
+            return
+        with torch.no_grad(), torch.random.fork_rng(devices=[]):
+            torch.manual_seed(int(random_seed))
+            self.initial_logits.add_(float(scale) * torch.randn_like(self.initial_logits))
+            self.transition_logits.add_(float(scale) * torch.randn_like(self.transition_logits))
+            self.emission_logits.add_(float(scale) * torch.randn_like(self.emission_logits))
 
     @property
     def initial_probs(self) -> torch.Tensor:

@@ -47,7 +47,7 @@ class HMMGenerationHead(CompactLabelGenerationHead):
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
         trainable: bool = False,
-        random_seed: int = 0,
+        random_seed: int | None = 0,
     ):
         super().__init__()
         self.pad_size = _positive_int(pad_size, "pad_size")

@@ -212,7 +212,7 @@ class SpectralWFAFactorGraphHead(CompactLabelGenerationHead):
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
         trainable: bool = True,
-        random_seed: int = 0,
+        random_seed: int | None = 0,
     ):
         super().__init__()
         self.label_count = _resolve_label_count(model, label_count)
@@ -515,8 +515,8 @@ def _model_state_count(model: WeightedFiniteAutomaton | None) -> int | None:
     return None if model is None else int(model.state_count)
 
 
-def _random_wfa_parameters(state_count: int, label_count: int, random_seed: int):
-    generator = torch.Generator().manual_seed(int(random_seed))
+def _random_wfa_parameters(state_count: int, label_count: int, random_seed: int | None):
+    generator = None if random_seed is None else torch.Generator().manual_seed(int(random_seed))
     initial = torch.randn(state_count, generator=generator) * 0.1
     transitions = torch.randn(label_count, state_count, state_count, generator=generator) * 0.1
     final = torch.randn(state_count, generator=generator) * 0.1

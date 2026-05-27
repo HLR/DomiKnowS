@@ -43,6 +43,44 @@ def test_prompt_conditioned_wfa_returns_finite_log_probs():
     assert torch.allclose(log_probs.exp().sum(dim=-1), torch.ones(4), atol=1e-5)
 
 
+def test_prompt_conditioned_hmm_random_seed_covers_prompt_and_dynamics_modules():
+    kwargs = {
+        **_head_kwargs(),
+        "dynamics_conditioning": "gated",
+        "dynamics_expert_count": 3,
+        "step_dynamics_conditioning": "prefix_gated",
+    }
+    first = PromptConditionedHMMGenerationHead(**kwargs)
+    second = PromptConditionedHMMGenerationHead(**kwargs)
+    other = PromptConditionedHMMGenerationHead(**{**kwargs, "random_seed": 8})
+
+    for name, parameter in first.named_parameters():
+        assert torch.allclose(parameter, dict(second.named_parameters())[name]), name
+    assert any(
+        not torch.allclose(parameter, dict(other.named_parameters())[name])
+        for name, parameter in first.named_parameters()
+    )
+
+
+def test_prompt_conditioned_wfa_random_seed_covers_prompt_and_dynamics_modules():
+    kwargs = {
+        **_head_kwargs(),
+        "dynamics_conditioning": "gated",
+        "dynamics_expert_count": 3,
+        "step_dynamics_conditioning": "prefix_gated",
+    }
+    first = PromptConditionedSpectralWFAGenerationHead(**kwargs)
+    second = PromptConditionedSpectralWFAGenerationHead(**kwargs)
+    other = PromptConditionedSpectralWFAGenerationHead(**{**kwargs, "random_seed": 8})
+
+    for name, parameter in first.named_parameters():
+        assert torch.allclose(parameter, dict(second.named_parameters())[name]), name
+    assert any(
+        not torch.allclose(parameter, dict(other.named_parameters())[name])
+        for name, parameter in first.named_parameters()
+    )
+
+
 def test_different_prompts_change_hmm_initial_state_and_logits():
     head = PromptConditionedHMMGenerationHead(**_head_kwargs())
 

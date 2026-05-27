@@ -25,6 +25,7 @@ from ..common.utils import (
     _resolve_label_count,
     _resolve_state_count,
     _safe_log,
+    _seeded_torch_rng,
     _stack_base_and_optional_experts,
     _target_label_batch,
     _target_labels,
@@ -54,7 +55,7 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
         dynamics_expert_count: int = 2,
         step_dynamics_conditioning: str = "none",
         trainable: bool = True,
-        random_seed: int = 0,
+        random_seed: int | None = 0,
     ):
         super().__init__()
         self.pad_size = _positive_int(pad_size, "pad_size")
@@ -71,16 +72,17 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
         )
         self.label_to_token_id = _coerce_label_to_token_id(label_to_token_id, self.label_count)
         self._token_id_to_label = _invert_label_to_token_id(self.label_to_token_id)
-        self.prompt_encoder = _build_prompt_encoder(
-            prompt_encoder=prompt_encoder,
-            prompt_encoder_type=prompt_encoder_type,
-            prompt_vocab_size=prompt_vocab_size,
-            prompt_hidden_size=prompt_hidden_size,
-            backbone=backbone,
-            backbone_hidden_size=backbone_hidden_size,
-        )
+        with _seeded_torch_rng(random_seed):
+            self.prompt_encoder = _build_prompt_encoder(
+                prompt_encoder=prompt_encoder,
+                prompt_encoder_type=prompt_encoder_type,
+                prompt_vocab_size=prompt_vocab_size,
+                prompt_hidden_size=prompt_hidden_size,
+                backbone=backbone,
+                backbone_hidden_size=backbone_hidden_size,
+            )
+            self.initial_projector = torch.nn.Linear(self.prompt_encoder.output_size, self.state_count)
         _configure_prompt_encoder_trainability(self.prompt_encoder, trainable)
-        self.initial_projector = torch.nn.Linear(self.prompt_encoder.output_size, self.state_count)
 
         _initial, transition, emission = _random_hmm_parameters(self.state_count, self.label_count, random_seed)
         self.transition_logits = torch.nn.Parameter(_safe_log(transition), requires_grad=trainable)
@@ -90,11 +92,12 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
                 self.dynamics_expert_count - 1,
                 self.state_count,
                 self.label_count,
-                random_seed + 101,
+                None if random_seed is None else int(random_seed) + 101,
             )
             self.transition_expert_logits = torch.nn.Parameter(transition_experts, requires_grad=trainable)
             self.emission_expert_logits = torch.nn.Parameter(emission_experts, requires_grad=trainable)
-            self.dynamics_gate = torch.nn.Linear(self.prompt_encoder.output_size, self.dynamics_expert_count)
+            with _seeded_torch_rng(None if random_seed is None else int(random_seed) + 1):
+                self.dynamics_gate = torch.nn.Linear(self.prompt_encoder.output_size, self.dynamics_expert_count)
             for parameter in self.dynamics_gate.parameters():
                 parameter.requires_grad_(trainable)
         else:
@@ -102,8 +105,9 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
             self.register_parameter("emission_expert_logits", None)
             self.dynamics_gate = None
         if self.step_dynamics_conditioning == "prefix_gated":
-            self.prefix_embedding = torch.nn.Embedding(self.label_count, self.prompt_encoder.output_size)
-            self.step_dynamics_gate = torch.nn.Linear(self.prompt_encoder.output_size * 2, self.dynamics_expert_count)
+            with _seeded_torch_rng(None if random_seed is None else int(random_seed) + 2):
+                self.prefix_embedding = torch.nn.Embedding(self.label_count, self.prompt_encoder.output_size)
+                self.step_dynamics_gate = torch.nn.Linear(self.prompt_encoder.output_size * 2, self.dynamics_expert_count)
             for parameter in self.prefix_embedding.parameters():
                 parameter.requires_grad_(trainable)
             for parameter in self.step_dynamics_gate.parameters():

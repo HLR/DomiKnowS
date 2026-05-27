@@ -276,7 +276,7 @@ class GraphSpectralAutomaton:
                 reconstructed[i, j] = state @ self.final
         return reconstructed
 
-    def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None):
+    def to_torch_learner(self, *, trainable: bool = True, pad_size: int = 4, label_to_token_id=None, random_seed: int | None = None):
         """Return a PMD-compatible Torch head initialized from this fitted WFA."""
         from .graph_head import GraphSpectralGenerationHead
 
@@ -285,6 +285,7 @@ class GraphSpectralAutomaton:
             trainable=trainable,
             pad_size=pad_size,
             label_to_token_id=label_to_token_id,
+            random_seed=random_seed,
         )
 
     def _build_symbol_table(

@@ -239,7 +239,7 @@ class HMMFactorGraphHead(CompactLabelGenerationHead):
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
         trainable: bool = True,
-        random_seed: int = 0,
+        random_seed: int | None = 0,
     ):
         super().__init__()
         self.label_count = _positive_int(label_count, "label_count")
@@ -251,7 +251,7 @@ class HMMFactorGraphHead(CompactLabelGenerationHead):
             int(token_id): label for label, token_id in enumerate(self.label_to_token_id) if token_id is not None
         }
 
-        generator = torch.Generator().manual_seed(int(random_seed))
+        generator = None if random_seed is None else torch.Generator().manual_seed(int(random_seed))
         initial = torch.rand(self.state_count, generator=generator) + 0.1
         transition = torch.rand(self.state_count, self.state_count, generator=generator) + 0.1
         emission = torch.rand(self.state_count, self.label_count, generator=generator) + 0.1

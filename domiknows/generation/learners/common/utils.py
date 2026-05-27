@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 
 import torch
 
@@ -37,10 +38,20 @@ __all__ = [
     '_random_wfa_parameters',
     '_random_hmm_dynamics_experts',
     '_random_wfa_dynamics_experts',
+    '_seeded_torch_rng',
     '_validate_hmm_shapes',
     '_validate_wfa_shapes',
     'TransitionPotentialInput',
 ]
+
+@contextmanager
+def _seeded_torch_rng(random_seed: int | None):
+    if random_seed is None:
+        yield
+        return
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(int(random_seed))
+        yield
 
 def _positive_int(value: int, name: str) -> int:
     value = int(value)
@@ -298,8 +309,16 @@ def _validate_label(label: int, label_count: int) -> int:
 def _safe_log(values: torch.Tensor) -> torch.Tensor:
     return torch.log(values.float().clamp_min(torch.finfo(torch.float32).eps))
 
-def _random_hmm_parameters(state_count: int, label_count: int, random_seed: int):
-    generator = torch.Generator().manual_seed(int(random_seed))
+def _generator_for_seed(random_seed: int | None) -> torch.Generator | None:
+    if random_seed is None:
+        return None
+    return torch.Generator().manual_seed(int(random_seed))
+
+def _offset_seed(random_seed: int | None, offset: int) -> int | None:
+    return None if random_seed is None else int(random_seed) + int(offset)
+
+def _random_hmm_parameters(state_count: int, label_count: int, random_seed: int | None):
+    generator = _generator_for_seed(random_seed)
     initial = torch.rand(state_count, generator=generator) + 0.1
     transition = torch.rand(state_count, state_count, generator=generator) + 0.1
     emission = torch.rand(state_count, label_count, generator=generator) + 0.1
@@ -308,8 +327,8 @@ def _random_hmm_parameters(state_count: int, label_count: int, random_seed: int)
     emission = emission / emission.sum(dim=-1, keepdim=True)
     return initial, transition, emission
 
-def _random_wfa_parameters(state_count: int, label_count: int, random_seed: int):
-    generator = torch.Generator().manual_seed(int(random_seed))
+def _random_wfa_parameters(state_count: int, label_count: int, random_seed: int | None):
+    generator = _generator_for_seed(random_seed)
     initial = torch.randn(state_count, generator=generator) * 0.1
     transitions = torch.randn(label_count, state_count, state_count, generator=generator) * 0.1
     final = torch.randn(state_count, generator=generator) * 0.1
@@ -319,7 +338,7 @@ def _random_hmm_dynamics_experts(
     expert_count: int,
     state_count: int,
     label_count: int,
-    random_seed: int,
+    random_seed: int | None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if expert_count < 1:
         return (
@@ -332,7 +351,7 @@ def _random_hmm_dynamics_experts(
         _initial, transition, emission = _random_hmm_parameters(
             state_count,
             label_count,
-            random_seed + offset,
+            _offset_seed(random_seed, offset),
         )
         transition_experts.append(_safe_log(transition))
         emission_experts.append(_safe_log(emission))
@@ -342,7 +361,7 @@ def _random_wfa_dynamics_experts(
     expert_count: int,
     state_count: int,
     label_count: int,
-    random_seed: int,
+    random_seed: int | None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if expert_count < 1:
         return (
@@ -355,7 +374,7 @@ def _random_wfa_dynamics_experts(
         _initial, transitions, final = _random_wfa_parameters(
             state_count,
             label_count,
-            random_seed + offset,
+            _offset_seed(random_seed, offset),
         )
         transition_experts.append(transitions)
         final_experts.append(final)
