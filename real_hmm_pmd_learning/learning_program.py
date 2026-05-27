@@ -124,13 +124,8 @@ def build_compact_learner(
             label_to_token_id=label_to_token_id,
             prompt_conditioning="initial",
             prompt_vocab_size=PROMPT_VOCAB_SIZE,
+            random_seed=random_seed,
         )
-        if random_seed is not None:
-            with torch.no_grad(), torch.random.fork_rng(devices=[]):
-                torch.manual_seed(int(random_seed))
-                model.initial_logits.add_(0.01 * torch.randn_like(model.initial_logits))
-                model.transition_logits.add_(0.01 * torch.randn_like(model.transition_logits))
-                model.emission_logits.add_(0.01 * torch.randn_like(model.emission_logits))
         return model
     if learner == "energy":
         return EnergyCompactLabelGenerationHead(
@@ -154,7 +149,7 @@ def build_learning_program(
     stream_seed: int = 0,
     inference_prompt: str = "AB",
     pad_size: int | None = None,
-    random_seed: int = 0,
+    random_seed: int | None = 0,
 ) -> RealHMMPMDArtifacts:
     """Build a PMD program with a trainable compact-label learner."""
     if head is not None:
