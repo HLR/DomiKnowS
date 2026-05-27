@@ -6,15 +6,18 @@ import io
 from contextlib import redirect_stderr
 from functools import partial
 
-import torch
-
 try:
     from .learning_program import build_learning_program
     from .stream_generator import PROMPT_ORDER
     from .utils import (
+        AdamWithGradSnapshot,
+        capture_parameter_snapshot,
+        print_gradient_snapshot,
         print_demo_header,
         print_learning_snapshot,
         print_no_training_requested,
+        print_parameter_update_snapshot,
+        reset_optimizer_grad_snapshot,
         print_stream_batch,
         print_trained_batch,
         print_training_header,
@@ -23,9 +26,14 @@ except ImportError:  # pragma: no cover - direct script execution fallback
     from learning_program import build_learning_program
     from stream_generator import PROMPT_ORDER
     from utils import (
+        AdamWithGradSnapshot,
+        capture_parameter_snapshot,
+        print_gradient_snapshot,
         print_demo_header,
         print_learning_snapshot,
         print_no_training_requested,
+        print_parameter_update_snapshot,
+        reset_optimizer_grad_snapshot,
         print_stream_batch,
         print_trained_batch,
         print_training_header,
@@ -68,17 +76,26 @@ def main(argv=None) -> int:
     
     # 2. Train on live stream batches, printing PMD predictions after each batch.
     for step in range(max(0, args.steps)):
+        before_hmm = capture_parameter_snapshot(artifacts.model, hmm_only=True)
+        matched_hmm_names = any(
+            any(keyword in name.lower() for keyword in ("hmm", "transition", "emission", "initial", "start"))
+            for name in before_hmm
+        )
         artifacts.stream_examples = artifacts.training_source.next_batch(step)
         print_stream_batch(artifacts.stream_examples, title=f"  live stream batch {step + 1}")
+        reset_optimizer_grad_snapshot()
         with redirect_stderr(io.StringIO()):
             artifacts.program.train(
                 artifacts.training_source.training_data(artifacts.stream_examples),
                 train_epoch_num=1,
-                Optim=partial(torch.optim.Adam, lr=lr),
+                Optim=partial(AdamWithGradSnapshot, lr=lr),
                 c_lr=lr,
                 print_loss=False,
             )
         print_trained_batch(step, len(artifacts.stream_examples))
+        print_gradient_snapshot(artifacts.model, step=step)
+        after_hmm = capture_parameter_snapshot(artifacts.model, hmm_only=matched_hmm_names)
+        print_parameter_update_snapshot(before_hmm, after_hmm, step=step, hmm_matched=matched_hmm_names)
 
     print_learning_snapshot(artifacts, title="\nAfter training")
     return 0

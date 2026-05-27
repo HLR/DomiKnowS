@@ -111,6 +111,8 @@ def build_compact_learner(
     learner = learner.lower()
     label_to_token_id = label_token_id_map(bundle.vocabulary)
     if learner == "graph-hmm":
+        # The graph-HMM learner is initialized with the best-fitting HMM given the graph constraints, 
+        # which may help it learn faster than the randomly initialized energy model.
         fitted_hmm = domiknows_hmm_from_generation_constraints(
             graph,
             bundle,
