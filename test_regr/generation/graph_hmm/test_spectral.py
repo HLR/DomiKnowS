@@ -17,7 +17,7 @@ import math
 import pytest
 import torch
 
-from domiknows.generation.learners import DFA
+from domiknows.generation.dfa import DFA
 from domiknows.generation.learners import GraphSpectralAutomaton, sequence_has_legal_path
 
 

@@ -18,7 +18,7 @@ constraints into a :class:`GenerationEnforcement` bundle:
 **Data structures**:
 
 - :class:`LatentWindowSpec` — parameters for one soft window-formula loss term.
-- :class:`GenerationEnforcement` — all hard DFA constraints + compiled soft
+- :class:`GenerationEnforcement` — compiled hard DFA + compiled soft
   loss callable.
 
 Workflow overview::
@@ -26,14 +26,14 @@ Workflow overview::
     # 1. Build graph, mark constraints
     with Graph(...) as graph:
         lc = ifL(...)
-        mark_for_dfa(lc, constraint=forbidden_token("bad"))
+        mark_for_dfa(lc)
         mark_for_latent(lc, LatentWindowSpec(if_label=3, formula=my_formula, window=5))
 
     # 2. Discover enforcement bundle
     enforcement = discover_generation_enforcement(graph, bundle)
 
     # 3. Use at generation time
-    combined_dfa = constraints_to_dfa(enforcement.dfa_constraints, vocabulary)
+    combined_dfa = enforcement.dfa
     loss = enforcement.latent_loss(token_probs)
 """
 from __future__ import annotations
@@ -45,10 +45,10 @@ import warnings
 
 import torch
 
-from .constraints import GenerationConstraint
-from .graph_discovery import discover_generation_constraints
-from .latent_constraints import Formula, LabelRef, LatentLossBreakdown, evaluate_latent_loss, window_formula_loss
-from .latent_potentials import LatentTransitionPotential, combine_transition_potentials, forbid_hmm_transition
+from ..dfa.core import DFA
+from ..dfa.graph_discovery import constraints_to_dfa_from_graph
+from .constraints import Formula, LabelRef, LatentLossBreakdown, evaluate_latent_loss, window_formula_loss
+from .potentials import LatentTransitionPotential, combine_transition_potentials, forbid_hmm_transition
 
 
 GraphLatentCompiler: TypeAlias = Callable[[object, object], "GraphLatentCompilerResult | None"]
@@ -58,7 +58,7 @@ GraphLatentCompiler: TypeAlias = Callable[[object, object], "GraphLatentCompiler
 class LatentWindowSpec:
     """Parameters for a single soft window-formula loss term.
 
-    A *window formula loss* evaluates a propositional :class:`~.latent_constraints.Formula`
+    A *window formula loss* evaluates a propositional :class:`~.constraints.Formula`
     over every sliding window of *window* consecutive token-probability vectors
     and returns a scalar penalty.  This dataclass bundles all hyperparameters
     needed to instantiate that computation.
@@ -66,7 +66,7 @@ class LatentWindowSpec:
     Attributes:
         if_label (int): Vocabulary label index that conditions the window;
             the loss is only accumulated for windows where this label is
-            active (see :func:`~.latent_constraints.window_formula_loss`).
+            active (see :func:`~.constraints.window_formula_loss`).
         formula (Formula): Propositional formula describing the desired
             relationship between token probabilities within a window.
         window (int): Width of the sliding window in tokens (≥ 1).
@@ -106,10 +106,8 @@ class GenerationEnforcement:
     generation / training time.
 
     Attributes:
-        dfa_constraints: Tuple of :class:`~.constraints.GenerationConstraint`
-            objects collected from DFA-marked logical constraints.  Pass to
-            :func:`~.constraints.constraints_to_dfa` to get a single
-            combined DFA for hard token masking.
+        dfa: Combined hard-enforcement DFA compiled from supported
+            DomiKnowS graph constraints.
         latent_specs: Tuple of :class:`LatentWindowSpec` instances collected
             from latent-marked logical constraints.  Exposed for inspection;
             the compiled callable is in *latent_loss*.
@@ -118,7 +116,7 @@ class GenerationEnforcement:
             a scalar.  Returns ``0.0`` when *latent_specs* is empty.
     """
 
-    dfa_constraints: tuple[GenerationConstraint, ...]
+    dfa: DFA
     latent_specs: tuple[LatentWindowSpec, ...]
     latent_loss: Callable[..., torch.Tensor]
     latent_breakdown: Callable[..., LatentLossBreakdown]
@@ -168,27 +166,21 @@ def graph_latent_compiler_result(
     )
 
 
-def mark_for_dfa(lc, constraint: GenerationConstraint | None = None):
+def mark_for_dfa(lc):
     """Annotate a DomiKnowS logical constraint for hard DFA enforcement.
 
-    Attaches the ``_generation_dfa_constraint`` attribute to *lc* so that
-    :func:`discover_generation_enforcement` will include it when building the
-    DFA constraint tuple.  Call this at graph-build time, inside a
+    Attaches the ``_generation_dfa_constraint`` flag to *lc* so that
+    :func:`discover_generation_enforcement` will include it when compiling the
+    hard DFA.  Call this at graph-build time, inside a
     ``with Graph(...):`` block.
 
     Args:
         lc: A DomiKnowS logical constraint object (e.g. the result of
             ``ifL(...)``, ``atMostAL(...)``, etc.).
-        constraint: The :class:`~.constraints.GenerationConstraint` instance
-            that captures the same property as *lc* but in DFA form.  When
-            ``None``, the attribute is set to ``True`` as a plain presence
-            flag and the constraint will be discovered via graph introspection
-            by :func:`~.graph_discovery.discover_generation_constraints`.
-
     Returns:
         *lc* unchanged (for chaining).
     """
-    setattr(lc, "_generation_dfa_constraint", constraint if constraint is not None else True)
+    setattr(lc, "_generation_dfa_constraint", True)
     return lc
 
 
@@ -222,7 +214,6 @@ def mark_for_latent(lc, spec: LatentWindowSpec):
 
 def mark_for_both(
     lc,
-    constraint: GenerationConstraint | None = None,
     spec: LatentWindowSpec | None = None,
 ):
     """Annotate a logical constraint for both DFA and optional latent loss.
@@ -232,14 +223,12 @@ def mark_for_both(
 
     Args:
         lc: A DomiKnowS logical constraint object.
-        constraint: Forwarded to :func:`mark_for_dfa`; see that function for
-            semantics.
         spec: If not ``None``, forwarded to :func:`mark_for_latent`.
 
     Returns:
         *lc* unchanged (for chaining).
     """
-    mark_for_dfa(lc, constraint=constraint)
+    mark_for_dfa(lc)
     if spec is not None:
         mark_for_latent(lc, spec)
     return lc
@@ -255,29 +244,27 @@ def discover_generation_enforcement(
 ) -> GenerationEnforcement:
     """Walk a built DomiKnowS graph and collect all enforcement annotations.
 
-    Combines the results of
-    :func:`~.graph_discovery.discover_generation_constraints` (DFA) and the
-    private :func:`_discover_latent_specs` (latent) passes into a single
-    :class:`GenerationEnforcement` bundle that is ready for use at generation
-    or training time.
+    Combines the graph-only DFA compiler with the private latent discovery
+    passes into a single :class:`GenerationEnforcement` bundle that is ready
+    for use at generation or training time.
 
     Args:
         graph: A DomiKnowS :class:`~domiknows.graph.Graph` instance that was
-            built with :meth:`~.encoder.GenerationEncoder.build_graph` and
+            built with :meth:`~.dfa.encoder.GenerationEncoder.build_graph` and
             optionally annotated with :func:`mark_for_dfa` /
             :func:`mark_for_latent`.
-        bundle: The :class:`~.encoder.GenerationBundle` returned alongside
+        bundle: The :class:`~.dfa.encoder.GenerationBundle` returned alongside
             *graph*.
-        on_unsupported: Behaviour when a DFA-marked constraint cannot be
-            automatically converted to a :class:`~.constraints.GenerationConstraint`.
+        on_unsupported: Behaviour when a generation-relevant graph constraint
+            cannot be compiled to DFA.
             ``"warn"`` (default) emits a warning; ``"raise"`` raises;
             ``"ignore"`` silently skips.
 
     Returns:
-        A :class:`GenerationEnforcement` with the collected DFA constraints,
-        latent specs, and a compiled latent loss callable.
+        A :class:`GenerationEnforcement` with the compiled DFA, latent specs,
+        and a compiled latent loss callable.
     """
-    dfa_constraints = discover_generation_constraints(graph, bundle, on_unsupported=on_unsupported)
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported=on_unsupported)
     compiler_results = _run_custom_latent_compilers(
         graph,
         bundle,
@@ -301,7 +288,7 @@ def discover_generation_enforcement(
         _compiler_results=compiler_results,
     )
     return GenerationEnforcement(
-        dfa_constraints=dfa_constraints,
+        dfa=dfa,
         latent_specs=latent_specs,
         latent_loss=_compile_latent_loss(latent_specs),
         latent_breakdown=_compile_latent_breakdown(latent_specs),

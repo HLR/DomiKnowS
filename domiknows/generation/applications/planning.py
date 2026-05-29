@@ -15,7 +15,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import torch
 
-from .learners.dfa.core import DFA
+from ..dfa.core import DFA
 
 
 @dataclass(frozen=True)

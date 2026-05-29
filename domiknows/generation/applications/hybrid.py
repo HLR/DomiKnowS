@@ -16,22 +16,11 @@ from typing import Any
 import torch
 
 from .adapters import GenerationResult, HuggingFaceGenerationAdapter, OpenAIResponsesAdapter
-from .learners.dfa.core import DFA
-from .learners.dfa.visualization import explain_dfa_rejection
-from .constraints import (
-    ConditionalMaxNonEosConstraint,
-    EosClosureConstraint,
-    ForbiddenTokenConstraint,
-    GenerationConstraint,
-    MaxNonEosConstraint,
-    RequiredTokenConstraint,
-    constraints_to_dfa,
-)
-from .decoder import ConstrainedGenerationResult
-from .enforcement import GenerationEnforcement
-from .latent_constraints import LatentLossBreakdown
-from .losses import token_probs_from_log_probs
-from .vocabulary import TokenVocabulary
+from ..dfa.core import DFA
+from ..dfa.visualization import explain_dfa_rejection
+from ..dfa.decoder import ConstrainedGenerationResult
+from ..latent import GenerationEnforcement, LatentLossBreakdown, token_probs_from_log_probs
+from ..dfa.vocabulary import TokenVocabulary
 
 
 @dataclass(frozen=True)
@@ -82,15 +71,15 @@ class HybridScoreWeights:
 
 @dataclass(frozen=True)
 class ConstraintBundle:
-    """Named constraint set used by prompt-level constraint selection."""
+    """Named precompiled DFA used by prompt-level constraint selection."""
 
     name: str
-    constraints: tuple[GenerationConstraint, ...]
+    dfa: DFA
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dfa(self, vocabulary: TokenVocabulary) -> DFA:
-        """Compile this bundle to a DFA."""
-        return constraints_to_dfa(self.constraints, vocabulary)
+        """Return the precompiled DFA; *vocabulary* is accepted for API symmetry."""
+        return self.dfa
 
 
 class ManualConstraintSelector:
@@ -167,7 +156,6 @@ class HybridController:
         enforcement: GenerationEnforcement | None = None,
         tokenizer=None,
         weights: HybridScoreWeights | Mapping[str, float] | None = None,
-        constraints: Sequence[GenerationConstraint] = (),
         constraint_selector: Any = None,
     ):
         if vocabulary is None:
@@ -181,7 +169,6 @@ class HybridController:
         self.enforcement = enforcement
         self.tokenizer = tokenizer or getattr(generator, "tokenizer", None) or getattr(vocabulary, "tokenizer", None)
         self.weights = _coerce_weights(weights)
-        self.constraints = tuple(constraints or getattr(enforcement, "dfa_constraints", ()) or ())
         self.constraint_selector = constraint_selector
 
     def generate_verify_rerank(
@@ -334,7 +321,7 @@ class HybridController:
         candidate_n = self._normalise_candidate(candidate, prompt_ids_t)
         labels = list(candidate_n.labels or ())
         tokens = [self.vocabulary.token_for_label(label) for label in labels]
-        suggestions = _constraint_repair_suggestions(self.constraints, labels, self.vocabulary)
+        suggestions = _constraint_repair_suggestions(self.dfa, labels, self.vocabulary)
         state = self.dfa.start_state
         for label in labels:
             next_state = self.dfa.step(state, int(label))
@@ -665,41 +652,24 @@ def _next_label_logits(model, input_ids: Sequence[int], prompt_ids: torch.Tensor
 
 
 def _constraint_repair_suggestions(
-    constraints: Sequence[GenerationConstraint],
+    dfa: DFA,
     labels: Sequence[int],
     vocabulary: TokenVocabulary,
 ) -> list[str]:
-    suggestions: list[str] = []
-    tokens = [vocabulary.token_for_label(label) for label in labels]
-    eos_label = vocabulary.eos_label
-    for constraint in constraints:
-        if isinstance(constraint, RequiredTokenConstraint):
-            count = tokens.count(constraint.token)
-            if count < constraint.min_count:
-                suggestions.append(f"add {constraint.token!r} ({count}/{constraint.min_count} present)")
-        elif isinstance(constraint, ForbiddenTokenConstraint):
-            if constraint.token in tokens:
-                suggestions.append(f"remove forbidden token {constraint.token!r}")
-        elif isinstance(constraint, MaxNonEosConstraint):
-            count = sum(1 for label in labels if label != eos_label)
-            if count > constraint.max_count:
-                suggestions.append(f"shorten to at most {constraint.max_count} non-EOS tokens")
-        elif isinstance(constraint, EosClosureConstraint):
-            seen_eos = False
-            for label in labels:
-                if seen_eos and label != eos_label:
-                    suggestions.append("after EOS, emit only EOS")
-                    break
-                seen_eos = seen_eos or label == eos_label
-        elif isinstance(constraint, ConditionalMaxNonEosConstraint):
-            count = sum(1 for label in labels if label != eos_label)
-            if constraint.token in tokens and count > constraint.max_count:
-                suggestions.append(
-                    f"because {constraint.token!r} appears, shorten to at most {constraint.max_count} non-EOS tokens"
-                )
-    if not suggestions:
-        suggestions.append("no constraint-specific repair needed")
-    return suggestions
+    if dfa.accepts(labels):
+        return ["sequence already satisfies the hard DFA"]
+    state = dfa.start_state
+    for index, label in enumerate(labels):
+        next_state = dfa.step(state, int(label))
+        if next_state is None or next_state in dfa.dead_states:
+            token = vocabulary.token_for_label(int(label))
+            return [f"revise token {index} ({token!r}) or choose one of the DFA-allowed next labels before it"]
+        state = next_state
+    allowed = sorted(int(label) for label in dfa.allowed_tokens(state, remaining_steps=1))
+    if allowed:
+        rendered = ", ".join(repr(vocabulary.token_for_label(label)) for label in allowed[:5])
+        return [f"append or replace with a DFA-allowed next token such as {rendered}"]
+    return ["no DFA-specific repair suggestion available"]
 
 
 def _candidate_full_ids(prompt_ids: torch.Tensor, candidate: GenerationCandidate) -> list[int]:

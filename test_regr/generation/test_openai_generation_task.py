@@ -16,7 +16,7 @@ def test_openai_generation_graph_constraints_compile_to_dfa():
 
     graph, bundle = graph_module.build_generation_graph(mock_openai.MockTokenizer())
     enforcement = run_demo.discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = run_demo.constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = run_demo.enforcement.dfa
 
     assert graph.name == "openai_generation"
     assert dfa.accepts([1, 2, 3, 0])
@@ -92,7 +92,7 @@ def test_openai_generation_mock_hybrid_generate_verify_rerank():
     tokenizer = mock_openai.MockTokenizer()
     graph, bundle = graph_module.build_generation_graph(tokenizer)
     enforcement = run_demo.discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = run_demo.constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = run_demo.enforcement.dfa
     client = mock_openai.MockOpenAIClient(" The cat mat<eos>")
     adapter = run_demo.OpenAIResponsesAdapter(client=client, model="mock", tokenizer=tokenizer)
     controller = HybridController(

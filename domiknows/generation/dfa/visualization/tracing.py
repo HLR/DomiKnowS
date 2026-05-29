@@ -2,7 +2,7 @@
 
 The helpers in this module are intentionally dependency-free.  They expose
 plain dataclasses and Graphviz DOT text that can be used from tests, CLIs, or
-the optional Flask viewer in :mod:`domiknows.generation.visual_server`.
+the optional Flask viewer in :mod:`domiknows.generation.dfa.visualization.server`.
 """
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from typing import Any
 
 import torch
 
-from .core import DFA, State, Symbol
-from ..hmm import DiscreteHMM
-from ..wfa import WeightedFiniteAutomaton, start_product_state, step_product_state
+from ..core import DFA, State, Symbol
+from ...learners.hmm import DiscreteHMM
+from ...learners.wfa import WeightedFiniteAutomaton, start_product_state, step_product_state
 
 Labeler = Callable[[Any], str]
 

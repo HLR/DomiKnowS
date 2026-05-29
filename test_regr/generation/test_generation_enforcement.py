@@ -97,7 +97,7 @@ def test_auto_discovered_dfa_constraints_still_work_with_enforcement():
         atLeastAL(bundle.context.token_value("A", "x"), 1)
 
     enforcement = discover_generation_enforcement(graph, bundle)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
     a = bundle.vocabulary.label_for_token("A")
     eos = bundle.vocabulary.label_for_token("<eos>")
 
@@ -117,7 +117,7 @@ def test_auto_discovered_boolean_dfa_constraints_work_with_enforcement():
 
     assert len(enforcement.dfa_constraints) == 1
     assert isinstance(enforcement.dfa_constraints[0], AnyOfGenerationConstraint)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
     a = bundle.vocabulary.label_for_token("A")
     b = bundle.vocabulary.label_for_token("B")
     eos = bundle.vocabulary.label_for_token("<eos>")

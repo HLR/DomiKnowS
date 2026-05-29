@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from domiknows.generation.planning import (
+from domiknows.generation.applications.planning import (
     planning_bundle_from_graph,
     planning_dfa_from_graph,
     planning_hmm_masks_from_graph,

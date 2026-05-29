@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from domiknows.generation import EnergyCompactLabelGenerationHead, constraints_to_dfa_from_graph, discover_generation_constraints
-from domiknows.generation.learners import GraphHMMGenerationHead
+from domiknows.generation.learners import GraphHMMGenerationHead, HMMGenerationHead
 
 
 def import_task_module(name: str):
@@ -139,6 +139,17 @@ def test_real_hmm_pmd_learning_program_builds_with_graph_hmm_learner():
     assert any(isinstance(module, GraphHMMGenerationHead) for module in artifacts.program.model.modules())
 
 
+def test_real_hmm_pmd_learning_program_builds_with_default_discrete_hmm_learner():
+    learning_program = import_task_module("learning_program")
+
+    artifacts = learning_program.build_learning_program(stream_count=4, pad_size=12, random_seed=0)
+
+    assert artifacts.program is not None
+    assert artifacts.learner_name == "discrete-hmm"
+    assert isinstance(artifacts.model, HMMGenerationHead)
+    assert any(isinstance(module, HMMGenerationHead) for module in artifacts.program.model.modules())
+
+
 def test_real_hmm_pmd_learning_program_builds_with_energy_learner():
     learning_program = import_task_module("learning_program")
 
@@ -151,7 +162,7 @@ def test_real_hmm_pmd_learning_program_builds_with_energy_learner():
     assert artifacts.model.vocab_size >= 100
 
 
-@pytest.mark.parametrize("learner", ["graph-hmm", "energy"])
+@pytest.mark.parametrize("learner", ["discrete-hmm", "graph-hmm", "energy"])
 def test_real_hmm_pmd_learning_uses_standard_program_train_and_updates_learner(learner):
     learning_program = import_task_module("learning_program")
     artifacts = learning_program.build_learning_program(learner=learner, stream_count=4, pad_size=12, random_seed=0)
@@ -174,7 +185,7 @@ def test_real_hmm_pmd_learning_uses_standard_program_train_and_updates_learner(l
     assert any(not torch.allclose(old, new) for old, new in zip(before, after))
 
 
-@pytest.mark.parametrize("learner", ["graph-hmm", "energy"])
+@pytest.mark.parametrize("learner", ["discrete-hmm", "graph-hmm", "energy"])
 def test_real_hmm_pmd_learning_scoring_and_greedy_inference(learner):
     graph_module = import_task_module("graph")
     learning_program = import_task_module("learning_program")
@@ -212,14 +223,14 @@ def test_real_hmm_pmd_learning_run_demo_main_runs_offline(capsys):
     captured = capsys.readouterr()
     output = captured.out
     assert "One-constraint DomiKnowS PMD learning demo" in output
-    assert "Active compact-label learner: graph-hmm" in output
+    assert "Active compact-label learner: discrete-hmm" in output
     assert "Parameter meaning:" in output
     assert "initial_logits: learns which hidden state" in output
     assert "transition_logits: learns how hidden states move" in output
     assert "emission_logits: learns which symbols" in output
     assert "hidden-state example: one state can mean 'B has not appeared yet'" in output
     assert "emission example: the 'B already appeared' state" in output
-    assert "transition example: after emitting B" in output
+    assert "plain DiscreteHMM-backed learner" in output
     assert "Rule: token B may appear at most once" in output
     assert "Generator stream: prompt-conditioned outputs are used for PMD training" in output
     assert "Prompt meanings: AB prefers A/B tokens; CD prefers C/D tokens; short prefers early END" in output
@@ -244,11 +255,13 @@ def test_real_hmm_pmd_learning_run_demo_main_runs_offline(capsys):
     assert "Training uses PrimalDualProgram.train(...)" in output
     assert "GeneratorTrainingSource.next_batch(step)" in output
     assert "trained on batch 2: 4 generated samples" in output
-    assert "Learned graph-hmm greedy inference:" in output
+    assert "Learned discrete-hmm greedy inference:" in output
     assert "labels:" in output
     assert "symbols:" in output
     assert "DFA note: the decoder masks illegal next labels while generating" in output
-    assert "dfa_accepted:" not in output
+    assert "DFA-constrained greedy inference:" in output
+    assert "decoder_call: constrained_label_greedy_decode(...)" in output
+    assert "dfa_accepted:" in output
     assert "learner_log_score=" in output
     assert "learner_log_score:" in output
     assert "relative_preference=" in output

@@ -8,9 +8,8 @@ import torch
 
 from .core import DiscreteHMM
 from ..common.base import CompactLabelGenerationHead
-from ...constraints import GenerationConstraint
-from ...encoder import GenerationBundle, GenerationGraphContext
-from ...vocabulary import TokenVocabulary
+from ...dfa.encoder import GenerationBundle, GenerationGraphContext
+from ...dfa.vocabulary import TokenVocabulary
 
 
 @dataclass
@@ -133,8 +132,8 @@ class HMMFactorGraphEncoder:
         self.clear_graph = clear_graph
         self.include_dp_factors = bool(include_dp_factors)
 
-    def build_graph(self, constraints: Sequence[GenerationConstraint] = ()) -> tuple[object, HMMFactorGraphBundle]:
-        """Construct the opt-in HMM factor graph and compile generation constraints."""
+    def build_graph(self) -> tuple[object, HMMFactorGraphBundle]:
+        """Construct the opt-in HMM factor graph."""
         from domiknows.graph import Concept, EnumConcept, Graph, Relation
 
         if self.clear_graph:
@@ -198,9 +197,6 @@ class HMMFactorGraphEncoder:
                 transition_pair=transition_pair,
                 transition_pair_names=transition_pair_names,
             )
-            for constraint in constraints:
-                if constraint.supports_domiknows:
-                    constraint.apply_domiknows(context)
 
         bundle = HMMFactorGraphBundle(
             text=text,
@@ -211,7 +207,6 @@ class HMMFactorGraphEncoder:
             first_token=first_token,
             second_token=second_token,
             context=context,
-            constraints=tuple(constraints),
             vocabulary=self.vocabulary,
             latent_state=latent_state,
             is_next_rel=is_next_rel,

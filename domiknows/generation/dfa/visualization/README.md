@@ -1,14 +1,13 @@
 # Product-Automaton Visualization
 
 This note explains the DFA and product-automaton visualization utilities that
-now live conceptually with the learner stack under
-`domiknows.generation.learners`, while remaining re-exported from
+live under `domiknows.generation.dfa`, while remaining re-exported from
 `domiknows.generation` for convenience.
 
 The ownership split is:
 
-- core trace and DOT helpers live in `domiknows.generation.learners.dfa.visualization`
-- the optional Flask web viewer lives in `domiknows.generation.visual_server`
+- core trace and DOT helpers live in `domiknows.generation.dfa.visualization`
+- the optional Flask web viewer lives in `domiknows.generation.dfa.visualization.server`
 - `domiknows.generation` re-exports both layers for easier user-facing imports
 
 These tools help debug why a DFA constraint accepts, rejects, or blocks a
@@ -45,10 +44,10 @@ dot = dfa_to_dot(dfa, highlight_path=trace)
 print(dot)
 ```
 
-Use learner-level imports when you want the owning implementation surface:
+Use DFA visualization imports when you want the owning implementation surface:
 
 ```python
-from domiknows.generation.learners import dfa_to_dot, explain_dfa_rejection, trace_dfa
+from domiknows.generation.dfa.visualization import dfa_to_dot, explain_dfa_rejection, trace_dfa
 ```
 
 For WFA x DFA product-state debugging:
@@ -65,9 +64,8 @@ print(product_trace_to_dot(trace))
 
 ## Run the Flask Viewer
 
-Use the generation-level helper. The viewer lives one package level above the
-learners modules because it is an optional application wrapper around the trace
-primitives.
+Use the generation-level helper, or import it directly from
+`domiknows.generation.dfa.visualization`.
 
 ```python
 from domiknows.generation import run_generation_debug_server

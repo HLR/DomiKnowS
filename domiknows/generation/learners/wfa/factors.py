@@ -9,9 +9,8 @@ import torch.nn.functional as F
 
 from .hankel import WeightedFiniteAutomaton
 from ..common.base import CompactLabelGenerationHead
-from ...constraints import GenerationConstraint
-from ...encoder import GenerationBundle, GenerationGraphContext
-from ...vocabulary import TokenVocabulary
+from ...dfa.encoder import GenerationBundle, GenerationGraphContext
+from ...dfa.vocabulary import TokenVocabulary
 
 
 @dataclass
@@ -110,11 +109,8 @@ class SpectralWFAFactorGraphEncoder:
         self.clear_graph = clear_graph
         self.include_transition_pairs = bool(include_transition_pairs)
 
-    def build_graph(
-        self,
-        constraints: Sequence[GenerationConstraint] = (),
-    ) -> tuple[object, SpectralWFAFactorGraphBundle]:
-        """Construct the opt-in WFA factor graph and compile generation constraints."""
+    def build_graph(self) -> tuple[object, SpectralWFAFactorGraphBundle]:
+        """Construct the opt-in WFA factor graph."""
         from domiknows.graph import Concept, EnumConcept, Graph, Relation
 
         if self.clear_graph:
@@ -172,9 +168,6 @@ class SpectralWFAFactorGraphEncoder:
                 wfa_transition_pair=transition_pair,
                 transition_pair_names=transition_pair_names,
             )
-            for constraint in constraints:
-                if constraint.supports_domiknows:
-                    constraint.apply_domiknows(context)
 
         bundle = SpectralWFAFactorGraphBundle(
             text=text,
@@ -185,7 +178,6 @@ class SpectralWFAFactorGraphEncoder:
             first_token=first_token,
             second_token=second_token,
             context=context,
-            constraints=tuple(constraints),
             vocabulary=self.vocabulary,
             wfa_state=wfa_state,
             is_next_rel=is_next_rel,

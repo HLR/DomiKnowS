@@ -69,6 +69,9 @@ def log(*args, **kwargs):
             print('{}:\n{}'.format(k, v))
         else:
             print('{}: {}'.format(k, v))
+
+def _show_logging_status_messages():
+    return not globals().get('productionMode', False)
      
 def close_file_handlers(filename):
     """
@@ -108,9 +111,11 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
         if os.path.getsize(logFilename) == 0:
             try:
                 #os.remove(logFilename)
-                print(f"Removed empty log file: {logFilename}")
+                if _show_logging_status_messages():
+                    print(f"Removed empty log file: {logFilename}")
             except OSError as e:
-                print(f"Warning: Could not remove empty log file {logFilename}: {e}")
+                if _show_logging_status_messages():
+                    print(f"Warning: Could not remove empty log file {logFilename}: {e}")
             return
         
         # Close any existing handlers for this file first
@@ -157,7 +162,8 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
                         retry_delay *= 2
                         continue
                     else:
-                        print(f"Warning: Could not move file {source_path}: {e}")
+                        if _show_logging_status_messages():
+                            print(f"Warning: Could not move file {source_path}: {e}")
                         break
         
         # Clean up old run directories - keep only 10
@@ -179,9 +185,11 @@ def move_existing_logfile_with_timestamp(logFilename, logBackupCount):
                     oldest_dir = os.path.join(previous_dir, run_dirs.pop(0))
                     try:
                         shutil.rmtree(oldest_dir)
-                        print(f"Removed old run directory: {oldest_dir}")
+                        if _show_logging_status_messages():
+                            print(f"Removed old run directory: {oldest_dir}")
                     except OSError as e:
-                        print(f"Warning: Could not remove old run directory {oldest_dir}: {e}")
+                        if _show_logging_status_messages():
+                            print(f"Warning: Could not remove old run directory {oldest_dir}: {e}")
                         
         except OSError:
             # If directory operations fail, skip cleanup
@@ -267,7 +275,8 @@ def setup_error_warning_logger(log_dir=None):
             # Add handler to logger
             _error_warning_logger.addHandler(handler)
             
-            print("Error/Warning log file created: %s" % handler.baseFilename)
+            if _show_logging_status_messages():
+                print("Error/Warning log file created: %s" % handler.baseFilename)
     
     _error_warning_handler_class = ErrorWarningHandler
     _error_warning_logger_initialized = True
@@ -382,7 +391,8 @@ def setup_logger(config=None, default_filename='app.log'):
     if not (config and isinstance(config, dict) and config.get('error_warning_capture') is False):
         add_error_warning_handler_to_logger(logger)
 
-    print("Log file for %s is in: %s" % (logName, handler.baseFilename))
+    if _show_logging_status_messages():
+        print("Log file for %s is in: %s" % (logName, handler.baseFilename))
     
     return logger
 

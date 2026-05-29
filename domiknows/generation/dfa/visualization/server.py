@@ -10,9 +10,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .learners.dfa import DFA, Symbol
-from .learners.wfa import WeightedFiniteAutomaton
-from .learners.dfa.visualization import (
+from ..core import DFA, Symbol
+from ...learners.wfa import WeightedFiniteAutomaton
+from .tracing import (
     dfa_to_dot,
     explain_dfa_rejection,
     product_trace_to_dot,

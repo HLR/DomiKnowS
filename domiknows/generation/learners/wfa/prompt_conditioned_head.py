@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from ..common.base import CompactLabelGenerationHead
-from ...latent_potentials import LatentTransitionPotential, apply_wfa_transition_potential
+from ...latent import LatentTransitionPotential, apply_wfa_transition_potential
 from ..common.utils import (
     TransitionPotentialInput,
     _build_prompt_encoder,

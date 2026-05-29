@@ -21,6 +21,15 @@ class CompactLabelSequenceModel(Protocol):
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **kwargs) -> torch.Tensor:
         """Return next-step logits over compact labels."""
 
+    def greedy_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+        """Run unconstrained greedy compact-label inference."""
+
+    def beam_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+        """Run unconstrained beam compact-label inference."""
+
+    def sample_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+        """Run unconstrained stochastic compact-label inference."""
+
     def sequence_log_probs(
         self,
         target_labels: torch.Tensor | Sequence[int],
@@ -65,6 +74,24 @@ class CompactLabelGenerationHead(torch.nn.Module):
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **kwargs) -> torch.Tensor:
         raise NotImplementedError
+
+    def greedy_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+        """Run unconstrained greedy compact-label inference through this head."""
+        from ...inference import greedy_label_inference
+
+        return greedy_label_inference(self, vocabulary, input_ids, **kwargs)
+
+    def beam_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+        """Run unconstrained beam compact-label inference through this head."""
+        from ...inference import beam_label_inference
+
+        return beam_label_inference(self, vocabulary, input_ids, **kwargs)
+
+    def sample_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+        """Run unconstrained stochastic compact-label inference through this head."""
+        from ...inference import sample_label_inference
+
+        return sample_label_inference(self, vocabulary, input_ids, **kwargs)
 
     def sequence_log_probs(
         self,

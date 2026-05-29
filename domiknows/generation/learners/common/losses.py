@@ -6,7 +6,7 @@ from collections.abc import Sequence
 import torch
 import torch.nn.functional as F
 
-from ..dfa import DFA
+from ...dfa import DFA
 from ..hmm.head import HMMGenerationHead
 from ..hmm.prompt_conditioned_head import PromptConditionedHMMGenerationHead
 from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead

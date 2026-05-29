@@ -4,11 +4,10 @@ Finite-state, probabilistic, and compact-label learner primitives that underpin 
 
 This package is the current home of the automata and structured learner stack that used to be documented under `domiknows.generation.automata`. The code has since been reorganized into subpackages under `domiknows.generation.learners`, but the core ideas remain the same: combine hard symbolic constraints with compact probabilistic sequence models and reusable constrained decoders.
 
-At the top level, `domiknows.generation.learners` lazily re-exports the most important public APIs from its `dfa`, `wfa`, `hmm`, `compact`, and `common` subpackages, so most user code can still import from the package root.
+At the top level, `domiknows.generation.learners` lazily re-exports the most important public APIs from its `wfa`, `hmm`, `compact`, and `common` subpackages, so most user code can still import learner APIs from the package root. DFA enforcement and compilation lives in `domiknows.generation.dfa`.
 
-This package provides four core modeling families:
+This package provides three core modeling families:
 
-- a Deterministic Finite Automaton (DFA) layer for hard sequence constraints
 - a Weighted Finite Automaton (WFA) and Hankel layer for soft finite-state scoring
 - a Hidden Markov Model (HMM) layer for probabilistic sequence modeling and constraint compilation
 - a compact-label learner layer for lightweight GRU, Transformer, energy-based, n-gram, and CRF-style heads
@@ -25,7 +24,7 @@ Focused guides:
 
 - `README_learning.md` covers training compact heads, PMD/latent losses, and post-training generation or reranking flows.
 - `README_graph_hmm.md` covers graph-aware HMM and spectral automata, constraint compilation, dynamic masks, and factorized state spaces.
-- `README_visualization.md` covers DFA and WFA x DFA tracing, DOT export, and the optional Flask debug viewer.
+- `../dfa/visualization/README.md` covers DFA and WFA x DFA tracing, DOT export, and the optional Flask debug viewer.
 
 Current Package Layout
 
@@ -34,8 +33,8 @@ The code is now split by responsibility instead of living in four flat files:
 | Location | Main purpose |
 | --- | --- |
 | `learners/__init__.py` | Canonical lazy-export surface for public learner APIs |
-| `learners/dfa/core.py` | DFA primitives, products, unions, and complements |
-| `learners/dfa/visualization.py` | DFA tracing, rejection explanations, and DOT export |
+| `../dfa/core.py` | DFA primitives, products, unions, and complements |
+| `../dfa/visualization/` | DFA tracing, rejection explanations, DOT export, and the optional debug viewer |
 | `learners/wfa/hankel.py` | WFA scoring, Hankel matrices, and WFA x DFA product decoding |
 | `learners/wfa/spectral_learning.py` | Spectral / Hankel-SVD learning |
 | `learners/wfa/*.py` | WFA graph-conditioned, factor, and prompt-conditioned heads |
@@ -319,7 +318,7 @@ Module Overview
 | Location | Key classes / functions | Purpose |
 | --- | --- | --- |
 | `dfa/core.py` | `DFA`, `product_dfa`, `union_dfa`, `complement_dfa` | core deterministic automaton primitives, acceptance, reachability, masking, and set-like composition |
-| `dfa/visualization.py` | `trace_dfa`, `trace_product_automaton`, `dfa_to_dot`, `explain_dfa_rejection` | tracing, diagnostics, and graph export |
+| `dfa/visualization/` | `trace_dfa`, `trace_product_automaton`, `dfa_to_dot`, `explain_dfa_rejection` | tracing, diagnostics, graph export, and optional debug viewer |
 | `wfa/hankel.py` | `WeightedFiniteAutomaton`, `hankel_matrix`, `constrained_hankel_matrix`, `ProductDecoderState` | WFA scoring, Hankel construction, and WFA x DFA product decoding |
 | `wfa/spectral_learning.py` | `SpectralBasis`, `build_spectral_basis`, `spectral_learn_from_oracle`, `spectral_learn_from_samples`, `spectral_learn_from_counts` | spectral / Hankel-SVD learning |
 | `hmm/core.py` | `DiscreteHMM`, `baum_welch_train`, `compare_hmm_dfa`, `all_sequences`, `HMMParameters`, `BaumWelchResult` | HMM training, inference, and evaluation |
@@ -350,7 +349,7 @@ from domiknows.generation.learners import (
 Direct subpackage imports are also valid when you want a more explicit dependency:
 
 ```python
-from domiknows.generation.learners.dfa.core import DFA, product_dfa
+from domiknows.generation.dfa.core import DFA, product_dfa
 from domiknows.generation.learners.wfa.hankel import WeightedFiniteAutomaton
 from domiknows.generation.learners.wfa.spectral_learning import build_spectral_basis
 from domiknows.generation.learners.hmm.core import DiscreteHMM, baum_welch_train
@@ -481,10 +480,10 @@ Module Dependency Sketch
 ```text
 learners/wfa/spectral_learning.py
     └── learners/wfa/hankel.py
-            └── learners/dfa/core.py
+            └── dfa/core.py
 
 learners/hmm/core.py
-    └── learners/dfa/core.py
+    └── dfa/core.py
 
 learners/compact/*.py
     └── learners/common/base.py
@@ -503,9 +502,9 @@ User-defined constraints
 high-level constraint builders
         │
         ▼ product_dfa / union_dfa
-learners/dfa/core.py
+dfa/core.py
         │
-        ├──► generation/decoder.py
+        ├──► generation/dfa/decoder.py
         │       uses DFA.allowed_tokens at each generation step
         │
         ├──► learners/wfa/hankel.py
@@ -572,7 +571,7 @@ print(metrics)
 Intersecting multiple constraint DFAs
 
 ```python
-from domiknows.generation.learners import DFA, product_dfa, union_dfa
+from domiknows.generation.dfa import DFA, product_dfa, union_dfa
 
 combined = product_dfa([dfa_no_repetition, dfa_eos_closure, dfa_max_length])
 either = union_dfa([dfa_option_a, dfa_option_b])
@@ -586,6 +585,6 @@ No hidden state: the main scoring and learning algorithms expose explicit inputs
 
 Lazy materialization: product DFAs and related constructions expand only reachable states, keeping memory proportional to the explored portion of the state space rather than the full Cartesian product.
 
-Layered specialization: DFA, WFA, HMM, compact, and common code now live in separate subpackages so the public API can grow without turning a single file into a monolith.
+Layered specialization: DFA code lives in `domiknows.generation.dfa`, while WFA, HMM, compact, and common learner code live under `domiknows.generation.learners`.
 
 No mandatory heavy dependencies for the symbolic core: the DFA layer stays lightweight, while spectral learning and neural heads bring in Torch only where it is actually needed.

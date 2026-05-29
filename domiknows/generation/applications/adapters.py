@@ -25,15 +25,15 @@ from typing import Any
 
 import torch
 
-from .learners.dfa.core import DFA
-from .learners.dfa.visualization import explain_dfa_rejection
-from .decoder import (
+from ..dfa.core import DFA
+from ..dfa.visualization import explain_dfa_rejection
+from ..dfa.decoder import (
     ConstrainedGenerationResult,
     constrained_beam_search_decode,
     constrained_greedy_decode,
     constrained_sample_decode,
 )
-from .vocabulary import TokenVocabulary
+from ..dfa.vocabulary import TokenVocabulary
 
 
 @dataclass
@@ -47,7 +47,7 @@ class GenerationResult:
             tokenizer was provided.
         labels: Optional list of DomiKnowS vocabulary label IDs corresponding
             to *token_ids*.  Populated only when the caller encodes the output
-            through a :class:`~.vocabulary.TokenVocabulary`.
+            through a :class:`~domiknows.generation.dfa.vocabulary.TokenVocabulary`.
         accepted: Whether the generated sequence was accepted by the
             constraint DFA used during/after generation.  ``None`` when no DFA
             check was performed.
@@ -88,7 +88,7 @@ class HuggingFaceGenerationAdapter:
         Args:
             model: A HuggingFace ``PreTrainedModel`` (or compatible) instance.
             tokenizer: The tokenizer associated with *model*.
-            vocabulary: A :class:`~.vocabulary.TokenVocabulary` that maps
+            vocabulary: A :class:`~.dfa.vocabulary.TokenVocabulary` that maps
                 token IDs to DomiKnowS label indices.
         """
         self.model = model
@@ -110,14 +110,14 @@ class HuggingFaceGenerationAdapter:
 
         Args:
             input_ids: Prompt token IDs as a ``(1, T)`` or ``(T,)`` tensor.
-            dfa: Constraint :class:`~.learners.DFA` whose alphabet must be
+            dfa: Constraint :class:`~.dfa.DFA` whose alphabet must be
                 compatible with ``self.vocabulary``.
             max_new_tokens: Hard upper bound on generated tokens.
             use_cache: Whether to use ``past_key_values`` caching.  Set to
                 ``False`` to force full re-encoding at every step.
 
         Returns:
-            A :class:`~.decoder.ConstrainedGenerationResult` containing the
+            A :class:`~domiknows.generation.dfa.decoder.ConstrainedGenerationResult` containing the
             generated token IDs, label sequence, final DFA state, and
             whether the final state is accepting.
         """
@@ -151,7 +151,7 @@ class HuggingFaceGenerationAdapter:
 
         Args:
             input_ids: Prompt token IDs as a ``(1, T)`` or ``(T,)`` tensor.
-            dfa: Constraint :class:`~.learners.DFA` compatible with
+            dfa: Constraint :class:`~.dfa.DFA` compatible with
                 ``self.vocabulary``.
             max_new_tokens: Hard upper bound on generated tokens per beam.
             beam_size: Number of active beams to maintain at each step.
@@ -167,7 +167,7 @@ class HuggingFaceGenerationAdapter:
                 ``False`` to force full re-encoding at every step.
 
         Returns:
-            A :class:`~.decoder.ConstrainedGenerationResult` for the
+            A :class:`~domiknows.generation.dfa.decoder.ConstrainedGenerationResult` for the
             best-ranked candidate, with ``candidates`` populated for all
             *num_return_sequences* returned sequences.
         """
@@ -205,7 +205,7 @@ class HuggingFaceGenerationAdapter:
 
         Args:
             input_ids: Prompt token IDs as a ``(1, T)`` or ``(T,)`` tensor.
-            dfa: Constraint :class:`~.learners.DFA` compatible with
+            dfa: Constraint :class:`~.dfa.DFA` compatible with
                 ``self.vocabulary``.
             max_new_tokens: Hard upper bound on generated tokens.
             temperature: Softmax temperature.  Values < 1 sharpen the
@@ -220,7 +220,7 @@ class HuggingFaceGenerationAdapter:
                 ``False`` to force full re-encoding at every step.
 
         Returns:
-            A :class:`~.decoder.ConstrainedGenerationResult` with the
+            A :class:`~domiknows.generation.dfa.decoder.ConstrainedGenerationResult` with the
             generated token IDs, label sequence, final DFA state,
             acceptance flag, cumulative log-probability, and per-step scores.
         """
@@ -383,11 +383,11 @@ class OpenAIResponsesAdapter:
         Uses either the adapter's own tokenizer (if set) or the tokenizer
         embedded in *vocabulary* to first convert the text to token IDs, then
         maps those IDs to label indices via
-        :meth:`~.vocabulary.TokenVocabulary.labels_for_token_ids`.
+        :meth:`~.dfa.vocabulary.TokenVocabulary.labels_for_token_ids`.
 
         Args:
             text: Raw text string to encode (typically from :meth:`generate`).
-            vocabulary: The :class:`~.vocabulary.TokenVocabulary` that defines
+            vocabulary: The :class:`~.dfa.vocabulary.TokenVocabulary` that defines
                 the label mapping.
 
         Returns:

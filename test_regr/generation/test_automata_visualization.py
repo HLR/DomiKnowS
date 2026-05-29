@@ -1,8 +1,7 @@
 import torch
 
-import domiknows.generation.visual_server as visual_server
-from domiknows.generation import (
-    TokenVocabulary,
+import domiknows.generation.dfa.visualization.server as visual_server
+from domiknows.generation.dfa._constraints import (
     WeightedFiniteAutomaton,
     constraints_to_dfa,
     create_generation_debug_app,

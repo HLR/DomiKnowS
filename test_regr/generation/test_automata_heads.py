@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import torch
 
-from domiknows.generation import (
+from domiknows.generation.dfa._constraints import (
     HMMGenerationHead,
     SpectralWFAGenerationHead,
-    TokenVocabulary,
     allowed_mass_loss,
     constraints_to_dfa,
     hmm_sequence_nll,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 
-from domiknows.generation import AnyOfGenerationConstraint, constraints_to_dfa, discover_generation_enforcement
+from domiknows.generation import AnyOfGenerationConstraint, discover_generation_enforcement
 
 
 def import_task_module(name: str):
@@ -27,7 +27,7 @@ def test_hf_generation_graph_constraints_compile_to_dfa():
 
     graph, bundle = graph_module.build_generation_graph(mock_hf.MockTokenizer())
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     labels = bundle.vocabulary.labels_for_token_ids
     tokenizer = mock_hf.MockTokenizer()
@@ -56,7 +56,7 @@ def test_hf_generation_graph_accepts_real_hf_eos_token():
         eos_token="<|endoftext|>",
     )
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     assert bundle.vocabulary.eos_token == "<|endoftext|>"
     assert bundle.vocabulary.token_id_for_token("<|endoftext|>") == 6

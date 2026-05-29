@@ -5,12 +5,12 @@ the DomiKnowS graph/concept layer.  It provides:
 
 :class:`GenerationBundle`
     A plain dataclass holding all graph objects built by
-    :meth:`GenerationEncoder.build_graph`, plus the vocabulary and constraints
-    used during construction.
+    :meth:`GenerationEncoder.build_graph`, plus the vocabulary used during
+    construction.
 
 :class:`GenerationGraphContext`
     A concrete implementation of the
-    :class:`~.constraints.DomiKnowSGenerationContext` protocol.  Wraps the
+    :class:`~.dfa.DomiKnowSGenerationContext` protocol.  Wraps the
     graph objects from a :class:`GenerationBundle` and translates vocabulary
     predicates into DomiKnowS logical expressions.
 
@@ -21,14 +21,13 @@ the DomiKnowS graph/concept layer.  It provides:
 Typical usage::
 
     encoder = GenerationEncoder(vocab=my_tokens, eos_token="<eos>")
-    graph, bundle = encoder.build_graph(constraints=[max_non_eos(10)])
+    graph, bundle = encoder.build_graph()
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Sequence
 
-from .constraints import GenerationConstraint
 from .vocabulary import TokenVocabulary
 
 
@@ -55,9 +54,7 @@ class GenerationBundle:
         second_token: The second argument role of ``is_before_rel``.
         context: The :class:`GenerationGraphContext` that was used to compile
             DomiKnowS constraints during graph construction.
-        constraints: Tuple of :class:`~.constraints.GenerationConstraint`
-            objects that were registered when the graph was built.
-        vocabulary: The :class:`~.vocabulary.TokenVocabulary` used to build
+        vocabulary: The :class:`~.dfa.vocabulary.TokenVocabulary` used to build
             the graph.
     """
 
@@ -69,7 +66,6 @@ class GenerationBundle:
     first_token: object
     second_token: object
     context: object
-    constraints: tuple[GenerationConstraint, ...]
     vocabulary: TokenVocabulary
 
 
@@ -82,7 +78,7 @@ class GenerationGraphContext:
     during graph construction.
 
     Attributes:
-        vocabulary: The :class:`~.vocabulary.TokenVocabulary` for the current
+        vocabulary: The :class:`~.dfa.vocabulary.TokenVocabulary` for the current
             generation task.
         generated_token: The ``generated_token`` EnumConcept node.
         is_before_rel: The ``is_before_rel`` concept encoding pair ordering.
@@ -171,7 +167,6 @@ def generation_bundle_from_graph(
     before_relation_name: str = "is_before_rel",
     first_role_name: str = "arg1",
     second_role_name: str = "arg2",
-    constraints: Sequence[GenerationConstraint] = (),
 ) -> GenerationBundle:
     """Wrap an existing traditional DomiKnowS graph as a generation bundle.
 
@@ -207,9 +202,8 @@ def generation_bundle_from_graph(
             ``before_relation_name``.
         second_role_name: Role name for the second endpoint of
             ``before_relation_name``.
-        constraints: Optional generation constraint objects to store in the
-            bundle for discovery seeding.  The helper assumes graph-level raw
-            constraints are already written on *graph*.
+        The helper assumes graph-level raw constraints are already written on
+        *graph*.
 
     Returns:
         A :class:`GenerationBundle` backed by the existing graph objects.
@@ -247,7 +241,6 @@ def generation_bundle_from_graph(
         first_token=first_token,
         second_token=second_token,
         context=context,
-        constraints=tuple(constraints),
         vocabulary=vocabulary,
     )
 
@@ -299,9 +292,9 @@ def _validate_generated_token_enum(generated_token, vocabulary: TokenVocabulary)
 class GenerationEncoder:
     """Build the common DomiKnowS graph used for token generation.
 
-    :class:`GenerationEncoder` owns the :class:`~.vocabulary.TokenVocabulary`
-    and constructs the DomiKnowS graph (concepts, relations, enum values, and
-    logical constraints) on demand via :meth:`build_graph`.
+    :class:`GenerationEncoder` owns the :class:`~.dfa.vocabulary.TokenVocabulary`
+    and constructs the DomiKnowS graph concepts, relations, and enum values on
+    demand via :meth:`build_graph`.
 
     The graph layout produced by :meth:`build_graph` is:
 
@@ -315,7 +308,7 @@ class GenerationEncoder:
                        --has_a(arg2)-->  token  (second_token)
 
     Attributes:
-        vocabulary: The :class:`~.vocabulary.TokenVocabulary` built from the
+        vocabulary: The :class:`~.dfa.vocabulary.TokenVocabulary` built from the
             supplied *vocab* and *eos_token* arguments.
         graph_name: Name passed to the DomiKnowS :class:`~domiknows.graph.Graph`
             constructor.
@@ -338,7 +331,7 @@ class GenerationEncoder:
                 generation vocabulary (label 0 = ``vocab[0]``, etc.).
             eos_token: The end-of-sequence token string.  Must be present in
                 *vocab* or handled by
-                :class:`~.vocabulary.TokenVocabulary`.
+                :class:`~.dfa.vocabulary.TokenVocabulary`.
             graph_name: Name given to the DomiKnowS graph.  Defaults to
                 ``"main"``.
             tokenizer: Optional HuggingFace (or compatible) tokenizer.  When
@@ -352,23 +345,16 @@ class GenerationEncoder:
         self.graph_name = graph_name
         self.clear_graph = clear_graph
 
-    def build_graph(self, constraints: Sequence[GenerationConstraint] = ()) -> tuple[object, GenerationBundle]:
-        """Construct the DomiKnowS graph and compile constraints into it.
+    def build_graph(self) -> tuple[object, GenerationBundle]:
+        """Construct the DomiKnowS graph.
 
         Steps performed:
         1. Optionally clear global DomiKnowS registries.
         2. Create the ``text``, ``token``, and ``is_before_rel`` concepts.
         3. Attach a ``generated_token`` :class:`~domiknows.graph.EnumConcept`
            with one value per vocabulary label.
-        4. Build a :class:`GenerationGraphContext` and call
-           ``apply_domiknows`` on each constraint that supports it.
+        4. Build a :class:`GenerationGraphContext`.
         5. Return the graph and a :class:`GenerationBundle`.
-
-        Args:
-            constraints: Sequence of :class:`~.constraints.GenerationConstraint`
-                objects to register.  Constraints with
-                ``supports_domiknows = False`` are stored in the bundle but
-                not compiled into the graph.
 
         Returns:
             A ``(graph, bundle)`` tuple where *graph* is the DomiKnowS
@@ -401,7 +387,7 @@ class GenerationEncoder:
                 values=[str(i) for i in range(self.vocabulary.label_count)],
             )
 
-            # Build the context and compile each DomiKnowS-compatible constraint.
+            # Build the context used by graph-constraint helper functions.
             context = GenerationGraphContext(
                 self.vocabulary,
                 generated_token,
@@ -409,9 +395,6 @@ class GenerationEncoder:
                 first_token,
                 second_token,
             )
-            for constraint in constraints:
-                if constraint.supports_domiknows:
-                    constraint.apply_domiknows(context)
 
         bundle = GenerationBundle(
             text=text,
@@ -422,7 +405,6 @@ class GenerationEncoder:
             first_token=first_token,
             second_token=second_token,
             context=context,
-            constraints=tuple(constraints),
             vocabulary=self.vocabulary,
         )
         return graph, bundle

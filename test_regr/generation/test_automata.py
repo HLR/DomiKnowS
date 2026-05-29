@@ -1,9 +1,8 @@
-from domiknows.generation import (
+from domiknows.generation.dfa._constraints import (
     AfterTokenAllowedConstraint,
     ComplementGenerationConstraint,
     all_of_constraints,
     any_of_constraints,
-    TokenVocabulary,
     TokenSetCountConstraint,
     constraints_to_dfa,
     forbidden_token,
@@ -12,7 +11,7 @@ from domiknows.generation import (
     ordered_tokens,
     required_token,
 )
-from domiknows.generation.learners import complement_dfa, union_dfa
+from domiknows.generation.dfa import complement_dfa, union_dfa
 
 
 def test_dfa_accepts_and_rejects_basic_sequences():

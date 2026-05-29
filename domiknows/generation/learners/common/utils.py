@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 import torch
 
-from ...latent_potentials import LatentTransitionPotential
+from ...latent import LatentTransitionPotential
 from .prompt_encoders import FrozenBackbonePromptEncoder, PromptEmbeddingEncoder
 
 TransitionPotentialInput = LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None

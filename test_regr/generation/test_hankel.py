@@ -1,8 +1,8 @@
 import pytest
 import torch
 
+from domiknows.generation.dfa import DFA
 from domiknows.generation.learners import (
-    DFA,
     WeightedFiniteAutomaton,
     allowed_product_symbols,
     constrained_hankel_matrix,

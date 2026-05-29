@@ -1,7 +1,7 @@
 """Packaged custom graph-to-latent compiler recipes.
 
 The recipes in this module are small opt-in factories around the public
-``extra_latent_compilers`` hook in :mod:`domiknows.generation.enforcement`.
+``extra_latent_compilers`` hook in :mod:`domiknows.generation.latent.enforcement`.
 They do not broaden built-in DomiKnowS graph discovery by default; callers
 explicitly pass the returned compilers to discovery functions.
 """
@@ -17,8 +17,8 @@ from .enforcement import (
     LatentWindowSpec,
     graph_latent_compiler_result,
 )
-from .latent_constraints import Formula, LabelRef
-from .latent_potentials import LatentTransitionPotential, forbid_hmm_transition
+from .constraints import Formula, LabelRef
+from .potentials import LatentTransitionPotential, forbid_hmm_transition
 
 
 LabelLike: TypeAlias = int | str | LabelRef

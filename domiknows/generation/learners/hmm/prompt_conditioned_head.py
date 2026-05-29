@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 import torch
 
 from ..common.base import CompactLabelGenerationHead
-from ...latent_potentials import LatentTransitionPotential, apply_hmm_transition_potential
+from ...latent import LatentTransitionPotential, apply_hmm_transition_potential
 from ..common.utils import (
     TransitionPotentialInput,
     _build_prompt_encoder,

@@ -300,7 +300,7 @@ class DomiKnowSAwareHMM:
                     "mask, or on_unsupported_dynamic='static' to intentionally ignore it"
                 )
 
-        from ..dfa import DFA
+        from ...dfa import DFA
 
         transition, emission = self._projected_dynamics()
         transition_support = transition > support_threshold

@@ -13,7 +13,7 @@ from typing import Any, Callable, Sequence
 
 import torch
 
-from domiknows.generation.graph_discovery import constraints_to_dfa_from_graph, discover_generation_constraints
+from domiknows.generation.dfa.graph_discovery import constraints_to_dfa_from_graph
 
 from .graph import DomiKnowSAwareHMM
 
@@ -34,7 +34,6 @@ class ConstraintHMMCompilation:
     """Artifacts produced by compiling a generation DFA into HMM support."""
 
     dfa: Any
-    constraints: tuple[Any, ...]
     states: tuple[ConstraintHMMState, ...]
     transition_mask: torch.Tensor
     emission_mask: torch.Tensor
@@ -64,7 +63,6 @@ def compile_generation_constraints_to_hmm_support(
     HMM transitions.
     """
 
-    constraints = tuple(discover_generation_constraints(graph, bundle, on_unsupported=on_unsupported))
     dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported=on_unsupported)
     vocab = bundle.vocabulary
     token_symbols = tuple(symbols or vocab.tokens)
@@ -74,7 +72,7 @@ def compile_generation_constraints_to_hmm_support(
         eos_token = getattr(vocab, "eos_token", None)
 
     label_by_symbol = {symbol: vocab.label_for_token(symbol) for symbol in token_symbols}
-    component_specs = _component_specs_from_constraints(constraints)
+    component_specs: tuple[dict[str, str], ...] = ()
     if state_name_fn is None:
         state_name_fn = lambda q0, symbol, q1: _edge_state_name(q0, symbol, q1, component_specs)
 
@@ -129,7 +127,6 @@ def compile_generation_constraints_to_hmm_support(
     emission = emission_mask.clone()
     return ConstraintHMMCompilation(
         dfa=dfa,
-        constraints=constraints,
         states=tuple(states),
         transition_mask=transition_mask,
         emission_mask=emission_mask,

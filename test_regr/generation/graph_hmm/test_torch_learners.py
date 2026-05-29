@@ -16,14 +16,14 @@ Generation heads enable constraint-respecting neural text generation by combinin
 import torch
 
 from domiknows.generation import constrained_label_greedy_decode
-from domiknows.generation.learners import DFA
+from domiknows.generation.dfa import DFA
 from domiknows.generation.learners import (
     DomiKnowSAwareHMM,
     GraphHMMGenerationHead,
     GraphSpectralAutomaton,
     GraphSpectralGenerationHead,
 )
-from domiknows.generation.vocabulary import TokenVocabulary
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
 
 
 def test_graph_hmm_generation_head_forward_and_masks_are_finite():

@@ -438,6 +438,7 @@ class LossProgram(LearningBasedProgram):
         # Pluggable constraint-optimizer configuration (issue #422).
         self.copt_class = copt_class if copt_class is not None else torch.optim.Adam
         self.copt_kwargs = dict(copt_kwargs) if copt_kwargs else {}
+        self._persistent_c_session = None
 
     def _make_copt(self, lr):
         """Build the constraint optimizer if the cmodel has parameters, else return None.
@@ -460,9 +461,23 @@ class LossProgram(LearningBasedProgram):
     def call_epoch(self, name, dataset, epoch_fn, **kwargs):
         if dataset is not None:
             logger.info(f'{name}:')
-            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+            epoch_kwargs = dict(kwargs)
+            persist_c_session = bool(epoch_kwargs.pop('_persist_c_session_tqdm', False))
+            dataset_len = get_len(dataset)
+            c_session = epoch_kwargs.get('c_session')
+            display_epoch = self.epoch
+            if persist_c_session and c_session is not None:
+                if name == 'Training':
+                    c_session['_epoch'] = int(c_session.get('_epoch', 0)) + 1
+                display_epoch = c_session.get('_epoch', display_epoch)
+            desc = name if display_epoch is None else f'Epoch {display_epoch} {name}'
+            tqdm_kwargs = {'total': dataset_len, 'desc': desc}
+            if persist_c_session and c_session is not None and 'iter' in c_session and dataset_len is not None:
+                initial = int(c_session['iter'])
+                tqdm_kwargs['initial'] = initial
+                tqdm_kwargs['total'] = initial + dataset_len
 
-            consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
+            consume(tqdm(epoch_fn(dataset, **epoch_kwargs), **tqdm_kwargs))
 
             if self.model.loss:
                 logger.info(' - loss:')
@@ -489,24 +504,31 @@ class LossProgram(LearningBasedProgram):
     def train(self, training_set, valid_set=None, test_set=None,
               batch_size=1, dataset_size=None, print_loss=True,
               warmup_epochs=0, constraint_epochs=0,
+              persist_c_session=False, reset_c_session=False,
               **kwargs):
         """
         Base training loop. Subclasses pass algorithm-specific kwargs.
         """
-        c_session = self._init_session()
+        if persist_c_session:
+            if reset_c_session or getattr(self, '_persistent_c_session', None) is None:
+                self._persistent_c_session = self._init_session()
+            c_session = self._persistent_c_session
+        else:
+            c_session = self._init_session()
         
         if warmup_epochs > 0 or constraint_epochs > 0:
             self._phased_training(
                 training_set, valid_set, test_set,
                 warmup_epochs, constraint_epochs,
                 batch_size, dataset_size, print_loss,
-                c_session, **kwargs
+                c_session, persist_c_session=persist_c_session, **kwargs
             )
         else:
             return super().train(
                 training_set, valid_set=valid_set, test_set=test_set,
                 c_session=c_session, batch_size=batch_size,
                 dataset_size=dataset_size, print_loss=print_loss,
+                _persist_c_session_tqdm=persist_c_session,
                 **kwargs
             )
 
@@ -517,7 +539,7 @@ class LossProgram(LearningBasedProgram):
     def _phased_training(self, training_set, valid_set, test_set,
                          warmup_epochs, constraint_epochs,
                          batch_size, dataset_size, print_loss,
-                         c_session, **kwargs):
+                         c_session, persist_c_session=False, **kwargs):
         """Execute phased training (warmup -> constraint)."""
         self.stop = False
         epoch_counter = 0
@@ -534,6 +556,7 @@ class LossProgram(LearningBasedProgram):
                     'Training', training_set, self.train_epoch,
                     c_session=c_session, batch_size=batch_size,
                     dataset_size=dataset_size, print_loss=print_loss,
+                    _persist_c_session_tqdm=persist_c_session,
                     training_mode='warmup', **kwargs
                 )
                 if valid_set is not None:
@@ -551,6 +574,7 @@ class LossProgram(LearningBasedProgram):
                     'Training', training_set, self.train_epoch,
                     c_session=c_session, batch_size=batch_size,
                     dataset_size=dataset_size, print_loss=print_loss,
+                    _persist_c_session_tqdm=persist_c_session,
                     training_mode='standard', **kwargs
                 )
                 if valid_set is not None:
@@ -674,6 +698,7 @@ class PrimalDualProgram(LossProgram):
               batch_size=1, dataset_size=None, print_loss=True,
               warmup_epochs=0, constraint_epochs=0,
               constraint_only=False, constraint_loss_scale=1.0,
+              persist_c_session=False, reset_c_session=False,
               **kwargs):
         """
         Performs training over a single epoch using a combination of the model loss
@@ -722,6 +747,8 @@ class PrimalDualProgram(LossProgram):
             constraint_epochs=constraint_epochs,
             constraint_only=constraint_only,
             constraint_loss_scale=constraint_loss_scale,
+            persist_c_session=persist_c_session,
+            reset_c_session=reset_c_session,
             **kwargs
         )
 

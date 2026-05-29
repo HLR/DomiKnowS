@@ -196,7 +196,7 @@ def evaluate_latent_loss(
     """Evaluate latent window specs and return weighted diagnostics.
 
     ``specs`` are intentionally duck-typed so callers can pass
-    :class:`domiknows.generation.enforcement.LatentWindowSpec` without creating
+    :class:`domiknows.generation.latent.enforcement.LatentWindowSpec` without creating
     an import cycle.  Each spec should expose ``if_label``, ``formula``,
     ``window``, ``weight``, ``reduction``, and optionally ``name`` /
     ``concept`` / ``empty_window_policy``.

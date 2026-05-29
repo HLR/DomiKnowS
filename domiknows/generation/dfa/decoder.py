@@ -35,7 +35,7 @@ from typing import Sequence
 
 import torch
 
-from .learners.dfa.core import DFA
+from .core import DFA
 from .vocabulary import TokenVocabulary
 
 
@@ -148,7 +148,7 @@ def mask_logits_for_dfa(
             decoding step.
         allowed_labels: Set of DomiKnowS label IDs that the DFA currently
             permits.
-        vocabulary: :class:`~.vocabulary.TokenVocabulary` providing the
+        vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` providing the
             label ↔ token-ID mapping and the ``other_label`` value.
         fill_value: Score assigned to masked-out positions.  Should be
             sufficiently negative to be ignored by ``argmax`` / softmax.
@@ -513,9 +513,9 @@ def constrained_greedy_decode(
             ``(batch, seq_len, vocab_size)``.
         input_ids: Prompt token IDs as either a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
-        vocabulary: :class:`~.vocabulary.TokenVocabulary` mapping token IDs
+        vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs used by the DFA.
-        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.dfa.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated (not counting the prompt).
@@ -600,9 +600,9 @@ def constrained_beam_search_decode(
         model: A HuggingFace-compatible causal language model.
         input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
-        vocabulary: :class:`~.vocabulary.TokenVocabulary` mapping token IDs
+        vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs.
-        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.dfa.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated per beam.
@@ -765,9 +765,9 @@ def constrained_sample_decode(
         model: A HuggingFace-compatible causal language model.
         input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
-        vocabulary: :class:`~.vocabulary.TokenVocabulary` mapping token IDs
+        vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs.
-        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.dfa.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated.
@@ -880,9 +880,9 @@ def constrained_label_greedy_decode(
             shape ``(1, seq_len, label_count)``.
         input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
-        vocabulary: :class:`~.vocabulary.TokenVocabulary` providing the
+        vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` providing the
             label ↔ token-ID mapping.
-        dfa: Constraint :class:`~.learners.DFA` whose alphabet must cover
+        dfa: Constraint :class:`~.dfa.DFA` whose alphabet must cover
             the vocabulary's label set.
         max_new_tokens: Hard upper bound on the number of tokens that may be
             generated (not counting the prompt).

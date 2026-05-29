@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from .hankel import WeightedFiniteAutomaton
 from ..common.base import CompactLabelGenerationHead
-from ...latent_potentials import LatentTransitionPotential, apply_wfa_transition_potential
+from ...latent import LatentTransitionPotential, apply_wfa_transition_potential
 from ..common.utils import (
     TransitionPotentialInput,
     _coerce_label_to_token_id,

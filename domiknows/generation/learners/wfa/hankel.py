@@ -26,8 +26,8 @@ from pathlib import Path
 
 import torch
 
-from ..dfa import DFA, State
-from ...latent_potentials import LatentTransitionPotential, apply_wfa_transition_potential
+from ...dfa import DFA, State
+from ...latent import LatentTransitionPotential, apply_wfa_transition_potential
 
 # Type aliases used throughout this module.
 Symbol = Hashable

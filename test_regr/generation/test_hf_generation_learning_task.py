@@ -8,7 +8,6 @@ from domiknows.generation import (
     constrained_label_beam_search_decode,
     constrained_label_greedy_decode,
     constrained_label_sample_decode,
-    constraints_to_dfa,
     discover_generation_enforcement,
 )
 
@@ -33,7 +32,7 @@ def test_learning_graph_constraints_still_compile_to_dfa():
 
     artifacts = learning_program.build_learning_program(pad_size=4)
     enforcement = discover_generation_enforcement(artifacts.graph, artifacts.bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, artifacts.bundle.vocabulary)
+    dfa = enforcement.dfa
 
     assert dfa.accepts([1, 2, 3, 0])
     assert not dfa.accepts([1, 4, 2, 0])

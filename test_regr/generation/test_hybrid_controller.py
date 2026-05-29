@@ -61,7 +61,7 @@ def build_controller(scorer=None, *, enforcement=None, weights=None):
     tokenizer = mock_hf.MockTokenizer()
     graph, bundle = graph_module.build_generation_graph(tokenizer)
     discovered = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(discovered.dfa_constraints, bundle.vocabulary)
+    dfa = discovered.dfa
     scorer = scorer or SequenceScorer(bundle.vocabulary.label_count)
     return HybridController(
         vocabulary=bundle.vocabulary,

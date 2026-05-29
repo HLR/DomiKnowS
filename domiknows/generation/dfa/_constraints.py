@@ -2,7 +2,7 @@
 
 Each constraint can be compiled into one of two representations:
 
-* **DFA** (default) — a :class:`~.learners.DFA` over the vocabulary's label
+* **DFA** (default) — a :class:`~.dfa.DFA` over the vocabulary's label
   alphabet that accepts exactly the sequences satisfying the constraint.  DFA
   constraints can be combined via :func:`constraints_to_dfa`, which takes their
   product (intersection).
@@ -38,7 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Protocol
 
-from .learners.dfa.core import DFA, complement_dfa, product_dfa, union_dfa
+from .core import DFA, complement_dfa, product_dfa, union_dfa
 from .vocabulary import TokenVocabulary
 
 
@@ -51,7 +51,7 @@ class DomiKnowSGenerationContext(Protocol):
     DomiKnowS logical expressions.
 
     Attributes:
-        vocabulary: The :class:`~.vocabulary.TokenVocabulary` for the current
+        vocabulary: The :class:`~.dfa.vocabulary.TokenVocabulary` for the current
             generation task.
     """
 
@@ -84,14 +84,14 @@ class GenerationConstraint:
     name = "generation constraint"
 
     def to_dfa(self, vocabulary: TokenVocabulary) -> DFA:
-        """Compile this constraint into a :class:`~.learners.DFA`.
+        """Compile this constraint into a :class:`~.dfa.DFA`.
 
         Args:
             vocabulary: The vocabulary whose label alphabet the DFA should
                 operate over.
 
         Returns:
-            A :class:`~.learners.DFA` that accepts all and only the label
+            A :class:`~.dfa.DFA` that accepts all and only the label
             sequences satisfying this constraint.
 
         Raises:
@@ -154,7 +154,7 @@ class EosClosureConstraint(GenerationConstraint):
 
         Args:
             vocabulary: Token vocabulary providing the label alphabet and
-                :attr:`~.vocabulary.TokenVocabulary.eos_label`.
+                :attr:`~.dfa.vocabulary.TokenVocabulary.eos_label`.
 
         Returns:
             A three-state DFA that rejects any sequence containing a
@@ -906,7 +906,7 @@ def constraints_to_dfa(constraints: Iterable[GenerationConstraint], vocabulary: 
         vocabulary: Token vocabulary providing the shared label alphabet.
 
     Returns:
-        A single :class:`~.learners.DFA` accepting sequences that satisfy all
+        A single :class:`~.dfa.DFA` accepting sequences that satisfy all
         DFA-compilable constraints in *constraints*.
     """
     dfas = [constraint.to_dfa(vocabulary) for constraint in constraints if constraint.supports_dfa]

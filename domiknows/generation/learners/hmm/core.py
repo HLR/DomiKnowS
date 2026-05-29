@@ -4,7 +4,6 @@ Provides:
 - ``DiscreteHMM``: a Torch-backed discrete HMM that can score batched
   observation sequences, expose forward/backward factors, run Viterbi, sample,
   serialize, and be extracted into a deterministic finite automaton (DFA).
-- ``ProbabilisticAutomaton``: a legacy compatibility wrapper for examples.
 - ``HMMParameters`` / ``BaumWelchResult``: lightweight data containers.
 - ``baum_welch_train``: batched Torch Baum-Welch EM training with scaled
   forward-backward to avoid floating-point underflow.
@@ -23,8 +22,8 @@ from typing import Iterable, Sequence
 
 import torch
 
-from ..dfa import DFA
-from ...latent_potentials import LatentTransitionPotential, apply_hmm_transition_potential
+from ...dfa import DFA
+from ...latent import LatentTransitionPotential, apply_hmm_transition_potential
 
 
 @dataclass(frozen=True)
@@ -60,6 +59,7 @@ class DiscreteHMM:
         device: torch.device | str | None = None,
         dtype: torch.dtype | None = None,
     ):
+        # Initialize validated model parameters and symbol/state metadata.
         symbols = tuple(symbols)
         _validate_symbol_tuple(symbols)
         dtype = dtype or torch.float32
@@ -67,6 +67,7 @@ class DiscreteHMM:
         emission_t = torch.as_tensor(emission, dtype=dtype, device=device)
         initial_t = torch.as_tensor(initial, dtype=dtype, device=device)
         if normalize:
+            # Keep all parameter tensors row-stochastic unless caller opts out.
             initial_t = _normalize_tensor(initial_t, dim=0)
             transition_t = _normalize_tensor(transition_t, dim=-1)
             emission_t = _normalize_tensor(emission_t, dim=-1)
@@ -88,30 +89,37 @@ class DiscreteHMM:
 
     @property
     def state_count(self) -> int:
+        # Return the number of hidden states.
         return int(self.initial_probs.numel())
 
     @property
     def symbol_count(self) -> int:
+        # Return the vocabulary size.
         return len(self.symbols)
 
     @property
     def device(self) -> torch.device:
+        # Expose the device where parameters currently live.
         return self.initial_probs.device
 
     @property
     def dtype(self) -> torch.dtype:
+        # Expose the parameter dtype used for computations.
         return self.initial_probs.dtype
 
     @property
     def initial(self) -> torch.Tensor:
+        # Provide read-only-style access to initial probabilities.
         return self.initial_probs
 
     @property
     def transition(self) -> torch.Tensor:
+        # Provide read-only-style access to transition probabilities.
         return self.transition_probs
 
     @property
     def emission(self) -> torch.Tensor:
+        # Provide read-only-style access to emission probabilities.
         return self.emission_probs
 
     def transition_with_potential(
@@ -119,6 +127,7 @@ class DiscreteHMM:
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
     ) -> torch.Tensor:
         """Return transitions after optional latent-potential reweighting."""
+        # Delegate potential application and keep transition semantics centralized.
         return apply_hmm_transition_potential(self.transition_probs, transition_potential)
 
     def with_transition_potential(
@@ -126,6 +135,7 @@ class DiscreteHMM:
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]],
     ) -> "DiscreteHMM":
         """Return a new HMM with transition dynamics reweighted by *transition_potential*."""
+        # Create a new immutable-style view with reweighted transitions.
         return DiscreteHMM(
             self.transition_with_potential(transition_potential),
             self.emission_probs,
@@ -136,6 +146,8 @@ class DiscreteHMM:
         )
 
     def to(self, device: torch.device | str | None = None, dtype: torch.dtype | None = None) -> "DiscreteHMM":
+        # Return an equivalent model moved/cast to the requested backend.
+        # Rebuild via constructor so invariants (shape/type assumptions) stay centralized.
         return DiscreteHMM(
             self.transition_probs.to(device=device, dtype=dtype or self.dtype),
             self.emission_probs.to(device=device, dtype=dtype or self.dtype),
@@ -146,6 +158,7 @@ class DiscreteHMM:
         )
 
     def encode(self, sequences: Sequence[Sequence[object]]) -> tuple[torch.Tensor, torch.Tensor]:
+        # Map symbol sequences to padded index tensors and per-sequence lengths.
         if not sequences:
             raise ValueError("sequences must not be empty")
         encoded: list[list[int]] = []
@@ -161,6 +174,7 @@ class DiscreteHMM:
             encoded.append(row)
             lengths.append(len(row))
         max_len = max(lengths)
+        # Right-pad variable-length encoded sequences into a single batch tensor.
         padded = torch.zeros((len(encoded), max_len), dtype=torch.long, device=self.device)
         for idx, row in enumerate(encoded):
             padded[idx, : len(row)] = torch.tensor(row, dtype=torch.long, device=self.device)
@@ -171,6 +185,13 @@ class DiscreteHMM:
         observations: torch.Tensor | Sequence[Sequence[int]],
         lengths: torch.Tensor | Sequence[int] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # Canonicalize user inputs into one batched format shared by all inference paths.
+        # observations[b, t] is the observed/emitted symbol index at timestep t for batch item b.
+        # It must be in [0, symbol_count-1] and is distinct from the latent (hidden) state.
+        # Returns:
+        # - obs: shape [batch, seq_len]
+        # - lengths_t: valid length per batch item
+        # - mask: True on valid timesteps, False on right-padding positions
         obs = torch.as_tensor(observations, dtype=torch.long, device=self.device)
         if obs.dim() == 1:
             obs = obs.unsqueeze(0)
@@ -188,6 +209,7 @@ class DiscreteHMM:
             raise ValueError("lengths must contain one value per batch item")
         if torch.any(lengths_t < 1) or torch.any(lengths_t > obs.shape[1]):
             raise ValueError("lengths must be in [1, seq_len]")
+        # mask[b, t] is True only for valid timesteps of sequence b.
         mask = torch.arange(obs.shape[1], device=self.device).unsqueeze(0) < lengths_t.unsqueeze(1)
         return obs, lengths_t, mask
 
@@ -198,6 +220,8 @@ class DiscreteHMM:
         *,
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
     ) -> torch.Tensor:
+        # Return batched log-likelihoods for observation sequences.
+        # forward_backward already computes numerically stable log-likelihoods.
         factors = self.forward_backward(observations, lengths, transition_potential=transition_potential)
         return factors.log_likelihood
 
@@ -207,8 +231,10 @@ class DiscreteHMM:
         *,
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
     ) -> float:
+        # Convenience wrapper that returns a scalar probability for one sequence.
         if not sequence:
             return 1.0
+        # Keep scalar API for compatibility: encode one sequence and decode from log-space.
         obs, lengths = self.encode([sequence])
         return float(torch.exp(self.log_prob(obs, lengths, transition_potential=transition_potential))[0].item())
 
@@ -219,11 +245,15 @@ class DiscreteHMM:
         *,
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
     ) -> HMMForwardBackward:
+        # Compute scaled forward/backward factors and posterior marginals.
         obs, lengths_t, mask = self._prepare_observations(observations, lengths)
         batch, seq_len = obs.shape
         state_count = self.state_count
         eps = torch.finfo(self.dtype).eps
         transition = self.transition_with_potential(transition_potential)
+
+        # --- Forward pass (scaled) ---
+        # alpha[t] stores p(z_t | x_{<=t}) up to a per-step normalization.
         alpha_rows = []
         scale_rows = []
         first = self.initial_probs.unsqueeze(0) * self.emission_probs[:, obs[:, 0]].transpose(0, 1)
@@ -235,12 +265,15 @@ class DiscreteHMM:
             current = torch.matmul(alpha_t, transition) * self.emission_probs[:, obs[:, t]].transpose(0, 1)
             scale = current.sum(dim=-1).clamp_min(eps)
             current = current / scale.unsqueeze(-1)
+            # For padded positions, keep the previous alpha unchanged.
             alpha_t = torch.where(mask[:, t].unsqueeze(-1), current, alpha_t)
             alpha_rows.append(alpha_t)
+            # Scale of padded steps is neutral so they do not affect log-likelihood.
             scale_rows.append(torch.where(mask[:, t], scale, torch.ones_like(scale)))
         alpha = torch.stack(alpha_rows, dim=1)
         scales = torch.stack(scale_rows, dim=1)
 
+        # --- Backward pass (scaled with forward scales) ---
         beta_rows: list[torch.Tensor | None] = [None] * seq_len
         beta_t = torch.ones((batch, state_count), dtype=self.dtype, device=self.device)
         beta_rows[-1] = beta_t
@@ -248,14 +281,17 @@ class DiscreteHMM:
             next_emit = self.emission_probs[:, obs[:, t + 1]].transpose(0, 1)
             current = torch.matmul(transition.unsqueeze(0), (next_emit * beta_t).unsqueeze(-1)).squeeze(-1)
             current = current / scales[:, t + 1].clamp_min(eps).unsqueeze(-1)
+            # Do not back-propagate through padded suffixes.
             beta_t = torch.where(mask[:, t + 1].unsqueeze(-1), current, beta_t)
             beta_rows[t] = beta_t
         beta = torch.stack([row for row in beta_rows if row is not None], dim=1)
 
+        # Posterior state marginals p(z_t | x_{1:T}).
         gamma = alpha * beta
         gamma = gamma / gamma.sum(dim=-1, keepdim=True).clamp_min(eps)
         gamma = torch.where(mask.unsqueeze(-1), gamma, torch.zeros_like(gamma))
 
+        # Posterior transition marginals p(z_t=i, z_{t+1}=j | x_{1:T}).
         xi_rows = []
         for t in range(seq_len - 1):
             next_emit = self.emission_probs[:, obs[:, t + 1]].transpose(0, 1)
@@ -268,6 +304,7 @@ class DiscreteHMM:
             else torch.zeros((batch, 0, state_count, state_count), dtype=self.dtype, device=self.device)
         )
 
+        # log P(x) = sum_t log(scale_t) over valid timesteps only.
         log_likelihood = torch.log(scales.clamp_min(eps)).masked_fill(~mask, 0.0).sum(dim=-1)
         return HMMForwardBackward(alpha=alpha, beta=beta, gamma=gamma, xi=xi, scales=scales, log_likelihood=log_likelihood, mask=mask)
 
@@ -278,8 +315,10 @@ class DiscreteHMM:
         *,
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Decode the most likely hidden-state path for each sequence.
         obs, lengths_t, _mask = self._prepare_observations(observations, lengths)
         batch, seq_len = obs.shape
+        # Run decoding in log-space to avoid repeated products of tiny probabilities.
         log_initial = torch.log(self.initial_probs.clamp_min(torch.finfo(self.dtype).eps))
         transition = self.transition_with_potential(transition_potential)
         log_transition = torch.log(transition.clamp_min(torch.finfo(self.dtype).eps))
@@ -288,6 +327,7 @@ class DiscreteHMM:
         backpointers = torch.zeros((batch, seq_len, self.state_count), dtype=torch.long, device=self.device)
         deltas = [delta]
         for t in range(1, seq_len):
+            # scores[b, src, dst] = best log-score ending in src then transitioning to dst.
             scores = delta.unsqueeze(2) + log_transition.unsqueeze(0)
             best, arg = scores.max(dim=1)
             delta = best + log_emission[:, obs[:, t]].transpose(0, 1)
@@ -298,6 +338,7 @@ class DiscreteHMM:
         stacked = torch.stack(deltas, dim=1)
         for b in range(batch):
             last = int(lengths_t[b].item()) - 1
+            # Trace back only through the valid sequence prefix for batch item b.
             score, state = stacked[b, last].max(dim=0)
             log_scores[b] = score
             paths[b, last] = state
@@ -314,14 +355,17 @@ class DiscreteHMM:
         generator: torch.Generator | None = None,
         transition_potential: LatentTransitionPotential | torch.Tensor | Sequence[Sequence[float]] | None = None,
     ) -> torch.Tensor:
+        # Generate observation samples by alternating emission and transition draws.
         if batch_size < 1:
             raise ValueError("batch_size must be at least 1")
         if max_length < 1:
             raise ValueError("max_length must be at least 1")
         transition = self.transition_with_potential(transition_potential)
+        # Start each sampled trajectory from the initial-state distribution.
         states = torch.multinomial(self.initial_probs, batch_size, replacement=True, generator=generator)
         outputs = []
         for _ in range(max_length):
+            # Emit symbol from current state, then transition to next state.
             probs = self.emission_probs.index_select(0, states)
             symbol = torch.multinomial(probs, 1, generator=generator).squeeze(-1)
             outputs.append(symbol)
@@ -330,9 +374,11 @@ class DiscreteHMM:
         return torch.stack(outputs, dim=1)
 
     def extract_argmax_dfa(self, accept_probability_threshold: float = 0.0) -> DFA:
+        # Build a deterministic argmax approximation of this probabilistic model.
         alphabet = frozenset(self.symbols)
         states = frozenset(range(self.state_count))
         transitions = {}
+        # Joint score for taking transition i->j and emitting symbol k from j.
         scores = self.transition_probs.unsqueeze(-1) * self.emission_probs.transpose(0, 1).unsqueeze(0)
         for state in states:
             for sym_idx, symbol in enumerate(self.symbols):
@@ -348,9 +394,11 @@ class DiscreteHMM:
         return DFA(states=states, alphabet=alphabet, transitions=transitions, start_state=start, accepting_states=frozenset(accepting))
 
     def save_pretrained(self, path: str | Path) -> None:
+        # Persist model parameters and metadata to a directory.
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         config = {"symbols": list(self.symbols), "state_names": list(self.state_names), "dtype": str(self.dtype).replace("torch.", "")}
+        # Keep lightweight metadata in JSON and numeric tensors in torch format.
         (path / "config.json").write_text(json.dumps(config, indent=2), encoding="utf8")
         torch.save(
             {"initial": self.initial_probs.detach().cpu(), "transition": self.transition_probs.detach().cpu(), "emission": self.emission_probs.detach().cpu()},
@@ -359,8 +407,10 @@ class DiscreteHMM:
 
     @classmethod
     def from_pretrained(cls, path: str | Path, *, device: torch.device | str | None = None, dtype: torch.dtype | None = None) -> "DiscreteHMM":
+        # Reconstruct a model instance from files produced by save_pretrained.
         path = Path(path)
         config = json.loads((path / "config.json").read_text(encoding="utf8"))
+        # Load on CPU by default, then move/cast via constructor arguments.
         weights = torch.load(path / "model.pt", map_location=device or "cpu", weights_only=True)
         return cls(weights["transition"], weights["emission"], weights["initial"], config["symbols"], state_names=config.get("state_names"), normalize=False, device=device, dtype=dtype)
 
@@ -374,11 +424,17 @@ class DiscreteHMM:
         max_iter: int = 100,
         tol: float = 1e-6,
         smoothing: float = 1e-9,
-        init: "DiscreteHMM | ProbabilisticAutomaton | HMMParameters | None" = None,
+        init: "DiscreteHMM | HMMParameters | None" = None,
         random_seed: int = 0,
         device: torch.device | str | None = None,
         dtype: torch.dtype = torch.float64,
     ) -> "BaumWelchResult":
+        # Fit HMM parameters with Baum-Welch, i.e., EM for latent-state sequence models.
+        # E-step: run forward-backward to estimate expected state/transition counts under
+        #         current parameters.
+        # M-step: renormalize those expected counts into new initial/transition/emission
+        #         probabilities (with optional additive smoothing).
+        # Iterate until log-likelihood improvement is below tol or max_iter is reached.
         encoded, symbols = _validate_and_encode_sequences(sequences, symbols, state_count)
         if max_iter < 1:
             raise ValueError("max_iter must be at least 1")
@@ -388,6 +444,7 @@ class DiscreteHMM:
             raise ValueError("smoothing must be non-negative")
         lengths = torch.tensor([len(seq) for seq in encoded], dtype=torch.long, device=device)
         max_len = int(lengths.max().item())
+        # Build a padded observation tensor so EM can run in a single batched pass.
         obs = torch.zeros((len(encoded), max_len), dtype=torch.long, device=device)
         for idx, seq in enumerate(encoded):
             obs[idx, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=device)
@@ -409,6 +466,7 @@ class DiscreteHMM:
         log_likelihoods: list[float] = []
         converged = False
         for iteration in range(max_iter):
+            # E-step: compute expected sufficient statistics under current model.
             factors = model.forward_backward(obs, lengths)
             mask = factors.mask
             init_counts = factors.gamma[:, 0, :].sum(dim=0)
@@ -417,6 +475,7 @@ class DiscreteHMM:
             for symbol_idx in range(len(symbols)):
                 symbol_mask = (obs == symbol_idx) & mask
                 emit_counts[:, symbol_idx] = (factors.gamma * symbol_mask.unsqueeze(-1)).sum(dim=(0, 1))
+            # M-step: normalize expected counts back into stochastic parameters.
             initial = _normalize_tensor(init_counts + smoothing, dim=0)
             transition = _normalize_tensor(trans_counts + smoothing, dim=-1)
             emission = _normalize_tensor(emit_counts + smoothing, dim=-1)
@@ -430,131 +489,11 @@ class DiscreteHMM:
 
 
 @dataclass(frozen=True)
-class ProbabilisticAutomaton:
-    """Legacy immutable discrete Hidden Markov Model (HMM) wrapper.
-
-    Prefer :class:`DiscreteHMM` for new production code. This frozen dataclass
-    remains for source compatibility with older examples and tests.
-
-    Attributes:
-        transition: Square matrix of shape ``(S, S)`` where
-            ``transition[i][j]`` is the probability of moving from state *i*
-            to state *j*.
-        emission: Matrix of shape ``(S, V)`` where ``emission[i][k]`` is the
-            probability of emitting the *k*-th symbol from state *i*.
-        initial: Length-*S* vector of initial state probabilities.
-        symbols: Ordered tuple of observable symbol strings (vocabulary).
-    """
-    transition: tuple[tuple[float, ...], ...]
-    emission: tuple[tuple[float, ...], ...]
-    initial: tuple[float, ...]
-    symbols: tuple[str, ...]
-
-    def __init__(
-        self,
-        transition: Sequence[Sequence[float]],
-        emission: Sequence[Sequence[float]],
-        initial: Sequence[float],
-        symbols: Sequence[str],
-    ):
-        transition = tuple(tuple(float(v) for v in row) for row in transition)
-        emission = tuple(tuple(float(v) for v in row) for row in emission)
-        initial = tuple(float(v) for v in initial)
-        symbols = tuple(symbols)
-        if len(transition) != len(emission) or len(transition) != len(initial):
-            raise ValueError("transition, emission, and initial must agree on state count")
-        if any(len(row) != len(transition) for row in transition):
-            raise ValueError("transition matrix must be square")
-        if any(len(row) != len(symbols) for row in emission):
-            raise ValueError("emission rows must match symbol count")
-        object.__setattr__(self, "transition", transition)
-        object.__setattr__(self, "emission", emission)
-        object.__setattr__(self, "initial", initial)
-        object.__setattr__(self, "symbols", symbols)
-
-    @property
-    def state_count(self) -> int:
-        """Number of hidden states in the model."""
-        return len(self.initial)
-
-    def sequence_probability(self, sequence: Iterable[str]) -> float:
-        """Compute the total probability of an observation sequence.
-
-        Uses the forward algorithm without scaling; suitable for short
-        sequences or when numerical precision is not a concern.
-
-        Args:
-            sequence: Ordered iterable of symbol strings from ``self.symbols``.
-
-        Returns:
-            The marginal probability P(sequence) summed over all hidden paths.
-        """
-        # NOTE: This is intentionally the *unscaled* forward pass.  For long
-        # sequences use ``baum_welch_train`` which relies on the scaled version.
-        probs = list(self.initial)
-        symbol_index = {symbol: i for i, symbol in enumerate(self.symbols)}
-        for symbol in sequence:
-            e_idx = symbol_index[symbol]
-            emitted = [probs[state] * self.emission[state][e_idx] for state in range(self.state_count)]
-            probs = [
-                sum(emitted[src] * self.transition[src][dst] for src in range(self.state_count))
-                for dst in range(self.state_count)
-            ]
-        return sum(probs)
-
-    def extract_argmax_dfa(self, accept_probability_threshold: float = 0.0) -> DFA:
-        """Convert the HMM to a deterministic finite automaton (DFA).
-
-        At each state the transition for a symbol is wired to the successor
-        state that maximises ``transition[state][dst] * emission[dst][symbol]``
-        (the most likely next state given the observed symbol).  The initial
-        DFA state is the most probable initial HMM state.
-
-        Args:
-            accept_probability_threshold: A state is made accepting if its
-                maximum emission probability exceeds this threshold.  Defaults
-                to ``0.0`` (all states are accepting unless the resulting set
-                would be empty).
-
-        Returns:
-            A :class:`~.dfa.DFA` whose alphabet equals ``self.symbols``.
-        """
-        # Build argmax transitions: for each (state, symbol) pair choose the
-        # destination state with the highest joint transition × emission weight.
-        alphabet = frozenset(self.symbols)
-        states = frozenset(range(self.state_count))
-        transitions = {}
-        for state in states:
-            for sym_idx, symbol in enumerate(self.symbols):
-                best_dst = max(
-                    range(self.state_count),
-                    key=lambda dst: self.transition[state][dst] * self.emission[dst][sym_idx],
-                )
-                transitions[(state, symbol)] = best_dst
-
-        start = max(range(self.state_count), key=lambda state: self.initial[state])
-        accepting = {
-            state
-            for state in states
-            if max(self.emission[state]) >= accept_probability_threshold
-        }
-        if not accepting:
-            accepting = set(states)
-        return DFA(
-            states=states,
-            alphabet=alphabet,
-            transitions=transitions,
-            start_state=start,
-            accepting_states=frozenset(accepting),
-        )
-
-
-@dataclass(frozen=True)
 class HMMParameters:
     """Raw (unnormalised) HMM parameter arrays used to seed ``baum_welch_train``.
 
-    Unlike :class:`ProbabilisticAutomaton` this dataclass does *not* validate
-    or normalise its contents; normalisation happens inside ``_coerce_init``.
+    This dataclass does *not* validate or normalise its contents;
+    normalisation happens inside ``_coerce_init``.
 
     Attributes:
         transition: Square ``(S, S)`` transition probability matrix.
@@ -571,7 +510,7 @@ class BaumWelchResult:
     """Output of :func:`baum_welch_train`.
 
     Attributes:
-        model: The trained :class:`ProbabilisticAutomaton`.
+        model: The trained :class:`DiscreteHMM`.
         log_likelihoods: Per-iteration total log-likelihood of all training
             sequences.  Monotonically non-decreasing for a correct EM run.
         iterations: Number of EM iterations actually performed.
@@ -592,7 +531,7 @@ def baum_welch_train(
     max_iter: int = 100,
     tol: float = 1e-6,
     smoothing: float = 1e-9,
-    init: DiscreteHMM | ProbabilisticAutomaton | HMMParameters | None = None,
+    init: DiscreteHMM | HMMParameters | None = None,
     random_seed: int = 0,
 ) -> BaumWelchResult:
     """Train a discrete HMM with Baum-Welch expectation maximization.
@@ -614,7 +553,7 @@ def baum_welch_train(
 
 
 def compare_hmm_dfa(
-    hmm: ProbabilisticAutomaton,
+    hmm: DiscreteHMM,
     dfa: DFA,
     sequences: Iterable[Sequence[str]],
     probability_threshold: float = 0.0,
@@ -627,7 +566,7 @@ def compare_hmm_dfa(
     as the ground-truth acceptor.
 
     Args:
-        hmm: Trained probabilistic automaton.
+        hmm: Trained discrete HMM.
         dfa: Reference deterministic finite automaton acting as ground truth.
         sequences: Corpus of symbol sequences to evaluate.
         probability_threshold: HMM probability above which a sequence is
@@ -765,15 +704,15 @@ def _validate_and_encode_sequences(
 
 
 def _coerce_init(
-    init: DiscreteHMM | ProbabilisticAutomaton | HMMParameters,
+    init: DiscreteHMM | HMMParameters,
     symbols: tuple[str, ...],
     state_count: int,
 ) -> HMMParameters:
     """Normalise a warm-start object into a validated :class:`HMMParameters`.
 
-    Accepts either a fully-fledged :class:`ProbabilisticAutomaton` or a raw
-    :class:`HMMParameters` dataclass, validates the shapes against
-    *state_count* and *symbols*, then row-normalises every probability vector.
+    Accepts either a fully-fledged :class:`DiscreteHMM` or a raw
+    :class:`HMMParameters` dataclass, validates the shapes against *state_count*
+    and *symbols*, then row-normalises every probability vector.
 
     Raises:
         ValueError: If shapes are inconsistent or symbols don't match.
@@ -787,14 +726,10 @@ def _coerce_init(
             tuple(tuple(float(v) for v in row.tolist()) for row in init.emission_probs.detach().cpu()),
             tuple(float(v) for v in init.initial_probs.detach().cpu().tolist()),
         )
-    elif isinstance(init, ProbabilisticAutomaton):
-        if init.symbols != symbols:
-            raise ValueError("init symbols must match symbols")
-        params = HMMParameters(init.transition, init.emission, init.initial)
     elif isinstance(init, HMMParameters):
         params = init
     else:
-        raise TypeError("init must be DiscreteHMM, ProbabilisticAutomaton, HMMParameters, or None")
+        raise TypeError("init must be DiscreteHMM, HMMParameters, or None")
 
     if len(params.initial) != state_count:
         raise ValueError("init initial length must match state_count")

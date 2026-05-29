@@ -20,7 +20,7 @@ The detail learner-focused notes are:
 
 - model training and compact-head usage: [`learners/README_learning.md`](learners/README_learning.md)
 - graph-aware HMM and spectral automata: [`learners/README_graph_hmm.md`](learners/README_graph_hmm.md)
-- DFA and product-automaton tracing + debug server: [`learners/README_visualization.md`](learners/README_visualization.md)
+- DFA and product-automaton tracing + debug server: [`dfa/visualization/README.md`](dfa/visualization/README.md)
 
 
 | Tool | Purpose |
@@ -33,18 +33,18 @@ The detail learner-focused notes are:
 | `discover_generation_enforcement(...)` | Routes graph constraints into hard DFA constraints and soft latent specs. |
 | `HuggingFaceGenerationAdapter` | Runs true hard constrained decoding by masking logits with a DFA. |
 | `OpenAIResponsesAdapter` | Calls the OpenAI Responses API, then encodes and verifies output post hoc. |
-| `latent_constraints.py` | Product t-norm soft losses over token/latent probability sequences. |
+| `latent/` | Soft enforcement discovery, product t-norm latent losses, transition potentials, compiler recipes, and generation-level loss aggregation. |
 | `learners/compact/` | Shared compact-label head protocol plus GRU, Transformer, neural n-gram, local energy, and CRF heads for PMD, DFA-constrained label decoding, and hybrid scoring. |
-| `learners/dfa/` | DFA/product automata, tracing, reachability, DOT/export helpers, and decoder-facing support utilities. |
+| `dfa/` | DFA/product automata, vocabulary and graph-encoder helpers, constraint compilation/discovery, constrained decoders, tracing, DOT/export helpers, and the optional debug server. |
 | `learners/hmm/` | Canonical HMM tensors, graph-aware constrained HMM support, HMM Torch heads, and HMM factor projections. |
 | `learners/wfa/` | WFA/spectral learning, graph spectral automata, WFA Torch heads, prompt-conditioned heads, and WFA factor projections. |
 | `learners/common/` | Shared tensor utilities, prompt encoders, transition potential types, and auxiliary losses for `PrimalDualProgram` task loops. |
-| `hybrid.py` | Large-generator plus compact-head controller/scorer for candidate reranking, risk, repair, soft preferences, and constraint selection. |
+| `applications/` | Backend generation adapters, hybrid/reranking controllers, and planning-domain graph adapters built on DFA, latent, and learner primitives. |
 
 The package has three related automata layers:
 
 - **Hard DFA decoding** masks invalid local HuggingFace tokens or compact labels during generation.
-- **Core automata** in `domiknows.generation.learners` provide reusable DFA, HMM/PFA, WFA, Hankel, spectral, and visualization primitives.
+- **DFA infrastructure** in `domiknows.generation.dfa` provides reusable DFA primitives, vocabulary and graph-encoder helpers, hard constrained decoding, graph constraint discovery, compiler helpers, tracing, and visualization support.
 - **Graph-aware HMM/spectral learning** in `domiknows.generation.learners.hmm` and `domiknows.generation.learners.wfa` learns `P(x_1:T | G, C)` from compact sequences typed and restricted by DomiKnowS graph structure.
 
 ## Basic DFA Constraints
@@ -261,7 +261,7 @@ Custom compilers can also return `LatentTransitionPotential` objects or report
 
 ### Packaged Compiler Recipes
 
-`latent_compiler_recipes.py` provides opt-in factory helpers for common
+`latent/compiler_recipes.py` provides opt-in factory helpers for common
 downstream custom compilers. They are convenience wrappers over
 `GraphLatentCompiler`; they do not run unless passed explicitly.
 
@@ -564,7 +564,7 @@ only some are good.
 
 ## Latent Constraint Losses
 
-`latent_constraints.py` implements product t-norm soft logic:
+`latent/constraints.py` implements product t-norm soft logic:
 
 - `soft_not(x) = 1 - x`
 - `soft_and(a, b) = a * b`
@@ -756,7 +756,7 @@ run_generation_debug_server(
 
 The viewer exposes `/`, `/api/trace`, `/api/summary`, `/api/dot`, and
 `/api/svg`. It is a local debugging utility, not a production service.
-See [`learners/README_visualization.md`](learners/README_visualization.md) for a shorter runbook focused only on this
+See [`dfa/visualization/README.md`](dfa/visualization/README.md) for a shorter runbook focused only on this
 debug viewer.
 
 ### Spectral WFA Learning

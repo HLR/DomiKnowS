@@ -141,7 +141,7 @@ class SmallLLMPlanGenerator(torch.nn.Module):
         self.max_new_tokens = max_new_tokens
         self.max_steps = max_steps
         if vocabulary is None:
-            from domiknows.generation.vocabulary import TokenVocabulary
+            from domiknows.generation.dfa.vocabulary import TokenVocabulary
 
             vocabulary = TokenVocabulary(ACTION_VOCAB, eos_token=EOS_TOKEN)
         self.vocabulary = vocabulary

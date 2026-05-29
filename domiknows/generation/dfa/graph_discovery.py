@@ -1,20 +1,19 @@
-"""Introspection utilities that extract DFA constraints from a DomiKnowS graph.
+"""Compile DomiKnowS generation graph constraints into DFA fragments.
 
-After a generation graph is built with :class:`~.encoder.GenerationEncoder`
-and constraints are applied (either via :func:`~.generation_constraints.apply_all_constraints`
+After a generation graph is built with :class:`~.dfa.encoder.GenerationEncoder`
+and constraints are applied (either via :func:`~.dfa.generation_constraints.apply_all_constraints`
 or :func:`~.enforcement.mark_for_dfa`), this module walks the graph's logical
-constraint nodes and reconstructs the corresponding
-:class:`~.constraints.GenerationConstraint` objects so they can be compiled
-into a single combined DFA for token-level hard decoding.
+constraint nodes and compiles recognised regular fragments directly into DFA
+objects for token-level hard decoding.
 
 Recognised DomiKnowS constraint shapes
 ----------------------------------------
-- ``ifL(is_before_rel, ifL(eos, eos))``           → :class:`~.constraints.EosClosureConstraint`
-- ``atMostAL(notL(eos), N)``                      → :class:`~.constraints.MaxNonEosConstraint`
+- ``ifL(is_before_rel, ifL(eos, eos))``           -> EOS-closure DFA
+- ``atMostAL(notL(eos), N)``                      -> max non-EOS DFA
 - ``atLeastAL(token_value, N)`` / ``existsAL``    → required-token/count constraints
-- ``atMostAL(token_value, 0)``                    → :class:`~.constraints.ForbiddenTokenConstraint`
+- ``atMostAL(token_value, 0)``                    -> :class:`~.dfa.ForbiddenTokenConstraint`
 - ``exactAL`` / ``atLeastAL`` / ``atMostAL`` over token sets or negated tokens
-- ``ifL(existsAL(token), atMostAL(notL(eos), N))``→ :class:`~.constraints.ConditionalMaxNonEosConstraint`
+- ``ifL(existsAL(token), atMostAL(notL(eos), N))``-> :class:`~.dfa.ConditionalMaxNonEosConstraint`
 - regular boolean forms: ``andL``, ``orL``, ``notL``, ``nandL``, ``norL``,
   ``xorL``, ``iffL``/``equivalenceL``, and ``ifL(A, B)`` when both sides are regular
 - supported ``is_before_rel`` endpoint paths for after-trigger restrictions
@@ -25,12 +24,8 @@ Any other shape that still references generation concepts is considered
 
 Public API
 ----------
-:func:`discover_generation_constraints`
-    Primary entry point — returns a tuple of discovered constraints.
-
 :func:`constraints_to_dfa_from_graph`
-    Convenience wrapper that discovers constraints and immediately compiles
-    them into a single DFA.
+    Primary entry point — compiles supported graph constraints into one DFA.
 
 :func:`analyze_generation_constraints`
     Debugging entry point — reports supported constraints and unsupported
@@ -42,7 +37,8 @@ from dataclasses import dataclass
 import warnings
 from typing import Iterable
 
-from .constraints import (
+from .core import DFA, product_dfa
+from ._constraints import (
     AfterTokenAllowedConstraint,
     AllOfGenerationConstraint,
     AnyOfGenerationConstraint,
@@ -57,7 +53,6 @@ from .constraints import (
     TokenSetCountConstraint,
     all_of_constraints,
     any_of_constraints,
-    constraints_to_dfa,
     forbidden_token,
     if_token_present_then_at_most_non_eos,
     max_non_eos,
@@ -74,71 +69,21 @@ class GenerationConstraintAnalysis:
     lc_type: str
     relevant: bool
     supported: bool
-    constraints: tuple[GenerationConstraint, ...] = ()
+    dfas: tuple[DFA, ...] = ()
     reason: str | None = None
 
 
-def discover_generation_constraints(
+def _discover_generation_dfas(
     graph,
     bundle,
     *,
     on_unsupported: str = "warn",
-) -> tuple[GenerationConstraint, ...]:
-    """Discover DFA-enforceable generation constraints from a DomiKnowS graph.
-
-    Discovery proceeds in two passes:
-
-    1. **Bundle pass** — constraints already stored in ``bundle.constraints``
-       (placed there by :meth:`~.encoder.GenerationEncoder.build_graph`) are
-       collected first.
-    2. **Graph pass** — every head logical constraint in the graph is examined:
-
-       a. If it has a ``_generation_dfa_constraint`` marker (set by
-          :func:`~.enforcement.mark_for_dfa`), that marker is used directly
-          or triggers pattern matching.
-       b. Otherwise, structural pattern matching (:func:`_match_lc`) is
-          attempted.
-       c. Latent-only constraints (``_generation_latent_specs``) are silently
-          skipped.
-       d. Unrecognised constraints that reference generation concepts are
-          handled according to *on_unsupported*.
-
-    Duplicate constraints (by semantic key) are deduplicated automatically.
-
-    Args:
-        graph: A built DomiKnowS :class:`~domiknows.graph.Graph` with a
-            ``logicalConstrains`` attribute.
-        bundle: The :class:`~.encoder.GenerationBundle` returned alongside
-            *graph*.
-        on_unsupported: Policy for unrecognised generation-relevant constraints.
-            ``"warn"`` (default) emits a :class:`RuntimeWarning`;
-            ``"error"`` raises a :class:`ValueError`;
-            ``"ignore"`` silently skips.
-
-    Returns:
-        Tuple of unique :class:`~.constraints.GenerationConstraint` objects
-        discovered from the graph, in encounter order.
-
-    Raises:
-        ValueError: If *on_unsupported* is not one of the accepted values, or
-            if *on_unsupported* is ``"error"`` and an unsupported constraint
-            is encountered.
-    """
-    if on_unsupported not in {"ignore", "warn", "error"}:
-        raise ValueError("on_unsupported must be 'ignore', 'warn', or 'error'")
-
-    constraints: list[GenerationConstraint] = []
-    seen: set = set()
-
-    # Pass 1: seed from constraints already attached to the bundle.
-    for constraint in getattr(bundle, "constraints", ()):
-        _append_unique(constraints, seen, constraint)
-
+) -> tuple[DFA, ...]:
+    """Compile supported generation-relevant graph constraints into DFA fragments."""
+    dfas: list[DFA] = []
     for analysis in analyze_generation_constraints(graph, bundle, on_unsupported=on_unsupported):
-        for constraint in analysis.constraints:
-            _append_unique(constraints, seen, constraint)
-
-    return tuple(constraints)
+        dfas.extend(analysis.dfas)
+    return tuple(dfas)
 
 
 def analyze_generation_constraints(
@@ -150,9 +95,8 @@ def analyze_generation_constraints(
     """Analyze head graph constraints for DFA-enforceable generation fragments.
 
     The analysis is intentionally conservative: it reports supported regular
-    sequence fragments as :class:`GenerationConstraint` objects and gives a
-    reason for generation-relevant constraints that are not faithfully
-    compilable to DFA.
+    sequence fragments as DFA objects and gives a reason for generation-relevant
+    constraints that are not faithfully compilable to DFA.
     """
     if on_unsupported not in {"ignore", "warn", "error"}:
         raise ValueError("on_unsupported must be 'ignore', 'warn', or 'error'")
@@ -177,13 +121,14 @@ def analyze_generation_constraints(
         if discovered is False:
             discovered = _match_lc_many(lc, bundle)
         if discovered:
+            dfas = tuple(constraint.to_dfa(bundle.vocabulary) for constraint in discovered if constraint.supports_dfa)
             analyses.append(
                 GenerationConstraintAnalysis(
                     lc_name=lc_name,
                     lc_type=lc.__class__.__name__,
                     relevant=relevant,
                     supported=True,
-                    constraints=tuple(discovered),
+                    dfas=dfas,
                 )
             )
             continue
@@ -213,47 +158,34 @@ def analyze_generation_constraints(
 
 
 def constraints_to_dfa_from_graph(graph, bundle, *, on_unsupported: str = "warn"):
-    """Discover constraints from *graph* and compile them into a single DFA.
-
-    Convenience wrapper around :func:`discover_generation_constraints` +
-    :func:`~.constraints.constraints_to_dfa`.  Equivalent to::
-
-        constraints_to_dfa(
-            discover_generation_constraints(graph, bundle, on_unsupported=...),
-            bundle.vocabulary,
-        )
+    """Compile supported DomiKnowS graph constraints into a single DFA.
 
     Args:
         graph: A built DomiKnowS graph.
-        bundle: The :class:`~.encoder.GenerationBundle` returned alongside
+        bundle: The :class:`~.dfa.encoder.GenerationBundle` returned alongside
             *graph*.
-        on_unsupported: Forwarded to :func:`discover_generation_constraints`.
+        on_unsupported: Policy for unrecognised generation-relevant constraints.
 
     Returns:
-        A :class:`~.learners.DFA` accepting all sequences that satisfy every
+        A :class:`~.dfa.DFA` accepting all sequences that satisfy every
         discovered constraint.
     """
-    return constraints_to_dfa(
-        discover_generation_constraints(graph, bundle, on_unsupported=on_unsupported),
-        bundle.vocabulary,
+    return _combine_dfas(_discover_generation_dfas(graph, bundle, on_unsupported=on_unsupported), bundle.vocabulary)
+
+
+def _combine_dfas(dfas: Iterable[DFA], vocabulary) -> DFA:
+    """Intersect DFA fragments, returning accept-all when no graph constraints match."""
+    dfas = tuple(dfas)
+    if dfas:
+        return product_dfa(dfas)
+    alphabet = frozenset(vocabulary.alphabet)
+    return DFA(
+        states=frozenset({"ok"}),
+        alphabet=alphabet,
+        transitions={("ok", symbol): "ok" for symbol in alphabet},
+        start_state="ok",
+        accepting_states=frozenset({"ok"}),
     )
-
-
-def _append_unique(constraints: list[GenerationConstraint], seen: set, constraint: GenerationConstraint) -> None:
-    """Append *constraint* to *constraints* if its semantic key is not in *seen*.
-
-    Uses :func:`_constraint_key` to deduplicate constraints that are
-    semantically identical even if they are separate objects.
-
-    Args:
-        constraints: Accumulator list being built.
-        seen: Set of already-seen keys; mutated in place.
-        constraint: Candidate constraint to add.
-    """
-    key = _constraint_key(constraint)
-    if key not in seen:
-        seen.add(key)
-        constraints.append(constraint)
 
 
 def _constraint_key(constraint: GenerationConstraint):
@@ -265,7 +197,7 @@ def _constraint_key(constraint: GenerationConstraint):
     treated as the same constraint.
 
     Args:
-        constraint: Any :class:`~.constraints.GenerationConstraint`.
+        constraint: Any :class:`~.dfa.GenerationConstraint`.
 
     Returns:
         A tuple usable as a dict key / set member.
@@ -313,11 +245,11 @@ def _match_lc_many(lc, bundle) -> tuple[GenerationConstraint, ...] | None:
 
     Args:
         lc: A DomiKnowS logical constraint node.
-        bundle: The :class:`~.encoder.GenerationBundle` providing concept
+        bundle: The :class:`~.dfa.encoder.GenerationBundle` providing concept
             references for structural matching.
 
     Returns:
-        Tuple of :class:`~.constraints.GenerationConstraint` objects if the
+        Tuple of :class:`~.dfa.GenerationConstraint` objects if the
         shape is recognised, else ``None``.
     """
     cls_name = lc.__class__.__name__
@@ -366,24 +298,21 @@ def _marked_dfa_constraints(lc, bundle) -> tuple[GenerationConstraint, ...] | No
     - ``False``  — no marker present; caller should try ``_match_lc``.
     - ``None``   — marker present but could not be resolved to a constraint
                    (unrecognised marker type).
-    - A tuple of :class:`~.constraints.GenerationConstraint` instances —
+    - A tuple of :class:`~.dfa.GenerationConstraint` instances —
       resolved constraints ready to be appended.
 
     Args:
         lc: A DomiKnowS logical constraint node.
-        bundle: The :class:`~.encoder.GenerationBundle` for structural
+        bundle: The :class:`~.dfa.encoder.GenerationBundle` for structural
             fallback matching when the marker is ``True``.
 
     Returns:
-        ``False``, ``None``, or a :class:`~.constraints.GenerationConstraint`.
+        ``False``, ``None``, or a :class:`~.dfa.GenerationConstraint`.
     """
     marker = getattr(lc, "_generation_dfa_constraint", False)
     if marker is False:
         # No marker — signal the caller to try structural pattern matching.
         return False
-    if isinstance(marker, GenerationConstraint):
-        # Explicit constraint object stored directly in the marker.
-        return (marker,)
     if marker is True:
         # Marker present but no explicit constraint; fall back to structural matching.
         return _match_lc_many(lc, bundle)
@@ -505,10 +434,10 @@ def _match_if_lc(lc, bundle) -> GenerationConstraint | None:
 
     Args:
         lc: An ``ifL`` DomiKnowS logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` for concept references.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for concept references.
 
     Returns:
-        A :class:`~.constraints.GenerationConstraint` or ``None``.
+        A :class:`~.dfa.GenerationConstraint` or ``None``.
     """
     # Check for the EOS-closure pattern first.
     if _is_eos_closure(lc, bundle):
@@ -541,10 +470,10 @@ def _match_at_most_lc(lc, bundle) -> GenerationConstraint | None:
 
     Args:
         lc: An ``atMostAL`` DomiKnowS logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` for concept references.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for concept references.
 
     Returns:
-        A :class:`~.constraints.GenerationConstraint` or ``None``.
+        A :class:`~.dfa.GenerationConstraint` or ``None``.
     """
     # Try: atMostAL(notL(eos), N) → MaxNonEosConstraint
     max_count = _non_eos_at_most_count(lc, bundle)
@@ -570,10 +499,10 @@ def _match_at_least_lc(lc, bundle) -> GenerationConstraint | None:
 
     Args:
         lc: An ``atLeastAL`` DomiKnowS logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` for concept references.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for concept references.
 
     Returns:
-        A :class:`~.constraints.RequiredTokenConstraint` or ``None``.
+        A :class:`~.dfa.RequiredTokenConstraint` or ``None``.
     """
     token = _direct_token(lc.e, bundle)
     min_count = _last_int(lc.e)
@@ -606,10 +535,10 @@ def _match_exists_lc(lc, bundle) -> GenerationConstraint | None:
 
     Args:
         lc: An ``existsAL`` DomiKnowS logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` for concept references.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for concept references.
 
     Returns:
-        A :class:`~.constraints.RequiredTokenConstraint` with ``min_count=1``
+        A :class:`~.dfa.RequiredTokenConstraint` with ``min_count=1``
         or ``None``.
     """
     token = _exists_token(lc, bundle)
@@ -641,7 +570,7 @@ def _is_eos_closure(lc, bundle) -> bool:
 
     Args:
         lc: An ``ifL`` node to inspect.
-        bundle: :class:`~.encoder.GenerationBundle` supplying
+        bundle: :class:`~.dfa.encoder.GenerationBundle` supplying
             ``is_before_rel`` and the EOS token string.
 
     Returns:
@@ -670,7 +599,7 @@ def _non_eos_at_most_count(lc, bundle) -> int | None:
 
     Args:
         lc: A DomiKnowS logical constraint node to inspect.
-        bundle: :class:`~.encoder.GenerationBundle` for EOS token lookup.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for EOS token lookup.
 
     Returns:
         The integer cap *N* if the pattern matches, else ``None``.
@@ -694,7 +623,7 @@ def _exists_token(lc, bundle) -> str | None:
 
     Args:
         lc: A DomiKnowS logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` for token lookup.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for token lookup.
 
     Returns:
         The surface-form token string if *lc* is an ``existsAL`` containing
@@ -875,7 +804,7 @@ def _direct_token(elements: Iterable, bundle) -> str | None:
 
     Args:
         elements: Iterable of sub-expressions from a logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` for token lookup.
+        bundle: :class:`~.dfa.encoder.GenerationBundle` for token lookup.
 
     Returns:
         A surface-form token string, or ``None``.
@@ -928,7 +857,7 @@ def _token_from_tuple(item, bundle) -> str | None:
 
     Args:
         item: Candidate 4-tuple from a logical constraint expression.
-        bundle: :class:`~.encoder.GenerationBundle` providing
+        bundle: :class:`~.dfa.encoder.GenerationBundle` providing
             ``generated_token`` and the vocabulary.
 
     Returns:
@@ -993,7 +922,7 @@ def _is_generation_relevant(lc, bundle) -> bool:
 
     Args:
         lc: A DomiKnowS logical constraint node.
-        bundle: :class:`~.encoder.GenerationBundle` providing the concept
+        bundle: :class:`~.dfa.encoder.GenerationBundle` providing the concept
             references to look for.
 
     Returns:

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 import torch
 
-from .latent_constraints import LatentLossItem
+from .constraints import LatentLossItem
 
 
 @dataclass(frozen=True)
