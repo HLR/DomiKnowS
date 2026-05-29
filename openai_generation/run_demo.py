@@ -8,7 +8,7 @@ from typing import Any
 
 from domiknows.generation import (
     OpenAIResponsesAdapter,
-    constraints_to_dfa,
+    analyze_generation_constraints,
     discover_generation_enforcement,
 )
 
@@ -121,7 +121,7 @@ def run_generation(
     tokenizer = MockTokenizer()
     graph, bundle = build_generation_graph(tokenizer)
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     profile = backend_profile(backend, model=model, base_url=base_url, api_key=api_key)
     mock_text = _mock_text(mock_output, custom_mock_output)
@@ -140,7 +140,11 @@ def run_generation(
         **request_params,
     )
     logprob_summary = extract_logprob_summary(result.raw)
-    constraints = [str(constraint) for constraint in enforcement.dfa_constraints]
+    constraints = [
+        f"{analysis.lc_name}: {'supported' if analysis.supported else analysis.reason}"
+        for analysis in analyze_generation_constraints(graph, bundle, on_unsupported="error")
+        if analysis.relevant
+    ]
 
     return {
         "graph": graph.name,

@@ -7,14 +7,12 @@ from typing import Iterator, Sequence
 
 import torch
 
-from domiknows.generation import explain_dfa_rejection
-
 try:
     from .graph import EOS_TOKEN, VOCAB
-    from .utils import labels_for_symbols
+    from .learned_model_interface import labels_for_symbols
 except ImportError:  # pragma: no cover - direct script execution fallback
     from graph import EOS_TOKEN, VOCAB
-    from utils import labels_for_symbols
+    from learned_model_interface import labels_for_symbols
 
 
 NORMAL_SYMBOLS = tuple(symbol for symbol in VOCAB if symbol != EOS_TOKEN)
@@ -58,8 +56,6 @@ class StreamTrainingExample:
     prompt_token_id: int
     symbols: tuple[str, ...]
     labels: tuple[int, ...]
-    accepted: bool
-    rejection: str | None
     sample_data: dict
 
 
@@ -176,12 +172,12 @@ def mock_generator_stream(
     *,
     count: int,
     seed: int = 0,
-    max_length: int = 100,
+    max_length: int = 6,
 ) -> Iterator[tuple[str, str, tuple[str, ...]]]:
     """Yield deterministic generator proposals.
 
-    The sequence intentionally contains both valid and invalid outputs so users
-    can see PMD train on generator behavior while the DFA reports violations.
+    The sequence intentionally contains both rule-following and rule-breaking
+    outputs so users can see PMD train on generator behavior.
     """
     if max_length < 2:
         raise ValueError("max_length must be at least 2")
@@ -199,17 +195,15 @@ def mock_generator_stream(
 
 def stream_training_examples(
     bundle,
-    dfa,
     *,
     count: int,
     seed: int = 0,
-    max_length: int = 100,
+    max_length: int = 6,
 ) -> tuple[StreamTrainingExample, ...]:
     """Generate a stream batch and convert every output into PMD data."""
     examples: list[StreamTrainingExample] = []
     for name, prompt_name, symbols in mock_generator_stream(count=count, seed=seed, max_length=max_length):
         labels = tuple(labels_for_symbols(bundle, symbols))
-        accepted = bool(dfa.accepts(labels))
         prompt = prompt_spec(prompt_name)
         examples.append(
             StreamTrainingExample(
@@ -219,8 +213,6 @@ def stream_training_examples(
                 prompt_token_id=int(prompt["token_id"]),
                 symbols=tuple(symbols),
                 labels=labels,
-                accepted=accepted,
-                rejection=None if accepted else explain_dfa_rejection(dfa, labels),
                 sample_data=make_sample_data(bundle, symbols, prompt_name=prompt_name),
             )
         )
@@ -232,10 +224,9 @@ class GeneratorTrainingSource:
     """Small object that turns generator outputs into PMD training batches."""
 
     bundle: object
-    dfa: object
     stream_count: int = 4
     seed: int = 0
-    max_length: int = 100
+    max_length: int = 6
 
     def __post_init__(self) -> None:
         if self.stream_count <= 0:
@@ -247,7 +238,6 @@ class GeneratorTrainingSource:
         """Read the next deterministic generator batch for one PMD step."""
         return stream_training_examples(
             self.bundle,
-            self.dfa,
             count=self.stream_count,
             seed=self.seed + int(step),
             max_length=self.max_length,

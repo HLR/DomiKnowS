@@ -1,7 +1,7 @@
 # Package Shipping Planner Graph-HMM Demo
 
 This task is a second declarative planning domain used to verify that
-`domiknows.generation.planning` is not cooking-specific.
+`domiknows.generation.applications.planning` is not cooking-specific.
 
 The human-facing graph in `graph.py` declares package-shipping concepts,
 subconcepts, action labels, phase transitions, task requirements, reference

@@ -14,7 +14,6 @@ from domiknows.generation import (
     allowed_mass_loss,
     compute_generation_training_loss,
     constrained_label_greedy_decode,
-    constraints_to_dfa,
     discover_generation_enforcement,
     hmm_sequence_nll,
     token_probs_from_log_probs,
@@ -113,7 +112,7 @@ def build_prompt_automata_learning_program(
     vocab, eos_token = generation_vocab_for_tokenizer(tokenizer, real_hf=real_hf)
     graph, bundle = build_generation_graph(tokenizer, vocab, eos_token=eos_token)
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error", latent_mode=latent_mode)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     text = bundle.text
     token = bundle.token

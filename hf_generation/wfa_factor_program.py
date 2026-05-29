@@ -13,7 +13,6 @@ from domiknows.generation import (
     apply_wfa_factor_consistency_constraints,
     compute_generation_training_loss,
     constrained_label_greedy_decode,
-    constraints_to_dfa,
     discover_generation_enforcement,
     token_probs_from_log_probs,
     wfa_factor_consistency_loss,
@@ -130,7 +129,7 @@ def build_wfa_factor_program(
         include_transition_pairs=include_transition_pairs,
     )
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="ignore", latent_mode=latent_mode)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     text = bundle.text
     token = bundle.token

@@ -15,8 +15,8 @@ from __future__ import annotations
 import argparse
 
 from domiknows.generation import (
+    analyze_generation_constraints,
     constraints_to_dfa_from_graph,
-    discover_generation_constraints,
     domiknows_hmm_from_generation_constraints,
     explain_dfa_rejection,
     generation_bundle_from_graph,
@@ -80,7 +80,7 @@ def run_demo(*, demo: str, candidate_name: str) -> dict:
 
     # 1. Discover the graph constraints that are regular enough to enforce
     # during generation.  This is the symbolic/logic side.
-    discovered = discover_generation_constraints(graph, bundle, on_unsupported="error")
+    analyses = analyze_generation_constraints(graph, bundle, on_unsupported="error")
 
     # 2. Compile the discovered constraints into a hard DFA.  The DFA is the
     # exact yes/no verifier: it accepts or rejects a compact-label sequence.
@@ -111,7 +111,7 @@ def run_demo(*, demo: str, candidate_name: str) -> dict:
     return {
         "graph": graph.name,
         "candidate": candidate,
-        "constraints": [constraint.name for constraint in discovered],
+        "constraints": [analysis.lc_name for analysis in analyses if analysis.supported],
         "dfa_accepted": accepted,
         "dfa_rejection": rejection,
         "dfa_state_count": len(dfa.states),

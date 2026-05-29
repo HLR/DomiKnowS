@@ -54,9 +54,7 @@ def main(argv=None) -> int:
             print(response.get_json())
         return 0
 
-    print("Discovered DFA constraints:")
-    for constraint in enforcement.dfa_constraints:
-        print(" -", constraint.name)
+    print("Hard DFA compiled from graph constraints")
     print("Sequence:", sequence)
     print("Vocabulary:", bundle.vocabulary.labels)
     print(f"Open http://{args.host}:{args.port}")

@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Offline DomiKnowS PMD learning demo with compact-label learners."
 requires-python = ">=3.12"
 dependencies = [
+    "debugpy>=1.8.0",
     "domiknows[cpu]",
+    "scipy==1.14.1",
     "torch>=2.0.0",
 ]
 

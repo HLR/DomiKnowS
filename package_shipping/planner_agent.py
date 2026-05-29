@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import random
 from typing import Sequence
 
-from domiknows.generation.planning import PlanningBundle
+from domiknows.generation.applications.planning import PlanningBundle
 
 
 @dataclass(frozen=True)

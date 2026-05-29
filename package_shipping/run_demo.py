@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 
 from domiknows.generation import explain_dfa_rejection
-from domiknows.generation.planning import planning_bundle_from_graph, planning_dfa_from_graph
+from domiknows.generation.applications.planning import planning_bundle_from_graph, planning_dfa_from_graph
 
 try:
     from .graph import build_graph

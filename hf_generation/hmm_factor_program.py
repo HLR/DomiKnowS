@@ -13,7 +13,6 @@ from domiknows.generation import (
     apply_hmm_dp_consistency_constraints,
     compute_generation_training_loss,
     constrained_label_greedy_decode,
-    constraints_to_dfa,
     discover_generation_enforcement,
     hmm_dp_factor_consistency_loss,
     hmm_factor_sequence_nll,
@@ -133,7 +132,7 @@ def build_hmm_factor_program(
     # Latent-state constraints are for PMD/cmodel, not DFA token masking. The
     # DFA bridge should therefore ignore those non-token factor constraints.
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="ignore", latent_mode=latent_mode)
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     text = bundle.text
     token = bundle.token

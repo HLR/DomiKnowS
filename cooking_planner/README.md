@@ -42,7 +42,7 @@ syntax; the domain facts they create are still graph concepts and relations.
 
 ## Generated Execution Layer
 
-`domiknows.generation.planning` reads the graph and derives:
+`domiknows.generation.applications.planning` reads the graph and derives:
 
 - the ordered action vocabulary from `planned_action`;
 - task requirements from `dish_requires_action`;

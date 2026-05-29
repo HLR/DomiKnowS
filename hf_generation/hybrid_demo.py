@@ -37,7 +37,6 @@ def run_hybrid_demo(
         scorer_head=learning.model,
         enforcement=enforcement,
         tokenizer=tokenizer,
-        constraints=enforcement.dfa_constraints,
     )
 
     ranked = controller.generate_verify_rerank(

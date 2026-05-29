@@ -12,7 +12,7 @@ import torch
 
 from domiknows.generation import (  # noqa: E402
     HuggingFaceGenerationAdapter,
-    constraints_to_dfa,
+    analyze_generation_constraints,
     discover_generation_enforcement,
     mask_logits_for_dfa,
 )
@@ -69,7 +69,7 @@ def build_demo(
     vocab, eos_token = generation_vocab_for_tokenizer(tokenizer, real_hf=real_hf)
     graph, bundle = build_generation_graph(tokenizer, vocab, eos_token=eos_token)
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
     adapter = HuggingFaceGenerationAdapter(model, tokenizer, bundle.vocabulary)
     return graph, bundle, enforcement, dfa, adapter, tokenizer
 
@@ -107,7 +107,7 @@ def run_all_modes(
             top_p=0.95,
             generator=generator,
         ),
-        "constraints": enforcement.dfa_constraints,
+        "constraints": analyze_generation_constraints(_graph, bundle, on_unsupported="error"),
         "vocabulary": bundle.vocabulary,
     }
     return results
@@ -359,8 +359,9 @@ def main(argv=None) -> int:
     print("  decoded:", repr(tokenizer.decode(prompt_token_ids)))
     print("  max_new_tokens:", args.max_new_tokens)
     print("Discovered DFA constraints:")
-    for constraint in enforcement.dfa_constraints:
-        print(" -", constraint.name)
+    for analysis in analyze_generation_constraints(graph, bundle, on_unsupported="error"):
+        if analysis.relevant:
+            print(" -", analysis.lc_name, "supported" if analysis.supported else analysis.reason)
 
     if args.show_space_log or (not args.real_hf and not args.hide_space_log):
         _print_decoder_space_log(

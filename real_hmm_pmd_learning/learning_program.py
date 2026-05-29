@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 import torch
 
 from domiknows.generation import (
-    constraints_to_dfa,
     discover_generation_enforcement,
     domiknows_hmm_from_generation_constraints,
 )
@@ -13,6 +12,7 @@ from domiknows.generation.learners import (
     CompactLabelGenerationHead,
     EnergyCompactLabelGenerationHead,
     GraphHMMGenerationHead,
+    HMMGenerationHead,
 )
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
@@ -49,8 +49,8 @@ class RealHMMPMDArtifacts:
     )
     learner_name: str = field(
         metadata={
-            "description": "The selected compact-label learner: graph-hmm or energy.",
-            "purpose": "Lets the demo compare a graph-shaped HMM learner with a neural local energy scorer without changing PMD wiring.",
+            "description": "The selected compact-label learner: discrete-hmm, graph-hmm, or energy.",
+            "purpose": "Lets the demo compare a plain DiscreteHMM-backed learner, a graph-shaped HMM learner, and a neural local energy scorer without changing PMD wiring.",
         }
     )
     training_source: GeneratorTrainingSource = field(
@@ -61,7 +61,7 @@ class RealHMMPMDArtifacts:
     )
     stream_examples: tuple[StreamTrainingExample, ...] = field(
         metadata={
-            "description": "The latest materialized generator batch. Each item contains symbols, DFA status, rejection text, and the DomiKnowS sample dict.",
+            "description": "The latest materialized generator batch. Each item contains symbols and the DomiKnowS sample dict.",
             "purpose": "Gives the demo something concrete to print while training data itself comes from training_source.",
         }
     )
@@ -100,7 +100,7 @@ def label_token_id_map(vocabulary) -> tuple[int | None, ...]:
 
 
 def build_compact_learner(
-    learner: str,
+    learner: str = "discrete-hmm",
     *,
     graph,
     bundle,
@@ -108,8 +108,17 @@ def build_compact_learner(
     random_seed: int | None = 0,
 ) -> CompactLabelGenerationHead:
     """Create the compact-label learner used by ModuleLearner."""
-    learner = learner.lower()
+    learner = _normalise_learner_name(learner)
     label_to_token_id = label_token_id_map(bundle.vocabulary)
+    if learner == "discrete-hmm":
+        return HMMGenerationHead(
+            label_count=bundle.vocabulary.label_count,
+            state_count=3,
+            pad_size=pad_size,
+            label_to_token_id=label_to_token_id,
+            trainable=True,
+            random_seed=random_seed,
+        )
     if learner == "graph-hmm":
         # The graph-HMM learner is initialized with the best-fitting HMM given the graph constraints, 
         # which may help it learn faster than the randomly initialized energy model.
@@ -137,7 +146,7 @@ def build_compact_learner(
             vocab_size=PROMPT_VOCAB_SIZE,
             random_seed=random_seed,
         )
-    raise ValueError("learner must be 'graph-hmm' or 'energy'")
+    raise ValueError("learner must be 'discrete-hmm', 'graph-hmm', or 'energy'")
 
 
 build_compact_head = build_compact_learner
@@ -145,26 +154,28 @@ build_compact_head = build_compact_learner
 
 def build_learning_program(
     *,
-    learner: str = "graph-hmm",
+    learner: str = "discrete-hmm",
     head: str | None = None,
     stream_count: int = 4,
     stream_seed: int = 0,
     inference_prompt: str = "AB",
     pad_size: int | None = None,
     random_seed: int | None = 0,
+    beta: float = 2.0,
 ) -> RealHMMPMDArtifacts:
     """Build a PMD program with a trainable compact-label learner."""
     if head is not None:
         learner = head
+    learner = _normalise_learner_name(learner)
     if stream_count <= 0:
         raise ValueError("stream_count must be positive")
     inference_prompt_info = prompt_spec(inference_prompt)
 
     # 1. DomiKnows graph -> generation bundle -> graph-discovered DFA constraints.
     graph, bundle = build_bundle()
-    pad_size = int(pad_size or 100)
+    pad_size = int(pad_size or 6)
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
-    dfa = constraints_to_dfa(enforcement.dfa_constraints, bundle.vocabulary)
+    dfa = enforcement.dfa
 
     text = bundle.text
     token = bundle.token
@@ -181,9 +192,9 @@ def build_learning_program(
     def add_sequence(sequence_labels_input):
         flat = sequence_labels_input[0] if getattr(sequence_labels_input, "dim", lambda: 0)() == 2 else sequence_labels_input
         labels = [int(label) for label in flat[:pad_size]]
-        eos_label = bundle.vocabulary.eos_label
+        pad_label = bundle.vocabulary.other_label
         if len(labels) < pad_size:
-            labels.extend([eos_label] * (pad_size - len(labels)))
+            labels.extend([pad_label] * (pad_size - len(labels)))
         return torch.ones((pad_size, 1)), torch.tensor(labels, dtype=torch.long), torch.arange(pad_size)
 
     token[contains, "sequence_labels", "token_index"] = JointSensor(
@@ -205,9 +216,9 @@ def build_learning_program(
         pad_size=pad_size,
         random_seed=random_seed,
     )
-    learner_name = learner.lower()
-    if learner_name not in {"graph-hmm", "energy"}:
-        raise ValueError("learner must be 'graph-hmm' or 'energy'")
+    learner_name = learner
+    if learner_name not in {"discrete-hmm", "graph-hmm", "energy"}:
+        raise ValueError("learner must be 'discrete-hmm', 'graph-hmm', or 'energy'")
 
     # 4. ModuleLearner lets PMD read compact-learner probabilities on DataNodes.
     token[generated_symbol] = ModuleLearner(
@@ -238,7 +249,7 @@ def build_learning_program(
         poi=(text, token, precedes),
         inferTypes=["local/argmax"],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        beta=10,
+        beta=float(beta),
         device="cpu",
         tnorm="P",
         counting_tnorm="P",
@@ -246,7 +257,6 @@ def build_learning_program(
 
     training_source = GeneratorTrainingSource(
         bundle,
-        dfa,
         stream_count=stream_count,
         seed=stream_seed,
         max_length=pad_size,
@@ -267,3 +277,11 @@ def build_learning_program(
         inference_prompt_text=str(inference_prompt_info["text"]),
         inference_prompt_token_id=int(inference_prompt_info["token_id"]),
     )
+
+
+def _normalise_learner_name(learner: str) -> str:
+    """Normalize user-facing learner aliases."""
+    learner = str(learner).replace("_", "-").lower()
+    if learner == "hmm":
+        return "discrete-hmm"
+    return learner

@@ -1,6 +1,6 @@
 # Real HMM PMD Learning Demo
 
-This is the smallest PMD learning demo in the generation examples.
+This is the small PMD learning demo in the generation examples.
 
 It is self-contained and has one graph rule:
 
@@ -32,17 +32,18 @@ program.train(...)
 There is no task-specific optimizer loop in this demo. The selected compact
 learner is a normal `ModuleLearner` module.
 
-Two compact learners are available:
+Three compact learners are available:
 
 ```text
-Graph-HMM learner = graph-shaped probabilistic automaton learner
-Energy learner    = neural local energy scorer over compact labels
-DFA               = hard validity checker for both
-PMD               = logical constraint pressure for both
+Discrete-HMM learner = plain DiscreteHMM-backed compact-label learner, the default
+Graph-HMM learner    = graph-shaped probabilistic automaton learner
+Energy learner       = neural local energy scorer over compact labels
+DFA                  = hard verifier discovered from the same graph rule
+PMD                  = logical constraint pressure for all learners
 ```
 
 The mock generator stream emits deterministic prompt-conditioned valid and
-invalid strings, up to the current pad size. The default pad size is `100`, and
+invalid strings, up to the current pad size. The default pad size is `6`, and
 shorter strings are padded with `END` by the DomiKnowS sensor path.
 
 The prompts are intentionally tiny:
@@ -54,20 +55,9 @@ short -> prefer short strings that reach END quickly
 ```
 
 For example, prompt `AB` makes the generator assign higher probability to
-symbols `A` and `B`. The DFA still enforces the hard rule, so a second `B` is
-rejected even when the prompt likes `B`.
-
-The named diagnostic candidates are still:
-
-```text
-valid:   A B C D END
-invalid: A B C B END
-```
-
-Every generated string is used as a PMD training example. The DFA reports
-whether the string violates the rule, but invalid strings are not hidden from
-training. This is intentional: it lets the demo show DomiKnowS constraint
-pressure pushing back when the generator proposes bad behavior.
+symbols `A` and `B`. Every generated string is used directly as a PMD training
+example so the demo stays focused on the standard training call and the learned
+compact-label model.
 
 The generator is wrapped by a small source object:
 
@@ -80,10 +70,20 @@ PrimalDualProgram.train(...) -> one standard training epoch
 Run:
 
 ```bash
-uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --steps 2 --stream-count 4 --inference-prompt AB
-uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --learner energy --steps 2 --stream-count 4 --inference-prompt CD
-uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --steps 2 --stream-count 4 --pad-size 100
+uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --steps 3 --stream-count 4 --inference-prompt AB
+uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --learner graph-hmm --steps 3 --stream-count 4 --inference-prompt AB
+uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --learner energy --steps 3 --stream-count 4 --inference-prompt CD
+uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --steps 3 --stream-count 4 --pad-size 6
 ```
+
+Run with remote debugging enabled:
+
+```bash
+uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --steps 3 --remote-debug --debug-host 127.0.0.1 --debug-port 5678 --debug-wait
+```
+
+Then attach your debugger to `127.0.0.1:5678`. Drop `--debug-wait` if you want
+the demo to start immediately and attach later.
 
 Use `--help` to see the small CLI:
 
@@ -91,15 +91,14 @@ Use `--help` to see the small CLI:
 uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py --help
 ```
 
-After training, the demo runs one learned greedy inference path under the DFA
-mask. The DFA is still the hard rule checker; the selected compact learner is the
-learned compact-label model.
+After training, `run_demo.py` prints an explicit inference step. The greedy
+search queries the learned compact-label model for next-label scores and emits
+the best learned continuation for the selected prompt.
 
 Mental model:
 
 ```text
 mock generator stream -> proposes prompt-conditioned strings
-DFA                   -> reports hard validity
-PMD training          -> learns from all streamed strings with graph constraints
+PMD training          -> learns from streamed strings with graph constraints
 compact-label learner -> learned model used for inference
 ```

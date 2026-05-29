@@ -10,7 +10,7 @@ import torch
 
 from domiknows.generation import explain_dfa_rejection
 from domiknows.generation.learners import project_matrix
-from domiknows.generation.planning import planning_bundle_from_graph, planning_dfa_from_graph
+from domiknows.generation.applications.planning import planning_bundle_from_graph, planning_dfa_from_graph
 
 
 TASKS_DIR = Path(__file__).resolve().parents[1]

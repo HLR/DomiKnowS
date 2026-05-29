@@ -8,8 +8,8 @@ import torch
 from domiknows.generation import (
     DiscreteHMM,
     DomiKnowSAwareHMM,
+    analyze_generation_constraints,
     constraints_to_dfa_from_graph,
-    discover_generation_constraints,
     domiknows_hmm_from_generation_constraints,
     explain_dfa_rejection,
     generation_bundle_from_graph,
@@ -122,7 +122,7 @@ def build_flow(candidate: str = "valid", *, demo: str = "one") -> dict[str, Any]
         raise ValueError(f"candidate must be one of {sorted(candidate_map)}")
 
     graph, bundle = build_bundle(demo)
-    constraints = discover_generation_constraints(graph, bundle, on_unsupported="error")
+    analyses = analyze_generation_constraints(graph, bundle, on_unsupported="error")
     dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
     sequence = candidate_map[candidate]
     labels = [bundle.vocabulary.label_for_token(symbol) for symbol in sequence]
@@ -174,7 +174,7 @@ def build_flow(candidate: str = "valid", *, demo: str = "one") -> dict[str, Any]
                 if demo == "one"
                 else "atMostAL(generated_symbol.B('x'), 1); atLeastAL(generated_symbol.C('x'), 1)"
             ),
-            "discovered": [constraint.name for constraint in constraints],
+            "discovered": [analysis.lc_name for analysis in analyses if analysis.supported],
         },
         "dfa": {
             "accepted": dfa_trace["accepted"],
@@ -319,7 +319,7 @@ def _constraint_compilation_summary(model: DomiKnowSAwareHMM) -> dict[str, Any] 
             "whose DFA endpoints line up."
         ),
         "state_count": len(compilation.states),
-        "constraints": [str(getattr(constraint, "name", constraint)) for constraint in compilation.constraints],
+        "constraints": [],
         "states": [
             {
                 "name": state.name,
