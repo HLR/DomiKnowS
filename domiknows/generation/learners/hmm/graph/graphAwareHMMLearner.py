@@ -29,6 +29,75 @@ from .graph_head_utils import (
 
 __all__ = ["GraphHMMGenerationHead"]
 
+
+def _align_label_to_token_id(label_to_token_id, bundle, compiled_symbols):
+    """Trim a bundle-aligned ``label_to_token_id`` to the compiled symbol order.
+
+    The graph-HMM may operate over a subset of the bundle vocabulary (e.g.
+    when ``include_other=False`` drops the padding label).  The caller usually
+    passes the full bundle-wide map; this helper re-indexes it so the resulting
+    tuple has one entry per compiled symbol.  Returns the input unchanged if it
+    already has the right length, and ``None`` is passed through untouched.
+    """
+    if label_to_token_id is None:
+        return None
+    compiled_symbols = tuple(compiled_symbols)
+    if len(label_to_token_id) == len(compiled_symbols):
+        return label_to_token_id
+    vocabulary = getattr(bundle, "vocabulary", None)
+    bundle_labels = tuple(getattr(vocabulary, "labels", ()) or ())
+    if not bundle_labels or len(bundle_labels) != len(label_to_token_id):
+        # Fall back to a positional trim; works when compiled symbols are the
+        # prefix of the bundle vocabulary in order (the common case).
+        return tuple(label_to_token_id)[: len(compiled_symbols)]
+    aligned = []
+    for symbol in compiled_symbols:
+        try:
+            index = bundle_labels.index(symbol)
+        except ValueError:
+            aligned.append(None)
+            continue
+        aligned.append(label_to_token_id[index])
+    return tuple(aligned)
+
+
+def _seed_graph_hmm_from_compilation(model) -> None:
+    """Seed a freshly-constructed ``DomiKnowSAwareHMM`` from its DFA compilation.
+
+    ``DomiKnowSAwareHMM.from_dfa`` only builds the support masks — the learned
+    tensors (``initial_``, ``transition_``, ``emission_``) remain ``None`` until
+    ``fit`` is called.  Mirror the seeding ``domiknows_hmm_from_generation_constraints``
+    does for the graph path so callers that supply a precomputed DFA also get a
+    fit-ready model.
+    """
+    compilation = getattr(model, "constraint_hmm_compilation", None)
+    if compilation is None:
+        raise RuntimeError(
+            "DomiKnowSAwareHMM.from_dfa did not produce a DFA compilation; "
+            "cannot seed initial / transition / emission parameters"
+        )
+    # Pick any symbol that has positive emission mass somewhere as a one-token
+    # initialisation sequence — the actual content does not matter because
+    # ``max_iter=0`` skips the E/M loop and only triggers the parameter
+    # initialisation path.
+    init_symbol = None
+    for symbol_index, symbol in enumerate(compilation.symbols):
+        if (compilation.emission_mask[:, symbol_index] > 0).any():
+            init_symbol = symbol
+            break
+    if init_symbol is None:
+        raise ValueError("compiled HMM has no globally emittable symbol")
+    model.fit(
+        [(init_symbol,)],
+        max_iter=0,
+        init={
+            "initial": compilation.initial,
+            "transition": compilation.transition,
+            "emission": compilation.emission,
+        },
+    )
+
+
 class GraphHMMGenerationHead(CompactLabelGenerationHead):
     """Compact-label HMM head that projects parameters through graph constraints."""
 
@@ -56,8 +125,18 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         from .constraint_compiler import domiknows_hmm_from_generation_constraints
         from .graphAwareHMM import DomiKnowSAwareHMM
 
+        # Include the bundle's ``_other`` (padding) label in the compiled
+        # symbol space so the head's label_count matches the bundle vocabulary.
+        # Without this the head rejects padded training targets at index
+        # ``other_label`` because they are out of bounds for the smaller
+        # compiled emission matrix.
         if dfa is not None:
-            fitted_hmm = DomiKnowSAwareHMM.from_dfa(bundle, dfa)
+            fitted_hmm = DomiKnowSAwareHMM.from_dfa(bundle, dfa, include_other=True)
+            # ``from_dfa`` builds the DFA-compiled HMM support but does not
+            # populate the learned tensors.  Seed them from the compilation
+            # with a zero-iteration fit, matching the graph-based code path
+            # in ``domiknows_hmm_from_generation_constraints``.
+            _seed_graph_hmm_from_compilation(fitted_hmm)
         else:
             if graph is None:
                 graph = getattr(bundle, "graph", None)
@@ -66,13 +145,21 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
             fitted_hmm = domiknows_hmm_from_generation_constraints(
                 graph,
                 bundle,
+                include_other=True,
                 dtype=torch.float64,
             )
+        # The DFA compilation may emit fewer labels than the bundle vocabulary
+        # (e.g. it excludes the ``_other`` padding label by default).  Align the
+        # caller-supplied label-to-token map with the compiled symbol order so
+        # the head's label space matches the fitted HMM.
+        aligned_label_to_token_id = _align_label_to_token_id(
+            label_to_token_id, bundle, fitted_hmm.id_to_symbol,
+        )
         return cls.from_graph_hmm(
             fitted_hmm,
             trainable=trainable,
             pad_size=pad_size,
-            label_to_token_id=label_to_token_id,
+            label_to_token_id=aligned_label_to_token_id,
             prompt_conditioning=prompt_conditioning,
             prompt_vocab_size=prompt_vocab_size,
             prompt_hidden_size=prompt_hidden_size,
