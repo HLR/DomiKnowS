@@ -7,49 +7,43 @@ import torch
 
 EOS_TOKEN = "<eos>"
 
-ACTION_LABELS = (
-    "open",
-    "close",
-    "walk",
-    "grasp",
-    "place",
-    "put",
-    "switch",
-    "navigate",
-    "other",
-)
-ACTION_VOCAB = (EOS_TOKEN, *ACTION_LABELS)
+FALLBACK_ACTION = "other"
+DEFAULT_ACTION_LABELS = (FALLBACK_ACTION,)
+BASE_VOCAB = (EOS_TOKEN, *DEFAULT_ACTION_LABELS)
+ACTION_VOCAB = BASE_VOCAB
 
 HF_DATASET = "Inevitablevalor/EmbodiedAgentInterface"
 
 
-def _normalize_action_name(action):
-    """
-    Simplify the baseline vocabulary size
-    """
-    if isinstance(action, dict):
-        action = action.get("action", "")
-    action = str(action or "").lower()
-    action = action.replace("right_", "").replace("left_", "")
-    action = re.sub(r"[^a-z0-9_]+", "_", action).strip("_")
+def _normalize_surface_token(value):
+    value = str(value or "").lower()
+    return re.sub(r"[^a-z0-9_]+", "_", value).strip("_")
 
-    if "open" in action:
-        return "open"
-    if "close" in action:
-        return "close"
-    if "walk" in action:
-        return "walk"
-    if "grasp" in action or "grab" in action or "pick" in action:
-        return "grasp"
-    if "place" in action:
-        return "place"
-    if "put" in action:
-        return "put"
-    if "switch" in action or "turn" in action:
-        return "switch"
-    if "navigate" in action or "move" in action:
-        return "navigate"
-    return "other"
+
+def _normalize_action_name(action):
+    """Normalize raw EAI action names while removing object/id payloads."""
+    raw_action = action.get("action", "") if isinstance(action, dict) else action
+    token = _normalize_surface_token(raw_action)
+    token = re.sub(r"_\d+$", "", token)
+    if isinstance(action, dict):
+        obj = _normalize_object_name(action.get("object"))
+        if obj:
+            suffix = f"_{obj}"
+            if token.endswith(suffix):
+                token = token[: -len(suffix)]
+            token = re.sub(rf"_{re.escape(obj)}(_|$).*", "", token)
+
+    preserve_prefixes = ("left_", "right_", "switch_", "toggle_", "turn_")
+    if "_" in token and not token.startswith(preserve_prefixes):
+        token = token.split("_", 1)[0]
+    return token or FALLBACK_ACTION
+
+
+def _normalize_object_name(value):
+    if isinstance(value, dict):
+        value = value.get("object", "") or value.get("name", "")
+    value = _normalize_surface_token(value)
+    return value or None
 
 
 def parse_action_trajectory(value):
@@ -67,9 +61,52 @@ def parse_action_trajectory(value):
     return parsed if isinstance(parsed, list) else []
 
 
+def action_object_tokens_from_step(step):
+    if not isinstance(step, dict):
+        action = _normalize_action_name(step)
+        return action, None
+    action = _normalize_action_name(step.get("action", ""))
+    obj = _normalize_object_name(step.get("object"))
+    return action, obj
+
+
+def trajectory_action_object_tokens(row):
+    pairs = []
+    for step in parse_action_trajectory(row.get("action_trajectory")):
+        action, obj = action_object_tokens_from_step(step)
+        if action:
+            pairs.append((action, obj))
+    return pairs
+
+
+def object_tokens_from_row(row):
+    return [obj for _action, obj in trajectory_action_object_tokens(row) if obj]
+
+
+def action_tokens_from_row(row):
+    return [action for action, _obj in trajectory_action_object_tokens(row) if action]
+
+
+def action_tokens_requiring_object_from_row(row):
+    return [action for action, obj in trajectory_action_object_tokens(row) if action and obj]
+
+
+def build_generation_vocab(rows):
+    actions = sorted({action for row in rows for action in action_tokens_from_row(row)})
+    objects = sorted({obj for row in rows for obj in object_tokens_from_row(row)})
+    vocab = [EOS_TOKEN]
+    for token in (*actions, *DEFAULT_ACTION_LABELS, *objects):
+        if token not in vocab:
+            vocab.append(token)
+    return tuple(vocab)
+
+
 def action_sequence_labels(row, max_steps=8):
-    trajectory = parse_action_trajectory(row.get("action_trajectory"))
-    labels = [_normalize_action_name(action) for action in trajectory]
+    labels = []
+    for action, obj in trajectory_action_object_tokens(row):
+        labels.append(action)
+        if obj:
+            labels.append(obj)
     labels = labels[: max(0, max_steps - 1)]
     labels.append(EOS_TOKEN)
     while len(labels) < max_steps:
@@ -77,21 +114,24 @@ def action_sequence_labels(row, max_steps=8):
     return labels
 
 
-def action_sequence_ids(labels):
-    label_to_id = {label: idx for idx, label in enumerate(ACTION_VOCAB)}
-    return [label_to_id.get(label, label_to_id["other"]) for label in labels]
+def action_sequence_ids(labels, vocab=None):
+    vocab = vocab or ACTION_VOCAB
+    label_to_id = {label: idx for idx, label in enumerate(vocab)}
+    fallback = label_to_id.get("other", len(vocab))
+    return [label_to_id.get(label, fallback) for label in labels]
 
 
 def first_action_label(row):
-    trajectory = parse_action_trajectory(row.get("action_trajectory"))
-    if not trajectory:
-        return "other"
-    return _normalize_action_name(trajectory[0])
+    pairs = trajectory_action_object_tokens(row)
+    if not pairs:
+        return FALLBACK_ACTION
+    return pairs[0][0]
 
 
-def row_to_example(row, device="cpu", max_steps=8):
+def row_to_example(row, device="cpu", max_steps=8, vocab=None):
+    vocab = vocab or build_generation_vocab([row])
     sequence_labels = action_sequence_labels(row, max_steps=max_steps)
-    sequence_ids = action_sequence_ids(sequence_labels)
+    sequence_ids = action_sequence_ids(sequence_labels, vocab=vocab)
     label = next((item for item in sequence_labels if item != EOS_TOKEN), "other")
     text_parts = [
         row.get("task_name", ""),
@@ -100,6 +140,9 @@ def row_to_example(row, device="cpu", max_steps=8):
     ]
     text = " ".join(str(part) for part in text_parts if part)
     task_id = row.get("task_id") or row.get("scene_id") or row.get("task_name") or "task"
+    action_tokens = set(action_tokens_from_row(row))
+    action_requires_object_tokens = set(action_tokens_requiring_object_from_row(row))
+    object_tokens = set(object_tokens_from_row(row))
     return {
         "task_id": str(task_id),
         "task_name": str(row.get("task_name", "")),
@@ -111,14 +154,22 @@ def row_to_example(row, device="cpu", max_steps=8):
         "target_action_tokens": sequence_labels,
         "target_action_labels": torch.LongTensor(sequence_ids).to(device),
         "token_positions": torch.arange(max_steps, dtype=torch.long, device=device),
+        "generation_vocab": vocab,
+        "action_tokens": tuple(action for action in vocab if action in action_tokens),
+        "action_requires_object_tokens": tuple(
+            action for action in vocab if action in action_requires_object_tokens
+        ),
+        "object_tokens": tuple(token for token in vocab if token in object_tokens),
         "logic_label": torch.LongTensor([1]).to(device),
     }
 
 
 def add_action_concept_labels(examples, device="cpu"):
+    action_labels = sorted({label for sample in examples for label in sample.get("action_tokens", ())})
+    action_labels.append(FALLBACK_ACTION) if FALLBACK_ACTION not in action_labels else None
     for sample in examples:
         gold = sample["first_action"]
-        for label in ACTION_LABELS:
+        for label in action_labels:
             sample[f"{label}_label"] = torch.LongTensor([gold == label]).to(device)
     return examples
 
@@ -130,14 +181,14 @@ def dummy_dataset(device="cpu", max_steps=8):
             "task_name": "turn_on_light",
             "natural_language_description": "Open the cabinet and switch on the light.",
             "tl_goal": "switchon(light)",
-            "action_trajectory": "[{'action': 'OPEN', 'object': 'cabinet_1'}]",
+            "action_trajectory": "[{'action': 'OPEN', 'object': 'cabinet_1'}, {'action': 'SWITCH_ON', 'object': 'light_1'}]",
         },
         {
             "task_id": "dummy_grasp_0",
             "task_name": "pack_bag",
             "natural_language_description": "Pick up the toothbrush and put it in the backpack.",
             "tl_goal": "inside(toothbrush, backpack)",
-            "action_trajectory": "[{'action': 'RIGHT_GRASP', 'object': 'toothbrush_1'}]",
+            "action_trajectory": "[{'action': 'RIGHT_GRASP', 'object': 'toothbrush_1'}, {'action': 'PUT', 'object': 'backpack_1'}]",
         },
         {
             "task_id": "dummy_place_0",
@@ -161,7 +212,11 @@ def dummy_dataset(device="cpu", max_steps=8):
             "action_trajectory": "[{'action': 'CLOSE', 'object': 'fridge_1'}]",
         },
     ]
-    return add_action_concept_labels([row_to_example(row, device=device, max_steps=max_steps) for row in rows], device=device)
+    vocab = build_generation_vocab(rows)
+    return add_action_concept_labels(
+        [row_to_example(row, device=device, max_steps=max_steps, vocab=vocab) for row in rows],
+        device=device,
+    )
 
 
 def load_eai_dataset(dataset_name="all", split=None, limit=None, data_path=None, device="cpu", max_steps=8):
@@ -187,7 +242,9 @@ def load_eai_dataset(dataset_name="all", split=None, limit=None, data_path=None,
     if limit is not None and limit >= 0:
         rows = rows[:limit]
 
-    examples = [row_to_example(dict(row), device=device, max_steps=max_steps) for row in rows]
+    rows = [dict(row) for row in rows]
+    vocab = build_generation_vocab(rows)
+    examples = [row_to_example(row, device=device, max_steps=max_steps, vocab=vocab) for row in rows]
     return add_action_concept_labels(examples, device=device)
 
 
@@ -217,4 +274,3 @@ def split_train_dev(examples, dev_fraction=0.2):
     cut = max(1, int(len(examples) * (1.0 - dev_fraction)))
     cut = min(cut, len(examples))
     return examples[:cut], examples[cut:]
-
