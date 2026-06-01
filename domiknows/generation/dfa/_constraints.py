@@ -324,3 +324,22 @@ def accept_all_dfa(vocabulary: TokenVocabulary) -> DFA:
         start_state="ok",
         accepting_states=frozenset({"ok"}),
     )
+
+
+def empty_dfa(vocabulary: TokenVocabulary) -> DFA:
+    """Return a trivial single-state DFA that rejects every sequence.
+
+    Used by the LC normalizer when a constraint tree constant-folds to a
+    contradiction (e.g. ``andL(A, notL(A))``).  The single state is marked as
+    dead so reachability queries short-circuit immediately, and decoders can
+    detect that no extension is feasible.
+    """
+    alphabet = frozenset(vocabulary.alphabet)
+    return DFA(
+        states=frozenset({"reject"}),
+        alphabet=alphabet,
+        transitions={("reject", symbol): "reject" for symbol in alphabet},
+        start_state="reject",
+        accepting_states=frozenset(),
+        dead_states=frozenset({"reject"}),
+    )

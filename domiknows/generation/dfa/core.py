@@ -8,6 +8,7 @@ Provides:
 - ``union_dfa``: take the union of an arbitrary number of DFAs over a shared
   alphabet via a product construction with accepting-if-any semantics.
 - ``complement_dfa``: complete a DFA and flip accepting states.
+- ``minimize_dfa``: collapse equivalent states via partition refinement.
 
 Type aliases ``State`` and ``Symbol`` are both ``Hashable``; any hashable
 Python object can serve as a state identifier or an alphabet symbol.
@@ -82,8 +83,8 @@ class DFA:
     def can_reach_accepting(self, state: State, max_steps: int | None = None) -> bool:
         """Return ``True`` if an accepting state is reachable from *state*.
 
-        Uses a BFS over the transition graph.  States in ``dead_states`` are
-        treated as sinks and never expanded.
+        Uses a breadth-first search (BFS) over the transition graph.  States
+        in ``dead_states`` are treated as sinks and never expanded.
 
         Args:
             state: The starting state for the reachability query.
@@ -102,7 +103,7 @@ class DFA:
         # Fast-accept: *state* itself is accepting.
         if self.is_accepting(state):
             return True
-        # BFS with optional depth limit.
+        # Breadth-first search (BFS) with optional depth limit.
         queue = deque([(state, 0)])
         seen = {state}
         while queue:
@@ -300,6 +301,146 @@ def union_dfa(dfas: Iterable[DFA]) -> DFA:
         start_state=start,
         accepting_states=frozenset(accepting),
         dead_states=frozenset(dead),
+    )
+
+
+def minimize_dfa(dfa: DFA) -> DFA:
+    """Return an equivalent DFA with the minimum number of states.
+
+    Uses Hopcroft-style partition refinement:
+
+    "Hopcroft-style" refers to the classic DFA minimization approach
+    introduced by John E. Hopcroft (1971), where states are repeatedly split
+    into equivalence classes based on how transitions lead into already-known
+    classes.  The original algorithm is known for an efficient
+    :math:`O(n \log n)` refinement strategy (for fixed alphabet size), and
+    this implementation follows that same partition-refinement idea in a
+    straightforward, readability-first form.
+
+    1. Complete the input by funnelling missing transitions to a fresh
+       rejecting sink (same trick :func:`complement_dfa` uses).
+    2. Discard states that are unreachable from ``start_state``.
+    3. Partition states by ``(accepting, dead)`` and refine until the
+       transition signature on the alphabet stabilises.
+    4. Reindex equivalence classes to integers 0..k for a compact output.
+
+    The returned DFA preserves language exactly, including the ``dead_states``
+    set: any equivalence class whose members were all dead in the input stays
+    dead.
+
+    Args:
+        dfa: Any DFA over a finite alphabet.
+
+    Returns:
+        A new :class:`DFA` whose ``states`` are integers and whose transition
+        table is total over its alphabet (every reachable equivalence class
+        has a defined outgoing transition for every symbol).
+    """
+    alphabet = dfa.alphabet
+    sink = ("__minimize_sink__",)
+    while sink in dfa.states:
+        sink = (sink,)
+
+    # Step 1: complete the transition table with the sink for any missing edge.
+    all_states = set(dfa.states)
+    transitions: dict[tuple[State, Symbol], State] = dict(dfa.transitions)
+    sink_used = False
+    for state in dfa.states:
+        for symbol in alphabet:
+            if (state, symbol) not in transitions:
+                transitions[(state, symbol)] = sink
+                sink_used = True
+    if sink_used:
+        all_states.add(sink)
+        for symbol in alphabet:
+            transitions[(sink, symbol)] = sink
+
+    # Step 2: breadth-first search (BFS) from start_state and keep only reachable states.
+    reachable: set[State] = {dfa.start_state}
+    queue = deque([dfa.start_state])
+    while queue:
+        state = queue.popleft()
+        for symbol in alphabet:
+            nxt = transitions.get((state, symbol))
+            if nxt is not None and nxt not in reachable:
+                reachable.add(nxt)
+                queue.append(nxt)
+
+    accepting = set(dfa.accepting_states) & reachable
+    dead = set(dfa.dead_states) & reachable
+    if sink in reachable:
+        dead.add(sink)
+
+    # Step 3: initial partition by (accepting, dead).
+    def _signature(state):
+        return (state in accepting, state in dead)
+
+    partitions: dict[tuple[bool, bool], set[State]] = {}
+    for state in reachable:
+        partitions.setdefault(_signature(state), set()).add(state)
+    blocks = [frozenset(block) for block in partitions.values()]
+
+    # Refine: split blocks until each block's members agree on the destination
+    # block under every symbol.
+    changed = True
+    while changed:
+        changed = False
+        block_of: dict[State, int] = {}
+        for index, block in enumerate(blocks):
+            for state in block:
+                block_of[state] = index
+        new_blocks: list[frozenset[State]] = []
+        for block in blocks:
+            buckets: dict[tuple, set[State]] = {}
+            for state in block:
+                signature = tuple(
+                    block_of.get(transitions.get((state, symbol)), -1)
+                    for symbol in sorted(alphabet, key=repr)
+                )
+                buckets.setdefault(signature, set()).add(state)
+            if len(buckets) == 1:
+                new_blocks.append(block)
+            else:
+                new_blocks.extend(frozenset(bucket) for bucket in buckets.values())
+                changed = True
+        blocks = new_blocks
+
+    # Step 4: reindex blocks to integers 0..k; the block containing start_state
+    # becomes the new start state.
+    block_of_final: dict[State, int] = {}
+    for index, block in enumerate(blocks):
+        for state in block:
+            block_of_final[state] = index
+
+    start_block = block_of_final[dfa.start_state]
+    new_states = frozenset(range(len(blocks)))
+    new_transitions: dict[tuple[State, Symbol], State] = {}
+    for index, block in enumerate(blocks):
+        # Every member of a block agrees on the destination block per symbol,
+        # so picking any representative suffices.
+        representative = next(iter(block))
+        for symbol in alphabet:
+            destination = transitions.get((representative, symbol))
+            if destination is None:
+                continue
+            new_transitions[(index, symbol)] = block_of_final[destination]
+
+    new_accepting = frozenset(
+        index for index, block in enumerate(blocks)
+        if any(state in accepting for state in block)
+    )
+    new_dead = frozenset(
+        index for index, block in enumerate(blocks)
+        if all(state in dead for state in block)
+    )
+
+    return DFA(
+        states=new_states,
+        alphabet=alphabet,
+        transitions=new_transitions,
+        start_state=start_block,
+        accepting_states=new_accepting,
+        dead_states=new_dead,
     )
 
 

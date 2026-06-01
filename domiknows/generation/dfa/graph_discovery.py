@@ -6,6 +6,24 @@ or :func:`~.enforcement.mark_for_dfa`), this module walks the graph's logical
 constraint nodes and compiles recognised regular fragments directly into DFA
 objects for token-level hard decoding.
 
+The pipeline (see the five steps in ``LogicalConstraintsToDFAPipeline.png``):
+
+1. **Discovery** — :func:`analyze_generation_constraints` iterates head LCs.
+2. **Normalize** — each head LC is normalised by
+   :func:`~._lc_normalize.normalize_lc`: flatten ``andL`` / ``orL`` chains,
+   eliminate double negations, push ``notL`` through De Morgan's, dedup
+   identical atoms, constant-fold contradictions / tautologies, and salvage
+   regular atoms from heterogeneous ``andL`` trees.
+3. **Pattern match** — :func:`_match_lc_many` dispatches on the normalized
+   tree (mirror nodes carry a ``_kind`` attribute consumed via
+   :func:`~._lc_normalize.kind`) and delegates each leaf to the right
+   ``_match_*_lc`` helper.
+4. **Build** — each leaf compiles to a DFA via the builders in
+   :mod:`._constraints`.
+5. **Combine + minimize** — :func:`_combine_dfas` intersects the fragments via
+   :func:`~.core.product_dfa`, then applies :func:`~.core.minimize_dfa` to
+   collapse equivalent states.
+
 Recognised DomiKnowS constraint shapes
 ----------------------------------------
 - ``ifL(is_before_rel, ifL(eos, eos))``           → EOS-closure DFA
@@ -37,11 +55,12 @@ from dataclasses import dataclass
 import warnings
 from typing import Iterable
 
-from .core import DFA, complement_dfa, product_dfa, union_dfa
+from .core import DFA, complement_dfa, minimize_dfa, product_dfa, union_dfa
 from ._constraints import (
     accept_all_dfa,
     after_token_allowed_dfa,
     conditional_max_non_eos_dfa,
+    empty_dfa,
     eos_closure_dfa,
     forbidden_token_dfa,
     max_non_eos_dfa,
@@ -49,6 +68,7 @@ from ._constraints import (
     required_token_dfa,
     token_set_count_dfa,
 )
+from ._lc_normalize import _ForbiddenLeaf, kind, normalize_lc
 
 
 @dataclass(frozen=True)
@@ -107,9 +127,22 @@ def analyze_generation_constraints(
                 )
             )
             continue
-        discovered = _marked_dfas(lc, bundle)
+        # Step 3 of the pipeline: normalize the LC tree before matching.  The
+        # mirror tree is flatter / deduped / negation-collapsed, so the matcher
+        # sees a smaller AST and produces smaller DFAs.  Irregular siblings
+        # exposed by the normalizer's andL-salvage are surfaced through the
+        # ``on_unsupported`` policy so callers still get a warning / error.
+        normal = normalize_lc(lc, bundle=bundle)
+        for irregular in normal.irregular_children:
+            _handle_unsupported(
+                f"{lc_name}/irregular_sibling",
+                irregular,
+                on_unsupported,
+                reason=_unsupported_reason(irregular, bundle),
+            )
+        discovered = _marked_dfas(lc, normal.tree, bundle)
         if discovered is False:
-            discovered = _match_lc_many(lc, bundle)
+            discovered = _match_lc_many(normal.tree, bundle)
         if discovered:
             analyses.append(
                 GenerationConstraintAnalysis(
@@ -146,7 +179,13 @@ def analyze_generation_constraints(
     return tuple(analyses)
 
 
-def constraints_to_dfa_from_graph(graph, bundle, *, on_unsupported: str = "warn"):
+def constraints_to_dfa_from_graph(
+    graph,
+    bundle,
+    *,
+    on_unsupported: str = "warn",
+    minimize: bool = True,
+):
     """Compile supported DomiKnowS graph constraints into a single DFA.
 
     Args:
@@ -154,30 +193,57 @@ def constraints_to_dfa_from_graph(graph, bundle, *, on_unsupported: str = "warn"
         bundle: The :class:`~.dfa.encoder.GenerationBundle` returned alongside
             *graph*.
         on_unsupported: Policy for unrecognised generation-relevant constraints.
+        minimize: When ``True`` (default), apply Hopcroft state-equivalence
+            minimization to the final product DFA so the returned automaton has
+            the minimum number of states for its language.  Pass ``False`` when
+            you need the raw product-state IDs (e.g. for the debug visualizer).
 
     Returns:
         A :class:`~.dfa.DFA` accepting all sequences that satisfy every
         discovered constraint.
     """
-    return _combine_dfas(_discover_generation_dfas(graph, bundle, on_unsupported=on_unsupported), bundle.vocabulary)
+    return _combine_dfas(
+        _discover_generation_dfas(graph, bundle, on_unsupported=on_unsupported),
+        bundle.vocabulary,
+        minimize=minimize,
+    )
 
 
-def _combine_dfas(dfas: Iterable[DFA], vocabulary) -> DFA:
-    """Intersect DFA fragments, returning accept-all when no graph constraints match."""
+def _combine_dfas(dfas: Iterable[DFA], vocabulary, *, minimize: bool = True) -> DFA:
+    """Intersect DFA fragments, returning accept-all when no graph constraints match.
+
+    When ``minimize`` is True (default), the final product DFA is collapsed via
+    :func:`~.core.minimize_dfa` so equivalent states are merged.  This is the
+    *"Apply structural minimization"* substep of the pipeline diagram.
+    """
     dfas = tuple(dfas)
     if dfas:
-        return product_dfa(dfas)
+        combined = product_dfa(dfas)
+        return minimize_dfa(combined) if minimize else combined
     return accept_all_dfa(vocabulary)
 
 
 def _match_lc_many(lc, bundle) -> tuple[DFA, ...] | None:
     """Attempt to match *lc* against the known generation constraint shapes.
 
-    Dispatches on the DomiKnowS logical-constraint class name and delegates to
-    the appropriate ``_match_*`` helper.  Returns ``None`` when no pattern
-    matches; returns a tuple of one or more :class:`DFA` instances otherwise.
+    Dispatches on the LC class name (or the ``_kind`` attribute carried by
+    mirror nodes produced by :func:`~._lc_normalize.normalize_lc`).  Returns
+    ``None`` when no pattern matches; returns a tuple of one or more
+    :class:`DFA` instances otherwise.
+
+    Callers normally pre-normalize the LC tree via
+    :func:`~._lc_normalize.normalize_lc` so the matcher sees a flattened,
+    deduped, leaf-pushed structure.  Mirror-node kinds ``_top`` / ``_bottom``
+    / ``_forbidden_token`` are compiled directly via the corresponding
+    primitive builders.
     """
-    cls_name = lc.__class__.__name__
+    cls_name = kind(lc)
+    if cls_name == "_top":
+        return (accept_all_dfa(bundle.vocabulary),)
+    if cls_name == "_bottom":
+        return (empty_dfa(bundle.vocabulary),)
+    if cls_name == "_forbidden_token":
+        return (forbidden_token_dfa(bundle.vocabulary, lc.token),)
     if cls_name == "andL":
         return _match_and_lc(lc, bundle)
     if cls_name == "orL":
@@ -214,8 +280,11 @@ def _as_dfa_tuple(dfa: DFA | None) -> tuple[DFA, ...] | None:
     return (dfa,)
 
 
-def _marked_dfas(lc, bundle) -> tuple[DFA, ...] | None | bool:
+def _marked_dfas(lc, normalized_tree, bundle) -> tuple[DFA, ...] | None | bool:
     """Resolve the ``_generation_dfa_constraint`` marker on *lc*.
+
+    The marker is checked on the original LC (mirror nodes do not carry it);
+    when present, the matcher dispatch runs on the normalized tree.
 
     Returns ``False`` when no marker is present (caller should fall back to
     structural matching), ``None`` when the marker cannot be resolved, or a
@@ -225,7 +294,7 @@ def _marked_dfas(lc, bundle) -> tuple[DFA, ...] | None | bool:
     if marker is False:
         return False
     if marker is True:
-        return _match_lc_many(lc, bundle)
+        return _match_lc_many(normalized_tree, bundle)
     return None
 
 
@@ -240,6 +309,9 @@ def _match_and_lc(lc, bundle) -> tuple[DFA, ...] | None:
     Generation-relevant unsupported children make the whole ``andL``
     unsupported.  Non-generation children are ignored for hard decoding and
     remain available to normal DomiKnowS loss/verification.
+
+    Returns a single-element tuple holding the product of all child DFAs so
+    every LC analysis surfaces one coalesced DFA fragment regardless of arity.
     """
     dfas: list[DFA] = []
     for child in getattr(lc, "e", ()):
@@ -249,7 +321,11 @@ def _match_and_lc(lc, bundle) -> tuple[DFA, ...] | None:
                 return None
             continue
         dfas.extend(child_match)
-    return tuple(dfas)
+    if not dfas:
+        return None
+    if len(dfas) == 1:
+        return (dfas[0],)
+    return (product_dfa(dfas),)
 
 
 def _match_or_lc(lc, bundle) -> tuple[DFA, ...] | None:
@@ -666,8 +742,18 @@ def _last_int(elements: Iterable) -> int | None:
 
 
 def _is_generation_relevant(lc, bundle) -> bool:
-    """Return ``True`` if *lc* references any generation-specific concept."""
+    """Return ``True`` if *lc* references any generation-specific concept.
+
+    Mirror nodes produced by :func:`~._lc_normalize.normalize_lc` are always
+    treated as relevant: they exist solely to compile to DFA fragments over the
+    generation vocabulary, even when their ``e`` field carries no concept tuple
+    (e.g. :class:`~._lc_normalize._ForbiddenLeaf`).
+    """
+    if getattr(lc, "_kind", None) is not None:
+        return True
     for item in _walk_lc(lc):
+        if getattr(item, "_kind", None) is not None:
+            return True
         concept_tuple = _concept_tuple(item)
         if concept_tuple is None:
             continue

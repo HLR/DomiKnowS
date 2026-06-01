@@ -357,3 +357,137 @@ def test_unsupported_or_lc_branch_warns_or_errors():
 
     with pytest.raises(ValueError, match="not supported by generation DFA discovery"):
         constraints_to_dfa_from_graph(graph, bundle, on_unsupported="error")
+
+
+# --------------------------------------------------------------------------- #
+# Normalization (step 3 of the LogicalConstraintsToDFAPipeline) tests         #
+# --------------------------------------------------------------------------- #
+
+
+def _build_atmost_b_one_dfa():
+    """Reference DFA: ``atMostAL(token_value('B'), 1)`` on its own."""
+    graph, bundle = build_bundle()
+    with graph:
+        atMostAL(bundle.context.token_value("B", "x"), 1)
+    return constraints_to_dfa_from_graph(graph, bundle), bundle
+
+
+def test_double_negation_collapses_to_atom():
+    """``notL(notL(atMostAL(B, 1)))`` minimises to the same DFA as the atom alone."""
+    reference, _ref_bundle = _build_atmost_b_one_dfa()
+
+    graph, bundle = build_bundle()
+    with graph:
+        notL(notL(atMostAL(bundle.context.token_value("B", "x"), 1)))
+    actual = constraints_to_dfa_from_graph(graph, bundle)
+
+    assert len(actual.states) == len(reference.states)
+    # Language equivalence as a sanity check.
+    for symbols in [["A", "<eos>"], ["B", "<eos>"], ["B", "B"], ["A", "B", "A"]]:
+        assert actual.accepts(labels(bundle, symbols)) == reference.accepts(labels(bundle, symbols))
+
+
+def test_not_exists_collapses_to_forbidden():
+    """``notL(existsAL(t))`` compiles to the same DFA as ``atMostAL(t, 0)``."""
+    graph_ref, bundle_ref = build_bundle()
+    with graph_ref:
+        atMostAL(bundle_ref.context.token_value("A", "x"), 0)
+    reference = constraints_to_dfa_from_graph(graph_ref, bundle_ref)
+
+    graph, bundle = build_bundle()
+    with graph:
+        notL(existsAL(bundle.context.token_value("A", "x")))
+    actual = constraints_to_dfa_from_graph(graph, bundle)
+
+    assert len(actual.states) == len(reference.states)
+    for symbols in [["B", "<eos>"], ["A"], ["A", "B"], ["<eos>"]]:
+        assert actual.accepts(labels(bundle, symbols)) == reference.accepts(labels(bundle, symbols))
+
+
+def test_duplicate_and_atoms_are_deduped():
+    """``andL(A, A)`` produces the same DFA as ``A`` after dedup."""
+    reference, _ = _build_atmost_b_one_dfa()
+
+    graph, bundle = build_bundle()
+    with graph:
+        andL(
+            atMostAL(bundle.context.token_value("B", "x"), 1),
+            atMostAL(bundle.context.token_value("B", "y"), 1),
+        )
+    actual = constraints_to_dfa_from_graph(graph, bundle)
+
+    assert len(actual.states) == len(reference.states)
+    for symbols in [["A", "<eos>"], ["B", "<eos>"], ["B", "B"], ["A", "B", "A"]]:
+        assert actual.accepts(labels(bundle, symbols)) == reference.accepts(labels(bundle, symbols))
+
+
+def test_contradiction_is_empty_language():
+    """``andL(A, notL(A))`` rejects every sequence (constant-folded to bottom)."""
+    graph, bundle = build_bundle()
+    with graph:
+        andL(
+            atMostAL(bundle.context.token_value("B", "x"), 1),
+            notL(atMostAL(bundle.context.token_value("B", "y"), 1)),
+        )
+    dfa = constraints_to_dfa_from_graph(graph, bundle)
+
+    # Every reasonable sequence must be rejected.
+    for symbols in [[], ["A"], ["B"], ["A", "<eos>"], ["B", "B"], ["A", "B", "A"], ["A", "A", "B", "B", "B"]]:
+        assert not dfa.accepts(labels(bundle, symbols)), f"accepted {symbols!r}"
+
+
+def test_heterogeneous_and_salvages_regular_part():
+    """``andL(regular, irregular)`` returns a DFA equivalent to the regular part.
+
+    Without normalization the irregular sibling would cause the whole ``andL``
+    to be marked unsupported and dropped from the discovered DFA set.  The
+    normalizer salvages the regular subtree and surfaces a warning for the
+    irregular sibling.
+
+    The irregular sibling here is an ``andL`` whose direct children are raw
+    concept tuples rather than nested LCs — a shape the structural matcher
+    cannot compile to a DFA, the same pattern exercised by
+    :func:`test_unsupported_or_lc_branch_warns_or_errors`.
+    """
+    reference, _ = _build_atmost_b_one_dfa()
+
+    graph, bundle = build_bundle()
+    with graph:
+        andL(
+            atMostAL(bundle.context.token_value("B", "x"), 1),
+            andL(
+                bundle.context.token_value("A", "y"),
+                bundle.context.token_value("B", "y"),
+            ),
+        )
+
+    with pytest.warns(RuntimeWarning, match="not supported by generation DFA discovery"):
+        actual = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="warn")
+
+    assert len(actual.states) == len(reference.states)
+    for symbols in [["A", "<eos>"], ["B", "<eos>"], ["B", "B"]]:
+        assert actual.accepts(labels(bundle, symbols)) == reference.accepts(labels(bundle, symbols))
+
+
+def test_de_morgan_negation_push_preserves_language():
+    """``notL(andL(A, B))`` accepts the same set as ``orL(notL(A), notL(B))``."""
+    graph_a, bundle_a = build_bundle()
+    with graph_a:
+        notL(
+            andL(
+                existsAL(bundle_a.context.token_value("A", "x")),
+                existsAL(bundle_a.context.token_value("B", "y")),
+            )
+        )
+    via_demorgan = constraints_to_dfa_from_graph(graph_a, bundle_a)
+
+    graph_b, bundle_b = build_bundle()
+    with graph_b:
+        orL(
+            notL(existsAL(bundle_b.context.token_value("A", "x"))),
+            notL(existsAL(bundle_b.context.token_value("B", "y"))),
+        )
+    via_explicit_or = constraints_to_dfa_from_graph(graph_b, bundle_b)
+
+    for symbols in [[], ["A"], ["B"], ["A", "B"], ["A", "B", "<eos>"], ["A", "A", "B"], ["<eos>"]]:
+        assert via_demorgan.accepts(labels(bundle_a, symbols)) == via_explicit_or.accepts(labels(bundle_b, symbols)), symbols
