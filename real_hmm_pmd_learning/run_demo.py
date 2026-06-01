@@ -125,6 +125,8 @@ def main(argv=None) -> int:
     prompt = int(artifacts.inference_prompt_token_id)
     
     # Run greedy inference on the learned model to see its generated output
+    # DFA constraints are applied during inference. 
+    # The learned compact-learner should have influenced the model to generate different outputs for the same prompt compared to before training.
     inference_result = artifacts.model.greedy_label_inference(
         artifacts.bundle.vocabulary,
         [prompt],

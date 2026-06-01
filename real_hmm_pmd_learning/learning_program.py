@@ -11,7 +11,7 @@ from domiknows.generation.learners import (
     CompactLabelGenerationHead,
     EnergyCompactLabelGenerationHead,
     GraphHMMGenerationHead,
-    PromptConditionedHMMGenerationHead,
+    HMMGenerationHead,
 )
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
@@ -116,11 +116,12 @@ def build_compact_learner(
         # hidden state, and with limited training data the initial_projector
         # softmax saturates to one state for every prompt — collapsing AB / CD /
         # short into identical outputs.
-        return PromptConditionedHMMGenerationHead(
+        return HMMGenerationHead(
             label_count=bundle.vocabulary.label_count,
             state_count=3,
             pad_size=pad_size,
             label_to_token_id=label_to_token_id,
+            prompt_conditioning="initial",
             prompt_vocab_size=PROMPT_VOCAB_SIZE,
             trainable=True,
             random_seed=random_seed,

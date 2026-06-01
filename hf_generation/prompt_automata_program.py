@@ -8,7 +8,6 @@ import torch
 from domiknows.generation import (
     GenerationLossWeights,
     HMMGenerationHead,
-    PromptConditionedHMMGenerationHead,
     PromptConditionedSpectralWFAGenerationHead,
     SpectralWFAGenerationHead,
     allowed_mass_loss,
@@ -37,7 +36,7 @@ except ImportError:
     from run_demo import generation_vocab_for_tokenizer
 
 
-PromptAutomataHead = PromptConditionedHMMGenerationHead | PromptConditionedSpectralWFAGenerationHead
+PromptAutomataHead = HMMGenerationHead | PromptConditionedSpectralWFAGenerationHead
 BaselineAutomataHead = HMMGenerationHead | SpectralWFAGenerationHead
 
 
@@ -153,7 +152,7 @@ def build_prompt_automata_learning_program(
     }
     if kind == "hmm":
         baseline_model: BaselineAutomataHead = HMMGenerationHead(**common_kwargs)
-        model_cls = PromptConditionedHMMGenerationHead
+        model_cls = HMMGenerationHead
     else:
         baseline_model = SpectralWFAGenerationHead(**common_kwargs)
         model_cls = PromptConditionedSpectralWFAGenerationHead
@@ -172,6 +171,9 @@ def build_prompt_automata_learning_program(
         dynamics_expert_count=dynamics_expert_count,
         step_dynamics_conditioning=step_dynamics_conditioning,
     )
+    if kind == "hmm":
+        # Activate the unified HMMGenerationHead's prompt-conditioned mode.
+        prompt_kwargs["prompt_conditioning"] = "initial"
     model: PromptAutomataHead = model_cls(**prompt_kwargs)
 
     token[generated_token] = ModuleLearner(
@@ -237,7 +239,7 @@ def prompt_automata_auxiliary_loss(artifacts: PromptAutomataLearningArtifacts) -
     """Return the prompt-conditioned HMM/WFA supervised auxiliary loss."""
     labels = target_labels_for_sample(artifacts)
     instruction_tokens = artifacts.sample_data["instruction_tokens"]
-    if isinstance(artifacts.model, PromptConditionedHMMGenerationHead):
+    if isinstance(artifacts.model, HMMGenerationHead):
         return hmm_sequence_nll(artifacts.model, labels, instruction_tokens=instruction_tokens)
     return wfa_sequence_energy_loss(artifacts.model, labels, instruction_tokens=instruction_tokens)
 
