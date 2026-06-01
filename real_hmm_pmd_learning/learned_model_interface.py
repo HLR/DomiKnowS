@@ -5,10 +5,10 @@ from typing import Sequence
 
 import torch
 
-from domiknows.generation import LabelInferenceResult, greedy_label_inference
+from domiknows.generation import ConstrainedGenerationResult, greedy_label_inference
 
 
-LearnedInferenceResult = LabelInferenceResult
+LearnedInferenceResult = ConstrainedGenerationResult
 
 
 def labels_for_symbols(bundle, symbols: Sequence[str]) -> list[int]:

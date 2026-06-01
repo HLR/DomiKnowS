@@ -6,13 +6,12 @@ import torch
 
 from domiknows.generation import (
     discover_generation_enforcement,
-    domiknows_hmm_from_generation_constraints,
 )
 from domiknows.generation.learners import (
     CompactLabelGenerationHead,
     EnergyCompactLabelGenerationHead,
     GraphHMMGenerationHead,
-    HMMGenerationHead,
+    PromptConditionedHMMGenerationHead,
 )
 from domiknows.program.loss import NBCrossEntropyLoss
 from domiknows.program.lossprogram import PrimalDualProgram
@@ -50,7 +49,7 @@ class RealHMMPMDArtifacts:
     learner_name: str = field(
         metadata={
             "description": "The selected compact-label learner: discrete-hmm, graph-hmm, or energy.",
-            "purpose": "Lets the demo compare a plain DiscreteHMM-backed learner, a graph-shaped HMM learner, and a neural local energy scorer without changing PMD wiring.",
+            "purpose": "Lets the demo compare a prompt-conditioned DiscreteHMM-backed learner, a graph-shaped HMM learner, and a neural local energy scorer without changing PMD wiring.",
         }
     )
     training_source: GeneratorTrainingSource = field(
@@ -104,6 +103,7 @@ def build_compact_learner(
     *,
     graph,
     bundle,
+    dfa=None,
     pad_size: int,
     random_seed: int | None = 0,
 ) -> CompactLabelGenerationHead:
@@ -111,25 +111,28 @@ def build_compact_learner(
     learner = _normalise_learner_name(learner)
     label_to_token_id = label_token_id_map(bundle.vocabulary)
     if learner == "discrete-hmm":
-        return HMMGenerationHead(
+        # Use gated dynamics so emission/transition (not just the initial state)
+        # depend on the prompt.  Without this the prompt only steers the first
+        # hidden state, and with limited training data the initial_projector
+        # softmax saturates to one state for every prompt — collapsing AB / CD /
+        # short into identical outputs.
+        return PromptConditionedHMMGenerationHead(
             label_count=bundle.vocabulary.label_count,
             state_count=3,
             pad_size=pad_size,
             label_to_token_id=label_to_token_id,
+            prompt_vocab_size=PROMPT_VOCAB_SIZE,
             trainable=True,
             random_seed=random_seed,
+            dynamics_conditioning="gated",
+            dynamics_expert_count=3,
         )
     if learner == "graph-hmm":
-        # The graph-HMM learner is initialized with the best-fitting HMM given the graph constraints, 
-        # which may help it learn faster than the randomly initialized energy model.
-        fitted_hmm = domiknows_hmm_from_generation_constraints(
-            graph,
+        # The graph-HMM learner starts from the bundle-specific DFA support when available.
+        model = GraphHMMGenerationHead.from_bundle(
             bundle,
-            symbols=bundle.vocabulary.labels,
-            dtype=torch.float64,
-        )
-        model = GraphHMMGenerationHead.from_graph_hmm(
-            fitted_hmm,
+            graph=graph,
+            dfa=dfa,
             trainable=True,
             pad_size=pad_size,
             label_to_token_id=label_to_token_id,
@@ -213,6 +216,7 @@ def build_learning_program(
         learner,
         graph=graph,
         bundle=bundle,
+        dfa=dfa,
         pad_size=pad_size,
         random_seed=random_seed,
     )

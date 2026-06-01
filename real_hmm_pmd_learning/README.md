@@ -35,7 +35,7 @@ learner is a normal `ModuleLearner` module.
 Three compact learners are available:
 
 ```text
-Discrete-HMM learner = plain DiscreteHMM-backed compact-label learner, the default
+Discrete-HMM learner = prompt-conditioned DiscreteHMM-backed compact-label learner, the default
 Graph-HMM learner    = graph-shaped probabilistic automaton learner
 Energy learner       = neural local energy scorer over compact labels
 DFA                  = hard verifier discovered from the same graph rule

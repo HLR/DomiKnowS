@@ -105,7 +105,10 @@ def print_greedy_inference(artifacts, result=None) -> None:
     print("  purpose: let the trained learner generate a sequence")
     print(f"  prompt: {artifacts.inference_prompt_name} ({artifacts.inference_prompt_text})")
     print(f"  labels: {_short_values(result.labels)}")
-    print(f"  symbols: {_short_sequence(result.symbols)}")
+    symbols = getattr(result, "symbols", None)
+    if symbols is None:
+        symbols = [artifacts.bundle.vocabulary.token_for_label(int(label)) for label in result.labels]
+    print(f"  symbols: {_short_sequence(symbols)}")
     print(f"  learner_log_score: {score}")
     if result.score is not None and result.labels:
         avg_log_score = result.score / len(result.labels)
@@ -389,12 +392,12 @@ def print_parameter_explanation(artifacts) -> None:
     """Print a compact explanation of what the active learner parameters mean."""
     print("Parameter meaning:")
     if artifacts.learner_name == "discrete-hmm":
-        print("  initial_logits: learns which hidden state a generated string starts in.")
+        print("  prompt_encoder / initial_projector: learn how the prompt changes the initial hidden-state belief.")
         print("  transition_logits: learns how hidden states move from one position to the next.")
         print("  emission_logits: learns which symbols each hidden state tends to emit.")
         print("  hidden-state example: one state can mean 'B has not appeared yet'; another can mean 'B already appeared'.")
         print("  emission example: the 'B already appeared' state should learn low probability for emitting another B.")
-        print("  note: this is the plain DiscreteHMM-backed learner; graph-hmm adds graph-shaped initialization and prompt conditioning.")
+        print("  note: this is the prompt-conditioned DiscreteHMM-backed learner; graph-hmm adds graph-shaped initialization.")
         return
     if artifacts.learner_name == "graph-hmm":
         print("  prompt_embedding / prompt_initial_projector: learn how the prompt changes the initial hidden-state belief.")

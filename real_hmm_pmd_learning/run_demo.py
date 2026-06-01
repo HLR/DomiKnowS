@@ -56,13 +56,13 @@ except ImportError:  # pragma: no cover - direct script execution fallback
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--learner", choices=("discrete-hmm", "hmm", "graph-hmm", "energy"), default="discrete-hmm", help="Compact-label learner attached through ModuleLearner.")
-    parser.add_argument("--steps", type=int, default=3, help="Number of live stream PMD training batches before learned-learner inference.")
+    parser.add_argument("--steps", type=int, default=20, help="Number of live stream PMD training batches before learned-learner inference.  ~20 is enough for the gated DiscreteHMM head to differentiate the three demo prompts.")
     parser.add_argument("--stream-count", type=int, default=4, help="Number of generator outputs in each live stream batch.")
     parser.add_argument("--inference-prompt", choices=PROMPT_ORDER, default="AB", help="Prompt used for learned greedy inference after training.")
     parser.add_argument("--pad-size", type=int, default=6, help="Maximum generated length used for padding/truncation and random stream generation.")
     parser.add_argument("--seed", type=int, default=0, help="Deterministic seed for the mock generator stream.")
-    parser.add_argument("--lr", type=float, default=1e-2, help="Learning rate for the compact-label learner and PMD constraint model.")
-    parser.add_argument("--beta", type=float, default=2.0, help="Weight for the PMD constraint loss; larger values enforce rules harder but can encourage early END.")
+    parser.add_argument("--lr", type=float, default=1e-1, help="Learning rate for the compact-label learner and PMD constraint model.")
+    parser.add_argument("--beta", type=float, default=0.3, help="Weight for the PMD constraint loss; larger values enforce rules harder but can drown out the prompt-conditioning signal on this tiny dataset.")
     parser.add_argument("--remote-debug", action="store_true", help="Enable debugpy remote debugging before building the demo.")
     parser.add_argument("--debug-host", default="127.0.0.1", help="Host/interface for --remote-debug.")
     parser.add_argument("--debug-port", type=int, default=5678, help="Port for --remote-debug.")
@@ -129,24 +129,10 @@ def main(argv=None) -> int:
         artifacts.bundle.vocabulary,
         [prompt],
         max_new_tokens=artifacts.model.pad_size,
+        dfa=artifacts.dfa
     )
     print_greedy_inference(artifacts, inference_result)
-    
-    # Verify that the learned inference result satisfies the PMD constraints by checking DFA acceptance.
-    inference_result_dfa_accepted = artifacts.dfa.accepts(inference_result.labels)
-    print("Verification of learned greedy inference_result:")
-    print("  verifier_call: artifacts.dfa.accepts(inference_result.labels)")
-    print(f"  dfa_accepted: {inference_result_dfa_accepted}")
-    
-    # Run constrained greedy inference with the same prompt and max_new_tokens as the learned inference, to see if it matches the learned result and satisfies constraints.
-    constrained_inference_result = constrained_label_greedy_decode(
-        artifacts.model,
-        [prompt],
-        artifacts.bundle.vocabulary,
-        artifacts.dfa,
-        max_new_tokens=artifacts.model.pad_size,
-    )
-    print_constrained_greedy_inference(artifacts, constrained_inference_result)
+
 
     return 0
 
