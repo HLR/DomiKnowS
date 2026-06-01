@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import torch
 
 from .utils import _coerce_label_to_token_id, _invert_label_to_token_id, _positive_int, _validate_label
+
+if TYPE_CHECKING:
+    from ...dfa.core import DFA
 
 
 @runtime_checkable
@@ -15,19 +18,43 @@ class CompactLabelSequenceModel(Protocol):
 
     label_count: int
 
-    def forward(self, _contains, instruction_tokens: torch.Tensor, target_labels: torch.Tensor):
+    def forward(
+        self,
+        _contains,
+        instruction_tokens: torch.Tensor,
+        target_labels: torch.Tensor,
+        **kwargs,
+    ) -> torch.Tensor:
         """Return teacher-forced compact-label log-probabilities."""
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **kwargs) -> torch.Tensor:
         """Return next-step logits over compact labels."""
 
-    def greedy_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+    def greedy_label_inference(
+        self,
+        vocabulary,
+        prompt_ids: torch.Tensor | Sequence[int],
+        dfa: DFA | None = None,
+        **kwargs,
+    ) -> Any:
         """Run unconstrained greedy compact-label inference."""
 
-    def beam_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+    def beam_label_inference(
+        self,
+        vocabulary,
+        prompt_ids: torch.Tensor | Sequence[int],
+        dfa: DFA | None = None,
+        **kwargs,
+    ) -> Any:
         """Run unconstrained beam compact-label inference."""
 
-    def sample_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+    def sample_label_inference(
+        self,
+        vocabulary,
+        prompt_ids: torch.Tensor | Sequence[int],
+        dfa: DFA | None = None,
+        **kwargs,
+    ) -> Any:
         """Run unconstrained stochastic compact-label inference."""
 
     def sequence_log_probs(
@@ -75,23 +102,41 @@ class CompactLabelGenerationHead(torch.nn.Module):
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **kwargs) -> torch.Tensor:
         raise NotImplementedError
 
-    def greedy_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+    def greedy_label_inference(
+        self,
+        vocabulary,
+        prompt_ids: torch.Tensor | Sequence[int],
+        dfa: DFA | None = None,
+        **kwargs,
+    ):
         """Run unconstrained greedy compact-label inference through this head."""
-        from ...inference import greedy_label_inference
+        from ...applications.inference import greedy_label_inference
 
-        return greedy_label_inference(self, vocabulary, input_ids, **kwargs)
+        return greedy_label_inference(self, vocabulary, prompt_ids, dfa=dfa, **kwargs)
 
-    def beam_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+    def beam_label_inference(
+        self,
+        vocabulary,
+        prompt_ids: torch.Tensor | Sequence[int],
+        dfa: DFA | None = None,
+        **kwargs,
+    ):
         """Run unconstrained beam compact-label inference through this head."""
-        from ...inference import beam_label_inference
+        from ...applications.inference import beam_label_inference
 
-        return beam_label_inference(self, vocabulary, input_ids, **kwargs)
+        return beam_label_inference(self, vocabulary, prompt_ids, dfa=dfa, **kwargs)
 
-    def sample_label_inference(self, vocabulary, input_ids: torch.Tensor | Sequence[int], **kwargs):
+    def sample_label_inference(
+        self,
+        vocabulary,
+        prompt_ids: torch.Tensor | Sequence[int],
+        dfa: DFA | None = None,
+        **kwargs,
+    ):
         """Run unconstrained stochastic compact-label inference through this head."""
-        from ...inference import sample_label_inference
+        from ...applications.inference import sample_label_inference
 
-        return sample_label_inference(self, vocabulary, input_ids, **kwargs)
+        return sample_label_inference(self, vocabulary, prompt_ids, dfa=dfa, **kwargs)
 
     def sequence_log_probs(
         self,
@@ -102,7 +147,13 @@ class CompactLabelGenerationHead(torch.nn.Module):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    def forward(self, _contains, instruction_tokens: torch.Tensor, target_labels: torch.Tensor):
+    def forward(
+        self,
+        _contains,
+        instruction_tokens: torch.Tensor,
+        target_labels: torch.Tensor,
+        **kwargs,
+    ) -> torch.Tensor:
         return self.sequence_log_probs(target_labels, instruction_tokens=instruction_tokens)
 
     def trainable_parameter_names(self) -> list[str]:

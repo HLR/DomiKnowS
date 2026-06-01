@@ -15,8 +15,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import torch
 
-from ..hmm.constraints import combine_masks, project_matrix_rows, validate_mask
-from ..hmm.dynamic import DynamicConstraintContext, transition_energy_matrix
+from ..hmm.graph.constraints import combine_masks, project_matrix_rows, validate_mask
+from ..hmm.graph.dynamic import DynamicConstraintContext, transition_energy_matrix
 
 
 @dataclass

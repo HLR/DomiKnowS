@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 
-from domiknows.generation import AnyOfGenerationConstraint, discover_generation_enforcement
+from domiknows.generation import discover_generation_enforcement
 
 
 def import_task_module(name: str):
@@ -17,8 +17,7 @@ def test_hf_generation_graph_builds_and_discovers_constraints():
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
 
     assert bundle.vocabulary.tokens == tuple(graph_module.VOCAB)
-    assert len(enforcement.dfa_constraints) >= 5
-    assert any(isinstance(constraint, AnyOfGenerationConstraint) for constraint in enforcement.dfa_constraints)
+    assert enforcement.dfa is not None
 
 
 def test_hf_generation_graph_constraints_compile_to_dfa():

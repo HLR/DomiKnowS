@@ -15,7 +15,7 @@ import torch
 
 from domiknows.generation.dfa.graph_discovery import constraints_to_dfa_from_graph
 
-from .graph import DomiKnowSAwareHMM
+from .graphAwareHMM import DomiKnowSAwareHMM
 
 
 @dataclass(frozen=True)
@@ -64,6 +64,35 @@ def compile_generation_constraints_to_hmm_support(
     """
 
     dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported=on_unsupported)
+    return compile_dfa_to_hmm_support(
+        dfa,
+        bundle,
+        symbols=symbols,
+        eos_token=eos_token,
+        include_other=include_other,
+        state_name_fn=state_name_fn,
+        device=device,
+        dtype=dtype,
+    )
+
+
+def compile_dfa_to_hmm_support(
+    dfa,
+    bundle,
+    *,
+    symbols: Sequence[str] | None = None,
+    eos_token: str | None = None,
+    include_other: bool = False,
+    state_name_fn: Callable[[Any, str, Any], str] | None = None,
+    device=None,
+    dtype: torch.dtype = torch.float64,
+) -> ConstraintHMMCompilation:
+    """Compile a preconstructed generation DFA into HMM masks and parameters.
+
+    This path is used when callers already have a DFA and only need to map it
+    to graph-aware HMM support.
+    """
+
     vocab = bundle.vocabulary
     token_symbols = tuple(symbols or vocab.tokens)
     if include_other and vocab.other_token not in token_symbols:
@@ -72,9 +101,8 @@ def compile_generation_constraints_to_hmm_support(
         eos_token = getattr(vocab, "eos_token", None)
 
     label_by_symbol = {symbol: vocab.label_for_token(symbol) for symbol in token_symbols}
-    component_specs: tuple[dict[str, str], ...] = ()
     if state_name_fn is None:
-        state_name_fn = lambda q0, symbol, q1: _edge_state_name(q0, symbol, q1, component_specs)
+        state_name_fn = _edge_state_name
 
     states: list[ConstraintHMMState] = []
     seen_names: set[str] = set()
@@ -200,55 +228,16 @@ def _initialization_sequence(compilation: ConstraintHMMCompilation) -> tuple[str
     raise ValueError("compiled HMM has no globally emittable symbol")
 
 
-def _component_specs_from_constraints(constraints: Sequence[Any]) -> tuple[dict[str, str], ...]:
-    specs: list[dict[str, str]] = []
-    for constraint in constraints:
-        name = str(getattr(constraint, "name", constraint))
-        token = _quoted_token(name)
-        lower = name.lower()
-        if "at least" in lower:
-            specs.append({"kind": "at_least", "token": token or "token"})
-        elif "at most" in lower:
-            specs.append({"kind": "at_most", "token": token or "token"})
-        else:
-            specs.append({"kind": "state", "token": token or f"q{len(specs)}"})
-    return tuple(specs)
-
-
-def _quoted_token(text: str) -> str | None:
-    match = re.search(r"'([^']+)'", text)
-    if match:
-        return _safe_part(match.group(1))
-    return None
-
-
-def _edge_state_name(dfa_from: Any, symbol: str, dfa_to: Any, component_specs: tuple[dict[str, str], ...]) -> str:
-    source = _dfa_state_name(dfa_from, component_specs)
-    target = _dfa_state_name(dfa_to, component_specs)
+def _edge_state_name(dfa_from: Any, symbol: str, dfa_to: Any) -> str:
+    source = _dfa_state_name(dfa_from)
+    target = _dfa_state_name(dfa_to)
     symbol_part = _safe_part(symbol)
     if source == target:
         return f"{source}__emit_{symbol_part}"
     return f"{source}__emit_{symbol_part}__to_{target}"
 
 
-def _dfa_state_name(state: Any, component_specs: tuple[dict[str, str], ...]) -> str:
-    if isinstance(state, tuple) and component_specs and len(state) == len(component_specs):
-        parts = []
-        for index, spec in sorted(enumerate(component_specs), key=lambda item: 0 if item[1]["kind"] == "at_least" else 1):
-            value = state[index]
-            token = _safe_part(spec["token"])
-            if spec["kind"] == "at_least":
-                parts.append(f"seen_{token}" if int(value) >= 1 else f"need_{token}")
-            elif spec["kind"] == "at_most":
-                if int(value) <= 0:
-                    parts.append(f"no_{token}")
-                elif int(value) == 1:
-                    parts.append(f"seen_{token}")
-                else:
-                    parts.append(f"too_many_{token}")
-            else:
-                parts.append(f"{token}_{_safe_part(value)}")
-        return "_".join(parts)
+def _dfa_state_name(state: Any) -> str:
     return "q_" + _safe_part(state)
 
 

@@ -1,4 +1,4 @@
-"""DFA primitives, compilers, graph discovery, and tracing helpers."""
+"""DFA primitives, builders, graph discovery, and tracing helpers."""
 
 from importlib import import_module
 
@@ -18,6 +18,9 @@ _EXPORTS = {
     "State": ".core",
     "Symbol": ".core",
     "TokenVocabulary": ".vocabulary",
+    "accept_all_dfa": "._constraints",
+    "after_token_allowed_dfa": "._constraints",
+    "analyze_generation_constraints": ".graph_discovery",
     "apply_all_constraints": ".generation_constraints",
     "apply_conditional_max_non_eos_constraint": ".generation_constraints",
     "apply_conditional_max_non_eos_constraints": ".generation_constraints",
@@ -27,8 +30,8 @@ _EXPORTS = {
     "apply_max_non_eos_constraint": ".generation_constraints",
     "apply_required_token_constraint": ".generation_constraints",
     "apply_required_token_constraints": ".generation_constraints",
-    "analyze_generation_constraints": ".graph_discovery",
     "complement_dfa": ".core",
+    "conditional_max_non_eos_dfa": "._constraints",
     "constrained_beam_search_decode": ".decoder",
     "constrained_greedy_decode": ".decoder",
     "constrained_label_beam_search_decode": ".decoder",
@@ -39,15 +42,21 @@ _EXPORTS = {
     "create_generation_debug_app": ".visualization",
     "dfa_to_dot": ".visualization",
     "dot_to_svg": ".visualization",
+    "eos_closure_dfa": "._constraints",
     "explain_dfa_rejection": ".visualization",
+    "forbidden_token_dfa": "._constraints",
     "generation_bundle_from_graph": ".encoder",
     "mask_label_logits_for_dfa": ".decoder",
     "mask_logits_for_dfa": ".decoder",
+    "max_non_eos_dfa": "._constraints",
+    "ordered_tokens_dfa": "._constraints",
     "product_dfa": ".core",
     "product_trace_to_dot": ".visualization",
     "reachable_product_graph": ".visualization",
     "render_dot_svg": ".visualization",
+    "required_token_dfa": "._constraints",
     "run_generation_debug_server": ".visualization",
+    "token_set_count_dfa": "._constraints",
     "trace_dfa": ".visualization",
     "trace_discrete_hmm": ".visualization",
     "trace_product_automaton": ".visualization",

@@ -2,7 +2,8 @@ import pytest
 import torch
 
 from domiknows.generation import (
-    LabelInferenceResult,
+    ConstrainedGenerationResult,
+    DFA,
     TokenVocabulary,
     beam_label_inference,
     greedy_label_inference,
@@ -90,6 +91,19 @@ def _vocabulary():
     return TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=FakeTokenizer())
 
 
+def _dfa_force_b_then_eos() -> DFA:
+    return DFA(
+        states=frozenset({"start", "seen_b", "done"}),
+        alphabet=frozenset({0, 1, 2, 3}),
+        transitions={
+            ("start", 2): "seen_b",
+            ("seen_b", 0): "done",
+        },
+        start_state="start",
+        accepting_states=frozenset({"done"}),
+    )
+
+
 def test_greedy_label_inference_stops_at_eos_and_skips_non_emittable_labels():
     result = greedy_label_inference(
         BranchingCompactModel(),
@@ -98,11 +112,10 @@ def test_greedy_label_inference_stops_at_eos_and_skips_non_emittable_labels():
         max_new_tokens=3,
     )
 
-    assert isinstance(result, LabelInferenceResult)
-    assert result.labels == (1, 0)
-    assert result.symbols == ("A", "<eos>")
-    assert result.token_ids == (9, 1, 0)
-    assert result.finished
+    assert isinstance(result, ConstrainedGenerationResult)
+    assert result.labels == [1, 0]
+    assert result.token_ids == [9, 1, 0]
+    assert result.accepted
     assert result.score == pytest.approx(sum(result.scores))
 
 
@@ -145,10 +158,10 @@ def test_label_inference_can_decode_from_empty_input_when_enabled():
         allow_empty_input=True,
     )
 
-    assert greedy.labels == (1, 0)
-    assert greedy.token_ids == (1, 0)
+    assert greedy.labels == [1, 0]
+    assert greedy.token_ids == [1, 0]
     assert len(beam.candidates) == 2
-    assert sample.labels == (1, 0)
+    assert sample.labels == [1, 0]
 
 
 def test_beam_label_inference_returns_ranked_candidates():
@@ -201,8 +214,7 @@ def test_sample_label_inference_is_seeded_and_supports_top_k_filtering():
         generator=torch.Generator().manual_seed(7),
     )
 
-    assert first.labels == second.labels == (1, 0)
-    assert first.symbols == second.symbols == ("A", "<eos>")
+    assert first.labels == second.labels == [1, 0]
     assert first.score == pytest.approx(second.score)
 
 
@@ -232,7 +244,7 @@ def test_label_inference_forwards_next_label_kwargs():
         next_label_kwargs={"bias_label": 2},
     )
 
-    assert result.labels == (2,)
+    assert result.labels == [2]
     assert model.seen_biases == [2]
 
 
@@ -250,6 +262,42 @@ def test_compact_label_head_exposes_method_style_inference():
         generator=torch.Generator().manual_seed(3),
     )
 
-    assert greedy.labels == (1, 0)
+    assert greedy.labels == [1, 0]
     assert len(beam.candidates) == 2
-    assert sample.labels == (1, 0)
+    assert sample.labels == [1, 0]
+
+
+def test_label_inference_routes_to_constrained_decoders_when_dfa_is_provided():
+    vocab = _vocabulary()
+    dfa = _dfa_force_b_then_eos()
+
+    greedy = greedy_label_inference(
+        BranchingCompactModel(),
+        vocab,
+        [9],
+        dfa=dfa,
+        max_new_tokens=3,
+    )
+    beam = beam_label_inference(
+        BranchingCompactModel(),
+        vocab,
+        [9],
+        dfa=dfa,
+        max_new_tokens=3,
+        beam_size=2,
+        num_return_sequences=2,
+        early_stopping=False,
+    )
+    sample = sample_label_inference(
+        BranchingCompactModel(),
+        vocab,
+        [9],
+        dfa=dfa,
+        max_new_tokens=3,
+        top_k=1,
+        generator=torch.Generator().manual_seed(13),
+    )
+
+    assert greedy.labels == [2, 0]
+    assert beam.labels == [2, 0]
+    assert sample.labels == [2, 0]

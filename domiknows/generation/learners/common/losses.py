@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 
 from ...dfa import DFA
-from ..hmm.head import HMMGenerationHead
-from ..hmm.prompt_conditioned_head import PromptConditionedHMMGenerationHead
-from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead
-from ..wfa.head import SpectralWFAGenerationHead
 from .utils import TransitionPotentialInput, _empty_or_prompt, _target_labels
+
+if TYPE_CHECKING:
+    from ..hmm.discrete.discreteHMMLearner import HMMGenerationHead
+    from ..hmm.discrete.promptConditionedDiscreteHMMLearner import PromptConditionedHMMGenerationHead
+    from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead
+    from ..wfa.head import SpectralWFAGenerationHead
 
 __all__ = ["allowed_mass_loss", "hmm_sequence_nll", "wfa_sequence_energy_loss"]
 
@@ -24,6 +27,9 @@ def hmm_sequence_nll(
     reduction: str = "mean",
 ) -> torch.Tensor:
     """Negative log-likelihood of a target label sequence under an HMM head."""
+    from ..hmm.discrete.discreteHMMLearner import HMMGenerationHead
+    from ..hmm.discrete.promptConditionedDiscreteHMMLearner import PromptConditionedHMMGenerationHead
+
     if not isinstance(head, (HMMGenerationHead, PromptConditionedHMMGenerationHead)):
         raise TypeError("hmm_sequence_nll expects an HMM generation head")
     device = head.transition_logits.device
@@ -46,6 +52,9 @@ def wfa_sequence_energy_loss(
     Signed WFA next-symbol scores are interpreted as logits and optimized with
     cross-entropy against the target compact labels.
     """
+    from ..wfa.head import SpectralWFAGenerationHead
+    from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead
+
     if not isinstance(head, (SpectralWFAGenerationHead, PromptConditionedSpectralWFAGenerationHead)):
         raise TypeError("wfa_sequence_energy_loss expects a spectral WFA generation head")
     device = head.transitions.device if hasattr(head, "transitions") else head.initial.device

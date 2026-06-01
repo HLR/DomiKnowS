@@ -1,9 +1,10 @@
+from itertools import product
+
 import pytest
 import torch
 
-from domiknows.generation.learners.hmm.core import (
+from domiknows.generation.learners.hmm.discrete.discreteHMM import (
     DiscreteHMM,
-    all_sequences,
     baum_welch_train,
     compare_hmm_dfa,
 )
@@ -80,7 +81,8 @@ def test_trained_model_still_extracts_dfa_and_compares_with_checker():
     )
 
     dfa = result.model.extract_argmax_dfa()
-    summary = compare_hmm_dfa(result.model, dfa, all_sequences(["a", "b"], max_length=3))
+    corpus = [()] + [tuple(seq) for length in range(1, 4) for seq in product(["a", "b"], repeat=length)]
+    summary = compare_hmm_dfa(result.model, dfa, corpus)
 
     assert dfa.accepts(["a"])
     assert 0.0 <= summary["precision"] <= 1.0

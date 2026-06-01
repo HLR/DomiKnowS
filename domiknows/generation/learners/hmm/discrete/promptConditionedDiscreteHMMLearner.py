@@ -5,9 +5,9 @@ from collections.abc import Mapping, Sequence
 
 import torch
 
-from ..common.base import CompactLabelGenerationHead
-from ...latent import LatentTransitionPotential, apply_hmm_transition_potential
-from ..common.utils import (
+from ...common.base import CompactLabelGenerationHead
+from ....latent import LatentTransitionPotential, apply_hmm_transition_potential
+from ...common.utils import (
     TransitionPotentialInput,
     _build_prompt_encoder,
     _coerce_label_to_token_id,
@@ -131,10 +131,17 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
         return apply_hmm_transition_potential(self.transition_probs, transition_potential)
 
     def prompt_initial_probs(self, instruction_tokens: torch.Tensor | Sequence[int]) -> torch.Tensor:
-        """Return prompt-conditioned initial HMM state probabilities."""
+        """Return prompt-conditioned initial HMM state probabilities.
+
+        Returns a vector ``(state_count,)`` for a single prompt and a matrix
+        ``(batch, state_count)`` when *instruction_tokens* is a true batched
+        prompt tensor with ``batch > 1``.  Each row is the initial state
+        distribution for the corresponding prompt.
+        """
         features = self._prompt_features(instruction_tokens)
-        logits = self.initial_projector(features)[0]
-        return torch.softmax(logits, dim=-1)
+        logits = self.initial_projector(features)
+        probs = torch.softmax(logits, dim=-1)
+        return probs[0] if probs.shape[0] == 1 else probs
 
     def prompt_dynamics_weights(self, instruction_tokens: torch.Tensor | Sequence[int]) -> torch.Tensor:
         """Return prompt-selected HMM dynamics expert weights."""
@@ -268,7 +275,10 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
         input_ids: torch.Tensor | Sequence[int],
         *,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ) -> torch.Tensor:
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         return self._next_logits_from_prompt_and_prefix(prompt_ids, prefix_labels, transition_potential=transition_potential)
 
@@ -279,8 +289,20 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
         lengths: torch.Tensor | Sequence[int] | None = None,
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ) -> torch.Tensor:
-        """Return teacher-forced prompt-conditioned log-probs over labels."""
+        """Return teacher-forced prompt-conditioned log-probs over labels.
+
+        The result is shape ``(pad_size, label_count)`` for a single sequence
+        and ``(batch, pad_size, label_count)`` for batched input.  Padded
+        positions (those beyond *lengths*) are zeroed out so they contribute
+        a constant — and therefore gradient-free — term to a downstream
+        cross-entropy loss.  This keeps the loss focused on real generated
+        positions and prevents the head from being trained to predict the
+        padding label everywhere.
+        """
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -300,7 +322,13 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
                 )
             )
         result = torch.stack(rows, dim=0)
-        mask = (torch.arange(result.shape[1], device=result.device).unsqueeze(0) < lengths_t.unsqueeze(1)).unsqueeze(-1)
+        # Block gradient flow through padded positions: ``result * 0`` gives
+        # a constant loss term for every label there, so its derivative w.r.t.
+        # the model parameters is zero.  Real positions pass through unchanged.
+        mask = (
+            torch.arange(result.shape[1], device=result.device).unsqueeze(0)
+            < lengths_t.unsqueeze(1)
+        ).unsqueeze(-1)
         result = result * mask.to(result.dtype)
         return result[0] if squeeze else result
 
@@ -310,20 +338,70 @@ class PromptConditionedHMMGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor,
         target_labels: torch.Tensor,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ):
+        """Teacher-forced log-probs for ``pad_size`` autoregressive steps.
+
+        Uses a single forward-filter sweep (linear in ``pad_size``) when neither
+        :attr:`dynamics_conditioning` nor :attr:`step_dynamics_conditioning`
+        depends on the generated prefix.  Falls back to a per-step recompute
+        only when prefix-gated dynamics are configured.
+        """
+        if self.step_dynamics_conditioning == "none":
+            return self._forward_static(instruction_tokens, target_labels, transition_potential)
+        return self._forward_prefix_gated(instruction_tokens, target_labels, transition_potential)
+
+    def _forward_static(
+        self,
+        instruction_tokens: torch.Tensor,
+        target_labels: torch.Tensor,
+        transition_potential: TransitionPotentialInput,
+    ) -> torch.Tensor:
+        # Emission and transition are prefix-independent; compute them once and
+        # run a single forward filter pass.
         labels = _target_labels(target_labels, self.pad_size, device=self.transition_logits.device)
-        generated = []
-        prefix: list[int] = []
+        emission = self.prompt_emission_probs(instruction_tokens)
+        transition = self.prompt_transition_probs(
+            instruction_tokens, transition_potential=transition_potential
+        )
+        state = self.prompt_initial_probs(instruction_tokens)
+        eps = torch.finfo(self.emission_logits.dtype).eps
+        outputs = []
         for step in range(self.pad_size):
-            generated.append(
-                self._next_logits_from_prompt_and_prefix(
-                    instruction_tokens,
-                    prefix,
-                    transition_potential=transition_potential,
-                )
+            next_probs = torch.matmul(state, emission)
+            outputs.append(torch.log(next_probs.clamp_min(eps)))
+            label = int(labels[step].item())
+            posterior = state * emission[:, label]
+            posterior = posterior / posterior.sum().clamp_min(eps)
+            state = torch.matmul(posterior, transition)
+        return torch.log_softmax(torch.stack(outputs, dim=0), dim=-1)
+
+    def _forward_prefix_gated(
+        self,
+        instruction_tokens: torch.Tensor,
+        target_labels: torch.Tensor,
+        transition_potential: TransitionPotentialInput,
+    ) -> torch.Tensor:
+        # Emission/transition depend on the generated prefix; recompute per step
+        # using a running state (no full re-trace from initial each step).
+        labels = _target_labels(target_labels, self.pad_size, device=self.transition_logits.device)
+        state = self.prompt_initial_probs(instruction_tokens)
+        eps = torch.finfo(self.emission_logits.dtype).eps
+        outputs = []
+        consumed: list[int] = []
+        for step in range(self.pad_size):
+            emission = self.step_emission_probs(instruction_tokens, consumed)
+            transition = self.step_transition_probs(
+                instruction_tokens, consumed, transition_potential=transition_potential
             )
-            prefix.append(int(labels[step].item()))
-        return torch.log_softmax(torch.stack(generated, dim=0), dim=-1)
+            next_probs = torch.matmul(state, emission)
+            outputs.append(torch.log(next_probs.clamp_min(eps)))
+            label = int(labels[step].item())
+            posterior = state * emission[:, label]
+            posterior = posterior / posterior.sum().clamp_min(eps)
+            state = torch.matmul(posterior, transition)
+            consumed.append(label)
+        return torch.log_softmax(torch.stack(outputs, dim=0), dim=-1)
 
     def trainable_parameter_names(self) -> list[str]:
         return [name for name, parameter in self.named_parameters() if parameter.requires_grad]

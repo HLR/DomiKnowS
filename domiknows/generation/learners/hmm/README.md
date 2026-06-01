@@ -3,24 +3,25 @@
 This folder contains the Hidden Markov Model (HMM) implementation used by the
 compact-label generation stack.
 
-This README focuses on the pure HMM path (no graph adapter, no graph masks),
+This README focuses on the pure HMM path (no graph-constrained masks),
 then shows how the same HMM head plugs into DomiKnowS `ModuleLearner`.
 
 ## What Is In This Folder
 
-- `core.py`: production `DiscreteHMM`, forward/backward factors, Viterbi,
+- `discrete/discreteHMM.py`: production `DiscreteHMM`, forward/backward factors, Viterbi,
   sampling, and Baum-Welch training.
-- `head.py`: `HMMGenerationHead`, a compact-label Torch head compatible with
+- `discrete/discreteHMMLearner.py`: `HMMGenerationHead`, a compact-label Torch head compatible with
   constrained decoding and DomiKnowS concept learning.
-- `factors.py`: optional explicit factor-graph view (`HMMFactorGraphHead`) for
+- `discrete/factors.py`: optional explicit factor-graph view (`HMMFactorGraphHead`) for
   exposing latent/factor concepts to DomiKnowS.
-- `graph.py`, `graph_adapter.py`, `graph_head.py`: graph-aware extensions.
+- `graph/graphAwareHMM.py`, `graph/graph_head.py`: graph-aware extensions
+  built around explicit masks and the generation DFA->HMM compiler.
 
-If you want plain HMM training only, start with `core.py`.
+If you want plain HMM training only, start with `discrete/discreteHMM.py`.
 
 ## Pure HMM Training Flow (Forward and Backward)
 
-The pure HMM object is `DiscreteHMM` in `core.py`.
+The pure HMM object is `DiscreteHMM` in `discrete/discreteHMM.py`.
 
 Parameters:
 
@@ -105,7 +106,7 @@ Returned object: `BaumWelchResult(model, log_likelihoods, iterations, converged)
 ## Minimal Pure HMM Example (No Graph)
 
 ```python
-from domiknows.generation.learners.hmm.core import baum_welch_train
+from domiknows.generation.learners.hmm.discrete.discreteHMM import baum_welch_train
 
 result = baum_welch_train(
     sequences=[
@@ -126,7 +127,7 @@ print(hmm.log_prob([[0, 1, 1]]))
 
 ## How It Integrates With DomiKnowS ModuleLearner
 
-The bridge class is `HMMGenerationHead` in `head.py`.
+The bridge class is `HMMGenerationHead` in `discrete/discreteHMMLearner.py`.
 
 Why this works:
 
@@ -198,8 +199,8 @@ This keeps the division of responsibilities clear:
 ## Related Optional Components
 
 If you later want graph-visible HMM factors, use `HMMFactorGraphHead` from
-`factors.py`. It exposes generated token probabilities plus latent/factor
+`discrete/factors.py`. It exposes generated token probabilities plus latent/factor
 projections (`gamma`, optional alpha/beta/xi views) for richer PMD constraints.
 
-For graph-aware constraints and dynamic masks, move to `graph.py` and
-`graph_adapter.py`.
+For graph-aware constraints and dynamic masks, move to
+`graph/graphAwareHMM.py` and `graph/constraint_compiler.py`.

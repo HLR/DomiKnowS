@@ -29,15 +29,17 @@ def _identity_emission_model(**kwargs):
     - 2 symbols: "x" and "y"
     - Identity emission mask: state A emits x, state B emits y
     """
-    return DomiKnowSAwareHMM(
-        graph=None,
-        n_hidden_states=2,
-        state_names=["A", "B"],
-        symbols=["x", "y"],
-        emission_mask=torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64),
-        random_seed=3,
-        **kwargs,
-    )
+    params = {
+        "graph": None,
+        "n_hidden_states": 2,
+        "state_names": ["A", "B"],
+        "symbols": ["x", "y"],
+        "transition_mask": torch.ones((2, 2), dtype=torch.float64),
+        "emission_mask": torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64),
+        "random_seed": 3,
+    }
+    params.update(kwargs)
+    return DomiKnowSAwareHMM(**params)
 
 
 def test_dynamic_hard_mask_blocks_paths_during_score_and_viterbi():

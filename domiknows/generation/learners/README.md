@@ -38,8 +38,8 @@ The code is now split by responsibility instead of living in four flat files:
 | `learners/wfa/hankel.py` | WFA scoring, Hankel matrices, and WFA x DFA product decoding |
 | `learners/wfa/spectral_learning.py` | Spectral / Hankel-SVD learning |
 | `learners/wfa/*.py` | WFA graph-conditioned, factor, and prompt-conditioned heads |
-| `learners/hmm/core.py` | Core HMM training, scoring, and comparison utilities |
-| `learners/hmm/*.py` | HMM constraint compilation, graph adapters, dynamic constraints, and generation heads |
+| `learners/hmm/discreteHMM.py` | Core HMM training, scoring, and comparison utilities |
+| `learners/hmm/*.py` | HMM constraint compilation, DFA/mask flows, dynamic constraints, and generation heads |
 | `learners/compact/*.py` | Compact-label GRU, Transformer, energy, neural n-gram, and CRF heads |
 | `learners/common/*.py` | Shared generation-head interfaces, prompt encoders, losses, and utilities |
 
@@ -321,10 +321,10 @@ Module Overview
 | `dfa/visualization/` | `trace_dfa`, `trace_product_automaton`, `dfa_to_dot`, `explain_dfa_rejection` | tracing, diagnostics, graph export, and optional debug viewer |
 | `wfa/hankel.py` | `WeightedFiniteAutomaton`, `hankel_matrix`, `constrained_hankel_matrix`, `ProductDecoderState` | WFA scoring, Hankel construction, and WFA x DFA product decoding |
 | `wfa/spectral_learning.py` | `SpectralBasis`, `build_spectral_basis`, `spectral_learn_from_oracle`, `spectral_learn_from_samples`, `spectral_learn_from_counts` | spectral / Hankel-SVD learning |
-| `hmm/core.py` | `DiscreteHMM`, `baum_welch_train`, `compare_hmm_dfa`, `all_sequences`, `HMMParameters`, `BaumWelchResult` | HMM training, inference, and evaluation |
+| `hmm/discreteHMM.py` | `DiscreteHMM`, `baum_welch_train`, `compare_hmm_dfa`, `HMMParameters`, `BaumWelchResult` | HMM training, inference, and evaluation |
 | `hmm/constraints.py` | mask specs and projection helpers | declarative transition and emission constraints for HMM-style models |
 | `hmm/constraint_compiler.py` | `ConstraintHMMCompilation`, `compile_generation_constraints_to_hmm_support` | compile generation constraints into HMM support structures |
-| `hmm/head.py` and related files | `HMMGenerationHead`, prompt-conditioned and graph-conditioned heads | deploy HMMs as generation heads |
+| `hmm/discreteHMMLearner.py` and related files | `HMMGenerationHead`, prompt-conditioned and graph-conditioned heads | deploy HMMs as generation heads |
 | `compact/*.py` | GRU, Transformer, energy, CRF, neural n-gram heads | lightweight compact-label generation and scoring |
 | `common/*.py` | base interfaces, prompt encoders, losses, shared utilities | common infrastructure for learner heads |
 
@@ -352,7 +352,7 @@ Direct subpackage imports are also valid when you want a more explicit dependenc
 from domiknows.generation.dfa.core import DFA, product_dfa
 from domiknows.generation.learners.wfa.hankel import WeightedFiniteAutomaton
 from domiknows.generation.learners.wfa.spectral_learning import build_spectral_basis
-from domiknows.generation.learners.hmm.core import DiscreteHMM, baum_welch_train
+from domiknows.generation.learners.hmm.discreteHMM import DiscreteHMM, baum_welch_train
 ```
 
 Module Details
@@ -413,7 +413,7 @@ Product-decoder utilities, used to decode with both a WFA and a DFA simultaneous
 | `step_product_state(state, symbol, wfa, dfa)` | advance both models by one symbol |
 | `allowed_product_symbols(state, wfa, dfa)` | symbols currently permitted by the DFA |
 
-`hmm/core.py`
+`hmm/discreteHMM.py`
 
 The core HMM implementation for learning a probability distribution over short token sequences.
 
@@ -425,7 +425,7 @@ Training and evaluation utilities:
 | --- | --- |
 | `baum_welch_train(sequences, params)` | train an HMM with Baum-Welch EM using numerically stable forward-backward passes |
 | `compare_hmm_dfa(automaton, dfa, sequences)` | compare HMM acceptance behavior against a reference DFA |
-| `all_sequences(symbols, max_len)` | generate every symbol sequence up to a maximum length |
+| inline corpus generation (`itertools.product`) | build a finite evaluation corpus over an alphabet |
 
 Core containers:
 
@@ -482,14 +482,14 @@ learners/wfa/spectral_learning.py
     └── learners/wfa/hankel.py
             └── dfa/core.py
 
-learners/hmm/core.py
+learners/hmm/discreteHMM.py
     └── dfa/core.py
 
 learners/compact/*.py
     └── learners/common/base.py
 ```
 
-`dfa/core.py` has no internal learner dependency below it; it is the bedrock of the finite-state stack. `wfa/hankel.py` depends on DFA concepts. `hmm/core.py` interoperates with DFAs for comparison and extraction workflows. The `compact` heads depend on shared interfaces in `common`, and are then consumed by the decoding and hybrid scoring layers elsewhere in `domiknows.generation`.
+`dfa/core.py` has no internal learner dependency below it; it is the bedrock of the finite-state stack. `wfa/hankel.py` depends on DFA concepts. `hmm/discreteHMM.py` interoperates with DFAs for comparison and extraction workflows. The `compact` heads depend on shared interfaces in `common`, and are then consumed by the decoding and hybrid scoring layers elsewhere in `domiknows.generation`.
 
 How the Pieces Fit Together
 
@@ -551,20 +551,24 @@ for _ in range(20):
 Training an HMM from sequences and comparing it to a DFA
 
 ```python
+from itertools import product
+
 from domiknows.generation.learners import (
     baum_welch_train,
     compare_hmm_dfa,
-    all_sequences,
-    HMMParameters,
 )
 
 sequences = [("a", "b", "<eos>"), ("a", "<eos>")]
-params = HMMParameters(n_states=4, n_symbols=3, max_iter=200)
-result = baum_welch_train(sequences, params)
+result = baum_welch_train(
+    sequences,
+    symbols=["a", "b", "<eos>"],
+    state_count=4,
+    max_iter=200,
+)
 
 symbols = ("a", "b", "<eos>")
-corpus = list(all_sequences(symbols, max_len=5))
-metrics = compare_hmm_dfa(result.automaton, reference_dfa, corpus)
+corpus = [()] + [tuple(seq) for length in range(1, 6) for seq in product(symbols, repeat=length)]
+metrics = compare_hmm_dfa(result.model, reference_dfa, corpus)
 print(metrics)
 ```
 

@@ -5,10 +5,10 @@ from collections.abc import Mapping, Sequence
 
 import torch
 
-from .core import DiscreteHMM
-from ...latent import LatentTransitionPotential, apply_hmm_transition_potential
-from ..common.base import CompactLabelGenerationHead
-from ..common.utils import (
+from .discreteHMM import DiscreteHMM
+from ....latent import LatentTransitionPotential, apply_hmm_transition_potential
+from ...common.base import CompactLabelGenerationHead
+from ...common.utils import (
     TransitionPotentialInput,
     _coerce_label_to_token_id,
     _empty_or_prompt,
@@ -46,7 +46,7 @@ class HMMGenerationHead(CompactLabelGenerationHead):
         state_count: int | None = None,
         pad_size: int = 4,
         label_to_token_id: Sequence[int | None] | None = None,
-        trainable: bool = False,
+        trainable: bool = True,
         random_seed: int | None = 0,
     ):
         # Resolve static shape/mapping configuration for compact labels and HMM states.
@@ -141,9 +141,12 @@ class HMMGenerationHead(CompactLabelGenerationHead):
         input_ids: torch.Tensor | Sequence[int],
         *,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ) -> torch.Tensor:
         # Public decoding API: tokenize prefix to labels, then compute next-label logits.
         """Return next-step logits over compact generation labels."""
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         return self._next_logits_from_prefix_labels(
             self._labels_from_input_ids(input_ids),
             transition_potential=transition_potential,
@@ -166,9 +169,12 @@ class HMMGenerationHead(CompactLabelGenerationHead):
         *,
         lengths: torch.Tensor | Sequence[int] | None = None,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ) -> torch.Tensor:
         # Teacher-forced rollout: return per-step log-probs for supervised training loss.
         """Return teacher-forced log-probs shaped ``[batch, seq, label_count]``."""
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -195,18 +201,37 @@ class HMMGenerationHead(CompactLabelGenerationHead):
             state = torch.where(active, next_state, state)
         # Ensure logits are normalized in log-space for downstream losses.
         result = torch.log_softmax(torch.stack(outputs, dim=1), dim=-1)
+        # Block gradient flow through padded positions so the loss only trains
+        # the model on real generated tokens (zeroing the log-probs makes every
+        # label entry at a padded position equal, giving zero gradient there).
+        mask = (
+            torch.arange(result.shape[1], device=result.device).unsqueeze(0)
+            < lengths_t.unsqueeze(1)
+        ).unsqueeze(-1)
+        result = result * mask.to(result.dtype)
         return result[0] if squeeze else result
 
     def forward(
         self,
         _contains,
-        instruction_tokens: torch.Tensor,
+        _instruction_tokens: torch.Tensor,
         target_labels: torch.Tensor,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ):
-        # DomiKnowS learner entrypoint; instruction tokens are currently unused here.
-        """Teacher-forced log-probs for DomiKnowS generation concept learning."""
-        return self.sequence_log_probs(target_labels, transition_potential=transition_potential)
+        """Teacher-forced log-probs for DomiKnowS generation concept learning.
+
+        This is the **unconditional** HMM head: *instruction_tokens* is part of
+        the sensor signature for compatibility with the prompt-conditioned head
+        and is intentionally ignored.  Use
+        :class:`~.promptConditionedDiscreteHMMLearner.PromptConditionedHMMGenerationHead`
+        when prompt conditioning is required.
+        """
+        return self.sequence_log_probs(
+            target_labels,
+            transition_potential=transition_potential,
+            **kwargs,
+        )
 
     def trainable_parameter_names(self) -> list[str]:
         # Expose only parameters participating in gradient updates.

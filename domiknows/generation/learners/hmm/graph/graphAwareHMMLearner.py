@@ -6,16 +6,18 @@ from typing import Any, Callable, Mapping
 
 import torch
 
-from ..common.base import CompactLabelGenerationHead
-from ..common.utils import _seeded_torch_rng
-from .constraints import combine_masks, project_matrix_rows, validate_mask
-from .dynamic import DynamicConstraintContext, FactorizedStateSpace, apply_transition_energy, transition_energy_matrix
-from .graph_adapter import DomiKnowSGraphAdapter
-from .graph_head_utils import (
+from ...common.base import CompactLabelGenerationHead
+from ...common.utils import (
     _coerce_label_to_token_id,
     _first_generated_index,
-    _flat_input_ids,
     _invert_label_to_token_id,
+    _seeded_torch_rng,
+    _validate_label,
+)
+from .constraints import ConstraintApplicationReport, project_matrix_rows, validate_mask
+from .dynamic import DynamicConstraintContext, FactorizedStateSpace, apply_transition_energy, transition_energy_matrix
+from .graph_head_utils import (
+    _flat_input_ids,
     _labels_from_input_ids,
     _normalize_vector,
     _normalise_prompt_ids,
@@ -23,7 +25,6 @@ from .graph_head_utils import (
     _safe_log,
     _target_label_batch,
     _validate_hmm_shapes,
-    _validate_label,
 )
 
 __all__ = ["GraphHMMGenerationHead"]
@@ -31,13 +32,56 @@ __all__ = ["GraphHMMGenerationHead"]
 class GraphHMMGenerationHead(CompactLabelGenerationHead):
     """Compact-label HMM head that projects parameters through graph constraints."""
 
+    @classmethod
+    def from_bundle(
+        cls,
+        bundle,
+        *,
+        graph=None,
+        dfa=None,
+        trainable: bool = True,
+        pad_size: int = 4,
+        label_to_token_id: Sequence[int | None] | None = None,
+        prompt_conditioning: str = "none",
+        prompt_vocab_size: int = 128,
+        prompt_hidden_size: int = 16,
+        random_seed: int | None = None,
+    ) -> "GraphHMMGenerationHead":
+        """Build a compact head directly from a generation bundle.
+
+        If ``dfa`` is not provided, the method falls back to the bundle graph
+        for DFA-first HMM compilation.
+        """
+
+        from .constraint_compiler import domiknows_hmm_from_generation_constraints
+        from .graphAwareHMM import DomiKnowSAwareHMM
+
+        if dfa is not None:
+            fitted_hmm = DomiKnowSAwareHMM.from_dfa(bundle, dfa)
+        else:
+            if graph is None:
+                graph = getattr(bundle, "graph", None)
+            if graph is None:
+                raise ValueError("from_bundle requires graph or dfa support")
+            fitted_hmm = domiknows_hmm_from_generation_constraints(
+                graph,
+                bundle,
+                dtype=torch.float64,
+            )
+        return cls.from_graph_hmm(
+            fitted_hmm,
+            trainable=trainable,
+            pad_size=pad_size,
+            label_to_token_id=label_to_token_id,
+            prompt_conditioning=prompt_conditioning,
+            prompt_vocab_size=prompt_vocab_size,
+            prompt_hidden_size=prompt_hidden_size,
+            random_seed=random_seed,
+        )
+
     def __init__(
         self,
         *,
-        graph=None,
-        concepts: Sequence[Any] | None = None,
-        relations: Sequence[Any] | None = None,
-        constraints: Sequence[Any] | None = None,
         n_hidden_states: int,
         label_count: int,
         symbols: Sequence[Any] | None = None,
@@ -61,7 +105,55 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         prompt_hidden_size: int = 16,
         dtype: torch.dtype = torch.float32,
     ):
-        """Initialize a compact-label HMM head with graph-constrained support."""
+        """Initialize a compact-label HMM head with graph-constrained support.
+
+        Parameters
+        ----------
+        n_hidden_states:
+            Number of latent HMM states.
+        label_count:
+            Size of the compact label alphabet handled by this head.
+        symbols:
+            Optional human-readable symbol names for labels.
+        state_names:
+            Optional latent-state names used in diagnostics and debugging.
+        transition_mask:
+            Hard support mask over latent-state transitions.
+        emission_mask:
+            Hard support mask over latent-state emissions.
+        pad_size:
+            Maximum prefix length used when splitting prompt/prefix inputs.
+        label_to_token_id:
+            Mapping from compact labels to tokenizer token ids.
+        trainable:
+            Whether the logits and prompt-conditioning layers require gradients.
+        random_seed:
+            Seed used for deterministic parameter initialization.
+        initial:
+            Optional initial-state probabilities.
+        transition:
+            Optional transition probability matrix.
+        emission:
+            Optional emission probability matrix.
+        dynamic_transition:
+            Optional callback that provides per-step hard transition support.
+        transition_energy:
+            Optional callback that provides per-step soft transition penalties.
+        energy_weight:
+            Scale applied to the soft transition-energy penalty.
+        state_space:
+            Optional factorized state space used for diagnostics and dynamics.
+        dynamic_metadata:
+            Extra metadata forwarded to dynamic callbacks.
+        prompt_conditioning:
+            Prompt-conditioning mode for the initial state.
+        prompt_vocab_size:
+            Size of the prompt token vocabulary when prompt conditioning is on.
+        prompt_hidden_size:
+            Hidden size of the prompt encoder when prompt conditioning is on.
+        dtype:
+            Tensor dtype used for mask validation and parameter initialization.
+        """
         super().__init__()
         if n_hidden_states < 1:
             raise ValueError("n_hidden_states must be at least 1")
@@ -113,36 +205,31 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
             self.prompt_embedding = None
             self.prompt_initial_projector = None
 
-        adapter = DomiKnowSGraphAdapter(
-            graph,
-            concepts=concepts,
-            relations=relations,
-            constraints=constraints,
-            n_hidden_states=self.n_hidden_states,
-            state_names=self.state_names,
-            state_space=state_space,
-            symbols=self.symbols,
-            dtype=dtype,
-        )
-        graph_transition = adapter.allowed_transition_mask()
-        graph_emission = adapter.emission_type_mask()
-        self.constraint_report = adapter.report
+        if transition_mask is None or emission_mask is None:
+            raise ValueError(
+                "transition_mask and emission_mask are required; "
+                "construct masks via DFA/plan compilers before creating GraphHMMGenerationHead"
+            )
 
-        transition_mask_t = combine_masks(
-            (graph_transition, transition_mask),
+        # Step 1: Validate and materialize the hard-support masks up front.
+        transition_mask_t = validate_mask(
+            transition_mask,
             (self.n_hidden_states, self.n_hidden_states),
             name="transition_mask",
             dtype=dtype,
         ).to(dtype=torch.float32)
-        emission_mask_t = combine_masks(
-            (graph_emission, emission_mask),
+        emission_mask_t = validate_mask(
+            emission_mask,
             (self.n_hidden_states, self.label_count),
             name="emission_mask",
             dtype=dtype,
         ).to(dtype=torch.float32)
         self.register_buffer("transition_mask", transition_mask_t)
         self.register_buffer("emission_mask", emission_mask_t)
+        self.constraint_report = ConstraintApplicationReport()
 
+        # Step 2: Either use caller-provided probabilities or build a seeded
+        # random initialization that already respects the masks.
         if initial is None or transition is None or emission is None:
             initial_t, transition_t, emission_t = _random_hmm_parameters(
                 self.n_hidden_states,
@@ -182,8 +269,9 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
     ) -> "GraphHMMGenerationHead":
         """Create a PMD head initialized from a fitted ``DomiKnowSAwareHMM``."""
         learner._require_fitted()
+        # Reuse the fitted learner's support and parameter tensors directly so
+        # the head starts from the same constrained distribution.
         head = cls(
-            graph=learner.graph,
             n_hidden_states=learner.n_hidden_states,
             label_count=len(learner.id_to_symbol),
             symbols=learner.id_to_symbol,
@@ -220,11 +308,107 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         """
         if random_seed is None:
             return
+        # Keep the perturbation reproducible without changing the public state
+        # distribution in a large or unstable way.
         with torch.no_grad(), torch.random.fork_rng(devices=[]):
             torch.manual_seed(int(random_seed))
             self.initial_logits.add_(float(scale) * torch.randn_like(self.initial_logits))
             self.transition_logits.add_(float(scale) * torch.randn_like(self.transition_logits))
             self.emission_logits.add_(float(scale) * torch.randn_like(self.emission_logits))
+
+    @property
+    def initial_probs(self) -> torch.Tensor:
+        return _normalize_vector(torch.exp(self.initial_logits))
+
+    @property
+    def transition_probs(self) -> torch.Tensor:
+        return torch.softmax(self.transition_logits, dim=-1) * self.transition_mask
+
+    @property
+    def emission_probs(self) -> torch.Tensor:
+        return torch.softmax(self.emission_logits, dim=-1) * self.emission_mask
+
+    def _projected_parameters(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        initial = _normalize_vector(torch.exp(self.initial_logits))
+        transition = torch.softmax(self.transition_logits, dim=-1) * self.transition_mask
+        emission = torch.softmax(self.emission_logits, dim=-1) * self.emission_mask
+        transition = project_matrix_rows(transition, self.transition_mask)
+        emission = project_matrix_rows(emission, self.emission_mask)
+        return initial, transition, emission
+
+    def _dynamic_transition_matrix(self, *, step: int, prompt_ids: torch.Tensor | None, prefix_labels: torch.Tensor, belief: torch.Tensor | None, input_ids: torch.Tensor | None) -> torch.Tensor:
+        transition = torch.softmax(self.transition_logits, dim=-1) * self.transition_mask
+        if self.dynamic_transition is None and self.transition_energy is None:
+            return project_matrix_rows(transition, self.transition_mask)
+        context = DynamicConstraintContext(
+            step=step,
+            prefix=tuple(prefix_labels.tolist()) if hasattr(prefix_labels, "tolist") else tuple(prefix_labels),
+            belief=None if belief is None else belief.detach().clone(),
+            sequence=None if input_ids is None else tuple(input_ids.tolist()) if hasattr(input_ids, "tolist") else tuple(input_ids),
+            metadata={
+                "state_names": self.state_names,
+                "symbols": self.symbols,
+                "state_space": self.state_space,
+                **self.dynamic_metadata,
+            },
+        )
+        weighted = transition
+        effective_mask = self.transition_mask
+        if self.dynamic_transition is not None:
+            dynamic = self.dynamic_transition(context)
+            if dynamic is not None:
+                factor = validate_mask(
+                    dynamic,
+                    (self.n_hidden_states, self.n_hidden_states),
+                    name="dynamic_transition",
+                    dtype=self.transition_mask.dtype,
+                )
+                weighted = weighted * factor
+                effective_mask = effective_mask * (factor > 0).to(dtype=self.transition_mask.dtype)
+        if self.transition_energy is not None:
+            energy = self.transition_energy(context)
+            if energy is not None:
+                weighted = apply_transition_energy(
+                    weighted,
+                    transition_energy_matrix(
+                        energy,
+                        shape=(self.n_hidden_states, self.n_hidden_states),
+                        dtype=self.transition_mask.dtype,
+                    ),
+                    weight=self.energy_weight,
+                )
+        return project_matrix_rows(weighted, effective_mask)
+
+    def forward(self, *args, **kwargs):
+        return super().forward(*args, **kwargs)
+
+    def _initial_distribution(self, prompt_ids: torch.Tensor | None = None) -> torch.Tensor:
+        initial = _normalize_vector(torch.exp(self.initial_logits))
+        if self.prompt_conditioning == "none" or prompt_ids is None:
+            return initial
+        prompt_ids = _normalise_prompt_ids(prompt_ids, self.prompt_vocab_size)
+        prompt_hidden = self.prompt_embedding(prompt_ids).mean(dim=1)
+        prompt_logits = self.prompt_initial_projector(prompt_hidden)
+        prompt_bias = torch.softmax(prompt_logits, dim=-1)
+        return _normalize_vector(initial * prompt_bias)
+
+    def _build_prompt_context(self, input_ids: torch.Tensor | Sequence[int] | None) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        if input_ids is None:
+            return None, None
+        flat_ids = _flat_input_ids(input_ids)
+        if flat_ids.numel() == 0:
+            return None, None
+        prompt_ids = flat_ids[:, : self.pad_size]
+        return flat_ids, prompt_ids
+
+    def _target_labels(self, input_ids: torch.Tensor | Sequence[int] | None, labels: torch.Tensor | Sequence[int]) -> torch.Tensor:
+        return _target_label_batch(labels, self.label_count)
+
+    def _labels_from_inputs(self, input_ids: torch.Tensor | Sequence[int] | None) -> torch.Tensor:
+        return _labels_from_input_ids(input_ids, self.label_count)
+
+    def _first_generated_index(self, input_ids: torch.Tensor | Sequence[int] | None) -> int:
+        return _first_generated_index(input_ids, self.pad_size)
 
     @property
     def initial_probs(self) -> torch.Tensor:
@@ -259,24 +443,27 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         *,
         lengths=None,
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
+        **_kwargs,
     ) -> torch.Tensor:
         """Compute per-step log-probabilities for one batch of label sequences."""
         labels, _lengths_t, step_mask, squeeze = _target_label_batch(target_labels, self.pad_size, lengths=lengths)
         batch, seq_len = labels.shape
+        # Start from the initial latent belief, optionally conditioned on the prompt.
         state = self._initial_probs_for_prompt(instruction_tokens, batch)
         emission = self.emission_probs
         eps = torch.finfo(emission.dtype).eps
         outputs = []
         prefixes: list[list[int]] = [[] for _ in range(batch)]
         for step in range(seq_len):
-            # Predict next-label distribution from current latent belief.
+            # Predict the next-label distribution from the current latent belief.
             next_probs = torch.matmul(state, emission)
             outputs.append(torch.log(next_probs.clamp_min(eps)))
-            # Posterior over hidden states after observing current label.
+            # Update the hidden-state belief after observing the current label.
             posterior = state * emission[:, labels[:, step]].transpose(0, 1)
             posterior = posterior / posterior.sum(dim=-1, keepdim=True).clamp_min(eps)
             next_states = []
             for batch_index in range(batch):
+                # Apply any step-specific transition constraint before advancing.
                 transition = self._transition_for_prefix(
                     step=step,
                     prefix=tuple(prefixes[batch_index] + [int(labels[batch_index, step].item())]),
@@ -290,25 +477,28 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         result = result * step_mask.to(dtype=result.dtype).unsqueeze(-1)
         return result[0] if squeeze else result
 
-    def next_label_logits(self, input_ids: torch.Tensor | Sequence[int]) -> torch.Tensor:
+    def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
         """Return next-label logits for a decoded prefix of token ids."""
         if self.prompt_conditioning == "none":
             prompt_ids = None
             prefix_labels = _labels_from_input_ids(input_ids, self._token_id_to_label, self.label_count)
         else:
             prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
+        # Recover the current latent belief by replaying the observed prefix.
         state = self._initial_probs_for_prompt(prompt_ids, 1)[0]
         emission = self.emission_probs
         eps = torch.finfo(emission.dtype).eps
         for step, label in enumerate(prefix_labels):
+            # Consume one observed label and advance the belief one step.
             posterior = state * emission[:, label]
             posterior = posterior / posterior.sum().clamp_min(eps)
             transition = self._transition_for_prefix(step=step, prefix=tuple(prefix_labels[: step + 1]), belief=posterior)
             state = torch.matmul(posterior, transition)
+        # Project the final belief to the next-label distribution.
         next_probs = torch.matmul(state, emission)
         return torch.log(next_probs.clamp_min(eps))
 
-    def forward(self, _contains, instruction_tokens: torch.Tensor, target_labels: torch.Tensor):
+    def forward(self, _contains, instruction_tokens: torch.Tensor, target_labels: torch.Tensor, **_kwargs):
         """PMD module interface: returns sequence log-probabilities."""
         return self.sequence_log_probs(target_labels, instruction_tokens=instruction_tokens)
 
@@ -321,6 +511,8 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         base = self.initial_logits.reshape(1, -1).expand(batch_size, -1)
         if self.prompt_conditioning == "none" or instruction_tokens is None:
             return torch.softmax(base, dim=-1)
+        # Convert the prompt to token ids, then summarize it into a prompt-level
+        # latent feature vector.
         prompt = _normalise_prompt_ids(instruction_tokens, device=self.initial_logits.device)
         if torch.any(prompt < 0) or torch.any(prompt >= self.prompt_vocab_size):
             raise ValueError(f"instruction_tokens contains ids outside prompt_vocab_size={self.prompt_vocab_size}")
@@ -329,9 +521,11 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
             features = features.expand(batch_size, -1)
         if features.shape[0] != batch_size:
             raise ValueError("instruction_tokens batch size must be 1 or match target_labels")
+        # Combine the prompt-conditioned bias with the base initial logits.
         return torch.softmax(base + self.prompt_initial_projector(features), dim=-1)
 
     def _split_prompt_and_prefix(self, input_ids: torch.Tensor | Sequence[int]) -> tuple[torch.Tensor, list[int]]:
+        # Separate prompt tokens from already-generated labels using the label map.
         ids = _flat_input_ids(input_ids)
         split = _first_generated_index(ids, self._token_id_to_label)
         prompt_ids = ids[:split] or [0]
@@ -341,9 +535,11 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
 
     def _transition_for_prefix(self, *, step: int, prefix: tuple[int, ...], belief: torch.Tensor | None) -> torch.Tensor:
         """Build per-step transition matrix under optional dynamic constraints."""
+        # Begin with the globally legal transition distribution.
         transition = self.transition_probs
         if self.dynamic_transition is None and self.transition_energy is None:
             return transition
+        # Build the per-step dynamic context using decoded symbols, not raw ids.
         context = DynamicConstraintContext(
             step=step,
             prefix=tuple(self.symbols[label] for label in prefix),
@@ -359,7 +555,7 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
         weighted = transition
         effective_mask = self.transition_mask.to(device=weighted.device, dtype=weighted.dtype)
         if self.dynamic_transition is not None:
-            # Hard multiplicative transition factor from user callback.
+            # Apply hard multiplicative transition compatibility from the callback.
             dynamic = self.dynamic_transition(context)
             if dynamic is not None:
                 factor = validate_mask(
@@ -375,7 +571,7 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
                 # weights; zero values are the hard forbidden support.
                 effective_mask = effective_mask * (factor > 0).to(dtype=weighted.dtype)
         if self.transition_energy is not None:
-            # Soft penalty: multiply by exp(-weight * energy).
+            # Apply a soft penalty by multiplying by exp(-weight * energy).
             energy = self.transition_energy(context)
             if energy is not None:
                 weighted = apply_transition_energy(

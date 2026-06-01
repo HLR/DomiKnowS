@@ -426,34 +426,23 @@ strings.
 
 ## API Overview
 
-### Graph Adapter
+### Explicit Mask Inputs (DFA First)
 
-`DomiKnowSGraphAdapter` extracts the parts of a DomiKnowS graph that can be
-used as HMM constraints:
+Graph-aware HMM construction is explicit-mask-first.
 
-```python
-from domiknows.generation.learners import DomiKnowSGraphAdapter
+Recommended path:
 
-adapter = DomiKnowSGraphAdapter(
-    graph,
-    n_hidden_states=2,
-    state_names=["Person", "Object"],
-    symbols=["person_token", "object_token"],
-)
+- compile generation logical constraints to DFA,
+- convert DFA structure to transition/emission masks,
+- initialize `DomiKnowSAwareHMM` with those masks.
 
-transition_mask = adapter.allowed_transition_mask()
-emission_mask = adapter.emission_type_mask()
-```
-
-You can also pass explicit relation pairs or constraint specs when the graph
-does not contain enough information for an automatic mapping.
+For planning-style domains, pass masks directly from planning compilers.
 
 ### Supported Constraint Specs
 
-The HMM adapter normalizes explicit dict or object constraints and typed spec
-objects into one static compilation path. Static specs are best for constraints
-that can be represented before inference as transition masks, emission masks,
-or observable DFA metadata.
+The HMM stack accepts explicit mask/spec inputs through typed spec objects.
+These are best for constraints representable before inference as transition
+masks, emission masks, or observable DFA metadata.
 
 | Spec | Meaning | Effect |
 | --- | --- | --- |
@@ -497,11 +486,8 @@ constraints = [
 ]
 ```
 
-The graph adapter also compiles a conservative static DomiKnowS logical
-fragment when it can be interpreted exactly as a local HMM mask.
-
-Unsupported logical constraints are reported through
-`adapter.report.unsupported`; they are not approximated silently.
+Unsupported/non-local forms are reported through
+`constraint_report.unsupported`; they are not approximated silently.
 
 ### Static Specs vs Dynamic Hooks
 

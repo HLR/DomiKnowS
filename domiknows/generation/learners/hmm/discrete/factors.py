@@ -6,10 +6,10 @@ from typing import Sequence
 
 import torch
 
-from .core import DiscreteHMM
-from ..common.base import CompactLabelGenerationHead
-from ...dfa.encoder import GenerationBundle, GenerationGraphContext
-from ...dfa.vocabulary import TokenVocabulary
+from .discreteHMM import DiscreteHMM
+from ...common.base import CompactLabelGenerationHead
+from ....dfa.encoder import GenerationBundle, GenerationGraphContext
+from ....dfa.vocabulary import TokenVocabulary
 
 
 @dataclass
@@ -404,43 +404,6 @@ class HMMFactorGraphHead(CompactLabelGenerationHead):
             alphas.append(alpha)
             scales.append(scale)
         return torch.stack(alphas, dim=0), torch.stack(scales, dim=0)
-
-    def _backward_scaled(self, labels: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
-        transition = self.transition_probs
-        emission = self.emission_probs
-        betas = [None] * labels.numel()
-        beta = torch.ones(self.state_count, dtype=emission.dtype, device=emission.device)
-        betas[-1] = beta
-        for t in range(labels.numel() - 2, -1, -1):
-            next_emission = emission[:, int(labels[t + 1].item())]
-            beta = torch.matmul(transition, next_emission * beta) / scales[t + 1].clamp_min(
-                torch.finfo(emission.dtype).eps
-            )
-            betas[t] = beta
-        return torch.stack(betas, dim=0)
-
-    def _transition_pair_marginals(
-        self,
-        labels: torch.Tensor,
-        alpha: torch.Tensor,
-        beta: torch.Tensor,
-    ) -> torch.Tensor:
-        transition = self.transition_probs
-        emission = self.emission_probs
-        eps = torch.finfo(emission.dtype).eps
-        if labels.numel() < 2:
-            return torch.empty(
-                (0, self.state_count, self.state_count),
-                dtype=emission.dtype,
-                device=emission.device,
-            )
-        xis = []
-        for t in range(labels.numel() - 1):
-            next_emission = emission[:, int(labels[t + 1].item())]
-            pair = alpha[t].unsqueeze(1) * transition * (next_emission * beta[t + 1]).unsqueeze(0)
-            pair = pair / pair.sum().clamp_min(eps)
-            xis.append(pair)
-        return torch.stack(xis, dim=0)
 
     def _target_labels(self, target_labels: torch.Tensor | Sequence[int]) -> torch.Tensor:
         if isinstance(target_labels, torch.Tensor):

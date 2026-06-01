@@ -1,28 +1,24 @@
 from domiknows.generation.dfa._constraints import (
-    AfterTokenAllowedConstraint,
-    ComplementGenerationConstraint,
-    all_of_constraints,
-    any_of_constraints,
-    TokenSetCountConstraint,
-    constraints_to_dfa,
-    forbidden_token,
-    max_non_eos,
-    no_token_after_eos,
-    ordered_tokens,
-    required_token,
+    after_token_allowed_dfa,
+    eos_closure_dfa,
+    forbidden_token_dfa,
+    max_non_eos_dfa,
+    ordered_tokens_dfa,
+    required_token_dfa,
+    token_set_count_dfa,
 )
-from domiknows.generation.dfa import complement_dfa, union_dfa
+from domiknows.generation.dfa import complement_dfa, product_dfa, union_dfa
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
 
 
 def test_dfa_accepts_and_rejects_basic_sequences():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = constraints_to_dfa(
+    dfa = product_dfa(
         [
-            no_token_after_eos(),
-            max_non_eos(2),
-            forbidden_token("B"),
-        ],
-        vocab,
+            eos_closure_dfa(vocab),
+            max_non_eos_dfa(vocab, 2),
+            forbidden_token_dfa(vocab, "B"),
+        ]
     )
 
     eos = vocab.label_for_token("<eos>")
@@ -37,7 +33,7 @@ def test_dfa_accepts_and_rejects_basic_sequences():
 
 def test_remaining_steps_force_required_token():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     allowed = dfa.allowed_tokens(dfa.start_state, remaining_steps=1)
 
     assert allowed == {vocab.label_for_token("B")}
@@ -45,7 +41,7 @@ def test_remaining_steps_force_required_token():
 
 def test_ordered_tokens_constraint_tracks_progress():
     vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>")
-    dfa = ordered_tokens(["A", "C"]).to_dfa(vocab)
+    dfa = ordered_tokens_dfa(vocab, ["A", "C"])
 
     a = vocab.label_for_token("A")
     b = vocab.label_for_token("B")
@@ -57,7 +53,7 @@ def test_ordered_tokens_constraint_tracks_progress():
 
 def test_composite_all_of_constraint_intersects_children():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = all_of_constraints([required_token("A"), forbidden_token("B")]).to_dfa(vocab)
+    dfa = product_dfa([required_token_dfa(vocab, "A"), forbidden_token_dfa(vocab, "B")])
 
     eos = vocab.label_for_token("<eos>")
     a = vocab.label_for_token("A")
@@ -70,7 +66,7 @@ def test_composite_all_of_constraint_intersects_children():
 
 def test_composite_any_of_constraint_unions_children():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = any_of_constraints([required_token("A"), required_token("B")]).to_dfa(vocab)
+    dfa = union_dfa([required_token_dfa(vocab, "A"), required_token_dfa(vocab, "B")])
 
     eos = vocab.label_for_token("<eos>")
     a = vocab.label_for_token("A")
@@ -83,7 +79,7 @@ def test_composite_any_of_constraint_unions_children():
 
 def test_union_dfa_preserves_acceptance_and_allowed_tokens():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = union_dfa([required_token("A").to_dfa(vocab), required_token("B").to_dfa(vocab)])
+    dfa = union_dfa([required_token_dfa(vocab, "A"), required_token_dfa(vocab, "B")])
 
     eos = vocab.label_for_token("<eos>")
     a = vocab.label_for_token("A")
@@ -97,7 +93,7 @@ def test_union_dfa_preserves_acceptance_and_allowed_tokens():
 
 def test_complement_dfa_flips_acceptance_without_dead_state_pruning():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    base = required_token("A").to_dfa(vocab)
+    base = required_token_dfa(vocab, "A")
     dfa = complement_dfa(base)
 
     eos = vocab.label_for_token("<eos>")
@@ -114,7 +110,7 @@ def test_complement_dfa_flips_acceptance_without_dead_state_pruning():
 
 def test_complement_generation_constraint_wraps_child_dfa():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = ComplementGenerationConstraint(required_token("A")).to_dfa(vocab)
+    dfa = complement_dfa(required_token_dfa(vocab, "A"))
 
     assert dfa.accepts([vocab.label_for_token("B")])
     assert not dfa.accepts([vocab.label_for_token("A")])
@@ -122,7 +118,7 @@ def test_complement_generation_constraint_wraps_child_dfa():
 
 def test_token_set_count_constraint_counts_token_sets():
     vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>")
-    dfa = TokenSetCountConstraint(("A", "B"), min_count=2).to_dfa(vocab)
+    dfa = token_set_count_dfa(vocab, ("A", "B"), min_count=2)
 
     eos = vocab.label_for_token("<eos>")
     a = vocab.label_for_token("A")
@@ -136,7 +132,7 @@ def test_token_set_count_constraint_counts_token_sets():
 
 def test_after_token_allowed_constraint_blocks_later_tokens():
     vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>")
-    dfa = AfterTokenAllowedConstraint(("A",), ("B",)).to_dfa(vocab)
+    dfa = after_token_allowed_dfa(vocab, ("A",), ("B",))
 
     a = vocab.label_for_token("A")
     b = vocab.label_for_token("B")

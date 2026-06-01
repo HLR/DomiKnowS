@@ -9,21 +9,20 @@ Provides:
   forward-backward to avoid floating-point underflow.
 - ``compare_hmm_dfa``: evaluation helper that compares HMM acceptance against
   a reference DFA over a corpus of sequences.
-- ``all_sequences``: enumerates all symbol sequences up to a given length.
+
 """
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from itertools import product
 from pathlib import Path
-from random import Random
 from typing import Iterable, Sequence
 
 import torch
 
-from ...dfa import DFA
-from ...latent import LatentTransitionPotential, apply_hmm_transition_potential
+from .baumWelchDiscretHMM import BaumWelchResult, HMMParameters, _normalize_tensor, baum_welch_train, run_baum_welch
+from ....dfa import DFA
+from ....latent import LatentTransitionPotential, apply_hmm_transition_potential
 
 
 @dataclass(frozen=True)
@@ -96,21 +95,6 @@ class DiscreteHMM:
     def symbol_count(self) -> int:
         # Return the vocabulary size.
         return len(self.symbols)
-
-    @property
-    def device(self) -> torch.device:
-        # Expose the device where parameters currently live.
-        return self.initial_probs.device
-
-    @property
-    def dtype(self) -> torch.dtype:
-        # Expose the parameter dtype used for computations.
-        return self.initial_probs.dtype
-
-    @property
-    def initial(self) -> torch.Tensor:
-        # Provide read-only-style access to initial probabilities.
-        return self.initial_probs
 
     @property
     def transition(self) -> torch.Tensor:
@@ -429,127 +413,20 @@ class DiscreteHMM:
         device: torch.device | str | None = None,
         dtype: torch.dtype = torch.float64,
     ) -> "BaumWelchResult":
-        # Fit HMM parameters with Baum-Welch, i.e., EM for latent-state sequence models.
-        # E-step: run forward-backward to estimate expected state/transition counts under
-        #         current parameters.
-        # M-step: renormalize those expected counts into new initial/transition/emission
-        #         probabilities (with optional additive smoothing).
-        # Iterate until log-likelihood improvement is below tol or max_iter is reached.
-        encoded, symbols = _validate_and_encode_sequences(sequences, symbols, state_count)
-        if max_iter < 1:
-            raise ValueError("max_iter must be at least 1")
-        if tol < 0:
-            raise ValueError("tol must be non-negative")
-        if smoothing < 0:
-            raise ValueError("smoothing must be non-negative")
-        lengths = torch.tensor([len(seq) for seq in encoded], dtype=torch.long, device=device)
-        max_len = int(lengths.max().item())
-        # Build a padded observation tensor so EM can run in a single batched pass.
-        obs = torch.zeros((len(encoded), max_len), dtype=torch.long, device=device)
-        for idx, seq in enumerate(encoded):
-            obs[idx, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=device)
-        if init is None:
-            gen_device = torch.device(device) if device is not None else torch.device("cpu")
-            gen = torch.Generator(device=gen_device).manual_seed(int(random_seed))
-            initial = _normalize_tensor(torch.rand(state_count, generator=gen, dtype=dtype, device=device) + 0.1, dim=0)
-            transition = _normalize_tensor(torch.rand((state_count, state_count), generator=gen, dtype=dtype, device=device) + 0.1, dim=-1)
-            emission = _normalize_tensor(torch.rand((state_count, len(symbols)), generator=gen, dtype=dtype, device=device) + 0.1, dim=-1)
-            model = cls(transition, emission, initial, symbols, normalize=False)
-        elif isinstance(init, DiscreteHMM):
-            if init.symbols != tuple(symbols) or init.state_count != state_count:
-                raise ValueError("init must match symbols and state_count")
-            model = init.to(device=device, dtype=dtype)
-        else:
-            params = _coerce_init(init, symbols, state_count)
-            model = cls(params.transition, params.emission, params.initial, symbols, device=device, dtype=dtype)
-
-        log_likelihoods: list[float] = []
-        converged = False
-        for iteration in range(max_iter):
-            # E-step: compute expected sufficient statistics under current model.
-            factors = model.forward_backward(obs, lengths)
-            mask = factors.mask
-            init_counts = factors.gamma[:, 0, :].sum(dim=0)
-            trans_counts = factors.xi.sum(dim=(0, 1))
-            emit_counts = torch.zeros((state_count, len(symbols)), dtype=model.dtype, device=model.device)
-            for symbol_idx in range(len(symbols)):
-                symbol_mask = (obs == symbol_idx) & mask
-                emit_counts[:, symbol_idx] = (factors.gamma * symbol_mask.unsqueeze(-1)).sum(dim=(0, 1))
-            # M-step: normalize expected counts back into stochastic parameters.
-            initial = _normalize_tensor(init_counts + smoothing, dim=0)
-            transition = _normalize_tensor(trans_counts + smoothing, dim=-1)
-            emission = _normalize_tensor(emit_counts + smoothing, dim=-1)
-            total_ll = float(factors.log_likelihood.sum().item())
-            log_likelihoods.append(total_ll)
-            model = cls(transition, emission, initial, symbols, state_names=model.state_names, normalize=False)
-            if len(log_likelihoods) > 1 and log_likelihoods[-1] - log_likelihoods[-2] < tol:
-                converged = True
-                break
-        return BaumWelchResult(model=model, log_likelihoods=tuple(log_likelihoods), iterations=iteration + 1, converged=converged)
-
-
-@dataclass(frozen=True)
-class HMMParameters:
-    """Raw (unnormalised) HMM parameter arrays used to seed ``baum_welch_train``.
-
-    This dataclass does *not* validate or normalise its contents;
-    normalisation happens inside ``_coerce_init``.
-
-    Attributes:
-        transition: Square ``(S, S)`` transition probability matrix.
-        emission: ``(S, V)`` emission probability matrix.
-        initial: Length-*S* vector of initial state probabilities.
-    """
-    transition: tuple[tuple[float, ...], ...]
-    emission: tuple[tuple[float, ...], ...]
-    initial: tuple[float, ...]
-
-
-@dataclass(frozen=True)
-class BaumWelchResult:
-    """Output of :func:`baum_welch_train`.
-
-    Attributes:
-        model: The trained :class:`DiscreteHMM`.
-        log_likelihoods: Per-iteration total log-likelihood of all training
-            sequences.  Monotonically non-decreasing for a correct EM run.
-        iterations: Number of EM iterations actually performed.
-        converged: ``True`` if the log-likelihood improvement fell below
-            ``tol`` before ``max_iter`` was reached.
-    """
-    model: DiscreteHMM
-    log_likelihoods: tuple[float, ...]
-    iterations: int
-    converged: bool
-
-
-def baum_welch_train(
-    sequences: Sequence[Sequence[str]],
-    symbols: Sequence[str],
-    state_count: int,
-    *,
-    max_iter: int = 100,
-    tol: float = 1e-6,
-    smoothing: float = 1e-9,
-    init: DiscreteHMM | HMMParameters | None = None,
-    random_seed: int = 0,
-) -> BaumWelchResult:
-    """Train a discrete HMM with Baum-Welch expectation maximization.
-
-    Production implementation backed by batched Torch forward/backward. String
-    sequences are encoded once, then EM updates are vectorized across the
-    training batch.
-    """
-    return DiscreteHMM.baum_welch(
-        sequences,
-        symbols,
-        state_count,
-        max_iter=max_iter,
-        tol=tol,
-        smoothing=smoothing,
-        init=init,
-        random_seed=random_seed,
-    )
+        # Baum-Welch implementation is extracted into baumWelchDiscretHMM.
+        return run_baum_welch(
+            cls,
+            sequences,
+            symbols,
+            state_count,
+            max_iter=max_iter,
+            tol=tol,
+            smoothing=smoothing,
+            init=init,
+            random_seed=random_seed,
+            device=device,
+            dtype=dtype,
+        )
 
 
 def compare_hmm_dfa(
@@ -608,41 +485,11 @@ def compare_hmm_dfa(
     }
 
 
-def all_sequences(symbols: Sequence[str], max_length: int) -> list[tuple[str, ...]]:
-    """Return all symbol sequences of length 0 through *max_length*.
-
-    The empty sequence ``()`` is always included as the first element.
-
-    Args:
-        symbols: The alphabet to draw symbols from.
-        max_length: Maximum sequence length (inclusive).
-
-    Returns:
-        A list of tuples, ordered by increasing length then lexicographic order
-        within each length (as determined by ``itertools.product``).
-    """
-    output: list[tuple[str, ...]] = [()]  # start with the empty sequence
-    for length in range(1, max_length + 1):
-        output.extend(tuple(seq) for seq in product(symbols, repeat=length))
-    return output
-
-
 def _validate_symbol_tuple(symbols: tuple[object, ...]) -> None:
     if not symbols:
         raise ValueError("symbols must not be empty")
     if len(set(symbols)) != len(symbols):
         raise ValueError("symbols must be unique")
-
-
-def _normalize_tensor(values: torch.Tensor, dim: int) -> torch.Tensor:
-    if not torch.isfinite(values).all():
-        raise ValueError("probability tensors must contain only finite values")
-    values = values.clamp_min(0)
-    total = values.sum(dim=dim, keepdim=True)
-    if torch.any(total <= 0):
-        size = values.shape[dim]
-        return torch.full_like(values, 1.0 / float(size))
-    return values / total
 
 
 def _validate_hmm_tensors(initial: torch.Tensor, transition: torch.Tensor, emission: torch.Tensor, symbol_count: int) -> None:
@@ -658,302 +505,3 @@ def _validate_hmm_tensors(initial: torch.Tensor, transition: torch.Tensor, emiss
     if torch.any(initial < 0) or torch.any(transition < 0) or torch.any(emission < 0):
         raise ValueError("HMM probability parameters must be non-negative")
 
-
-def _validate_and_encode_sequences(
-    sequences: Sequence[Sequence[str]],
-    symbols: Sequence[str],
-    state_count: int,
-) -> tuple[list[list[int]], tuple[str, ...]]:
-    """Validate inputs and encode symbol strings to integer indices.
-
-    Args:
-        sequences: Training sequences of symbol strings.
-        symbols: Ordered vocabulary.
-        state_count: Requested number of hidden states.
-
-    Returns:
-        A tuple of ``(encoded_sequences, symbols)`` where each inner list
-        contains integer indices into *symbols*.
-
-    Raises:
-        ValueError: On empty sequences/symbols, duplicate symbols, unknown
-            symbols, or ``state_count < 1``.
-    """
-    if state_count < 1:
-        raise ValueError("state_count must be at least 1")
-    symbols = tuple(symbols)
-    if not symbols:
-        raise ValueError("symbols must not be empty")
-    if len(set(symbols)) != len(symbols):
-        raise ValueError("symbols must be unique")
-    if not sequences:
-        raise ValueError("sequences must not be empty")
-
-    symbol_index = {symbol: i for i, symbol in enumerate(symbols)}
-    encoded = []
-    for seq_idx, sequence in enumerate(sequences):
-        if not sequence:
-            raise ValueError("empty sequences are not supported in Baum-Welch v1")
-        encoded_sequence = []
-        for symbol in sequence:
-            if symbol not in symbol_index:
-                raise ValueError(f"unknown symbol {symbol!r} in sequence {seq_idx}")
-            encoded_sequence.append(symbol_index[symbol])
-        encoded.append(encoded_sequence)
-    return encoded, symbols
-
-
-def _coerce_init(
-    init: DiscreteHMM | HMMParameters,
-    symbols: tuple[str, ...],
-    state_count: int,
-) -> HMMParameters:
-    """Normalise a warm-start object into a validated :class:`HMMParameters`.
-
-    Accepts either a fully-fledged :class:`DiscreteHMM` or a raw
-    :class:`HMMParameters` dataclass, validates the shapes against *state_count*
-    and *symbols*, then row-normalises every probability vector.
-
-    Raises:
-        ValueError: If shapes are inconsistent or symbols don't match.
-        TypeError: If *init* is neither of the expected types.
-    """
-    if isinstance(init, DiscreteHMM):
-        if init.symbols != symbols:
-            raise ValueError("init symbols must match symbols")
-        params = HMMParameters(
-            tuple(tuple(float(v) for v in row.tolist()) for row in init.transition_probs.detach().cpu()),
-            tuple(tuple(float(v) for v in row.tolist()) for row in init.emission_probs.detach().cpu()),
-            tuple(float(v) for v in init.initial_probs.detach().cpu().tolist()),
-        )
-    elif isinstance(init, HMMParameters):
-        params = init
-    else:
-        raise TypeError("init must be DiscreteHMM, HMMParameters, or None")
-
-    if len(params.initial) != state_count:
-        raise ValueError("init initial length must match state_count")
-    if len(params.transition) != state_count or any(len(row) != state_count for row in params.transition):
-        raise ValueError("init transition shape must be state_count x state_count")
-    if len(params.emission) != state_count or any(len(row) != len(symbols) for row in params.emission):
-        raise ValueError("init emission shape must be state_count x len(symbols)")
-    initial = tuple(_normalize_row(params.initial, 0.0))
-    transition = tuple(tuple(_normalize_row(row, 0.0)) for row in params.transition)
-    emission = tuple(tuple(_normalize_row(row, 0.0)) for row in params.emission)
-    return HMMParameters(transition=transition, emission=emission, initial=initial)
-
-
-def _random_stochastic_vector(size: int, rng: Random) -> list[float]:
-    """Generate a random normalised probability vector of length *size*.
-
-    Each element is drawn from Uniform(0,1) + 1e-3 to avoid zero entries
-    before normalisation.
-    """
-    return _normalize_row([rng.random() + 1e-3 for _ in range(size)], 0.0)
-
-
-def _random_stochastic_matrix(rows: int, cols: int, rng: Random) -> list[list[float]]:
-    """Generate a random row-stochastic matrix of shape ``(rows, cols)``."""
-    return [_random_stochastic_vector(cols, rng) for _ in range(rows)]
-
-
-def _normalize_row(row: Sequence[float], smoothing: float) -> list[float]:
-    """Normalise *row* to a valid probability distribution.
-
-    Negative values are clamped to zero before *smoothing* is added to every
-    element.  If the resulting sum is still non-positive (all-zero after
-    clamping and no smoothing) the uniform distribution is returned.
-
-    Args:
-        row: Raw non-negative counts or probability estimates.
-        smoothing: Additive (Laplace-style) smoothing constant.
-
-    Returns:
-        A list of floats that sums to 1.0.
-    """
-    if not row:
-        raise ValueError("cannot normalize an empty row")
-    smoothed = [max(float(value), 0.0) + smoothing for value in row]
-    total = sum(smoothed)
-    if total <= 0.0:
-        # Fallback: return the uniform distribution to avoid division by zero.
-        return [1.0 / len(row) for _ in row]
-    return [value / total for value in smoothed]
-
-
-def _forward_scaled(
-    obs: Sequence[int],
-    initial: Sequence[float],
-    transition: Sequence[Sequence[float]],
-    emission: Sequence[Sequence[float]],
-) -> tuple[list[list[float]], list[float], float]:
-    """Compute the *scaled* forward variable alpha and the sequence log-likelihood.
-
-    At each time step the raw alpha vector is divided by its sum (the scale
-    factor) and the log of the scale is accumulated into the log-likelihood.
-    This prevents floating-point underflow for long sequences.
-
-    Args:
-        obs: Integer-encoded observation sequence.
-        initial: Initial state distribution.
-        transition: Row-stochastic transition matrix.
-        emission: Row-stochastic emission matrix.
-
-    Returns:
-        ``(alpha, scales, log_likelihood)`` where *alpha* is ``T × S``,
-        *scales* is length *T*, and *log_likelihood* is the total log P(obs).
-    """
-    state_count = len(initial)
-    alpha: list[list[float]] = []
-    scales: list[float] = []
-    log_likelihood = 0.0
-
-    # Initialise alpha at t=0 with initial × emission probabilities.
-    first = [initial[state] * emission[state][obs[0]] for state in range(state_count)]
-    first, scale = _scale_probabilities(first)
-    alpha.append(first)
-    scales.append(scale)
-    log_likelihood += _safe_log(scale)
-
-    # Induction step: propagate alpha forward one time step at a time.
-    for t in range(1, len(obs)):
-        row = []
-        for dst in range(state_count):
-            prob = sum(alpha[t - 1][src] * transition[src][dst] for src in range(state_count))
-            row.append(prob * emission[dst][obs[t]])
-        row, scale = _scale_probabilities(row)
-        alpha.append(row)
-        scales.append(scale)
-        log_likelihood += _safe_log(scale)
-
-    return alpha, scales, log_likelihood
-
-
-def _backward_scaled(
-    obs: Sequence[int],
-    transition: Sequence[Sequence[float]],
-    emission: Sequence[Sequence[float]],
-    scales: Sequence[float],
-) -> list[list[float]]:
-    """Compute the *scaled* backward variable beta.
-
-    The same scale factors produced by :func:`_forward_scaled` are reused
-    here so that alpha[t] * beta[t] yields properly normalised posteriors
-    without additional re-scaling.
-
-    Args:
-        obs: Integer-encoded observation sequence.
-        transition: Row-stochastic transition matrix.
-        emission: Row-stochastic emission matrix.
-        scales: Per-timestep scale factors from the forward pass.
-
-    Returns:
-        Beta matrix of shape ``T × S``.
-    """
-    state_count = len(transition)
-    beta = [[0.0 for _ in range(state_count)] for _ in obs]
-    # Initialise beta at the last time step to all-ones (unscaled).
-    beta[-1] = [1.0 for _ in range(state_count)]
-
-    # Induction step: propagate beta backward, dividing by the forward scale
-    # at the *next* time step to keep values numerically stable.
-    for t in range(len(obs) - 2, -1, -1):
-        scale = scales[t + 1] if scales[t + 1] > 0.0 else 1.0
-        for src in range(state_count):
-            beta[t][src] = (
-                sum(
-                    transition[src][dst] * emission[dst][obs[t + 1]] * beta[t + 1][dst]
-                    for dst in range(state_count)
-                )
-                / scale
-            )
-    return beta
-
-
-def _expectations(
-    obs: Sequence[int],
-    alpha: Sequence[Sequence[float]],
-    beta: Sequence[Sequence[float]],
-    transition: Sequence[Sequence[float]],
-    emission: Sequence[Sequence[float]],
-) -> tuple[list[list[float]], list[list[list[float]]]]:
-    """Compute the E-step posteriors gamma and xi from forward-backward variables.
-
-    - **gamma[t][s]**: probability of being in state *s* at time *t* given the
-      full observation sequence.
-    - **xi[t][src][dst]**: probability of transitioning from *src* to *dst*
-      between times *t* and *t+1* given the full observation sequence.
-
-    Args:
-        obs: Integer-encoded observation sequence.
-        alpha: Scaled forward variable from :func:`_forward_scaled`.
-        beta: Scaled backward variable from :func:`_backward_scaled`.
-        transition: Current transition matrix estimate.
-        emission: Current emission matrix estimate.
-
-    Returns:
-        ``(gamma, xi)`` — gamma is ``T × S``, xi is ``(T-1) × S × S``.
-    """
-    state_count = len(transition)
-    # --- Gamma: state-occupation posteriors ---
-    gamma = []
-    for t in range(len(obs)):
-        # alpha[t] * beta[t] is proportional to P(state | obs); normalise to
-        # obtain a proper distribution.
-        row = [alpha[t][state] * beta[t][state] for state in range(state_count)]
-        gamma.append(_normalize_row(row, 0.0))
-
-    # --- Xi: transition posteriors ---
-    xi = []
-    for t in range(len(obs) - 1):
-        matrix = [[0.0 for _ in range(state_count)] for _ in range(state_count)]
-        denom = 0.0
-        for src in range(state_count):
-            for dst in range(state_count):
-                value = (
-                    alpha[t][src]
-                    * transition[src][dst]
-                    * emission[dst][obs[t + 1]]
-                    * beta[t + 1][dst]
-                )
-                matrix[src][dst] = value
-                denom += value
-        if denom <= 0.0:
-            # Numerical underflow: fall back to a uniform joint distribution.
-            uniform = 1.0 / (state_count * state_count)
-            matrix = [[uniform for _ in range(state_count)] for _ in range(state_count)]
-        else:
-            matrix = [[value / denom for value in row] for row in matrix]
-        xi.append(matrix)
-    return gamma, xi
-
-
-def _scale_probabilities(row: Sequence[float]) -> tuple[list[float], float]:
-    """Normalise a probability row and return the scale factor.
-
-    Args:
-        row: Non-negative probability values at a single time step.
-
-    Returns:
-        ``(normalised_row, scale)`` where *scale* is the pre-normalisation sum.
-        If the sum is zero (complete underflow) returns the uniform distribution
-        and a scale of ``0.0`` so the caller can detect the degenerate case.
-    """
-    scale = sum(row)
-    if scale <= 0.0:
-        # All probabilities collapsed to zero — return uniform and signal via scale=0.
-        return [1.0 / len(row) for _ in row], 0.0
-    return [value / scale for value in row], scale
-
-
-def _safe_log(value: float) -> float:
-    """Return ``math.log(value)``, or ``-inf`` for non-positive inputs.
-
-    Used when accumulating the log-likelihood from per-step scale factors;
-    a scale of 0.0 indicates numerical underflow and contributes ``-inf``.
-    """
-    if value <= 0.0:
-        return float("-inf")
-    import math
-
-    return math.log(value)

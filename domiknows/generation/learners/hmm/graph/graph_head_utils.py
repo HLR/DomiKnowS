@@ -14,13 +14,9 @@ __all__ = [
     '_validate_hmm_shapes',
     '_validate_wfa_shapes',
     '_target_label_batch',
-    '_coerce_label_to_token_id',
-    '_invert_label_to_token_id',
     '_labels_from_input_ids',
     '_flat_input_ids',
     '_normalise_prompt_ids',
-    '_first_generated_index',
-    '_validate_label',
 ]
 
 def _random_hmm_parameters(
@@ -107,26 +103,16 @@ def _target_label_batch(target_labels: torch.Tensor | Sequence[int], pad_size: i
     step_mask = torch.arange(labels.shape[1], device=labels.device).unsqueeze(0) < lengths_t.unsqueeze(1)
     return labels, lengths_t, step_mask, squeeze
 
-def _coerce_label_to_token_id(label_to_token_id: Sequence[int | None] | None, label_count: int) -> tuple[int | None, ...]:
-    """Normalize optional label->token mapping and validate length."""
-    if label_to_token_id is None:
-        return tuple(range(label_count))
-    values = tuple(None if value is None else int(value) for value in label_to_token_id)
-    if len(values) != label_count:
-        raise ValueError("label_to_token_id length must match label_count")
-    return values
-
-def _invert_label_to_token_id(label_to_token_id: Sequence[int | None]) -> dict[int, int]:
-    """Build token->label lookup for decoding from tokenizer space."""
-    return {int(token_id): label for label, token_id in enumerate(label_to_token_id) if token_id is not None}
-
 def _labels_from_input_ids(input_ids: torch.Tensor | Sequence[int], token_id_to_label: Mapping[int, int], label_count: int) -> list[int]:
     """Map token ids to compact labels, validating label range."""
     ids = _flat_input_ids(input_ids)
     labels = []
     for token_id in ids:
         label = token_id_to_label.get(int(token_id), int(token_id))
-        labels.append(_validate_label(label, label_count))
+        label = int(label)
+        if label < 0 or label >= label_count:
+            raise ValueError(f"label {label} is out of range")
+        labels.append(label)
     return labels
 
 def _flat_input_ids(input_ids: torch.Tensor | Sequence[int]) -> list[int]:
@@ -155,16 +141,3 @@ def _normalise_prompt_ids(input_ids: torch.Tensor | Sequence[int], *, device: to
         raise ValueError("instruction_tokens must have shape [seq] or [batch, seq]")
     return ids
 
-def _first_generated_index(ids: Sequence[int], token_id_to_label: Mapping[int, int]) -> int:
-    """Return index where compact generated token ids begin."""
-    for index, token_id in enumerate(ids):
-        if int(token_id) in token_id_to_label:
-            return index
-    return len(ids)
-
-def _validate_label(label: int, label_count: int) -> int:
-    """Ensure label index is in ``[0, label_count)``."""
-    label = int(label)
-    if label < 0 or label >= label_count:
-        raise ValueError(f"label {label} is out of range")
-    return label

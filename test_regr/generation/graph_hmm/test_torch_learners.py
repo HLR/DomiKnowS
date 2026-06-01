@@ -134,6 +134,8 @@ def test_graph_hmm_to_torch_learner_factory():
         n_hidden_states=2,
         state_names=["A", "B"],
         symbols=[0, 1],
+        transition_mask=torch.ones((2, 2), dtype=torch.float64),
+        emission_mask=torch.ones((2, 2), dtype=torch.float64),
         random_seed=5,
     ).fit([[0, 1], [0, 0]], max_iter=1)
 

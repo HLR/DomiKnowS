@@ -30,14 +30,17 @@ def _learner(**kwargs):
     - Default constraints: no explicit masks (all transitions/emissions allowed)
     - Seeded randomness for reproducibility
     """
-    return DomiKnowSAwareHMM(
-        graph=None,
-        n_hidden_states=2,
-        state_names=["A", "B"],
-        symbols=["x", "y"],
-        random_seed=13,
-        **kwargs,
-    )
+    params = {
+        "graph": None,
+        "n_hidden_states": 2,
+        "state_names": ["A", "B"],
+        "symbols": ["x", "y"],
+        "transition_mask": torch.ones((2, 2), dtype=torch.float64),
+        "emission_mask": torch.ones((2, 2), dtype=torch.float64),
+        "random_seed": 13,
+    }
+    params.update(kwargs)
+    return DomiKnowSAwareHMM(**params)
 
 
 def test_constrained_baum_welch_keeps_forbidden_probabilities_zero():

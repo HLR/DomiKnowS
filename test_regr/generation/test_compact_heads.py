@@ -5,20 +5,22 @@ import itertools
 import torch
 
 from domiknows.generation.dfa._constraints import (
+    accept_all_dfa,
+    required_token_dfa,
+)
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
+from domiknows.generation.applications import GenerationCandidate, HybridController
+from domiknows.generation.learners import (
     CompactLabelSequenceModel,
     CRFCompactLabelScorer,
     EnergyCompactLabelGenerationHead,
-    GenerationCandidate,
     GRUCompactLabelGenerationHead,
     GraphHMMGenerationHead,
     GraphSpectralGenerationHead,
     HMMGenerationHead,
-    HybridController,
     NeuralNGramCompactLabelGenerationHead,
     SpectralWFAGenerationHead,
     TransformerCompactLabelGenerationHead,
-    constraints_to_dfa,
-    required_token,
 )
 
 
@@ -143,7 +145,7 @@ def test_gru_compact_head_trainable_parameter_reporting():
 
 def test_gru_compact_head_works_with_label_decoders():
     vocab = _vocab()
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     head = GRUCompactLabelGenerationHead(
         label_count=vocab.label_count,
         label_to_token_id=_label_to_token_id(),
@@ -171,7 +173,7 @@ def test_gru_compact_head_works_with_label_decoders():
 
 def test_transformer_compact_head_works_with_label_decoders():
     vocab = _vocab()
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     head = TransformerCompactLabelGenerationHead(
         label_count=vocab.label_count,
         label_to_token_id=_label_to_token_id(),
@@ -201,7 +203,7 @@ def test_transformer_compact_head_works_with_label_decoders():
 
 def test_ngram_and_crf_compact_heads_work_with_label_decoders():
     vocab = _vocab()
-    dfa = constraints_to_dfa([required_token("B")], vocab)
+    dfa = required_token_dfa(vocab, "B")
     heads = [
         NeuralNGramCompactLabelGenerationHead(
             label_count=vocab.label_count,
@@ -287,7 +289,7 @@ def test_ngram_and_crf_next_logits_change_with_prefix():
 
 def test_neural_compact_heads_support_pmd_style_forward_and_hybrid_scoring():
     vocab = _vocab()
-    dfa = constraints_to_dfa([], vocab)
+    dfa = accept_all_dfa(vocab)
     head = GRUCompactLabelGenerationHead(
         label_count=vocab.label_count,
         label_to_token_id=_label_to_token_id(),
@@ -314,7 +316,7 @@ def test_neural_compact_heads_support_pmd_style_forward_and_hybrid_scoring():
 
 def test_ngram_and_crf_support_pmd_style_forward_and_hybrid_scoring():
     vocab = _vocab()
-    dfa = constraints_to_dfa([], vocab)
+    dfa = accept_all_dfa(vocab)
     prompt = torch.tensor([[9]])
     labels = torch.tensor([1, 2, 0])
     heads = [

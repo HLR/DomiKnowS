@@ -292,7 +292,10 @@ class PromptConditionedSpectralWFAGenerationHead(CompactLabelGenerationHead):
         *,
         transition_potential: TransitionPotentialInput = None,
         transition_potential_mode: str = "multiply",
+        **kwargs,
     ) -> torch.Tensor:
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         return self._next_logits_from_prompt_and_prefix(
             prompt_ids,
@@ -309,8 +312,11 @@ class PromptConditionedSpectralWFAGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         transition_potential: TransitionPotentialInput = None,
         transition_potential_mode: str = "multiply",
+        **kwargs,
     ) -> torch.Tensor:
         """Return teacher-forced prompt-conditioned log-probs over labels."""
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -340,6 +346,7 @@ class PromptConditionedSpectralWFAGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor,
         target_labels: torch.Tensor,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ):
         labels = _target_labels(target_labels, self.pad_size, device=self.transitions.device)
         generated = []

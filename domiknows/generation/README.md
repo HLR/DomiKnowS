@@ -27,10 +27,11 @@ The detail learner-focused notes are:
 | --- | --- |
 | `GenerationEncoder` | Builds the common `text -> token -> generated_token` DomiKnowS graph shape. |
 | `HMMFactorGraphEncoder` | Builds the opt-in HMM factor graph with generated labels, latent states, adjacency, and optional DP factor concepts. |
-| `GenerationConstraint` classes | Declarative constraints such as EOS closure, max length, required tokens, forbidden tokens, ordered tokens, and conditional max length. |
-| `constraints_to_dfa(...)` | Compiles constraint objects into one product DFA. |
-| `discover_generation_constraints(...)` | Reads supported raw DomiKnowS graph constraints back into generation constraints. |
-| `discover_generation_enforcement(...)` | Routes graph constraints into hard DFA constraints and soft latent specs. |
+| DFA builders (`eos_closure_dfa`, `max_non_eos_dfa`, `required_token_dfa`, `forbidden_token_dfa`, `ordered_tokens_dfa`, `conditional_max_non_eos_dfa`, `token_set_count_dfa`, `after_token_allowed_dfa`) | Build the per-constraint DFA directly from a `TokenVocabulary`. |
+| `product_dfa(...)` / `union_dfa(...)` / `complement_dfa(...)` | Combine DFAs by intersection, union, and complement. |
+| `constraints_to_dfa_from_graph(...)` | Walks supported DomiKnowS graph constraints and returns one combined DFA. |
+| `analyze_generation_constraints(...)` | Inspects each head LC and reports which were compiled and why others were skipped. |
+| `discover_generation_enforcement(...)` | Routes graph constraints into the hard DFA and soft latent specs. |
 | `HuggingFaceGenerationAdapter` | Runs true hard constrained decoding by masking logits with a DFA. |
 | `OpenAIResponsesAdapter` | Calls the OpenAI Responses API, then encodes and verifies output post hoc. |
 | `latent/` | Soft enforcement discovery, product t-norm latent losses, transition potentials, compiler recipes, and generation-level loss aggregation. |
@@ -56,10 +57,10 @@ IDs outside the listed tokens.
 ```python
 from domiknows.generation import (
     TokenVocabulary,
-    constraints_to_dfa,
-    max_non_eos,
-    no_token_after_eos,
-    required_token,
+    eos_closure_dfa,
+    max_non_eos_dfa,
+    product_dfa,
+    required_token_dfa,
 )
 
 vocabulary = TokenVocabulary(
@@ -68,14 +69,14 @@ vocabulary = TokenVocabulary(
     tokenizer=tokenizer,
 )
 
-constraints = (
-    no_token_after_eos(),
-    max_non_eos(4),
-    required_token(" The"),
-    required_token(" slide"),
+dfa = product_dfa(
+    [
+        eos_closure_dfa(vocabulary),
+        max_non_eos_dfa(vocabulary, 4),
+        required_token_dfa(vocabulary, " The"),
+        required_token_dfa(vocabulary, " slide"),
+    ]
 )
-
-dfa = constraints_to_dfa(constraints, vocabulary)
 ```
 
 The resulting DFA accepts label sequences satisfying all constraints. For
@@ -98,9 +99,7 @@ tasks:
 ```python
 from domiknows.generation import (
     GenerationEncoder,
-    max_non_eos,
-    no_token_after_eos,
-    required_token,
+    apply_all_constraints,
 )
 
 encoder = GenerationEncoder(
@@ -110,14 +109,13 @@ encoder = GenerationEncoder(
     graph_name="main",
 )
 
-graph, bundle = encoder.build_graph(
-    constraints=[
-        no_token_after_eos(),
-        max_non_eos(4),
-        required_token(" The"),
-        required_token(" slide"),
-    ]
-)
+graph, bundle = encoder.build_graph()
+with graph:
+    apply_all_constraints(
+        bundle.context,
+        max_non_eos_count=4,
+        required_tokens=[" The", " slide"],
+    )
 ```
 
 `bundle` contains the graph concepts and the vocabulary:
@@ -131,9 +129,9 @@ bundle.is_before_rel
 bundle.vocabulary
 ```
 
-Constraints that support DomiKnowS compilation are also written into
-`graph.logicalConstrains`, so the same rule can participate in DomiKnowS
-verification/loss and DFA decoding.
+The `apply_*_constraint` helpers write standard DomiKnowS logical-constraint
+expressions into `graph.logicalConstrains`.  Call `constraints_to_dfa_from_graph(graph, bundle)`
+afterwards to compile the supported shapes into a single combined DFA.
 
 ## Auto-Picking Graph Constraints
 
@@ -156,16 +154,16 @@ dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="warn")
 
 Supported graph-discovery patterns in V1:
 
-| DomiKnowS shape | Generation constraint |
+| DomiKnowS shape | Compiled DFA |
 | --- | --- |
-| `ifL(is_before_rel, ifL(EOS(first), EOS(second)))` | `EosClosureConstraint` |
-| `atMostAL(notL(EOS("x")), n)` | `MaxNonEosConstraint(n)` |
-| `atLeastAL(token("x"), n)` | `RequiredTokenConstraint(token, n)` |
-| `existsAL(token("x"))` | `RequiredTokenConstraint(token, 1)` |
-| `atMostAL(token("x"), 0)` | `ForbiddenTokenConstraint(token)` |
-| `ifL(existsAL(token("x")), atMostAL(notL(EOS("y")), n))` | `ConditionalMaxNonEosConstraint(token, n)` |
-| `andL(supported_constraint, ...)` | all child constraints must hold |
-| `orL(supported_branch, ...)` | at least one branch must hold |
+| `ifL(is_before_rel, ifL(EOS(first), EOS(second)))` | EOS-closure |
+| `atMostAL(notL(EOS("x")), n)` | max-`n` non-EOS tokens |
+| `atLeastAL(token("x"), n)` | required-token (at least `n` occurrences) |
+| `existsAL(token("x"))` | required-token (at least one occurrence) |
+| `atMostAL(token("x"), 0)` | forbidden-token |
+| `ifL(existsAL(token("x")), atMostAL(notL(EOS("y")), n))` | conditional max non-EOS |
+| `andL(supported_constraint, ...)` | DFA intersection (all child constraints hold) |
+| `orL(supported_branch, ...)` | DFA union (at least one branch holds) |
 
 Unsupported generation-relevant graph constraints are skipped, warned, or
 raised depending on `on_unsupported="ignore" | "warn" | "error"`.
@@ -308,10 +306,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from domiknows.generation import (
     GenerationEncoder,
     HuggingFaceGenerationAdapter,
+    apply_all_constraints,
     constraints_to_dfa_from_graph,
-    max_non_eos,
-    no_token_after_eos,
-    required_token,
 )
 
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
@@ -319,12 +315,13 @@ model = AutoModelForCausalLM.from_pretrained("roneneldan/TinyStories-1M")
 
 vocab = ["<|endoftext|>", " The", " slide"]
 encoder = GenerationEncoder(vocab, eos_token="<|endoftext|>", tokenizer=tokenizer)
-graph, bundle = encoder.build_graph([
-    no_token_after_eos(),
-    max_non_eos(4),
-    required_token(" The"),
-    required_token(" slide"),
-])
+graph, bundle = encoder.build_graph()
+with graph:
+    apply_all_constraints(
+        bundle.context,
+        max_non_eos_count=4,
+        required_tokens=[" The", " slide"],
+    )
 
 dfa = constraints_to_dfa_from_graph(graph, bundle)
 adapter = HuggingFaceGenerationAdapter(model, tokenizer, bundle.vocabulary)
@@ -653,9 +650,10 @@ side of constrained generation research.
 ### HMM/PFA Checker
 
 ```python
+from itertools import product
+
 from domiknows.generation.learners import (
     DiscreteHMM,
-    all_sequences,
     compare_hmm_dfa,
 )
 
@@ -667,7 +665,8 @@ hmm = DiscreteHMM(
 )
 
 dfa = hmm.extract_argmax_dfa()
-summary = compare_hmm_dfa(hmm, dfa, all_sequences(["a", "b"], max_length=3))
+corpus = [()] + [tuple(seq) for length in range(1, 4) for seq in product(["a", "b"], repeat=length)]
+summary = compare_hmm_dfa(hmm, dfa, corpus)
 ```
 
 Full discrete Baum-Welch training is available:
@@ -1073,7 +1072,7 @@ bridges around generation workflows.
   before-path implications, and simple ordered-token existence. Arbitrary
   DataNode traversal, `eqL` path filters, query/selection/sum constraints,
   comparative counts, custom predicates, and non-generation relations remain
-  solver-side unless explicitly marked with a supported `GenerationConstraint`.
+  solver-side unless reduced to one of the supported generation LC shapes.
 - HuggingFace hard decoding with constrained greedy, beam search, sampling,
   KV-cache use, and full-prefix fallback is implemented for single-prompt
   decoding. Batched constrained decoding and batched cache reordering are not
@@ -1137,5 +1136,5 @@ bridges around generation workflows.
 - Add richer backend-native hybrid adapters for vLLM/llama.cpp/Ollama guided
   decoding and server-side logprob/candidate APIs.
 - Add benchmark scripts for CTRL-G-style lexical constraints.
-- Add documentation showing how to register custom `GenerationConstraint`
-  classes.
+- Add documentation showing how to register custom DFA builders / LC patterns
+  with `graph_discovery`.

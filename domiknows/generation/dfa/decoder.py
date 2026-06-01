@@ -232,17 +232,17 @@ def mask_label_logits_for_dfa(
     return masked
 
 
-def _normalise_input_ids(input_ids: torch.Tensor | Sequence[int]) -> tuple[list[int], torch.device]:
+def _normalise_input_ids(prompt_ids: torch.Tensor | Sequence[int]) -> tuple[list[int], torch.device]:
     """Return flat token ids plus the device to use for model inputs."""
-    if isinstance(input_ids, torch.Tensor):
-        if input_ids.dim() == 2:
-            ids = input_ids[0].tolist()
-        elif input_ids.dim() == 1:
-            ids = input_ids.tolist()
+    if isinstance(prompt_ids, torch.Tensor):
+        if prompt_ids.dim() == 2:
+            ids = prompt_ids[0].tolist()
+        elif prompt_ids.dim() == 1:
+            ids = prompt_ids.tolist()
         else:
-            raise ValueError(f"expected input_ids to be 1D or 2D, got shape {tuple(input_ids.shape)}")
-        return [int(token_id) for token_id in ids], input_ids.device
-    return [int(token_id) for token_id in input_ids], torch.device("cpu")
+            raise ValueError(f"expected prompt_ids to be 1D or 2D, got shape {tuple(prompt_ids.shape)}")
+        return [int(token_id) for token_id in ids], prompt_ids.device
+    return [int(token_id) for token_id in prompt_ids], torch.device("cpu")
 
 
 def _next_logits(model, ids: list[int], device: torch.device) -> torch.Tensor:
@@ -489,7 +489,7 @@ def _filter_sampling_logits(
 
 def constrained_greedy_decode(
     model,
-    input_ids: torch.Tensor | Sequence[int],
+    prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
     max_new_tokens: int,
@@ -511,7 +511,7 @@ def constrained_greedy_decode(
         model: A HuggingFace-compatible causal language model whose forward
             pass returns an object with a ``.logits`` attribute of shape
             ``(batch, seq_len, vocab_size)``.
-        input_ids: Prompt token IDs as either a ``(1, T)`` / ``(T,)``
+        prompt_ids: Prompt token IDs as either a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs used by the DFA.
@@ -535,7 +535,7 @@ def constrained_greedy_decode(
             removes all tokens at any step.
     """
     _validate_common(max_new_tokens)
-    ids, device = _normalise_input_ids(input_ids)
+    ids, device = _normalise_input_ids(prompt_ids)
 
     state = dfa.start_state
     labels: list[int] = []
@@ -577,7 +577,7 @@ def constrained_greedy_decode(
 
 def constrained_beam_search_decode(
     model,
-    input_ids: torch.Tensor | Sequence[int],
+    prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
     max_new_tokens: int,
@@ -598,7 +598,7 @@ def constrained_beam_search_decode(
 
     Args:
         model: A HuggingFace-compatible causal language model.
-        input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
+        prompt_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs.
@@ -639,7 +639,7 @@ def constrained_beam_search_decode(
     if num_return_sequences < 1:
         raise ValueError("num_return_sequences must be at least 1")
 
-    ids, device = _normalise_input_ids(input_ids)
+    ids, device = _normalise_input_ids(prompt_ids)
     eos_token_id = _resolve_eos_token_id(vocabulary, eos_token_id)
     initial_cache_state = _cached_state_from_ids(ids, device)
     beams = [
@@ -736,7 +736,7 @@ def constrained_beam_search_decode(
 
 def constrained_sample_decode(
     model,
-    input_ids: torch.Tensor | Sequence[int],
+    prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
     max_new_tokens: int,
@@ -763,7 +763,7 @@ def constrained_sample_decode(
 
     Args:
         model: A HuggingFace-compatible causal language model.
-        input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
+        prompt_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` mapping token IDs
             to DomiKnowS label IDs.
@@ -803,7 +803,7 @@ def constrained_sample_decode(
     if temperature <= 0.0:
         raise ValueError("temperature must be positive")
 
-    ids, device = _normalise_input_ids(input_ids)
+    ids, device = _normalise_input_ids(prompt_ids)
     eos_token_id = _resolve_eos_token_id(vocabulary, eos_token_id)
     state = dfa.start_state
     labels: list[int] = []
@@ -849,7 +849,7 @@ def constrained_sample_decode(
 
 def constrained_label_greedy_decode(
     model,
-    input_ids: torch.Tensor | Sequence[int],
+    prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
     max_new_tokens: int,
@@ -875,10 +875,10 @@ def constrained_label_greedy_decode(
     6. Stop early when the EOS label is selected in an accepting DFA state.
 
     Args:
-        model: A model that exposes either a ``next_label_logits(input_ids)``
+        model: A model that exposes either a ``next_label_logits(prompt_ids)``
             method or a standard HuggingFace forward pass returning logits of
             shape ``(1, seq_len, label_count)``.
-        input_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
+        prompt_ids: Prompt token IDs as a ``(1, T)`` / ``(T,)``
             :class:`torch.Tensor` or a plain Python sequence of ints.
         vocabulary: :class:`~.dfa.vocabulary.TokenVocabulary` providing the
             label ↔ token-ID mapping.
@@ -902,7 +902,7 @@ def constrained_label_greedy_decode(
             masking removes all labels at any step.
     """
     _validate_common(max_new_tokens)
-    ids, device = _normalise_input_ids(input_ids)
+    ids, device = _normalise_input_ids(prompt_ids)
     eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
     state = dfa.start_state
     labels: list[int] = []
@@ -949,7 +949,7 @@ def constrained_label_greedy_decode(
 
 def constrained_label_beam_search_decode(
     model,
-    input_ids: torch.Tensor | Sequence[int],
+    prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
     max_new_tokens: int,
@@ -978,7 +978,7 @@ def constrained_label_beam_search_decode(
     if num_return_sequences < 1:
         raise ValueError("num_return_sequences must be at least 1")
 
-    ids, device = _normalise_input_ids(input_ids)
+    ids, device = _normalise_input_ids(prompt_ids)
     eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
     emittable = _emittable_labels(model, vocabulary)
     beams = [BeamCandidate(token_ids=ids, labels=[], state=dfa.start_state, score=0.0)]
@@ -1058,7 +1058,7 @@ def constrained_label_beam_search_decode(
 
 def constrained_label_sample_decode(
     model,
-    input_ids: torch.Tensor | Sequence[int],
+    prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
     max_new_tokens: int,
@@ -1081,7 +1081,7 @@ def constrained_label_sample_decode(
     if temperature <= 0.0:
         raise ValueError("temperature must be positive")
 
-    ids, device = _normalise_input_ids(input_ids)
+    ids, device = _normalise_input_ids(prompt_ids)
     eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
     state = dfa.start_state
     labels: list[int] = []

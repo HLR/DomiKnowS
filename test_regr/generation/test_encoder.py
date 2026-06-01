@@ -2,9 +2,9 @@ import pytest
 
 from domiknows.generation import (
     GenerationEncoder,
+    apply_eos_closure_constraint,
+    apply_max_non_eos_constraint,
     generation_bundle_from_graph,
-    max_non_eos,
-    no_token_after_eos,
 )
 from domiknows.graph import Concept, EnumConcept, Graph, Relation
 
@@ -20,7 +20,10 @@ def test_generation_encoder_builds_domiknows_graph():
         eos_token="<eos>",
         tokenizer=FakeTokenizer(),
     )
-    graph, bundle = encoder.build_graph([no_token_after_eos(), max_non_eos(1)])
+    graph, bundle = encoder.build_graph()
+    with graph:
+        apply_eos_closure_constraint(bundle.context)
+        apply_max_non_eos_constraint(bundle.context, 1)
 
     assert graph is not None
     assert bundle.vocabulary.label_count == 3

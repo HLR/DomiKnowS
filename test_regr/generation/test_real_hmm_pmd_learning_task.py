@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from domiknows.generation import EnergyCompactLabelGenerationHead, constraints_to_dfa_from_graph, discover_generation_constraints
-from domiknows.generation.learners import GraphHMMGenerationHead, HMMGenerationHead
+from domiknows.generation.learners import GraphHMMGenerationHead, PromptConditionedHMMGenerationHead
 
 
 def import_task_module(name: str):
@@ -146,8 +146,8 @@ def test_real_hmm_pmd_learning_program_builds_with_default_discrete_hmm_learner(
 
     assert artifacts.program is not None
     assert artifacts.learner_name == "discrete-hmm"
-    assert isinstance(artifacts.model, HMMGenerationHead)
-    assert any(isinstance(module, HMMGenerationHead) for module in artifacts.program.model.modules())
+    assert isinstance(artifacts.model, PromptConditionedHMMGenerationHead)
+    assert any(isinstance(module, PromptConditionedHMMGenerationHead) for module in artifacts.program.model.modules())
 
 
 def test_real_hmm_pmd_learning_program_builds_with_energy_learner():
@@ -225,12 +225,12 @@ def test_real_hmm_pmd_learning_run_demo_main_runs_offline(capsys):
     assert "One-constraint DomiKnowS PMD learning demo" in output
     assert "Active compact-label learner: discrete-hmm" in output
     assert "Parameter meaning:" in output
-    assert "initial_logits: learns which hidden state" in output
+    assert "prompt_encoder / initial_projector" in output
     assert "transition_logits: learns how hidden states move" in output
     assert "emission_logits: learns which symbols" in output
     assert "hidden-state example: one state can mean 'B has not appeared yet'" in output
     assert "emission example: the 'B already appeared' state" in output
-    assert "plain DiscreteHMM-backed learner" in output
+    assert "prompt-conditioned DiscreteHMM-backed learner" in output
     assert "Rule: token B may appear at most once" in output
     assert "Generator stream: prompt-conditioned outputs are used for PMD training" in output
     assert "Prompt meanings: AB prefers A/B tokens; CD prefers C/D tokens; short prefers early END" in output

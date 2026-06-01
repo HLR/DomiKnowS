@@ -2,32 +2,34 @@ import torch
 
 import domiknows.generation.dfa.visualization.server as visual_server
 from domiknows.generation.dfa._constraints import (
-    WeightedFiniteAutomaton,
-    constraints_to_dfa,
+    eos_closure_dfa,
+    forbidden_token_dfa,
+    max_non_eos_dfa,
+    required_token_dfa,
+)
+from domiknows.generation.dfa import product_dfa
+from domiknows.generation.dfa.vocabulary import TokenVocabulary
+from domiknows.generation.dfa.visualization import (
     create_generation_debug_app,
     dfa_to_dot,
     explain_dfa_rejection,
-    forbidden_token,
-    max_non_eos,
-    no_token_after_eos,
     product_trace_to_dot,
     reachable_product_graph,
-    required_token,
     trace_dfa,
     trace_product_automaton,
 )
+from domiknows.generation.learners import WeightedFiniteAutomaton
 
 
 def _demo_dfa():
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>")
-    dfa = constraints_to_dfa(
+    dfa = product_dfa(
         [
-            no_token_after_eos(),
-            max_non_eos(2),
-            required_token("A"),
-            forbidden_token("B"),
-        ],
-        vocab,
+            eos_closure_dfa(vocab),
+            max_non_eos_dfa(vocab, 2),
+            required_token_dfa(vocab, "A"),
+            forbidden_token_dfa(vocab, "B"),
+        ]
     )
     return vocab, dfa
 

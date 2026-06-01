@@ -1,7 +1,7 @@
 """DomiKnowS graph encoder for token-generation tasks.
 
-This module bridges the generation vocabulary and constraints subsystems with
-the DomiKnowS graph/concept layer.  It provides:
+This module bridges the generation vocabulary with the DomiKnowS graph/concept
+layer.  It provides:
 
 :class:`GenerationBundle`
     A plain dataclass holding all graph objects built by
@@ -9,10 +9,8 @@ the DomiKnowS graph/concept layer.  It provides:
     construction.
 
 :class:`GenerationGraphContext`
-    A concrete implementation of the
-    :class:`~.dfa.DomiKnowSGenerationContext` protocol.  Wraps the
-    graph objects from a :class:`GenerationBundle` and translates vocabulary
-    predicates into DomiKnowS logical expressions.
+    Wraps the graph objects from a :class:`GenerationBundle` and translates
+    vocabulary predicates into DomiKnowS logical expressions.
 
 :class:`GenerationEncoder`
     Factory that constructs the shared DomiKnowS graph for a generation task
@@ -70,11 +68,12 @@ class GenerationBundle:
 
 
 class GenerationGraphContext:
-    """Concrete implementation of the DomiKnowS generation context protocol.
+    """Wraps generation graph concepts and exposes DomiKnowS predicate helpers.
 
     Wraps the graph objects produced by :class:`GenerationEncoder` and
     translates vocabulary-level token predicates into DomiKnowS logical
-    expressions.  Passed to each constraint's ``apply_domiknows`` method
+    expressions.  Passed to the ``apply_*_constraint`` helpers in
+    :mod:`.generation_constraints` (and to user code that writes raw LCs)
     during graph construction.
 
     Attributes:

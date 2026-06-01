@@ -7,15 +7,17 @@ from typing import Any, Mapping
 import torch
 
 from ..common.base import CompactLabelGenerationHead
-from ..hmm.constraints import validate_mask
-from ..hmm.graph_head_utils import (
+from ..common.utils import (
     _coerce_label_to_token_id,
-    _flat_input_ids,
     _invert_label_to_token_id,
+    _validate_label,
+)
+from ..hmm.graph.constraints import validate_mask
+from ..hmm.graph.graph_head_utils import (
+    _flat_input_ids,
     _labels_from_input_ids,
     _normalize_vector,
     _target_label_batch,
-    _validate_label,
     _validate_wfa_shapes,
 )
 
@@ -121,7 +123,13 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
         """List parameter names currently participating in gradient updates."""
         return [name for name, parameter in self.named_parameters() if parameter.requires_grad]
 
-    def sequence_log_probs(self, target_labels: torch.Tensor | Sequence[int], *, lengths=None) -> torch.Tensor:
+    def sequence_log_probs(
+        self,
+        target_labels: torch.Tensor | Sequence[int],
+        *,
+        lengths=None,
+        **_kwargs,
+    ) -> torch.Tensor:
         """Compute per-step log-probabilities for target label sequences."""
         labels, _lengths_t, step_mask, squeeze = _target_label_batch(target_labels, self.pad_size, lengths=lengths)
         outputs = []
@@ -139,7 +147,7 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
         result = result * step_mask.to(dtype=result.dtype).unsqueeze(-1)
         return result[0] if squeeze else result
 
-    def next_label_logits(self, input_ids: torch.Tensor | Sequence[int]) -> torch.Tensor:
+    def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
         """Return unnormalized next-label scores for a token-id prefix."""
         prefix_labels = _labels_from_input_ids(input_ids, self._token_id_to_label, self.label_count)
         state = self.initial
@@ -147,6 +155,6 @@ class GraphSpectralGenerationHead(CompactLabelGenerationHead):
             state = state @ self.operators[label]
         return torch.stack([state @ self.operators[label] @ self.final for label in range(self.label_count)])
 
-    def forward(self, _contains, instruction_tokens: torch.Tensor, target_labels: torch.Tensor):
+    def forward(self, _contains, instruction_tokens: torch.Tensor, target_labels: torch.Tensor, **_kwargs):
         """PMD module interface: returns sequence log-probabilities."""
         return self.sequence_log_probs(target_labels)

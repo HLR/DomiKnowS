@@ -12,11 +12,11 @@ from domiknows.generation import (
     HybridScoreWeights,
     LatentLossBreakdown,
     ManualConstraintSelector,
-    constraints_to_dfa,
     discover_generation_enforcement,
-    forbidden_token,
-    no_token_after_eos,
-    required_token,
+    eos_closure_dfa,
+    forbidden_token_dfa,
+    product_dfa,
+    required_token_dfa,
 )
 
 
@@ -169,9 +169,18 @@ def test_constraint_selector_returns_expected_named_bundle():
         weights=HybridScoreWeights(),
     )
     controller.constraint_selector = ManualConstraintSelector({"strict": "strict"}, default="loose")
+    vocab = controller.vocabulary
+    loose_dfa = product_dfa([eos_closure_dfa(vocab), required_token_dfa(vocab, " cat")])
+    strict_dfa = product_dfa(
+        [
+            eos_closure_dfa(vocab),
+            required_token_dfa(vocab, " cat"),
+            forbidden_token_dfa(vocab, " dog"),
+        ]
+    )
     bundles = [
-        ConstraintBundle("loose", (no_token_after_eos(), required_token(" cat"))),
-        ConstraintBundle("strict", (no_token_after_eos(), required_token(" cat"), forbidden_token(" dog"))),
+        ConstraintBundle("loose", loose_dfa),
+        ConstraintBundle("strict", strict_dfa),
     ]
 
     selected = controller.select_constraints("use strict constraints", bundles)

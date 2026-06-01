@@ -133,8 +133,11 @@ class SpectralWFAGenerationHead(CompactLabelGenerationHead):
         *,
         transition_potential: TransitionPotentialInput = None,
         transition_potential_mode: str = "multiply",
+        **kwargs,
     ) -> torch.Tensor:
         """Return next-step signed WFA scores over compact labels."""
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         return self._next_logits_from_prefix_labels(
             self._labels_from_input_ids(input_ids),
             transition_potential=transition_potential,
@@ -162,8 +165,11 @@ class SpectralWFAGenerationHead(CompactLabelGenerationHead):
         lengths: torch.Tensor | Sequence[int] | None = None,
         transition_potential: TransitionPotentialInput = None,
         transition_potential_mode: str = "multiply",
+        **kwargs,
     ) -> torch.Tensor:
         """Return teacher-forced log-probs shaped ``[batch, seq, label_count]``."""
+        if transition_potential is None:
+            transition_potential = kwargs.get("transition_potential")
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -190,9 +196,14 @@ class SpectralWFAGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor,
         target_labels: torch.Tensor,
         transition_potential: TransitionPotentialInput = None,
+        **kwargs,
     ):
         """Teacher-forced log-probs for DomiKnowS generation concept learning."""
-        return self.sequence_log_probs(target_labels, transition_potential=transition_potential)
+        return self.sequence_log_probs(
+            target_labels,
+            transition_potential=transition_potential,
+            **kwargs,
+        )
 
     def trainable_parameter_names(self) -> list[str]:
         """Return names of parameters optimized by a normal Torch optimizer."""
