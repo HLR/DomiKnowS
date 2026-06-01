@@ -38,7 +38,6 @@ _EXPORTS = {
     'HMMParameters': '.hmm.discrete.discreteHMM',
     'NeuralNGramCompactLabelGenerationHead': '.compact',
     'ProductDecoderState': '.wfa.hankel',
-    'PromptConditionedHMMGenerationHead': '.hmm.discrete.promptConditionedDiscreteHMMLearner',
     'PromptConditionedSpectralWFAGenerationHead': '.wfa.prompt_conditioned_head',
     'PromptEmbeddingEncoder': '.common.prompt_encoders',
     'SpectralBasis': '.wfa.spectral_learning',

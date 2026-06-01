@@ -102,11 +102,12 @@ uv run --project Tasks/hf_generation python Tasks/hf_generation/learn_demo.py --
 
 ### HMM / WFA Compact Automata Heads
 
-`HMMGenerationHead`, `SpectralWFAGenerationHead`,
-`PromptConditionedHMMGenerationHead`, and
+`HMMGenerationHead`, `SpectralWFAGenerationHead`, and
 `PromptConditionedSpectralWFAGenerationHead` are Torch compact-label modules.
-They can be attached to `token[generated_token]` and trained by normal Torch
-optimizers together with PMD constraint loss.
+`HMMGenerationHead` covers both unconditional and prompt-conditioned discrete
+HMMs — pass `prompt_conditioning="initial"` (plus the optional gating knobs) to
+activate prompt conditioning. They can be attached to `token[generated_token]`
+and trained by normal Torch optimizers together with PMD constraint loss.
 
 Use this path when you want inspectable compact sequence dynamics rather than a
 black-box head.

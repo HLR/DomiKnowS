@@ -27,7 +27,6 @@ _EXPORTS = {
     'HMMForwardBackward': '.discrete.discreteHMM',
     'HMMGenerationHead': '.discrete.discreteHMMLearner',
     'HMMParameters': '.discrete.discreteHMM',
-    'PromptConditionedHMMGenerationHead': '.discrete.promptConditionedDiscreteHMMLearner',
     'StatePredicateTransitionSpec': '.graph.constraints',
     'TransitionMaskSpec': '.graph.constraints',
     'ViterbiResult': '.graph',

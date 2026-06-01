@@ -838,7 +838,7 @@ DFA-allowed labels, but it is not a replacement for hard DFA decoding.
 
 ### Prompt-Conditioned Automata Heads
 
-`PromptConditionedHMMGenerationHead` and
+`HMMGenerationHead` (with `prompt_conditioning="initial"`) and
 `PromptConditionedSpectralWFAGenerationHead` make the small automata models
 learn a prompt-conditioned proposal:
 
@@ -849,21 +849,26 @@ prompt + generated prefix -> step-adaptive dynamics
 automaton state + dynamics -> output labels
 ```
 
-By default, current callers still get initial-state conditioning only. Pass
-`dynamics_conditioning="gated"` to let the prompt choose a mixture over several
-global dynamics experts. Expert 0 is the familiar base transition/emission
-parameter, so the automaton remains inspectable while becoming prompt-aware.
-Pass `step_dynamics_conditioning="prefix_gated"` with gated dynamics to
-recompute expert weights at each generated step from prompt features plus a
-mean-pooled learned embedding of generated labels seen so far.
+`HMMGenerationHead` is the single unified discrete-HMM head — pass
+`prompt_conditioning="none"` (default) for the vanilla unconditional head and
+`prompt_conditioning="initial"` to activate the prompt encoder and any of the
+gating modes below.
+
+Pass `dynamics_conditioning="gated"` to let the prompt choose a mixture over
+several global dynamics experts. Expert 0 is the familiar base
+transition/emission parameter, so the automaton remains inspectable while
+becoming prompt-aware. Pass `step_dynamics_conditioning="prefix_gated"` with
+gated dynamics to recompute expert weights at each generated step from prompt
+features plus a mean-pooled learned embedding of generated labels seen so far.
 
 ```python
-from domiknows.generation.learners import PromptConditionedHMMGenerationHead, hmm_sequence_nll
+from domiknows.generation.learners import HMMGenerationHead, hmm_sequence_nll
 
-head = PromptConditionedHMMGenerationHead(
+head = HMMGenerationHead(
     label_count=bundle.vocabulary.label_count,
     state_count=3,
     label_to_token_id=label_token_id_map(bundle.vocabulary),
+    prompt_conditioning="initial",
     prompt_encoder_type="embedding",
     prompt_vocab_size=1024,
     dynamics_conditioning="gated",

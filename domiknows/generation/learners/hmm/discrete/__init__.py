@@ -13,7 +13,6 @@ from .factors import (
     hmm_factor_sequence_nll,
     hmm_forward_backward_factors,
 )
-from .promptConditionedDiscreteHMMLearner import PromptConditionedHMMGenerationHead
 
 __all__ = [
     "BaumWelchResult",
@@ -25,7 +24,6 @@ __all__ = [
     "HMMForwardBackward",
     "HMMGenerationHead",
     "HMMParameters",
-    "PromptConditionedHMMGenerationHead",
     "apply_hmm_dp_consistency_constraints",
     "baum_welch_train",
     "compare_hmm_dfa",

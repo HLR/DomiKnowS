@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from domiknows.generation import EnergyCompactLabelGenerationHead, constraints_to_dfa_from_graph, discover_generation_constraints
-from domiknows.generation.learners import GraphHMMGenerationHead, PromptConditionedHMMGenerationHead
+from domiknows.generation.learners import GraphHMMGenerationHead, HMMGenerationHead
 
 
 def import_task_module(name: str):
@@ -146,8 +146,9 @@ def test_real_hmm_pmd_learning_program_builds_with_default_discrete_hmm_learner(
 
     assert artifacts.program is not None
     assert artifacts.learner_name == "discrete-hmm"
-    assert isinstance(artifacts.model, PromptConditionedHMMGenerationHead)
-    assert any(isinstance(module, PromptConditionedHMMGenerationHead) for module in artifacts.program.model.modules())
+    assert isinstance(artifacts.model, HMMGenerationHead)
+    assert artifacts.model.prompt_conditioning == "initial"
+    assert any(isinstance(module, HMMGenerationHead) and module.prompt_conditioning == "initial" for module in artifacts.program.model.modules())
 
 
 def test_real_hmm_pmd_learning_program_builds_with_energy_learner():

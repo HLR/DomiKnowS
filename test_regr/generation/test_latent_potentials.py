@@ -3,7 +3,6 @@ import torch
 
 from domiknows.generation import (
     HMMGenerationHead,
-    PromptConditionedHMMGenerationHead,
     PromptConditionedSpectralWFAGenerationHead,
     SpectralWFAGenerationHead,
     WeightedFiniteAutomaton,
@@ -175,10 +174,11 @@ def test_prompt_conditioned_heads_apply_potential_after_prompt_dynamics():
     prompt = torch.tensor([[1, 2, 3]])
     labels = torch.tensor([1, 2, 0])
     potential = forbid_hmm_transition(0, 1, state_count=2)
-    hmm_head = PromptConditionedHMMGenerationHead(
+    hmm_head = HMMGenerationHead(
         label_count=3,
         state_count=2,
         pad_size=3,
+        prompt_conditioning="initial",
         dynamics_conditioning="gated",
         dynamics_expert_count=2,
         random_seed=5,

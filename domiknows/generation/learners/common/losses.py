@@ -12,14 +12,13 @@ from .utils import TransitionPotentialInput, _empty_or_prompt, _target_labels
 
 if TYPE_CHECKING:
     from ..hmm.discrete.discreteHMMLearner import HMMGenerationHead
-    from ..hmm.discrete.promptConditionedDiscreteHMMLearner import PromptConditionedHMMGenerationHead
     from ..wfa.prompt_conditioned_head import PromptConditionedSpectralWFAGenerationHead
     from ..wfa.head import SpectralWFAGenerationHead
 
 __all__ = ["allowed_mass_loss", "hmm_sequence_nll", "wfa_sequence_energy_loss"]
 
 def hmm_sequence_nll(
-    head: HMMGenerationHead | PromptConditionedHMMGenerationHead,
+    head: HMMGenerationHead,
     target_labels: torch.Tensor | Sequence[int],
     *,
     instruction_tokens: torch.Tensor | Sequence[int] | None = None,
@@ -28,9 +27,8 @@ def hmm_sequence_nll(
 ) -> torch.Tensor:
     """Negative log-likelihood of a target label sequence under an HMM head."""
     from ..hmm.discrete.discreteHMMLearner import HMMGenerationHead
-    from ..hmm.discrete.promptConditionedDiscreteHMMLearner import PromptConditionedHMMGenerationHead
 
-    if not isinstance(head, (HMMGenerationHead, PromptConditionedHMMGenerationHead)):
+    if not isinstance(head, HMMGenerationHead):
         raise TypeError("hmm_sequence_nll expects an HMM generation head")
     device = head.transition_logits.device
     labels = _target_labels(target_labels, head.pad_size, device=device)
