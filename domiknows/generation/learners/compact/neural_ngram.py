@@ -1,4 +1,27 @@
-"""Neural n-gram compact-label learner head."""
+"""Neural n-gram compact-label learner head.
+
+This module implements a compact autoregressive label model with a finite
+Markov context. At each step, the scorer conditions on:
+
+- a pooled prompt representation from ``instruction_tokens``, and
+- the last ``context_size`` generated labels (left-padded with BOS sentinel).
+
+How this is used as a generative model with a DFA
+--------------------------------------------------
+The n-gram head provides unconstrained next-label logits. A DFA-guided decoder
+can enforce valid sequences externally:
+
+1. Track DFA state ``q`` and generated label prefix.
+2. Call ``next_label_logits(input_ids_with_prefix)``.
+3. Query DFA transitions from ``q`` to get allowed labels.
+4. Mask all disallowed labels in logits (for example to ``-inf``).
+5. Sample or argmax from the masked distribution.
+6. Advance DFA state with the chosen label and append to prefix.
+7. Repeat until acceptance/termination criteria are reached.
+
+This keeps neural scoring modular while guaranteeing symbolic constraints
+during decoding.
+"""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -22,7 +45,11 @@ from .utils import (
 )
 
 class NeuralNGramCompactLabelGenerationHead(CompactLabelGenerationHead):
-    """Neural Markov head over the last ``context_size`` compact labels."""
+    """Neural Markov head over the last ``context_size`` compact labels.
+
+    ``label_count`` labels are predicted over ``[0, label_count)`` and the
+    internal sentinel ``label_count`` is used as BOS/padding in contexts.
+    """
 
     def __init__(
         self,
@@ -78,6 +105,20 @@ class NeuralNGramCompactLabelGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         **_kwargs,
     ) -> torch.Tensor:
+        """Return token-level log probabilities using teacher forcing.
+
+        For position ``t``, the model builds a context from gold labels
+        ``[max(0, t-context_size), ..., t-1]``, left-padded with BOS sentinel.
+
+        Args:
+            target_labels: Gold label ids in ``[0, label_count)``.
+            lengths: Optional valid lengths used to zero padded tail positions.
+            instruction_tokens: Optional prompt tokens conditioning generation.
+
+        Returns:
+            Tensor of shape ``[batch, seq_len, label_count]`` (or squeezed
+            ``[seq_len, label_count]`` for a single unbatched sample).
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -98,6 +139,15 @@ class NeuralNGramCompactLabelGenerationHead(CompactLabelGenerationHead):
         return log_probs[0] if squeeze else log_probs
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
+        """Compute one-step next-label logits for autoregressive decoding.
+
+        ``input_ids`` may include prompt tokens followed by generated label
+        tokens. The method derives the latest n-gram context from the prefix
+        and returns logits over the next label in ``[0, label_count)``.
+
+        This is the main API for DFA-constrained decoding: obtain logits here,
+        apply DFA-state masks externally, then sample/argmax among valid labels.
+        """
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         context = self._context_from_prefix(prefix_labels).unsqueeze(0).unsqueeze(0)
         return self._logits_for_contexts(prompt_ids, context)[0, 0]
@@ -110,6 +160,7 @@ class NeuralNGramCompactLabelGenerationHead(CompactLabelGenerationHead):
         return self.mlp[0].weight.device
 
     def _split_prompt_and_prefix(self, input_ids: torch.Tensor | Sequence[int]) -> tuple[torch.Tensor, list[int]]:
+        """Split flat ids into prompt-token and generated-label segments."""
         ids, _device = _normalise_flat_ids(input_ids)
         split = _first_generated_index(ids, self._token_id_to_label)
         prompt_ids = ids[:split] or [0]
@@ -120,6 +171,7 @@ class NeuralNGramCompactLabelGenerationHead(CompactLabelGenerationHead):
         return prompt, labels
 
     def _context_tensor(self, prefix_labels: torch.Tensor) -> torch.Tensor:
+        """Build batched fixed-width contexts from batched label prefixes."""
         batch = prefix_labels.shape[0]
         context = torch.full((batch, self.context_size), self.label_count, dtype=torch.long, device=prefix_labels.device)
         if prefix_labels.shape[1] > 0:
@@ -128,11 +180,13 @@ class NeuralNGramCompactLabelGenerationHead(CompactLabelGenerationHead):
         return context
 
     def _context_from_prefix(self, prefix_labels: Sequence[int]) -> torch.Tensor:
+        """Build one fixed-width context from an in-memory label prefix."""
         values = [_validate_label(label, self.label_count) for label in prefix_labels[-self.context_size :]]
         padded = [self.label_count] * (self.context_size - len(values)) + values
         return torch.tensor(padded, dtype=torch.long, device=self._device)
 
     def _logits_for_contexts(self, prompt: torch.Tensor, contexts: torch.Tensor) -> torch.Tensor:
+        """Score each context row and return logits over labels."""
         _validate_token_ids(prompt, self.vocab_size, "instruction_tokens")
         prompt_features = self.prompt_embedding(prompt).mean(dim=1)
         if prompt_features.shape[0] == 1 and contexts.shape[0] > 1:

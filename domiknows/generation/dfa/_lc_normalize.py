@@ -54,6 +54,24 @@ class _NotNode:
 
 
 @dataclass(frozen=True)
+class _IfNode:
+    """Normalized ``ifL`` node.
+
+    ``ifL`` is *not* rewritten via boolean identities (e.g. ``ifL(A, B) ≡
+    ¬A ∨ B``) because the matcher in :mod:`graph_discovery` recognises specific
+    ``ifL`` shapes — EOS-closure, conditional max non-EOS, after-trigger
+    implication — by their nested ``ifL`` structure.  Instead, this mirror node
+    preserves the ``ifL`` arity and order while letting any LC children be
+    recursively normalized (so a nested ``orL`` of path-bound ``token_value``\
+    s inside an ``ifL`` is visible to the matcher as an ``_OrNode`` rather than
+    a raw DomiKnowS ``orL`` LC).
+    """
+
+    e: tuple
+    _kind: str = "ifL"
+
+
+@dataclass(frozen=True)
 class _TopNode:
     """Constant-true subtree (compiled to ``accept_all_dfa``)."""
 
@@ -145,9 +163,11 @@ def _normalize(lc, bundle):
         return _normalize_negated_aggregate(lc, bundle, base_op="andL")
     if op == "norL":
         return _normalize_negated_aggregate(lc, bundle, base_op="orL")
-    # Other LC types (atMostAL, existsAL, ifL, …) and original leaves pass
-    # through unchanged.  Build a single-element atom set so the caller can
-    # dedup later.
+    if op == "ifL":
+        return _normalize_if(lc, bundle)
+    # Other LC types (atMostAL, existsAL, exactAL, …) and original leaves
+    # pass through unchanged.  Build a single-element atom set so the caller
+    # can dedup later.
     key = _canonical_key(lc, bundle)
     atoms = frozenset({key}) if key is not None else frozenset()
     return lc, atoms, ()
@@ -235,6 +255,38 @@ def _normalize_negated_aggregate(lc, bundle, *, base_op: str):
     synthetic = _AndNode(tuple(getattr(lc, "e", ()))) if base_op == "andL" else _OrNode(tuple(getattr(lc, "e", ())))
     base_tree, atoms, irregular = _normalize(synthetic, bundle)
     return _push_negation(base_tree, bundle, atoms, irregular)
+
+
+def _normalize_if(lc, bundle):
+    """Normalize ``ifL`` by recursing into LC children only.
+
+    Unlike :func:`_normalize_and` / :func:`_normalize_or`, the ``ifL`` boolean
+    is left structurally intact — the matcher in :mod:`graph_discovery`
+    recognises specific ``ifL`` shapes by their nested arrangement
+    (EOS-closure, conditional max non-EOS, after-trigger implication), so a
+    De Morgan-style rewrite would defeat the leaf-pattern recognition.
+
+    Non-LC items (concept 4-tuples, ``V`` instances, plain ``int``\\ s) pass
+    through untouched.  LC children are dispatched through :func:`_normalize`,
+    so a nested ``orL`` of path-bound ``token_value``\\ s becomes an
+    ``_OrNode`` mirror with ``_kind == "orL"`` and the matcher's
+    :func:`_path_token_predicate_from_flat` can recognise it via :func:`kind`.
+    """
+    children: list = []
+    atoms: set = set()
+    irregular: list = []
+    for child in getattr(lc, "e", ()):
+        # Leaf-like items (no ``e`` attribute and not a mirror node) pass
+        # through unchanged: this catches the concept 4-tuples and V instances
+        # that DomiKnowS flattens into ``ifL.e`` for ``token_value`` arguments.
+        if not hasattr(child, "e") and getattr(child, "_kind", None) is None:
+            children.append(child)
+            continue
+        norm_child, child_atoms, child_irregular = _normalize(child, bundle)
+        atoms.update(child_atoms)
+        irregular.extend(child_irregular)
+        children.append(norm_child)
+    return _IfNode(tuple(children)), atoms, tuple(irregular)
 
 
 def _push_negation(inner, bundle, inner_atoms, inner_irregular):
@@ -444,9 +496,17 @@ def _canonical_key(node, bundle):
         return ("exactAL", _direct_token(node.e, bundle), _last_int(node.e))
     if op == "existsAL":
         return ("existsAL", _exists_token(node, bundle))
-    # Anything else (with paths, V instances, eqL filters, …): use a
-    # structural fallback via repr.  Not perfect, but conservative — if two
-    # nodes have different reprs they are simply not deduped.
+    # Raw items that flow through DomiKnowS LCs unchanged (concept 4-tuples,
+    # ``V`` instances, plain ``int``\\ s) don't have an ``e`` attribute and
+    # have no meaningful structural key.  Returning ``None`` disables
+    # dedup for them — without this, every concept tuple under an ``orL`` or
+    # ``andL`` would map to the same fallback key and the second-and-later
+    # siblings would be collapsed by ``_dedup_with_*``.
+    if not hasattr(node, "e"):
+        return None
+    # Other LC types (eqL filters, sumL/iotaL/…): structural fallback via repr.
+    # Not perfect, but conservative — if two nodes have different reprs they
+    # are simply not deduped.
     try:
         return ("_lc", op, repr(getattr(node, "e", ())))
     except Exception:  # pragma: no cover - very defensive

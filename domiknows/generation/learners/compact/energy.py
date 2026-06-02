@@ -1,4 +1,29 @@
-"""Energy compact-label learner head."""
+"""Energy compact-label learner head.
+
+This module implements an autoregressive local energy model in compact label
+space. For each decoding step, it computes an energy value per candidate label:
+
+- lower energy means the label is more compatible with prompt and prefix,
+- higher energy means the label is less preferred.
+
+The public next-step interface exposes logits as negative energies so it can be
+used by standard decoders.
+
+How this is used as a generative model with a DFA
+--------------------------------------------------
+The model itself is an unconstrained scorer. A DFA-based decoder enforces
+structural validity externally:
+
+1. Keep DFA state q and generated label prefix.
+2. Call next_label_logits(input_ids_with_prefix) to get -energy logits.
+3. Ask the DFA for labels reachable from state q.
+4. Mask disallowed labels in logits (for example set to -inf).
+5. Sample or argmax from masked logits.
+6. Transition DFA state with the chosen label and append to prefix.
+7. Repeat until acceptance or stopping criterion.
+
+This cleanly separates neural preference modeling from symbolic constraints.
+"""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -27,6 +52,9 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
     Lower energy means a more preferred next compact label.  The current
     compact decoders consume ``-energy`` through ``next_label_logits`` and then
     apply their normal DFA mask.
+
+    The context is finite-width (context_size) and left-padded with sentinel
+    id label_count when the prefix is shorter than context_size.
     """
 
     def __init__(
@@ -81,7 +109,10 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         prefix_labels: torch.Tensor | Sequence[int],
         next_label: int,
     ) -> torch.Tensor:
-        """Return the scalar local energy for one prompt/prefix/next-label."""
+        """Return local energy for one prompt, prefix, and candidate label.
+
+        Lower values indicate higher preference under the model.
+        """
         label = _validate_label(int(next_label), self.label_count)
         prompt = _normalise_prompt_ids(instruction_tokens, device=self._device)
         if isinstance(prefix_labels, torch.Tensor):
@@ -98,7 +129,11 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         lengths: torch.Tensor | Sequence[int] | None = None,
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
     ) -> torch.Tensor:
-        """Return summed local energies for teacher-forced compact labels."""
+        """Return summed teacher-forced local energies for target labels.
+
+        For each position, context is built from prior gold labels. The method
+        gathers the energy of each gold next label and sums over valid positions.
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -141,6 +176,11 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         **_kwargs,
     ) -> torch.Tensor:
+        """Return token-level log probabilities induced by local energies.
+
+        Logits are computed as negative energies and normalized with softmax,
+        giving a locally normalized autoregressive distribution.
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -160,6 +200,12 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         return log_probs[0] if squeeze else log_probs
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
+        """Compute one-step logits for autoregressive constrained decoding.
+
+        The returned vector is -energy over candidate labels in [0, label_count).
+        This is the expected entrypoint for DFA-constrained decoding: obtain
+        logits here, apply DFA-state masking externally, then sample or argmax.
+        """
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         context = self._context_from_prefix(prefix_labels).reshape(1, 1, self.context_size)
         return -self._energies_for_contexts(prompt_ids, context)[0, 0]
@@ -172,6 +218,7 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         return self.energy_mlp[0].weight.device
 
     def _split_prompt_and_prefix(self, input_ids: torch.Tensor | Sequence[int]) -> tuple[torch.Tensor, list[int]]:
+        """Split flat ids into prompt-token and generated-label segments."""
         ids, _device = _normalise_flat_ids(input_ids)
         split = _first_generated_index(ids, self._token_id_to_label)
         prompt_ids = ids[:split] or [0]
@@ -182,6 +229,7 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         return prompt, labels
 
     def _context_tensor(self, prefix_labels: torch.Tensor) -> torch.Tensor:
+        """Build batched fixed-width contexts from batched label prefixes."""
         batch = prefix_labels.shape[0]
         context = torch.full((batch, self.context_size), self.label_count, dtype=torch.long, device=prefix_labels.device)
         if prefix_labels.shape[1] > 0:
@@ -190,11 +238,13 @@ class EnergyCompactLabelGenerationHead(CompactLabelGenerationHead):
         return context
 
     def _context_from_prefix(self, prefix_labels: Sequence[int]) -> torch.Tensor:
+        """Build one fixed-width context from an in-memory label prefix."""
         values = [_validate_label(label, self.label_count) for label in prefix_labels[-self.context_size :]]
         padded = [self.label_count] * (self.context_size - len(values)) + values
         return torch.tensor(padded, dtype=torch.long, device=self._device)
 
     def _energies_for_contexts(self, prompt: torch.Tensor, contexts: torch.Tensor) -> torch.Tensor:
+        """Return per-label energies for each (prompt, context) row."""
         _validate_token_ids(prompt, self.vocab_size, "instruction_tokens")
         prompt_features = self.prompt_embedding(prompt).mean(dim=1)
         if prompt_features.shape[0] == 1 and contexts.shape[0] > 1:

@@ -1,4 +1,27 @@
-"""GRU compact-label learner head."""
+"""GRU compact-label learner head.
+
+This module implements a compact autoregressive label model with a GRU core.
+At each step, the model predicts the next label in ``[0, label_count)`` from:
+
+- a prompt-conditioned initial hidden state, and
+- the generated label prefix (teacher-forced during training).
+
+How this is used as a generative model with a DFA
+--------------------------------------------------
+The GRU head returns unconstrained next-label logits. A DFA-based decoder can
+enforce validity by wrapping generation externally:
+
+1. Keep DFA state ``q`` and generated label prefix.
+2. Call ``next_label_logits(input_ids_with_prefix)``.
+3. Retrieve DFA-allowed outgoing labels for state ``q``.
+4. Mask all disallowed labels in logits (for example set to ``-inf``).
+5. Sample or argmax from masked logits.
+6. Apply DFA transition with the chosen label and append to prefix.
+7. Repeat until accept/stop condition.
+
+This keeps neural scoring separate from symbolic constraints while still
+supporting strictly constrained decoding.
+"""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -27,6 +50,9 @@ class GRUCompactLabelGenerationHead(CompactLabelGenerationHead):
     The prompt is summarized with a learned token embedding and used to
     initialize the GRU hidden state.  Generated prefixes are represented in the
     compact label space, so the head can be decoded with ``constrained_label_*``.
+
+    ``label_count`` is also used as the BOS sentinel id for autoregressive
+    shifting in training and startup token in stepwise generation.
     """
 
     def __init__(
@@ -84,6 +110,11 @@ class GRUCompactLabelGenerationHead(CompactLabelGenerationHead):
             parameter.requires_grad_(trainable)
 
     def _initial_hidden(self, instruction_tokens: torch.Tensor | Sequence[int], batch_size: int | None = None) -> torch.Tensor:
+        """Build GRU initial hidden state from prompt token ids.
+
+        Prompt tokens are embedded, mean pooled, projected, and reshaped into
+        ``[num_layers, batch, hidden_size]`` as required by ``torch.nn.GRU``.
+        """
         prompt = _normalise_prompt_ids(instruction_tokens, device=self.output.weight.device)
         _validate_token_ids(prompt, self.vocab_size, "instruction_tokens")
         features = self.prompt_embedding(prompt).mean(dim=1)
@@ -100,6 +131,20 @@ class GRUCompactLabelGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         **_kwargs,
     ) -> torch.Tensor:
+        """Return token-level log probabilities under teacher forcing.
+
+        The sequence is right-shifted with BOS sentinel ``self.label_count``,
+        then scored autoregressively by the GRU.
+
+        Args:
+            target_labels: Gold label ids in ``[0, label_count)``.
+            lengths: Optional valid lengths used to mask padded tail positions.
+            instruction_tokens: Optional prompt tokens conditioning generation.
+
+        Returns:
+            Tensor of shape ``[batch, seq_len, label_count]`` (or squeezed
+            ``[seq_len, label_count]`` for a single unbatched sample).
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -122,6 +167,17 @@ class GRUCompactLabelGenerationHead(CompactLabelGenerationHead):
         return log_probs[0] if squeeze else log_probs
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
+        """Compute one-step next-label logits for autoregressive decoding.
+
+        ``input_ids`` may contain prompt tokens followed by generated label
+        tokens. The method reconstructs hidden state from the prompt, rolls the
+        GRU through the provided label prefix, and returns logits for the next
+        label only.
+
+        This method is the main integration point for DFA-constrained decoding:
+        obtain logits here, apply DFA-state masking externally, then
+        sample/argmax among valid labels.
+        """
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         hidden = self._initial_hidden(prompt_ids, batch_size=1)
         current = torch.tensor([[self.label_count]], dtype=torch.long, device=self.output.weight.device)
@@ -136,6 +192,7 @@ class GRUCompactLabelGenerationHead(CompactLabelGenerationHead):
         return self.sequence_log_probs(target_labels, instruction_tokens=instruction_tokens)
 
     def _split_prompt_and_prefix(self, input_ids: torch.Tensor | Sequence[int]) -> tuple[torch.Tensor, list[int]]:
+        """Split flat ids into prompt-token and generated-label segments."""
         ids, _device = _normalise_flat_ids(input_ids)
         split = _first_generated_index(ids, self._token_id_to_label)
         prompt_ids = ids[:split] or [0]

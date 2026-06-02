@@ -1,4 +1,30 @@
-"""CRF compact-label scorer."""
+"""CRF compact-label scorer.
+
+This module implements a compact linear-chain CRF over generated labels.
+The model combines:
+
+- prompt-conditioned unary logits,
+- start-transition logits,
+- label-to-label transition logits,
+- optional end logits.
+
+How this is used as a generative model with a DFA
+--------------------------------------------------
+The CRF is globally normalized over full sequences, but stepwise decoding can
+still use ``next_label_logits`` as a local proposal interface:
+
+1. Keep DFA state q and generated label prefix.
+2. Call next_label_logits(input_ids_with_prefix).
+3. Retrieve labels allowed by outgoing DFA transitions from q.
+4. Mask disallowed labels in logits (for example set to -inf).
+5. Sample or argmax among valid labels.
+6. Advance DFA state and append chosen label to prefix.
+7. Repeat until stopping or acceptance.
+
+For exact CRF + DFA decoding, run Viterbi on the product state space
+(CRF label state x DFA state). The local interface above is an efficient
+approximation compatible with existing compact decoders.
+"""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -28,6 +54,8 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
     ``next_label_logits`` remains a local proposal interface for the existing
     compact DFA decoders; exact constrained CRF decoding requires a product
     Viterbi search over CRF and DFA states.
+
+    Label ids are in ``[0, label_count)``.
     """
 
     def __init__(
@@ -77,7 +105,11 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         **_kwargs,
     ) -> torch.Tensor:
-        """Return exact CRF marginal log-probs for PMD/DataNode probabilities."""
+        """Return exact CRF token marginals as log probabilities.
+
+        The output is suitable for per-position probability consumers while
+        preserving global CRF normalization.
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -121,6 +153,14 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         return log_probs[0] if squeeze else log_probs
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
+        """Return local next-label proposal logits for autoregressive decoding.
+
+        This combines unary prompt logits with either start logits (empty
+        prefix) or transition logits from the last generated label.
+
+        In DFA-constrained generation, callers should mask labels not allowed
+        by the current DFA state before sampling/argmax.
+        """
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         unary = self._prompt_unary(prompt_ids)[0]
         if prefix_labels:
@@ -135,7 +175,7 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         lengths: torch.Tensor | Sequence[int] | None = None,
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
     ) -> torch.Tensor:
-        """Return the unnormalized gold path score for target labels."""
+        """Return unnormalized CRF path score for the provided gold sequence."""
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -185,7 +225,7 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         max_length: int | None = None,
     ) -> torch.Tensor:
-        """Compute exact CRF log partition values with forward DP."""
+        """Compute exact CRF log partition with forward dynamic programming."""
         lengths_t, max_len, squeeze = self._normalise_lengths(lengths, max_length=max_length)
         prompt = _empty_prompt(instruction_tokens, int(lengths_t.numel()), device=self._device)
         unary = self._prompt_unary(prompt)
@@ -205,7 +245,10 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         reduction: str = "mean",
     ) -> torch.Tensor:
-        """Return exact negative log-likelihood under the linear-chain CRF."""
+        """Return exact negative log-likelihood under the linear-chain CRF.
+
+        NLL = log_partition - gold_path_score.
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -232,7 +275,10 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         lengths: torch.Tensor | Sequence[int] | None = None,
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
     ) -> torch.Tensor:
-        """Return exact token marginal log-probs shaped ``[batch, seq, labels]``."""
+        """Return exact token marginals as log-probs.
+
+        Output shape is ``[batch, seq, label_count]`` (or squeezed batch).
+        """
         lengths_t, max_len, squeeze = self._lengths_from_labels_or_lengths(labels_or_lengths, lengths=lengths)
         prompt = _empty_prompt(instruction_tokens, int(lengths_t.numel()), device=self._device)
         unary = self._prompt_unary(prompt)
@@ -255,6 +301,7 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         return self.start_logits.device
 
     def _split_prompt_and_prefix(self, input_ids: torch.Tensor | Sequence[int]) -> tuple[torch.Tensor, list[int]]:
+        """Split flat ids into prompt-token and generated-label segments."""
         ids, _device = _normalise_flat_ids(input_ids)
         split = _first_generated_index(ids, self._token_id_to_label)
         prompt_ids = ids[:split] or [0]
@@ -265,11 +312,13 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         return prompt, labels
 
     def _prompt_unary(self, instruction_tokens: torch.Tensor | Sequence[int]) -> torch.Tensor:
+        """Compute prompt-conditioned unary logits over labels."""
         prompt = _normalise_prompt_ids(instruction_tokens, device=self._device)
         _validate_token_ids(prompt, self.vocab_size, "instruction_tokens")
         return self.unary_projector(self.prompt_embedding(prompt).mean(dim=1))
 
     def _local_logits_for_labels(self, instruction_tokens: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """Build teacher-forced local logits per sequence position."""
         unary = self._prompt_unary(instruction_tokens)
         if unary.shape[0] == 1 and labels.shape[0] > 1:
             unary = unary.expand(labels.shape[0], -1)
@@ -285,6 +334,7 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         return torch.stack(rows, dim=1)
 
     def _forward_alg(self, unary: torch.Tensor, lengths: torch.Tensor, max_len: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward DP for CRF alpha table and log-partition values."""
         alpha = unary + self.start_logits
         history = [alpha]
         for _step in range(1, max_len):
@@ -298,6 +348,7 @@ class CRFCompactLabelScorer(CompactLabelGenerationHead):
         return stacked, torch.logsumexp(last, dim=-1)
 
     def _backward_alg(self, unary: torch.Tensor, lengths: torch.Tensor, max_len: int) -> torch.Tensor:
+        """Backward DP for CRF beta table."""
         end = self.end_logits if self.end_logits is not None else torch.zeros(self.label_count, dtype=unary.dtype, device=unary.device)
         beta = end.reshape(1, -1).expand(unary.shape[0], -1)
         history = [None for _ in range(max_len)]

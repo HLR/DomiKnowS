@@ -36,6 +36,10 @@ Recognised DomiKnowS constraint shapes
   ``xorL``, ``iffL``/``equivalenceL``, and ``ifL(A, B)`` when both sides are regular
 - supported ``is_before_rel`` endpoint paths for after-trigger restrictions
   and simple ordered-token existence patterns
+- ``ifL(is_before_rel, ifL(<trigger>, <allowed>))`` where each side is either
+  a single path-bound ``token_value`` or an ``orL`` of path-bound
+  ``token_value`` siblings on the same path role -> after-trigger-allowed
+  DFA over the union of tokens in each set
 
 Any other shape that still references generation concepts is considered
 *unsupported* and handled according to the ``on_unsupported`` policy.
@@ -505,7 +509,9 @@ def _is_eos_closure(lc, bundle) -> bool:
     rel = _concept_tuple(lc.e[0])
     if rel is None or rel[0] is not bundle.is_before_rel:
         return False
-    nested = next((item for item in lc.e if getattr(item, "__class__", None).__name__ == "ifL"), None)
+    # ``kind`` (not ``__class__.__name__``) so a nested ``ifL`` normalized into
+    # an ``_IfNode`` mirror is still recognised.
+    nested = next((item for item in lc.e if kind(item) == "ifL"), None)
     if nested is None:
         return False
     tokens = [_token_from_tuple(item, bundle) for item in nested.e if _concept_tuple(item) is not None]
@@ -514,12 +520,12 @@ def _is_eos_closure(lc, bundle) -> bool:
 
 def _non_eos_at_most_count(lc, bundle) -> int | None:
     """Extract the count from an ``atMostAL(notL(eos), N)`` sub-expression."""
-    if getattr(lc, "__class__", None).__name__ != "atMostAL":
+    if kind(lc) != "atMostAL":
         return None
     limit = _last_int(lc.e)
     if limit is None:
         return None
-    if not lc.e or getattr(lc.e[0], "__class__", None).__name__ != "notL":
+    if not lc.e or kind(lc.e[0]) != "notL":
         return None
     token = _direct_token(lc.e[0].e, bundle)
     if token == bundle.vocabulary.eos_token:
@@ -529,7 +535,7 @@ def _non_eos_at_most_count(lc, bundle) -> int | None:
 
 def _exists_token(lc, bundle) -> str | None:
     """Extract the token from an ``existsAL(token_value)`` sub-expression."""
-    if getattr(lc, "__class__", None).__name__ != "existsAL":
+    if kind(lc) != "existsAL":
         return None
     return _direct_token(lc.e, bundle)
 
@@ -544,7 +550,7 @@ def _token_predicate_from_count_lc(lc, bundle) -> tuple[tuple[str, ...], bool] |
 
 def _token_predicate_from_expr(expr, bundle) -> tuple[tuple[str, ...], bool] | None:
     """Parse regular token predicates used inside count constraints."""
-    cls_name = getattr(expr, "__class__", None).__name__
+    cls_name = kind(expr)
     if cls_name == "notL":
         children = [child for child in getattr(expr, "e", ()) if hasattr(child, "e") or _concept_tuple(child)]
         if len(children) == 1 and hasattr(children[0], "e"):
@@ -614,11 +620,19 @@ def _token_predicate_from_elements(elements: Iterable, bundle) -> tuple[tuple[st
 
 
 def _match_before_implication(lc, bundle) -> DFA | None:
-    """Match ``ifL(before, ifL(trigger(first), allowed(second)))``."""
+    """Match ``ifL(before, ifL(<trigger>, <allowed>))``.
+
+    Both ``<trigger>`` and ``<allowed>`` may be a single path-bound
+    ``token_value`` or an ``orL`` of path-bound ``token_value`` siblings on the
+    same path role (``first_token`` / ``second_token`` of the before relation).
+    The token sets are unioned per role and compiled into
+    :func:`~.after_token_allowed_dfa`.
+    """
     before_var = _before_relation_variable(lc, bundle)
     if before_var is None:
         return None
-    nested = next((item for item in lc.e if getattr(item, "__class__", None).__name__ == "ifL"), None)
+    # ``kind`` so a normalized ``_IfNode`` mirror still matches.
+    nested = next((item for item in lc.e if kind(item) == "ifL"), None)
     if nested is None:
         return None
     trigger = _path_token_predicate_from_flat(nested.e, bundle, before_var, bundle.first_token)
@@ -635,7 +649,7 @@ def _match_before_implication(lc, bundle) -> DFA | None:
 def _match_ordered_pair_exists(lc, bundle) -> DFA | None:
     """Match ``existsAL(andL(before, A(first), B(second)))``."""
     children = [item for item in getattr(lc, "e", ()) if hasattr(item, "e")]
-    if len(children) != 1 or getattr(children[0], "__class__", None).__name__ != "andL":
+    if len(children) != 1 or kind(children[0]) != "andL":
         return None
     and_lc = children[0]
     before_var = _before_relation_variable(and_lc, bundle)
@@ -667,16 +681,42 @@ def _before_relation_variable(lc, bundle) -> str | None:
 
 
 def _path_token_predicate_from_flat(elements, bundle, before_var: str, role) -> tuple[tuple[str, ...], bool] | None:
-    """Parse one or more token predicates in a flat LC element list by path role."""
+    """Parse one or more token predicates in a flat LC element list by path role.
+
+    Recognises two shapes per element:
+
+    1. A concept-4-tuple followed by a ``V``-instance whose ``.v`` matches the
+       requested ``(before_var, role)`` — the canonical single-token form
+       produced by ``ctx.token_value(..., path=(before_var, role))``.
+    2. An ``orL`` LC node whose own children contain shape (1).  Recursing into
+       the ``orL`` lets the matcher accept multi-token predicates expressed as
+       ``orL(token_value(x, path=(...)), token_value(y, path=(...)))`` on the
+       same path role, which is the natural way to write a "first position is
+       one of {x, y}" antecedent inside an ``ifL``.
+
+    Returns the union of all tokens collected from both shapes (deduplicated
+    and sorted), or ``None`` when none are found.  Negation is never produced
+    from the recursive branch.
+    """
     elements = list(elements)
-    tokens = []
+    tokens: list[str] = []
     for index, item in enumerate(elements):
         token = _token_from_tuple(item, bundle)
-        if token is None:
+        if token is not None:
+            next_item = elements[index + 1] if index + 1 < len(elements) else None
+            if _is_v(next_item) and next_item.v == (before_var, role):
+                tokens.append(token)
             continue
-        next_item = elements[index + 1] if index + 1 < len(elements) else None
-        if _is_v(next_item) and next_item.v == (before_var, role):
-            tokens.append(token)
+        # Recurse into ``orL`` siblings so multi-token predicates expressed
+        # as ``orL(token_value(x, ..., path=...), token_value(y, ..., path=...))``
+        # are recognised on the same path role.  ``kind`` recognises both the
+        # original DomiKnowS ``orL`` and the normalized ``_OrNode`` mirror.
+        if kind(item) == "orL":
+            inner = _path_token_predicate_from_flat(item.e, bundle, before_var, role)
+            if inner is not None:
+                inner_tokens, inner_negated = inner
+                if not inner_negated:
+                    tokens.extend(inner_tokens)
     if not tokens:
         return None
     return tuple(sorted(set(tokens))), False

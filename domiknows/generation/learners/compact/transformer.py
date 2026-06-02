@@ -1,4 +1,30 @@
-"""Transformer compact-label learner head."""
+"""Transformer compact-label learner head.
+
+This module implements a compact autoregressive label model:
+
+- The model predicts the next label given previous labels plus optional
+    instruction tokens.
+- During training, ``sequence_log_probs`` applies teacher forcing and returns
+    token-level log probabilities for each target position.
+- During inference, ``next_label_logits`` produces logits for one next-step
+    label distribution over ``[0, label_count)``.
+
+How this is used as a generative model with a DFA
+--------------------------------------------------
+The transformer itself is an unconstrained next-label scorer. A DFA-based
+decoder can wrap it to enforce valid label sequences:
+
+1. Keep a DFA state ``q`` and a generated label prefix.
+2. Call ``next_label_logits(input_ids_with_prefix)``.
+3. Get allowed outgoing labels from the DFA for state ``q``.
+4. Mask disallowed labels in logits (for example set to ``-inf``).
+5. Sample or argmax from masked logits to pick the next label.
+6. Transition DFA state with that label and append it to the prefix.
+7. Repeat until an accept/stop condition is met.
+
+This separation keeps neural scoring and symbolic validity constraints cleanly
+decoupled while still enabling constrained generation.
+"""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -22,7 +48,6 @@ from .utils import (
 )
 
 class TransformerCompactLabelGenerationHead(CompactLabelGenerationHead):
-    """Small causal Transformer head over compact generation labels."""
 
     def __init__(
         self,
@@ -94,6 +119,20 @@ class TransformerCompactLabelGenerationHead(CompactLabelGenerationHead):
         instruction_tokens: torch.Tensor | Sequence[int] | None = None,
         **_kwargs,
     ) -> torch.Tensor:
+        """Return per-position log probabilities under teacher forcing.
+
+        ``target_labels`` are shifted right by one position with a BOS sentinel
+        (``self.label_count``), then scored autoregressively.
+
+        Args:
+            target_labels: Gold label ids in ``[0, label_count)``.
+            lengths: Optional valid lengths for masking padded tail positions.
+            instruction_tokens: Optional prompt tokens conditioning generation.
+
+        Returns:
+            Tensor of shape ``[batch, seq_len, label_count]`` (or squeezed
+            ``[seq_len, label_count]`` for a single unbatched sample).
+        """
         labels, lengths_t, squeeze = _target_label_batch(
             target_labels,
             self.pad_size,
@@ -113,6 +152,19 @@ class TransformerCompactLabelGenerationHead(CompactLabelGenerationHead):
         return log_probs[0] if squeeze else log_probs
 
     def next_label_logits(self, input_ids: torch.Tensor | Sequence[int], **_kwargs) -> torch.Tensor:
+        """Compute next-step logits for autoregressive generation.
+
+        ``input_ids`` may contain prompt tokens followed by already generated
+        label tokens. The method splits these regions, rebuilds the recent
+        label prefix window, and returns logits for the next label only.
+
+        This method is the primary integration point for constrained decoders
+        such as DFA-guided search:
+
+        - call this method to obtain unconstrained logits,
+        - apply DFA-state-dependent masking externally,
+        - then sample/argmax among valid labels.
+        """
         prompt_ids, prefix_labels = self._split_prompt_and_prefix(input_ids)
         previous = [self.label_count] + [_validate_label(label, self.label_count) for label in prefix_labels]
         if len(previous) > self.pad_size:
@@ -125,6 +177,7 @@ class TransformerCompactLabelGenerationHead(CompactLabelGenerationHead):
         return self.sequence_log_probs(target_labels, instruction_tokens=instruction_tokens)
 
     def _logits_for_previous(self, prompt: torch.Tensor, previous: torch.Tensor) -> torch.Tensor:
+        """Score each position in ``previous`` under a causal transformer."""
         _validate_token_ids(prompt, self.vocab_size, "instruction_tokens")
         prompt_features = self.prompt_embedding(prompt).mean(dim=1)
         if prompt_features.shape[0] == 1 and previous.shape[0] > 1:
@@ -140,6 +193,11 @@ class TransformerCompactLabelGenerationHead(CompactLabelGenerationHead):
         return self.output(encoded)
 
     def _split_prompt_and_prefix(self, input_ids: torch.Tensor | Sequence[int]) -> tuple[torch.Tensor, list[int]]:
+        """Split flat ``input_ids`` into prompt-token and generated-label parts.
+
+        Tokens that map through ``self._token_id_to_label`` are treated as
+        generated labels; earlier tokens are treated as prompt context.
+        """
         ids, _device = _normalise_flat_ids(input_ids)
         split = _first_generated_index(ids, self._token_id_to_label)
         prompt_ids = ids[:split] or [0]

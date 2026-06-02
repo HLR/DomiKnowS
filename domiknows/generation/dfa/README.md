@@ -665,27 +665,12 @@ The DFA therefore acts as a symbolic controller layered on top of probabilistic 
 
 ---
 
-# 10. Why This Works
-The key idea is that many DomiKnowS logical constraints correspond to regular languages.
+# 10. Summary
 
 Regular constraints can be represented exactly by DFAs.
 
-Instead of approximating these constraints with penalties or post-processing, the system translates supported logical constraints directly into automata and performs:
+Instead of approximating these constraints with penalties or post-processing, the system translates supported logical constraints directly into automata and performs Hard Constraint Decoding where illegal prefixes are impossible to generate.
 
-```
-Hard Constraint Decoding
-```
-
-where illegal prefixes are impossible to generate.
-
-This provides:
-
-- Exact enforcement
-- Interpretable constraint states
-- Efficient decoding
-- Compatibility with HMMs
-- Compatibility with spectral weighted automata
-- Direct integration with DomiKnowS logical constraints
 
 The resulting system is therefore best viewed as a graph-constrained weighted automaton whose language is defined jointly by learned probabilities and symbolic DomiKnowS knowledge.
 

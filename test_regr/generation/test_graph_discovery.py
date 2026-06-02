@@ -297,6 +297,46 @@ def test_discovers_generalized_before_path_implication():
     assert not dfa.accepts(labels(bundle, ["A", "B", "A"]))
 
 
+def test_discovers_multi_token_before_path_implication():
+    """``ifL(before, ifL(orL(token x, token y), orL(token a, token b)))``
+    compiles to ``after_token_allowed_dfa`` over both trigger and allowed sets.
+
+    Exercises the multi-token generalisation: the trigger antecedent and the
+    allowed consequent each carry an ``orL`` of path-bound ``token_value``\\ s
+    on the same role.  Semantics: for every (p1, p2) under ``is_before_rel``,
+    if p1 emits one of the trigger tokens then p2 must emit one of the allowed
+    tokens.
+    """
+    graph, bundle = build_bundle()
+    ctx = bundle.context
+    with graph:
+        ifL(
+            ctx.is_before_rel("before"),
+            ifL(
+                orL(
+                    ctx.token_value("A", "x1", path=("before", ctx.first_token)),
+                    ctx.token_value("B", "x2", path=("before", ctx.first_token)),
+                ),
+                orL(
+                    ctx.token_value("<eos>", "y1", path=("before", ctx.second_token)),
+                    ctx.token_value("A", "y2", path=("before", ctx.second_token)),
+                ),
+            ),
+        )
+
+    assert "ifL" in supported_lc_types(graph, bundle)
+    dfa = constraints_to_dfa_from_graph(graph, bundle)
+    # No trigger emitted yet: any single token is fine.
+    assert dfa.accepts(labels(bundle, ["<eos>"]))
+    # Triggered by A; allowed set is {<eos>, A}.
+    assert dfa.accepts(labels(bundle, ["A", "A"]))
+    assert dfa.accepts(labels(bundle, ["A", "<eos>"]))
+    assert not dfa.accepts(labels(bundle, ["A", "B"]))
+    # Triggered by B (second trigger token); same allowed set.
+    assert dfa.accepts(labels(bundle, ["B", "A"]))
+    assert not dfa.accepts(labels(bundle, ["B", "B"]))
+
+
 def test_discovers_ordered_pair_existence_from_before_path():
     graph, bundle = build_bundle()
     ctx = bundle.context
