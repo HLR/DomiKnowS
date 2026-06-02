@@ -1,13 +1,15 @@
 # Plan: Remove `max_new_tokens` From DFA Decoding
 
+**Status:** verified against the current `decoder.py` / `core.py` / `applications/` layout (last verified 2026-06-02).  Line numbers have been replaced with symbolic anchors so the plan does not drift as the surrounding code changes.
+
 ## Goal
 Replace fixed token-count stopping (`max_new_tokens`) with policy-driven stopping so decoding can run without a mandatory length cap, while preserving safety and DFA correctness.
 
 ## Why This Is Feasible
-The DFA core already supports unbounded reachability checks when no step budget is supplied (`remaining_steps=None`).
+The DFA core already supports unbounded reachability and allowed-token enumeration when the budget is omitted.  In `domiknows/generation/dfa/core.py`:
 
-- `domiknows/generation/dfa/core.py:82` (`can_reach_accepting`)
-- `domiknows/generation/dfa/core.py:122` (`allowed_tokens`)
+- `DFA.can_reach_accepting(state, max_steps=None)` — the parameter is named **`max_steps`**; `None` means "no depth limit" on the BFS over reachable, non-dead states.
+- `DFA.allowed_tokens(state, remaining_steps=None)` — the parameter is named **`remaining_steps`**.  When it is `None`, the function *skips the reachability call entirely* and returns every non-dead successor of *state*, so no reachability budget needs to be plumbed in unbounded mode.
 
 Most work is therefore in decoder control flow and API shape.
 
@@ -23,12 +25,23 @@ Suggested fields:
 - `timeout_seconds: float | None`
 - `external_stop_fn: Callable | None`
 
-Candidate decoder entry points to update:
-- `domiknows/generation/dfa/decoder.py:463`
-- `domiknows/generation/dfa/decoder.py:568`
-- `domiknows/generation/dfa/decoder.py:758`
-- `domiknows/generation/dfa/decoder.py:847`
-- `domiknows/generation/dfa/decoder.py:940`
+Candidate decoder entry points to update (all in `domiknows/generation/dfa/decoder.py`):
+- `constrained_greedy_decode`
+- `constrained_beam_search_decode`
+- `constrained_sample_decode`
+- `constrained_label_greedy_decode`
+- `constrained_label_beam_search_decode`
+- `constrained_label_sample_decode`
+
+### 1b. Application-layer wrappers also passing `max_new_tokens`
+
+The decoder entry points above are wrapped at the application layer.  These callers must be migrated to `StopPolicy` (with the same `max_new_tokens=` deprecation shim — see §8) so the public API stays consistent.
+
+- `domiknows/generation/applications/inference.py` — the three top-level `greedy_label_inference` / `beam_label_inference` / `sample_label_inference` helpers each take and forward `max_new_tokens`, and the file **duplicates** the `_validate_common(max_new_tokens)` helper.  The duplicate must be removed when the decoder's validator is replaced (or both must point at the new `validate_stop_policy`).
+- `domiknows/generation/applications/adapters.py` — `HuggingFaceGenerationAdapter.greedy / beam / sample` methods each accept `max_new_tokens` and pass it to the corresponding decoder.
+- `domiknows/generation/applications/hybrid.py` — `HybridController.greedy_decode`, the candidate-rendering path, and the rerank-with-decoder path all carry a `max_new_tokens` argument.
+- Compact-label generation heads expose `head.greedy_label_inference(..., max_new_tokens=...)` via a `**kwargs` passthrough on `CompactLabelGenerationHead.greedy_label_inference` (in `domiknows/generation/learners/common/base.py`).  Every `Tasks/` demo reaches the decoder through this surface.
+- Doc references in `domiknows/generation/learners/README.md` (the `remaining_steps`-budget paragraph) and `domiknows/generation/learners/README_learning.md` (`max_new_tokens=8` examples) describe the old semantics and must be updated.
 
 ### 2. Remove hard dependency on `remaining_steps` from decode loop budget
 Currently, decode loops compute:
@@ -39,12 +52,13 @@ Refactor to:
 - unbounded mode: `dfa.allowed_tokens(state, remaining_steps=None)`
 - bounded mode: pass remaining budget only if `max_steps` is set in stop policy.
 
-Locations:
-- `domiknows/generation/dfa/decoder.py:516`
-- `domiknows/generation/dfa/decoder.py:658`
-- `domiknows/generation/dfa/decoder.py:818`
-- `domiknows/generation/dfa/decoder.py:911`
-- `domiknows/generation/dfa/decoder.py:1007`
+Locations (grep `'remaining_steps = max_new_tokens - step_idx'` in `domiknows/generation/dfa/decoder.py` — present in the body of every entry point):
+- `constrained_greedy_decode`
+- `constrained_beam_search_decode`
+- `constrained_sample_decode`
+- `constrained_label_greedy_decode`
+- `constrained_label_beam_search_decode`
+- `constrained_label_sample_decode`
 
 ### 3. Replace fixed-range loops with policy-driven loops
 Current pattern:
@@ -55,21 +69,35 @@ New pattern:
 
 Keep an internal `step_idx` counter for metrics and optional safeguards.
 
-Loop sites:
-- `domiknows/generation/dfa/decoder.py:509`
-- `domiknows/generation/dfa/decoder.py:646`
-- `domiknows/generation/dfa/decoder.py:816`
-- `domiknows/generation/dfa/decoder.py:907`
+Loop sites (grep `'for step_idx in range(max_new_tokens):'` in `domiknows/generation/dfa/decoder.py` — one per entry point):
+- `constrained_greedy_decode`
+- `constrained_beam_search_decode`
+- `constrained_sample_decode`
+- `constrained_label_greedy_decode`
+- `constrained_label_beam_search_decode`
+- `constrained_label_sample_decode`
 
 ### 4. Keep mandatory safety guardrails
 Even in "unbounded" mode, do not allow unconstrained infinite runtime.
 
-Require at least one safeguard:
-- `max_steps`
-- `timeout_seconds`
-- `external_stop_fn`
+Validation requires *at least one* of these conditions to hold:
 
-This prevents hung decode jobs when EOS never appears.
+- `max_steps is not None`, or
+- `timeout_seconds is not None`, or
+- `external_stop_fn is not None`, or
+- `stop_on_eos` / `stop_on_eos_if_accepting` is `True` **and** the DFA's
+  alphabet includes the EOS label.
+
+The last condition lets pure EOS-driven stopping be a single, sufficient
+safety signal — matching today's behaviour where a positive `max_new_tokens`
+together with EOS termination is the only safety net.  Callers who want
+to opt out (e.g. unit tests that exhaustively explore the DFA) should pass
+an `external_stop_fn` that asserts deliberately.
+
+Migration impact:
+
+- The transitional shim (§8) maps `max_new_tokens=N` to `StopPolicy(max_steps=N)`, so existing call sites that pass a positive integer still satisfy the guard automatically.
+- A caller who previously passed `max_new_tokens=None` (illegal today — `_validate_common` requires `>= 0`) would fail the new validator unless one of the other safety signals is set.  This stays consistent with the current behaviour.
 
 ### 5. Make EOS stop behavior configurable
 Current behavior stops early only on:
@@ -80,22 +108,25 @@ Retain as default, but support alternatives:
 - accepting-state only
 - EOS and accepting (current default)
 
-EOS checks currently in:
-- `domiknows/generation/dfa/decoder.py:533`
-- `domiknows/generation/dfa/decoder.py:696`
-- `domiknows/generation/dfa/decoder.py:838`
-- `domiknows/generation/dfa/decoder.py:930`
+EOS checks currently in (grep `'next_label == eos_label and dfa.is_accepting(state)'` and `'next_token_id == eos_token_id'` in `domiknows/generation/dfa/decoder.py`):
+- `constrained_greedy_decode`
+- `constrained_beam_search_decode`
+- `constrained_sample_decode`
+- `constrained_label_greedy_decode`
+- `constrained_label_beam_search_decode`
+- `constrained_label_sample_decode`
 
 ### 6. Replace shared validator
 Current validator:
 - `_validate_common(max_new_tokens)`
 
 Replace with stop-policy validation:
-- verifies at least one safety stop mechanism
+- verifies at least one safety stop mechanism (per §4)
 - validates timeout/limits
 
-Location:
-- `domiknows/generation/dfa/decoder.py:451`
+Locations:
+- `domiknows/generation/dfa/decoder.py` — top-level `_validate_common`.
+- `domiknows/generation/applications/inference.py` — **duplicate** `_validate_common` defined locally.  Drop the duplicate or rewire it to call the new `validate_stop_policy`; otherwise the two validators will drift.
 
 ### 7. Beam-specific completion rules
 Without `max_new_tokens`, beam search needs explicit stop criteria:
@@ -103,6 +134,8 @@ Without `max_new_tokens`, beam search needs explicit stop criteria:
 - no expandable beams remain
 - stop policy triggered
 - optional minimum finished beams threshold
+
+Preserve the existing per-beam plumbing.  Both `constrained_beam_search_decode` and `constrained_label_beam_search_decode` already track `BeamCandidate.finished` (set when `next_label == eos_label and dfa.is_accepting(next_state)`) and use an "all-finished short-circuit" inside the outer loop to break early when every candidate is finished.  The StopPolicy migration must keep this short-circuit — without it, beam decoding will pay the full `step_idx` budget even when every beam terminated several steps earlier.
 
 ### 8. Backward compatibility path
 Keep API compatibility for one transition period:
@@ -297,7 +330,7 @@ def constrained_greedy_decode(
 	...
 ```
 
-Apply the same transition pattern to all five decode entry points.
+Apply the same transition pattern to all six decode entry points.
 
 ### Internal loop shape (target)
 
@@ -316,3 +349,28 @@ while True:
 
 	step_idx += 1
 ```
+
+## Verification
+
+After the refactor lands, the following must all be green in *both* legacy `max_new_tokens=N` mode (through the deprecation shim) and the new `stop_policy=StopPolicy(...)` mode:
+
+1. **Decoder-level tests** —
+   ```
+   pytest test_regr/generation/test_decoder.py -q
+   ```
+   Every `constrained_*_decode` test must pass, including any newly added test that exercises the `stop_policy` kwarg directly.
+2. **Head-level passthrough tests** —
+   ```
+   pytest test_regr/generation/test_compact_heads.py \
+          test_regr/generation/test_automata_heads.py \
+          test_regr/generation/test_prompt_conditioned_automata_heads.py -q
+   ```
+   These exercise `head.greedy_label_inference(..., max_new_tokens=N)` (the `**kwargs` passthrough on `CompactLabelGenerationHead`).  Both the legacy call-shape and the new `stop_policy=` call-shape must work.
+3. **End-to-end demos** —
+   ```
+   uv run --project Tasks/real_hmm_pmd_learning python Tasks/real_hmm_pmd_learning/run_demo.py
+   uv run --project Tasks/real_hmm_pmd_learning python -m Tasks.nested_constraints_demo.run_demo
+   ```
+   Both demos must produce byte-identical greedy and DFA-constrained-greedy outputs in transitional `max_new_tokens=` mode (i.e. nothing changed from the user's perspective after the deprecation shim is in place).
+4. **New unbounded-EOS regression test** — add `test_stop_policy_unbounded_eos_only` that constructs a tiny DFA accepting `EOS`, calls `constrained_greedy_decode` with `stop_policy=StopPolicy(stop_on_eos_if_accepting=True)` and **no** `max_steps`, and verifies the loop terminates on the first EOS without a length cap.
+5. **Application-layer round-trip** — every wrapper listed in §1b (`applications/inference.py`, `applications/adapters.py`, `applications/hybrid.py`) must accept both `max_new_tokens=` and `stop_policy=`, and at least one test must exercise each side.

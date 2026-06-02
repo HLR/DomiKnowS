@@ -36,6 +36,15 @@ from typing import Sequence
 import torch
 
 from .core import DFA
+from .stop_policy import (
+    DecodeProgress,
+    StopPolicy,
+    make_progress_tracker,
+    remaining_steps_for,
+    should_stop_decoding,
+    should_stop_on_token,
+    stop_policy_from_legacy,
+)
 from .vocabulary import TokenVocabulary
 
 
@@ -492,9 +501,11 @@ def constrained_greedy_decode(
     prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
-    max_new_tokens: int,
+    max_new_tokens: int | None = None,
     eos_token_id: int | None = None,
     use_cache: bool = True,
+    *,
+    stop_policy: StopPolicy | None = None,
 ) -> ConstrainedGenerationResult:
     """Run DFA-constrained greedy decoding from a prompt.
 
@@ -534,20 +545,35 @@ def constrained_greedy_decode(
         ValueError: Propagated from :func:`mask_logits_for_dfa` if masking
             removes all tokens at any step.
     """
-    _validate_common(max_new_tokens)
+    policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
     ids, device = _normalise_input_ids(prompt_ids)
+    prompt_len = len(ids)
 
     state = dfa.start_state
     labels: list[int] = []
     cache_state = _cached_state_from_ids(ids, device)
     # Resolve EOS token ID once before the loop.
     eos_token_id = _resolve_eos_token_id(vocabulary, eos_token_id)
+    update_progress = make_progress_tracker()
 
-    for step_idx in range(max_new_tokens):
+    step_idx = 0
+    while True:
+        # Check budget / timeout / external stop before generating the next token.
+        progress = update_progress(
+            step_index=step_idx,
+            dfa_state=state,
+            prompt_token_count=prompt_len,
+            generated_token_ids=tuple(ids[prompt_len:]),
+            generated_labels=tuple(labels),
+            accepted=dfa.is_accepting(state),
+            eos_emitted=False,
+        )
+        if should_stop_decoding(policy, progress):
+            break
         # Take logits for the last position only.
         logits, cache_state = _next_logits_cached(model, cache_state, use_cache=use_cache)
         # Ask the DFA which labels are reachable within the remaining budget.
-        remaining_steps = max_new_tokens - step_idx
+        remaining_steps = remaining_steps_for(policy, step_idx)
         allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
         # Mask out disallowed tokens in the full vocabulary logit space.
         masked = mask_logits_for_dfa(logits, allowed, vocabulary)
@@ -562,9 +588,14 @@ def constrained_greedy_decode(
         labels.append(next_label)
         state = next_state
         cache_state = _append_cached_token(cache_state, next_id)
+        step_idx += 1
 
-        # Stop early when EOS is produced in a valid (accepting) DFA state.
-        if next_id == eos_token_id and dfa.is_accepting(state):
+        # Stop early when policy says so (default: EOS + accepting state).
+        if should_stop_on_token(
+            policy,
+            eos_emitted=(next_id == eos_token_id),
+            accepted=dfa.is_accepting(state),
+        ):
             break
 
     return ConstrainedGenerationResult(
@@ -580,13 +611,15 @@ def constrained_beam_search_decode(
     prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
-    max_new_tokens: int,
+    max_new_tokens: int | None = None,
     eos_token_id: int | None = None,
     beam_size: int = 4,
     length_penalty: float = 1.0,
     early_stopping: bool = True,
     num_return_sequences: int = 1,
     use_cache: bool = True,
+    *,
+    stop_policy: StopPolicy | None = None,
 ) -> ConstrainedGenerationResult:
     """Run DFA-constrained beam search from a prompt.
 
@@ -631,7 +664,7 @@ def constrained_beam_search_decode(
         RuntimeError: If the DFA has no transition from a beam's current state
             on the selected label (indicates a vocabulary / DFA mismatch).
     """
-    _validate_common(max_new_tokens)
+    policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
     if beam_size < 1:
         raise ValueError("beam_size must be at least 1")
     if length_penalty <= 0.0:
@@ -640,6 +673,7 @@ def constrained_beam_search_decode(
         raise ValueError("num_return_sequences must be at least 1")
 
     ids, device = _normalise_input_ids(prompt_ids)
+    prompt_len = len(ids)
     eos_token_id = _resolve_eos_token_id(vocabulary, eos_token_id)
     initial_cache_state = _cached_state_from_ids(ids, device)
     beams = [
@@ -652,10 +686,27 @@ def constrained_beam_search_decode(
         )
     ]
     finished: list[BeamCandidate] = []
+    update_progress = make_progress_tracker()
 
-    for step_idx in range(max_new_tokens):
+    step_idx = 0
+    while True:
+        # Stop before expanding when policy says so.  Uses the highest-scoring
+        # beam's DFA state as the representative for stagnation tracking; safety
+        # signals (max_steps / timeout / external_stop_fn) are beam-independent.
+        head_beam = beams[0] if beams else BeamCandidate(token_ids=ids, labels=[], state=dfa.start_state, score=0.0)
+        progress = update_progress(
+            step_index=step_idx,
+            dfa_state=head_beam.state,
+            prompt_token_count=prompt_len,
+            generated_token_ids=tuple(head_beam.token_ids[prompt_len:]),
+            generated_labels=tuple(head_beam.labels),
+            accepted=dfa.is_accepting(head_beam.state),
+            eos_emitted=False,
+        )
+        if should_stop_decoding(policy, progress):
+            break
         expanded: list[BeamCandidate] = []
-        remaining_steps = max_new_tokens - step_idx
+        remaining_steps = remaining_steps_for(policy, step_idx)
 
         for candidate in beams:
             if candidate.finished:
@@ -687,7 +738,13 @@ def constrained_beam_search_decode(
                 next_state = _advance_dfa(dfa, candidate.state, next_label)
                 next_labels = candidate.labels + [next_label]
                 next_ids = candidate.token_ids + [next_id]
-                is_finished = next_id == eos_token_id and dfa.is_accepting(next_state)
+                # Per-beam finished flag honours the policy's stop_on_eos /
+                # stop_on_accepting_state knobs (default: EOS + accepting).
+                is_finished = should_stop_on_token(
+                    policy,
+                    eos_emitted=(next_id == eos_token_id),
+                    accepted=dfa.is_accepting(next_state),
+                )
                 try:
                     next_cache_state = _clone_cached_state_for_branch(parent_cache_state, next_id)
                 except ValueError:
@@ -712,7 +769,12 @@ def constrained_beam_search_decode(
 
         expanded.sort(key=lambda item: _candidate_rank(item, length_penalty), reverse=True)
         beams = expanded[:beam_size]
+        step_idx += 1
         if early_stopping and len(finished) >= num_return_sequences:
+            break
+        # All-finished short-circuit: skip the rest of the budget once every
+        # surviving beam has terminated.
+        if beams and all(beam.finished for beam in beams):
             break
 
     accepted_candidates = [candidate for candidate in finished + beams if dfa.is_accepting(candidate.state)]
@@ -739,13 +801,15 @@ def constrained_sample_decode(
     prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
-    max_new_tokens: int,
+    max_new_tokens: int | None = None,
     eos_token_id: int | None = None,
     temperature: float = 1.0,
     top_k: int | None = None,
     top_p: float | None = None,
     generator: torch.Generator | None = None,
     use_cache: bool = True,
+    *,
+    stop_policy: StopPolicy | None = None,
 ) -> ConstrainedGenerationResult:
     """Run DFA-constrained stochastic decoding from a prompt.
 
@@ -799,21 +863,35 @@ def constrained_sample_decode(
         ValueError: Propagated from :func:`mask_logits_for_dfa` if masking
             removes all tokens at any step.
     """
-    _validate_common(max_new_tokens)
+    policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
     if temperature <= 0.0:
         raise ValueError("temperature must be positive")
 
     ids, device = _normalise_input_ids(prompt_ids)
+    prompt_len = len(ids)
     eos_token_id = _resolve_eos_token_id(vocabulary, eos_token_id)
     state = dfa.start_state
     labels: list[int] = []
     token_scores: list[float] = []
     total_score = 0.0
     cache_state = _cached_state_from_ids(ids, device)
+    update_progress = make_progress_tracker()
 
-    for step_idx in range(max_new_tokens):
+    step_idx = 0
+    while True:
+        progress = update_progress(
+            step_index=step_idx,
+            dfa_state=state,
+            prompt_token_count=prompt_len,
+            generated_token_ids=tuple(ids[prompt_len:]),
+            generated_labels=tuple(labels),
+            accepted=dfa.is_accepting(state),
+            eos_emitted=False,
+        )
+        if should_stop_decoding(policy, progress):
+            break
         logits, cache_state = _next_logits_cached(model, cache_state, use_cache=use_cache)
-        remaining_steps = max_new_tokens - step_idx
+        remaining_steps = remaining_steps_for(policy, step_idx)
         allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
         masked = mask_logits_for_dfa(logits, allowed, vocabulary)
         constrained_logits = masked / float(temperature)
@@ -833,8 +911,13 @@ def constrained_sample_decode(
         total_score += log_prob
         state = next_state
         cache_state = _append_cached_token(cache_state, next_id)
+        step_idx += 1
 
-        if next_id == eos_token_id and dfa.is_accepting(state):
+        if should_stop_on_token(
+            policy,
+            eos_emitted=(next_id == eos_token_id),
+            accepted=dfa.is_accepting(state),
+        ):
             break
 
     return ConstrainedGenerationResult(
@@ -852,10 +935,12 @@ def constrained_label_greedy_decode(
     prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
-    max_new_tokens: int,
+    max_new_tokens: int | None = None,
     eos_label: int | None = None,
     model_kwargs: dict | None = None,
     next_label_kwargs: dict | None = None,
+    *,
+    stop_policy: StopPolicy | None = None,
 ) -> ConstrainedGenerationResult:
     """Run DFA-constrained greedy decoding for compact-label generation heads.
 
@@ -901,17 +986,31 @@ def constrained_label_greedy_decode(
         ValueError: Propagated from :func:`mask_label_logits_for_dfa` if
             masking removes all labels at any step.
     """
-    _validate_common(max_new_tokens)
+    policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
     ids, device = _normalise_input_ids(prompt_ids)
+    prompt_len = len(ids)
     eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
     state = dfa.start_state
     labels: list[int] = []
     token_scores: list[float] = []
     total_score = 0.0
     emittable = _emittable_labels(model, vocabulary)
+    update_progress = make_progress_tracker()
 
-    for step_idx in range(max_new_tokens):
-        remaining_steps = max_new_tokens - step_idx
+    step_idx = 0
+    while True:
+        progress = update_progress(
+            step_index=step_idx,
+            dfa_state=state,
+            prompt_token_count=prompt_len,
+            generated_token_ids=tuple(ids[prompt_len:]),
+            generated_labels=tuple(labels),
+            accepted=dfa.is_accepting(state),
+            eos_emitted=False,
+        )
+        if should_stop_decoding(policy, progress):
+            break
+        remaining_steps = remaining_steps_for(policy, step_idx)
         allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
         allowed &= emittable
         logits = _next_label_logits(
@@ -933,8 +1032,13 @@ def constrained_label_greedy_decode(
         token_scores.append(log_prob)
         total_score += log_prob
         state = next_state
+        step_idx += 1
 
-        if next_label == eos_label and dfa.is_accepting(state):
+        if should_stop_on_token(
+            policy,
+            eos_emitted=(next_label == eos_label),
+            accepted=dfa.is_accepting(state),
+        ):
             break
 
     return ConstrainedGenerationResult(
@@ -952,7 +1056,7 @@ def constrained_label_beam_search_decode(
     prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
-    max_new_tokens: int,
+    max_new_tokens: int | None = None,
     eos_label: int | None = None,
     beam_size: int = 4,
     length_penalty: float = 1.0,
@@ -960,6 +1064,8 @@ def constrained_label_beam_search_decode(
     num_return_sequences: int = 1,
     model_kwargs: dict | None = None,
     next_label_kwargs: dict | None = None,
+    *,
+    stop_policy: StopPolicy | None = None,
 ) -> ConstrainedGenerationResult:
     """Run DFA-constrained beam search for compact-label generation heads.
 
@@ -970,7 +1076,7 @@ def constrained_label_beam_search_decode(
     tokenizer IDs through ``model.token_id_for_label(...)`` when available, or
     :class:`TokenVocabulary` otherwise.
     """
-    _validate_common(max_new_tokens)
+    policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
     if beam_size < 1:
         raise ValueError("beam_size must be at least 1")
     if length_penalty <= 0.0:
@@ -979,14 +1085,29 @@ def constrained_label_beam_search_decode(
         raise ValueError("num_return_sequences must be at least 1")
 
     ids, device = _normalise_input_ids(prompt_ids)
+    prompt_len = len(ids)
     eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
     emittable = _emittable_labels(model, vocabulary)
     beams = [BeamCandidate(token_ids=ids, labels=[], state=dfa.start_state, score=0.0)]
     finished: list[BeamCandidate] = []
+    update_progress = make_progress_tracker()
 
-    for step_idx in range(max_new_tokens):
+    step_idx = 0
+    while True:
+        head_beam = beams[0] if beams else BeamCandidate(token_ids=ids, labels=[], state=dfa.start_state, score=0.0)
+        progress = update_progress(
+            step_index=step_idx,
+            dfa_state=head_beam.state,
+            prompt_token_count=prompt_len,
+            generated_token_ids=tuple(head_beam.token_ids[prompt_len:]),
+            generated_labels=tuple(head_beam.labels),
+            accepted=dfa.is_accepting(head_beam.state),
+            eos_emitted=False,
+        )
+        if should_stop_decoding(policy, progress):
+            break
         expanded: list[BeamCandidate] = []
-        remaining_steps = max_new_tokens - step_idx
+        remaining_steps = remaining_steps_for(policy, step_idx)
 
         for candidate in beams:
             if candidate.finished:
@@ -1023,7 +1144,11 @@ def constrained_label_beam_search_decode(
                     labels=candidate.labels + [next_label],
                     state=next_state,
                     score=float(candidate.score + score_delta),
-                    finished=next_label == eos_label and dfa.is_accepting(next_state),
+                    finished=should_stop_on_token(
+                        policy,
+                        eos_emitted=(next_label == eos_label),
+                        accepted=dfa.is_accepting(next_state),
+                    ),
                 )
                 expanded.append(next_candidate)
                 if next_candidate.finished:
@@ -1034,7 +1159,12 @@ def constrained_label_beam_search_decode(
 
         expanded.sort(key=lambda item: _candidate_rank(item, length_penalty), reverse=True)
         beams = expanded[:beam_size]
+        step_idx += 1
         if early_stopping and len(finished) >= num_return_sequences:
+            break
+        # All-finished short-circuit: skip the rest of the budget once every
+        # surviving beam has terminated.
+        if beams and all(beam.finished for beam in beams):
             break
 
     accepted_candidates = [candidate for candidate in finished + beams if dfa.is_accepting(candidate.state)]
@@ -1061,7 +1191,7 @@ def constrained_label_sample_decode(
     prompt_ids: torch.Tensor | Sequence[int],
     vocabulary: TokenVocabulary,
     dfa: DFA,
-    max_new_tokens: int,
+    max_new_tokens: int | None = None,
     eos_label: int | None = None,
     temperature: float = 1.0,
     top_k: int | None = None,
@@ -1069,6 +1199,8 @@ def constrained_label_sample_decode(
     generator: torch.Generator | None = None,
     model_kwargs: dict | None = None,
     next_label_kwargs: dict | None = None,
+    *,
+    stop_policy: StopPolicy | None = None,
 ) -> ConstrainedGenerationResult:
     """Run DFA-constrained sampling for compact-label generation heads.
 
@@ -1077,20 +1209,34 @@ def constrained_label_sample_decode(
     the unfiltered DFA-masked logits so an invalid label is never emitted just
     because stochastic filtering was too aggressive.
     """
-    _validate_common(max_new_tokens)
+    policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
     if temperature <= 0.0:
         raise ValueError("temperature must be positive")
 
     ids, device = _normalise_input_ids(prompt_ids)
+    prompt_len = len(ids)
     eos_label = vocabulary.eos_label if eos_label is None else int(eos_label)
     state = dfa.start_state
     labels: list[int] = []
     token_scores: list[float] = []
     total_score = 0.0
     emittable = _emittable_labels(model, vocabulary)
+    update_progress = make_progress_tracker()
 
-    for step_idx in range(max_new_tokens):
-        remaining_steps = max_new_tokens - step_idx
+    step_idx = 0
+    while True:
+        progress = update_progress(
+            step_index=step_idx,
+            dfa_state=state,
+            prompt_token_count=prompt_len,
+            generated_token_ids=tuple(ids[prompt_len:]),
+            generated_labels=tuple(labels),
+            accepted=dfa.is_accepting(state),
+            eos_emitted=False,
+        )
+        if should_stop_decoding(policy, progress):
+            break
+        remaining_steps = remaining_steps_for(policy, step_idx)
         allowed = {int(label) for label in dfa.allowed_tokens(state, remaining_steps=remaining_steps)}
         allowed &= emittable
         logits = _next_label_logits(
@@ -1118,7 +1264,12 @@ def constrained_label_sample_decode(
         total_score += log_prob
         state = next_state
 
-        if next_label == eos_label and dfa.is_accepting(state):
+        step_idx += 1
+        if should_stop_on_token(
+            policy,
+            eos_emitted=(next_label == eos_label),
+            accepted=dfa.is_accepting(state),
+        ):
             break
 
     return ConstrainedGenerationResult(

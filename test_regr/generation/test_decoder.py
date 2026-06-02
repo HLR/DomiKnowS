@@ -11,6 +11,7 @@ from domiknows.generation.dfa.decoder import (
     constrained_beam_search_decode,
     constrained_sample_decode,
 )
+from domiknows.generation.dfa.stop_policy import StopPolicy
 from domiknows.generation.applications import HuggingFaceGenerationAdapter
 
 
@@ -666,3 +667,78 @@ def test_huggingface_adapter_forwards_use_cache_flag():
 
     assert result.accepted
     assert [call["length"] for call in model.calls] == [1, 2]
+
+
+class EosFirstModel:
+    """Tiny model whose highest-logit token is always EOS (id 0)."""
+
+    def __call__(self, input_ids):
+        logits = torch.zeros((1, input_ids.shape[1], 3))
+        logits[0, -1, 0] = 10.0
+        logits[0, -1, 1] = 1.0
+        logits[0, -1, 2] = 1.0
+        return FakeOutput(logits)
+
+
+def test_stop_policy_unbounded_eos_only():
+    """An unbounded StopPolicy with EOS-stop must terminate on first accepting EOS.
+
+    Verifies the refactor's core promise: without a ``max_steps`` budget the
+    decoder loop still halts when ``stop_on_eos_if_accepting=True`` and the
+    next emitted token is EOS while the DFA is accepting.
+    """
+    tokenizer = FakeTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    dfa = accept_all_dfa(vocab)  # every state is accepting; EOS is allowed from start.
+
+    result = constrained_greedy_decode(
+        EosFirstModel(),
+        torch.tensor([[1]]),
+        vocab,
+        dfa,
+        eos_token_id=tokenizer.eos_token_id,
+        stop_policy=StopPolicy(stop_on_eos_if_accepting=True),
+    )
+
+    # Exactly one new token (EOS) is emitted, the DFA is accepting, and the
+    # decoder did not run off into an infinite loop.
+    assert result.token_ids[-1] == 0
+    assert result.labels == [vocab.label_for_token("<eos>")]
+    assert result.accepted
+
+
+def test_stop_policy_legacy_max_new_tokens_still_works():
+    """Legacy ``max_new_tokens=N`` keeps the historic behaviour after the refactor."""
+    tokenizer = FakeTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    dfa = required_token_dfa(vocab, "B")
+
+    result = constrained_greedy_decode(
+        FakeModel(),
+        torch.tensor([[1]]),
+        vocab,
+        dfa,
+        max_new_tokens=1,
+        eos_token_id=tokenizer.eos_token_id,
+    )
+
+    assert result.token_ids[-1] == 2
+    assert result.accepted
+
+
+def test_stop_policy_and_max_new_tokens_mutually_exclusive():
+    """Passing both legacy ``max_new_tokens=`` and new ``stop_policy=`` is a ValueError."""
+    tokenizer = FakeTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    dfa = accept_all_dfa(vocab)
+
+    with pytest.raises(ValueError, match="Pass either"):
+        constrained_greedy_decode(
+            EosFirstModel(),
+            torch.tensor([[1]]),
+            vocab,
+            dfa,
+            max_new_tokens=2,
+            eos_token_id=tokenizer.eos_token_id,
+            stop_policy=StopPolicy(max_steps=2),
+        )

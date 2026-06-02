@@ -16,6 +16,8 @@ _EXPORTS = {
     "ProductReachabilityGraph": ".visualization",
     "ProductTraceStep": ".visualization",
     "State": ".core",
+    "DecodeProgress": ".stop_policy",
+    "StopPolicy": ".stop_policy",
     "Symbol": ".core",
     "TokenVocabulary": ".vocabulary",
     "accept_all_dfa": "._constraints",

@@ -1,8 +1,10 @@
 import os
-os.environ["HF_HOME"]="/egr/research-hlr2/premsrit/transformer_cache"
-os.environ["HF_DATASETS_CACHE"]="/egr/research-hlr2/premsrit/transformer_cache"
+
+os.environ.setdefault("HF_HOME", "/egr/research-hlr2/premsrit/transformer_cache")
+os.environ.setdefault("HF_DATASETS_CACHE", "/egr/research-hlr2/premsrit/transformer_cache")
 import argparse
 import sys
+import tempfile
 from pathlib import Path
 
 import torch
@@ -25,8 +27,16 @@ RESULTS_PATHS = {
     "solver": RUN_DIR / "results_solver.txt",
     "primal-dual": RUN_DIR / "results_pmd.txt",
 }
-MODEL_DIR = Path("/egr/research-hlr2/premsrit/model_EAI")
-MODEL_DIR.mkdir(exist_ok=True)
+# ``MODEL_DIR`` honours ``EAI_MODEL_DIR`` first, then falls back to the
+# original Linux path, then to a per-user temp dir so the script
+# can run on any machine without manual setup.
+_default_model_dir = "/egr/research-hlr2/premsrit/model_EAI"
+MODEL_DIR = Path(os.environ.get("EAI_MODEL_DIR", _default_model_dir))
+try:
+    MODEL_DIR.mkdir(exist_ok=True)
+except (FileNotFoundError, OSError):
+    MODEL_DIR = Path(tempfile.gettempdir()) / "model_EAI"
+    MODEL_DIR.mkdir(exist_ok=True)
 
 
 def build_program(

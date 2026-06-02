@@ -33,6 +33,7 @@ from ..dfa.decoder import (
     constrained_greedy_decode,
     constrained_sample_decode,
 )
+from ..dfa.stop_policy import StopPolicy
 from ..dfa.vocabulary import TokenVocabulary
 
 
@@ -99,8 +100,10 @@ class HuggingFaceGenerationAdapter:
         self,
         input_ids: torch.Tensor,
         dfa: DFA,
-        max_new_tokens: int,
+        max_new_tokens: int | None = None,
         use_cache: bool = True,
+        *,
+        stop_policy: StopPolicy | None = None,
     ) -> ConstrainedGenerationResult:
         """Run DFA-constrained greedy decoding from *input_ids*.
 
@@ -126,22 +129,25 @@ class HuggingFaceGenerationAdapter:
             input_ids,
             self.vocabulary,
             dfa,
-            max_new_tokens,
+            max_new_tokens=max_new_tokens,
             # Pass the tokenizer's EOS id so the decoder knows when to stop.
             eos_token_id=getattr(self.tokenizer, "eos_token_id", None),
             use_cache=use_cache,
+            stop_policy=stop_policy,
         )
 
     def constrained_beam_search(
         self,
         input_ids: torch.Tensor,
         dfa: DFA,
-        max_new_tokens: int,
+        max_new_tokens: int | None = None,
         beam_size: int = 4,
         length_penalty: float = 1.0,
         early_stopping: bool = True,
         num_return_sequences: int = 1,
         use_cache: bool = True,
+        *,
+        stop_policy: StopPolicy | None = None,
     ) -> ConstrainedGenerationResult:
         """Run DFA-constrained beam search from *input_ids*.
 
@@ -176,25 +182,28 @@ class HuggingFaceGenerationAdapter:
             input_ids,
             self.vocabulary,
             dfa,
-            max_new_tokens,
+            max_new_tokens=max_new_tokens,
             eos_token_id=getattr(self.tokenizer, "eos_token_id", None),
             beam_size=beam_size,
             length_penalty=length_penalty,
             early_stopping=early_stopping,
             num_return_sequences=num_return_sequences,
             use_cache=use_cache,
+            stop_policy=stop_policy,
         )
 
     def constrained_sample(
         self,
         input_ids: torch.Tensor,
         dfa: DFA,
-        max_new_tokens: int,
+        max_new_tokens: int | None = None,
         temperature: float = 1.0,
         top_k: int | None = None,
         top_p: float | None = None,
         generator: torch.Generator | None = None,
         use_cache: bool = True,
+        *,
+        stop_policy: StopPolicy | None = None,
     ) -> ConstrainedGenerationResult:
         """Run DFA-constrained stochastic decoding from *input_ids*.
 
@@ -229,13 +238,14 @@ class HuggingFaceGenerationAdapter:
             input_ids,
             self.vocabulary,
             dfa,
-            max_new_tokens,
+            max_new_tokens=max_new_tokens,
             eos_token_id=getattr(self.tokenizer, "eos_token_id", None),
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
             generator=generator,
             use_cache=use_cache,
+            stop_policy=stop_policy,
         )
 
 
