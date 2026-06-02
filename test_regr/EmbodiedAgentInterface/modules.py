@@ -55,6 +55,280 @@ class TextBERTEncoder(torch.nn.Module):
         return pooled.float()
 
 
+class AutoregressiveActionObjectGenerator(torch.nn.Module):
+    def __init__(
+        self,
+        model_path="bert-base-uncased",
+        label_count=2,
+        eos_label=0,
+        device="cpu",
+        max_length=256,
+        freeze=True,
+        hidden_dim=128,
+    ):
+        super().__init__()
+        self.encoder = TextBERTEncoder(
+            model_path=model_path,
+            device=device,
+            max_length=max_length,
+            freeze=freeze,
+        )
+        self.label_count = label_count
+        self.eos_label = int(eos_label)
+        self.device_name = device
+        self.hidden_dim = hidden_dim
+        self.token_embedding = torch.nn.Embedding(label_count, hidden_dim).to(device)
+        self.context_projection = torch.nn.Linear(self.encoder.hidden_size, hidden_dim).to(device)
+        self.gru = torch.nn.GRU(input_size=hidden_dim, hidden_size=hidden_dim, batch_first=True).to(device)
+        self.output = torch.nn.Linear(hidden_dim, label_count).to(device)
+
+    @property
+    def hidden_size(self):
+        return self.encoder.hidden_size
+
+    def token_id_for_label(self, label):
+        return int(label)
+
+    def _context_hidden(self, text):
+        context = self.encoder(text).float()
+        if context.dim() == 1:
+            context = context.unsqueeze(0)
+        hidden = torch.tanh(self.context_projection(context)).unsqueeze(0)
+        return hidden
+
+    def _shift_right(self, target_labels):
+        labels = torch.as_tensor(target_labels, dtype=torch.long, device=self.device_name)
+        if labels.dim() == 1:
+            labels = labels.unsqueeze(0)
+        start = torch.full(
+            (labels.shape[0], 1),
+            self.eos_label,
+            dtype=torch.long,
+            device=self.device_name,
+        )
+        return torch.cat([start, labels[:, :-1]], dim=1)
+
+    def sequence_logits(self, text, prefix_labels):
+        prefix = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device_name)
+        if prefix.dim() == 1:
+            prefix = prefix.unsqueeze(0)
+        prefix = prefix.clamp(min=0, max=self.label_count - 1)
+        embeddings = self.token_embedding(prefix)
+        outputs, _hidden = self.gru(embeddings, self._context_hidden(text))
+        return self.output(outputs)
+
+    def forward(self, _contains, text, target_labels):
+        prefix = self._shift_right(target_labels)
+        logits = self.sequence_logits(text, prefix)
+        return logits.squeeze(0) if logits.shape[0] == 1 else logits
+
+    def next_label_logits(self, input_ids, text=""):
+        ids = torch.as_tensor(input_ids, dtype=torch.long, device=self.device_name)
+        if ids.dim() == 2:
+            ids = ids[0]
+        if ids.numel() == 0:
+            ids = torch.tensor([self.eos_label], dtype=torch.long, device=self.device_name)
+        logits = self.sequence_logits(text, ids.unsqueeze(0))[0, -1, :]
+        return logits
+
+
+class ByteTextEncoder(torch.nn.Module):
+    def __init__(self, hidden_dim=128, device="cpu", max_length=512):
+        super().__init__()
+        self.device_name = device
+        self.max_length = max_length
+        self.embedding = torch.nn.Embedding(256, hidden_dim).to(device)
+        self.projection = torch.nn.Sequential(
+            torch.nn.LayerNorm(hidden_dim),
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            torch.nn.Tanh(),
+        ).to(device)
+
+    def _encode_one(self, text):
+        raw = str(text).encode("utf-8", errors="ignore")[: self.max_length]
+        if not raw:
+            raw = b" "
+        return torch.tensor(list(raw), dtype=torch.long, device=self.device_name)
+
+    def forward(self, text):
+        texts = [text] if isinstance(text, str) else list(text) if isinstance(text, (list, tuple)) else [str(text)]
+        encoded = [self._encode_one(item) for item in texts]
+        max_len = max(item.numel() for item in encoded)
+        padded = torch.zeros((len(encoded), max_len), dtype=torch.long, device=self.device_name)
+        mask = torch.zeros((len(encoded), max_len), dtype=torch.float32, device=self.device_name)
+        for row, item in enumerate(encoded):
+            padded[row, : item.numel()] = item
+            mask[row, : item.numel()] = 1.0
+        embeddings = self.embedding(padded)
+        pooled = (embeddings * mask.unsqueeze(-1)).sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp_min(1.0)
+        return self.projection(pooled.float())
+
+
+class TinyTransformerActionObjectGenerator(torch.nn.Module):
+    def __init__(
+        self,
+        label_count=2,
+        eos_label=0,
+        device="cpu",
+        max_length=512,
+        hidden_dim=128,
+        num_layers=2,
+        num_heads=4,
+        dropout=0.1,
+    ):
+        super().__init__()
+        self.label_count = label_count
+        self.eos_label = int(eos_label)
+        self.device_name = device
+        self.hidden_dim = hidden_dim
+        self.text_encoder = ByteTextEncoder(hidden_dim=hidden_dim, device=device, max_length=max_length)
+        self.token_embedding = torch.nn.Embedding(label_count, hidden_dim).to(device)
+        self.position_embedding = torch.nn.Embedding(512, hidden_dim).to(device)
+        layer = torch.nn.TransformerEncoderLayer(
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            dropout=dropout,
+            batch_first=True,
+            activation="gelu",
+        )
+        self.transformer = torch.nn.TransformerEncoder(layer, num_layers=num_layers).to(device)
+        self.output = torch.nn.Linear(hidden_dim, label_count).to(device)
+
+    def token_id_for_label(self, label):
+        return int(label)
+
+    def _shift_right(self, target_labels):
+        labels = torch.as_tensor(target_labels, dtype=torch.long, device=self.device_name)
+        if labels.dim() == 1:
+            labels = labels.unsqueeze(0)
+        start = torch.full((labels.shape[0], 1), self.eos_label, dtype=torch.long, device=self.device_name)
+        return torch.cat([start, labels[:, :-1]], dim=1)
+
+    def sequence_logits(self, text, prefix_labels):
+        prefix = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device_name)
+        if prefix.dim() == 1:
+            prefix = prefix.unsqueeze(0)
+        prefix = prefix.clamp(min=0, max=self.label_count - 1)
+        seq_len = prefix.shape[1]
+        positions = torch.arange(seq_len, dtype=torch.long, device=self.device_name).unsqueeze(0)
+        positions = positions.clamp(max=self.position_embedding.num_embeddings - 1)
+        context = self.text_encoder(text).unsqueeze(1)
+        hidden = self.token_embedding(prefix) + self.position_embedding(positions) + context
+        causal_mask = torch.triu(
+            torch.full((seq_len, seq_len), float("-inf"), device=self.device_name),
+            diagonal=1,
+        )
+        outputs = self.transformer(hidden, mask=causal_mask)
+        return self.output(outputs)
+
+    def forward(self, _contains, text, target_labels):
+        logits = self.sequence_logits(text, self._shift_right(target_labels))
+        return logits.squeeze(0) if logits.shape[0] == 1 else logits
+
+    def next_label_logits(self, input_ids, text=""):
+        ids = torch.as_tensor(input_ids, dtype=torch.long, device=self.device_name)
+        if ids.dim() == 2:
+            ids = ids[0]
+        if ids.numel() == 0:
+            ids = torch.tensor([self.eos_label], dtype=torch.long, device=self.device_name)
+        return self.sequence_logits(text, ids.unsqueeze(0))[0, -1, :]
+
+
+class CausalLMActionObjectGenerator(torch.nn.Module):
+    def __init__(
+        self,
+        model_path="Qwen/Qwen2.5-0.5B-Instruct",
+        label_count=2,
+        eos_label=0,
+        device="cpu",
+        max_length=512,
+        freeze=True,
+        hidden_dim=None,
+        vocabulary=None,
+    ):
+        super().__init__()
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.label_count = label_count
+        self.eos_label = int(eos_label)
+        self.device_name = device
+        self.max_length = max_length
+        self.vocabulary = vocabulary
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=dtype,
+            trust_remote_code=True,
+        ).to(device)
+        if freeze:
+            for param in self.model.parameters():
+                param.requires_grad = False
+        self.model.eval() if freeze else self.model.train()
+        model_hidden = getattr(self.model.config, "hidden_size", hidden_dim or 768)
+        self.output = torch.nn.Linear(model_hidden, label_count).to(device)
+
+    def token_id_for_label(self, label):
+        return int(label)
+
+    def _label_to_token(self, label):
+        if self.vocabulary is None:
+            return str(int(label))
+        try:
+            return self.vocabulary.token_for_label(int(label))
+        except Exception:
+            return str(int(label))
+
+    def _prompt(self, text, prefix_labels):
+        prefix = " ".join(self._label_to_token(label) for label in prefix_labels if int(label) != self.eos_label)
+        return f"Instruction: {text}\nGenerated action tokens: {prefix}\nNext token:"
+
+    def _next_logits_for_prefix(self, text, prefix_labels):
+        prompt = self._prompt(text, prefix_labels)
+        inputs = self.tokenizer(
+            prompt,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        ).to(self.device_name)
+        with torch.set_grad_enabled(any(param.requires_grad for param in self.model.parameters())):
+            outputs = self.model(**inputs, output_hidden_states=True, use_cache=False)
+            hidden = outputs.hidden_states[-1][:, -1, :].float()
+        return self.output(hidden)[0]
+
+    def _shift_right(self, target_labels):
+        labels = torch.as_tensor(target_labels, dtype=torch.long, device=self.device_name)
+        if labels.dim() == 1:
+            labels = labels.unsqueeze(0)
+        start = torch.full((labels.shape[0], 1), self.eos_label, dtype=torch.long, device=self.device_name)
+        return torch.cat([start, labels[:, :-1]], dim=1)
+
+    def sequence_logits(self, text, prefix_labels):
+        prefix = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device_name)
+        if prefix.dim() == 1:
+            prefix = prefix.unsqueeze(0)
+        rows = []
+        for row in prefix:
+            logits = []
+            for end in range(1, row.numel() + 1):
+                logits.append(self._next_logits_for_prefix(text, row[:end].tolist()))
+            rows.append(torch.stack(logits, dim=0))
+        return torch.stack(rows, dim=0)
+
+    def forward(self, _contains, text, target_labels):
+        logits = self.sequence_logits(text, self._shift_right(target_labels))
+        return logits.squeeze(0) if logits.shape[0] == 1 else logits
+
+    def next_label_logits(self, input_ids, text=""):
+        ids = torch.as_tensor(input_ids, dtype=torch.long, device=self.device_name)
+        if ids.dim() == 2:
+            ids = ids[0]
+        if ids.numel() == 0:
+            ids = torch.tensor([self.eos_label], dtype=torch.long, device=self.device_name)
+        return self._next_logits_for_prefix(text, ids.tolist())
+
+
 class TextBERTTokenEncoder(TextBERTEncoder):
     def __init__(
         self,

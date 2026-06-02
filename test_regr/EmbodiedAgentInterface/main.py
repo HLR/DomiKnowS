@@ -1,3 +1,6 @@
+import os
+os.environ["HF_HOME"]="/egr/research-hlr2/premsrit/transformer_cache"
+os.environ["HF_DATASETS_CACHE"]="/egr/research-hlr2/premsrit/transformer_cache"
 import argparse
 import sys
 from pathlib import Path
@@ -9,11 +12,20 @@ sys.path.append(str(SCRIPT_DIR))
 sys.path.append(str(SCRIPT_DIR.parents[1]))
 
 from dataset import ACTION_VOCAB, EOS_TOKEN, dummy_dataset, load_eai_dataset, split_train_dev
-from modules import SmallLLMPlanGenerator, TextBERTTokenEncoder, TokenActionClassifier
+from modules import (
+    AutoregressiveActionObjectGenerator,
+    CausalLMActionObjectGenerator,
+    SmallLLMPlanGenerator,
+    TinyTransformerActionObjectGenerator,
+)
 
 
 RUN_DIR = Path(__file__).parent.resolve()
-MODEL_DIR = RUN_DIR / "models"
+RESULTS_PATHS = {
+    "solver": RUN_DIR / "results_solver.txt",
+    "primal-dual": RUN_DIR / "results_pmd.txt",
+}
+MODEL_DIR = Path("/egr/research-hlr2/premsrit/model_EAI")
 MODEL_DIR.mkdir(exist_ok=True)
 
 
@@ -28,9 +40,21 @@ def build_program(
     use_llm=False,
     llm_model_path=None,
     max_new_tokens=128,
+    vocab=None,
+    object_tokens=None,
+    action_tokens=None,
+    program_type="solver",
+    baseline_model="tiny-transformer",
+    llm_backbone_path="Qwen/Qwen2.5-0.5B-Instruct",
+    transformer_layers=2,
+    transformer_heads=4,
 ):
     from domiknows import setProductionLogMode
     from domiknows.program import SolverPOIProgram
+    from domiknows.program.loss import NBCrossEntropyLoss
+    from domiknows.program.lossprogram import PrimalDualProgram
+    from domiknows.program.metric import MacroAverageTracker
+    from domiknows.program.model.pytorch import SolverModel
     from domiknows.sensor.pytorch.sensors import ModuleSensor, ReaderSensor
     from domiknows.sensor.pytorch.learners import ModuleLearner
     from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
@@ -38,8 +62,17 @@ def build_program(
     from graph import create_generation_graph
 
     setProductionLogMode(True)
-    graph, bundle = create_generation_graph(max_steps=max_steps)
+    graph, bundle = create_generation_graph(
+        max_steps=max_steps,
+        vocab=vocab,
+        object_tokens=object_tokens,
+        action_tokens=action_tokens,
+    )
     graph.detach()
+    if program_type not in {"solver", "primal-dual"}:
+        raise ValueError(f"Unsupported program_type={program_type!r}")
+    program_args = (graph,) if program_type == "solver" else (graph, SolverModel)
+    supervised_loss = MacroAverageTracker(NBCrossEntropyLoss())
 
     # Match the generation examples: text owns prompt-level inputs, token owns
     # per-step features/labels, and token[generated_token] owns predictions.
@@ -56,7 +89,7 @@ def build_program(
         relation=bundle.contains,
         forward=lambda _text, positions: torch.ones_like(positions).unsqueeze(-1).float(),
     )
-    token["target_action_label"] = ReaderSensor(keyword="target_action_labels", label=True)
+    token["target_action_label"] = ReaderSensor(keyword="target_action_labels")
 
     if use_llm:
         llm_generator = SmallLLMPlanGenerator(
@@ -80,37 +113,67 @@ def build_program(
         )
         return program, bundle
 
-    token_encoder = TextBERTTokenEncoder(
-        model_path=encoder_model_path,
-        device=device,
-        max_length=encoder_max_length,
-        freeze=freeze_encoder,
-        max_steps=max_steps,
-    )
-    feature_dim = feature_dim or token_encoder.hidden_size
-    token["features"] = ModuleSensor(
+    if baseline_model == "bert-gru":
+        autoregressive_head = AutoregressiveActionObjectGenerator(
+            model_path=encoder_model_path,
+            label_count=bundle.vocabulary.label_count,
+            eos_label=bundle.vocabulary.eos_label,
+            device=device,
+            max_length=encoder_max_length,
+            freeze=freeze_encoder,
+            hidden_dim=hidden_dim,
+        ).to(device)
+    elif baseline_model == "tiny-transformer":
+        autoregressive_head = TinyTransformerActionObjectGenerator(
+            label_count=bundle.vocabulary.label_count,
+            eos_label=bundle.vocabulary.eos_label,
+            device=device,
+            max_length=encoder_max_length,
+            hidden_dim=hidden_dim,
+            num_layers=transformer_layers,
+            num_heads=transformer_heads,
+        ).to(device)
+    elif baseline_model == "causal-lm":
+        autoregressive_head = CausalLMActionObjectGenerator(
+            model_path=llm_backbone_path,
+            label_count=bundle.vocabulary.label_count,
+            eos_label=bundle.vocabulary.eos_label,
+            device=device,
+            max_length=encoder_max_length,
+            freeze=freeze_encoder,
+            hidden_dim=hidden_dim,
+            vocabulary=bundle.vocabulary,
+        ).to(device)
+    else:
+        raise ValueError(f"Unsupported baseline_model={baseline_model!r}")
+    token[generated_token] = ModuleLearner(
         bundle.contains,
         text["instruction_text"],
-        "position",
-        module=token_encoder,
+        "target_action_label",
+        module=autoregressive_head,
         device=device,
     )
-    token_classifier = TokenActionClassifier(
-        feature_dim=feature_dim,
-        label_count=bundle.vocabulary.label_count,
-        hidden_dim=hidden_dim,
-        device=device,
-    )
-    token[generated_token] = ModuleLearner(
-        "features",
-        module=token_classifier,
-        device=device,
-    )
-    program = SolverPOIProgram(
-        graph,
-        poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
-        inferTypes=['local/argmax']
-    )
+    token[generated_token] = ReaderSensor(keyword="target_action_labels", label=True)
+
+    if program_type == "solver":
+        program = SolverPOIProgram(
+            *program_args,
+            poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
+            inferTypes=['local/argmax'],
+            loss=supervised_loss,
+            device=device,
+            metric={},
+        )
+    else:
+         program = PrimalDualProgram(
+            *program_args,
+            poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
+            inferTypes=['local/argmax'],
+            loss=supervised_loss,
+            device=device,
+            metric={},
+        )
+    program.autoregressive_head = autoregressive_head
     return program, bundle
 
 
@@ -233,6 +296,266 @@ def generated_token_sequence(datanode, bundle):
     return [label for _position, label in sorted(labels)]
 
 
+def generation_vocab_from_examples(examples):
+    if not examples:
+        return ACTION_VOCAB
+    return examples[0].get("generation_vocab", ACTION_VOCAB)
+
+
+def action_tokens_from_examples(examples):
+    if not examples:
+        return ()
+    vocab = generation_vocab_from_examples(examples)
+    return tuple(token for token in vocab if any(token in sample.get("action_tokens", ()) for sample in examples))
+
+
+def action_tokens_requiring_object_from_examples(examples):
+    if not examples:
+        return ()
+    vocab = generation_vocab_from_examples(examples)
+    return tuple(
+        token
+        for token in vocab
+        if any(token in sample.get("action_requires_object_tokens", ()) for sample in examples)
+    )
+
+
+def object_tokens_from_examples(examples):
+    if not examples:
+        return ()
+    vocab = generation_vocab_from_examples(examples)
+    return tuple(token for token in vocab if any(token in sample.get("object_tokens", ()) for sample in examples))
+
+
+def write_vocab_info_log(examples):
+    log_dir = RUN_DIR / "logs"
+    log_dir.mkdir(exist_ok=True)
+    vocab = generation_vocab_from_examples(examples)
+    action_tokens = action_tokens_from_examples(examples)
+    object_tokens = object_tokens_from_examples(examples)
+    action_requires_object_tokens = action_tokens_requiring_object_from_examples(examples)
+    info_path = log_dir / "info.log"
+    with info_path.open("w") as log_file:
+        log_file.write("EmbodiedAgentInterface vocabulary info\n")
+        log_file.write(f"example_count: {len(examples)}\n")
+        log_file.write(f"vocab_size: {len(vocab)}\n")
+        log_file.write(f"action_count: {len(action_tokens)}\n")
+        log_file.write(f"object_count: {len(object_tokens)}\n")
+        log_file.write(
+            f"action_requires_object_count: {len(action_requires_object_tokens)}\n"
+        )
+        log_file.write("\n[vocabulary]\n")
+        for index, token in enumerate(vocab):
+            log_file.write(f"{index}: {token}\n")
+        log_file.write("\n[action_tokens]\n")
+        for token in action_tokens:
+            log_file.write(f"{token}\n")
+        log_file.write("\n[action_requires_object_tokens]\n")
+        for token in action_requires_object_tokens:
+            log_file.write(f"{token}\n")
+        log_file.write("\n[object_tokens]\n")
+        for token in object_tokens:
+            log_file.write(f"{token}\n")
+    print(f"Vocabulary info log: {info_path}")
+
+
+def dfa_constrained_sequence(program, bundle, sample, max_steps):
+    from domiknows.generation import constrained_label_greedy_decode, constraints_to_dfa_from_graph
+
+    dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+    result = constrained_label_greedy_decode(
+        program.autoregressive_head,
+        [bundle.vocabulary.eos_label],
+        bundle.vocabulary,
+        dfa,
+        max_new_tokens=max_steps,
+        next_label_kwargs={"text": sample.get("text", "")},
+    )
+    return result.labels
+
+
+def greedy_sequence(program, bundle, sample, max_steps):
+    labels = []
+    prefix = [bundle.vocabulary.eos_label]
+    for _step in range(max_steps):
+        logits = program.autoregressive_head.next_label_logits(
+            prefix,
+            text=sample.get("text", ""),
+        )
+        label = int(torch.argmax(logits.detach(), dim=-1).item())
+        labels.append(label)
+        prefix.append(label)
+        if label == bundle.vocabulary.eos_label:
+            break
+    return labels
+
+
+def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=False, limit=None, show=False):
+    from domiknows.generation import constraints_to_dfa_from_graph
+
+    eval_examples = examples if limit is None else examples[:limit]
+    if not eval_examples:
+        return {"examples": 0, "exact_sequence": 0.0, "token_accuracy": 0.0, "dfa_valid": 0.0}
+
+    dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+    exact = 0
+    token_correct = 0
+    token_total = 0
+    dfa_valid = 0
+    for idx, sample in enumerate(eval_examples):
+        program.populate_one(sample, device=device)
+        labels = dfa_constrained_sequence(program, bundle, sample, max_steps) if use_dfa else greedy_sequence(program, bundle, sample, max_steps)
+        gold = [int(x.item() if torch.is_tensor(x) else x) for x in sample["target_action_labels"][:max_steps]]
+        pred = [int(x.item() if torch.is_tensor(x) else x) for x in labels[:max_steps]]
+        pred_padded = pred + [bundle.vocabulary.eos_label] * max(0, len(gold) - len(pred))
+        pred_padded = pred_padded[:len(gold)]
+        exact += int(pred_padded == gold)
+        token_correct += sum(int(p == g) for p, g in zip(pred_padded, gold))
+        token_total += len(gold)
+        dfa_valid += int(dfa.accepts(pred_padded))
+        if show:
+            print()
+            print(f"## Example {idx}: {sample.get('task_id', 'task')}")
+            print(f"Instruction: {sample.get('natural_language_description') or sample.get('text')}")
+            print(f"Gold sequence:      {labels_to_actions(gold, bundle.vocabulary)}")
+            print(f"Predicted sequence: {labels_to_actions(pred_padded, bundle.vocabulary)}")
+    return {
+        "examples": len(eval_examples),
+        "exact_sequence": exact / len(eval_examples),
+        "token_accuracy": token_correct / token_total if token_total else 0.0,
+        "dfa_valid": dfa_valid / len(eval_examples),
+    }
+
+
+def results_path_for_program(program_type):
+    return RESULTS_PATHS.get(program_type, RUN_DIR / "results.txt")
+
+
+def print_score(title, score, program_type=None):
+    line = (
+        f"{title}: examples={score['examples']} "
+        f"exact_sequence={score['exact_sequence']:.3f} "
+        f"token_accuracy={score['token_accuracy']:.3f} "
+        f"dfa_valid={score['dfa_valid']:.3f}"
+    )
+    print(line)
+    with results_path_for_program(program_type).open("a") as results_file:
+        results_file.write(line + "\n")
+
+
+def build_trainable_program(args, examples, device):
+    return build_program(
+        device=device,
+        feature_dim=args.feature_dim,
+        hidden_dim=args.hidden_dim,
+        encoder_model_path=args.encoder_model_path,
+        encoder_max_length=args.encoder_max_length,
+        freeze_encoder=not args.finetune_encoder,
+        max_steps=args.max_steps,
+        vocab=generation_vocab_from_examples(examples),
+        object_tokens=object_tokens_from_examples(examples),
+        action_tokens=action_tokens_requiring_object_from_examples(examples),
+        program_type=args.program,
+        baseline_model=args.baseline_model,
+        llm_backbone_path=args.llm_backbone_path,
+        transformer_layers=args.transformer_layers,
+        transformer_heads=args.transformer_heads,
+    )
+
+
+def _train_kwargs(args, train, device, epochs):
+    train_kwargs = {
+        "device": device,
+        "train_epoch_num": epochs,
+        "Optim": lambda params: torch.optim.Adam(params, lr=args.lr),
+        "test_every_epoch": False,
+    }
+    if args.program == "primal-dual":
+        train_kwargs.update(
+            c_warmup_iters=args.constraint_warmup_iters,
+            batch_size=args.batch_size,
+            dataset_size=len(train),
+        )
+    return train_kwargs
+
+
+def _epoch_accuracy_title(args, split_name, epoch):
+    dfa_text = "with DFA" if args.use_dfa else "without DFA"
+    return f"epoch {epoch} {args.dataset} {args.program} {split_name} {dfa_text}"
+
+
+def report_epoch_accuracy(args, program, bundle, train, dev, device, epoch):
+    limit = args.epoch_eval_limit if args.epoch_eval_limit > 0 else None
+    for split_name, split_examples in (("train", train), ("dev", dev)):
+        if not split_examples:
+            continue
+        score = sequence_score(
+            program,
+            bundle,
+            split_examples,
+            args.max_steps,
+            device=device,
+            use_dfa=args.use_dfa,
+            limit=limit,
+            show=False,
+        )
+        print_score(_epoch_accuracy_title(args, split_name, epoch), score, args.program)
+
+
+def train_program(args, train, dev, examples, device):
+    program, bundle = build_trainable_program(args, examples, device)
+    if args.eval_every_epoch:
+        for epoch in range(1, args.epochs + 1):
+            print(f"Training epoch {epoch}/{args.epochs}")
+            program.train(train, valid_set=dev, test_set=None, **_train_kwargs(args, train, device, 1))
+            report_epoch_accuracy(args, program, bundle, train, dev, device, epoch)
+    else:
+        program.train(train, valid_set=dev, test_set=None, **_train_kwargs(args, train, device, args.epochs))
+
+    if args.model:
+        model_path = Path(args.model)
+        model_path.parent.mkdir(exist_ok=True, parents=True)
+        program.save(model_path)
+        print(f"Saved model: {model_path}")
+    return program, bundle
+
+
+def load_trained_program(args, examples, device):
+    program, bundle = build_trainable_program(args, examples, device)
+    if args.model:
+        model_path = Path(args.model)
+        if model_path.exists():
+            program.load(model_path, map_location=device)
+            print(f"Loaded model: {model_path}")
+        else:
+            raise FileNotFoundError(f"Model file does not exist: {model_path}")
+    return program, bundle
+
+
+def run_train_or_evaluate(args, examples, device):
+    train, dev = split_train_dev(examples, args.dev_fraction)
+    eval_examples = dev or train
+    program = bundle = None
+    if args.train:
+        program, bundle = train_program(args, train, dev, examples, device)
+    if args.evaluate or args.eval_only:
+        if program is None or bundle is None:
+            program, bundle = load_trained_program(args, examples, device)
+        title = f"{args.dataset} {args.program} {'with DFA' if args.use_dfa else 'without DFA'}"
+        score = sequence_score(
+            program,
+            bundle,
+            eval_examples,
+            args.max_steps,
+            device=device,
+            use_dfa=args.use_dfa,
+            limit=args.num_generations if args.num_generations > 0 else None,
+            show=args.show_predictions,
+        )
+        print_score(title, score, args.program)
+    return 0
+
+
 def generate_baseline_sequences(args, examples, device):
     program, bundle = build_program(
         device=device,
@@ -242,12 +565,21 @@ def generate_baseline_sequences(args, examples, device):
         encoder_max_length=args.encoder_max_length,
         freeze_encoder=not args.finetune_encoder,
         max_steps=args.max_steps,
+        vocab=generation_vocab_from_examples(examples),
+        object_tokens=object_tokens_from_examples(examples),
+        action_tokens=action_tokens_requiring_object_from_examples(examples),
+        program_type=args.program,
+        baseline_model=args.baseline_model,
+        llm_backbone_path=args.llm_backbone_path,
+        transformer_layers=args.transformer_layers,
+        transformer_heads=args.transformer_heads,
     )
     correct = 0
     total = 0
     for idx, sample in enumerate(examples[:args.num_generations]):
-        datanode = program.populate_one(sample, device=device)
-        pred = labels_to_actions(generated_token_sequence(datanode, bundle), bundle.vocabulary)
+        program.populate_one(sample, device=device)
+        labels = dfa_constrained_sequence(program, bundle, sample, args.max_steps) if args.use_dfa else greedy_sequence(program, bundle, sample, args.max_steps)
+        pred = labels_to_actions(labels, bundle.vocabulary)
         gold = sample["target_action_tokens"]
         correct += int(bool(pred) and pred == gold[: len(pred)])
         total += 1
@@ -267,6 +599,9 @@ def generate_llm_sequences(args, examples, device):
         use_llm=True,
         llm_model_path=args.llm_model_path,
         max_new_tokens=args.max_new_tokens,
+        vocab=generation_vocab_from_examples(examples),
+        object_tokens=object_tokens_from_examples(examples),
+        action_tokens=action_tokens_requiring_object_from_examples(examples),
     )
     for idx, sample in enumerate(examples[:args.num_generations]):
         datanode = program.populate_one(sample, device=device)
@@ -288,9 +623,15 @@ def parse_args():
     parser.add_argument("--data-path", default=None, help="Local parquet/csv/json/jsonl copy of EAI.")
     parser.add_argument("--dummy", action="store_true", help="Use a tiny local smoke-test dataset.")
     parser.add_argument("--limit", type=int, default=None, help="Limit loaded rows.")
-    parser.add_argument("--max-steps", type=int, default=8, help="Padded action-token sequence length including EOS.")
+    parser.add_argument("--max-steps", type=int, default=60, help="Padded action-token sequence length including EOS.")
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--program", choices=["solver", "primal-dual"], default="solver", help="DomiKnowS training program to use for the autoregressive baseline.")
+    parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
+    parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-0.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
+    parser.add_argument("--transformer-layers", type=int, default=2, help="Layers for --baseline-model tiny-transformer.")
+    parser.add_argument("--transformer-heads", type=int, default=4, help="Attention heads for --baseline-model tiny-transformer.")
+    parser.add_argument("--constraint-warmup-iters", type=int, default=5, help="Model-only warmup iterations before primal-dual constraint updates.")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--dev-fraction", type=float, default=0.2)
     parser.add_argument("--feature-dim", type=int, default=None, help="Override encoder hidden size for the sequence head input.")
@@ -299,12 +640,19 @@ def parse_args():
     parser.add_argument("--finetune-encoder", action="store_true", help="Allow gradients through the BERT encoder. Default freezes it.")
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--train", action="store_true", help="Train the selected --program and save --model.")
+    parser.add_argument("--evaluate", action="store_true", help="Evaluate the selected --program, loading --model unless training in the same run.")
+    parser.add_argument("--eval-every-epoch", action="store_true", help="Report train/dev sequence accuracy after each training epoch.")
+    parser.add_argument("--epoch-eval-limit", type=int, default=0, help="Limit examples used for --eval-every-epoch scoring; 0 evaluates the full split.")
+    parser.add_argument("--use-dfa", action="store_true", help="Use DFA-constrained decoding during evaluation/generation.")
+    parser.add_argument("--show-predictions", action="store_true", help="Print decoded examples during evaluation.")
     parser.add_argument("--eval-only", action="store_true")
     parser.add_argument("--model", default=str(MODEL_DIR / "eai_action_sequence_baseline.pth"))
     parser.add_argument("--use-llm", action="store_true", help="Attach a small text LLM as a DomiKnowS ModuleSensor for action-sequence generation.")
     parser.add_argument("--llm-model-path", default="Qwen/Qwen2.5-0.5B-Instruct", help="Small Hugging Face causal LM used by the DomiKnowS generated action sequence sensor.")
     parser.add_argument("--max-new-tokens", type=int, default=128, help="Maximum generated plan tokens for --use-llm.")
-    parser.add_argument("--num-generations", type=int, default=5, help="Number of examples to decode/show.")
+    parser.add_argument("--num-generations", type=int, default=300, help="Number of examples to decode/show.")
+    parser.add_argument("--single-run", action="store_true", help="Train only --program on --dataset instead of the BEHAVIOR/VirtualHome normal+PMD suite.")
     return parser.parse_args()
 
 
@@ -312,10 +660,14 @@ def main():
     args = parse_args()
     device = args.device
     examples = load_examples(args, device)
+    write_vocab_info_log(examples)
 
     if args.use_llm:
         generate_llm_sequences(args, examples, device)
         return 0
+
+    if args.train or args.evaluate or args.eval_only:
+        return run_train_or_evaluate(args, examples, device)
 
     train, dev = split_train_dev(examples, args.dev_fraction)
     shown = dev or train
