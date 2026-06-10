@@ -177,7 +177,7 @@ def build_learning_program(
 
     # 1. DomiKnows graph -> generation bundle -> graph-discovered DFA constraints.
     graph, bundle = build_bundle()
-    pad_size = int(pad_size or 6)
+    pad_size = int(pad_size or 100)
     enforcement = discover_generation_enforcement(graph, bundle, on_unsupported="error")
     dfa = enforcement.dfa
 

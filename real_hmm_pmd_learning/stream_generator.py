@@ -58,6 +58,18 @@ class StreamTrainingExample:
     labels: tuple[int, ...]
     sample_data: dict
 
+    @property
+    def accepted(self) -> bool:
+        """Return whether this mock generator output follows the demo rule."""
+        return self.name == "valid"
+
+    @property
+    def rejection(self) -> str | None:
+        """Return a short rule explanation for intentionally invalid examples."""
+        if self.accepted:
+            return None
+        return "token B appears more than once"
+
 
 def make_sample_data(bundle, symbols: Sequence[str], *, prompt_name: str = "AB") -> dict:
     """Create one PMD training example from a generated symbol sequence."""

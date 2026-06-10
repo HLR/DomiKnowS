@@ -7,18 +7,25 @@ from typing import Sequence
 
 import torch
 
-from domiknows.generation import constrained_label_greedy_decode
+from domiknows.generation import GenerationCandidate, HybridController, constrained_label_greedy_decode
 
 try:
     from .learned_model_interface import (
+        labels_for_symbols,
         learned_model_greedy_search,
         predictions_for_sample,
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
     from learned_model_interface import (
+        labels_for_symbols,
         learned_model_greedy_search,
         predictions_for_sample,
     )
+
+try:
+    from .graph import CANDIDATES
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from graph import CANDIDATES
 
 
 _OPTIMIZER_GRAD_SNAPSHOT: dict[str, object] | None = None
@@ -163,6 +170,61 @@ def print_constrained_greedy_inference(artifacts, result=None) -> None:
     print(f"  learner_log_score: {score}")
 
 
+def score_candidate_with_learner(artifacts, symbols: Sequence[str]) -> dict[str, object]:
+    """Score one fixed diagnostic candidate with the active compact-label learner."""
+    labels = tuple(int(label) for label in labels_for_symbols(artifacts.bundle, symbols))
+    token_ids = list(labels)
+    controller = HybridController(
+        vocabulary=artifacts.bundle.vocabulary,
+        dfa=artifacts.dfa,
+        scorer_head=artifacts.model,
+        enforcement=artifacts.enforcement,
+        constraints=getattr(artifacts.enforcement, "dfa_constraints", ()),
+    )
+    candidate = GenerationCandidate(
+        text=None,
+        token_ids=token_ids,
+        labels=list(labels),
+        source="diagnostic_candidate",
+    )
+    score = controller.score_candidate(
+        [int(artifacts.inference_prompt_token_id)],
+        candidate,
+        explain=True,
+    )
+    return {
+        "labels": labels,
+        "symbols": tuple(str(symbol) for symbol in symbols),
+        "accepted": bool(score.accepted),
+        "rejection": score.rejection,
+        "score": float(score.head_logprob),
+        "total": float(score.total),
+    }
+
+
+def print_candidate_scores(artifacts) -> None:
+    """Print fixed candidate verdicts and compact-learner scores."""
+    print("Candidate scores:")
+    print("  This table is the DFA pre-check plus the learner score for fixed diagnostic candidates.")
+    print("  candidate  dfa_verdict  sequence  length  learner_log_score")
+    scored = {
+        name: score_candidate_with_learner(artifacts, symbols)
+        for name, symbols in CANDIDATES.items()
+    }
+    for name, values in scored.items():
+        verdict = "accepted" if values["accepted"] else "rejected"
+        print(
+            f"  {name:8s} dfa_verdict={verdict} "
+            f"sequence={_short_sequence(values['symbols'])} "
+            f"length={len(values['symbols'])} learner_log_score={float(values['score']):.4f}"
+        )
+        if values["rejection"]:
+            print(f"    dfa_rejection: {values['rejection']}")
+    if "valid" in scored and "invalid" in scored:
+        relative = float(scored["valid"]["score"]) - float(scored["invalid"]["score"])
+        print(f"  relative_preference={relative:.4f}")
+
+
 def print_hybrid_controller_ranking(ranked) -> None:
     """Print HybridController reranking results for inference candidates."""
     print("HybridController reranking:")
@@ -197,7 +259,7 @@ def print_demo_header(artifacts) -> None:
     """Print the beginner-facing summary of the demo setup."""
     print("One-constraint DomiKnowS PMD learning demo")
     print("Rule: token B may appear at most once")
-    print("Generator stream: prompt-conditioned outputs are used directly for PMD training")
+    print("Generator stream: prompt-conditioned outputs are used for PMD training")
     print("Prompt meanings: AB prefers A/B tokens; CD prefers C/D tokens; short prefers early END")
     print("Padding: unused fixed-width positions use _other, not END, so padding does not teach early stopping")
     print(f"Inference prompt: {artifacts.inference_prompt_name} ({artifacts.inference_prompt_text})")
@@ -212,9 +274,11 @@ def print_learning_snapshot(artifacts, *, title: str) -> None:
     print(title)
     print("Snapshot guide:")
     print("  Predictions      = inspect learner on one generator-produced training sequence")
-    print("  Greedy inference = let the learner generate a sequence for the inference prompt")
+    print("  Candidate scores = score/rerank fixed diagnostic candidates for the inference prompt")
+    print("  Greedy inference = let the learner generate a DFA-constrained sequence for the inference prompt")
     print_predictions(artifacts)
-    print_greedy_inference(artifacts)
+    print_candidate_scores(artifacts)
+    print_constrained_greedy_inference(artifacts)
 
 
 def print_training_header() -> None:

@@ -49,6 +49,50 @@ GRAPH_TWO_STATE_NAMES = (
 )
 
 
+def _comparison_state_name_fn(demo: str):
+    if demo == "one":
+        semantic_names = {
+            0: "before_B",
+            1: "seen_B",
+        }
+    elif demo == "two":
+        semantic_names = {
+            0: "seen_C_no_B",
+            1: "seen_C_seen_B",
+            3: "need_C_seen_B",
+            4: "need_C_no_B",
+        }
+    else:
+        raise ValueError(f"demo must be one of {DEMOS!r}")
+
+    def format_state(dfa_state, symbol: str, next_state) -> str:
+        source = semantic_names.get(dfa_state, f"q_{dfa_state}")
+        target = semantic_names.get(next_state, f"q_{next_state}")
+        if source == target:
+            return f"{source}__emit_{symbol}"
+        return f"{source}__emit_{symbol}__to_{target}"
+
+    return format_state
+
+
+def _state_display_names(state_names: tuple[str, ...]) -> list[str]:
+    prefixes = (
+        "need_C_no_B",
+        "need_C_seen_B",
+        "seen_C_no_B",
+        "seen_C_seen_B",
+        "before_B",
+        "seen_B",
+    )
+    prefix_rank = {prefix: index for index, prefix in enumerate(prefixes)}
+
+    def sort_key(name: str) -> tuple[int, str]:
+        prefix = name.split("__emit_", 1)[0]
+        return (prefix_rank.get(prefix, len(prefix_rank)), name)
+
+    return sorted(state_names, key=sort_key)
+
+
 def build_bundle(demo: str = "one"):
     if demo == "one":
         graph, _parts = build_graph()
@@ -100,6 +144,7 @@ def build_domiknows_hmm() -> DomiKnowSAwareHMM:
         graph,
         bundle,
         symbols=VOCAB,
+        state_name_fn=_comparison_state_name_fn("one"),
         dtype=torch.float64,
     )
 
@@ -112,6 +157,7 @@ def build_two_constraint_domiknows_hmm() -> DomiKnowSAwareHMM:
         graph,
         bundle,
         symbols=VOCAB,
+        state_name_fn=_comparison_state_name_fn("two"),
         dtype=torch.float64,
     )
 
@@ -240,7 +286,7 @@ def trace_domiknows_aware_hmm(model: DomiKnowSAwareHMM, sequence: tuple[str, ...
     viterbi_states = () if score == float("-inf") else viterbi.states
     viterbi_score = float("-inf") if score == float("-inf") else viterbi.score
     return {
-        "states": list(model.state_names),
+        "states": _state_display_names(tuple(model.state_names)),
         "symbols": [str(symbol) for symbol in model.id_to_symbol],
         "auto_compilation": _constraint_compilation_summary(model),
         "log_likelihood": _json_number(score),

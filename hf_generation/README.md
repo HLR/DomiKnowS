@@ -84,6 +84,12 @@ compact-label DomiKnowS head reranks valid candidates and diagnoses rejected
 ones. This is the path to use when the compact head should guide a larger
 generator rather than replace it.
 
+`hmm_distillation_decoder_baseline.py` is a baseline comparison. It distills the
+offline small HuggingFace-shaped mock LM into a compact HMM head, then reports
+constraint accuracy for raw small-LM greedy decoding, DFA hard decoding, generic
+compact product decoding, and strict HMM+DFA product decoding. See
+`README_hmm_distillation_decoder_baseline.md` for the dedicated walkthrough.
+
 ## Simple Hard-Decoding Demo
 
 From the repository root:
@@ -103,6 +109,19 @@ uv run --project Tasks/hf_generation python Tasks/hf_generation/hybrid_demo.py -
 
 The output shows PMD/head training losses, ranked generator candidates, a
 rejected-candidate repair diagnostic, and a next-step risk estimate.
+
+## HMM Distillation Decoder Baseline
+
+```powershell
+uv run --project Tasks/hf_generation python Tasks/hf_generation/hmm_distillation_decoder_baseline.py --steps 40
+```
+
+The output table compares accepted-sequence accuracy across decoder baselines.
+In the offline mock setup, raw greedy decoding follows the small LM into the
+forbidden `" dog"` branch, while DFA and product decoders enforce the graph
+constraints.
+The strict `product_hmm_dfa` baseline uses
+`HybridController.decode_hmm_dfa(...)` directly.
 
 ## Constraint Debug Viewer
 

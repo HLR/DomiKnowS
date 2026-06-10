@@ -107,6 +107,7 @@ def run_all_modes(
             top_p=0.95,
             generator=generator,
         ),
+        "dfa": dfa,
         "constraints": analyze_generation_constraints(_graph, bundle, on_unsupported="error"),
         "vocabulary": bundle.vocabulary,
     }

@@ -23,8 +23,10 @@ from domiknows.generation import (
 )
 
 try:
+    from .flow import _comparison_state_name_fn
     from .graph import EOS_TOKEN, VOCAB, build_graph, build_two_constraint_graph
 except ImportError:  # pragma: no cover - direct script execution
+    from flow import _comparison_state_name_fn
     from graph import EOS_TOKEN, VOCAB, build_graph, build_two_constraint_graph
 
 
@@ -101,6 +103,7 @@ def run_demo(*, demo: str, candidate_name: str) -> dict:
         bundle,
         symbols=VOCAB,
         eos_token=EOS_TOKEN,
+        state_name_fn=_comparison_state_name_fn(demo),
         on_unsupported="error",
     )
 

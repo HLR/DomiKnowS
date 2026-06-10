@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from functools import partial
+import io
 
 from domiknows.generation import GenerationCandidate, HybridController, constrained_label_greedy_decode
 
@@ -12,6 +14,8 @@ try:
         _enable_domiknows_production_logging,
         _enable_remote_debug,
         capture_parameter_snapshot,
+        print_learning_snapshot,
+        print_stream_batch,
         print_constrained_greedy_inference,
         print_gradient_snapshot,
         print_demo_header,
@@ -30,6 +34,8 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _enable_domiknows_production_logging,
         _enable_remote_debug,
         capture_parameter_snapshot,
+        print_learning_snapshot,
+        print_stream_batch,
         print_constrained_greedy_inference,
         print_gradient_snapshot,
         print_demo_header,
@@ -59,7 +65,7 @@ def main(argv=None) -> int:
     parser.add_argument("--steps", type=int, default=20, help="Number of live stream PMD training batches before learned-learner inference.  ~20 is enough for the gated DiscreteHMM head to differentiate the three demo prompts.")
     parser.add_argument("--stream-count", type=int, default=4, help="Number of generator outputs in each live stream batch.")
     parser.add_argument("--inference-prompt", choices=PROMPT_ORDER, default="AB", help="Prompt used for learned greedy inference after training.")
-    parser.add_argument("--pad-size", type=int, default=6, help="Maximum generated length used for padding/truncation and random stream generation.")
+    parser.add_argument("--pad-size", type=int, default=100, help="Maximum generated length used for padding/truncation and random stream generation.")
     parser.add_argument("--seed", type=int, default=0, help="Deterministic seed for the mock generator stream.")
     parser.add_argument("--lr", type=float, default=1e-1, help="Learning rate for the compact-label learner and PMD constraint model.")
     parser.add_argument("--beta", type=float, default=0.3, help="Weight for the PMD constraint loss; larger values enforce rules harder but can drown out the prompt-conditioning signal on this tiny dataset.")
@@ -89,6 +95,8 @@ def main(argv=None) -> int:
     )
 
     print_demo_header(artifacts)
+    print_stream_batch(artifacts.stream_examples, title="Initial generator batch")
+    print_learning_snapshot(artifacts, title="Initial learner snapshot")
     print_training_header()
 
     lr = args.lr
@@ -105,14 +113,15 @@ def main(argv=None) -> int:
         )
         artifacts.stream_examples = artifacts.training_source.next_batch(step)
         reset_optimizer_grad_snapshot()
-        artifacts.program.train(
-            artifacts.training_source.training_data(artifacts.stream_examples),
-            train_epoch_num=1,
-            Optim=partial(AdamWithGradSnapshot, lr=lr),
-            c_lr=lr,
-            print_loss=False,
-            persist_c_session=True,
-        )
+        with contextlib.redirect_stderr(io.StringIO()):
+            artifacts.program.train(
+                artifacts.training_source.training_data(artifacts.stream_examples),
+                train_epoch_num=1,
+                Optim=partial(AdamWithGradSnapshot, lr=lr),
+                c_lr=lr,
+                print_loss=False,
+                persist_c_session=True,
+            )
         print_trained_batch(step, len(artifacts.stream_examples))
         print_gradient_snapshot(artifacts.model, step=step)
         after_hmm = capture_parameter_snapshot(artifacts.model, hmm_only=matched_hmm_names)
@@ -120,21 +129,8 @@ def main(argv=None) -> int:
 
     # 3. Run inference explicitly after training.
     print_inference_header()
-    
-    # Prompt used for inference test 
-    prompt = int(artifacts.inference_prompt_token_id)
-    
-    # Run greedy inference on the learned model to see its generated output
-    # DFA constraints are applied during inference. 
-    # The learned compact-learner should have influenced the model to generate different outputs for the same prompt compared to before training.
-    inference_result = artifacts.model.greedy_label_inference(
-        artifacts.bundle.vocabulary,
-        [prompt],
-        max_new_tokens=artifacts.model.pad_size,
-        dfa=artifacts.dfa
-    )
-    print_greedy_inference(artifacts, inference_result)
-
+    print_greedy_inference(artifacts)
+    print_constrained_greedy_inference(artifacts)
 
     return 0
 
