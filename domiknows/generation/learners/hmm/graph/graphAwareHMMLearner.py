@@ -169,6 +169,7 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
     def __init__(
         self,
         *,
+        graph=None,
         n_hidden_states: int,
         label_count: int,
         symbols: Sequence[Any] | None = None,
@@ -274,6 +275,7 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
             raise ValueError("prompt_conditioning must be 'none' or 'initial'")
         self.prompt_vocab_size = int(prompt_vocab_size)
         self.prompt_hidden_size = int(prompt_hidden_size)
+        self.graph = graph
         if self.prompt_conditioning != "none":
             if self.prompt_vocab_size < 1:
                 raise ValueError("prompt_vocab_size must be positive")
@@ -292,11 +294,10 @@ class GraphHMMGenerationHead(CompactLabelGenerationHead):
             self.prompt_embedding = None
             self.prompt_initial_projector = None
 
-        if transition_mask is None or emission_mask is None:
-            raise ValueError(
-                "transition_mask and emission_mask are required; "
-                "construct masks via DFA/plan compilers before creating GraphHMMGenerationHead"
-            )
+        if transition_mask is None:
+            transition_mask = torch.ones((self.n_hidden_states, self.n_hidden_states), dtype=dtype)
+        if emission_mask is None:
+            emission_mask = torch.ones((self.n_hidden_states, self.label_count), dtype=dtype)
 
         # Step 1: Validate and materialize the hard-support masks up front.
         transition_mask_t = validate_mask(

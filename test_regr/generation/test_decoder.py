@@ -9,7 +9,11 @@ from domiknows.generation.dfa.vocabulary import TokenVocabulary
 from domiknows.generation.dfa.decoder import (
     constrained_greedy_decode,
     constrained_beam_search_decode,
+    constrained_label_beam_search_decode,
+    constrained_label_greedy_decode,
+    constrained_label_sample_decode,
     constrained_sample_decode,
+    mask_label_logits_for_dfa,
 )
 from domiknows.generation.dfa.stop_policy import StopPolicy
 from domiknows.generation.applications import HuggingFaceGenerationAdapter
@@ -165,7 +169,8 @@ def test_constrained_greedy_masks_logits_to_satisfy_dfa():
         FakeModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         eos_token_id=tokenizer.eos_token_id,
     )
 
@@ -184,7 +189,8 @@ def test_constrained_greedy_uses_kv_cache_when_available():
         model,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
     )
 
@@ -204,7 +210,8 @@ def test_constrained_greedy_can_disable_kv_cache():
         model,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         use_cache=False,
     )
@@ -224,7 +231,8 @@ def test_constrained_greedy_falls_back_when_model_omits_past_key_values():
         model,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
     )
 
@@ -256,7 +264,8 @@ def test_constrained_label_greedy_masks_compact_head_logits_to_satisfy_dfa():
         FakeLabelModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
     )
 
     assert result.token_ids[-1] == 2
@@ -274,7 +283,8 @@ def test_constrained_label_beam_search_masks_invalid_high_logit_label():
         FakeLabelModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         beam_size=2,
     )
 
@@ -293,7 +303,8 @@ def test_constrained_label_beam_search_keeps_separate_dfa_states():
         BranchingLabelModel(),
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         beam_size=2,
         early_stopping=False,
         num_return_sequences=2,
@@ -314,7 +325,8 @@ def test_constrained_label_beam_search_returns_unaccepted_when_no_solution_reach
         FakeLabelModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=0,
+        dfa,
+        max_new_tokens=0,
     )
 
     assert result.labels == []
@@ -330,7 +342,8 @@ def test_constrained_label_sampling_never_emits_dfa_disallowed_labels():
         FakeLabelModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         generator=torch.Generator().manual_seed(13),
     )
 
@@ -348,14 +361,16 @@ def test_constrained_label_sampling_is_deterministic_with_generator():
         BranchingLabelModel(),
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         generator=torch.Generator().manual_seed(7),
     )
     second = constrained_label_sample_decode(
         BranchingLabelModel(),
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         generator=torch.Generator().manual_seed(7),
     )
 
@@ -385,7 +400,8 @@ def test_constrained_label_sampling_filters_after_dfa_mask():
         FakeLabelModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         top_k=1,
         top_p=0.01,
         generator=torch.Generator().manual_seed(3),
@@ -405,21 +421,24 @@ def test_constrained_label_decoders_forward_next_label_kwargs():
         model,
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         next_label_kwargs={"transition_potential": "soft-block"},
     )
     beam = constrained_label_beam_search_decode(
         model,
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         next_label_kwargs={"transition_potential": "soft-block"},
     )
     sample = constrained_label_sample_decode(
         model,
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         next_label_kwargs={"transition_potential": "soft-block"},
         generator=torch.Generator().manual_seed(1),
     )
@@ -439,7 +458,8 @@ def test_constrained_beam_search_masks_logits_to_satisfy_dfa():
         FakeModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         eos_token_id=tokenizer.eos_token_id,
         beam_size=2,
     )
@@ -459,7 +479,8 @@ def test_constrained_beam_search_keeps_separate_dfa_states():
         BranchingModel(),
         torch.tensor([[0]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         beam_size=2,
         early_stopping=False,
@@ -482,7 +503,8 @@ def test_constrained_beam_search_uses_separate_kv_cache_per_beam():
         model,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         beam_size=2,
         early_stopping=False,
@@ -506,7 +528,8 @@ def test_constrained_beam_search_reports_uncloneable_cache():
             UncloneableCacheModel(),
             torch.tensor([[9]]),
             vocab,
-                    max_new_tokens=1,
+            dfa,
+            max_new_tokens=1,
             eos_token_id=tokenizer.eos_token_id,
             beam_size=2,
         )
@@ -521,7 +544,8 @@ def test_constrained_beam_search_returns_unaccepted_when_no_solution_reached():
         FakeModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=0,
+        dfa,
+        max_new_tokens=0,
         eos_token_id=tokenizer.eos_token_id,
     )
 
@@ -538,7 +562,8 @@ def test_constrained_sampling_masks_invalid_highest_logit():
         FakeModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         eos_token_id=tokenizer.eos_token_id,
         generator=torch.Generator().manual_seed(13),
     )
@@ -557,7 +582,8 @@ def test_constrained_sampling_is_deterministic_with_generator():
         BranchingModel(),
         torch.tensor([[0]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         generator=torch.Generator().manual_seed(7),
     )
@@ -565,7 +591,8 @@ def test_constrained_sampling_is_deterministic_with_generator():
         BranchingModel(),
         torch.tensor([[0]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         generator=torch.Generator().manual_seed(7),
     )
@@ -585,7 +612,8 @@ def test_constrained_sampling_uses_kv_cache_and_stays_deterministic():
         first_model,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         generator=torch.Generator().manual_seed(7),
     )
@@ -593,7 +621,8 @@ def test_constrained_sampling_uses_kv_cache_and_stays_deterministic():
         second_model,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=2,
+        dfa,
+        max_new_tokens=2,
         eos_token_id=tokenizer.eos_token_id,
         generator=torch.Generator().manual_seed(7),
     )
@@ -626,7 +655,8 @@ def test_constrained_sampling_filters_after_dfa_mask():
         FakeModel(),
         torch.tensor([[1]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         eos_token_id=tokenizer.eos_token_id,
         top_k=1,
         top_p=0.01,
@@ -646,6 +676,7 @@ def test_huggingface_adapter_exposes_beam_and_sampling():
     beam = adapter.constrained_beam_search(torch.tensor([[1]]), dfa, max_new_tokens=1, beam_size=2)
     sample = adapter.constrained_sample(
         torch.tensor([[1]]),
+        dfa,
             max_new_tokens=1,
         generator=torch.Generator().manual_seed(5),
     )

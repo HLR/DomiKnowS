@@ -87,6 +87,15 @@ class GenerationConstraintAnalysis:
     reason: str | None = None
 
 
+@dataclass(frozen=True)
+class DiscoveredGenerationConstraint:
+    """Backward-compatible summary for one DFA-discoverable graph constraint."""
+
+    name: str
+    lc_name: str
+    lc_type: str
+
+
 def _discover_generation_dfas(
     graph,
     bundle,
@@ -183,6 +192,31 @@ def analyze_generation_constraints(
     return tuple(analyses)
 
 
+def discover_generation_constraints(
+    graph,
+    bundle,
+    *,
+    on_unsupported: str = "warn",
+) -> tuple[DiscoveredGenerationConstraint, ...]:
+    """Return readable summaries for graph constraints compiled into the DFA."""
+
+    analyses = analyze_generation_constraints(graph, bundle, on_unsupported=on_unsupported)
+    logical_constraints = getattr(graph, "logicalConstrains", getattr(graph, "_logicalConstrains", {}))
+    discovered: list[DiscoveredGenerationConstraint] = []
+    for analysis in analyses:
+        if not analysis.supported:
+            continue
+        lc = logical_constraints.get(analysis.lc_name)
+        discovered.append(
+            DiscoveredGenerationConstraint(
+                name=_constraint_display_name(lc, bundle, analysis),
+                lc_name=analysis.lc_name,
+                lc_type=analysis.lc_type,
+            )
+        )
+    return tuple(discovered)
+
+
 def constraints_to_dfa_from_graph(
     graph,
     bundle,
@@ -211,6 +245,88 @@ def constraints_to_dfa_from_graph(
         bundle.vocabulary,
         minimize=minimize,
     )
+
+
+def _constraint_display_name(lc, bundle, analysis: GenerationConstraintAnalysis) -> str:
+    """Render a readable label for one supported discovered generation constraint."""
+
+    if lc is None:
+        return analysis.lc_name
+    if _is_eos_closure(lc, bundle):
+        return "no non-EOS tokens can follow an EOS token"
+    if kind(lc) == "ifL" and len(getattr(lc, "e", ())) == 2:
+        token = _exists_token(lc.e[0], bundle)
+        max_count = _non_eos_at_most_count(lc.e[1], bundle)
+        if token is not None and max_count is not None:
+            return f"if {token!r} appears then at most {max_count} non-EOS tokens are generated"
+    if kind(lc) == "atMostAL":
+        max_count = _non_eos_at_most_count(lc, bundle)
+        if max_count is not None:
+            return f"at most {max_count} non-EOS tokens are generated"
+        token = _direct_token(lc.e, bundle)
+        limit = _last_int(lc.e)
+        if token is not None and limit == 0:
+            return f"no {token!r} token(s) are generated"
+        predicate = _token_predicate_from_count_lc(lc, bundle)
+        if predicate is not None and limit is not None:
+            return _count_constraint_name(predicate, max_count=limit)
+    if kind(lc) == "atLeastAL":
+        token = _direct_token(lc.e, bundle)
+        min_count = _last_int(lc.e)
+        if token is not None and min_count is not None and min_count >= 1:
+            return f"at least {min_count} {token!r} token(s) are generated"
+        predicate = _token_predicate_from_count_lc(lc, bundle)
+        if predicate is not None and min_count is not None:
+            return _count_constraint_name(predicate, min_count=min_count)
+    if kind(lc) == "existsAL":
+        token = _exists_token(lc, bundle)
+        if token is not None:
+            return f"at least 1 {token!r} token(s) are generated"
+        ordered = _match_ordered_pair_exists(lc, bundle)
+        if ordered is not None:
+            return "an ordered token pair must appear"
+        predicate = _token_predicate_from_count_lc(lc, bundle)
+        if predicate is not None:
+            return _count_constraint_name(predicate, min_count=1)
+    if kind(lc) == "exactAL":
+        limit = _last_int(lc.e)
+        predicate = _token_predicate_from_count_lc(lc, bundle)
+        if predicate is not None and limit is not None:
+            return _count_constraint_name(predicate, exact_count=limit)
+    return f"supported generation constraint ({analysis.lc_type})"
+
+
+def _count_constraint_name(
+    predicate: tuple[tuple[str, ...], bool],
+    *,
+    min_count: int | None = None,
+    max_count: int | None = None,
+    exact_count: int | None = None,
+) -> str:
+    """Render a readable label for generic token-set count constraints."""
+
+    tokens, negated = predicate
+    rendered = _render_token_set(tokens)
+    subject = f"tokens outside {rendered}" if negated else f"tokens in {rendered}"
+    if exact_count is not None:
+        return f"exactly {exact_count} {subject} are generated"
+    if min_count is not None and max_count is not None:
+        return f"between {min_count} and {max_count} {subject} are generated"
+    if min_count is not None:
+        return f"at least {min_count} {subject} are generated"
+    if max_count is not None:
+        return f"at most {max_count} {subject} are generated"
+    return f"counted {subject} are generated"
+
+
+def _render_token_set(tokens: tuple[str, ...]) -> str:
+    """Render one or more tokens for readable discovery labels."""
+
+    if not tokens:
+        return "{}"
+    if len(tokens) == 1:
+        return repr(tokens[0])
+    return "{" + ", ".join(repr(token) for token in tokens) + "}"
 
 
 def _combine_dfas(dfas: Iterable[DFA], vocabulary, *, minimize: bool = True) -> DFA:

@@ -46,7 +46,7 @@ import warnings
 import torch
 
 from ..dfa.core import DFA
-from ..dfa.graph_discovery import constraints_to_dfa_from_graph
+from ..dfa.graph_discovery import DiscoveredGenerationConstraint, constraints_to_dfa_from_graph, discover_generation_constraints
 from .constraints import Formula, LabelRef, LatentLossBreakdown, evaluate_latent_loss, window_formula_loss
 from .potentials import LatentTransitionPotential, combine_transition_potentials, forbid_hmm_transition
 
@@ -121,6 +121,7 @@ class GenerationEnforcement:
     latent_loss: Callable[..., torch.Tensor]
     latent_breakdown: Callable[..., LatentLossBreakdown]
     transition_potentials: tuple[LatentTransitionPotential, ...] = ()
+    dfa_constraints: tuple[DiscoveredGenerationConstraint, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -264,7 +265,8 @@ def discover_generation_enforcement(
         A :class:`GenerationEnforcement` with the compiled DFA, latent specs,
         and a compiled latent loss callable.
     """
-    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported=on_unsupported)
+    dfa_constraints = discover_generation_constraints(graph, bundle, on_unsupported=on_unsupported)
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="ignore")
     compiler_results = _run_custom_latent_compilers(
         graph,
         bundle,
@@ -293,6 +295,7 @@ def discover_generation_enforcement(
         latent_loss=_compile_latent_loss(latent_specs),
         latent_breakdown=_compile_latent_breakdown(latent_specs),
         transition_potentials=transition_potentials,
+        dfa_constraints=dfa_constraints,
     )
 
 

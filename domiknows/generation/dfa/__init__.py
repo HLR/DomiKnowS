@@ -42,6 +42,7 @@ _EXPORTS = {
     "constrained_sample_decode": ".decoder",
     "constraints_to_dfa_from_graph": ".graph_discovery",
     "create_generation_debug_app": ".visualization",
+    "discover_generation_constraints": ".graph_discovery",
     "dfa_to_dot": ".visualization",
     "dot_to_svg": ".visualization",
     "empty_dfa": "._constraints",

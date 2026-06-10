@@ -112,6 +112,12 @@ class HMMGenerationHead(CompactLabelGenerationHead):
         self._token_id_to_label = _invert_label_to_token_id(self.label_to_token_id)
 
         # --- Mode normalisation + cross-flag validation ---
+        if prompt_conditioning == "none" and (
+            prompt_encoder is not None
+            or backbone is not None
+            or prompt_encoder_type != "embedding"
+        ):
+            prompt_conditioning = "initial"
         self.prompt_conditioning = _normalise_prompt_conditioning(prompt_conditioning)
         self.dynamics_conditioning = _normalise_dynamics_conditioning(dynamics_conditioning)
         self.step_dynamics_conditioning = _normalise_step_dynamics_conditioning(step_dynamics_conditioning)

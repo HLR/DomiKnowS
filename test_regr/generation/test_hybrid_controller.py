@@ -8,16 +8,23 @@ import torch
 from domiknows.generation import (
     ConstraintBundle,
     GenerationCandidate,
+    GraphHMMGenerationHead,
     HybridController,
     HybridScoreWeights,
+    HuggingFaceGenerationAdapter,
+    DiscreteHMM,
+    HMMGenerationHead,
     LatentLossBreakdown,
     ManualConstraintSelector,
+    DFA,
+    TokenVocabulary,
     discover_generation_enforcement,
     eos_closure_dfa,
     forbidden_token_dfa,
     product_dfa,
     required_token_dfa,
 )
+from domiknows.generation.dfa.stop_policy import StopPolicy
 
 
 def import_hf_module(name: str):
@@ -53,6 +60,58 @@ class SequenceScorer(torch.nn.Module):
         for index, label in enumerate(labels.tolist()):
             rows[index, int(label)] = -0.1
         return torch.log_softmax(rows, dim=-1)
+
+
+class TinyTokenizer:
+    eos_token_id = 0
+
+    def __init__(self):
+        self.map = {"<eos>": 0, "A": 1, "B": 2}
+        self.inverse = {value: key for key, value in self.map.items()}
+
+    def encode(self, text):
+        return [self.map[text]]
+
+    def decode(self, token_ids):
+        return "".join(self.inverse[int(token_id)] for token_id in token_ids)
+
+    def __call__(self, _text, return_tensors=None):
+        return SimpleNamespace(input_ids=torch.tensor([[9]], dtype=torch.long))
+
+
+class BackendLogitModel(torch.nn.Module):
+    def __init__(self, logits_by_prefix):
+        super().__init__()
+        self.logits_by_prefix = {
+            tuple(key): torch.tensor(value, dtype=torch.float32)
+            for key, value in logits_by_prefix.items()
+        }
+
+    def forward(self, input_ids):
+        ids = tuple(int(item) for item in input_ids.reshape(-1).tolist())
+        logits = self.logits_by_prefix.get(ids, torch.zeros(3, dtype=torch.float32))
+        return SimpleNamespace(logits=logits.reshape(1, 1, -1))
+
+
+def _ab_vocab_and_dfa(*, allow_b: bool = True):
+    tokenizer = TinyTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    start, saw_a, saw_b, done = "start", "saw_a", "saw_b", "done"
+    transitions = {
+        (start, vocab.label_for_token("A")): saw_a,
+        (saw_a, vocab.eos_label): done,
+    }
+    if allow_b:
+        transitions[(start, vocab.label_for_token("B"))] = saw_b
+        transitions[(saw_b, vocab.eos_label)] = done
+    dfa = DFA(
+        states=frozenset({start, saw_a, saw_b, done}),
+        alphabet=frozenset(vocab.alphabet),
+        transitions=transitions,
+        start_state=start,
+        accepting_states=frozenset({done}),
+    )
+    return tokenizer, vocab, dfa
 
 
 def build_controller(scorer=None, *, enforcement=None, weights=None):
@@ -114,6 +173,636 @@ def test_stepwise_compact_head_scoring_path_is_used():
     poor = controller.score_candidate(prompt_ids, GenerationCandidate(text=" cat The<eos>", token_ids=[2, 1, 0], labels=[2, 1, 0]))
 
     assert good.head_logprob > poor.head_logprob
+
+
+def test_product_compact_learner_dfa_masks_blocked_compact_labels():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    scorer = StepwiseScorer(
+        {
+            (9,): [-5, 2, 9, -5],
+            (9, 1): [9, -5, -5, -5],
+        },
+        [0, 1, 2, None],
+    )
+    generator = HuggingFaceGenerationAdapter(
+        BackendLogitModel({(9,): [0, 0, 0], (9, 1): [0, 0, 0]}),
+        tokenizer,
+        vocab,
+    )
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=scorer, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_compact_learner_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert ranked[0].score.accepted
+    assert ranked[0].candidate.raw.final_state == "done"
+
+
+def test_product_compact_learner_dfa_can_combine_backend_llm_logits():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    scorer = StepwiseScorer(
+        {
+            (9,): [-5, 5, 0, -5],
+            (9, 2): [9, -5, -5, -5],
+        },
+        [0, 1, 2, None],
+    )
+    generator = HuggingFaceGenerationAdapter(
+        BackendLogitModel({(9,): [-5, 0, 10], (9, 2): [10, 0, 0]}),
+        tokenizer,
+        vocab,
+    )
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=scorer, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_compact_learner_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+        backend_logit_weight=1.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert ranked[0].score.accepted
+
+
+def test_product_compact_learner_dfa_does_not_stop_on_accepting_prefix():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    dfa = DFA(
+        states=dfa.states,
+        alphabet=dfa.alphabet,
+        transitions=dfa.transitions,
+        start_state=dfa.start_state,
+        accepting_states=frozenset({"saw_a", "done"}),
+    )
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    scorer = StepwiseScorer(
+        {
+            (9,): [-5, 9, -5, -5],
+            (9, 1): [9, -5, -5, -5],
+        },
+        [0, 1, 2, None],
+    )
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=scorer, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_compact_learner_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert ranked[0].score.accepted
+
+
+def test_product_compact_learner_dfa_honors_stop_policy():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    dfa = DFA(
+        states=dfa.states,
+        alphabet=dfa.alphabet,
+        transitions=dfa.transitions,
+        start_state=dfa.start_state,
+        accepting_states=frozenset({"saw_a", "done"}),
+    )
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    scorer = StepwiseScorer({(9,): [-5, 9, -5, -5]}, [0, 1, 2, None])
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=scorer, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_compact_learner_dfa",
+        max_new_tokens=None,
+        stop_policy=StopPolicy(stop_on_accepting_state=True),
+        temperature=0.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("A")]
+    assert ranked[0].score.accepted
+
+
+def test_product_compact_learner_dfa_omits_rejected_candidates_by_default():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    scorer = StepwiseScorer({(9,): [-5, 9, -5, -5]}, [0, 1, 2, None])
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=scorer, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_compact_learner_dfa",
+        max_new_tokens=1,
+        temperature=0.0,
+    )
+    rejected = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_compact_learner_dfa",
+        max_new_tokens=1,
+        temperature=0.0,
+        keep_rejected=True,
+    )
+
+    assert ranked == []
+    assert rejected
+    assert not rejected[0].score.accepted
+
+
+def _strict_hmm_for_ab_path():
+    # Hidden state S0 emits A, then transitions to S1, which emits EOS.
+    return DiscreteHMM(
+        transition=torch.tensor([[0.0, 1.0], [0.0, 1.0]], dtype=torch.float32),
+        emission=torch.tensor([[0.0, 0.9, 0.1], [1.0, 0.0, 0.0]], dtype=torch.float32),
+        initial=torch.tensor([1.0, 0.0], dtype=torch.float32),
+        symbols=(0, 1, 2),
+        normalize=False,
+    )
+
+
+def _hmm_prefers_blocked_b_path():
+    # The HMM's unconstrained first-step argmax is B, but the DFA tests below
+    # make B non-productive. Deterministic decoding must still choose A.
+    return DiscreteHMM(
+        transition=torch.tensor([[0.0, 1.0], [0.0, 1.0]], dtype=torch.float32),
+        emission=torch.tensor([[0.0, 0.01, 0.99], [1.0, 0.0, 0.0]], dtype=torch.float32),
+        initial=torch.tensor([1.0, 0.0], dtype=torch.float32),
+        symbols=(0, 1, 2),
+        normalize=False,
+    )
+
+
+def _dfa_with_dead_b_branch():
+    tokenizer = TinyTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    start, saw_a, done, bad = "start", "saw_a", "done", "bad"
+    dfa = DFA(
+        states=frozenset({start, saw_a, done, bad}),
+        alphabet=frozenset(vocab.alphabet),
+        transitions={
+            (start, vocab.label_for_token("A")): saw_a,
+            (start, vocab.label_for_token("B")): bad,
+            (saw_a, vocab.eos_label): done,
+            (bad, vocab.eos_label): bad,
+            (bad, vocab.label_for_token("A")): bad,
+            (bad, vocab.label_for_token("B")): bad,
+        },
+        start_state=start,
+        accepting_states=frozenset({done}),
+        dead_states=frozenset({bad}),
+    )
+    return tokenizer, vocab, dfa
+
+
+def _lookahead_branch_hmm():
+    return DiscreteHMM(
+        transition=torch.tensor(
+            [
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=torch.float32,
+        ),
+        emission=torch.tensor(
+            [
+                [0.0, 0.99, 0.01],
+                [0.0, 0.01, 0.99],
+                [0.99, 0.005, 0.005],
+                [0.01, 0.495, 0.495],
+            ],
+            dtype=torch.float32,
+        ),
+        initial=torch.tensor([0.45, 0.55, 0.0, 0.0], dtype=torch.float32),
+        symbols=(0, 1, 2),
+        normalize=False,
+    )
+
+
+def _dfa_with_two_accepting_branches():
+    tokenizer = TinyTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    start, after_a, after_b, done = "start", "after_a", "after_b", "done"
+    dfa = DFA(
+        states=frozenset({start, after_a, after_b, done}),
+        alphabet=frozenset(vocab.alphabet),
+        transitions={
+            (start, vocab.label_for_token("A")): after_a,
+            (start, vocab.label_for_token("B")): after_b,
+            (after_a, vocab.eos_label): done,
+            (after_b, vocab.eos_label): done,
+        },
+        start_state=start,
+        accepting_states=frozenset({done}),
+    )
+    return tokenizer, vocab, dfa
+
+
+def _hmm_prefers_accepting_prefix_without_eos():
+    return DiscreteHMM(
+        transition=torch.tensor(
+            [
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=torch.float32,
+        ),
+        emission=torch.tensor(
+            [
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [0.0, 0.5, 0.5],
+                [1.0, 0.0, 0.0],
+            ],
+            dtype=torch.float32,
+        ),
+        initial=torch.tensor([0.9, 0.1, 0.0, 0.0], dtype=torch.float32),
+        symbols=(0, 1, 2),
+        normalize=False,
+    )
+
+
+def _dfa_accepting_prefix_requires_eos_for_stop():
+    tokenizer = TinyTokenizer()
+    vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
+    start, after_a, after_b, done = "start", "after_a", "after_b", "done"
+    dfa = DFA(
+        states=frozenset({start, after_a, after_b, done}),
+        alphabet=frozenset(vocab.alphabet),
+        transitions={
+            (start, vocab.label_for_token("A")): after_a,
+            (start, vocab.label_for_token("B")): after_b,
+            (after_b, vocab.eos_label): done,
+        },
+        start_state=start,
+        accepting_states=frozenset({after_a, done}),
+    )
+    return tokenizer, vocab, dfa
+
+
+def test_product_hmm_dfa_tracks_explicit_discrete_hmm_belief():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert ranked[0].score.accepted
+    assert ranked[0].candidate.metadata["tracks_hmm_belief"] is True
+    assert torch.allclose(ranked[0].candidate.metadata["final_hmm_belief"], torch.tensor([0.0, 1.0]))
+
+
+def test_decode_hmm_dfa_greedy_returns_one_deterministic_result():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    first = controller.decode_hmm_dfa(prompt_ids, search="greedy", max_new_tokens=2)
+    second = controller.decode_hmm_dfa(prompt_ids, search="greedy", max_new_tokens=2)
+
+    assert len(first) == 1
+    assert first[0].search == "greedy"
+    assert first[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert first[0].accepted
+    assert second[0].labels == first[0].labels
+    assert torch.allclose(first[0].final_hmm_belief, torch.tensor([0.0, 1.0]))
+
+
+def test_decode_hmm_dfa_sample_returns_dfa_valid_results():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = DiscreteHMM(
+        transition=torch.tensor([[0.0, 1.0], [0.0, 1.0]], dtype=torch.float32),
+        emission=torch.tensor([[0.0, 0.5, 0.5], [1.0, 0.0, 0.0]], dtype=torch.float32),
+        initial=torch.tensor([1.0, 0.0], dtype=torch.float32),
+        symbols=(0, 1, 2),
+        normalize=False,
+    )
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="sample",
+        num_return_sequences=4,
+        max_new_tokens=2,
+        temperature=1.0,
+        generator_seed=17,
+        product_decode_max_attempts=8,
+    )
+
+    assert len(results) == 4
+    assert all(result.search == "sample" for result in results)
+    assert all(result.accepted for result in results)
+    assert all(dfa.accepts(result.labels) for result in results)
+
+
+def test_decode_hmm_dfa_beam_returns_best_accepted_result():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _lookahead_branch_hmm()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+
+    assert len(results) == 1
+    assert results[0].search == "beam"
+    assert results[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert results[0].accepted
+
+
+def test_decode_hmm_dfa_lookahead_weight_changes_ranking():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _lookahead_branch_hmm()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    immediate_only = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=0.0,
+    )
+    with_lookahead = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+
+    assert immediate_only[0].labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert with_lookahead[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert immediate_only[0].accepted
+    assert with_lookahead[0].accepted
+
+
+def test_decode_hmm_dfa_keep_rejected_returns_output_when_no_acceptance_possible():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    without_rejected = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        max_new_tokens=1,
+        keep_rejected=False,
+    )
+    with_rejected = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        max_new_tokens=1,
+        keep_rejected=True,
+    )
+
+    assert without_rejected == []
+    assert len(with_rejected) == 1
+    assert not with_rejected[0].accepted
+
+
+def test_decode_hmm_dfa_stop_policy_requires_eos_and_accepting_by_default():
+    tokenizer, vocab, dfa = _dfa_accepting_prefix_requires_eos_for_stop()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _hmm_prefers_accepting_prefix_without_eos()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=5.0,
+    )
+
+    assert results[0].labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert results[0].accepted
+    assert results[0].final_state == "done"
+
+
+def test_decode_hmm_dfa_accepts_graph_hmm_generation_head():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    head = GraphHMMGenerationHead(
+        n_hidden_states=2,
+        label_count=3,
+        transition_mask=torch.ones((2, 2), dtype=torch.float32),
+        emission_mask=torch.ones((2, 3), dtype=torch.float32),
+        label_to_token_id=[0, 1, 2],
+        trainable=False,
+        initial=hmm.initial_probs,
+        transition=hmm.transition_probs,
+        emission=hmm.emission_probs,
+    )
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=head, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(prompt_ids, search="beam", max_new_tokens=2)
+
+    assert results[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert results[0].accepted
+
+
+def test_product_hmm_dfa_deterministically_avoids_unacceptable_dfa_states():
+    tokenizer, vocab, dfa = _dfa_with_dead_b_branch()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _hmm_prefers_blocked_b_path()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    expected = [vocab.label_for_token("A"), vocab.eos_label]
+    for seed in range(5):
+        ranked = controller.generate_verify_rerank(
+            prompt_ids,
+            1,
+            decode_strategy="product_hmm_dfa",
+            max_new_tokens=2,
+            temperature=0.0,
+            generator_seed=seed,
+        )
+
+        assert ranked[0].candidate.labels == expected
+        assert ranked[0].score.accepted
+        assert ranked[0].candidate.raw.final_state == "done"
+        assert vocab.label_for_token("B") not in ranked[0].candidate.labels
+
+
+def test_product_hmm_dfa_lookahead_scores_future_acceptance_mass():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _lookahead_branch_hmm()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    immediate_only = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+        lookahead_weight=0.0,
+    )
+    with_lookahead = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+        lookahead_weight=2.0,
+    )
+
+    assert immediate_only[0].candidate.labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert with_lookahead[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert immediate_only[0].score.accepted
+    assert with_lookahead[0].score.accepted
+
+
+def test_product_hmm_dfa_lookahead_requires_eos_for_default_success():
+    tokenizer, vocab, dfa = _dfa_accepting_prefix_requires_eos_for_stop()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _hmm_prefers_accepting_prefix_without_eos()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    immediate_only = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+        lookahead_weight=0.0,
+    )
+    with_lookahead = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+        lookahead_weight=5.0,
+    )
+
+    assert immediate_only[0].candidate.labels == [vocab.label_for_token("A")]
+    assert with_lookahead[0].candidate.labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert with_lookahead[0].score.accepted
+
+
+def test_product_hmm_dfa_accepts_hmm_generation_head():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    head = HMMGenerationHead(
+        label_count=3,
+        state_count=2,
+        label_to_token_id=[0, 1, 2],
+        trainable=False,
+    )
+    hmm = _strict_hmm_for_ab_path()
+    with torch.no_grad():
+        head.initial_logits.copy_(torch.log(hmm.initial_probs.clamp_min(1e-6)))
+        head.transition_logits.copy_(torch.log(hmm.transition_probs.clamp_min(1e-6)))
+        head.emission_logits.copy_(torch.log(hmm.emission_probs.clamp_min(1e-6)))
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=head, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert ranked[0].score.accepted
+
+
+def test_product_hmm_dfa_accepts_graph_hmm_generation_head():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    head = GraphHMMGenerationHead(
+        n_hidden_states=2,
+        label_count=3,
+        transition_mask=torch.ones((2, 2), dtype=torch.float32),
+        emission_mask=torch.ones((2, 3), dtype=torch.float32),
+        label_to_token_id=[0, 1, 2],
+        trainable=False,
+        initial=hmm.initial_probs,
+        transition=hmm.transition_probs,
+        emission=hmm.emission_probs,
+    )
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=head, tokenizer=tokenizer)
+
+    ranked = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+    )
+
+    assert ranked[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert ranked[0].score.accepted
+
+
+def test_product_hmm_dfa_rejects_generic_compact_scorer():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    scorer = StepwiseScorer({(9,): [-5, 9, -5, -5]}, [0, 1, 2, None])
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=scorer, tokenizer=tokenizer)
+
+    try:
+        controller.generate_verify_rerank(
+            prompt_ids,
+            1,
+            decode_strategy="product_hmm_dfa",
+            max_new_tokens=2,
+            temperature=0.0,
+        )
+    except ValueError as exc:
+        assert "HMMGenerationHead, GraphHMMGenerationHead, or DiscreteHMM" in str(exc)
+    else:
+        raise AssertionError("product_hmm_dfa should reject non-HMM scorer heads")
 
 
 def test_latent_preference_weight_can_change_ranking():

@@ -5,12 +5,14 @@ from .hybrid import (
     CompactConstraintSelector,
     ConstraintBundle,
     GenerationCandidate,
+    HMMDFADecodeResult,
     HybridController,
     HybridScoreWeights,
     ManualConstraintSelector,
     ScoredCandidate,
     preference_pair_ranking_loss,
 )
+from .hmm_dfa_decoder import HMMDFADecoder
 from .adapters import GenerationResult, HuggingFaceGenerationAdapter, OpenAIResponsesAdapter
 from .planning import (
     PlanningBundle,
@@ -33,6 +35,8 @@ __all__ = [
     "ConstraintBundle",
     "GenerationCandidate",
     "GenerationResult",
+    "HMMDFADecoder",
+    "HMMDFADecodeResult",
     "HybridController",
     "HybridScoreWeights",
     "HuggingFaceGenerationAdapter",

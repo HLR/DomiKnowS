@@ -11,6 +11,11 @@ The `HybridController` is a neuro-symbolic generation controller that combines:
 
 Rather than relying solely on a language model, the controller performs a generate–verify–rerank workflow in which symbolic constraints and compact learned domain models influence the final output.
 
+It supports both backend paths:
+
+1. HuggingFace path, including hard_dfa, unconstrained, product_compact_learner_dfa, and product_hmm_dfa decode strategies.
+2. OpenAI path via OpenAIResponsesAdapter, where candidates are generated through Responses API integration and then normalized into the same HybridController scoring and reranking pipeline.
+
 ---
 
 # High-Level Architecture
@@ -152,6 +157,8 @@ OpenAI Responses API
 Generated Candidates
 ```
 
+OpenAI-backed generation runs through OpenAIResponsesAdapter and uses the shared vocabulary and DFA interfaces to produce constrained/verified candidates before normalization and reranking.
+
 ### Precomputed Candidates
 
 Candidates may also be provided externally.
@@ -170,6 +177,147 @@ GenerationCandidate
 ```
 
 objects.
+
+### HuggingFace Decode Strategies
+
+For HuggingFace-backed generation, the controller supports multiple decode strategies:
+
+1. hard_dfa
+2. unconstrained
+3. product_compact_learner_dfa
+4. product_hmm_dfa
+
+Alias names are also supported for compatibility (for example compact_dfa, hmm_dfa, strict_hmm_dfa).
+
+The strategy is resolved in an internal normalization step, then routed to the appropriate decode loop.
+
+### OpenAI Generation Path
+
+For backend = openai, the controller routes into the OpenAI adapter path:
+
+1. Submit prompt to the OpenAI Responses integration.
+2. Generate and verify candidate output using vocabulary and DFA constraints.
+3. Normalize adapter output into GenerationCandidate.
+4. Reuse the same HybridController scoring, risk estimation, latent preference, and ranking logic.
+
+Conceptually:
+
+```text
+Prompt
+   │
+   ▼
+OpenAIResponsesAdapter
+   │
+   ▼
+generate_and_verify(...)
+   │
+   ▼
+GenerationCandidate
+   │
+   ▼
+Hybrid Scoring + Reranking
+```
+
+---
+
+# New Product Decode Paths
+
+The new functionality introduces two strict product-state decoding modes that tightly couple symbolic constraints with compact-model scoring during generation.
+
+## product_compact_learner_dfa
+
+This path runs a custom token/label loop where each step:
+
+1. Computes compact next-label logits from the current prefix.
+2. Intersects with DFA-allowed labels.
+3. Optionally blends one-step HuggingFace backend logits projected into label space.
+4. Samples from the masked/filtered label distribution.
+5. Commits the transition to token ids and label trace.
+
+Conceptually:
+
+```text
+Prefix
+   │
+   ▼
+Compact Head Next-Label Logits
+   │
+   ▼
+DFA Allowed Label Mask
+   │
+   ▼
+(Optional) HF Backend Label Bias
+   │
+   ▼
+Sample Label
+   │
+   ▼
+Append Token + Advance DFA
+```
+
+This ensures no sampled label can violate DFA transitions at generation time.
+
+## product_hmm_dfa
+
+This path decodes over an explicit product state:
+
+1. HMM belief
+2. DFA state
+3. Token prefix
+
+At each step:
+
+1. HMM emission and current belief produce immediate label logits.
+2. Optional recursive lookahead estimates downstream DFA success probability.
+3. Optional HuggingFace backend token logits are projected to label logits and blended.
+4. A label is sampled under DFA masking.
+5. Both HMM belief and DFA state are advanced.
+
+Conceptually:
+
+```text
+(HMM Belief, DFA State, Prefix)
+                     │
+                     ▼
+          HMM Label Logits
+                     │
+                     ├── Optional Lookahead (future DFA success)
+                     │
+                     ├── Optional HF Label Bias
+                     │
+                     ▼
+         DFA-Constrained Sampling
+                     │
+                     ▼
+ Update Belief + DFA + Prefix
+```
+
+This provides strict constrained decoding while preserving explicit probabilistic state tracking.
+
+---
+
+# Runtime Controls for New Paths
+
+Both product decode paths support runtime controls:
+
+1. stop policy integration for decoding termination
+2. top-k and top-p sampling filters
+3. per-candidate random generator seeds
+4. optional retention of rejected candidates
+
+Additional controls:
+
+1. product_compact_learner_dfa
+    1. compact_logit_weight
+    2. backend_logit_weight
+2. product_hmm_dfa
+    1. hmm_weight
+    2. lookahead_weight
+    3. hf_weight
+    4. lookahead_max_steps
+    5. transition_potential
+
+Unsupported keyword arguments in strict product modes are rejected explicitly, which helps catch misspelled or unintended options early.
 
 ---
 

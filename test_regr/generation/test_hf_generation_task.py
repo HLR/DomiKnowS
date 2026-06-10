@@ -66,7 +66,7 @@ def test_hf_generation_demo_runs_mock_modes_without_downloads():
     run_demo = import_task_module("run_demo")
 
     results = run_demo.run_all_modes(prompt="Once", max_new_tokens=4)
-    dfa = constraints_to_dfa(results["constraints"], results["vocabulary"])
+    dfa = results["dfa"]
 
     for mode in ("greedy", "beam", "sample"):
         result = results[mode]

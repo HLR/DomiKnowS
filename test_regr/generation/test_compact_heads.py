@@ -4,6 +4,11 @@ import itertools
 
 import torch
 
+from domiknows.generation import (
+    constrained_label_beam_search_decode,
+    constrained_label_greedy_decode,
+    constrained_label_sample_decode,
+)
 from domiknows.generation.dfa._constraints import (
     accept_all_dfa,
     required_token_dfa,
@@ -161,7 +166,8 @@ def test_gru_compact_head_works_with_label_decoders():
         head,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         generator=torch.Generator().manual_seed(3),
     )
 
@@ -191,7 +197,8 @@ def test_transformer_compact_head_works_with_label_decoders():
         head,
         torch.tensor([[9]]),
         vocab,
-            max_new_tokens=1,
+        dfa,
+        max_new_tokens=1,
         generator=torch.Generator().manual_seed(3),
     )
 
@@ -239,7 +246,8 @@ def test_ngram_and_crf_compact_heads_work_with_label_decoders():
             head,
             torch.tensor([[9]]),
             vocab,
-                    max_new_tokens=1,
+            dfa,
+            max_new_tokens=1,
             generator=torch.Generator().manual_seed(3),
         )
 

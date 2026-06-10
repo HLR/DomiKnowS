@@ -92,9 +92,24 @@ class DiscreteHMM:
         return int(self.initial_probs.numel())
 
     @property
+    def device(self) -> torch.device:
+        # Preserve the legacy device attribute expected by helpers and tests.
+        return self.initial_probs.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        # Preserve the legacy dtype attribute expected by helpers and tests.
+        return self.initial_probs.dtype
+
+    @property
     def symbol_count(self) -> int:
         # Return the vocabulary size.
         return len(self.symbols)
+
+    @property
+    def initial(self) -> torch.Tensor:
+        # Backward-compatible alias for the initial-state distribution.
+        return self.initial_probs
 
     @property
     def transition(self) -> torch.Tensor:

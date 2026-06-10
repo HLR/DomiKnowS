@@ -77,6 +77,7 @@ class DomiKnowSAwareHMM:
         self,
         *,
         n_hidden_states: int | None = None,
+        graph=None,
         bundle=None,
         dfa=None,
         preconstructed_dfa=None,
@@ -164,7 +165,8 @@ class DomiKnowSAwareHMM:
         if energy_weight < 0:
             raise ValueError("energy_weight must be non-negative")
 
-        graph = getattr(bundle, "graph", None) if bundle is not None else None
+        if graph is None and bundle is not None:
+            graph = getattr(bundle, "graph", None)
         if dfa is None:
             dfa = preconstructed_dfa
 
