@@ -23,7 +23,6 @@ dependencies = [
     "setuptools>=68",
     "click>=8.1.0",
     "spacy>=3.8.0",
-    "tokenizers>=0.22.0",
     "transformers>=4.56.1",
     "colorama",
     "pillow>=11.3.0",

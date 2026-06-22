@@ -31,8 +31,10 @@ from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, Modu
 from domiknows.sensor.pytorch.learners import ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, \
     CompositionCandidateReaderSensor
+import re
 from reader import conll4_reader
 from reward import reward_from_generator
+from domiknows.program import ReinforcementProgram
 import numpy as np
 
 import spacy
@@ -41,8 +43,13 @@ import spacy
 nlp = spacy.load('en_core_web_sm')  # English()
 
 import logging
+import os
 
-logging.basicConfig(level=logging.DEBUG)
+# The per-tensor debug_tensor(...) calls log at DEBUG on every sensor/BERT/
+# Classifier forward, which floods the console each training step. Default to
+# WARNING; set DOMIKNOWS_HARD_DEBUG=1 to restore the verbose DEBUG output.
+logging.basicConfig(
+    level=logging.DEBUG if os.environ.get("DOMIKNOWS_HARD_DEBUG") == "1" else logging.WARNING)
 
 from transformers import BertTokenizerFast, BertModel
 
@@ -164,6 +171,89 @@ def debug_tensor(name, tensor):
         logging.debug(f"[DTYPE DEBUG] {name}: type={type(tensor)}")
     return tensor
 
+# Asking function (from reader.ASKING_TYPE) -> comparison operator the answer uses.
+_ASK_OP = {
+    "atLeastAL": ">=", "atLeastL": ">=",
+    "atMostAL": "<=", "atMostL": "<=",
+    "exactAL": "==", "exactL": "==",
+    "sumL": "==",
+}
+
+# Relation concept names (graph uses 'orgbase_in' for the orgbase_on variable).
+_RELATION_NAMES = {"work_for", "located_in", "live_in", "orgbase_in", "orgbase_on", "kill"}
+
+
+def _asking_op(logic_str):
+    """Leading asking function in a logic_str, e.g. 'atMostAL(...)' -> '<='."""
+    m = re.match(r"\s*([A-Za-z]+)\s*\(", logic_str or "")
+    return _ASK_OP.get(m.group(1)) if m else None
+
+
+def _asked_number(data_item, logic_str):
+    """The threshold N the question asks about (label count, or trailing int)."""
+    if isinstance(data_item, dict):
+        ll = data_item.get("logic_label")
+        if isinstance(ll, (list, tuple)) and ll:
+            try:
+                return int(ll[0])
+            except (TypeError, ValueError):
+                pass
+        if isinstance(ll, (int, float)):
+            return int(ll)
+    nums = re.findall(r"-?\d+", logic_str or "")
+    return int(nums[-1]) if nums else 1
+
+
+def yesno_answer_decoder(samples, targets, datanode, data_item):
+    """Map one sampled NER/relation decoding to a yes/no answer (threshold-aware).
+
+    Counts how many asked instances the decoding turns on, then answers the
+    *actual* asked question by comparing that count to the asked threshold N via
+    the asking type parsed from ``logic_str`` (``atLeast`` -> ``count >= N``,
+    ``atMost`` -> ``count <= N``, ``exact``/``sum`` -> ``count == N``).  This makes
+    the answer depend on getting the count right, which gives the reward a real
+    learning signal (unlike a trivial "yes if any positive" rule, which a random
+    model already satisfies).  Falls back to ``count >= 1`` if the asking type is
+    unknown.
+    """
+    logic_str = ""
+    if isinstance(data_item, dict):
+        logic_str = data_item.get("logic_str") or ""
+
+    asked = [
+        c for c in targets
+        if re.search(rf"(?<!\w){re.escape(c.name)}(?!\w)", logic_str)
+    ]
+    if not asked:
+        asked = list(targets)
+
+    # Count one scale-appropriate group so the count is comparable to N: prefer
+    # the asked relation (the head of the andL pattern), else the asked entity.
+    # Summing across all asked concepts would inflate the count far beyond N and
+    # make the threshold comparison unsatisfiable.
+    asked_rel = [c for c in asked if c.name in _RELATION_NAMES]
+    counting = asked_rel if asked_rel else asked
+
+    count = 0
+    for concept in counting:
+        idx = samples.get(concept)
+        if idx is not None:
+            # class index 1 == "the concept holds" for binary concepts
+            count += int((idx.reshape(-1) == 1).sum().item())
+
+    op = _asking_op(logic_str)
+    n = _asked_number(data_item, logic_str)
+    if op == ">=":
+        answer = count >= n
+    elif op == "<=":
+        answer = count <= n
+    elif op == "==":
+        answer = count == n
+    else:
+        answer = count >= 1
+    return "yes" if answer else "no"
+
+
 def program_declaration(train, args, device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
@@ -191,23 +281,9 @@ def program_declaration(train, args, device='auto'):
         ones = torch.ones((1, len(phrase_text)), device=device)  # was torch.device
         debug_tensor("merge_phrase ones", ones)
         return [' '.join(phrase_text)], ones
-    
-    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
-        phrase['text'], word['offset'],
-        relation=rel_phrase_contains_word.reversed,
-        forward=match_phrase
-    )
 
-    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
-
-    # Create Tokenizer with device parameter
-    tokenizer = Tokenizer(device=device)
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=tokenizer)
-    
-    # Create BERT with device parameter
-    bert_model = BERT(device=device)
-    word['bert'] = ModuleSensor('ids', module=bert_model)
-
+    # NOTE: defined before its use in the EdgeSensor below (was previously
+    # referenced before definition, which raised NameError at declaration time).
     def match_phrase(phrase, word_offset):
         def overlap(a_s, a_e, b_s, b_e):
             return (a_s <= b_s and b_s <= a_e) or (a_s <= b_e and b_e <= a_e)
@@ -227,6 +303,23 @@ def program_declaration(train, args, device='auto'):
         result = torch.tensor(ph_word_overlap, device=device)
         debug_tensor("match_phrase output", result)
         return result
+
+    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
+
+    # Create Tokenizer with device parameter. This must be declared before the
+    # phrase->word EdgeSensor below, which reads word['offset'].
+    tokenizer = Tokenizer(device=device)
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=tokenizer)
+
+    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(
+        phrase['text'], word['offset'],
+        relation=rel_phrase_contains_word.reversed,
+        forward=match_phrase
+    )
+
+    # Create BERT with device parameter
+    bert_model = BERT(device=device)
+    word['bert'] = ModuleSensor('ids', module=bert_model)
 
     def phrase_bert(bert):
         debug_tensor("phrase_bert input", bert)
@@ -250,15 +343,21 @@ def program_declaration(train, args, device='auto'):
     phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM, device=device))
     
     def filter_pairs(phrase_text, arg1, arg2, data):
-        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
-            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+        # `data` is the reader's 'relation' list: (rel_text, head_idx, tail_idx)
+        # tuples. Create a pair candidate for each true (head, tail) relation.
+        for rel in data or []:
+            try:
+                head_idx, tail_idx = rel[1], rel[2]
+            except (TypeError, IndexError, KeyError):
+                continue
+            if arg1.instanceID == head_idx and arg2.instanceID == tail_idx:
                 return True
         return False
 
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
         phrase['text'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        keyword='relations',
+        keyword='relation',
         forward=filter_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
@@ -270,25 +369,64 @@ def program_declaration(train, args, device='auto'):
     pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
     pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM * 2))
 
-    def find_label(label_type):
-        def find(data):
-            label = torch.tensor([item == label_type for item in data], device=device)
-            return label
+    # The decision variables sampled by the reinforcement program: the entity
+    # labels on phrases and the relation labels on pairs.
+    targets = [people, organization, location, other, o,
+               work_for, located_in, live_in, orgbase_on, kill]
 
-        return find
-    
-    # TODO: Adding the reward function here (key for reward is reward_function. )
-    # Reward function may be unique for each question. This may not be possible.
-
-    program = None
+    # Each data item carries its own reward function under the 'reward_function'
+    # key (see reader.conll4_reader / reward.make_reward_function). The decoder
+    # turns a sampled decoding into the yes/no answer the reward scores.
+    program = ReinforcementProgram(
+        graph,
+        targets=targets,
+        reward_key='reward_function',
+        decoder=yesno_answer_decoder,
+        num_samples=getattr(args, 'num_samples', 8),
+        estimator=getattr(args, 'estimator', 'importance_weighted'),
+        device=device,
+        visualize=getattr(args, 'visualize', False),
+        visualize_port=getattr(args, 'port', 5000),
+    )
     return program, train
 
     
 
 
+def _print_reward_summary(args, baseline, trained):
+    """Explain the before/after mean reward of the reinforcement run."""
+    delta = trained - baseline
+    print("\n" + "=" * 64)
+    print("Reinforcement training summary (hard example)")
+    print("-" * 64)
+    print("Reward = fraction of sampled decodings whose decoded yes/no answer")
+    print("matches the question label. The decoder counts how many asked")
+    print("entity/relation instances a decoding turns on, then answers the asked")
+    print("question (atLeast/atMost/exact N) by comparing that count to N.")
+    print("-" * 64)
+    print(f"  estimator         : {getattr(args, 'estimator', 'importance_weighted')}")
+    print(f"  epochs            : {args.epochs}")
+    print(f"  samples / step    : {getattr(args, 'num_samples', 8)}")
+    print(f"  mean reward before: {baseline:.4f}   (random/initial model)")
+    print(f"  mean reward after : {trained:.4f}   (after training)")
+    print(f"  improvement       : {delta:+.4f}")
+    if delta > 1e-3:
+        print("  => training INCREASED the reward: the model learned to produce")
+        print("     decodings whose counts better satisfy the asked constraints.")
+    elif abs(delta) <= 1e-3:
+        print("  => reward ~unchanged: near the ceiling for this subset, or the run")
+        print("     is too short (raise --epochs / --num_samples / --train_size).")
+    else:
+        print("  => reward DECREASED: likely sampling noise or too-high --lr;")
+        print("     try more --num_samples or a smaller --lr.")
+    print("=" * 64)
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Getting the arguments passed")
-    parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=1e-3,
+                        help="Learning rate (the trainable params are the small relation/entity "
+                             "classifier heads; BERT is frozen, so ~1e-3 is appropriate)")
     parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--load_previous", action='store_true')
@@ -298,7 +436,11 @@ def parse_arguments():
     parser.add_argument("--checked_acc", type=float, default=0, help="Accuracy to test")
     parser.add_argument("--counting_tnorm", choices=["G", "P", "L", "SP"], default="G", help="The tnorm method to use for the counting constraints")
     parser.add_argument("--data_path", type=str, default="data2.json", help="Path to data file (can be relative or absolute)")
-    parser.add_argument("--device", type=str, default="cuda", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--device", type=str, default="auto", help="Device to use for computation (e.g., 'cuda', 'cpu', 'cuda:0', 'auto')")
+    parser.add_argument("--num_samples", type=int, default=8, help="Decodings sampled per reinforcement step")
+    parser.add_argument("--estimator", type=str, default="importance_weighted", choices=["importance_weighted", "reinforce"], help="Reward-loss estimator")
+    parser.add_argument("--visualize", action='store_true', help="Launch the Flask step-by-step visualizer (training pauses each step)")
+    parser.add_argument("--port", type=int, default=5000, help="Visualizer port")
     args = parser.parse_args()
 
     return args
@@ -308,37 +450,46 @@ def main(args):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
 
+    # Resolve a concrete device (the sensors/modules cannot take 'auto').
+    device = args.device
+    if device == 'auto':
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     # Find the data file automatically (will use extracted file if exists)
     data_file_path = find_data_file(args.data_path, args.train_portion)
 
-    train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion, reward_function=reward_from_generator)
+    # Pass reward_function=None so each data item gets its own per-question reward
+    # closure (reward.make_reward_function), which the program calls as
+    # reward_fn(generator_output).
+    train, dev, test = conll4_reader(data_path=data_file_path, dataset_portion=args.train_portion, reward_function=None)
 
     if args.train_size != -1:
         train = train[:args.train_size]
 
-    program, dataset = program_declaration(train if not args.evaluate else test, args, device=args.device)
+    program, dataset = program_declaration(train if not args.evaluate else test, args, device=device)
 
-    # TODO: Add training and evaluation code here, similar to the commented-out code in the original snippet but using reward instead of loss.
-    # suffix = "_curriculum_learning" if args.load_previous else ""
-    # if not args.evaluate:
-    #     if args.load_previous:
-    #         program.load(f"training_{args.epochs}_lr_{args.lr}_{args.previous_portion}.pth")
-    #     program.train(dataset, Optim=torch.optim.Adam, train_epoch_num=args.epochs, c_lr=args.lr, c_warmup_iters=-1,
-    #                   batch_size=1, print_loss=False)
-    #     program.save(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
-    # else:
-    #     program.load(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}.pth")
-
-    # output_f = open("result.txt", 'a')
-    # train_acc = program.evaluate_condition(dataset, threshold=0.5, device=args.device)
-    # portion = "Training" if not args.evaluate else "Testing"
-    # print(f"training_{args.epochs}_lr_{args.lr}_{args.train_portion}{suffix}", file=output_f)
-    # print(f"{portion} Acc: {train_acc}", file=output_f)
-    # print("#" * 40, file=output_f)
-
-    # if args.checked_acc:
-    #     print(f"<acc>{train_acc}</acc>")
-    #     assert train_acc > args.checked_acc
+    if not args.evaluate:
+        # Use more samples for the before/after readout so it isn't dominated by
+        # sampling noise (this only adds cheap extra sampling, not extra forwards).
+        eval_samples = max(64, getattr(args, 'num_samples', 8) * 4)
+        baseline = program.evaluate_reward(dataset, num_samples=eval_samples, device=device)
+        program.train(
+            dataset,
+            train_epoch_num=args.epochs,
+            Optim=lambda params: torch.optim.Adam(
+                [p for p in params if p.requires_grad], lr=args.lr),
+            device=device,
+        )
+        trained = program.evaluate_reward(dataset, num_samples=eval_samples, device=device)
+        _print_reward_summary(args, baseline, trained)
+    else:
+        reward = program.evaluate_reward(dataset, device=device)
+        print("\n" + "=" * 64)
+        print("Reinforcement evaluation (hard example)")
+        print(f"  Mean reward over sampled decodings: {reward:.4f}")
+        print("  (fraction of sampled decodings whose decoded yes/no answer")
+        print("   matches the question label, per the asking-type decoder)")
+        print("=" * 64)
 
     return 0
 

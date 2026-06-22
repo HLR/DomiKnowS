@@ -90,6 +90,7 @@ jobs:
             'vizual'
             'fixes'
             'generation'
+            'Reinforcement'
           )
           
           bash .github/scripts/run_tests.sh "test-cpu" "${TEST_LIST[@]}"
