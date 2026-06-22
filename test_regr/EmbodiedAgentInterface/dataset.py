@@ -14,6 +14,37 @@ ACTION_VOCAB = BASE_VOCAB
 
 HF_DATASET = "Inevitablevalor/EmbodiedAgentInterface"
 
+ACTION_OBJECT_CONSTRAINT_ACTIONS = frozenset({
+    "clean",
+    "close",
+    "cook",
+    "freeze",
+    "left_place_inside",
+    "left_place_nextto",
+    "left_place_nextto_ontop",
+    "left_place_nextto_on_top",
+    "left_place_on_top",
+    "left_place_ontop",
+    "left_place_under",
+    "open",
+    "right_place_inside",
+    "right_place_nextto",
+    "right_place_nextto_ontop",
+    "right_place_nextto_on_top",
+    "right_place_on_top",
+    "right_place_ontop",
+    "right_place_under",
+    "slice",
+    "soak",
+    "switch_off",
+    "switch_on",
+    "toggle_off",
+    "toggle_on",
+    "turn_off",
+    "turn_on",
+    "unfreeze",
+})
+
 
 def _normalize_surface_token(value):
     value = str(value or "").lower()
@@ -91,6 +122,18 @@ def action_tokens_requiring_object_from_row(row):
     return [action for action, obj in trajectory_action_object_tokens(row) if action and obj]
 
 
+def openable_object_tokens_from_row(row):
+    return [obj for action, obj in trajectory_action_object_tokens(row) if action == "open" and obj]
+
+
+def constrained_action_object_pairs_from_row(row):
+    return tuple(
+        (action, obj)
+        for action, obj in trajectory_action_object_tokens(row)
+        if action in ACTION_OBJECT_CONSTRAINT_ACTIONS and obj
+    )
+
+
 def build_generation_vocab(rows):
     actions = sorted({action for row in rows for action in action_tokens_from_row(row)})
     objects = sorted({obj for row in rows for obj in object_tokens_from_row(row)})
@@ -143,6 +186,8 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
     action_tokens = set(action_tokens_from_row(row))
     action_requires_object_tokens = set(action_tokens_requiring_object_from_row(row))
     object_tokens = set(object_tokens_from_row(row))
+    openable_object_tokens = set(openable_object_tokens_from_row(row))
+    action_object_constraint_pairs = constrained_action_object_pairs_from_row(row)
     return {
         "task_id": str(task_id),
         "task_name": str(row.get("task_name", "")),
@@ -160,6 +205,10 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
             action for action in vocab if action in action_requires_object_tokens
         ),
         "object_tokens": tuple(token for token in vocab if token in object_tokens),
+        "openable_object_tokens": tuple(
+            token for token in vocab if token in openable_object_tokens
+        ),
+        "action_object_constraint_pairs": action_object_constraint_pairs,
         "logic_label": torch.LongTensor([1]).to(device),
     }
 

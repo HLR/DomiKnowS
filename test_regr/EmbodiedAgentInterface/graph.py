@@ -80,12 +80,44 @@ def _add_action_object_logical_constraint(graph, bundle, action_tokens, object_t
             ctx.token_value(obj, "y", path=("before", ctx.second_token))
             for obj in valid_objects
         ]
+        #
         lc = ifL(
             ctx.is_before_rel("before"),
-            ifL(_disjunction(action_calls, orL), _disjunction(object_calls, orL)),
+            ifL(_disjunction(action_calls, orL), 
+                _disjunction(object_calls, orL)),
         )
         # The single-arg modern signature; ``mark_for_dfa`` returns *lc* for chaining.
         mark_for_dfa(lc)
+
+
+def _add_action_specific_object_constraints(graph, bundle, action_object_constraint_tokens):
+    """Encode action-specific next-object compatibility constraints."""
+    from domiknows.generation import mark_for_dfa
+    from domiknows.graph.logicalConstrain import ifL, orL
+
+    if not action_object_constraint_tokens:
+        return
+
+    ctx = bundle.context
+    with graph:
+        for action, object_tokens in sorted(action_object_constraint_tokens.items()):
+            valid_objects = tuple(
+                token for token in object_tokens if token in bundle.vocabulary.tokens
+            )
+            if action not in bundle.vocabulary.tokens or not valid_objects:
+                continue
+            object_calls = [
+                ctx.token_value(obj, "y", path=("before", ctx.second_token))
+                for obj in valid_objects
+            ]
+            lc = ifL(
+                ctx.is_before_rel("before"),
+                ifL(
+                    ctx.token_value(action, "x", path=("before", ctx.first_token)),
+                    _disjunction(object_calls, orL),
+                ),
+            )
+            mark_for_dfa(lc)
 
 
 def create_generation_graph(
@@ -95,13 +127,20 @@ def create_generation_graph(
     vocab=None,
     object_tokens=None,
     action_tokens=None,
+    openable_object_tokens=None,
+    action_object_constraint_tokens=None,
     enforce_action_object=True,
+    enforce_action_object_constraints=True,
 ):
     from domiknows.generation import GenerationEncoder
 
     vocab = tuple(vocab or ACTION_VOCAB)
     object_tokens = tuple(object_tokens or ())
     action_tokens = tuple(action_tokens or ())
+    openable_object_tokens = tuple(openable_object_tokens or ())
+    action_object_constraint_tokens = dict(action_object_constraint_tokens or {})
+    if openable_object_tokens:
+        action_object_constraint_tokens.setdefault("open", openable_object_tokens)
 
     encoder = GenerationEncoder(
         vocab=list(vocab),
@@ -120,6 +159,8 @@ def create_generation_graph(
 
     if enforce_action_object:
         _add_action_object_logical_constraint(graph, bundle, action_tokens, object_tokens)
+    if enforce_action_object_constraints:
+        _add_action_specific_object_constraints(graph, bundle, action_object_constraint_tokens)
     return graph, bundle
 
 

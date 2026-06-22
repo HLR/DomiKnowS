@@ -53,11 +53,20 @@ def build_program(
     vocab=None,
     object_tokens=None,
     action_tokens=None,
+    openable_object_tokens=None,
+    action_object_constraint_tokens=None,
     program_type="solver",
     baseline_model="tiny-transformer",
     llm_backbone_path="Qwen/Qwen2.5-0.5B-Instruct",
     transformer_layers=2,
     transformer_heads=4,
+    use_lora=False,
+    lora_r=8,
+    lora_alpha=16,
+    lora_dropout=0.05,
+    lora_target_modules=None,
+    llm_device_map=None,
+    gradient_checkpointing=False,
 ):
     from domiknows import setProductionLogMode
     from domiknows.program import SolverPOIProgram
@@ -77,6 +86,8 @@ def build_program(
         vocab=vocab,
         object_tokens=object_tokens,
         action_tokens=action_tokens,
+        openable_object_tokens=openable_object_tokens,
+        action_object_constraint_tokens=action_object_constraint_tokens,
     )
     graph.detach()
     if program_type not in {"solver", "primal-dual"}:
@@ -153,7 +164,16 @@ def build_program(
             freeze=freeze_encoder,
             hidden_dim=hidden_dim,
             vocabulary=bundle.vocabulary,
-        ).to(device)
+            use_lora=use_lora,
+            lora_r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            lora_target_modules=lora_target_modules,
+            device_map=llm_device_map,
+            gradient_checkpointing=gradient_checkpointing,
+        )
+        if not (llm_device_map and str(llm_device_map).lower() != "none"):
+            autoregressive_head = autoregressive_head.to(device)
     else:
         raise ValueError(f"Unsupported baseline_model={baseline_model!r}")
     token[generated_token] = ModuleLearner(
@@ -337,6 +357,33 @@ def object_tokens_from_examples(examples):
     return tuple(token for token in vocab if any(token in sample.get("object_tokens", ()) for sample in examples))
 
 
+def openable_object_tokens_from_examples(examples):
+    if not examples:
+        return ()
+    vocab = generation_vocab_from_examples(examples)
+    return tuple(
+        token
+        for token in vocab
+        if any(token in sample.get("openable_object_tokens", ()) for sample in examples)
+    )
+
+
+def action_object_constraint_tokens_from_examples(examples):
+    if not examples:
+        return {}
+    vocab = generation_vocab_from_examples(examples)
+    vocab_set = set(vocab)
+    action_to_objects = {}
+    for sample in examples:
+        for action, obj in sample.get("action_object_constraint_pairs", ()):
+            if action in vocab_set and obj in vocab_set:
+                action_to_objects.setdefault(action, set()).add(obj)
+    return {
+        action: tuple(token for token in vocab if token in objects)
+        for action, objects in sorted(action_to_objects.items())
+    }
+
+
 def write_vocab_info_log(examples):
     log_dir = RUN_DIR / "logs"
     log_dir.mkdir(exist_ok=True)
@@ -344,6 +391,8 @@ def write_vocab_info_log(examples):
     action_tokens = action_tokens_from_examples(examples)
     object_tokens = object_tokens_from_examples(examples)
     action_requires_object_tokens = action_tokens_requiring_object_from_examples(examples)
+    openable_object_tokens = openable_object_tokens_from_examples(examples)
+    action_object_constraint_tokens = action_object_constraint_tokens_from_examples(examples)
     info_path = log_dir / "info.log"
     with info_path.open("w") as log_file:
         log_file.write("EmbodiedAgentInterface vocabulary info\n")
@@ -353,6 +402,10 @@ def write_vocab_info_log(examples):
         log_file.write(f"object_count: {len(object_tokens)}\n")
         log_file.write(
             f"action_requires_object_count: {len(action_requires_object_tokens)}\n"
+        )
+        log_file.write(f"openable_object_count: {len(openable_object_tokens)}\n")
+        log_file.write(
+            f"action_object_constraint_count: {len(action_object_constraint_tokens)}\n"
         )
         log_file.write("\n[vocabulary]\n")
         for index, token in enumerate(vocab):
@@ -366,6 +419,12 @@ def write_vocab_info_log(examples):
         log_file.write("\n[object_tokens]\n")
         for token in object_tokens:
             log_file.write(f"{token}\n")
+        log_file.write("\n[openable_object_tokens]\n")
+        for token in openable_object_tokens:
+            log_file.write(f"{token}\n")
+        log_file.write("\n[action_object_constraints]\n")
+        for action, objects in action_object_constraint_tokens.items():
+            log_file.write(f"{action}: {', '.join(objects)}\n")
     print(f"Vocabulary info log: {info_path}")
 
 
@@ -465,11 +524,20 @@ def build_trainable_program(args, examples, device):
         vocab=generation_vocab_from_examples(examples),
         object_tokens=object_tokens_from_examples(examples),
         action_tokens=action_tokens_requiring_object_from_examples(examples),
+        openable_object_tokens=openable_object_tokens_from_examples(examples),
+        action_object_constraint_tokens=action_object_constraint_tokens_from_examples(examples),
         program_type=args.program,
         baseline_model=args.baseline_model,
         llm_backbone_path=args.llm_backbone_path,
         transformer_layers=args.transformer_layers,
         transformer_heads=args.transformer_heads,
+        use_lora=args.use_lora,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        lora_target_modules=args.lora_target_modules,
+        llm_device_map=args.llm_device_map,
+        gradient_checkpointing=args.gradient_checkpointing,
     )
 
 
@@ -514,6 +582,7 @@ def report_epoch_accuracy(args, program, bundle, train, dev, device, epoch):
 
 def train_program(args, train, dev, examples, device):
     program, bundle = build_trainable_program(args, examples, device)
+    print(f"Starting training and will save at {args.model}")
     if args.eval_every_epoch:
         for epoch in range(1, args.epochs + 1):
             print(f"Training epoch {epoch}/{args.epochs}")
@@ -521,6 +590,7 @@ def train_program(args, train, dev, examples, device):
             report_epoch_accuracy(args, program, bundle, train, dev, device, epoch)
     else:
         program.train(train, valid_set=dev, test_set=None, **_train_kwargs(args, train, device, args.epochs))
+        # report_epoch_accuracy(args, program, bundle, train, dev, device, epoch)
 
     if args.model:
         model_path = Path(args.model)
@@ -578,11 +648,20 @@ def generate_baseline_sequences(args, examples, device):
         vocab=generation_vocab_from_examples(examples),
         object_tokens=object_tokens_from_examples(examples),
         action_tokens=action_tokens_requiring_object_from_examples(examples),
+        openable_object_tokens=openable_object_tokens_from_examples(examples),
+        action_object_constraint_tokens=action_object_constraint_tokens_from_examples(examples),
         program_type=args.program,
         baseline_model=args.baseline_model,
         llm_backbone_path=args.llm_backbone_path,
         transformer_layers=args.transformer_layers,
         transformer_heads=args.transformer_heads,
+        use_lora=args.use_lora,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        lora_target_modules=args.lora_target_modules,
+        llm_device_map=args.llm_device_map,
+        gradient_checkpointing=args.gradient_checkpointing,
     )
     correct = 0
     total = 0
@@ -612,6 +691,8 @@ def generate_llm_sequences(args, examples, device):
         vocab=generation_vocab_from_examples(examples),
         object_tokens=object_tokens_from_examples(examples),
         action_tokens=action_tokens_requiring_object_from_examples(examples),
+        openable_object_tokens=openable_object_tokens_from_examples(examples),
+        action_object_constraint_tokens=action_object_constraint_tokens_from_examples(examples),
     )
     for idx, sample in enumerate(examples[:args.num_generations]):
         datanode = program.populate_one(sample, device=device)
@@ -639,6 +720,13 @@ def parse_args():
     parser.add_argument("--program", choices=["solver", "primal-dual"], default="solver", help="DomiKnowS training program to use for the autoregressive baseline.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
     parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-0.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
+    parser.add_argument("--use-lora", action="store_true", help="Train LoRA adapters on the causal LM backbone.")
+    parser.add_argument("--lora-r", type=int, default=8, help="LoRA rank for --baseline-model causal-lm --use-lora.")
+    parser.add_argument("--lora-alpha", type=int, default=16, help="LoRA alpha for --baseline-model causal-lm --use-lora.")
+    parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout for --baseline-model causal-lm --use-lora.")
+    parser.add_argument("--lora-target-modules", nargs="+", default=None, help="Optional LoRA target module names. Defaults to Qwen attention/MLP projections.")
+    parser.add_argument("--llm-device-map", default=None, help="Optional Hugging Face device_map for causal LM loading, e.g. auto for multi-GPU sharding.")
+    parser.add_argument("--gradient-checkpointing", action="store_true", help="Enable gradient checkpointing for causal LM LoRA training to reduce activation memory.")
     parser.add_argument("--transformer-layers", type=int, default=2, help="Layers for --baseline-model tiny-transformer.")
     parser.add_argument("--transformer-heads", type=int, default=4, help="Attention heads for --baseline-model tiny-transformer.")
     parser.add_argument("--constraint-warmup-iters", type=int, default=5, help="Model-only warmup iterations before primal-dual constraint updates.")

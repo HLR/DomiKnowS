@@ -246,6 +246,14 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         freeze=True,
         hidden_dim=None,
         vocabulary=None,
+        use_lora=False,
+        lora_r=8,
+        lora_alpha=16,
+        lora_dropout=0.05,
+        lora_target_modules=None,
+        device_map=None,
+        gradient_checkpointing=False,
+        low_cpu_mem_usage=True,
     ):
         super().__init__()
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -255,19 +263,67 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         self.device_name = device
         self.max_length = max_length
         self.vocabulary = vocabulary
+        self.use_lora = bool(use_lora)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=dtype,
-            trust_remote_code=True,
-        ).to(device)
-        if freeze:
-            for param in self.model.parameters():
-                param.requires_grad = False
-        self.model.eval() if freeze else self.model.train()
+        model_kwargs = {
+            "torch_dtype": dtype,
+            "trust_remote_code": True,
+        }
+        if device_map and str(device_map).lower() != "none":
+            model_kwargs["device_map"] = device_map
+            model_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
+        self.model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+        if not (device_map and str(device_map).lower() != "none"):
+            self.model = self.model.to(device)
+        if hasattr(self.model.config, "use_cache"):
+            self.model.config.use_cache = False
+        if gradient_checkpointing and hasattr(self.model, "gradient_checkpointing_enable"):
+            self.model.gradient_checkpointing_enable()
+
+        if self.use_lora:
+            try:
+                from peft import LoraConfig, TaskType, get_peft_model
+            except ImportError as exc:
+                raise ImportError(
+                    "--use-lora requires the 'peft' package in this environment."
+                ) from exc
+            target_modules = lora_target_modules or (
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            )
+            config = LoraConfig(
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                bias="none",
+                task_type=TaskType.CAUSAL_LM,
+                target_modules=list(target_modules),
+            )
+            self.model = get_peft_model(self.model, config)
+            self.model.train()
+        else:
+            if freeze:
+                for param in self.model.parameters():
+                    param.requires_grad = False
+            self.model.eval() if freeze else self.model.train()
+
         model_hidden = getattr(self.model.config, "hidden_size", hidden_dim or 768)
-        self.output = torch.nn.Linear(model_hidden, label_count).to(device)
+        self.output = torch.nn.Linear(model_hidden, label_count).to(self._model_input_device())
+
+    def _model_input_device(self):
+        try:
+            return next(self.model.parameters()).device
+        except StopIteration:
+            return torch.device(self.device_name)
+
+    def trainable_parameter_count(self):
+        return sum(param.numel() for param in self.parameters() if param.requires_grad)
 
     def token_id_for_label(self, label):
         return int(label)
@@ -280,9 +336,22 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         except Exception:
             return str(int(label))
 
+    def _prompt_base(self, text):
+        return f"Instruction: {text}\nGenerated action tokens:"
+
     def _prompt(self, text, prefix_labels):
         prefix = " ".join(self._label_to_token(label) for label in prefix_labels if int(label) != self.eos_label)
-        return f"Instruction: {text}\nGenerated action tokens: {prefix}\nNext token:"
+        if prefix:
+            return f"{self._prompt_base(text)} {prefix}"
+        return self._prompt_base(text)
+
+    def _model_hidden_states(self, input_ids, attention_mask=None):
+        kwargs = {"input_ids": input_ids}
+        if attention_mask is not None:
+            kwargs["attention_mask"] = attention_mask
+        with torch.set_grad_enabled(any(param.requires_grad for param in self.model.parameters())):
+            outputs = self.model(**kwargs, output_hidden_states=True, use_cache=False)
+        return outputs.hidden_states[-1].float().to(self.output.weight.device)
 
     def _next_logits_for_prefix(self, text, prefix_labels):
         prompt = self._prompt(text, prefix_labels)
@@ -291,10 +360,11 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
             truncation=True,
             max_length=self.max_length,
             return_tensors="pt",
-        ).to(self.device_name)
-        with torch.set_grad_enabled(any(param.requires_grad for param in self.model.parameters())):
-            outputs = self.model(**inputs, output_hidden_states=True, use_cache=False)
-            hidden = outputs.hidden_states[-1][:, -1, :].float()
+        ).to(self._model_input_device())
+        hidden = self._model_hidden_states(
+            inputs["input_ids"],
+            inputs.get("attention_mask"),
+        )[:, -1, :]
         return self.output(hidden)[0]
 
     def _shift_right(self, target_labels):
@@ -304,16 +374,70 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         start = torch.full((labels.shape[0], 1), self.eos_label, dtype=torch.long, device=self.device_name)
         return torch.cat([start, labels[:, :-1]], dim=1)
 
+    def _constant_eos_logits(self):
+        logits = torch.full(
+            (self.label_count,),
+            -8.0,
+            dtype=self.output.weight.dtype,
+            device=self.output.weight.device,
+        )
+        logits[self.eos_label] = 8.0
+        return logits
+
+    def _padding_start_from_shifted_prefix(self, row):
+        # ``row`` is shifted-right target labels: [BOS/EOS, y0, ..., y_{n-1}].
+        # The first EOS after index 0 corresponds to already-finished padding
+        # positions, so those later predictions do not need another LLM forward.
+        eos_positions = (row[1:] == self.eos_label).nonzero(as_tuple=False)
+        if eos_positions.numel() == 0:
+            return row.numel()
+        return int(eos_positions[0].item()) + 1
+
+    def _teacher_forced_input(self, text, row, padding_start):
+        ids = self.tokenizer(
+            self._prompt_base(text),
+            add_special_tokens=True,
+        )["input_ids"]
+        if not ids:
+            ids = [self.tokenizer.eos_token_id or 0]
+        boundary_positions = [len(ids) - 1]
+        for label in row[1:padding_start].detach().cpu().tolist():
+            label_ids = self.tokenizer(
+                " " + self._label_to_token(label),
+                add_special_tokens=False,
+            )["input_ids"]
+            if not label_ids:
+                continue
+            ids.extend(label_ids)
+            boundary_positions.append(len(ids) - 1)
+
+        if len(ids) > self.max_length:
+            offset = len(ids) - self.max_length
+            ids = ids[offset:]
+            boundary_positions = [max(0, pos - offset) for pos in boundary_positions]
+
+        return (
+            torch.tensor(ids, dtype=torch.long, device=self._model_input_device()).unsqueeze(0),
+            torch.tensor(boundary_positions, dtype=torch.long, device=self.output.weight.device),
+        )
+
     def sequence_logits(self, text, prefix_labels):
         prefix = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device_name)
         if prefix.dim() == 1:
             prefix = prefix.unsqueeze(0)
         rows = []
+        eos_logits = None
         for row in prefix:
-            logits = []
-            for end in range(1, row.numel() + 1):
-                logits.append(self._next_logits_for_prefix(text, row[:end].tolist()))
-            rows.append(torch.stack(logits, dim=0))
+            padding_start = self._padding_start_from_shifted_prefix(row)
+            input_ids, boundary_positions = self._teacher_forced_input(text, row, padding_start)
+            hidden_states = self._model_hidden_states(input_ids)[0]
+            active_logits = self.output(hidden_states.index_select(0, boundary_positions))
+            logits = [active_logits[index] for index in range(active_logits.shape[0])]
+            while len(logits) < row.numel():
+                if eos_logits is None:
+                    eos_logits = self._constant_eos_logits()
+                logits.append(eos_logits)
+            rows.append(torch.stack(logits[: row.numel()], dim=0))
         return torch.stack(rows, dim=0)
 
     def forward(self, _contains, text, target_labels):

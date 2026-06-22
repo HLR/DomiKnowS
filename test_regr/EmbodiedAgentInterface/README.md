@@ -23,3 +23,18 @@ Generate action-token sequences with a small text LLM attached as a DomiKnowS Mo
     uv run test_regr/EmbodiedAgentInterface/main.py --dummy --use-llm --llm-model-path Qwen/Qwen2.5-0.5B-Instruct --num-generations 3 --device cuda
 
 For CPU-only smoke tests, use --device cpu; a locally cached tiny model is best if the machine has no network access. In --use-llm mode, main.py builds a DomiKnowS generation program and stores the model output on text[generated_action_sequence].
+
+## Inference-only Qwen + HMM + DFA
+
+Use `infer_qwen_hmm_dfa.py` for the no-training setup. This path does not load or train a checkpoint; it calls `main.py`'s `build_trainable_program(...)` to build the same graph/bundle/default DomiKnowS generator, compiles that graph to DFA, loads the saved HMM artifact, and decodes with generator logits combined with HMM + DFA during inference.
+
+Small subset example:
+
+    CUDA_VISIBLE_DEVICES=2 conda run -n CLEVER python infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --eval-split full --hmm models/eai_all_qwen25_ctrlg_hmm.npz --device cuda --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --output results_qwen_hmm_dfa_100.txt
+
+Useful options:
+
+- `--hmm-hf-weight` controls the default DomiKnowS generator logit contribution.
+- `--hmm-weight` controls the HMM contribution.
+- `--hmm-lookahead-weight` enables bounded HMM lookahead without pruning.
+
