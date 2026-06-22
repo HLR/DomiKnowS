@@ -58,7 +58,7 @@ def parse_args():
     parser.add_argument("--hmm-search", choices=["greedy", "beam", "sample"], default="greedy")
     parser.add_argument("--hmm-beam-size", type=int, default=4)
     parser.add_argument("--hmm-weight", type=float, default=1.0)
-    parser.add_argument("--hmm-hf-weight", type=float, default=1.0, help="Weight for DomiKnowS generator label scores.")
+    parser.add_argument("--hmm-hf-weight", type=float, default=0.0, help="Optional backend generator label-bias weight. Use 0.0 for Ctrl-G-style HMM+DFA decoding.")
     parser.add_argument("--hmm-lookahead-weight", type=float, default=0.0)
     parser.add_argument("--hmm-lookahead-max-steps", type=int, default=8)
     parser.add_argument("--hmm-keep-rejected", action="store_true")
@@ -84,7 +84,7 @@ def main():
 
     dfa = constraints_to_dfa_from_graph(program.graph, bundle)
     score = ev.score_predictions(
-        "DomiKnowS default Qwen generator + HMM + DFA (no training)",
+        "DomiKnowS HMM+DFA decoder with Qwen-distilled HMM (no training)",
         predictions,
         examples,
         bundle.vocabulary,
@@ -93,11 +93,11 @@ def main():
     )
 
     lines = [
-        "EAI inference-only DomiKnowS default Qwen generator + HMM + DFA",
+        "EAI inference-only DomiKnowS HMM+DFA decoder with Qwen-distilled HMM",
         f"dataset={args.dataset} eval_split={args.eval_split} examples={len(examples)} loaded_examples={len(all_examples)} max_steps={args.max_steps}",
         f"generator={args.baseline_model} qwen={args.llm_backbone_path}",
         f"hmm={args.hmm}",
-        f"hmm_search={args.hmm_search} hmm_weight={args.hmm_weight} generator_weight={args.hmm_hf_weight} lookahead_weight={args.hmm_lookahead_weight}",
+        f"hmm_search={args.hmm_search} hmm_weight={args.hmm_weight} backend_generator_weight={args.hmm_hf_weight} lookahead_weight={args.hmm_lookahead_weight}",
         "",
         ev.format_score(score),
         "",

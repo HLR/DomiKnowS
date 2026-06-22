@@ -110,7 +110,7 @@ def parse_args():
     parser.add_argument("--hmm-search", choices=["greedy", "beam", "sample"], default="greedy")
     parser.add_argument("--hmm-beam-size", type=int, default=4)
     parser.add_argument("--hmm-weight", type=float, default=1.0)
-    parser.add_argument("--hmm-hf-weight", type=float, default=1.0)
+    parser.add_argument("--hmm-hf-weight", type=float, default=0.0)
     parser.add_argument("--hmm-lookahead-weight", type=float, default=0.0)
     parser.add_argument("--hmm-lookahead-max-steps", type=int, default=8)
     parser.add_argument("--hmm-keep-rejected", action="store_true")
@@ -809,40 +809,22 @@ def _domiknows_hmm_dfa_predictions(args, dfa, bundle, generator, examples, desc=
     """
     if not args.hmm:
         raise ValueError("--hmm is required for HMM+DFA decoding")
-    from domiknows.generation.applications.hmm_dfa_decoder import HMMDFADecoder
+    from domiknows.generation.applications.hybrid import HybridController
 
     scorer_head = load_hmm_generation_head(args.hmm, bundle.vocabulary, args.device)
+    controller = HybridController(
+        dfa=dfa,
+        vocabulary=bundle.vocabulary,
+        generator=generator,
+        scorer_head=scorer_head,
+        tokenizer=None,
+    )
     predictions = []
     failures = 0
     iterator = progress_bar(examples, total=len(examples), desc=desc)
     for sample in iterator:
-        text = sample.get("text", "")
-
-        def backend_label_logits(_generator, input_ids, _compact_model, _vocabulary, device, *, label_count, allowed_labels=None):
-            logits = generator.next_label_logits(_flat_ids(input_ids), text=text).detach().to(device)
-            label_count = int(label_count)
-            if logits.numel() == label_count:
-                return logits
-            fixed = logits.new_full((label_count,), -1e9)
-            width = min(label_count, logits.numel())
-            fixed[:width] = logits[:width]
-            return fixed
-
-        decoder = HMMDFADecoder(
-            dfa=dfa,
-            vocabulary=bundle.vocabulary,
-            generator=generator,
-            scorer_head=scorer_head,
-            tokenizer=None,
-            backend_label_logits=backend_label_logits,
-            emittable_labels=_identity_emittable_labels,
-            flat_ids=_flat_ids,
-            mask_label_logits=_mask_label_logits_local,
-            select_label=_select_label_local,
-            token_id_for_generated_label=_identity_token_id_for_label,
-        )
         prompt = torch.tensor([[int(bundle.vocabulary.eos_label)]], dtype=torch.long, device=args.device)
-        results = decoder.decode_hmm_dfa(
+        results = controller.decode_hmm_dfa(
             prompt,
             search=args.hmm_search,
             num_return_sequences=1,
