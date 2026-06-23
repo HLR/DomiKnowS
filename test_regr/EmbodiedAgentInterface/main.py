@@ -67,6 +67,10 @@ def build_program(
     lora_target_modules=None,
     llm_device_map=None,
     gradient_checkpointing=False,
+    shared_llm_model=None,
+    shared_llm_tokenizer=None,
+    enforce_action_object=True,
+    enforce_action_object_constraints=True,
 ):
     from domiknows import setProductionLogMode
     from domiknows.program import SolverPOIProgram
@@ -88,6 +92,8 @@ def build_program(
         action_tokens=action_tokens,
         openable_object_tokens=openable_object_tokens,
         action_object_constraint_tokens=action_object_constraint_tokens,
+        enforce_action_object=enforce_action_object,
+        enforce_action_object_constraints=enforce_action_object_constraints,
     )
     graph.detach()
     if program_type not in {"solver", "primal-dual"}:
@@ -171,6 +177,8 @@ def build_program(
             lora_target_modules=lora_target_modules,
             device_map=llm_device_map,
             gradient_checkpointing=gradient_checkpointing,
+            shared_model=shared_llm_model,
+            shared_tokenizer=shared_llm_tokenizer,
         )
         if not (llm_device_map and str(llm_device_map).lower() != "none"):
             autoregressive_head = autoregressive_head.to(device)
@@ -538,6 +546,10 @@ def build_trainable_program(args, examples, device):
         lora_target_modules=args.lora_target_modules,
         llm_device_map=args.llm_device_map,
         gradient_checkpointing=args.gradient_checkpointing,
+        shared_llm_model=getattr(args, "_shared_llm_model", None),
+        shared_llm_tokenizer=getattr(args, "_shared_llm_tokenizer", None),
+        enforce_action_object=getattr(args, "_enforce_action_object", True),
+        enforce_action_object_constraints=getattr(args, "_enforce_action_object_constraints", True),
     )
 
 

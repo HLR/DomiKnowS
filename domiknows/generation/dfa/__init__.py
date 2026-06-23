@@ -4,6 +4,7 @@ from importlib import import_module
 
 _EXPORTS = {
     "ConstrainedGenerationResult": ".decoder",
+    "ComposedRuntimeDFA": ".runtime",
     "DFA": ".core",
     "DFATrace": ".visualization",
     "DFATraceStep": ".visualization",
@@ -19,6 +20,7 @@ _EXPORTS = {
     "DecodeProgress": ".stop_policy",
     "StopPolicy": ".stop_policy",
     "Symbol": ".core",
+    "RuntimeDFAOverlay": ".runtime",
     "TokenVocabulary": ".vocabulary",
     "accept_all_dfa": "._constraints",
     "after_token_allowed_dfa": "._constraints",
@@ -33,6 +35,7 @@ _EXPORTS = {
     "apply_required_token_constraint": ".generation_constraints",
     "apply_required_token_constraints": ".generation_constraints",
     "complement_dfa": ".core",
+    "compose_runtime_dfa": ".runtime",
     "conditional_max_non_eos_dfa": "._constraints",
     "constrained_beam_search_decode": ".decoder",
     "constrained_greedy_decode": ".decoder",
@@ -63,9 +66,12 @@ _EXPORTS = {
     "required_token_dfa": "._constraints",
     "run_generation_debug_server": ".visualization",
     "token_set_count_dfa": "._constraints",
+    "pending_token_allowed_set_overlay": ".runtime",
     "trace_dfa": ".visualization",
     "trace_discrete_hmm": ".visualization",
     "trace_product_automaton": ".visualization",
+    "token_class_sequence_overlay": ".runtime",
+    "token_set_sequence_overlay": ".runtime",
     "union_dfa": ".core",
 }
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import time
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 from domiknows.generation import (
@@ -457,6 +459,37 @@ def _dfa_accepting_prefix_requires_eos_for_stop():
     return tokenizer, vocab, dfa
 
 
+def _branchy_abc_vocab_dfa_and_hmm():
+    tokenizer = TinyTokenizer()
+    tokenizer.map = {"<eos>": 0, "A": 1, "B": 2, "C": 3}
+    tokenizer.inverse = {value: key for key, value in tokenizer.map.items()}
+    vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>", tokenizer=tokenizer)
+    transitions = {}
+    states = {f"q{index}" for index in range(6)} | {"done"}
+    for index in range(5):
+        state = f"q{index}"
+        for token in ("A", "B", "C"):
+            transitions[(state, vocab.label_for_token(token))] = f"q{index + 1}"
+        if index >= 1:
+            transitions[(state, vocab.eos_label)] = "done"
+    transitions[("q5", vocab.eos_label)] = "done"
+    dfa = DFA(
+        states=frozenset(states),
+        alphabet=frozenset(vocab.alphabet),
+        transitions=transitions,
+        start_state="q0",
+        accepting_states=frozenset({"done"}),
+    )
+    hmm = DiscreteHMM(
+        transition=torch.eye(8, dtype=torch.float32),
+        emission=torch.full((8, 4), 0.25, dtype=torch.float32),
+        initial=torch.ones(8, dtype=torch.float32) / 8,
+        symbols=(0, 1, 2, 3),
+        normalize=False,
+    )
+    return tokenizer, vocab, dfa, hmm
+
+
 def test_product_hmm_dfa_tracks_explicit_discrete_hmm_belief():
     tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
     prompt_ids = torch.tensor([[9]], dtype=torch.long)
@@ -624,6 +657,144 @@ def test_decode_hmm_dfa_static_dp_avoids_recursive_success_probability(monkeypat
 
     assert results[0].metadata["lookahead_backend"] == "static_dp"
     assert results[0].accepted
+
+
+def test_decode_hmm_dfa_static_vectorized_updates_match_scalar_fallback(monkeypatch):
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _lookahead_branch_hmm()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    vectorized = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+    monkeypatch.setattr(HMMDFADecoder, "_static_next_beliefs", staticmethod(lambda *_args, **_kwargs: {}))
+    scalar = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+
+    assert vectorized[0].labels == scalar[0].labels
+    assert torch.allclose(vectorized[0].final_hmm_belief, scalar[0].final_hmm_belief)
+    assert torch.allclose(torch.tensor(vectorized[0].scores), torch.tensor(scalar[0].scores))
+
+
+def test_decode_hmm_dfa_caches_dfa_allowed_transitions(monkeypatch):
+    tokenizer, vocab, dfa, hmm = _branchy_abc_vocab_dfa_and_hmm()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+    calls = 0
+    original = DFA.allowed_tokens
+
+    def spy_allowed_tokens(self, state, remaining_steps=None):
+        nonlocal calls
+        if self is dfa:
+            calls += 1
+        return original(self, state, remaining_steps=remaining_steps)
+
+    monkeypatch.setattr(DFA, "allowed_tokens", spy_allowed_tokens)
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=4,
+        max_new_tokens=6,
+        lookahead_weight=1.0,
+        hf_weight=0.0,
+    )
+
+    assert results[0].metadata["lookahead_backend"] == "static_dp"
+    assert results[0].accepted
+    assert calls <= len(dfa.states) * 6
+
+
+@pytest.mark.benchmark
+def test_decode_hmm_dfa_static_dp_is_faster_than_recursive_lookahead(monkeypatch):
+    tokenizer, vocab, dfa, hmm = _branchy_abc_vocab_dfa_and_hmm()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    def decode():
+        return controller.decode_hmm_dfa(
+            prompt_ids,
+            search="beam",
+            beam_size=4,
+            max_new_tokens=6,
+            lookahead_weight=1.0,
+            hf_weight=0.0,
+        )
+
+    static_warmup = decode()
+    assert static_warmup[0].metadata["lookahead_backend"] == "static_dp"
+    assert static_warmup[0].accepted
+
+    runs = 10
+    start = time.perf_counter()
+    for _ in range(runs):
+        static_result = decode()
+    static_time = time.perf_counter() - start
+
+    monkeypatch.setattr(HMMDFADecoder, "_build_static_lookahead", lambda *_args, **_kwargs: None)
+    recursive_warmup = decode()
+    assert recursive_warmup[0].metadata["lookahead_backend"] == "recursive"
+    assert recursive_warmup[0].accepted
+
+    start = time.perf_counter()
+    for _ in range(runs):
+        recursive_result = decode()
+    recursive_time = time.perf_counter() - start
+
+    speedup = recursive_time / static_time if static_time else float("inf")
+    print(
+        "\nHMM+DFA lookahead benchmark "
+        f"({runs} runs): static_dp={static_time:.4f}s "
+        f"recursive={recursive_time:.4f}s speedup={speedup:.2f}x"
+    )
+
+    assert static_result[0].labels == recursive_result[0].labels
+    assert static_result[0].accepted
+    assert recursive_result[0].accepted
+    assert static_time <= recursive_time * 0.75
+
+
+def test_decode_hmm_dfa_caches_backend_logits_for_repeated_sample_prefixes():
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    backend = BackendLogitModel({(9,): [0, 1, 0], (9, 1): [1, 0, 0]})
+    backend.calls = 0
+    original_forward = backend.forward
+
+    def counted_forward(input_ids):
+        backend.calls += 1
+        return original_forward(input_ids)
+
+    backend.forward = counted_forward
+    generator = HuggingFaceGenerationAdapter(backend, tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="sample",
+        num_return_sequences=3,
+        max_new_tokens=2,
+        temperature=0.0,
+        hf_weight=1.0,
+        product_decode_max_attempts=3,
+    )
+
+    assert len(results) == 3
+    assert all(result.accepted for result in results)
+    assert backend.calls == 2
 
 
 def test_decode_hmm_dfa_keep_rejected_returns_output_when_no_acceptance_possible():

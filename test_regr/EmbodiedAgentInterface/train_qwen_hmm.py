@@ -144,7 +144,7 @@ def load_qwen(model_path, device):
     dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
-        torch_dtype=dtype,
+        dtype=dtype,
         trust_remote_code=True,
     ).to(device)
     model.eval()

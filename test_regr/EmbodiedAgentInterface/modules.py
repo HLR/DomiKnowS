@@ -254,6 +254,8 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         device_map=None,
         gradient_checkpointing=False,
         low_cpu_mem_usage=True,
+        shared_model=None,
+        shared_tokenizer=None,
     ):
         super().__init__()
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -264,16 +266,21 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         self.max_length = max_length
         self.vocabulary = vocabulary
         self.use_lora = bool(use_lora)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        if self.use_lora and shared_model is not None:
+            raise ValueError("shared_model cannot be used with --use-lora because LoRA mutates the backbone")
+        self.tokenizer = shared_tokenizer or AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
-        model_kwargs = {
-            "torch_dtype": dtype,
-            "trust_remote_code": True,
-        }
-        if device_map and str(device_map).lower() != "none":
-            model_kwargs["device_map"] = device_map
-            model_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
-        self.model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+        if shared_model is None:
+            model_kwargs = {
+                "dtype": dtype,
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": low_cpu_mem_usage,
+            }
+            if device_map and str(device_map).lower() != "none":
+                model_kwargs["device_map"] = device_map
+            self.model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+        else:
+            self.model = shared_model
         if not (device_map and str(device_map).lower() != "none"):
             self.model = self.model.to(device)
         if hasattr(self.model.config, "use_cache"):
@@ -551,7 +558,7 @@ class SmallLLMPlanGenerator(torch.nn.Module):
         dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=dtype,
+            dtype=dtype,
             trust_remote_code=True,
         ).to(device)
         self.model.eval()

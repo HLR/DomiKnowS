@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 
 from domiknows.generation import constraints_to_dfa_from_graph, discover_generation_constraints, trace_discrete_hmm
 
@@ -17,6 +18,9 @@ from Tasks.real_hmm_comparison_viz.flow import (
 from Tasks.real_hmm_comparison_viz.graph import ENUM_VALUES, build_graph, build_two_constraint_graph
 from Tasks.real_hmm_comparison_viz.run_demo import main as run_demo_main
 from Tasks.real_hmm_comparison_viz.run_domiknows_hmm_demo import main as minimal_demo_main, run_demo as run_minimal_demo
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _labels(bundle, symbols):
@@ -131,7 +135,7 @@ def test_real_hmm_comparison_two_constraint_flow_contains_all_three_layers():
 
 
 def test_real_hmm_comparison_viewer_has_comparison_panels_and_help():
-    html = open("Tasks/real_hmm_comparison_viz/viewer.html", encoding="utf-8").read()
+    html = (REPO_ROOT / "Tasks" / "real_hmm_comparison_viz" / "viewer.html").read_text(encoding="utf-8")
 
     assert "DFA Hard Rule" in html
     assert "Plain DiscreteHMM" in html

@@ -19,6 +19,7 @@ from dataset import EOS_TOKEN, split_train_dev
 from graph import create_generation_graph
 from main import (
     action_object_constraint_tokens_from_examples,
+    action_tokens_from_examples,
     action_tokens_requiring_object_from_examples,
     build_trainable_program,
     dfa_constrained_sequence,
@@ -323,172 +324,112 @@ def format_score(score):
         f"avg_pred_len={score['avg_pred_len']:.2f}"
     )
 
+def action_object_runtime_dfa(
+    base_dfa,
+    vocabulary,
+    action_tokens,
+    object_tokens,
+    action_object_constraint_tokens=None,
+    action_sequence_tokens=None,
+):
+    """Compose EAI action/object runtime constraints using shared DFA overlays."""
+    from domiknows.generation import (
+        compose_runtime_dfa,
+        pending_token_allowed_set_overlay,
+        token_class_sequence_overlay,
+        token_set_sequence_overlay,
+    )
 
-
-
-
-class ActionObjectGrammarDFA:
-    """Compose a base DFA with EAI plan grammar: action object (action object)* EOS."""
-
-    START = "start"
-    WANT_OBJECT = "want_object"
-    WANT_ACTION = "want_action"
-
-    def __init__(self, base_dfa, vocabulary, action_tokens, object_tokens):
-        self.base_dfa = base_dfa
-        self.vocabulary = vocabulary
-        self.eos_label = int(vocabulary.eos_label)
-        token_to_label = {
-            vocabulary.token_for_label(label): int(label)
-            for label in range(int(vocabulary.label_count))
+    known_tokens = {vocabulary.token_for_label(label) for label in range(int(vocabulary.label_count))}
+    action_tokens = [token for token in action_tokens if not isinstance(token, str) or token in known_tokens]
+    object_tokens = [token for token in object_tokens if not isinstance(token, str) or token in known_tokens]
+    action_sequence_tokens = [
+        token
+        for token in (action_sequence_tokens if action_sequence_tokens is not None else action_tokens)
+        if not isinstance(token, str) or token in known_tokens
+    ]
+    if action_object_constraint_tokens:
+        action_object_constraint_tokens = {
+            action: [obj for obj in objects if not isinstance(obj, str) or obj in known_tokens]
+            for action, objects in action_object_constraint_tokens.items()
+            if not isinstance(action, str) or action in known_tokens
         }
-        self.action_labels = {token_to_label[token] for token in action_tokens if token in token_to_label}
-        self.object_labels = {token_to_label[token] for token in object_tokens if token in token_to_label}
-        self.start_state = (base_dfa.start_state, self.START)
 
-    def allowed_tokens(self, state, remaining_steps=None):
-        base_state, phase = state
-        try:
-            allowed = set(self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps))
-        except TypeError:
-            allowed = set(self.base_dfa.allowed_tokens(base_state))
-        if phase == self.START:
-            return allowed & self.action_labels
-        if phase == self.WANT_OBJECT:
-            return allowed & self.object_labels
-        return allowed & (self.action_labels | {self.eos_label})
+    overlays = []
+    if action_tokens and object_tokens:
+        overlays.append(
+            token_class_sequence_overlay(
+                action_tokens,
+                object_tokens,
+                int(vocabulary.eos_label),
+                vocabulary=vocabulary,
+                name="eai_action_object_grammar",
+            )
+        )
+    elif action_sequence_tokens:
+        overlays.append(
+            token_set_sequence_overlay(
+                action_sequence_tokens,
+                int(vocabulary.eos_label),
+                vocabulary=vocabulary,
+                name="eai_action_sequence_grammar",
+            )
+        )
+    if action_object_constraint_tokens:
+        overlays.append(
+            pending_token_allowed_set_overlay(
+                action_object_constraint_tokens,
+                vocabulary=vocabulary,
+                name="eai_action_object_compatibility",
+            )
+        )
+    if not overlays:
+        return base_dfa
+    return compose_runtime_dfa(base_dfa, overlays)
 
-    def step(self, state, label):
+
+def ActionObjectGrammarDFA(base_dfa, vocabulary, action_tokens, object_tokens):
+    """Backward-compatible factory for the generic action/object grammar overlay."""
+    return action_object_runtime_dfa(base_dfa, vocabulary, action_tokens, object_tokens)
+
+
+def ActionObjectCompatibilityDFA(base_dfa, vocabulary, action_object_constraint_tokens):
+    """Backward-compatible factory for the generic compatibility overlay."""
+    from domiknows.generation import compose_runtime_dfa, pending_token_allowed_set_overlay
+
+    return compose_runtime_dfa(
+        base_dfa,
+        [
+            pending_token_allowed_set_overlay(
+                action_object_constraint_tokens,
+                vocabulary=vocabulary,
+                name="eai_action_object_compatibility",
+            )
+        ],
+    )
+
+
+def NoImmediateEOSDFA(base_dfa, eos_label):
+    """Backward-compatible factory that prevents empty plans by blocking EOS at step 0."""
+    from domiknows.generation import RuntimeDFAOverlay, compose_runtime_dfa
+
+    eos_label = int(eos_label)
+
+    def step(emitted, label):
         label = int(label)
-        if label not in self.allowed_tokens(state):
+        if int(emitted) == 0 and label == eos_label:
             return None
-        base_state, phase = state
-        next_base = self.base_dfa.step(base_state, label)
-        if next_base is None:
-            return None
-        if phase in {self.START, self.WANT_ACTION} and label in self.action_labels:
-            next_phase = self.WANT_OBJECT
-        elif phase == self.WANT_OBJECT and label in self.object_labels:
-            next_phase = self.WANT_ACTION
-        elif phase == self.WANT_ACTION and label == self.eos_label:
-            next_phase = self.WANT_ACTION
-        else:
-            return None
-        return (next_base, next_phase)
+        return 1
 
-    def is_accepting(self, state):
-        base_state, phase = state
-        return phase == self.WANT_ACTION and self.base_dfa.is_accepting(base_state)
-
-    def accepts(self, labels):
-        state = self.start_state
-        for label in labels:
-            state = self.step(state, int(label))
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
-
-
-class NoImmediateEOSDFA:
-    """DFA wrapper that prevents empty plans by blocking EOS at step 0."""
-
-    def __init__(self, base_dfa, eos_label):
-        self.base_dfa = base_dfa
-        self.eos_label = int(eos_label)
-        self.start_state = (base_dfa.start_state, 0)
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        base_state, emitted = state
-        try:
-            allowed = set(self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps))
-        except TypeError:
-            allowed = set(self.base_dfa.allowed_tokens(base_state))
-        if int(emitted) == 0:
-            allowed.discard(self.eos_label)
-        return allowed
-
-    def step(self, state, label):
-        label = int(label)
-        if label not in self.allowed_tokens(state):
-            return None
-        base_state, emitted = state
-        next_base = self.base_dfa.step(base_state, label)
-        if next_base is None:
-            return None
-        return (next_base, int(emitted) + 1)
-
-    def is_accepting(self, state):
-        base_state, emitted = state
-        return int(emitted) > 0 and self.base_dfa.is_accepting(base_state)
-
-    def accepts(self, labels):
-        state = self.start_state
-        for label in labels:
-            state = self.step(state, int(label))
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
-
-
-class ActionObjectCompatibilityDFA:
-    """Compose a base DomiKnowS DFA with action-specific next-object filters."""
-
-    def __init__(self, base_dfa, vocabulary, action_object_constraint_tokens):
-        self.base_dfa = base_dfa
-        self.vocabulary = vocabulary
-        self.start_state = (base_dfa.start_state, None)
-        self.action_to_allowed = {}
-        token_to_label = {
-            vocabulary.token_for_label(label): int(label)
-            for label in range(int(vocabulary.label_count))
-        }
-        for action, objects in action_object_constraint_tokens.items():
-            action_label = token_to_label.get(action)
-            allowed = {token_to_label[obj] for obj in objects if obj in token_to_label}
-            if action_label is not None and allowed:
-                self.action_to_allowed[int(action_label)] = allowed
-
-    def allowed_tokens(self, state, remaining_steps=None):
-        base_state, pending_action = state
-        try:
-            allowed = set(self.base_dfa.allowed_tokens(base_state, remaining_steps=remaining_steps))
-        except TypeError:
-            allowed = set(self.base_dfa.allowed_tokens(base_state))
-        if pending_action is not None:
-            allowed &= self.action_to_allowed.get(int(pending_action), set())
-        return allowed
-
-    def step(self, state, label):
-        label = int(label)
-        if label not in self.allowed_tokens(state):
-            return None
-        base_state, _pending_action = state
-        next_base = self.base_dfa.step(base_state, label)
-        if next_base is None:
-            return None
-        next_pending = label if label in self.action_to_allowed else None
-        return (next_base, next_pending)
-
-    def is_accepting(self, state):
-        base_state, pending_action = state
-        return pending_action is None and self.base_dfa.is_accepting(base_state)
-
-    def accepts(self, labels):
-        state = self.start_state
-        for label in labels:
-            state = self.step(state, int(label))
-            if state is None:
-                return False
-        return self.is_accepting(state)
-
-    def __getattr__(self, name):
-        return getattr(self.base_dfa, name)
+    overlay = RuntimeDFAOverlay(
+        states=frozenset({0, 1}),
+        alphabet=frozenset(base_dfa.alphabet),
+        start_state=0,
+        step_fn=step,
+        accepting_states=frozenset({1}),
+        name="no_immediate_eos",
+    )
+    return compose_runtime_dfa(base_dfa, [overlay])
 
 
 def raw_qwen_predictions(args, examples, vocab):
@@ -652,18 +593,14 @@ def build_no_training_dfa(args, examples, constraint_mode="specific"):
 
     graph, bundle = build_no_training_graph(args, examples, constraint_mode=constraint_mode)
     dfa = constraints_to_dfa_from_graph(graph, bundle)
-    dfa = ActionObjectGrammarDFA(
+    dfa = action_object_runtime_dfa(
         dfa,
         bundle.vocabulary,
         action_tokens_requiring_object_from_examples(examples),
         object_tokens_from_examples(examples),
+        action_object_constraint_tokens_from_examples(examples) if constraint_mode == "specific" else None,
+        action_tokens_from_examples(examples),
     )
-    if constraint_mode == "specific":
-        dfa = ActionObjectCompatibilityDFA(
-            dfa,
-            bundle.vocabulary,
-            action_object_constraint_tokens_from_examples(examples),
-        )
     return dfa, bundle.vocabulary, graph, bundle
 
 

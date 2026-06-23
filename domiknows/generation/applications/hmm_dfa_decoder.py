@@ -62,19 +62,68 @@ class HMMDFAStepScores:
 
 @dataclass(frozen=True)
 class HMMDFAStaticLookahead:
-    """Static HMM+DFA success table indexed by depth and DFA state."""
+    """Lazy static HMM+DFA success table indexed by depth and DFA state."""
 
-    values: list[dict[Any, torch.Tensor]]
+    transition: torch.Tensor
+    emission: torch.Tensor
+    policy: StopPolicy
+    eos_label: int
     max_depth: int
+    allowed_transitions: Callable[[Any, int | None], tuple[tuple[int, Any], ...]]
+    is_accepting: Callable[[Any], bool]
+    dfa_state_count: int | None = None
+    _cache: dict[tuple[Any, int], torch.Tensor] = field(default_factory=dict)
+    _entries_computed: int = 0
 
     def success_after(self, belief: torch.Tensor, dfa_state, remaining_steps: int | None) -> torch.Tensor:
         """Return success probability from a belief and DFA state."""
         depth = self.max_depth if remaining_steps is None else min(max(0, int(remaining_steps)), self.max_depth)
-        vector = self.values[depth].get(dfa_state)
-        if vector is None:
-            return belief.new_tensor(0.0)
+        vector = self.success_vector(dfa_state, depth)
         vector = vector.to(device=belief.device, dtype=belief.dtype)
         return torch.dot(belief, vector).clamp(0.0, 1.0)
+
+    def success_vector(self, dfa_state, depth: int | None) -> torch.Tensor:
+        """Return hidden-state success probabilities for one DFA state/depth."""
+        depth = self.max_depth if depth is None else min(max(0, int(depth)), self.max_depth)
+        zero = self.transition.new_zeros((int(self.transition.shape[0]),))
+        if depth <= 0:
+            return zero
+
+        cache_key = (dfa_state, depth)
+        try:
+            cached = self._cache.get(cache_key)
+        except TypeError:
+            cached = None
+            cache_key = None
+        if cached is not None:
+            return cached
+
+        vector = zero.clone()
+        for label, next_state in self.allowed_transitions(dfa_state, depth):
+            if label < 0 or label >= self.emission.shape[-1]:
+                continue
+            emit = self.emission[:, label]
+            if should_stop_on_token(
+                self.policy,
+                eos_emitted=(label == int(self.eos_label)),
+                accepted=self.is_accepting(next_state),
+            ):
+                vector = vector + emit
+            else:
+                next_vector = self.success_vector(next_state, depth - 1)
+                continuation = torch.matmul(self.transition, next_vector)
+                vector = vector + emit * continuation
+
+        result = vector.clamp(0.0, 1.0)
+        object.__setattr__(self, "_entries_computed", self._entries_computed + 1)
+        if cache_key is not None:
+            self._cache[cache_key] = result.detach()
+        return result
+
+    @property
+    def entries_computed(self) -> int:
+        """Number of non-zero-depth lookahead vectors computed lazily."""
+        return int(self._entries_computed)
 
 
 class HMMDFADecoder:
@@ -154,6 +203,7 @@ class HMMDFADecoder:
         runtime = resolve_hmm_snapshot(self.scorer_head, prompt_ids_t, transition_potential=transition_potential)
         emittable = self._emittable_labels(self.scorer_head, self.vocabulary)
         eos_label = int(self.vocabulary.eos_label)
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]] = {}
         static_lookahead = self._build_static_lookahead(
             runtime,
             policy=policy,
@@ -161,9 +211,11 @@ class HMMDFADecoder:
             eos_label=eos_label,
             lookahead_weight=lookahead_weight,
             lookahead_max_steps=lookahead_max_steps,
+            allowed_transition_cache=allowed_transition_cache,
         )
         lookahead_backend = "disabled" if not lookahead_weight else ("static_dp" if static_lookahead is not None else "recursive")
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor] = {}
+        backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None] = {}
         common = {
             "runtime": runtime,
             "policy": policy,
@@ -175,6 +227,8 @@ class HMMDFADecoder:
             "lookahead_max_steps": lookahead_max_steps,
             "static_lookahead": static_lookahead,
             "recursive_cache": recursive_cache,
+            "allowed_transition_cache": allowed_transition_cache,
+            "backend_logits_cache": backend_logits_cache,
         }
         if search_n == "greedy":
             states = self._decode_greedy(
@@ -204,6 +258,15 @@ class HMMDFADecoder:
                 keep_rejected=keep_rejected,
                 **common,
             )
+        lookahead_metadata = (
+            {
+                "lookahead_depth": static_lookahead.max_depth,
+                "lookahead_dfa_states": static_lookahead.dfa_state_count,
+                "lookahead_entries": static_lookahead.entries_computed,
+            }
+            if static_lookahead is not None
+            else {}
+        )
         return [
             self._decode_result_from_state(
                 state,
@@ -217,6 +280,7 @@ class HMMDFADecoder:
                     "hf_weight": hf_weight,
                     "lookahead_weight": lookahead_weight,
                     "lookahead_backend": lookahead_backend,
+                    **lookahead_metadata,
                 },
             )
             for state in states[: int(num_return_sequences)]
@@ -249,11 +313,18 @@ class HMMDFADecoder:
         lookahead_max_steps: int | None,
         static_lookahead: HMMDFAStaticLookahead | None,
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
+        backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
     ) -> HMMDFAStepScores:
         """Score the next compact labels for every HMM+DFA search mode."""
         remaining_steps = remaining_steps_for(policy, step_index)
-        allowed = {int(label) for label in self.dfa.allowed_tokens(product_state.dfa_state, remaining_steps=remaining_steps)}
-        allowed &= emittable
+        allowed_pairs = self._allowed_transitions(
+            product_state.dfa_state,
+            remaining_steps,
+            emittable,
+            allowed_transition_cache,
+        )
+        allowed = {label for label, _state in allowed_pairs}
 
         emission = runtime.emission_for(product_state.labels).to(
             device=product_state.hmm_belief.device,
@@ -265,42 +336,61 @@ class HMMDFADecoder:
 
         combined = hmm_logits * float(hmm_weight)
         next_beliefs: dict[int, torch.Tensor] = {}
-        next_dfa_states: dict[int, Any] = {}
+        next_dfa_states: dict[int, Any] = {label: next_state for label, next_state in allowed_pairs}
 
         if float(lookahead_weight):
             lookahead_logits = torch.full_like(hmm_logits, -1e9)
             lookahead_remaining = lookahead_remaining_after_label(remaining_steps, lookahead_max_steps)
-            for label in allowed:
-                next_state = self.dfa.step(product_state.dfa_state, int(label))
-                if next_state is None:
-                    continue
-                next_belief = runtime.forward_update(product_state.hmm_belief, product_state.labels, int(label))
-                next_beliefs[int(label)] = next_belief
-                next_dfa_states[int(label)] = next_state
-                success = self._lookahead_success_after_label(
-                    runtime,
-                    next_belief,
-                    next_state,
-                    int(label),
-                    product_state.labels + [int(label)],
+            if runtime.static_transition is not None and runtime.static_emission is not None:
+                next_beliefs.update(
+                    self._static_next_beliefs(
+                        runtime,
+                        product_state.hmm_belief,
+                        sorted(allowed),
+                    )
+                )
+            static_successes = (
+                self._static_lookahead_successes(
+                    static_lookahead,
+                    next_beliefs,
+                    allowed_pairs,
                     lookahead_remaining,
-                    emittable,
                     policy=policy,
                     eos_label=eos_label,
-                    static_lookahead=static_lookahead,
-                    recursive_cache=recursive_cache,
                 )
-                lookahead_logits[int(label)] = torch.log(success.clamp_min(torch.finfo(success.dtype).eps))
+                if static_lookahead is not None
+                else {}
+            )
+            for label, next_state in allowed_pairs:
+                next_belief = next_beliefs.get(label)
+                if next_belief is None:
+                    next_belief = runtime.forward_update(product_state.hmm_belief, product_state.labels, label)
+                    next_beliefs[label] = next_belief
+                success = static_successes.get(label)
+                if success is None:
+                    success = self._lookahead_success_after_label(
+                        runtime,
+                        next_belief,
+                        next_state,
+                        label,
+                        product_state.labels + [label],
+                        lookahead_remaining,
+                        emittable,
+                        policy=policy,
+                        eos_label=eos_label,
+                        static_lookahead=static_lookahead,
+                        recursive_cache=recursive_cache,
+                        allowed_transition_cache=allowed_transition_cache,
+                    )
+                lookahead_logits[label] = torch.log(success.clamp_min(torch.finfo(success.dtype).eps))
             combined = combined + lookahead_logits * float(lookahead_weight)
 
         if float(hf_weight):
-            hf_logits = self._backend_label_logits(
-                self.generator,
+            hf_logits = self._cached_backend_label_logits(
                 product_state.full_ids,
-                self.scorer_head,
-                self.vocabulary,
                 product_state.hmm_belief.device,
                 label_count=hmm_logits.numel(),
+                backend_logits_cache=backend_logits_cache,
             )
             if hf_logits is not None:
                 combined = combined + hf_logits.to(device=combined.device, dtype=combined.dtype) * float(hf_weight)
@@ -389,6 +479,8 @@ class HMMDFADecoder:
         lookahead_max_steps: int | None,
         static_lookahead: HMMDFAStaticLookahead | None,
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
+        backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
         keep_rejected: bool,
     ) -> list[HMMDFAProductState]:
         """Deterministically decode one product path by argmax at every step."""
@@ -412,6 +504,8 @@ class HMMDFADecoder:
                 lookahead_max_steps=lookahead_max_steps,
                 static_lookahead=static_lookahead,
                 recursive_cache=recursive_cache,
+                allowed_transition_cache=allowed_transition_cache,
+                backend_logits_cache=backend_logits_cache,
             )
             if not step_scores.allowed:
                 break
@@ -448,6 +542,8 @@ class HMMDFADecoder:
         lookahead_max_steps: int | None,
         static_lookahead: HMMDFAStaticLookahead | None,
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
+        backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
         num_return_sequences: int,
         temperature: float,
         top_k: int | None,
@@ -484,6 +580,8 @@ class HMMDFADecoder:
                     lookahead_max_steps=lookahead_max_steps,
                     static_lookahead=static_lookahead,
                     recursive_cache=recursive_cache,
+                    allowed_transition_cache=allowed_transition_cache,
+                    backend_logits_cache=backend_logits_cache,
                 )
                 if not step_scores.allowed:
                     break
@@ -531,6 +629,8 @@ class HMMDFADecoder:
         lookahead_max_steps: int | None,
         static_lookahead: HMMDFAStaticLookahead | None,
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
+        backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
         num_return_sequences: int,
         beam_size: int,
         length_penalty: float,
@@ -564,25 +664,26 @@ class HMMDFADecoder:
                     lookahead_max_steps=lookahead_max_steps,
                     static_lookahead=static_lookahead,
                     recursive_cache=recursive_cache,
+                    allowed_transition_cache=allowed_transition_cache,
+                    backend_logits_cache=backend_logits_cache,
                 )
                 if not step_scores.allowed:
                     stopped.append(product)
                     continue
-                valid_labels = [label for label in step_scores.allowed if 0 <= int(label) < step_scores.masked_logits.numel()]
+                valid_labels = sorted(label for label in step_scores.allowed if 0 <= int(label) < step_scores.masked_logits.numel())
                 if not valid_labels:
                     stopped.append(product)
                     continue
                 log_probs = torch.log_softmax(step_scores.masked_logits, dim=-1)
-                local = sorted(
-                    ((int(label), float(log_probs[int(label)].detach().item())) for label in valid_labels),
-                    key=lambda item: item[1],
-                    reverse=True,
-                )[: int(beam_size)]
-                for label, log_prob in local:
+                valid_tensor = torch.tensor(valid_labels, dtype=torch.long, device=log_probs.device)
+                top_count = min(int(beam_size), int(valid_tensor.numel()))
+                top_scores, top_offsets = torch.topk(log_probs.index_select(0, valid_tensor), k=top_count)
+                for offset, score in zip(top_offsets.tolist(), top_scores.detach().tolist()):
+                    label = int(valid_tensor[int(offset)].item())
                     child = self._expand_state(
                         product,
                         label,
-                        log_prob,
+                        float(score),
                         step_scores,
                         runtime,
                     )
@@ -632,6 +733,129 @@ class HMMDFADecoder:
             metadata=dict(metadata),
         )
 
+    def _allowed_transitions(
+        self,
+        dfa_state,
+        remaining_steps: int | None,
+        emittable: set[int],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
+    ) -> tuple[tuple[int, Any], ...]:
+        """Return cached productive DFA transitions after emittable filtering."""
+        remaining_key = None if remaining_steps is None else int(remaining_steps)
+        cache_key = (dfa_state, remaining_key)
+        try:
+            cached = allowed_transition_cache.get(cache_key)
+        except TypeError:
+            cached = None
+            cache_key = None
+        if cached is not None:
+            return cached
+
+        allowed = {int(label) for label in self.dfa.allowed_tokens(dfa_state, remaining_steps=remaining_steps)}
+        allowed &= emittable
+        transitions: list[tuple[int, Any]] = []
+        for label in sorted(allowed):
+            next_state = self.dfa.step(dfa_state, int(label))
+            if next_state is not None:
+                transitions.append((int(label), next_state))
+        result = tuple(transitions)
+        if cache_key is not None:
+            allowed_transition_cache[cache_key] = result
+        return result
+
+    def _cached_backend_label_logits(
+        self,
+        full_ids: Sequence[int],
+        device: torch.device,
+        *,
+        label_count: int,
+        backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
+    ) -> torch.Tensor | None:
+        """Project backend logits once per generated prefix within a decode call."""
+        key = tuple(int(item) for item in full_ids)
+        if key not in backend_logits_cache:
+            value = self._backend_label_logits(
+                self.generator,
+                full_ids,
+                self.scorer_head,
+                self.vocabulary,
+                device,
+                label_count=label_count,
+            )
+            backend_logits_cache[key] = None if value is None else value.detach()
+        cached = backend_logits_cache[key]
+        if cached is None:
+            return None
+        return cached.to(device=device)
+
+    @staticmethod
+    def _static_next_beliefs(
+        runtime: HMMRuntimeView,
+        belief: torch.Tensor,
+        labels: Sequence[int],
+    ) -> dict[int, torch.Tensor]:
+        """Batch static HMM observation/transition updates for labels."""
+        labels = tuple(int(label) for label in labels)
+        if not labels or runtime.static_transition is None or runtime.static_emission is None:
+            return {}
+        transition = runtime.static_transition.to(device=belief.device, dtype=belief.dtype)
+        emission = runtime.static_emission.to(device=belief.device, dtype=belief.dtype)
+        valid = [label for label in labels if 0 <= label < emission.shape[-1]]
+        if not valid:
+            return {}
+        label_tensor = torch.tensor(valid, dtype=torch.long, device=belief.device)
+        emit = emission.index_select(1, label_tensor)
+        posterior = belief.unsqueeze(1) * emit
+        posterior = posterior / posterior.sum(dim=0, keepdim=True).clamp_min(torch.finfo(belief.dtype).eps)
+        next_beliefs = torch.matmul(posterior.transpose(0, 1), transition)
+        next_beliefs = next_beliefs / next_beliefs.sum(dim=1, keepdim=True).clamp_min(torch.finfo(belief.dtype).eps)
+        return {label: next_beliefs[index] for index, label in enumerate(valid)}
+
+    def _static_lookahead_successes(
+        self,
+        static_lookahead: HMMDFAStaticLookahead | None,
+        next_beliefs: Mapping[int, torch.Tensor],
+        allowed_pairs: Sequence[tuple[int, Any]],
+        remaining_steps: int | None,
+        *,
+        policy: StopPolicy,
+        eos_label: int,
+    ) -> dict[int, torch.Tensor]:
+        """Batch static lookahead success dots for candidate labels."""
+        if static_lookahead is None:
+            return {}
+        immediate: dict[int, torch.Tensor] = {}
+        labels: list[int] = []
+        beliefs: list[torch.Tensor] = []
+        vectors: list[torch.Tensor] = []
+        depth = static_lookahead.max_depth if remaining_steps is None else min(max(0, int(remaining_steps)), static_lookahead.max_depth)
+        for label, next_state in allowed_pairs:
+            belief = next_beliefs.get(label)
+            if belief is None:
+                continue
+            if should_stop_on_token(
+                policy,
+                eos_emitted=(int(label) == int(eos_label)),
+                accepted=self.dfa.is_accepting(next_state),
+            ):
+                immediate[label] = belief.new_tensor(1.0)
+                continue
+            if remaining_steps is not None and int(remaining_steps) <= 0:
+                immediate[label] = belief.new_tensor(0.0)
+                continue
+            vector = static_lookahead.success_vector(next_state, depth)
+            labels.append(label)
+            beliefs.append(belief)
+            vectors.append(vector.to(device=belief.device, dtype=belief.dtype))
+        if not labels:
+            return immediate
+        belief_matrix = torch.stack(beliefs, dim=0)
+        vector_matrix = torch.stack(vectors, dim=0)
+        scores = (belief_matrix * vector_matrix).sum(dim=1).clamp(0.0, 1.0)
+        for index, label in enumerate(labels):
+            immediate[label] = scores[index]
+        return immediate
+
     def _build_static_lookahead(
         self,
         runtime: HMMRuntimeView,
@@ -641,8 +865,9 @@ class HMMDFADecoder:
         eos_label: int,
         lookahead_weight: float,
         lookahead_max_steps: int | None,
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
     ) -> HMMDFAStaticLookahead | None:
-        """Precompute static HMM+DFA lookahead values when matrices are fixed."""
+        """Build lazy static HMM+DFA lookahead when matrices are fixed."""
         if not float(lookahead_weight):
             return None
         if runtime.static_transition is None or runtime.static_emission is None:
@@ -660,38 +885,24 @@ class HMMDFADecoder:
         if transition.shape[0] != transition.shape[1] or transition.shape[0] != emission.shape[0]:
             return None
 
-        state_count = int(transition.shape[0])
-        zero = torch.zeros((state_count,), dtype=dtype, device=device)
-        values: list[dict[Any, torch.Tensor]] = [
-            {state: zero.clone() for state in self.dfa.states}
-        ]
-        for depth in range(1, int(max_depth) + 1):
-            previous = values[depth - 1]
-            current: dict[Any, torch.Tensor] = {}
-            for dfa_state in self.dfa.states:
-                vector = zero.clone()
-                allowed = {int(label) for label in self.dfa.allowed_tokens(dfa_state, remaining_steps=depth)}
-                allowed &= emittable
-                for label in allowed:
-                    if label < 0 or label >= emission.shape[-1]:
-                        continue
-                    next_state = self.dfa.step(dfa_state, label)
-                    if next_state is None:
-                        continue
-                    emit = emission[:, label]
-                    if should_stop_on_token(
-                        policy,
-                        eos_emitted=(label == int(eos_label)),
-                        accepted=self.dfa.is_accepting(next_state),
-                    ):
-                        vector = vector + emit
-                    else:
-                        next_vector = previous.get(next_state, zero)
-                        continuation = torch.matmul(transition, next_vector)
-                        vector = vector + emit * continuation
-                current[dfa_state] = vector.clamp(0.0, 1.0)
-            values.append(current)
-        return HMMDFAStaticLookahead(values=values, max_depth=int(max_depth))
+        def allowed_transitions(dfa_state, remaining_steps):
+            return self._allowed_transitions(
+                dfa_state,
+                remaining_steps,
+                emittable,
+                allowed_transition_cache,
+            )
+
+        return HMMDFAStaticLookahead(
+            transition=transition,
+            emission=emission,
+            policy=policy,
+            eos_label=int(eos_label),
+            max_depth=int(max_depth),
+            allowed_transitions=allowed_transitions,
+            is_accepting=self.dfa.is_accepting,
+            dfa_state_count=len(getattr(self.dfa, "states", ())),
+        )
 
     @staticmethod
     def _lookahead_table_depth(policy: StopPolicy, lookahead_max_steps: int | None) -> int | None:
@@ -716,6 +927,7 @@ class HMMDFADecoder:
         eos_label: int,
         static_lookahead: HMMDFAStaticLookahead | None,
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
     ) -> torch.Tensor:
         """Return lookahead success probability after committing one label."""
         if should_stop_on_token(
@@ -738,6 +950,7 @@ class HMMDFADecoder:
             policy=policy,
             eos_label=eos_label,
             recursive_cache=recursive_cache,
+            allowed_transition_cache=allowed_transition_cache,
         )
 
     def _success_probability(
@@ -752,6 +965,7 @@ class HMMDFADecoder:
         policy: StopPolicy,
         eos_label: int,
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
+        allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
     ) -> torch.Tensor:
         """Estimate recursive success probability for HMM+DFA lookahead."""
         one = belief.new_tensor(1.0)
@@ -776,30 +990,32 @@ class HMMDFADecoder:
 
         emission = runtime.emission_for(prefix_labels).to(device=belief.device, dtype=belief.dtype)
         label_probs = torch.matmul(belief, emission)
-        allowed = {int(label) for label in self.dfa.allowed_tokens(dfa_state, remaining_steps=remaining_steps)}
-        allowed &= emittable
-        if not allowed:
+        allowed_pairs = self._allowed_transitions(
+            dfa_state,
+            remaining_steps,
+            emittable,
+            allowed_transition_cache,
+        )
+        if not allowed_pairs:
             return zero
 
         next_remaining = None if remaining_steps is None else max(0, int(remaining_steps) - 1)
         total = zero
-        for label in allowed:
-            next_state = self.dfa.step(dfa_state, int(label))
-            if next_state is None:
-                continue
-            next_belief = runtime.forward_update(belief, prefix_labels, int(label))
+        for label, next_state in allowed_pairs:
+            next_belief = runtime.forward_update(belief, prefix_labels, label)
             child = self._success_probability(
                 runtime,
                 next_belief,
                 next_state,
-                tuple(prefix_labels) + (int(label),),
+                tuple(prefix_labels) + (label,),
                 next_remaining,
                 emittable,
                 policy=policy,
                 eos_label=eos_label,
                 recursive_cache=recursive_cache,
+                allowed_transition_cache=allowed_transition_cache,
             )
-            total = total + label_probs[int(label)] * child
+            total = total + label_probs[label] * child
         result = total.clamp(0.0, 1.0)
         if cache_key is not None:
             recursive_cache[cache_key] = result.detach()

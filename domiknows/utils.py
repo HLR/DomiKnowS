@@ -71,7 +71,9 @@ def log(*args, **kwargs):
             print('{}: {}'.format(k, v))
 
 def _show_logging_status_messages():
-    return not globals().get('productionMode', False)
+    if globals().get('productionMode', False):
+        return False
+    return os.environ.get('DOMIKNOWS_LOG_STATUS', '').lower() in {'1', 'true', 'yes', 'on'}
      
 def close_file_handlers(filename):
     """

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from domiknows.generation import constraints_to_dfa_from_graph, discover_generation_constraints
 
@@ -15,6 +16,9 @@ from Tasks.simple_hmm_dfa_viz.flow import (
 )
 from Tasks.simple_hmm_dfa_viz.graph import ENUM_VALUES, build_graph, build_two_constraint_graph
 from Tasks.simple_hmm_dfa_viz.run_demo import main as run_demo_main, terminal_file_link
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _labels(bundle, symbols):
@@ -119,7 +123,7 @@ def test_simple_viz_two_constraint_flow_shows_both_rules():
 
 
 def test_simple_viz_viewer_contains_interactive_hooks():
-    html = open("Tasks/simple_hmm_dfa_viz/viewer.html", encoding="utf-8").read()
+    html = (REPO_ROOT / "Tasks" / "simple_hmm_dfa_viz" / "viewer.html").read_text(encoding="utf-8")
 
     assert 'id="flow-data"' in html
     assert 'id="step-list"' in html
