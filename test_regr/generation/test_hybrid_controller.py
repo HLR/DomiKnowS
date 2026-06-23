@@ -25,6 +25,7 @@ from domiknows.generation import (
     required_token_dfa,
 )
 from domiknows.generation.dfa.stop_policy import StopPolicy
+from domiknows.generation.applications.hmm_dfa_decoder import HMMDFADecoder
 
 
 def import_hf_module(name: str):
@@ -571,6 +572,58 @@ def test_decode_hmm_dfa_lookahead_weight_changes_ranking():
     assert with_lookahead[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
     assert immediate_only[0].accepted
     assert with_lookahead[0].accepted
+
+
+def test_decode_hmm_dfa_static_dp_matches_recursive_lookahead(monkeypatch):
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _lookahead_branch_hmm()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    static_result = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+    monkeypatch.setattr(HMMDFADecoder, "_build_static_lookahead", lambda *_args, **_kwargs: None)
+    recursive_result = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+
+    assert static_result[0].metadata["lookahead_backend"] == "static_dp"
+    assert recursive_result[0].metadata["lookahead_backend"] == "recursive"
+    assert static_result[0].labels == recursive_result[0].labels
+    assert torch.allclose(torch.tensor(static_result[0].scores), torch.tensor(recursive_result[0].scores))
+
+
+def test_decode_hmm_dfa_static_dp_avoids_recursive_success_probability(monkeypatch):
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _lookahead_branch_hmm()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    def fail_recursive(*_args, **_kwargs):
+        raise AssertionError("static HMM+DFA lookahead should use the DP table")
+
+    monkeypatch.setattr(HMMDFADecoder, "_success_probability", fail_recursive)
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="beam",
+        beam_size=2,
+        max_new_tokens=2,
+        lookahead_weight=2.0,
+    )
+
+    assert results[0].metadata["lookahead_backend"] == "static_dp"
+    assert results[0].accepted
 
 
 def test_decode_hmm_dfa_keep_rejected_returns_output_when_no_acceptance_possible():
