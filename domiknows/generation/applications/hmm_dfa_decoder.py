@@ -1,11 +1,15 @@
 """Strict HMM+DFA product decoder for hybrid generation."""
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import torch
+
+from domiknows.utils import setup_logger
 
 from .hmm_utils import HMMRuntimeView, hmm_next_label_logits, lookahead_remaining_after_label, resolve_hmm_snapshot
 from ..dfa.core import DFA
@@ -58,6 +62,117 @@ class HMMDFAStepScores:
     allowed: set[int]
     next_beliefs: Mapping[int, torch.Tensor] = field(default_factory=dict)
     next_dfa_states: Mapping[int, Any] = field(default_factory=dict)
+    stats: Mapping[str, Any] = field(default_factory=dict)
+
+
+_HMM_DFA_TRACE_LOGGER: logging.Logger | None = None
+_HMM_DFA_TRACE_PATH: str | None = None
+_HMM_DFA_TRACE_SETUP_FAILED = False
+_HMM_DFA_TRACE_DECODE_ID = 0
+
+
+def _safe_len(value) -> int | None:
+    try:
+        return len(value)
+    except Exception:
+        return None
+
+
+def _safe_repr(value, max_chars: int = 160) -> str:
+    text = repr(value)
+    if len(text) > max_chars:
+        return text[: max(0, max_chars - 3)] + "..."
+    return text
+
+
+def _elapsed_ms(start: float) -> float:
+    return (time.perf_counter() - start) * 1000.0
+
+
+def _format_trace_value(value: Any) -> str:
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return f"{value:.3f}"
+    if isinstance(value, int):
+        return str(value)
+    text = str(value)
+    if not text:
+        return "''"
+    if any(ch.isspace() for ch in text) or "=" in text:
+        return repr(text)
+    return text
+
+
+def _trace_logger_path(logger: logging.Logger) -> str | None:
+    for handler in logger.handlers:
+        base_filename = getattr(handler, "baseFilename", None)
+        if base_filename:
+            return str(base_filename)
+    return None
+
+
+def _get_hmm_dfa_trace_logger() -> tuple[logging.Logger | None, str | None]:
+    global _HMM_DFA_TRACE_LOGGER, _HMM_DFA_TRACE_PATH, _HMM_DFA_TRACE_SETUP_FAILED
+    if _HMM_DFA_TRACE_SETUP_FAILED:
+        return None, None
+    if _HMM_DFA_TRACE_LOGGER is not None:
+        return _HMM_DFA_TRACE_LOGGER, _HMM_DFA_TRACE_PATH
+    try:
+        logger = setup_logger(
+            {
+                "log_name": "hmmDfaDecoder",
+                "log_level": logging.INFO,
+                "log_filename": "hmmDfaDecoder",
+            },
+            "hmmDfaDecoder.log",
+        )
+    except Exception:
+        _HMM_DFA_TRACE_SETUP_FAILED = True
+        return None, None
+    _HMM_DFA_TRACE_LOGGER = logger
+    _HMM_DFA_TRACE_PATH = _trace_logger_path(logger)
+    return _HMM_DFA_TRACE_LOGGER, _HMM_DFA_TRACE_PATH
+
+
+def _next_trace_decode_id() -> int:
+    global _HMM_DFA_TRACE_DECODE_ID
+    _HMM_DFA_TRACE_DECODE_ID += 1
+    return _HMM_DFA_TRACE_DECODE_ID
+
+
+@dataclass
+class _HMMDFATrace:
+    """Small wrapper around the standard DomiKnowS logger for decode traces."""
+
+    logger: logging.Logger | None
+    path: str | None
+    decode_id: int
+    context: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def enabled(self) -> bool:
+        return self.logger is not None
+
+    def log(self, event: str, **items: Any) -> None:
+        if self.logger is None:
+            return
+        parts = [f"event={_format_trace_value(event)}", f"decode_id={self.decode_id}"]
+        parts.extend(
+            f"{key}={_format_trace_value(value)}"
+            for key, value in items.items()
+            if value is not None
+        )
+        try:
+            self.logger.info(" ".join(parts))
+        except Exception:
+            self.logger = None
+
+
+def _disabled_trace() -> _HMMDFATrace:
+    return _HMMDFATrace(logger=None, path=None, decode_id=0)
 
 
 @dataclass(frozen=True)
@@ -156,6 +271,30 @@ class HMMDFADecoder:
         self._select_label = select_label
         self._token_id_for_generated_label = token_id_for_generated_label
 
+    def _create_trace(self, enabled: bool, context: Mapping[str, Any] | None = None) -> _HMMDFATrace:
+        """Create the shared decode trace wrapper when tracing is enabled."""
+        if not enabled:
+            return _disabled_trace()
+        logger, path = _get_hmm_dfa_trace_logger()
+        if logger is None:
+            return _disabled_trace()
+        return _HMMDFATrace(logger=logger, path=path, decode_id=_next_trace_decode_id(), context=dict(context or {}))
+
+    def _runtime_overlay_metadata(self) -> tuple[int, str | None]:
+        """Return runtime DFA overlay count and a compact comma-separated name list."""
+        overlays = tuple(getattr(self.dfa, "overlays", ()) or ())
+        if not overlays:
+            return 0, None
+        names = ",".join(str(getattr(overlay, "name", type(overlay).__name__)) for overlay in overlays)
+        return len(overlays), names
+
+    def _trace_token_for_label(self, label: int) -> str | None:
+        """Return a compact token name for trace output when the vocabulary can provide it."""
+        try:
+            return str(self.vocabulary.token_for_label(int(label)))
+        except Exception:
+            return None
+
     def decode_hmm_dfa(
         self,
         prompt_ids: torch.Tensor | Sequence[int],
@@ -175,6 +314,7 @@ class HMMDFADecoder:
         **kwargs,
     ) -> list[HMMDFADecodeResult]:
         """Direct strict HMM+DFA decoding over explicit product states."""
+        decode_started = time.perf_counter()
         if self.scorer_head is None:
             raise ValueError("decode_hmm_dfa requires scorer_head")
         search_n = str(search).strip().lower().replace("-", "_")
@@ -196,6 +336,12 @@ class HMMDFADecoder:
         lookahead_max_steps = kwargs.pop("lookahead_max_steps", max_new_tokens if max_new_tokens is not None else 8)
         lookahead_max_steps = None if lookahead_max_steps is None else int(lookahead_max_steps)
         max_attempts = int(kwargs.pop("product_decode_max_attempts", max(1, int(num_return_sequences) * 4)))
+        trace_enabled = bool(kwargs.pop("trace_enabled", True))
+        trace_context = kwargs.pop("trace_context", None)
+        if trace_context is None:
+            trace_context = {}
+        elif not isinstance(trace_context, Mapping):
+            raise ValueError("trace_context must be a mapping when provided")
         if kwargs:
             unknown = ", ".join(sorted(str(key) for key in kwargs))
             raise ValueError(f"unsupported decode_hmm_dfa kwargs: {unknown}")
@@ -216,6 +362,35 @@ class HMMDFADecoder:
         lookahead_backend = "disabled" if not lookahead_weight else ("static_dp" if static_lookahead is not None else "recursive")
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor] = {}
         backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None] = {}
+        trace = self._create_trace(bool(trace_enabled), trace_context)
+        setup_ms = _elapsed_ms(decode_started)
+        if trace.enabled:
+            runtime_overlay_count, runtime_overlay_names = self._runtime_overlay_metadata()
+            header = {
+                "search": search_n,
+                "num_return_sequences": int(num_return_sequences),
+                "beam_size": int(beam_size),
+                "max_new_tokens": policy.max_steps,
+                "device": str(prompt_ids_t.device),
+                "dtype": str(runtime.initial_belief.dtype),
+                "hmm_weight": hmm_weight,
+                "backend_weight": hf_weight,
+                "lookahead_weight": lookahead_weight,
+                "lookahead_backend": lookahead_backend,
+                "lookahead_depth": getattr(static_lookahead, "max_depth", None),
+                "setup_ms": setup_ms,
+                "dfa_states": _safe_len(getattr(self.dfa, "states", ())),
+                "hmm_states": int(runtime.initial_belief.numel()),
+                "label_count": int(getattr(self.vocabulary, "label_count", runtime.initial_belief.numel())),
+                "emittable_count": len(emittable),
+                "runtime_overlay_count": runtime_overlay_count,
+                "runtime_overlay_names": runtime_overlay_names,
+                "constraint_count": trace_context.get("constraint_count", runtime_overlay_count),
+                "trace_log": trace.path,
+            }
+            for key, value in trace_context.items():
+                header[f"context_{key}"] = value
+            trace.log("decode_start", **header)
         common = {
             "runtime": runtime,
             "policy": policy,
@@ -229,35 +404,47 @@ class HMMDFADecoder:
             "recursive_cache": recursive_cache,
             "allowed_transition_cache": allowed_transition_cache,
             "backend_logits_cache": backend_logits_cache,
+            "trace": trace,
         }
-        if search_n == "greedy":
-            states = self._decode_greedy(
-                prompt_ids_t,
-                keep_rejected=keep_rejected,
-                **common,
+        search_started = time.perf_counter()
+        try:
+            if search_n == "greedy":
+                states = self._decode_greedy(
+                    prompt_ids_t,
+                    keep_rejected=keep_rejected,
+                    **common,
+                )
+            elif search_n == "sample":
+                states = self._decode_sample(
+                    prompt_ids_t,
+                    num_return_sequences=int(num_return_sequences),
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    generator_seed=int(generator_seed),
+                    keep_rejected=keep_rejected,
+                    max_attempts=max_attempts,
+                    **common,
+                )
+            else:
+                states = self._decode_beam(
+                    prompt_ids_t,
+                    num_return_sequences=int(num_return_sequences),
+                    beam_size=int(beam_size),
+                    length_penalty=float(length_penalty),
+                    early_stopping=bool(early_stopping),
+                    keep_rejected=keep_rejected,
+                    **common,
+                )
+        except Exception as exc:
+            trace.log(
+                "decode_error",
+                error_type=type(exc).__name__,
+                error=_safe_repr(exc),
+                elapsed_ms=_elapsed_ms(decode_started),
             )
-        elif search_n == "sample":
-            states = self._decode_sample(
-                prompt_ids_t,
-                num_return_sequences=int(num_return_sequences),
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                generator_seed=int(generator_seed),
-                keep_rejected=keep_rejected,
-                max_attempts=max_attempts,
-                **common,
-            )
-        else:
-            states = self._decode_beam(
-                prompt_ids_t,
-                num_return_sequences=int(num_return_sequences),
-                beam_size=int(beam_size),
-                length_penalty=float(length_penalty),
-                early_stopping=bool(early_stopping),
-                keep_rejected=keep_rejected,
-                **common,
-            )
+            raise
+        search_ms = _elapsed_ms(search_started)
         lookahead_metadata = (
             {
                 "lookahead_depth": static_lookahead.max_depth,
@@ -266,6 +453,21 @@ class HMMDFADecoder:
             }
             if static_lookahead is not None
             else {}
+        )
+        trace_metadata = {"trace_log": trace.path} if trace.path else {}
+        selected_states = states[: int(num_return_sequences)]
+        trace.log(
+            "decode_summary",
+            result_count=len(selected_states),
+            accepted_count=sum(int(self.dfa.is_accepting(state.dfa_state)) for state in selected_states),
+            generated_lengths=",".join(str(len(state.labels)) for state in selected_states),
+            setup_ms=setup_ms,
+            search_ms=search_ms,
+            elapsed_ms=_elapsed_ms(decode_started),
+            allowed_cache_size=len(allowed_transition_cache),
+            backend_cache_size=len(backend_logits_cache),
+            recursive_cache_size=len(recursive_cache),
+            lookahead_entries=getattr(static_lookahead, "entries_computed", None),
         )
         return [
             self._decode_result_from_state(
@@ -281,9 +483,10 @@ class HMMDFADecoder:
                     "lookahead_weight": lookahead_weight,
                     "lookahead_backend": lookahead_backend,
                     **lookahead_metadata,
+                    **trace_metadata,
                 },
             )
-            for state in states[: int(num_return_sequences)]
+            for state in selected_states
         ]
 
     def _init_product_state(self, prompt_ids: torch.Tensor, runtime: HMMRuntimeView) -> HMMDFAProductState:
@@ -315,30 +518,63 @@ class HMMDFADecoder:
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
         allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
         backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
+        trace: _HMMDFATrace,
     ) -> HMMDFAStepScores:
         """Score the next compact labels for every HMM+DFA search mode."""
+        score_started = time.perf_counter()
         remaining_steps = remaining_steps_for(policy, step_index)
+        allowed_started = time.perf_counter()
         allowed_pairs = self._allowed_transitions(
             product_state.dfa_state,
             remaining_steps,
             emittable,
             allowed_transition_cache,
         )
+        allowed_ms = _elapsed_ms(allowed_started)
         allowed = {label for label, _state in allowed_pairs}
 
+        hmm_started = time.perf_counter()
         emission = runtime.emission_for(product_state.labels).to(
             device=product_state.hmm_belief.device,
             dtype=product_state.hmm_belief.dtype,
         )
         hmm_logits = hmm_next_label_logits(product_state.hmm_belief, emission)
+        hmm_ms = _elapsed_ms(hmm_started)
+        runtime_overlay_count, _runtime_overlay_names = self._runtime_overlay_metadata()
+        stats = {
+            "step": int(step_index),
+            "prefix_len": len(product_state.labels),
+            "remaining_steps": remaining_steps,
+            "dfa_state": _safe_repr(product_state.dfa_state),
+            "dfa_states": _safe_len(getattr(self.dfa, "states", ())),
+            "hmm_states": int(product_state.hmm_belief.numel()),
+            "constraint_count": trace.context.get("constraint_count", runtime_overlay_count),
+            "runtime_overlay_count": runtime_overlay_count,
+            "label_count": int(hmm_logits.numel()),
+            "emittable_count": len(emittable),
+            "allowed_count": len(allowed),
+            "allowed_transition_count": len(allowed_pairs),
+            "allowed_ms": allowed_ms,
+            "hmm_ms": hmm_ms,
+            "lookahead_ms": 0.0,
+            "backend_ms": 0.0,
+            "mask_ms": 0.0,
+            "allowed_cache_size": len(allowed_transition_cache),
+            "backend_cache_size": len(backend_logits_cache),
+            "lookahead_backend": "disabled" if not lookahead_weight else ("static_dp" if static_lookahead is not None else "recursive"),
+            "lookahead_depth": getattr(static_lookahead, "max_depth", None),
+            "lookahead_entries": getattr(static_lookahead, "entries_computed", None),
+        }
         if not allowed:
-            return HMMDFAStepScores(torch.full_like(hmm_logits, -1e9), set(), {}, {})
+            stats["score_ms"] = _elapsed_ms(score_started)
+            return HMMDFAStepScores(torch.full_like(hmm_logits, -1e9), set(), {}, {}, stats)
 
         combined = hmm_logits * float(hmm_weight)
         next_beliefs: dict[int, torch.Tensor] = {}
         next_dfa_states: dict[int, Any] = {label: next_state for label, next_state in allowed_pairs}
 
         if float(lookahead_weight):
+            lookahead_started = time.perf_counter()
             lookahead_logits = torch.full_like(hmm_logits, -1e9)
             lookahead_remaining = lookahead_remaining_after_label(remaining_steps, lookahead_max_steps)
             if runtime.static_transition is not None and runtime.static_emission is not None:
@@ -384,8 +620,12 @@ class HMMDFADecoder:
                     )
                 lookahead_logits[label] = torch.log(success.clamp_min(torch.finfo(success.dtype).eps))
             combined = combined + lookahead_logits * float(lookahead_weight)
+            stats["lookahead_ms"] = _elapsed_ms(lookahead_started)
+            stats["lookahead_entries"] = getattr(static_lookahead, "entries_computed", None)
+            stats["recursive_cache_size"] = len(recursive_cache)
 
         if float(hf_weight):
+            backend_started = time.perf_counter()
             hf_logits = self._cached_backend_label_logits(
                 product_state.full_ids,
                 product_state.hmm_belief.device,
@@ -394,12 +634,20 @@ class HMMDFADecoder:
             )
             if hf_logits is not None:
                 combined = combined + hf_logits.to(device=combined.device, dtype=combined.dtype) * float(hf_weight)
+            stats["backend_ms"] = _elapsed_ms(backend_started)
+            stats["backend_cache_size"] = len(backend_logits_cache)
 
         try:
+            mask_started = time.perf_counter()
             masked = self._mask_label_logits(combined, allowed)
+            stats["mask_ms"] = _elapsed_ms(mask_started)
         except ValueError:
-            return HMMDFAStepScores(torch.full_like(combined, -1e9), set(), next_beliefs, next_dfa_states)
-        return HMMDFAStepScores(masked, allowed, next_beliefs, next_dfa_states)
+            stats["mask_ms"] = _elapsed_ms(mask_started)
+            stats["mask_error"] = True
+            stats["score_ms"] = _elapsed_ms(score_started)
+            return HMMDFAStepScores(torch.full_like(combined, -1e9), set(), next_beliefs, next_dfa_states, stats)
+        stats["score_ms"] = _elapsed_ms(score_started)
+        return HMMDFAStepScores(masked, allowed, next_beliefs, next_dfa_states, stats)
 
     def _expand_state(
         self,
@@ -481,6 +729,7 @@ class HMMDFADecoder:
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
         allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
         backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
+        trace: _HMMDFATrace,
         keep_rejected: bool,
     ) -> list[HMMDFAProductState]:
         """Deterministically decode one product path by argmax at every step."""
@@ -506,11 +755,21 @@ class HMMDFADecoder:
                 recursive_cache=recursive_cache,
                 allowed_transition_cache=allowed_transition_cache,
                 backend_logits_cache=backend_logits_cache,
+                trace=trace,
             )
             if not step_scores.allowed:
+                trace.log("decode_step", search="greedy", stop_reason="no_allowed", **step_scores.stats)
                 break
             label = int(torch.argmax(step_scores.masked_logits).item())
             log_probs = torch.log_softmax(step_scores.masked_logits, dim=-1)
+            trace.log(
+                "decode_step",
+                search="greedy",
+                selected_label=label,
+                selected_token=self._trace_token_for_label(label),
+                selected_score=float(log_probs[label].detach().item()),
+                **step_scores.stats,
+            )
             product = self._expand_state(
                 product,
                 label,
@@ -526,6 +785,13 @@ class HMMDFADecoder:
                 break
         if self.dfa.is_accepting(product.dfa_state) or keep_rejected:
             return [product]
+        trace.log(
+            "decode_path_rejected",
+            search="greedy",
+            final_len=len(product.labels),
+            accepted=self.dfa.is_accepting(product.dfa_state),
+            final_state=_safe_repr(product.dfa_state),
+        )
         return []
 
     def _decode_sample(
@@ -544,6 +810,7 @@ class HMMDFADecoder:
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
         allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
         backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
+        trace: _HMMDFATrace,
         num_return_sequences: int,
         temperature: float,
         top_k: int | None,
@@ -582,8 +849,10 @@ class HMMDFADecoder:
                     recursive_cache=recursive_cache,
                     allowed_transition_cache=allowed_transition_cache,
                     backend_logits_cache=backend_logits_cache,
+                    trace=trace,
                 )
                 if not step_scores.allowed:
+                    trace.log("decode_step", search="sample", attempt=attempt, stop_reason="no_allowed", **step_scores.stats)
                     break
                 label, log_prob = self._select_label(
                     step_scores.masked_logits,
@@ -591,6 +860,15 @@ class HMMDFADecoder:
                     top_k=top_k,
                     top_p=top_p,
                     generator=rng,
+                )
+                trace.log(
+                    "decode_step",
+                    search="sample",
+                    attempt=attempt,
+                    selected_label=int(label),
+                    selected_token=self._trace_token_for_label(int(label)),
+                    selected_score=float(log_prob),
+                    **step_scores.stats,
                 )
                 product = self._expand_state(
                     product,
@@ -613,6 +891,7 @@ class HMMDFADecoder:
             return accepted[: int(num_return_sequences)]
         if keep_rejected:
             return rejected[: int(num_return_sequences)]
+        trace.log("decode_path_rejected", search="sample", rejected_count=len(rejected), accepted_count=len(accepted))
         return []
 
     def _decode_beam(
@@ -631,6 +910,7 @@ class HMMDFADecoder:
         recursive_cache: dict[tuple[tuple[int, ...], Any, int | None], torch.Tensor],
         allowed_transition_cache: dict[tuple[Any, int | None], tuple[tuple[int, Any], ...]],
         backend_logits_cache: dict[tuple[int, ...], torch.Tensor | None],
+        trace: _HMMDFATrace,
         num_return_sequences: int,
         beam_size: int,
         length_penalty: float,
@@ -645,10 +925,19 @@ class HMMDFADecoder:
 
         while active:
             expanded: list[HMMDFAProductState] = []
-            for product in active:
+            for beam_index, product in enumerate(active):
                 update_progress = make_progress_tracker()
                 progress = self._progress(product, prompt_len=prompt_len, update_progress=update_progress, eos_label=eos_label)
                 if should_stop_decoding(policy, progress):
+                    trace.log(
+                        "decode_step",
+                        search="beam",
+                        beam_index=beam_index,
+                        step=len(product.labels),
+                        stop_reason="stop_policy",
+                        prefix_len=len(product.labels),
+                        dfa_state=_safe_repr(product.dfa_state),
+                    )
                     stopped.append(product)
                     continue
                 step_scores = self._score_next_labels(
@@ -666,18 +955,31 @@ class HMMDFADecoder:
                     recursive_cache=recursive_cache,
                     allowed_transition_cache=allowed_transition_cache,
                     backend_logits_cache=backend_logits_cache,
+                    trace=trace,
                 )
                 if not step_scores.allowed:
+                    trace.log("decode_step", search="beam", beam_index=beam_index, stop_reason="no_allowed", **step_scores.stats)
                     stopped.append(product)
                     continue
                 valid_labels = sorted(label for label in step_scores.allowed if 0 <= int(label) < step_scores.masked_logits.numel())
                 if not valid_labels:
+                    trace.log("decode_step", search="beam", beam_index=beam_index, stop_reason="no_valid_labels", **step_scores.stats)
                     stopped.append(product)
                     continue
                 log_probs = torch.log_softmax(step_scores.masked_logits, dim=-1)
                 valid_tensor = torch.tensor(valid_labels, dtype=torch.long, device=log_probs.device)
                 top_count = min(int(beam_size), int(valid_tensor.numel()))
                 top_scores, top_offsets = torch.topk(log_probs.index_select(0, valid_tensor), k=top_count)
+                top_labels = [int(valid_tensor[int(offset)].item()) for offset in top_offsets.tolist()]
+                trace.log(
+                    "decode_step",
+                    search="beam",
+                    beam_index=beam_index,
+                    expanded_count=top_count,
+                    top_labels=",".join(str(label) for label in top_labels[:8]),
+                    top_scores=",".join(f"{float(score):.4f}" for score in top_scores.detach().tolist()[:8]),
+                    **step_scores.stats,
+                )
                 for offset, score in zip(top_offsets.tolist(), top_scores.detach().tolist()):
                     label = int(valid_tensor[int(offset)].item())
                     child = self._expand_state(

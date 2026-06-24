@@ -194,14 +194,29 @@ def _capture_shared_llm(args, program):
 
 def _example_dfa(base_dfa, vocabulary, sample):
     sample_examples = [sample]
-    return ev.action_object_runtime_dfa(
+    action_tokens = ev.action_tokens_requiring_object_from_examples(sample_examples)
+    object_tokens = ev.object_tokens_from_examples(sample_examples)
+    compatibility = ev.action_object_constraint_tokens_from_examples(sample_examples)
+    action_sequence_tokens = ev.action_tokens_from_examples(sample_examples)
+    dfa = ev.action_object_runtime_dfa(
         base_dfa,
         vocabulary,
-        ev.action_tokens_requiring_object_from_examples(sample_examples),
-        ev.object_tokens_from_examples(sample_examples),
-        ev.action_object_constraint_tokens_from_examples(sample_examples),
-        ev.action_tokens_from_examples(sample_examples),
+        action_tokens,
+        object_tokens,
+        compatibility,
+        action_sequence_tokens,
     )
+    overlay_count = len(getattr(dfa, "overlays", ()) or ())
+    stats = {
+        "constraint_count": overlay_count,
+        "runtime_overlay_count": overlay_count,
+        "action_requires_object_count": len(action_tokens),
+        "object_count": len(object_tokens),
+        "action_sequence_count": len(action_sequence_tokens),
+        "compatibility_action_count": len(compatibility),
+        "compatibility_pair_count": sum(len(objects) for objects in compatibility.values()),
+    }
+    return dfa, stats
 
 
 def _decode_one_dfa_per_example(args, all_examples, examples):
@@ -229,10 +244,12 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
     lookahead_entries_count = 0
     lookahead_entries_max = 0
     composed_dfa_states_max = 0
+    trace_log = None
     iterator = ev.progress_bar(enumerate(examples), total=len(examples), desc="4 product HMM+DFA per-example")
     for index, sample in iterator:
-        dfa = _example_dfa(base_dfa, bundle.vocabulary, sample)
-        composed_dfa_states_max = max(composed_dfa_states_max, len(getattr(dfa, "states", ())))
+        dfa, trace_stats = _example_dfa(base_dfa, bundle.vocabulary, sample)
+        composed_dfa_states = len(getattr(dfa, "states", ()))
+        composed_dfa_states_max = max(composed_dfa_states_max, composed_dfa_states)
         controller = HybridController(
             dfa=dfa,
             vocabulary=bundle.vocabulary,
@@ -253,8 +270,18 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
             hf_weight=args.hmm_hf_weight,
             lookahead_weight=args.hmm_lookahead_weight,
             lookahead_max_steps=args.hmm_lookahead_max_steps,
+            trace_context={
+                "example_index": index,
+                "task_id": sample.get("task_id", "task"),
+                "dataset": args.dataset,
+                "dfa_build_mode": args.dfa_build_mode,
+                "base_dfa_states": base_dfa_states,
+                "composed_dfa_states": composed_dfa_states,
+                **trace_stats,
+            },
         )
         if results:
+            trace_log = trace_log or results[0].metadata.get("trace_log")
             predictions = [results[0].labels]
             entries = results[0].metadata.get("lookahead_entries")
             if entries is not None:
@@ -286,6 +313,7 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
                 else None
             ),
             "lookahead_entries_max": lookahead_entries_max if lookahead_entries_count else None,
+            "trace_log": trace_log,
         },
     )
 
@@ -337,7 +365,11 @@ def _decode_batched(args, all_examples, examples):
             "DomiKnowS HMM+DFA decoder with Qwen-distilled HMM (no training)",
             counts,
         ),
-        {"base_dfa_states": dfa_state_counts[0] if len(dfa_state_counts) == 1 else dfa_state_counts, "batches": len(build_batches)},
+        {
+            "base_dfa_states": dfa_state_counts[0] if len(dfa_state_counts) == 1 else dfa_state_counts,
+            "batches": len(build_batches),
+            "trace_log": getattr(args, "_hmm_dfa_trace_log", None),
+        },
     )
 
 
@@ -371,6 +403,8 @@ def main():
             )
     else:
         dfa_metadata += f" batches={metadata['batches']}"
+    if metadata.get("trace_log"):
+        dfa_metadata += f" trace_log={metadata['trace_log']}"
 
     lines = [
         "EAI inference-only DomiKnowS HMM+DFA decoder with Qwen-distilled HMM",

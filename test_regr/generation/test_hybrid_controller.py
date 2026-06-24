@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 import time
 from types import SimpleNamespace
 
 import pytest
 import torch
+import domiknows.generation.applications.hmm_dfa_decoder as hmm_dfa_decoder_module
 
 from domiknows.generation import (
     ConstraintBundle,
@@ -527,6 +529,67 @@ def test_decode_hmm_dfa_greedy_returns_one_deterministic_result():
     assert first[0].accepted
     assert second[0].labels == first[0].labels
     assert torch.allclose(first[0].final_hmm_belief, torch.tensor([0.0, 1.0]))
+
+
+def _reset_hmm_dfa_trace(monkeypatch):
+    monkeypatch.setattr(hmm_dfa_decoder_module, "_HMM_DFA_TRACE_LOGGER", None)
+    monkeypatch.setattr(hmm_dfa_decoder_module, "_HMM_DFA_TRACE_PATH", None)
+    monkeypatch.setattr(hmm_dfa_decoder_module, "_HMM_DFA_TRACE_SETUP_FAILED", False)
+    monkeypatch.setattr(hmm_dfa_decoder_module, "_HMM_DFA_TRACE_DECODE_ID", 0)
+
+
+def test_decode_hmm_dfa_trace_logger_writes_step_stats(tmp_path, monkeypatch):
+    import __main__
+
+    _reset_hmm_dfa_trace(monkeypatch)
+    monkeypatch.setattr(__main__, "__file__", str(tmp_path / "driver.py"), raising=False)
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    traced = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="greedy",
+        max_new_tokens=2,
+        trace_context={"example_index": 7, "constraint_count": 3},
+    )
+    untraced = controller.decode_hmm_dfa(prompt_ids, search="greedy", max_new_tokens=2, trace_enabled=False)
+
+    assert traced[0].labels == untraced[0].labels
+    assert traced[0].metadata["trace_log"] == str(Path(tmp_path / "logs" / "hmmDfaDecoder.log"))
+    trace_text = Path(traced[0].metadata["trace_log"]).read_text(encoding="utf-8")
+    assert "event=decode_start" in trace_text
+    assert "context_example_index=7" in trace_text
+    assert "constraint_count=3" in trace_text
+    assert "event=decode_step" in trace_text
+    step_lines = [line for line in trace_text.splitlines() if "event=decode_step" in line]
+    assert any("constraint_count=3" in line for line in step_lines)
+    assert "allowed_count=" in trace_text
+    assert "dfa_states=4" in trace_text
+    assert "hmm_states=2" in trace_text
+    assert "selected_label=" in trace_text
+    assert "score_ms=" in trace_text
+    assert "event=decode_summary" in trace_text
+
+
+def test_decode_hmm_dfa_trace_can_be_disabled(tmp_path, monkeypatch):
+    import __main__
+
+    _reset_hmm_dfa_trace(monkeypatch)
+    monkeypatch.setattr(__main__, "__file__", str(tmp_path / "driver.py"), raising=False)
+    tokenizer, vocab, dfa = _ab_vocab_and_dfa(allow_b=False)
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _strict_hmm_for_ab_path()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(prompt_ids, search="greedy", max_new_tokens=2, trace_enabled=False)
+
+    assert results[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert "trace_log" not in results[0].metadata
+    assert not (tmp_path / "logs" / "hmmDfaDecoder.log").exists()
 
 
 def test_decode_hmm_dfa_sample_returns_dfa_valid_results():

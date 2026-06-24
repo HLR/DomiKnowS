@@ -758,8 +758,8 @@ def _domiknows_hmm_dfa_predictions(args, dfa, bundle, generator, examples, desc=
     )
     predictions = []
     failures = 0
-    iterator = progress_bar(examples, total=len(examples), desc=desc)
-    for sample in iterator:
+    iterator = progress_bar(enumerate(examples), total=len(examples), desc=desc)
+    for index, sample in iterator:
         prompt = torch.tensor([[int(bundle.vocabulary.eos_label)]], dtype=torch.long, device=args.device)
         results = controller.decode_hmm_dfa(
             prompt,
@@ -773,8 +773,26 @@ def _domiknows_hmm_dfa_predictions(args, dfa, bundle, generator, examples, desc=
             hf_weight=args.hmm_hf_weight,
             lookahead_weight=args.hmm_lookahead_weight,
             lookahead_max_steps=args.hmm_lookahead_max_steps,
+            trace_context={
+                "example_index": index,
+                "task_id": sample.get("task_id", "task"),
+                "dataset": getattr(args, "dataset", None),
+                "dfa_build_mode": getattr(args, "dfa_build_mode", "graph"),
+                "dfa_states": len(getattr(dfa, "states", ())),
+                "constraint_count": len(getattr(dfa, "overlays", ()) or ()),
+                "action_count": len(sample.get("action_tokens", ())),
+                "object_count": len(sample.get("object_tokens", ())),
+                "compatibility_pair_count": sum(
+                    len(objects)
+                    for objects in sample.get("action_object_constraint_tokens", {}).values()
+                )
+                if isinstance(sample.get("action_object_constraint_tokens", {}), dict)
+                else None,
+            },
         )
         if results:
+            if results[0].metadata.get("trace_log") and not getattr(args, "_hmm_dfa_trace_log", None):
+                setattr(args, "_hmm_dfa_trace_log", results[0].metadata["trace_log"])
             predictions.append(results[0].labels)
         else:
             failures += 1
