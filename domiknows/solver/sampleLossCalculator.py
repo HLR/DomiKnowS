@@ -143,6 +143,8 @@ class SampleLossCalculator:
                         if not c:
                             continue
                         c = c[0]
+                        if c is None:
+                            continue
                         if len(c) > 2:
                             if c[2] not in lcVariables:
                                 lcVariables[c[2]] = c
@@ -162,7 +164,11 @@ class SampleLossCalculator:
                     
                     # Collect lc variable
                     for k in sampleInfo.keys():
+                        if i >= len(sampleInfo[k]):
+                            continue
                         for c in sampleInfo[k][i]:
+                            if c is None:
+                                continue
                             if len(c) > 2:
                                 if c[2] not in lcVariables:
                                     lcVariables[c[2]] = c
@@ -220,7 +226,11 @@ class SampleLossCalculator:
                 for i, l in enumerate(lossTensor):
                     currentLcVariables = OrderedDict()
                     for k in sampleInfo.keys():
+                        if i >= len(sampleInfo[k]):
+                            continue
                         for c in sampleInfo[k][i]:
+                            if c is None:
+                                continue
                             if len(c) > 2:
                                 if c[2] not in currentLcVariables:
                                     currentLcVariables[c[2]] = c

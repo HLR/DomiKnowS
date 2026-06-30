@@ -28,6 +28,7 @@ from .sampling import (
     reinforce_loss,
 )
 from .constraint_reward import constraint_satisfaction_reward
+from .rewards import as_reward_tensor, call_reward_function
 
 __all__ = ["ReinforcementProgram", "ReinforcementModel"]
 
@@ -71,8 +72,11 @@ class ReinforcementProgram(LearningBasedProgram):
         sample).  Each may be a ``Concept`` (e.g. a binary phrase label or an
         ``EnumConcept``) or a ``Property``.  If ``None``, every concept that has a
         learner-backed property is used.
-    :param reward_function: a global ``reward_function(generator_output) -> Tensor``
-        used when a data item does not carry its own reward function.
+    :param reward_function: a global reward callable used when a data item does
+        not carry its own reward function. The callable may be old-style
+        ``reward_function(generator_output)`` or context-aware
+        ``reward_function(generator_output, *, data_item=None, datanode=None,
+        samples=None, targets=None)``.
     :param reward_key: data-item key holding a per-sample reward function
         (defaults to ``'reward_function'``); takes precedence over
         ``reward_function`` when present.
@@ -225,15 +229,26 @@ class ReinforcementProgram(LearningBasedProgram):
             flat.extend(int(x) for x in idx.reshape(-1).tolist())
         return flat
 
-    def _reward_for_sample(self, reward_fn, generator_output):
+    def _reward_for_sample(
+        self,
+        reward_fn,
+        generator_output,
+        *,
+        data_item=None,
+        datanode=None,
+        samples=None,
+        targets=None,
+    ):
         """Call the reward function and reduce its output to a scalar float."""
-        reward = reward_fn(generator_output)
-        if torch.is_tensor(reward):
-            return reward.float().mean().item()
-        if isinstance(reward, (list, tuple)):
-            t = torch.tensor(reward, dtype=torch.float32)
-            return t.mean().item()
-        return float(reward)
+        reward = call_reward_function(
+            reward_fn,
+            generator_output,
+            data_item=data_item,
+            datanode=datanode,
+            samples=samples,
+            targets=targets,
+        )
+        return as_reward_tensor(reward, dtype=torch.float32).mean().item()
 
     # ------------------------------------------------------------------
     # Visualization payload
@@ -354,7 +369,14 @@ class ReinforcementProgram(LearningBasedProgram):
         if reward_fn is not None:
             decoder = self.decoder or self._default_decoder
             generator_output = decoder(samples, present_targets, datanode, data_item)
-            total += self._reward_for_sample(reward_fn, generator_output)
+            total += self._reward_for_sample(
+                reward_fn,
+                generator_output,
+                data_item=data_item,
+                datanode=datanode,
+                samples=samples,
+                targets=present_targets,
+            )
             used = True
         if self.reward_from_constraints:
             total += self.constraint_reward_weight * constraint_satisfaction_reward(

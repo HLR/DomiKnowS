@@ -318,7 +318,12 @@ class LogicalConstraintConstructor:
         constraints produce multi-element tensors.
         """
         if loss and vDns:
-            vDnsList = [v[0] for v in vDns]
+            vDnsList = [
+                v[0] for v in vDns
+                if v and len(v) > 0 and v[0] is not None
+            ]
+            if not vDnsList:
+                return vDns
             
             updatedVDns = []
             try:
@@ -354,7 +359,7 @@ class LogicalConstraintConstructor:
                     tStack = vDnsList[0]
                     tsqueezed = torch.squeeze(tStack, dim=0) if torch.is_tensor(tStack) else tStack
 
-            except (IndexError, RuntimeError):
+            except (IndexError, RuntimeError, TypeError):
                 # Fallback: try to concatenate flattened tensors
                 flat_tensors = []
                 for v in vDnsList:

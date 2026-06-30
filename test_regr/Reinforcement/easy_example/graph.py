@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Iterable
-import re
+from typing import Any, Callable
 import sys
 
 import torch
@@ -14,73 +13,26 @@ for path in (RUN_DIR, REPO_ROOT):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-
-def _normalize_text(value: Any) -> str:
-    text = str(value).strip().lower()
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"[^\w\s\.\-\+]+", "", text)
-    return text
-
-
-def _flatten_generator_output(generator_output: Any) -> list[Any]:
-    if isinstance(generator_output, dict):
-        for key in ("generated_text", "text", "output", "answer", "prediction", "predictions"):
-            if key in generator_output:
-                return _flatten_generator_output(generator_output[key])
-        return [generator_output]
-    if isinstance(generator_output, (list, tuple)):
-        flattened: list[Any] = []
-        for item in generator_output:
-            flattened.extend(_flatten_generator_output(item))
-        return flattened
-    if isinstance(generator_output, torch.Tensor):
-        if generator_output.ndim == 0:
-            return [generator_output.item()]
-        return generator_output.detach().cpu().reshape(-1).tolist()
-    return [generator_output]
-
-
-def _extract_number(text: Any) -> int | None:
-    match = re.search(r"-?\d+", _normalize_text(text))
-    if not match:
-        return None
-    try:
-        return int(match.group(0))
-    except ValueError:
-        return None
+from domiknows.reinforcement.rewards import count_reward
 
 
 def _build_reward_function(args, expected_value: Any) -> Callable[[Any], torch.Tensor]:
-    expected_target = 0 if args.expected_value == 0 else 1
+    expected_label = "zero" if args.expected_value == 0 else "one"
 
     def _reward(generator_output: Any) -> torch.Tensor:
-        outputs = _flatten_generator_output(generator_output)
-        if not outputs:
-            return torch.zeros(1, dtype=torch.float32)
-
-        predicted_matches = 0
-        for output in outputs:
-            number = _extract_number(output)
-            if number is not None:
-                predicted_matches += int(number == expected_target)
-                continue
-
-            normalized = _normalize_text(output)
-            if expected_target == 0:
-                predicted_matches += int(normalized in {"zero", "0", "false", "no", "n"})
-            else:
-                predicted_matches += int(normalized in {"one", "1", "true", "yes", "y"})
-
         if args.atLeastL and args.atMostL:
-            passed = predicted_matches >= args.expected_atLeastL and predicted_matches <= args.expected_atMostL
-        elif args.atMostL:
-            passed = predicted_matches <= args.expected_atMostL
-        elif args.atLeastL:
-            passed = predicted_matches >= args.expected_atLeastL
-        else:
-            passed = predicted_matches == args.expected_atLeastL
-
-        return torch.tensor([1.0 if passed else 0.0], dtype=torch.float32)
+            lower = count_reward(
+                generator_output, expected_label, args.expected_atLeastL, mode="at_least"
+            ).item()
+            upper = count_reward(
+                generator_output, expected_label, args.expected_atMostL, mode="at_most"
+            ).item()
+            return torch.tensor([1.0 if lower and upper else 0.0], dtype=torch.float32)
+        if args.atMostL:
+            return count_reward(generator_output, expected_label, args.expected_atMostL, mode="at_most")
+        if args.atLeastL:
+            return count_reward(generator_output, expected_label, args.expected_atLeastL, mode="at_least")
+        return count_reward(generator_output, expected_label, args.expected_atLeastL, mode="exact")
 
     _reward.expected_value = expected_value
     _reward.expected_atLeastL = args.expected_atLeastL
