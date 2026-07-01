@@ -377,6 +377,7 @@ class ReinforcementProgram(LearningBasedProgram):
                 samples=samples,
                 targets=present_targets,
             )
+
             used = True
         if self.reward_from_constraints:
             total += self.constraint_reward_weight * constraint_satisfaction_reward(

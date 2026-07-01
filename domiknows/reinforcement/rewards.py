@@ -183,6 +183,8 @@ def call_reward_function(
         "targets": targets,
     }
     accepts_kwargs, accepted = _callable_context_keys(reward_fn)
+    # Preserve old one-argument reward functions, but pass context to rewards
+    # that explicitly ask for it via named keywords or **kwargs.
     if accepts_kwargs:
         return reward_fn(generator_output, **context)
     if accepted:
@@ -192,6 +194,8 @@ def call_reward_function(
 
 def make_reward_function(fn: Callable[..., Any], **metadata):
     """Wrap ``fn`` as a reward callable and attach metadata attributes."""
+    # Metadata is intentionally stored as attributes so examples can inspect the
+    # active reward without changing ReinforcementProgram's callable interface.
     def _reward(generator_output: Any, **context) -> Any:
         return call_reward_function(fn, generator_output, **context)
 

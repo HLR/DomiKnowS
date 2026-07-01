@@ -13,6 +13,8 @@ from domiknows.reinforcement.rewards import (
 
 def reward_from_generator(generator_output: Any, logic_label: Any) -> torch.Tensor:
     """Return a binary reward tensor for generated yes/no answers."""
+    # The hard example's decoder already converts sampled graph assignments to
+    # generated yes/no answers, so the shared binary matcher is enough here.
     return binary_match_reward(generator_output, logic_label)
 
 
@@ -26,4 +28,6 @@ class RewardProgramConfig:
 
 def make_reward_function(logic_str: str, logic_label: Any):
     """Build a Python reward function bound to a sample's logical target."""
+    # Keep the historical local factory name while using the generic closure
+    # builder that attaches logic_str and logic_label metadata.
     return make_binary_reward_function(logic_str, logic_label)

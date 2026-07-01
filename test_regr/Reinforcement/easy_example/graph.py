@@ -20,6 +20,8 @@ def _build_reward_function(args, expected_value: Any) -> Callable[[Any], torch.T
     expected_label = "zero" if args.expected_value == 0 else "one"
 
     def _reward(generator_output: Any) -> torch.Tensor:
+        # Convert the easy example's constraint-style CLI options into the
+        # generic count reward used by ReinforcementProgram.
         if args.atLeastL and args.atMostL:
             lower = count_reward(
                 generator_output, expected_label, args.expected_atLeastL, mode="at_least"
