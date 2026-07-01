@@ -1,0 +1,17 @@
+[project]
+name = "domiknows-beliefbank-sample-vs-reinforcement-task"
+version = "0.1.0"
+description = "BeliefBank comparison between DomiKnowS sample-loss constraint learning and ReinforcementProgram."
+requires-python = ">=3.12"
+dependencies = [
+    "domiknows[cpu]",
+    "numpy>=2.0",
+    "tqdm>=4.66.0",
+    "transformers>=4.56.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+domiknows = { path = "../..", editable = true }

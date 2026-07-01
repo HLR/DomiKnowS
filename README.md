@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # DomiKnowS: Declarative Knowledge Integration with Deep Neural Models
 
 DomiKnowS is a Python library that facilitates the integration of domain knowledge in deep learning architectures. With DomiKnowS, you can express the structure of your data symbolically via graph declarations and seamlessly add logical constraints over outputs or latent variables to your deep models. This allows you to define domain knowledge explicitly, improving your models' explainability, performance, and generalizability, especially in low-data regimes. 
@@ -62,4 +61,3 @@ To run a specific example, follow the steps.
 <code> pip install --no-cache-dir -r requirements.txt</code>
 - execute example, for instance in the case of the demo example:  
 <code>python main.py</code>
->>>>>>> 91b17141a344a22906f8c3bcbd6c7e9fe018dd24

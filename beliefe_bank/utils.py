@@ -34,14 +34,15 @@ class BBRobert(torch.nn.Module):
 
     def __init__(self):
         super(BBRobert, self).__init__()
-        self.bert = RobertaModel.from_pretrained('roberta-base')
+        self.bert = RobertaModel.from_pretrained('roberta-base', add_pooling_layer=False)
         for name, param in list(self.bert.named_parameters())[:-32]:
             param.requires_grad = False
         self.last_layer_size = self.bert.config.hidden_size
         self.head=RobertaClassificationHead(self.last_layer_size)
 
     def forward(self, input_ids,attention_mask):
-        last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
+        outputs = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
+        last_hidden_state = outputs[0]
         return self.head(last_hidden_state[:,0])
 
 class RobertaClassificationHead(torch.nn.Module):
