@@ -44,6 +44,12 @@ def reverse_sign_grad(parameters, factor=-1.):
         if parameter.grad is not None:
             parameter.grad = factor * parameter.grad
 
+
+def _project_cmodel_lambdas(cmodel):
+    project = getattr(cmodel, 'project_lmbd_', None)
+    if callable(project):
+        project()
+
 # =============================================================================
 # Evaluation Helpers  
 # =============================================================================
@@ -81,7 +87,16 @@ def _apply_threshold_to_predictions(program, datanode, threshold=0.5):
                     thresholded = (softmax_probs >= threshold).float()
                     dn.attributes[keyDecision] = thresholded
 
-def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
+def _evaluate_condition_impl(
+    program,
+    evaluate_data,
+    device="cpu",
+    threshold=0.0,
+    return_dict=False,
+    use_gumbel=False,
+    temperature=None,
+    hard_gumbel=False,
+):
     """
     Unified implementation for evaluating constraints with proper metrics.
 
@@ -109,11 +124,16 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         threshold: Threshold for converting probabilities to binary decisions
                   for counting constraints. Defaults to 0.0 - the threshold will not be applied.
         return_dict: If True, return full results dict; if False, return primary_metric float
+        use_gumbel: If True, evaluate executable constraints on Gumbel-Softmax
+            samples instead of the deterministic local softmax.
+        temperature: Gumbel-Softmax temperature. Defaults to the program's
+            current temperature when available.
+        hard_gumbel: If True, use straight-through hard Gumbel samples.
 
     Returns:
         dict or float: Full results dictionary or primary metric value
     """
-    from domiknows.graph.logicalConstrain import sumL
+    from domiknows.graph.logicalConstrain import queryL, sumL
     from domiknows.step_notebook import (
         StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
     )
@@ -123,6 +143,9 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
     counting_correct = 0
     counting_total = 0
+
+    query_correct = 0
+    query_total = 0
 
     total = 0
 
@@ -170,11 +193,25 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
         total += 1
         datanode.inferLocal()
+        if use_gumbel:
+            eval_temperature = temperature
+            if eval_temperature is None:
+                eval_temperature = getattr(program, "current_temp", None)
+            if eval_temperature is None and hasattr(program, "get_temperature"):
+                eval_temperature = program.get_temperature()
+            if eval_temperature is None:
+                eval_temperature = 1.0
+            datanode.inferGumbelLocal(
+                temperature=eval_temperature,
+                hard=hard_gumbel,
+            )
         if threshold > 0.0:
             _apply_threshold_to_predictions(program, datanode, threshold)
             key = "/local/decision"
         else:
             key = "/local/argmax"
+
+        lc_loss_context = None
 
         for lc_name in active_lc_name:
             if lc_name not in program.graph.executableLCs:
@@ -188,7 +225,65 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             if label is None:
                 continue
 
-            is_counting = isinstance(lc.innerLC, sumL)
+            inner_lc = getattr(lc, "innerLC", lc)
+            is_query = isinstance(inner_lc, queryL)
+            is_counting = isinstance(inner_lc, sumL)
+
+            if is_query:
+                query_total += 1
+                try:
+                    if lc_loss_context is None:
+                        cmodel = getattr(program, "cmodel", None)
+                        lc_loss_context = datanode._prepareLcLossContext(
+                            tnorm=getattr(cmodel, "tnorm", "P"),
+                            counting_tnorm=getattr(cmodel, "counting_tnorm", None),
+                        )
+                    loss_dict = datanode.calculateSingleLcLoss(
+                        lc_name,
+                        tnorm=getattr(getattr(program, "cmodel", None), "tnorm", "P"),
+                        counting_tnorm=getattr(getattr(program, "cmodel", None), "counting_tnorm", None),
+                        _context=lc_loss_context,
+                    )
+                    query_distribution = loss_dict.get("queryDistribution")
+                    if query_distribution is None:
+                        if _step_results is not None:
+                            _step_results[lc_name] = {
+                                'answer_result': None,
+                                'verify_result': None,
+                                'correct': False,
+                                'is_counting': False,
+                                'is_query': True,
+                            }
+                        continue
+
+                    predicted_label = int(torch.argmax(query_distribution.detach().reshape(-1)).item())
+                    expected_label = int(label.detach().reshape(-1)[0].item() if torch.is_tensor(label) else label)
+                    use_correct = predicted_label == expected_label
+                    if use_correct:
+                        query_correct += 1
+
+                    if _step_results is not None:
+                        _step_results[lc_name] = {
+                            'answer_result': predicted_label,
+                            'verify_result': {
+                                'queryDistribution': query_distribution.detach().cpu().tolist(),
+                                'expectedLabel': expected_label,
+                            },
+                            'correct': bool(use_correct),
+                            'is_counting': False,
+                            'is_query': True,
+                        }
+                except Exception as e:
+                    logger.warning(f"queryL accuracy evaluation failed for {lc_name}: {e}")
+                    if _step_results is not None:
+                        _step_results[lc_name] = {
+                            'answer_result': None,
+                            'verify_result': None,
+                            'correct': False,
+                            'is_counting': False,
+                            'is_query': True,
+                        }
+                continue
 
             # ── AnswerSolver (experimental, opt-in) ─────────────────
             # Only runs when DOMIKNOWS_USE_ANSWER_SOLVER=1. Kept here for
@@ -281,7 +376,9 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         'boolean_correct': boolean_correct,
         'boolean_total': boolean_total,
         'counting_correct': counting_correct,
-        'counting_total': counting_total
+        'counting_total': counting_total,
+        'query_correct': query_correct,
+        'query_total': query_total,
     }
 
     if total == 0:
@@ -305,21 +402,37 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     else:
         results['counting_accuracy'] = None
 
+    if query_total > 0:
+        query_accuracy = (query_correct / query_total) * 100
+        results['query_accuracy'] = query_accuracy
+        print(f"Query accuracy: {query_accuracy:.2f}% ({query_correct}/{query_total})")
+    else:
+        results['query_accuracy'] = None
+
     # Primary metric
-    if results['counting_accuracy'] is not None and results['boolean_accuracy'] is not None:
-        total_constraints = boolean_total + counting_total
-        boolean_weight = boolean_total / total_constraints
-        counting_weight = counting_total / total_constraints
-        results['accuracy'] = boolean_weight * results['boolean_accuracy'] + counting_weight * results['counting_accuracy']
-    elif results['counting_accuracy'] is not None:
-        results['accuracy'] = results['counting_accuracy']
-    elif results['boolean_accuracy'] is not None:
-        results['accuracy'] = results['boolean_accuracy']
+    accuracy_parts = [
+        (results['boolean_accuracy'], boolean_total),
+        (results['counting_accuracy'], counting_total),
+        (results['query_accuracy'], query_total),
+    ]
+    active_accuracy_parts = [
+        (accuracy, count)
+        for accuracy, count in accuracy_parts
+        if accuracy is not None and count > 0
+    ]
+    if active_accuracy_parts:
+        total_constraints = sum(count for _accuracy, count in active_accuracy_parts)
+        results['accuracy'] = sum(
+            accuracy * (count / total_constraints)
+            for accuracy, count in active_accuracy_parts
+        )
     else:
         results['accuracy'] = 0.0
 
     results["boolean_total"] = boolean_total
     results["counting_total"] = counting_total
+    results["query_total"] = query_total
+    results["evaluation_mode"] = "gumbel" if use_gumbel else "deterministic"
 
     return results if return_dict else results['accuracy']
 
@@ -603,7 +716,7 @@ class GumbelTemperatureMixin:
     Mixin providing Gumbel-Softmax temperature annealing for training programs.
     
     Provides shared temperature management across GumbelPrimalDualProgram,
-    GumbelSampleLossProgram, and GumbelInferenceProgram.
+    GumbelSampleLossProgram, and InferenceProgram(use_gumbel=True).
     """
     
     def _init_gumbel(self, use_gumbel=False, initial_temp=1.0, final_temp=0.1,
@@ -860,6 +973,7 @@ class PrimalDualProgram(LossProgram):
                     reverse_sign_grad(self.cmodel.parameters())
                     torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
                     
                     c_update_iter = iter_count
                     c_update += 1
@@ -922,6 +1036,8 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
     
     def train(self, training_set, valid_set=None, test_set=None,
               num_epochs=None, **kwargs):
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
         self._auto_set_anneal_epochs(num_epochs)
         return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
 
@@ -1022,6 +1138,7 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
                     reverse_sign_grad(self.cmodel.parameters())
                     torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
                     
                     c_update_iter = iter_count
                     c_update += 1
@@ -1045,15 +1162,33 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
         
         self._increment_epoch()
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
+    def evaluate_condition(
+        self,
+        evaluate_data,
+        device="cpu",
+        threshold=0.5,
+        return_dict=False,
+        use_gumbel=False,
+        temperature=None,
+        hard_gumbel=False,
+    ):
+        return _evaluate_condition_impl(
+            self,
+            evaluate_data,
+            device=device,
+            threshold=threshold,
+            return_dict=return_dict,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel,
+        )
 
 #=============================================================================
 # Inference Program
 #=============================================================================
 
 # Supported training styles for InferenceProgram.
-_INFERENCE_STYLES = ('simple', 'primal_dual')
+_INFERENCE_STYLES = ('default', 'primal_dual', 'simple')
 
 
 class InferenceProgram(GumbelTemperatureMixin, LossProgram):
@@ -1067,7 +1202,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
 
     Two training styles are supported (issue #424):
 
-    * ``training_style='simple'`` (default) — one-shot update per batch:
+    * ``training_style='default'`` — one-shot update per batch:
       ``loss = mloss + beta * closs``. This matches the original
       ``InferenceProgram`` behaviour and is fully backward compatible.
     * ``training_style='primal_dual'`` — Lagrangian primal/dual updates with
@@ -1078,18 +1213,20 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
 
     Gumbel-Softmax annealing (``use_gumbel=True``) can be enabled with either
     style; when enabled the constraint model is called through the
-    ``GumbelTemperatureMixin`` helpers so the same annealing schedule you get
-    from ``GumbelInferenceProgram`` / ``GumbelPrimalDualProgram`` is available
-    directly on ``InferenceProgram``.
+    ``GumbelTemperatureMixin`` helpers so the same annealing schedule is
+    available directly on ``InferenceProgram``.
     """
     DEFAULTCMODEL = InferenceModel
 
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, beta=1,
-                 training_style='simple',
+                 training_style='default',
                  use_gumbel=False, initial_temp=1.0, final_temp=0.1,
                  anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 include_global_constraint_loss=False,
+                 global_constraint_loss_weight=1.0,
+                 executable_constraint_loss_weight=1.0,
                  **kwargs):
         """
         Initializes an InferenceProgram instance.
@@ -1100,17 +1237,22 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             supervised training (e.g., `SolverModel`).
         :param beta: The weight given to the CModel loss (in this case, the loss from the program
             execution output).
-        :param training_style: Either ``'simple'`` (default) or ``'primal_dual'``. See the class
-            docstring for details.
+        :param training_style: Either ``'default'`` or ``'primal_dual'``.
+            ``'simple'`` is accepted as a legacy alias for ``'default'``.
         :param use_gumbel: If ``True``, apply Gumbel-Softmax sampling to the local decisions when
             computing the constraint loss. Other ``*_temp`` / ``anneal_*`` / ``hard_gumbel``
             parameters control the annealing schedule (see ``GumbelTemperatureMixin``).
+        :param include_global_constraint_loss: If ``True``, add graph-global
+            constraint loss to executable-constraint loss.
         """
         if training_style not in _INFERENCE_STYLES:
             raise ValueError(
                 f"training_style must be one of {_INFERENCE_STYLES}, got {training_style!r}"
             )
-        self.training_style = training_style
+        self.training_style = 'default' if training_style == 'simple' else training_style
+        kwargs['include_global_constraint_loss'] = bool(include_global_constraint_loss)
+        kwargs['global_constraint_loss_weight'] = global_constraint_loss_weight
+        kwargs['executable_constraint_loss_weight'] = executable_constraint_loss_weight
 
         super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
         self._init_gumbel(use_gumbel, initial_temp, final_temp,
@@ -1136,7 +1278,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
               batch_size=1, dataset_size=None, print_loss=True,
               warmup_epochs=0, constraint_epochs=0,
               num_epochs=None,
-              # primal-dual specific scheduling; ignored in 'simple' mode
+              # primal-dual specific scheduling; ignored in default mode
               c_lr=0.05, c_warmup_iters=10, c_freq=10,
               c_freq_increase=5, c_freq_increase_freq=1,
               c_lr_decay=4, c_lr_decay_param=1,
@@ -1145,7 +1287,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
         """Setup optimizer and train.
 
         The ``c_*`` parameters are the Primal-Dual scheduling knobs; they are
-        forwarded to ``train_epoch`` but have no effect in ``'simple'`` mode.
+        forwarded to ``train_epoch`` but have no effect in ``'default'`` mode.
         ``num_epochs`` is used to auto-configure the Gumbel annealing window.
         """
         # Pick the constraint optimizer's learning rate based on style so the
@@ -1159,6 +1301,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             self.copt = None
 
         self._c_freq = c_freq
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
         self._auto_set_anneal_epochs(num_epochs)
 
         return super().train(
@@ -1184,11 +1328,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                     training_mode='standard', **kwargs):
         """Dispatch to the correct training loop based on ``training_style``."""
         if self.training_style == 'primal_dual':
-            # GumbelPrimalDualProgram.train_epoch is style-complete: it handles
-            # the Lagrangian update, the c_freq schedule and (optionally) the
-            # Gumbel-Softmax annealing based on ``self.use_gumbel``. Delegating
-            # keeps the PD algorithm in a single place.
-            yield from GumbelPrimalDualProgram.train_epoch(
+            pd_program_cls = GumbelPrimalDualProgram if self.use_gumbel else PrimalDualProgram
+            yield from pd_program_cls.train_epoch(
                 self, dataset,
                 c_session=c_session, batch_size=batch_size,
                 dataset_size=dataset_size, print_loss=print_loss,
@@ -1196,7 +1337,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             )
             return
 
-        # 'simple' style — the original inference loop, with an optional
+        # Default style — the original inference loop, with an optional
         # Gumbel-Softmax hop on the constraint call.
         yield from self._train_epoch_simple(
             dataset, c_session=c_session, batch_size=batch_size,
@@ -1255,103 +1396,40 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                     self.opt.step()
                 if self.copt is not None:
                     self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
                 iter_count += 1
 
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
-        self._increment_epoch()
         if _mem_probe and torch.cuda.is_available():
-                _mem_step += 1
-                _alloc = torch.cuda.memory_allocated() / 1e9
-                _res = torch.cuda.memory_reserved() / 1e9
-                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
-
-        yield (loss, metric, *output[:1])
-
-        c_session['iter'] = iter_count
-        c_session['_mem_step'] = _mem_step
-
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
-
-#=============================================================================
-# Gumbel Inference Program
-#=============================================================================
-
-class GumbelInferenceProgram(InferenceProgram):
-    """Backward-compatible wrapper around ``InferenceProgram``.
-
-    Since issue #424, ``InferenceProgram`` itself accepts ``use_gumbel`` and
-    the related temperature-annealing kwargs. This subclass is kept so that
-    existing user code constructing ``GumbelInferenceProgram`` keeps working;
-    new code should prefer ``InferenceProgram(..., use_gumbel=True)``.
-    """
-
-    logger = logging.getLogger(__name__)
-    def train_epoch(self, dataset, c_session={}, batch_size=1,
-                    dataset_size=None, print_loss=True,
-                    training_mode='standard', **kwargs):
-        """Inference training epoch with Gumbel-Softmax."""
-        import os as _os
-        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
-        _mem_step = c_session.get('_mem_step', 0)
-
-        self._update_temperature_for_epoch()
-
-        self.model.mode(Mode.TRAIN)
-        self.model.train()
-        self.model.reset()
-        self.cmodel.train()
-        self.cmodel.reset()
-
-        iter_count = c_session.get('iter', 0)
-
-        for data in dataset:
-            if self.opt is not None:
-                self.opt.zero_grad()
-            if self.copt is not None:
-                self.copt.zero_grad()
-
-            mloss, metric, *output = self.model(data)
-
-            if training_mode == 'warmup':
-                loss = mloss
-            else:
-                closs, *_ = self._call_cmodel_with_gumbel(output[1])
-                if torch.is_tensor(closs):
-                    loss = mloss + self.beta * closs
-                else:
-                    loss = mloss
-
-            if torch.is_tensor(loss) and loss.requires_grad:
-                loss.backward()
-
-                # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
-                if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
-
-                if self.opt is not None:
-                    self.opt.step()
-                if self.copt is not None:
-                    self.copt.step()
-                iter_count += 1
-
-            if _mem_probe and torch.cuda.is_available():
-                _mem_step += 1
-                _alloc = torch.cuda.memory_allocated() / 1e9
-                _res = torch.cuda.memory_reserved() / 1e9
-                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
-
-            yield (loss, metric, *output[:1])
-
-        c_session['iter'] = iter_count
+            _mem_step += 1
+            _alloc = torch.cuda.memory_allocated() / 1e9
+            _res = torch.cuda.memory_reserved() / 1e9
+            print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
         c_session['_mem_step'] = _mem_step
         self._increment_epoch()
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
+    def evaluate_condition(
+        self,
+        evaluate_data,
+        device="cpu",
+        threshold=0.0,
+        return_dict=False,
+        use_gumbel=False,
+        temperature=None,
+        hard_gumbel=False,
+    ):
+        return _evaluate_condition_impl(
+            self,
+            evaluate_data,
+            device=device,
+            threshold=threshold,
+            return_dict=return_dict,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel,
+        )
 
 #=============================================================================
 # Sample Loss Program
@@ -1422,6 +1500,7 @@ class SampleLossProgram(LossProgram):
             
             if self.copt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 self.copt.step()
+                _project_cmodel_lambdas(self.cmodel)
             
             yield (loss, metric, *output[:1])
 
@@ -1446,6 +1525,8 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
     
     def train(self, training_set, valid_set=None, test_set=None,
               num_epochs=None, **kwargs):
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
         self._auto_set_anneal_epochs(num_epochs)
         return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
     
@@ -1495,6 +1576,7 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
             
             if self.copt is not None and loss:
                 self.copt.step()
+                _project_cmodel_lambdas(self.cmodel)
             
             yield (loss, metric, *output[:1])
 

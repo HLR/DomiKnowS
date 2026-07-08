@@ -845,6 +845,34 @@ class LogicalConstrain(LcElement):
                 myLogger.error(f"{logicMethodName} has no selection variables")
                 return []
 
+            if not headConstrain:
+                selection_vars = []
+                for name in sel_var_names:
+                    for row in v[name]:
+                        if row:
+                            selection_vars.extend(row)
+
+                if len(selection_vars) == 0:
+                    zVars = [[None]]
+                    return zVars
+
+                subclass_data = None
+                if sub_var_names:
+                    subclass_data = self._collect_query_subclass_data(
+                        v, sub_var_names, 0, 1, len(subclasses))
+
+                result = myConstraintVarProcessor.queryVar(
+                    model,
+                    concept,
+                    subclasses,
+                    selection_vars,
+                    subclass_data=subclass_data,
+                    onlyConstrains=False,
+                    temperature=temperature,
+                    logicMethodName=logicMethodName,
+                )
+                return [[result]]
+
             # Iterate over the *selection* variables' row count
             sel_var_0 = v[sel_var_names[0]]
             num_iterations = len(sel_var_0)

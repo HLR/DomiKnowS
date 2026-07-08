@@ -13,7 +13,7 @@ import torch
 from typing import Dict, Optional
 
 from domiknows.graph import fixedL
-from domiknows.graph.logicalConstrain import sumL
+from domiknows.graph.logicalConstrain import queryL, sumL
 
 from domiknows.solver.adaptiveTNormLossCalculator import (TNormSelector, get_constraint_type)
 
@@ -75,6 +75,31 @@ class LossCalculator:
 
         return torch.stack(normalized)
 
+    def _normalize_query_distribution(self, query_output, num_subclasses):
+        tensors = _collect_tensors(query_output)
+        candidates = []
+        for tensor in tensors:
+            if tensor is None:
+                continue
+            if tensor.dim() == 0:
+                continue
+            flat = tensor.reshape(-1)
+            if flat.numel() == num_subclasses:
+                candidates.append(flat)
+
+        if not candidates:
+            return None
+
+        distribution = torch.stack(candidates).mean(dim=0)
+        total = distribution.sum()
+        if (
+            torch.is_tensor(total)
+            and total.detach().abs().item() > 1e-12
+            and abs(total.detach().item() - 1.0) > 1e-5
+        ):
+            distribution = distribution / total
+        return distribution
+
     def calculate_single_lc_loss(self, lc, dn, key, tnorm='L', counting_tnorm=None, label=None):
         """
         Calculate loss for a single logical constraint.
@@ -115,6 +140,25 @@ class LossCalculator:
 
         self.solver.constraintConstructor.current_device = self.solver.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
+
+        if isinstance(lc, queryL):
+            query_output, _lc_variables = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, myBooleanMethods, None, dn, 0,
+                key=key, headLC=False, loss=True, sample=False)
+            query_distribution = self._normalize_query_distribution(
+                query_output,
+                lc.num_subclasses,
+            )
+            result['queryDistribution'] = query_distribution
+            result['lossTensor'] = None
+            if query_distribution is not None:
+                result['conversionSigmoid'] = query_distribution
+                result['loss'] = 1.0 - query_distribution.max()
+            else:
+                result['conversionSigmoid'] = None
+                result['loss'] = None
+            result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
+            return result
 
         if isinstance(lc, sumL) and label is None:
             result = None

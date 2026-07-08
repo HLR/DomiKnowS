@@ -135,7 +135,17 @@ class LossModel(torch.nn.Module):
             self.loss.reset()
 
     def get_lmbd(self, key):
-        return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
+        index = self.lmbd_index[key]
+        return self.lmbd[index].clamp(min=0, max=self.lmbd_p[index])
+
+    def project_lmbd_(self):
+        """Project learnable Lagrange multipliers to their valid range."""
+        if not hasattr(self, 'lmbd') or not hasattr(self, 'lmbd_p'):
+            return
+        with torch.no_grad():
+            upper = self.lmbd_p.to(device=self.lmbd.device, dtype=self.lmbd.dtype)
+            self.lmbd.clamp_(min=0)
+            self.lmbd.copy_(torch.minimum(self.lmbd, upper))
 
     def _apply_gumbel_softmax(self, datanode, temperature=None, hard=None):
         """
@@ -274,7 +284,10 @@ class InferenceModel(LossModel):
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
-                 pos_weight=1.0):
+                 pos_weight=1.0,
+                 include_global_constraint_loss=False,
+                 global_constraint_loss_weight=1.0,
+                 executable_constraint_loss_weight=1.0):
         """
         Initializes an instance of InferenceModel.
 
@@ -297,6 +310,10 @@ class InferenceModel(LossModel):
         global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
         :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
         be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        :param include_global_constraint_loss: Include graph.logicalConstrains loss in addition to
+            executable constraint BCE loss.
+        :param global_constraint_loss_weight: Weight for graph-global constraint loss.
+        :param executable_constraint_loss_weight: Weight for executable BCE loss.
         """
         self.graph = graph
 
@@ -307,6 +324,9 @@ class InferenceModel(LossModel):
                          hard_gumbel=hard_gumbel)
 
         self.loss_func = loss()
+        self.include_global_constraint_loss = bool(include_global_constraint_loss)
+        self.global_constraint_loss_weight = float(global_constraint_loss_weight)
+        self.executable_constraint_loss_weight = float(executable_constraint_loss_weight)
         # pos_weight rebalances BCE against majority-class collapse on existsL
         # constraints. When the dataset's logic_label has a skewed Yes/No ratio
         # the unweighted BCE will drift toward the majority direction — setting
@@ -339,6 +359,49 @@ class InferenceModel(LossModel):
         else:
             self.inferenceLogger.info("=== InferenceModel Operations Logger Initialized ===")
 
+    def _tensor_device(self):
+        if self.device == 'auto' or self.device is None:
+            return None
+        return self.device
+
+    def _zero_loss(self, datanode, requires_grad=True):
+        dtype = getattr(datanode, 'current_dtype', torch.float32)
+        return torch.tensor(
+            0.0,
+            dtype=dtype,
+            device=self._tensor_device(),
+            requires_grad=requires_grad,
+        )
+
+    def _calculate_global_constraint_loss(self, datanode):
+        """Return graph-level constraint loss from graph.logicalConstrains only."""
+        constr_loss = datanode.calculateLcLoss(
+            tnorm=self.tnorm,
+            counting_tnorm=self.counting_tnorm,
+            sample=self.sample,
+            sampleSize=self.sampleSize,
+            # Keep this path per-constraint so executable constraints are not
+            # folded into the graph-global component.
+            sampleGlobalLoss=False,
+        )
+
+        losses = []
+        for key, loss in constr_loss.items():
+            if key not in self.constr or not isinstance(loss, dict):
+                continue
+            loss_tensor = loss.get('lossTensor')
+            if loss_tensor is None:
+                continue
+
+            loss_value = loss_tensor.clamp(min=0)
+            loss_sum = loss_value[loss_value == loss_value].sum()
+            self.loss[key](loss_sum)
+            losses.append(loss_sum)
+
+        if losses:
+            return sum(losses)
+        return self._zero_loss(datanode)
+
     def forward(self, builder, build=None, use_gumbel=None, temperature=None, hard_gumbel=None):
         use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
         temperature = temperature if temperature is not None else self.temperature
@@ -364,117 +427,158 @@ class InferenceModel(LossModel):
 
         # read executable constraint labels from datanode
         read_labels = datanode.getExecutableConstraintLabels()
-        if len(read_labels) == 0:
+        if len(read_labels) == 0 and not self.include_global_constraint_loss:
             raise ValueError('No active executable constraint labels found in datanode.')
 
-        # Prepare shared context for loss calculation
-        lc_context = datanode._prepareLcLossContext(
-            tnorm=self.tnorm,
-            counting_tnorm=self.counting_tnorm,
-        )
-
-        losses = []
-        for lcName, lc in self.constr.items():
-            if f'{lcName}/label' not in read_labels:
-                continue
-
-            if not lc.active:
-                continue
-
-            # Use datanode method to get the label
-            lbl = datanode.getExecutableConstraintLabel(lcName).float()
-            
-            loss_dict = datanode.calculateSingleLcLoss(
-                lcName,
+        lc_context = None
+        if read_labels:
+            # Prepare shared context for executable loss calculation.
+            lc_context = datanode._prepareLcLossContext(
                 tnorm=self.tnorm,
                 counting_tnorm=self.counting_tnorm,
-                _context=lc_context
             )
 
-            if loss_dict.get('loss') is None:
-                continue
+        executable_losses = []
+        if read_labels:
+            for lcName, lc in self.constr.items():
+                if f'{lcName}/label' not in read_labels:
+                    continue
+
+                if not lc.active:
+                    continue
+
+                # Use datanode method to get the label.
+                raw_lbl = datanode.getExecutableConstraintLabel(lcName)
                 
-            if MONITORING_AVAILABLE:
-                lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
-                log_single_lc(
-                    constraint_name=lcName,
-                    loss_dict=loss_dict,
-                    label_tensor=lbl,
-                    lc_formulation=lcRepr
+                loss_dict = datanode.calculateSingleLcLoss(
+                    lcName,
+                    tnorm=self.tnorm,
+                    counting_tnorm=self.counting_tnorm,
+                    _context=lc_context
                 )
-                
-            is_sumL = isinstance(lc, sumL)
-            if is_sumL:
-                lbl = torch.tensor(1.0, dtype=dtype, device=self.device, requires_grad=True)
-                
-            constr_out = loss_dict['conversionSigmoid']
-            #if torch.equal(constr_out, lbl):
-            #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
-            # Avoid BCELoss saturation cliff using a STRAIGHT-THROUGH clamp:
-            # forward sees a clamped value (no -inf log), but the gradient
-            # flows back as if no clamp existed. A vanilla `tensor.clamp(...)`
-            # would zero the gradient at saturation — which kills the recovery
-            # gradient when convSig=0 with lbl=1 (the most informative case
-            # for pushing atoms back up). Disabled if DOMIKNOWS_INFER_NO_CLAMP=1.
-            import os as _os
-            if _os.environ.get('DOMIKNOWS_INFER_NO_CLAMP', '0') != '1':
-                _eps = 1e-6
-                _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
-                # Straight-through: forward = clamped, backward = identity.
-                constr_out = constr_out + (_co_clamped - constr_out).detach()
-            constraint_loss = self.loss_func(constr_out.float(), lbl)
 
-            if self._diag_step < self._diag_budget:
-                try:
-                    co = constr_out.detach().float().flatten()
-                    lb = lbl.detach().float().flatten()
-                    cl = constraint_loss.detach().float().flatten()
-                    # Dump a handful of atom probabilities that feed into this
-                    # LC via _prepareLcLossContext, so we can see how close to
-                    # saturation the atoms are on this step.
-                    atom_summary = ""
-                    try:
-                        probs_ctx = None
-                        for k in ('probs', 'predictions', 'softmax', 'localPredictions'):
-                            if isinstance(lc_context, dict) and k in lc_context:
-                                probs_ctx = lc_context[k]
-                                break
-                        if isinstance(probs_ctx, dict):
-                            keys = list(probs_ctx.keys())[:3]
-                            bits = []
-                            for k in keys:
-                                v = probs_ctx[k]
-                                if hasattr(v, 'detach'):
-                                    vv = v.detach().float().flatten()
-                                    bits.append(f"{k}:{vv[:4].tolist()}")
-                            if bits:
-                                atom_summary = " atoms=[" + "; ".join(bits) + "]"
-                    except Exception:
-                        pass
-                    print(
-                        f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
-                        f"convSig={co.tolist()} lbl={lb.tolist()} "
-                        f"loss={cl.tolist()} is_sumL={is_sumL}{atom_summary}",
-                        flush=True,
+                if loss_dict.get('loss') is None:
+                    continue
+                    
+                if MONITORING_AVAILABLE:
+                    lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
+                    log_single_lc(
+                        constraint_name=lcName,
+                        loss_dict=loss_dict,
+                        label_tensor=raw_lbl,
+                        lc_formulation=lcRepr
                     )
-                except Exception as e:
-                    print(f"[INFER_DIAG error] {e}", flush=True)
 
-            # Up-weight the positive (label=1) class if pos_weight != 1.
-            # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
-            # scale the already-computed loss by the per-sample weight.
-            if self.pos_weight != 1.0:
-                lbl_scalar = lbl.float().mean()  # lbl is 0-d or 1-d singleton here
-                sample_weight = (self.pos_weight - 1.0) * lbl_scalar + 1.0
-                constraint_loss = constraint_loss * sample_weight
+                query_distribution = loss_dict.get('queryDistribution')
+                if query_distribution is not None:
+                    try:
+                        constraint_loss = self.loss_func(query_distribution.float(), raw_lbl.long())
+                    except Exception as exc:
+                        raise TypeError(
+                            "queryL executable constraints produce a multiclass distribution. "
+                            "Use a multiclass loss such as domiknows.program.loss.NBCrossEntropyLoss."
+                        ) from exc
 
-            losses.append(constraint_loss)
+                    if self._diag_step < self._diag_budget:
+                        try:
+                            qd = query_distribution.detach().float().flatten()
+                            lb = raw_lbl.detach().long().flatten()
+                            cl = constraint_loss.detach().float().flatten()
+                            print(
+                                f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
+                                f"queryDistribution={qd.tolist()} lbl={lb.tolist()} "
+                                f"loss={cl.tolist()}",
+                                flush=True,
+                            )
+                        except Exception as e:
+                            print(f"[INFER_DIAG error] {e}", flush=True)
 
-        if len(losses) == 0:
-            dtype = getattr(datanode, 'current_dtype', torch.float32)
-            loss = torch.tensor(0.0, dtype=dtype, device=self.device, requires_grad=True)
+                    executable_losses.append(constraint_loss)
+                    continue
+                    
+                inner_lc = getattr(lc, "innerLC", lc)
+                is_sumL = isinstance(inner_lc, sumL)
+                constr_out = loss_dict['conversionSigmoid']
+                if is_sumL:
+                    lbl = torch.ones_like(constr_out, dtype=constr_out.dtype, device=constr_out.device)
+                else:
+                    lbl = raw_lbl.float().to(device=constr_out.device)
+                    if lbl.shape != constr_out.shape and lbl.numel() == 1:
+                        lbl = torch.ones_like(constr_out, dtype=constr_out.dtype, device=constr_out.device) * lbl.reshape(-1)[0]
+                #if torch.equal(constr_out, lbl):
+                #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
+                # Avoid BCELoss saturation cliff using a STRAIGHT-THROUGH clamp:
+                # forward sees a clamped value (no -inf log), but the gradient
+                # flows back as if no clamp existed. A vanilla `tensor.clamp(...)`
+                # would zero the gradient at saturation — which kills the recovery
+                # gradient when convSig=0 with lbl=1 (the most informative case
+                # for pushing atoms back up). Disabled if DOMIKNOWS_INFER_NO_CLAMP=1.
+                import os as _os
+                if _os.environ.get('DOMIKNOWS_INFER_NO_CLAMP', '0') != '1':
+                    _eps = 1e-6
+                    _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
+                    # Straight-through: forward = clamped, backward = identity.
+                    constr_out = constr_out + (_co_clamped - constr_out).detach()
+                constraint_loss = self.loss_func(constr_out.float(), lbl)
+
+                if self._diag_step < self._diag_budget:
+                    try:
+                        co = constr_out.detach().float().flatten()
+                        lb = lbl.detach().float().flatten()
+                        cl = constraint_loss.detach().float().flatten()
+                        # Dump a handful of atom probabilities that feed into this
+                        # LC via _prepareLcLossContext, so we can see how close to
+                        # saturation the atoms are on this step.
+                        atom_summary = ""
+                        try:
+                            probs_ctx = None
+                            for k in ('probs', 'predictions', 'softmax', 'localPredictions'):
+                                if isinstance(lc_context, dict) and k in lc_context:
+                                    probs_ctx = lc_context[k]
+                                    break
+                            if isinstance(probs_ctx, dict):
+                                keys = list(probs_ctx.keys())[:3]
+                                bits = []
+                                for k in keys:
+                                    v = probs_ctx[k]
+                                    if hasattr(v, 'detach'):
+                                        vv = v.detach().float().flatten()
+                                        bits.append(f"{k}:{vv[:4].tolist()}")
+                                if bits:
+                                    atom_summary = " atoms=[" + "; ".join(bits) + "]"
+                        except Exception:
+                            pass
+                        print(
+                            f"[INFER_DIAG step={self._diag_step} lc={lcName}] "
+                            f"convSig={co.tolist()} lbl={lb.tolist()} "
+                            f"loss={cl.tolist()} is_sumL={is_sumL}{atom_summary}",
+                            flush=True,
+                        )
+                    except Exception as e:
+                        print(f"[INFER_DIAG error] {e}", flush=True)
+
+                # Up-weight the positive (label=1) class if pos_weight != 1.
+                # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
+                # scale the already-computed loss by the per-sample weight.
+                if self.pos_weight != 1.0:
+                    lbl_scalar = lbl.float().mean()  # lbl is 0-d or 1-d singleton here
+                    sample_weight = (self.pos_weight - 1.0) * lbl_scalar + 1.0
+                    constraint_loss = constraint_loss * sample_weight
+
+                executable_losses.append(constraint_loss)
+
+        executable_loss = sum(executable_losses) if executable_losses else self._zero_loss(datanode)
+        if self.include_global_constraint_loss:
+            global_loss = self._calculate_global_constraint_loss(datanode)
         else:
-            loss = sum(losses)
+            global_loss = self._zero_loss(datanode)
+        loss = (
+            self.executable_constraint_loss_weight * executable_loss
+            + self.global_constraint_loss_weight * global_loss
+        )
+        self.last_executable_loss = executable_loss.detach() if torch.is_tensor(executable_loss) else executable_loss
+        self.last_global_loss = global_loss.detach() if torch.is_tensor(global_loss) else global_loss
+        self.last_total_constraint_loss = loss.detach() if torch.is_tensor(loss) else loss
             
         if MONITORING_AVAILABLE:
             log_memory() 
@@ -622,6 +726,7 @@ class SampleLossModel(LossModel):
         """
         Forward pass with sampling-based loss calculation.
         """
+        explicit_temperature = temperature is not None
         use_gumbel = use_gumbel if use_gumbel is not None else self.use_gumbel
         temperature = temperature if temperature is not None else self.temperature
         hard_gumbel = hard_gumbel if hard_gumbel is not None else self.hard_gumbel
@@ -642,7 +747,7 @@ class SampleLossModel(LossModel):
         
         # Apply Gumbel-Softmax if enabled using datanode's method
         if use_gumbel:
-            if self.training and temperature == self.temperature:
+            if self.training and not explicit_temperature:
                 self.anneal_temperature()
                 temperature = self.temperature
             

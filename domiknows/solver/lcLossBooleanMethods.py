@@ -1197,6 +1197,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         # -- Apply t-norm specific selection
         if self.tnorm == 'G':  # GÃ¶del - hard argmax
             self.countLogger.debug("Using GÃ¶del t-norm (hard argmax)")
+            soft_selection = torch.softmax(subclass_scores / temperature, dim=0)
             max_idx = torch.argmax(subclass_scores)
             selection = torch.zeros(num_subclasses, device=self.current_device, dtype=self._get_dtype())
             selection[max_idx] = 1.0
@@ -1208,6 +1209,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                 self.countLogger.info(f"GÃ¶del loss: {loss.item()}")
                 return loss
             else:
+                selection = soft_selection + (selection - soft_selection).detach()
                 self.countLogger.info(f"GÃ¶del selection: subclass {max_idx.item()}")
                 return selection
         
