@@ -73,8 +73,18 @@ def parse_args() -> argparse.Namespace:
         description="Compare deterministic InferenceProgram with InferenceProgram(use_gumbel=True)."
     )
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--train-items", type=int, default=16)
-    parser.add_argument("--eval-items", type=int, default=4)
+    parser.add_argument(
+        "--train-items",
+        type=int,
+        default=None,
+        help="Number of examples to train on. Defaults to 80%% of the compact dataset.",
+    )
+    parser.add_argument(
+        "--eval-items",
+        type=int,
+        default=None,
+        help="Number of examples to evaluate on. Defaults to the remaining compact dataset.",
+    )
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "cuda:0", "cuda:1"])
     parser.add_argument("--lr", type=float, default=1e-2)
     parser.add_argument("--tnorm", default="G")
@@ -237,13 +247,22 @@ def build_program(
         extra_namespace_values=attribute_names_dict,
     )
 
-    train_count = max(0, min(args.train_items, len(compiled)))
-    eval_count = max(0, min(args.eval_items, len(compiled) - train_count))
+    if args.train_items is None:
+        train_count = max(1, int(round(len(compiled) * 0.8)))
+        train_count = min(train_count, max(0, len(compiled) - 1))
+    else:
+        train_count = max(0, min(args.train_items, len(compiled)))
+
+    remaining = max(0, len(compiled) - train_count)
+    if args.eval_items is None:
+        eval_count = remaining
+    else:
+        eval_count = max(0, min(args.eval_items, remaining))
     train_dataset = [compiled[i] for i in range(train_count)]
     eval_dataset = [
         compiled[i]
         for i in range(train_count, train_count + eval_count)
-    ] or [compiled[i] for i in range(min(args.eval_items, len(compiled)))]
+    ] or [compiled[i] for i in range(min(args.eval_items or 1, len(compiled)))]
 
     poi = [image, objects, *attribute_names_dict.values(), graph.constraint, pair_forward]
     if pair_reverse is not None:

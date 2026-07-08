@@ -20,6 +20,11 @@ def _extract_first_var_symbol(expr: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _anchor_first_var_to_pair(expr: str, var_name: str, pair_name: str, pair_arg: str) -> str:
+    pattern = re.compile(rf"\('{re.escape(var_name)}'\)")
+    return pattern.sub(f"('{var_name}', path=('{pair_name}', {pair_arg}))", expr, count=1)
+
+
 class _ProgramTranslator:
     """Recursive CLEVR functional-program translator with explicit state."""
 
@@ -95,7 +100,11 @@ class _ProgramTranslator:
             if len(ins) != 2:
                 raise ValueError(f"union expects 2 inputs at step {current_idx}")
             left, depth_left = self._translate_at(ins[0], first_initial=first_initial, apply_sum=apply_sum)
-            right, depth_right = self._translate_at(ins[1], first_initial=first_initial, apply_sum=apply_sum)
+            right, depth_right = self._translate_at(
+                ins[1],
+                first_initial=False if first_initial else first_initial,
+                apply_sum=apply_sum,
+            )
             left = f"andL({left})" if depth_left > 1 else left
             right = f"andL({right})" if depth_right > 1 else right
             return f"orL({left}, {right})", 1
@@ -104,7 +113,11 @@ class _ProgramTranslator:
             if len(ins) != 2:
                 raise ValueError(f"intersect expects 2 inputs at step {current_idx}")
             left, depth_left = self._translate_at(ins[0], first_initial=first_initial, apply_sum=apply_sum)
-            right, depth_right = self._translate_at(ins[1], first_initial=first_initial, apply_sum=apply_sum)
+            right, depth_right = self._translate_at(
+                ins[1],
+                first_initial=False if first_initial else first_initial,
+                apply_sum=apply_sum,
+            )
             return f"andL({left}, {right})", max(depth_left, depth_right) + 1
 
         if fn == "count":
@@ -133,11 +146,26 @@ class _ProgramTranslator:
             if len(ins) != 2:
                 raise ValueError(f"{fn} expects 2 inputs at step {current_idx}")
             attr_suffix = fn.replace("equal_", "")
-            left, depth_left = self._translate_at(ins[0], first_initial=True, apply_sum=apply_sum)
-            right, depth_right = self._translate_at(ins[1], first_initial=True, apply_sum=apply_sum)
+            left_idx, right_idx = ins
+            left_step = self.program[left_idx]
+            right_step = self.program[right_idx]
+            left_fn = left_step.get("function", left_step.get("type", ""))
+            right_fn = right_step.get("function", right_step.get("type", ""))
+            if left_fn.startswith("query_"):
+                left_idx = left_step["inputs"][0]
+            if right_fn.startswith("query_"):
+                right_idx = right_step["inputs"][0]
+            left, depth_left = self._translate_at(left_idx, first_initial=True, apply_sum=apply_sum)
+            right, depth_right = self._translate_at(right_idx, first_initial=True, apply_sum=apply_sum)
             var_left = _extract_first_var_symbol(left)
             var_right = _extract_first_var_symbol(right)
-            same_term = f"sameL({attr_suffix}, '{var_left}', '{var_right}')"
+            pair_name = f"cmp{self.relation_val}"
+            self.relation_val += 1
+            if var_left is not None:
+                left = _anchor_first_var_to_pair(left, var_left, pair_name, "obj1")
+            if var_right is not None:
+                right = _anchor_first_var_to_pair(right, var_right, pair_name, "obj2")
+            same_term = f"same_{attr_suffix}('{pair_name}')"
             return f"existsL(andL({left}, {right}, {same_term}))", max(depth_left, depth_right) + 1
 
         if fn == "unique":
@@ -350,10 +378,14 @@ def prepare_logic_fields(
                 else translate_program_to_constraint(program, relation_syntax=relation_syntax)
             )
             answer = item.get("answer")
-            if isinstance(answer, str):
+            if isinstance(answer, bool):
+                label = float(answer)
+            elif isinstance(answer, int):
+                label = float(answer)
+            elif isinstance(answer, str):
                 label = answer.strip().lower() == "yes"
             else:
                 label = bool(answer)
             item["query_type"] = None
-            item["logic_label"] = torch.tensor([float(label)], dtype=torch.float32, device=device)
+            item["logic_label"] = torch.tensor([label], dtype=torch.float32, device=device)
     return items

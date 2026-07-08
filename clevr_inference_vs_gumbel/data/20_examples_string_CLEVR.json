@@ -1,82 +1,162 @@
 [
-   {
-      "question": "What material is the big object that is right of the brown cylinder and left of the large brown sphere?",
-      "answer": "rubber"
-   },
-   {
-      "question": "How big is the brown shiny sphere?",
-      "answer": "large"
-   },
-   {
-      "question": "What is the shape of the brown thing to the right of the large brown metallic thing that is on the left side of the brown sphere?",
-      "answer": "sphere"
-   },
-   {
-      "question": "The brown object that is the same shape as the green shiny thing is what size?",
-      "answer": "large"
-   },
-   {
-      "question": "What color is the tiny matte block left of the blue block?",
-      "answer": "gray"
-   },
-   {
-      "question": "There is a rubber thing that is the same color as the cylinder; what shape is it?",
-      "answer": "cube"
-   },
-   {
-      "question": "The matte ball that is the same size as the gray rubber object is what color?",
-      "answer": "blue"
-   },
-   {
-      "question": "There is a small matte block that is on the left side of the large rubber thing that is left of the gray ball; what is its color?",
-      "answer": "brown"
-   },
-   {
-      "question": "There is a gray object that is in front of the rubber cube behind the metallic ball behind the small brown thing; what shape is it?",
-      "answer": "sphere"
-   },
-   {
-      "question": "There is a thing that is both to the right of the big rubber cube and left of the small gray ball; what color is it?",
-      "answer": "yellow"
-   },
-   {
-      "question": "What color is the metallic thing behind the big metal object?",
-      "answer": "gray"
-   },
-   {
-      "question": "What is the shape of the object that is both behind the large metallic thing and left of the gray metallic sphere?",
-      "answer": "cube"
-   },
-   {
-      "question": "The other object that is the same shape as the large metal thing is what color?",
-      "answer": "gray"
-   },
-   {
-      "question": "What material is the tiny cube that is to the right of the blue thing?",
-      "answer": "rubber"
-   },
-   {
-      "question": "What is the material of the small thing to the left of the small purple block in front of the small cyan rubber cube?",
-      "answer": "rubber"
-   },
-   {
-      "question": "What is the shape of the tiny cyan matte thing?",
-      "answer": "cube"
-   },
-   {
-      "question": "There is a small cube on the right side of the tiny blue thing that is behind the tiny cyan matte thing; what is its color?",
-      "answer": "purple"
-   },
-   {
-      "question": "There is a metallic block that is the same size as the cyan rubber cube; what color is it?",
-      "answer": "blue"
-   },
-   {
-      "question": "There is a cyan metal thing behind the cyan metal ball; what shape is it?",
-      "answer": "cylinder"
-   },
-   {
-      "question": "The purple ball that is the same material as the tiny cyan cylinder is what size?",
-      "answer": "small"
-   }
+  {
+    "question": "What material is the big object that is right of the brown cylinder and left of the large brown sphere?",
+    "answer": "rubber"
+  },
+  {
+    "question": "How big is the brown shiny sphere?",
+    "answer": "large"
+  },
+  {
+    "question": "What is the shape of the brown thing to the right of the large brown metallic thing that is on the left side of the brown sphere?",
+    "answer": "sphere"
+  },
+  {
+    "question": "The brown object that is the same shape as the green shiny thing is what size?",
+    "answer": "large"
+  },
+  {
+    "question": "What color is the tiny matte block left of the blue block?",
+    "answer": "gray"
+  },
+  {
+    "question": "There is a rubber thing that is the same color as the cylinder; what shape is it?",
+    "answer": "cube"
+  },
+  {
+    "question": "The matte ball that is the same size as the gray rubber object is what color?",
+    "answer": "blue"
+  },
+  {
+    "question": "There is a small matte block that is on the left side of the large rubber thing that is left of the gray ball; what is its color?",
+    "answer": "brown"
+  },
+  {
+    "question": "There is a gray object that is in front of the rubber cube behind the metallic ball behind the small brown thing; what shape is it?",
+    "answer": "sphere"
+  },
+  {
+    "question": "There is a thing that is both to the right of the big rubber cube and left of the small gray ball; what color is it?",
+    "answer": "yellow"
+  },
+  {
+    "question": "What color is the metallic thing behind the big metal object?",
+    "answer": "gray"
+  },
+  {
+    "question": "What is the shape of the object that is both behind the large metallic thing and left of the gray metallic sphere?",
+    "answer": "cube"
+  },
+  {
+    "question": "The other object that is the same shape as the large metal thing is what color?",
+    "answer": "gray"
+  },
+  {
+    "question": "What material is the tiny cube that is to the right of the blue thing?",
+    "answer": "rubber"
+  },
+  {
+    "question": "What is the material of the small thing to the left of the small purple block in front of the small cyan rubber cube?",
+    "answer": "rubber"
+  },
+  {
+    "question": "What is the shape of the tiny cyan matte thing?",
+    "answer": "cube"
+  },
+  {
+    "question": "There is a small cube on the right side of the tiny blue thing that is behind the tiny cyan matte thing; what is its color?",
+    "answer": "purple"
+  },
+  {
+    "question": "There is a metallic block that is the same size as the cyan rubber cube; what color is it?",
+    "answer": "blue"
+  },
+  {
+    "question": "There is a cyan metal thing behind the cyan metal ball; what shape is it?",
+    "answer": "cylinder"
+  },
+  {
+    "question": "The purple ball that is the same material as the tiny cyan cylinder is what size?",
+    "answer": "small"
+  },
+  {
+    "question": "What number of tiny cyan cylinders are there?",
+    "answer": 0
+  },
+  {
+    "question": "What is the size of the rubber ball that is to the left of the blue matte sphere?",
+    "answer": "large"
+  },
+  {
+    "question": "There is a object right of the large red block; what number of big gray things are behind it?",
+    "answer": 0
+  },
+  {
+    "question": "There is a large blue cylinder that is to the left of the metal block in front of the small yellow object; what number of gray objects are left of it?",
+    "answer": 0
+  },
+  {
+    "question": "There is another sphere that is the same size as the purple sphere; what is its color?",
+    "answer": "blue"
+  },
+  {
+    "question": "There is a thing that is both on the right side of the small rubber block and in front of the small matte thing; how big is it?",
+    "answer": "large"
+  },
+  {
+    "question": "What number of objects are either cubes or big matte things?",
+    "answer": 4
+  },
+  {
+    "question": "Does the blue ball have the same size as the green rubber thing?",
+    "answer": false
+  },
+  {
+    "question": "Are there the same number of green objects and big rubber spheres?",
+    "answer": false
+  },
+  {
+    "question": "The yellow thing has what shape?",
+    "answer": "cube"
+  },
+  {
+    "question": "There is a block that is to the left of the red shiny thing; what is its size?",
+    "answer": "small"
+  },
+  {
+    "question": "What is the size of the yellow block that is on the left side of the metallic thing that is right of the red metal object?",
+    "answer": "small"
+  },
+  {
+    "question": "There is a big block behind the gray cube in front of the blue cylinder; is there a small yellow metal object behind it?",
+    "answer": false
+  },
+  {
+    "question": "Is there anything else that has the same size as the blue sphere?",
+    "answer": true
+  },
+  {
+    "question": "Is the gray metallic thing the same size as the red block?",
+    "answer": true
+  },
+  {
+    "question": "Is the number of tiny red shiny cylinders less than the number of large red shiny cylinders?",
+    "answer": false
+  },
+  {
+    "question": "What number of matte things are both on the left side of the blue object and to the right of the small block?",
+    "answer": 1
+  },
+  {
+    "question": "How many things are either cyan spheres or tiny brown shiny blocks?",
+    "answer": 1
+  },
+  {
+    "question": "How many red rubber objects are there?",
+    "answer": 2
+  },
+  {
+    "question": "Are there any tiny red things behind the tiny red shiny cylinder?",
+    "answer": false
+  }
 ]

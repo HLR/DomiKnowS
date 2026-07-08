@@ -1,5 +1,5 @@
 {
-  "source": "Exact matches from test_regr/Clever/train/questions.json and train/scenes.json",
+  "source": "Exact matches from test_regr/Clever/train plus generated CLEVR examples from clevr-dataset-gen output/domiknows_balanced",
   "items": [
     {
       "index": 0,
@@ -7688,6 +7688,5708 @@
             [
               0,
               2
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 20,
+      "question": "What number of tiny cyan cylinders are there?",
+      "answer": 0,
+      "matched_answer": 0,
+      "question_index": 81,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "zero_hop.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 21,
+      "question": "What is the size of the rubber ball that is to the left of the blue matte sphere?",
+      "answer": "large",
+      "matched_answer": "large",
+      "question_index": 27,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "one_hop.json",
+      "question_family_index": 2,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 22,
+      "question": "There is a object right of the large red block; what number of big gray things are behind it?",
+      "answer": 0,
+      "matched_answer": 0,
+      "question_index": 75,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "two_hop.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 23,
+      "question": "There is a large blue cylinder that is to the left of the metal block in front of the small yellow object; what number of gray objects are left of it?",
+      "answer": 0,
+      "matched_answer": 0,
+      "question_index": 69,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "three_hop.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "yellow"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "front"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            13
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            14
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 24,
+      "question": "There is another sphere that is the same size as the purple sphere; what is its color?",
+      "answer": "blue",
+      "matched_answer": "blue",
+      "question_index": 47,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "same_relate.json",
+      "question_family_index": 16,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "purple"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "same_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 25,
+      "question": "There is a thing that is both on the right side of the small rubber block and in front of the small matte thing; how big is it?",
+      "answer": "large",
+      "matched_answer": "large",
+      "question_index": 57,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "single_and.json",
+      "question_family_index": 1,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "front"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            4,
+            10
+          ],
+          "function": "intersect",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 26,
+      "question": "What number of objects are either cubes or big matte things?",
+      "answer": 4,
+      "matched_answer": 4,
+      "question_index": 61,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "single_or.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            1,
+            4
+          ],
+          "function": "union",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 27,
+      "question": "Does the blue ball have the same size as the green rubber thing?",
+      "answer": false,
+      "matched_answer": false,
+      "question_index": 9,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "comparison.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "green"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8,
+            9
+          ],
+          "function": "equal_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 28,
+      "question": "Are there the same number of green objects and big rubber spheres?",
+      "answer": false,
+      "matched_answer": false,
+      "question_index": 0,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "compare_integer.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "green"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "count",
+          "value_inputs": []
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "count",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            2,
+            7
+          ],
+          "function": "equal_integer",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 29,
+      "question": "The yellow thing has what shape?",
+      "answer": "cube",
+      "matched_answer": "cube",
+      "question_index": 83,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "zero_hop.json",
+      "question_family_index": 2,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "yellow"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 30,
+      "question": "There is a block that is to the left of the red shiny thing; what is its size?",
+      "answer": "small",
+      "matched_answer": "small",
+      "question_index": 109,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "one_hop.json",
+      "question_family_index": 2,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 31,
+      "question": "What is the size of the yellow block that is on the left side of the metallic thing that is right of the red metal object?",
+      "answer": "small",
+      "matched_answer": "small",
+      "question_index": 77,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "two_hop.json",
+      "question_family_index": 2,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "yellow"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 32,
+      "question": "There is a big block behind the gray cube in front of the blue cylinder; is there a small yellow metal object behind it?",
+      "answer": false,
+      "matched_answer": false,
+      "question_index": 70,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "three_hop.json",
+      "question_family_index": 1,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "front"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            13
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "yellow"
+          ]
+        },
+        {
+          "inputs": [
+            14
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            15
+          ],
+          "function": "exist",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 33,
+      "question": "Is there anything else that has the same size as the blue sphere?",
+      "answer": true,
+      "matched_answer": true,
+      "question_index": 31,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "same_relate.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "same_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "exist",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 34,
+      "question": "Is the gray metallic thing the same size as the red block?",
+      "answer": true,
+      "matched_answer": true,
+      "question_index": 95,
+      "image_index": 1,
+      "image_filename": "CLEVR_domiknows_balanced_000001.png",
+      "template_filename": "comparison.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8,
+            9
+          ],
+          "function": "equal_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 1,
+        "image_filename": "CLEVR_domiknows_balanced_000001.png",
+        "objects": [
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.1302614212036133,
+              -1.8158166408538818,
+              0.3499999940395355
+            ],
+            "rotation": 65.01532785460273,
+            "pixel_coords": [
+              37,
+              52,
+              11.286454200744629
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.4221861362457275,
+              0.2993241548538208,
+              0.699999988079071
+            ],
+            "rotation": 143.86270609712798,
+            "pixel_coords": [
+              114,
+              64,
+              9.243352890014648
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.0482914447784424,
+              2.875298261642456,
+              0.699999988079071
+            ],
+            "rotation": 186.21599087351416,
+            "pixel_coords": [
+              92,
+              31,
+              13.677979469299316
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.6274663209915161,
+              -0.05686836317181587,
+              0.699999988079071
+            ],
+            "rotation": 270.1988367864752,
+            "pixel_coords": [
+              64,
+              42,
+              11.75969123840332
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              2,
+              3
+            ],
+            [
+              0,
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              0
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3
+            ],
+            [],
+            [
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 35,
+      "question": "Is the number of tiny red shiny cylinders less than the number of large red shiny cylinders?",
+      "answer": false,
+      "matched_answer": false,
+      "question_index": 1,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "compare_integer.json",
+      "question_family_index": 1,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "count",
+          "value_inputs": []
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "count",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5,
+            11
+          ],
+          "function": "less_than",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 36,
+      "question": "What number of matte things are both on the left side of the blue object and to the right of the small block?",
+      "answer": 1,
+      "matched_answer": 1,
+      "question_index": 56,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "single_and.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            4,
+            8
+          ],
+          "function": "intersect",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 37,
+      "question": "How many things are either cyan spheres or tiny brown shiny blocks?",
+      "answer": 1,
+      "matched_answer": 1,
+      "question_index": 150,
+      "image_index": 2,
+      "image_filename": "CLEVR_domiknows_balanced_000002.png",
+      "template_filename": "single_or.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            2,
+            7
+          ],
+          "function": "union",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 2,
+        "image_filename": "CLEVR_domiknows_balanced_000002.png",
+        "objects": [
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.1761105060577393,
+              -2.311295986175537,
+              0.699999988079071
+            ],
+            "rotation": 255.09043941913845,
+            "pixel_coords": [
+              28,
+              49,
+              10.703615188598633
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.146095037460327,
+              1.8887975215911865,
+              0.699999988079071
+            ],
+            "rotation": 105.50310190401343,
+            "pixel_coords": [
+              128,
+              53,
+              10.292030334472656
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.8488266468048096,
+              -0.5389429926872253,
+              0.699999988079071
+            ],
+            "rotation": 199.7961194155834,
+            "pixel_coords": [
+              111,
+              73,
+              8.4327974319458
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.807281494140625,
+              2.572826623916626,
+              0.3499999940395355
+            ],
+            "rotation": 301.50595321527294,
+            "pixel_coords": [
+              90,
+              37,
+              13.447208404541016
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -2.908520221710205,
+              2.936129331588745,
+              0.3499999940395355
+            ],
+            "rotation": 340.08372275622366,
+            "pixel_coords": [
+              83,
+              32,
+              14.378005981445312
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.724402666091919,
+              -0.256941556930542,
+              0.3499999940395355
+            ],
+            "rotation": 83.04609923196385,
+            "pixel_coords": [
+              52,
+              43,
+              12.417559623718262
+            ],
+            "color": "purple"
+          },
+          {
+            "shape": "sphere",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -0.7208418846130371,
+              -0.02514810860157013,
+              0.3499999940395355
+            ],
+            "rotation": 63.830262667005286,
+            "pixel_coords": [
+              72,
+              51,
+              11.238506317138672
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.5337178111076355,
+              2.3487391471862793,
+              0.3499999940395355
+            ],
+            "rotation": 282.7403114534029,
+            "pixel_coords": [
+              111,
+              47,
+              11.78441047668457
+            ],
+            "color": "brown"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -0.16648921370506287,
+              -1.7180837392807007,
+              0.699999988079071
+            ],
+            "rotation": 265.200153724287,
+            "pixel_coords": [
+              55,
+              58,
+              9.728837966918945
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              3,
+              4
+            ],
+            [
+              3,
+              4,
+              5,
+              7
+            ],
+            [
+              3,
+              4,
+              5
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              8
+            ],
+            [
+              2,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              6,
+              8
+            ],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              4,
+              5,
+              6,
+              8
+            ],
+            [
+              0,
+              4,
+              5,
+              6,
+              8
+            ],
+            [
+              0,
+              5,
+              6,
+              8
+            ],
+            [
+              0
+            ],
+            [
+              0,
+              5,
+              8
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              8
+            ],
+            [
+              0,
+              5
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              1,
+              7
+            ],
+            [
+              1,
+              2,
+              7
+            ],
+            [
+              1,
+              2,
+              3,
+              7
+            ],
+            [
+              1,
+              2,
+              3,
+              4,
+              6,
+              7,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              4,
+              7
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              2,
+              3,
+              4,
+              6,
+              7
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 38,
+      "question": "How many red rubber objects are there?",
+      "answer": 2,
+      "matched_answer": 2,
+      "question_index": 170,
+      "image_index": 2,
+      "image_filename": "CLEVR_domiknows_balanced_000002.png",
+      "template_filename": "zero_hop.json",
+      "question_family_index": 0,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "count",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 2,
+        "image_filename": "CLEVR_domiknows_balanced_000002.png",
+        "objects": [
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -2.1761105060577393,
+              -2.311295986175537,
+              0.699999988079071
+            ],
+            "rotation": 255.09043941913845,
+            "pixel_coords": [
+              28,
+              49,
+              10.703615188598633
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.146095037460327,
+              1.8887975215911865,
+              0.699999988079071
+            ],
+            "rotation": 105.50310190401343,
+            "pixel_coords": [
+              128,
+              53,
+              10.292030334472656
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              2.8488266468048096,
+              -0.5389429926872253,
+              0.699999988079071
+            ],
+            "rotation": 199.7961194155834,
+            "pixel_coords": [
+              111,
+              73,
+              8.4327974319458
+            ],
+            "color": "yellow"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.807281494140625,
+              2.572826623916626,
+              0.3499999940395355
+            ],
+            "rotation": 301.50595321527294,
+            "pixel_coords": [
+              90,
+              37,
+              13.447208404541016
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -2.908520221710205,
+              2.936129331588745,
+              0.3499999940395355
+            ],
+            "rotation": 340.08372275622366,
+            "pixel_coords": [
+              83,
+              32,
+              14.378005981445312
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -2.724402666091919,
+              -0.256941556930542,
+              0.3499999940395355
+            ],
+            "rotation": 83.04609923196385,
+            "pixel_coords": [
+              52,
+              43,
+              12.417559623718262
+            ],
+            "color": "purple"
+          },
+          {
+            "shape": "sphere",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              -0.7208418846130371,
+              -0.02514810860157013,
+              0.3499999940395355
+            ],
+            "rotation": 63.830262667005286,
+            "pixel_coords": [
+              72,
+              51,
+              11.238506317138672
+            ],
+            "color": "gray"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.5337178111076355,
+              2.3487391471862793,
+              0.3499999940395355
+            ],
+            "rotation": 282.7403114534029,
+            "pixel_coords": [
+              111,
+              47,
+              11.78441047668457
+            ],
+            "color": "brown"
+          },
+          {
+            "shape": "cylinder",
+            "size": "large",
+            "material": "metal",
+            "3d_coords": [
+              -0.16648921370506287,
+              -1.7180837392807007,
+              0.699999988079071
+            ],
+            "rotation": 265.200153724287,
+            "pixel_coords": [
+              55,
+              58,
+              9.728837966918945
+            ],
+            "color": "blue"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              3,
+              4
+            ],
+            [
+              3,
+              4,
+              5,
+              7
+            ],
+            [
+              3,
+              4,
+              5
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              8
+            ],
+            [
+              2,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              6,
+              8
+            ],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              4,
+              5,
+              6,
+              8
+            ],
+            [
+              0,
+              4,
+              5,
+              6,
+              8
+            ],
+            [
+              0,
+              5,
+              6,
+              8
+            ],
+            [
+              0
+            ],
+            [
+              0,
+              5,
+              8
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              8
+            ],
+            [
+              0,
+              5
+            ]
+          ],
+          "right": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              1,
+              7
+            ],
+            [
+              1,
+              2,
+              7
+            ],
+            [
+              1,
+              2,
+              3,
+              7
+            ],
+            [
+              1,
+              2,
+              3,
+              4,
+              6,
+              7,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              4,
+              7
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              2,
+              3,
+              4,
+              6,
+              7
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 39,
+      "question": "Are there any tiny red things behind the tiny red shiny cylinder?",
+      "answer": false,
+      "matched_answer": false,
+      "question_index": 26,
+      "image_index": 0,
+      "image_filename": "CLEVR_domiknows_balanced_000000.png",
+      "template_filename": "one_hop.json",
+      "question_family_index": 1,
+      "generated_source": "clevr-dataset-gen:domiknows_balanced",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "red"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "exist",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "split": "domiknows_balanced",
+        "image_index": 0,
+        "image_filename": "CLEVR_domiknows_balanced_000000.png",
+        "objects": [
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -1.009751558303833,
+              2.64261531829834,
+              0.699999988079071
+            ],
+            "rotation": 207.43822156624125,
+            "pixel_coords": [
+              97,
+              36,
+              13.314650535583496
+            ],
+            "color": "blue"
+          },
+          {
+            "shape": "cube",
+            "size": "small",
+            "material": "rubber",
+            "3d_coords": [
+              -1.323229432106018,
+              -0.002791481791064143,
+              0.3499999940395355
+            ],
+            "rotation": 171.81402246744128,
+            "pixel_coords": [
+              67,
+              49,
+              12.141895294189453
+            ],
+            "color": "green"
+          },
+          {
+            "shape": "cylinder",
+            "size": "small",
+            "material": "metal",
+            "3d_coords": [
+              0.36335164308547974,
+              -2.836941719055176,
+              0.3499999940395355
+            ],
+            "rotation": 82.09763969332909,
+            "pixel_coords": [
+              45,
+              74,
+              9.381926536560059
+            ],
+            "color": "red"
+          },
+          {
+            "shape": "sphere",
+            "size": "large",
+            "material": "rubber",
+            "3d_coords": [
+              -0.07346627116203308,
+              0.48291370272636414,
+              0.699999988079071
+            ],
+            "rotation": 12.248314012071969,
+            "pixel_coords": [
+              85,
+              48,
+              11.439848899841309
+            ],
+            "color": "purple"
+          }
+        ],
+        "directions": {
+          "behind": [
+            -0.754490315914154,
+            0.6563112735748291,
+            0.0
+          ],
+          "front": [
+            0.754490315914154,
+            -0.6563112735748291,
+            -0.0
+          ],
+          "left": [
+            -0.6563112735748291,
+            -0.7544902563095093,
+            0.0
+          ],
+          "right": [
+            0.6563112735748291,
+            0.7544902563095093,
+            -0.0
+          ],
+          "above": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "below": [
+            -0.0,
+            -0.0,
+            -1.0
+          ]
+        },
+        "relationships": {
+          "behind": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1,
+              3
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [],
+            [
+              2
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              2
+            ],
+            [],
+            [
+              1,
+              2
+            ]
+          ],
+          "right": [
+            [],
+            [
+              0,
+              3
+            ],
+            [
+              0,
+              1,
+              3
             ],
             [
               0
