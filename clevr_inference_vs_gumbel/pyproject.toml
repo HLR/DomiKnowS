@@ -1,0 +1,16 @@
+[project]
+name = "domiknows-clevr-inference-vs-gumbel-task"
+version = "0.1.0"
+description = "CLEVR executable-constraint comparison for InferenceProgram with and without use_gumbel."
+requires-python = ">=3.12"
+dependencies = [
+    "domiknows[cpu]",
+    "numpy>=1.26.0",
+    "tqdm>=4.66.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+domiknows = { path = "../..", editable = true }

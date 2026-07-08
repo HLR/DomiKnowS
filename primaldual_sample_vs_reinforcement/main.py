@@ -24,7 +24,7 @@ setProductionLogMode(True)
 from domiknows.graph import Concept, EnumConcept, Graph, Relation
 from domiknows.graph.logicalConstrain import exactL
 from domiknows.program import ReinforcementProgram
-from domiknows.program.lossprogram import SampleLossProgram
+from domiknows.program.lossprogram import GumbelSampleLossProgram, SampleLossProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor import Sensor
 from domiknows.sensor.pytorch.learners import ModuleLearner
@@ -83,6 +83,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-size", type=int, default=32)
     parser.add_argument("--num-samples", type=int, default=32)
     parser.add_argument("--eval-samples", type=int, default=300)
+    parser.add_argument("--gumbel-temp-start", type=float, default=1.0)
+    parser.add_argument("--gumbel-temp-end", type=float, default=0.3)
+    parser.add_argument("--hard-gumbel", action="store_true")
     parser.add_argument(
         "--rl-estimator",
         choices=["importance_weighted", "reinforce"],
@@ -170,6 +173,30 @@ def build_sample_loss_example(args: argparse.Namespace, device: str) -> BuiltExa
         beta=args.beta,
         device=device,
         tnorm="L",
+    )
+    return BuiltExample(graph, a, b, b_answer, program)
+
+
+def build_gumbel_sample_loss_example(args: argparse.Namespace, device: str) -> BuiltExample:
+    torch.manual_seed(args.seed)
+    graph, a, b, a_contains_b, b_answer = build_graph(args.expected_zeros)
+    connect_sensors(a, b, a_contains_b, b_answer, args.features, device)
+    program = GumbelSampleLossProgram(
+        graph,
+        SolverModel,
+        poi=[a, b, b_answer],
+        inferTypes=["local/softmax"],
+        loss=None,
+        sample=True,
+        sampleSize=args.sample_size,
+        sampleGlobalLoss=True,
+        beta=args.beta,
+        device=device,
+        tnorm="L",
+        use_gumbel=True,
+        initial_temp=args.gumbel_temp_start,
+        final_temp=args.gumbel_temp_end,
+        hard_gumbel=args.hard_gumbel,
     )
     return BuiltExample(graph, a, b, b_answer, program)
 
@@ -328,6 +355,7 @@ def sample_loss_gradient_report(
     dataset: list[dict[str, Any]],
     device: str,
     title: str,
+    program_name: str = "SampleLossProgram",
     top_k: int = 4,
 ) -> None:
     """Print model-parameter gradients from one sample-loss constraint step."""
@@ -340,7 +368,11 @@ def sample_loss_gradient_report(
 
     mloss, _metric, *output = program.model(dataset[0])
     del mloss
-    closs, *_ = program.cmodel(output[1])
+    if isinstance(program, GumbelSampleLossProgram):
+        program._update_temperature_for_epoch()
+        closs, *_ = program._call_cmodel_with_gumbel(output[1])
+    else:
+        closs, *_ = program.cmodel(output[1])
 
     if torch.is_tensor(closs) and closs.requires_grad:
         closs.backward()
@@ -349,7 +381,7 @@ def sample_loss_gradient_report(
     closs_value = float(closs.detach().item()) if torch.is_tensor(closs) else 0.0
 
     _print_gradient_summary(
-        f"SampleLossProgram gradient report ({title})",
+        f"{program_name} gradient report ({title})",
         "constraint loss",
         closs_value,
         grad_l2,
@@ -417,41 +449,29 @@ def reward_gain(before: Stats, after: Stats) -> float:
     return after.sampled_reward - before.sampled_reward
 
 
-def print_comparison(sample_before: Stats, sample_after: Stats, rl_before: Stats, rl_after: Stats) -> None:
-    sample_gain = reward_gain(sample_before, sample_after)
-    rl_gain = reward_gain(rl_before, rl_after)
-    final_gap = sample_after.sampled_reward - rl_after.sampled_reward
+def print_comparison(results: list[tuple[str, Stats, Stats]]) -> None:
+    best_name, best_before, best_after = max(results, key=lambda row: row[2].sampled_reward)
+    del best_before
+    ordered = sorted(results, key=lambda row: row[2].sampled_reward, reverse=True)
 
     print("\nWhich program was better?")
     print("-------------------------")
-    if abs(final_gap) < 1e-6:
-        print("Result: tie on final sampled exact-count reward.")
-    elif final_gap > 0:
-        print("Result: SampleLossProgram was better on this run.")
+    top_reward = ordered[0][2].sampled_reward
+    ties = [name for name, _before, after in ordered if abs(after.sampled_reward - top_reward) < 1e-6]
+    if len(ties) > 1:
+        print("Result: tie on final sampled exact-count reward: " + ", ".join(ties))
     else:
-        print("Result: ReinforcementProgram was better on this run.")
+        print(f"Result: {best_name} was better on this run.")
 
-    print(f"final reward gap          : {final_gap:+.3f} (sample loss - reinforcement)")
-    print(f"reward gain, sample loss  : {sample_gain:+.3f}")
-    print(f"reward gain, reinforcement: {rl_gain:+.3f}")
+    for name, before, after in ordered:
+        print(f"final reward, {name:<28}: {after.sampled_reward:.3f} ({reward_gain(before, after):+.3f} gain)")
 
-    if abs(final_gap) < 1e-6:
-        print("Why: neither program has a measured advantage on this run. Both")
-        print("improved the sampled exact-count reward, but the small evaluation")
-        print("sample and stochastic training make this result effectively equal.")
-        print("Methodologically, sample loss uses a direct graph constraint-loss")
-        print("signal, while reinforcement uses generated labels scored by a")
-        print("sampled 0/1 count reward.")
-    elif final_gap > 0:
-        print("Why: the sample-loss path receives a direct constraint-loss signal from")
-        print("the graph, so it can move probabilities toward the exact-count target")
-        print("with lower variance on this small toy task.")
-        print("ReinforcementProgram learns from generated labels scored by a sampled")
-        print("0/1 reward; that is more general, but the signal is sparser and noisier here.")
-    else:
-        print("Why: the reinforcement objective directly optimizes sampled satisfying")
-        print("decodings, and in this run its reward estimator found better probability")
-        print("moves than the sample-loss constraint approximation.")
+    print("Why: SampleLossProgram and GumbelSampleLossProgram both receive direct")
+    print("graph constraint-loss signals. The Gumbel variant evaluates that sampled")
+    print("constraint loss after a differentiable Gumbel-Softmax perturbation, which")
+    print("can improve discrete exploration but also adds stochasticity. Reinforcement")
+    print("optimizes the generated-output reward directly, but on this exact-count")
+    print("toy task the 0/1 reward is sparse and usually higher variance.")
 
 
 def main() -> None:
@@ -482,6 +502,34 @@ def main() -> None:
         args.expected_zeros, args.eval_samples, device, args.seed + 11,
     )
 
+    gumbel_example = build_gumbel_sample_loss_example(args, device)
+    before_gumbel = evaluate_exact_count(
+        gumbel_example.program, dataset, gumbel_example.b_answer,
+        args.expected_zeros, args.eval_samples, device, args.seed + 10,
+    )
+    torch.manual_seed(args.seed + 250)
+    sample_loss_gradient_report(
+        gumbel_example.program,
+        dataset,
+        device,
+        "before training",
+        program_name="GumbelSampleLossProgram",
+    )
+    torch.manual_seed(args.seed + 100)
+    train_program(gumbel_example.program, dataset, args, device)
+    torch.manual_seed(args.seed + 251)
+    sample_loss_gradient_report(
+        gumbel_example.program,
+        dataset,
+        device,
+        "after training",
+        program_name="GumbelSampleLossProgram",
+    )
+    after_gumbel = evaluate_exact_count(
+        gumbel_example.program, dataset, gumbel_example.b_answer,
+        args.expected_zeros, args.eval_samples, device, args.seed + 11,
+    )
+
     rl_example = build_reinforcement_example(args, device)
     before_rl = evaluate_exact_count(
         rl_example.program, dataset, rl_example.b_answer,
@@ -505,8 +553,13 @@ def main() -> None:
     )
 
     print_result("SampleLossProgram (primal-dual sample loss)", before_sample, after_sample)
+    print_result("GumbelSampleLossProgram (Gumbel sample loss)", before_gumbel, after_gumbel)
     print_result("ReinforcementProgram (generated-output reward)", before_rl, after_rl)
-    print_comparison(before_sample, after_sample, before_rl, after_rl)
+    print_comparison([
+        ("SampleLossProgram", before_sample, after_sample),
+        ("GumbelSampleLossProgram", before_gumbel, after_gumbel),
+        ("ReinforcementProgram", before_rl, after_rl),
+    ])
 
     print("\nNote: exact-count tasks are judged by sampled reward and expected count.")
     print("Argmax count is reported as a useful diagnostic, but it is not the training objective.")

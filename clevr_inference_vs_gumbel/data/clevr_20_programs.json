@@ -1,0 +1,7700 @@
+{
+  "source": "Exact matches from test_regr/Clever/train/questions.json and train/scenes.json",
+  "items": [
+    {
+      "index": 0,
+      "question": "What material is the big object that is right of the brown cylinder and left of the large brown sphere?",
+      "answer": "rubber",
+      "matched_answer": "rubber",
+      "question_index": 3,
+      "image_index": 0,
+      "image_filename": "CLEVR_train_000000.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            5,
+            10
+          ],
+          "function": "intersect",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            13
+          ],
+          "function": "query_material",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 0,
+        "image_filename": "CLEVR_train_000000.png",
+        "objects": [
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 269.8517172617167,
+            "shape": "cube",
+            "3d_coords": [
+              -1.3705521821975708,
+              2.0794010162353516,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              269,
+              88,
+              12.661545753479004
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 292.2219458666971,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.9289753437042236,
+              -1.7488206624984741,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              93,
+              108,
+              11.522202491760254
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 25.545135239473026,
+            "shape": "cube",
+            "3d_coords": [
+              1.5515961647033691,
+              0.6776641607284546,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              319,
+              162,
+              10.045343399047852
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 327.3489188814305,
+            "shape": "cylinder",
+            "3d_coords": [
+              -0.25301405787467957,
+              -2.3089325428009033,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              132,
+              159,
+              9.392304420471191
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 6.325183772442613,
+            "shape": "cube",
+            "3d_coords": [
+              1.018894076347351,
+              -1.93693208694458,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              192,
+              197,
+              8.907766342163086
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 25.96049348342493,
+            "shape": "sphere",
+            "3d_coords": [
+              0.43993687629699707,
+              2.9987525939941406,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              353,
+              100,
+              11.964213371276855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              5
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              5
+            ],
+            [
+              0,
+              2,
+              4,
+              5
+            ],
+            [
+              0,
+              2,
+              5
+            ],
+            []
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              5
+            ],
+            [
+              0,
+              1,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5
+            ],
+            [
+              0
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              4
+            ]
+          ],
+          "left": [
+            [
+              1,
+              3,
+              4
+            ],
+            [],
+            [
+              0,
+              1,
+              3,
+              4
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 1,
+      "question": "How big is the brown shiny sphere?",
+      "answer": "large",
+      "matched_answer": "large",
+      "question_index": 4,
+      "image_index": 0,
+      "image_filename": "CLEVR_train_000000.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 0,
+        "image_filename": "CLEVR_train_000000.png",
+        "objects": [
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 269.8517172617167,
+            "shape": "cube",
+            "3d_coords": [
+              -1.3705521821975708,
+              2.0794010162353516,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              269,
+              88,
+              12.661545753479004
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 292.2219458666971,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.9289753437042236,
+              -1.7488206624984741,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              93,
+              108,
+              11.522202491760254
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 25.545135239473026,
+            "shape": "cube",
+            "3d_coords": [
+              1.5515961647033691,
+              0.6776641607284546,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              319,
+              162,
+              10.045343399047852
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 327.3489188814305,
+            "shape": "cylinder",
+            "3d_coords": [
+              -0.25301405787467957,
+              -2.3089325428009033,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              132,
+              159,
+              9.392304420471191
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 6.325183772442613,
+            "shape": "cube",
+            "3d_coords": [
+              1.018894076347351,
+              -1.93693208694458,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              192,
+              197,
+              8.907766342163086
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 25.96049348342493,
+            "shape": "sphere",
+            "3d_coords": [
+              0.43993687629699707,
+              2.9987525939941406,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              353,
+              100,
+              11.964213371276855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              5
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              5
+            ],
+            [
+              0,
+              2,
+              4,
+              5
+            ],
+            [
+              0,
+              2,
+              5
+            ],
+            []
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              5
+            ],
+            [
+              0,
+              1,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5
+            ],
+            [
+              0
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              4
+            ]
+          ],
+          "left": [
+            [
+              1,
+              3,
+              4
+            ],
+            [],
+            [
+              0,
+              1,
+              3,
+              4
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 2,
+      "question": "What is the shape of the brown thing to the right of the large brown metallic thing that is on the left side of the brown sphere?",
+      "answer": "sphere",
+      "matched_answer": "sphere",
+      "question_index": 6,
+      "image_index": 0,
+      "image_filename": "CLEVR_train_000000.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 0,
+        "image_filename": "CLEVR_train_000000.png",
+        "objects": [
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 269.8517172617167,
+            "shape": "cube",
+            "3d_coords": [
+              -1.3705521821975708,
+              2.0794010162353516,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              269,
+              88,
+              12.661545753479004
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 292.2219458666971,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.9289753437042236,
+              -1.7488206624984741,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              93,
+              108,
+              11.522202491760254
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 25.545135239473026,
+            "shape": "cube",
+            "3d_coords": [
+              1.5515961647033691,
+              0.6776641607284546,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              319,
+              162,
+              10.045343399047852
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 327.3489188814305,
+            "shape": "cylinder",
+            "3d_coords": [
+              -0.25301405787467957,
+              -2.3089325428009033,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              132,
+              159,
+              9.392304420471191
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 6.325183772442613,
+            "shape": "cube",
+            "3d_coords": [
+              1.018894076347351,
+              -1.93693208694458,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              192,
+              197,
+              8.907766342163086
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 25.96049348342493,
+            "shape": "sphere",
+            "3d_coords": [
+              0.43993687629699707,
+              2.9987525939941406,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              353,
+              100,
+              11.964213371276855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              5
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              5
+            ],
+            [
+              0,
+              2,
+              4,
+              5
+            ],
+            [
+              0,
+              2,
+              5
+            ],
+            []
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              5
+            ],
+            [
+              0,
+              1,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5
+            ],
+            [
+              0
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              4
+            ]
+          ],
+          "left": [
+            [
+              1,
+              3,
+              4
+            ],
+            [],
+            [
+              0,
+              1,
+              3,
+              4
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 3,
+      "question": "The brown object that is the same shape as the green shiny thing is what size?",
+      "answer": "large",
+      "matched_answer": "large",
+      "question_index": 7,
+      "image_index": 0,
+      "image_filename": "CLEVR_train_000000.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "green"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "same_shape",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 0,
+        "image_filename": "CLEVR_train_000000.png",
+        "objects": [
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 269.8517172617167,
+            "shape": "cube",
+            "3d_coords": [
+              -1.3705521821975708,
+              2.0794010162353516,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              269,
+              88,
+              12.661545753479004
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 292.2219458666971,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.9289753437042236,
+              -1.7488206624984741,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              93,
+              108,
+              11.522202491760254
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 25.545135239473026,
+            "shape": "cube",
+            "3d_coords": [
+              1.5515961647033691,
+              0.6776641607284546,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              319,
+              162,
+              10.045343399047852
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 327.3489188814305,
+            "shape": "cylinder",
+            "3d_coords": [
+              -0.25301405787467957,
+              -2.3089325428009033,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              132,
+              159,
+              9.392304420471191
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 6.325183772442613,
+            "shape": "cube",
+            "3d_coords": [
+              1.018894076347351,
+              -1.93693208694458,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              192,
+              197,
+              8.907766342163086
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 25.96049348342493,
+            "shape": "sphere",
+            "3d_coords": [
+              0.43993687629699707,
+              2.9987525939941406,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              353,
+              100,
+              11.964213371276855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              5
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              5
+            ],
+            [
+              0,
+              2,
+              4,
+              5
+            ],
+            [
+              0,
+              2,
+              5
+            ],
+            []
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              5
+            ],
+            [
+              0,
+              1,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5
+            ],
+            [
+              0
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              4
+            ]
+          ],
+          "left": [
+            [
+              1,
+              3,
+              4
+            ],
+            [],
+            [
+              0,
+              1,
+              3,
+              4
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 4,
+      "question": "What color is the tiny matte block left of the blue block?",
+      "answer": "gray",
+      "matched_answer": "gray",
+      "question_index": 9,
+      "image_index": 0,
+      "image_filename": "CLEVR_train_000000.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 0,
+        "image_filename": "CLEVR_train_000000.png",
+        "objects": [
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 269.8517172617167,
+            "shape": "cube",
+            "3d_coords": [
+              -1.3705521821975708,
+              2.0794010162353516,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              269,
+              88,
+              12.661545753479004
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 292.2219458666971,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.9289753437042236,
+              -1.7488206624984741,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              93,
+              108,
+              11.522202491760254
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 25.545135239473026,
+            "shape": "cube",
+            "3d_coords": [
+              1.5515961647033691,
+              0.6776641607284546,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              319,
+              162,
+              10.045343399047852
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 327.3489188814305,
+            "shape": "cylinder",
+            "3d_coords": [
+              -0.25301405787467957,
+              -2.3089325428009033,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              132,
+              159,
+              9.392304420471191
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 6.325183772442613,
+            "shape": "cube",
+            "3d_coords": [
+              1.018894076347351,
+              -1.93693208694458,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              192,
+              197,
+              8.907766342163086
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "large",
+            "rotation": 25.96049348342493,
+            "shape": "sphere",
+            "3d_coords": [
+              0.43993687629699707,
+              2.9987525939941406,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              353,
+              100,
+              11.964213371276855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              5
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              5
+            ],
+            [
+              0,
+              2,
+              4,
+              5
+            ],
+            [
+              0,
+              2,
+              5
+            ],
+            []
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              5
+            ],
+            [
+              0,
+              1,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5
+            ],
+            [
+              0
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              4
+            ]
+          ],
+          "left": [
+            [
+              1,
+              3,
+              4
+            ],
+            [],
+            [
+              0,
+              1,
+              3,
+              4
+            ],
+            [
+              1
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 5,
+      "question": "There is a rubber thing that is the same color as the cylinder; what shape is it?",
+      "answer": "cube",
+      "matched_answer": "cube",
+      "question_index": 11,
+      "image_index": 1,
+      "image_filename": "CLEVR_train_000001.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "same_color",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 1,
+        "image_filename": "CLEVR_train_000001.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 183.20697390901265,
+            "shape": "cube",
+            "3d_coords": [
+              -2.9243311882019043,
+              2.6810965538024902,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              242,
+              74,
+              14.934450149536133
+            ]
+          },
+          {
+            "color": "green",
+            "size": "small",
+            "rotation": 44.45085275738018,
+            "shape": "sphere",
+            "3d_coords": [
+              1.1266896724700928,
+              -1.7955763339996338,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              208,
+              194,
+              9.771279335021973
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 141.96757860631382,
+            "shape": "cube",
+            "3d_coords": [
+              1.8342416286468506,
+              0.9962153434753418,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              334,
+              161,
+              10.95494556427002
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 115.51317438709543,
+            "shape": "cylinder",
+            "3d_coords": [
+              2.609827995300293,
+              -0.87860506772995,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              301,
+              208,
+              9.333516120910645
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 279.3904968439553,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.5111390352249146,
+              2.136256456375122,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              262,
+              104,
+              13.840005874633789
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 139.64845410781967,
+            "shape": "sphere",
+            "3d_coords": [
+              2.5256597995758057,
+              2.6723458766937256,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              410,
+              133,
+              11.327693939208984
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 225.52678203157058,
+            "shape": "sphere",
+            "3d_coords": [
+              2.902068853378296,
+              1.218231439590454,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              384,
+              176,
+              10.380595207214355
+            ]
+          },
+          {
+            "color": "red",
+            "size": "small",
+            "rotation": 153.44996721728685,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.541959762573242,
+              -0.2289721965789795,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              165,
+              115,
+              13.122265815734863
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 52.71207174444655,
+            "shape": "cube",
+            "3d_coords": [
+              -1.8781393766403198,
+              -1.547451138496399,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              134,
+              139,
+              11.903752326965332
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              2,
+              5,
+              6
+            ],
+            [
+              2,
+              3,
+              5,
+              6
+            ],
+            [],
+            [
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0
+            ],
+            [
+              0,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              2,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              0,
+              4,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              3
+            ],
+            [
+              1,
+              3,
+              6
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              6
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6
+            ]
+          ],
+          "left": [
+            [
+              1,
+              7,
+              8
+            ],
+            [
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              8
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 6,
+      "question": "The matte ball that is the same size as the gray rubber object is what color?",
+      "answer": "blue",
+      "matched_answer": "blue",
+      "question_index": 13,
+      "image_index": 1,
+      "image_filename": "CLEVR_train_000001.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "same_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 1,
+        "image_filename": "CLEVR_train_000001.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 183.20697390901265,
+            "shape": "cube",
+            "3d_coords": [
+              -2.9243311882019043,
+              2.6810965538024902,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              242,
+              74,
+              14.934450149536133
+            ]
+          },
+          {
+            "color": "green",
+            "size": "small",
+            "rotation": 44.45085275738018,
+            "shape": "sphere",
+            "3d_coords": [
+              1.1266896724700928,
+              -1.7955763339996338,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              208,
+              194,
+              9.771279335021973
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 141.96757860631382,
+            "shape": "cube",
+            "3d_coords": [
+              1.8342416286468506,
+              0.9962153434753418,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              334,
+              161,
+              10.95494556427002
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 115.51317438709543,
+            "shape": "cylinder",
+            "3d_coords": [
+              2.609827995300293,
+              -0.87860506772995,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              301,
+              208,
+              9.333516120910645
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 279.3904968439553,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.5111390352249146,
+              2.136256456375122,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              262,
+              104,
+              13.840005874633789
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 139.64845410781967,
+            "shape": "sphere",
+            "3d_coords": [
+              2.5256597995758057,
+              2.6723458766937256,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              410,
+              133,
+              11.327693939208984
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 225.52678203157058,
+            "shape": "sphere",
+            "3d_coords": [
+              2.902068853378296,
+              1.218231439590454,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              384,
+              176,
+              10.380595207214355
+            ]
+          },
+          {
+            "color": "red",
+            "size": "small",
+            "rotation": 153.44996721728685,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.541959762573242,
+              -0.2289721965789795,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              165,
+              115,
+              13.122265815734863
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 52.71207174444655,
+            "shape": "cube",
+            "3d_coords": [
+              -1.8781393766403198,
+              -1.547451138496399,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              134,
+              139,
+              11.903752326965332
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              2,
+              5,
+              6
+            ],
+            [
+              2,
+              3,
+              5,
+              6
+            ],
+            [],
+            [
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0
+            ],
+            [
+              0,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              2,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              0,
+              4,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              3
+            ],
+            [
+              1,
+              3,
+              6
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              6
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6
+            ]
+          ],
+          "left": [
+            [
+              1,
+              7,
+              8
+            ],
+            [
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              8
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 7,
+      "question": "There is a small matte block that is on the left side of the large rubber thing that is left of the gray ball; what is its color?",
+      "answer": "brown",
+      "matched_answer": "brown",
+      "question_index": 14,
+      "image_index": 1,
+      "image_filename": "CLEVR_train_000001.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 1,
+        "image_filename": "CLEVR_train_000001.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 183.20697390901265,
+            "shape": "cube",
+            "3d_coords": [
+              -2.9243311882019043,
+              2.6810965538024902,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              242,
+              74,
+              14.934450149536133
+            ]
+          },
+          {
+            "color": "green",
+            "size": "small",
+            "rotation": 44.45085275738018,
+            "shape": "sphere",
+            "3d_coords": [
+              1.1266896724700928,
+              -1.7955763339996338,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              208,
+              194,
+              9.771279335021973
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 141.96757860631382,
+            "shape": "cube",
+            "3d_coords": [
+              1.8342416286468506,
+              0.9962153434753418,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              334,
+              161,
+              10.95494556427002
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 115.51317438709543,
+            "shape": "cylinder",
+            "3d_coords": [
+              2.609827995300293,
+              -0.87860506772995,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              301,
+              208,
+              9.333516120910645
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 279.3904968439553,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.5111390352249146,
+              2.136256456375122,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              262,
+              104,
+              13.840005874633789
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 139.64845410781967,
+            "shape": "sphere",
+            "3d_coords": [
+              2.5256597995758057,
+              2.6723458766937256,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              410,
+              133,
+              11.327693939208984
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 225.52678203157058,
+            "shape": "sphere",
+            "3d_coords": [
+              2.902068853378296,
+              1.218231439590454,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              384,
+              176,
+              10.380595207214355
+            ]
+          },
+          {
+            "color": "red",
+            "size": "small",
+            "rotation": 153.44996721728685,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.541959762573242,
+              -0.2289721965789795,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              165,
+              115,
+              13.122265815734863
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 52.71207174444655,
+            "shape": "cube",
+            "3d_coords": [
+              -1.8781393766403198,
+              -1.547451138496399,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              134,
+              139,
+              11.903752326965332
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              2,
+              5,
+              6
+            ],
+            [
+              2,
+              3,
+              5,
+              6
+            ],
+            [],
+            [
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0
+            ],
+            [
+              0,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              2,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              0,
+              4,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              3
+            ],
+            [
+              1,
+              3,
+              6
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              6
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6
+            ]
+          ],
+          "left": [
+            [
+              1,
+              7,
+              8
+            ],
+            [
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              8
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 8,
+      "question": "There is a gray object that is in front of the rubber cube behind the metallic ball behind the small brown thing; what shape is it?",
+      "answer": "sphere",
+      "matched_answer": "sphere",
+      "question_index": 16,
+      "image_index": 1,
+      "image_filename": "CLEVR_train_000001.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "brown"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "front"
+          ]
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            13
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            14
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 1,
+        "image_filename": "CLEVR_train_000001.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 183.20697390901265,
+            "shape": "cube",
+            "3d_coords": [
+              -2.9243311882019043,
+              2.6810965538024902,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              242,
+              74,
+              14.934450149536133
+            ]
+          },
+          {
+            "color": "green",
+            "size": "small",
+            "rotation": 44.45085275738018,
+            "shape": "sphere",
+            "3d_coords": [
+              1.1266896724700928,
+              -1.7955763339996338,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              208,
+              194,
+              9.771279335021973
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 141.96757860631382,
+            "shape": "cube",
+            "3d_coords": [
+              1.8342416286468506,
+              0.9962153434753418,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              334,
+              161,
+              10.95494556427002
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 115.51317438709543,
+            "shape": "cylinder",
+            "3d_coords": [
+              2.609827995300293,
+              -0.87860506772995,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              301,
+              208,
+              9.333516120910645
+            ]
+          },
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 279.3904968439553,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.5111390352249146,
+              2.136256456375122,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              262,
+              104,
+              13.840005874633789
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 139.64845410781967,
+            "shape": "sphere",
+            "3d_coords": [
+              2.5256597995758057,
+              2.6723458766937256,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              410,
+              133,
+              11.327693939208984
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "small",
+            "rotation": 225.52678203157058,
+            "shape": "sphere",
+            "3d_coords": [
+              2.902068853378296,
+              1.218231439590454,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              384,
+              176,
+              10.380595207214355
+            ]
+          },
+          {
+            "color": "red",
+            "size": "small",
+            "rotation": 153.44996721728685,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.541959762573242,
+              -0.2289721965789795,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              165,
+              115,
+              13.122265815734863
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 52.71207174444655,
+            "shape": "cube",
+            "3d_coords": [
+              -1.8781393766403198,
+              -1.547451138496399,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              134,
+              139,
+              11.903752326965332
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              2,
+              5,
+              6
+            ],
+            [
+              2,
+              3,
+              5,
+              6
+            ],
+            [],
+            [
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "behind": [
+            [],
+            [
+              0,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0
+            ],
+            [
+              0,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              2,
+              4,
+              5,
+              7,
+              8
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              0,
+              4,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              3
+            ],
+            [
+              1,
+              3,
+              6
+            ],
+            [],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              6
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6,
+              8
+            ],
+            [
+              1,
+              2,
+              3,
+              5,
+              6
+            ]
+          ],
+          "left": [
+            [
+              1,
+              7,
+              8
+            ],
+            [
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              4,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              7,
+              8
+            ],
+            [
+              8
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 9,
+      "question": "There is a thing that is both to the right of the big rubber cube and left of the small gray ball; what color is it?",
+      "answer": "yellow",
+      "matched_answer": "yellow",
+      "question_index": 21,
+      "image_index": 2,
+      "image_filename": "CLEVR_train_000002.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            5,
+            11
+          ],
+          "function": "intersect",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            13
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 2,
+        "image_filename": "CLEVR_train_000002.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 2.1325644261237775,
+            "shape": "sphere",
+            "3d_coords": [
+              1.9671114683151245,
+              1.1988708972930908,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              350,
+              163,
+              10.398611068725586
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 308.49217566676606,
+            "shape": "sphere",
+            "3d_coords": [
+              2.1141371726989746,
+              -0.5752051472663879,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              291,
+              180,
+              9.147775650024414
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 82.51702981683107,
+            "shape": "cube",
+            "3d_coords": [
+              -2.3854215145111084,
+              0.32431545853614807,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              188,
+              94,
+              12.699371337890625
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "behind": [
+            [
+              2
+            ],
+            [
+              0,
+              2
+            ],
+            []
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2
+            ],
+            [
+              2
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 10,
+      "question": "What color is the metallic thing behind the big metal object?",
+      "answer": "gray",
+      "matched_answer": "gray",
+      "question_index": 25,
+      "image_index": 2,
+      "image_filename": "CLEVR_train_000002.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 2,
+        "image_filename": "CLEVR_train_000002.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 2.1325644261237775,
+            "shape": "sphere",
+            "3d_coords": [
+              1.9671114683151245,
+              1.1988708972930908,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              350,
+              163,
+              10.398611068725586
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 308.49217566676606,
+            "shape": "sphere",
+            "3d_coords": [
+              2.1141371726989746,
+              -0.5752051472663879,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              291,
+              180,
+              9.147775650024414
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 82.51702981683107,
+            "shape": "cube",
+            "3d_coords": [
+              -2.3854215145111084,
+              0.32431545853614807,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              188,
+              94,
+              12.699371337890625
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "behind": [
+            [
+              2
+            ],
+            [
+              0,
+              2
+            ],
+            []
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2
+            ],
+            [
+              2
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 11,
+      "question": "What is the shape of the object that is both behind the large metallic thing and left of the gray metallic sphere?",
+      "answer": "cube",
+      "matched_answer": "cube",
+      "question_index": 27,
+      "image_index": 2,
+      "image_filename": "CLEVR_train_000002.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "gray"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            5,
+            10
+          ],
+          "function": "intersect",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 2,
+        "image_filename": "CLEVR_train_000002.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 2.1325644261237775,
+            "shape": "sphere",
+            "3d_coords": [
+              1.9671114683151245,
+              1.1988708972930908,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              350,
+              163,
+              10.398611068725586
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 308.49217566676606,
+            "shape": "sphere",
+            "3d_coords": [
+              2.1141371726989746,
+              -0.5752051472663879,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              291,
+              180,
+              9.147775650024414
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 82.51702981683107,
+            "shape": "cube",
+            "3d_coords": [
+              -2.3854215145111084,
+              0.32431545853614807,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              188,
+              94,
+              12.699371337890625
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "behind": [
+            [
+              2
+            ],
+            [
+              0,
+              2
+            ],
+            []
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2
+            ],
+            [
+              2
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 12,
+      "question": "The other object that is the same shape as the large metal thing is what color?",
+      "answer": "gray",
+      "matched_answer": "gray",
+      "question_index": 28,
+      "image_index": 2,
+      "image_filename": "CLEVR_train_000002.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "large"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "same_shape",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 2,
+        "image_filename": "CLEVR_train_000002.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "small",
+            "rotation": 2.1325644261237775,
+            "shape": "sphere",
+            "3d_coords": [
+              1.9671114683151245,
+              1.1988708972930908,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              350,
+              163,
+              10.398611068725586
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 308.49217566676606,
+            "shape": "sphere",
+            "3d_coords": [
+              2.1141371726989746,
+              -0.5752051472663879,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              291,
+              180,
+              9.147775650024414
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "large",
+            "rotation": 82.51702981683107,
+            "shape": "cube",
+            "3d_coords": [
+              -2.3854215145111084,
+              0.32431545853614807,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              188,
+              94,
+              12.699371337890625
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "behind": [
+            [
+              2
+            ],
+            [
+              0,
+              2
+            ],
+            []
+          ],
+          "front": [
+            [
+              1
+            ],
+            [],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2
+            ],
+            [
+              2
+            ],
+            []
+          ]
+        }
+      }
+    },
+    {
+      "index": 13,
+      "question": "What material is the tiny cube that is to the right of the blue thing?",
+      "answer": "rubber",
+      "matched_answer": "rubber",
+      "question_index": 30,
+      "image_index": 3,
+      "image_filename": "CLEVR_train_000003.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "query_material",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 3,
+        "image_filename": "CLEVR_train_000003.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 339.4640117712716,
+            "shape": "cylinder",
+            "3d_coords": [
+              1.4555912017822266,
+              0.15389864146709442,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              295,
+              153,
+              10.416396141052246
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 311.92494990715556,
+            "shape": "cube",
+            "3d_coords": [
+              0.6676796078681946,
+              -2.888568639755249,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              144,
+              208,
+              9.31428050994873
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 76.87876784959828,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.7043168544769287,
+              0.6628581285476685,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              214,
+              101,
+              12.785472869873047
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 255.54111242102783,
+            "shape": "cube",
+            "3d_coords": [
+              2.592374086380005,
+              2.6886513233184814,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              413,
+              149,
+              11.32518196105957
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 307.53591054518705,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.1076133251190186,
+              -1.843520164489746,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              114,
+              125,
+              11.579291343688965
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "small",
+            "rotation": 326.8436128800084,
+            "shape": "cube",
+            "3d_coords": [
+              0.6047872304916382,
+              2.4937057495117188,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              335,
+              123,
+              12.513147354125977
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 199.45798432349108,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.3544087409973145,
+              2.6400041580200195,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              254,
+              76,
+              14.371381759643555
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 232.48992271222795,
+            "shape": "cube",
+            "3d_coords": [
+              -0.5035906434059143,
+              2.7944021224975586,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              308,
+              106,
+              13.415806770324707
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 271.6428043214688,
+            "shape": "sphere",
+            "3d_coords": [
+              2.551689386367798,
+              -2.314333200454712,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              239,
+              225,
+              8.250139236450195
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 350.19727055862256,
+            "shape": "cube",
+            "3d_coords": [
+              -0.3976500928401947,
+              -2.6035330295562744,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              126,
+              179,
+              10.179545402526855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              3
+            ],
+            [
+              0,
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ]
+          ],
+          "behind": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              2,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [],
+            [
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              8,
+              9
+            ],
+            [
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              7,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [],
+            [
+              1,
+              8
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              1,
+              4,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              9
+            ],
+            [
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 14,
+      "question": "What is the material of the small thing to the left of the small purple block in front of the small cyan rubber cube?",
+      "answer": "rubber",
+      "matched_answer": "rubber",
+      "question_index": 32,
+      "image_index": 3,
+      "image_filename": "CLEVR_train_000003.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "front"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "purple"
+          ]
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "left"
+          ]
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            13
+          ],
+          "function": "query_material",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 3,
+        "image_filename": "CLEVR_train_000003.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 339.4640117712716,
+            "shape": "cylinder",
+            "3d_coords": [
+              1.4555912017822266,
+              0.15389864146709442,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              295,
+              153,
+              10.416396141052246
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 311.92494990715556,
+            "shape": "cube",
+            "3d_coords": [
+              0.6676796078681946,
+              -2.888568639755249,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              144,
+              208,
+              9.31428050994873
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 76.87876784959828,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.7043168544769287,
+              0.6628581285476685,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              214,
+              101,
+              12.785472869873047
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 255.54111242102783,
+            "shape": "cube",
+            "3d_coords": [
+              2.592374086380005,
+              2.6886513233184814,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              413,
+              149,
+              11.32518196105957
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 307.53591054518705,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.1076133251190186,
+              -1.843520164489746,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              114,
+              125,
+              11.579291343688965
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "small",
+            "rotation": 326.8436128800084,
+            "shape": "cube",
+            "3d_coords": [
+              0.6047872304916382,
+              2.4937057495117188,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              335,
+              123,
+              12.513147354125977
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 199.45798432349108,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.3544087409973145,
+              2.6400041580200195,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              254,
+              76,
+              14.371381759643555
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 232.48992271222795,
+            "shape": "cube",
+            "3d_coords": [
+              -0.5035906434059143,
+              2.7944021224975586,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              308,
+              106,
+              13.415806770324707
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 271.6428043214688,
+            "shape": "sphere",
+            "3d_coords": [
+              2.551689386367798,
+              -2.314333200454712,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              239,
+              225,
+              8.250139236450195
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 350.19727055862256,
+            "shape": "cube",
+            "3d_coords": [
+              -0.3976500928401947,
+              -2.6035330295562744,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              126,
+              179,
+              10.179545402526855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              3
+            ],
+            [
+              0,
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ]
+          ],
+          "behind": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              2,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [],
+            [
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              8,
+              9
+            ],
+            [
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              7,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [],
+            [
+              1,
+              8
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              1,
+              4,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              9
+            ],
+            [
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 15,
+      "question": "What is the shape of the tiny cyan matte thing?",
+      "answer": "cube",
+      "matched_answer": "cube",
+      "question_index": 34,
+      "image_index": 3,
+      "image_filename": "CLEVR_train_000003.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 3,
+        "image_filename": "CLEVR_train_000003.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 339.4640117712716,
+            "shape": "cylinder",
+            "3d_coords": [
+              1.4555912017822266,
+              0.15389864146709442,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              295,
+              153,
+              10.416396141052246
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 311.92494990715556,
+            "shape": "cube",
+            "3d_coords": [
+              0.6676796078681946,
+              -2.888568639755249,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              144,
+              208,
+              9.31428050994873
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 76.87876784959828,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.7043168544769287,
+              0.6628581285476685,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              214,
+              101,
+              12.785472869873047
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 255.54111242102783,
+            "shape": "cube",
+            "3d_coords": [
+              2.592374086380005,
+              2.6886513233184814,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              413,
+              149,
+              11.32518196105957
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 307.53591054518705,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.1076133251190186,
+              -1.843520164489746,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              114,
+              125,
+              11.579291343688965
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "small",
+            "rotation": 326.8436128800084,
+            "shape": "cube",
+            "3d_coords": [
+              0.6047872304916382,
+              2.4937057495117188,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              335,
+              123,
+              12.513147354125977
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 199.45798432349108,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.3544087409973145,
+              2.6400041580200195,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              254,
+              76,
+              14.371381759643555
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 232.48992271222795,
+            "shape": "cube",
+            "3d_coords": [
+              -0.5035906434059143,
+              2.7944021224975586,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              308,
+              106,
+              13.415806770324707
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 271.6428043214688,
+            "shape": "sphere",
+            "3d_coords": [
+              2.551689386367798,
+              -2.314333200454712,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              239,
+              225,
+              8.250139236450195
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 350.19727055862256,
+            "shape": "cube",
+            "3d_coords": [
+              -0.3976500928401947,
+              -2.6035330295562744,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              126,
+              179,
+              10.179545402526855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              3
+            ],
+            [
+              0,
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ]
+          ],
+          "behind": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              2,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [],
+            [
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              8,
+              9
+            ],
+            [
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              7,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [],
+            [
+              1,
+              8
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              1,
+              4,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              9
+            ],
+            [
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 16,
+      "question": "There is a small cube on the right side of the tiny blue thing that is behind the tiny cyan matte thing; what is its color?",
+      "answer": "purple",
+      "matched_answer": "purple",
+      "question_index": 36,
+      "image_index": 3,
+      "image_filename": "CLEVR_train_000003.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "blue"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "right"
+          ]
+        },
+        {
+          "inputs": [
+            9
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            10
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            11
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            12
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 3,
+        "image_filename": "CLEVR_train_000003.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 339.4640117712716,
+            "shape": "cylinder",
+            "3d_coords": [
+              1.4555912017822266,
+              0.15389864146709442,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              295,
+              153,
+              10.416396141052246
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 311.92494990715556,
+            "shape": "cube",
+            "3d_coords": [
+              0.6676796078681946,
+              -2.888568639755249,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              144,
+              208,
+              9.31428050994873
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 76.87876784959828,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.7043168544769287,
+              0.6628581285476685,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              214,
+              101,
+              12.785472869873047
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 255.54111242102783,
+            "shape": "cube",
+            "3d_coords": [
+              2.592374086380005,
+              2.6886513233184814,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              413,
+              149,
+              11.32518196105957
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 307.53591054518705,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.1076133251190186,
+              -1.843520164489746,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              114,
+              125,
+              11.579291343688965
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "small",
+            "rotation": 326.8436128800084,
+            "shape": "cube",
+            "3d_coords": [
+              0.6047872304916382,
+              2.4937057495117188,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              335,
+              123,
+              12.513147354125977
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 199.45798432349108,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.3544087409973145,
+              2.6400041580200195,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              254,
+              76,
+              14.371381759643555
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 232.48992271222795,
+            "shape": "cube",
+            "3d_coords": [
+              -0.5035906434059143,
+              2.7944021224975586,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              308,
+              106,
+              13.415806770324707
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 271.6428043214688,
+            "shape": "sphere",
+            "3d_coords": [
+              2.551689386367798,
+              -2.314333200454712,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              239,
+              225,
+              8.250139236450195
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 350.19727055862256,
+            "shape": "cube",
+            "3d_coords": [
+              -0.3976500928401947,
+              -2.6035330295562744,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              126,
+              179,
+              10.179545402526855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              3
+            ],
+            [
+              0,
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ]
+          ],
+          "behind": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              2,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [],
+            [
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              8,
+              9
+            ],
+            [
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              7,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [],
+            [
+              1,
+              8
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              1,
+              4,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              9
+            ],
+            [
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 17,
+      "question": "There is a metallic block that is the same size as the cyan rubber cube; what color is it?",
+      "answer": "blue",
+      "matched_answer": "blue",
+      "question_index": 37,
+      "image_index": 3,
+      "image_filename": "CLEVR_train_000003.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "rubber"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "same_size",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cube"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "query_color",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 3,
+        "image_filename": "CLEVR_train_000003.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 339.4640117712716,
+            "shape": "cylinder",
+            "3d_coords": [
+              1.4555912017822266,
+              0.15389864146709442,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              295,
+              153,
+              10.416396141052246
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 311.92494990715556,
+            "shape": "cube",
+            "3d_coords": [
+              0.6676796078681946,
+              -2.888568639755249,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              144,
+              208,
+              9.31428050994873
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 76.87876784959828,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.7043168544769287,
+              0.6628581285476685,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              214,
+              101,
+              12.785472869873047
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 255.54111242102783,
+            "shape": "cube",
+            "3d_coords": [
+              2.592374086380005,
+              2.6886513233184814,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              413,
+              149,
+              11.32518196105957
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 307.53591054518705,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.1076133251190186,
+              -1.843520164489746,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              114,
+              125,
+              11.579291343688965
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "small",
+            "rotation": 326.8436128800084,
+            "shape": "cube",
+            "3d_coords": [
+              0.6047872304916382,
+              2.4937057495117188,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              335,
+              123,
+              12.513147354125977
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 199.45798432349108,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.3544087409973145,
+              2.6400041580200195,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              254,
+              76,
+              14.371381759643555
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 232.48992271222795,
+            "shape": "cube",
+            "3d_coords": [
+              -0.5035906434059143,
+              2.7944021224975586,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              308,
+              106,
+              13.415806770324707
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 271.6428043214688,
+            "shape": "sphere",
+            "3d_coords": [
+              2.551689386367798,
+              -2.314333200454712,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              239,
+              225,
+              8.250139236450195
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 350.19727055862256,
+            "shape": "cube",
+            "3d_coords": [
+              -0.3976500928401947,
+              -2.6035330295562744,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              126,
+              179,
+              10.179545402526855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              3
+            ],
+            [
+              0,
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ]
+          ],
+          "behind": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              2,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [],
+            [
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              8,
+              9
+            ],
+            [
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              7,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [],
+            [
+              1,
+              8
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              1,
+              4,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              9
+            ],
+            [
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 18,
+      "question": "There is a cyan metal thing behind the cyan metal ball; what shape is it?",
+      "answer": "cylinder",
+      "matched_answer": "cylinder",
+      "question_index": 39,
+      "image_index": 3,
+      "image_filename": "CLEVR_train_000003.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "relate",
+          "value_inputs": [
+            "behind"
+          ]
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_material",
+          "value_inputs": [
+            "metal"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "query_shape",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 3,
+        "image_filename": "CLEVR_train_000003.png",
+        "objects": [
+          {
+            "color": "gray",
+            "size": "large",
+            "rotation": 339.4640117712716,
+            "shape": "cylinder",
+            "3d_coords": [
+              1.4555912017822266,
+              0.15389864146709442,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              295,
+              153,
+              10.416396141052246
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 311.92494990715556,
+            "shape": "cube",
+            "3d_coords": [
+              0.6676796078681946,
+              -2.888568639755249,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              144,
+              208,
+              9.31428050994873
+            ]
+          },
+          {
+            "color": "yellow",
+            "size": "large",
+            "rotation": 76.87876784959828,
+            "shape": "sphere",
+            "3d_coords": [
+              -1.7043168544769287,
+              0.6628581285476685,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              214,
+              101,
+              12.785472869873047
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 255.54111242102783,
+            "shape": "cube",
+            "3d_coords": [
+              2.592374086380005,
+              2.6886513233184814,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              413,
+              149,
+              11.32518196105957
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 307.53591054518705,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.1076133251190186,
+              -1.843520164489746,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              114,
+              125,
+              11.579291343688965
+            ]
+          },
+          {
+            "color": "blue",
+            "size": "small",
+            "rotation": 326.8436128800084,
+            "shape": "cube",
+            "3d_coords": [
+              0.6047872304916382,
+              2.4937057495117188,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              335,
+              123,
+              12.513147354125977
+            ]
+          },
+          {
+            "color": "green",
+            "size": "large",
+            "rotation": 199.45798432349108,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.3544087409973145,
+              2.6400041580200195,
+              0.699999988079071
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              254,
+              76,
+              14.371381759643555
+            ]
+          },
+          {
+            "color": "brown",
+            "size": "small",
+            "rotation": 232.48992271222795,
+            "shape": "cube",
+            "3d_coords": [
+              -0.5035906434059143,
+              2.7944021224975586,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              308,
+              106,
+              13.415806770324707
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "large",
+            "rotation": 271.6428043214688,
+            "shape": "sphere",
+            "3d_coords": [
+              2.551689386367798,
+              -2.314333200454712,
+              0.699999988079071
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              239,
+              225,
+              8.250139236450195
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 350.19727055862256,
+            "shape": "cube",
+            "3d_coords": [
+              -0.3976500928401947,
+              -2.6035330295562744,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              126,
+              179,
+              10.179545402526855
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              3,
+              5,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7,
+              8
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              3
+            ],
+            [
+              0,
+              3,
+              5,
+              7
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              0,
+              3,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              5,
+              6,
+              7,
+              8
+            ]
+          ],
+          "behind": [
+            [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              2,
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              5,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [],
+            [
+              6
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              9
+            ],
+            [
+              0,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          ],
+          "front": [
+            [
+              1,
+              8,
+              9
+            ],
+            [
+              8
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              3,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              7,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              8,
+              9
+            ],
+            [],
+            [
+              1,
+              8
+            ]
+          ],
+          "left": [
+            [
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              1,
+              4,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            [],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              7,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              8,
+              9
+            ],
+            [
+              0,
+              1,
+              2,
+              4,
+              6,
+              8,
+              9
+            ],
+            [
+              1,
+              2,
+              4,
+              9
+            ],
+            [
+              4
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "index": 19,
+      "question": "The purple ball that is the same material as the tiny cyan cylinder is what size?",
+      "answer": "small",
+      "matched_answer": "small",
+      "question_index": 43,
+      "image_index": 4,
+      "image_filename": "CLEVR_train_000004.png",
+      "program": [
+        {
+          "inputs": [],
+          "function": "scene",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "function": "filter_size",
+          "value_inputs": [
+            "small"
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "cyan"
+          ]
+        },
+        {
+          "inputs": [
+            2
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "cylinder"
+          ]
+        },
+        {
+          "inputs": [
+            3
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            4
+          ],
+          "function": "same_material",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            5
+          ],
+          "function": "filter_color",
+          "value_inputs": [
+            "purple"
+          ]
+        },
+        {
+          "inputs": [
+            6
+          ],
+          "function": "filter_shape",
+          "value_inputs": [
+            "sphere"
+          ]
+        },
+        {
+          "inputs": [
+            7
+          ],
+          "function": "unique",
+          "value_inputs": []
+        },
+        {
+          "inputs": [
+            8
+          ],
+          "function": "query_size",
+          "value_inputs": []
+        }
+      ],
+      "scene": {
+        "image_index": 4,
+        "image_filename": "CLEVR_train_000004.png",
+        "objects": [
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 217.07425030213477,
+            "shape": "sphere",
+            "3d_coords": [
+              -2.068769693374634,
+              -2.448986530303955,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              86,
+              146,
+              10.957023620605469
+            ]
+          },
+          {
+            "color": "purple",
+            "size": "small",
+            "rotation": 265.79354399904634,
+            "shape": "cube",
+            "3d_coords": [
+              -0.31139814853668213,
+              1.1114779710769653,
+              0.3499999940395355
+            ],
+            "material": "rubber",
+            "pixel_coords": [
+              269,
+              125,
+              11.80322265625
+            ]
+          },
+          {
+            "color": "cyan",
+            "size": "small",
+            "rotation": 354.5619563729614,
+            "shape": "cylinder",
+            "3d_coords": [
+              -2.7436418533325195,
+              1.5848991870880127,
+              0.3499999940395355
+            ],
+            "material": "metal",
+            "pixel_coords": [
+              218,
+              88,
+              13.668434143066406
+            ]
+          }
+        ],
+        "relationships": {
+          "right": [
+            [
+              1,
+              2
+            ],
+            [],
+            [
+              1
+            ]
+          ],
+          "behind": [
+            [
+              1,
+              2
+            ],
+            [
+              2
+            ],
+            []
+          ],
+          "front": [
+            [],
+            [
+              0
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "left": [
+            [],
+            [
+              0,
+              2
+            ],
+            [
+              0
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

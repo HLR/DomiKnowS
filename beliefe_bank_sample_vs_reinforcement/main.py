@@ -28,7 +28,7 @@ setProductionLogMode(True)
 from domiknows.graph import Concept, Graph, Relation, andL, existsL, ifL, notL
 from domiknows.program import ReinforcementProgram
 from domiknows.program.loss import NBCrossEntropyLoss
-from domiknows.program.lossprogram import SampleLossProgram
+from domiknows.program.lossprogram import GumbelSampleLossProgram, SampleLossProgram
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.model.base import Mode
 from domiknows.program.model.pytorch import SolverModel
@@ -90,6 +90,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--beta", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--gumbel-temp-start", type=float, default=1.0)
+    parser.add_argument("--gumbel-temp-end", type=float, default=0.3)
+    parser.add_argument("--hard-gumbel", action="store_true")
     return parser.parse_args()
 
 
@@ -338,6 +341,34 @@ def build_sample_loss_program(
     return BuiltProgram(graph, subject, facts, fact_check, implication, nimplication, program)
 
 
+def build_gumbel_sample_loss_program(
+    args: argparse.Namespace,
+    data: BeliefBankData,
+    device: str,
+) -> BuiltProgram:
+    set_seed(args.seed)
+    graph, subject, facts, fact_check, implication, nimplication = build_graph(
+        data.constraints_yes, data.constraints_no, device
+    )
+    program = GumbelSampleLossProgram(
+        graph,
+        SolverModel,
+        poi=[facts[fact_check], implication, nimplication],
+        inferTypes=["local/argmax"],
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        sample=True,
+        sampleSize=args.sample_size,
+        sampleGlobalLoss=True,
+        beta=args.beta,
+        device=device,
+        use_gumbel=True,
+        initial_temp=args.gumbel_temp_start,
+        final_temp=args.gumbel_temp_end,
+        hard_gumbel=args.hard_gumbel,
+    )
+    return BuiltProgram(graph, subject, facts, fact_check, implication, nimplication, program)
+
+
 def build_reinforcement_program(
     args: argparse.Namespace,
     data: BeliefBankData,
@@ -518,6 +549,7 @@ def sample_loss_gradient_report(
     item: dict[str, Any],
     device: str,
     label: str,
+    program_name: str = "SampleLossProgram",
 ) -> None:
     _zero_grads(built.program)
     built.program.to(device)
@@ -525,12 +557,16 @@ def sample_loss_gradient_report(
     built.program.model.train()
     built.program.cmodel.train()
     _mloss, _metric, _datanode, builder = built.program.model(item)
-    loss, *_ = built.program.cmodel(builder)
+    if isinstance(built.program, GumbelSampleLossProgram):
+        built.program._update_temperature_for_epoch()
+        loss, *_ = built.program._call_cmodel_with_gumbel(builder)
+    else:
+        loss, *_ = built.program.cmodel(builder)
     if torch.is_tensor(loss) and loss.requires_grad:
         loss.backward()
     summary = _grad_summary(built.program)
     value = float(loss.detach().item()) if torch.is_tensor(loss) else float("nan")
-    _print_grad_report(f"SampleLossProgram {label}", "sampled constraint loss", value, summary)
+    _print_grad_report(f"{program_name} {label}", "sampled constraint loss", value, summary)
     _zero_grads(built.program)
 
 
@@ -610,23 +646,22 @@ def _print_stats(name: str, before: EvalStats, after: EvalStats) -> None:
     )
 
 
-def _print_winner(sample_after: EvalStats, rl_after: EvalStats) -> None:
-    delta = sample_after.reward - rl_after.reward
-    if abs(delta) <= 1e-6:
-        print("\nWinner: tie on generated BeliefBank reward.")
-        print("  Both programs produced the same dense reward on this small evaluation slice.")
-    elif delta > 0:
-        print("\nWinner: SampleLossProgram by generated BeliefBank reward.")
-        print(
-            "  Sample loss receives a direct differentiable constraint-loss signal, "
-            "which is often lower variance than RL sampling on this small task."
-        )
+def _print_winner(results: list[tuple[str, EvalStats]]) -> None:
+    ordered = sorted(results, key=lambda row: row[1].reward, reverse=True)
+    top_reward = ordered[0][1].reward
+    ties = [name for name, stats in ordered if abs(stats.reward - top_reward) <= 1e-6]
+    if len(ties) > 1:
+        print("\nWinner: tie on generated BeliefBank reward: " + ", ".join(ties))
     else:
-        print("\nWinner: ReinforcementProgram by generated BeliefBank reward.")
-        print(
-            "  RL optimized the same dense reward used for comparison, so it can win "
-            "when sampled reward components align better than the graph constraint loss."
-        )
+        print(f"\nWinner: {ordered[0][0]} by generated BeliefBank reward.")
+    for name, stats in ordered:
+        print(f"  final reward, {name}: {stats.reward:.4f}")
+    print(
+        "  Sample-loss variants use graph constraint-loss gradients; the Gumbel "
+        "variant applies a differentiable Gumbel-Softmax perturbation before "
+        "that loss. ReinforcementProgram optimizes the dense generated-output "
+        "reward directly, but with sampled policy-gradient variance."
+    )
 
 
 def main() -> int:
@@ -635,7 +670,7 @@ def main() -> int:
     set_seed(args.seed)
 
     data = load_beliefbank_data(args.batch_size, args.train_items, args.eval_items)
-    print("BeliefBank SampleLossProgram vs ReinforcementProgram")
+    print("BeliefBank SampleLossProgram vs GumbelSampleLossProgram vs ReinforcementProgram")
     print(f"  device: {device}")
     print(f"  train/eval items: {len(data.train)}/{len(data.eval)}")
     print(f"  batch size: {args.batch_size}")
@@ -654,6 +689,31 @@ def main() -> int:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    print("\nGumbelSampleLossProgram diagnostics")
+    gumbel = build_gumbel_sample_loss_program(args, data, device)
+    sample_loss_gradient_report(
+        gumbel,
+        data.train[0],
+        device,
+        "before training",
+        program_name="GumbelSampleLossProgram",
+    )
+    gumbel_before = evaluate(gumbel, data.eval, device, args.seed + 11, args.num_samples)
+    print("\nTraining GumbelSampleLossProgram")
+    train_sample_loss(gumbel, data.train, args, device)
+    sample_loss_gradient_report(
+        gumbel,
+        data.train[0],
+        device,
+        "after training",
+        program_name="GumbelSampleLossProgram",
+    )
+    gumbel_after = evaluate(gumbel, data.eval, device, args.seed + 29, args.num_samples)
+    del gumbel
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     print("\nReinforcementProgram diagnostics")
     reinforcement = build_reinforcement_program(args, data, device)
     reinforcement_gradient_report(reinforcement, data.train[0], device, "before training")
@@ -665,8 +725,13 @@ def main() -> int:
     rl_after = evaluate(reinforcement, data.eval, device, args.seed + 29, args.num_samples)
 
     _print_stats("SampleLossProgram", sample_before, sample_after)
+    _print_stats("GumbelSampleLossProgram", gumbel_before, gumbel_after)
     _print_stats("ReinforcementProgram", rl_before, rl_after)
-    _print_winner(sample_after, rl_after)
+    _print_winner([
+        ("SampleLossProgram", sample_after),
+        ("GumbelSampleLossProgram", gumbel_after),
+        ("ReinforcementProgram", rl_after),
+    ])
     return 0
 
 

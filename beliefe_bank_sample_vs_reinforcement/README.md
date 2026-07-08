@@ -1,8 +1,10 @@
-# BeliefBank Sample Loss vs ReinforcementProgram
+# BeliefBank Sample Loss vs Gumbel Sample Loss vs ReinforcementProgram
 
 This task compares BeliefBank constraint learning with:
 
 - `SampleLossProgram`, using sampled DomiKnowS graph-constraint loss.
+- `GumbelSampleLossProgram`, using the same sampled graph-constraint loss after
+  a differentiable Gumbel-Softmax perturbation of local predictions.
 - `ReinforcementProgram`, using a generated-output reward over sampled fact
   assignments.
 
@@ -47,8 +49,12 @@ The script reports before/after:
 - gold-label argmax accuracy
 - graph constraint satisfaction
 - predicted yes count vs. gold yes count
-- gradient diagnostics for both programs
+- gradient diagnostics for all three programs
 - which program performed better on generated reward
 
 `SampleLossProgram` uses sampled graph-constraint loss directly; it should not
 fall back to supervised-only training.
+
+`GumbelSampleLossProgram` should also use sampled graph-constraint loss directly.
+Tune `--gumbel-temp-start`, `--gumbel-temp-end`, and `--hard-gumbel` to adjust
+how discrete the Gumbel-Softmax perturbation is during training.
