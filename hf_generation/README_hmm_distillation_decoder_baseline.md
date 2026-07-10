@@ -48,7 +48,7 @@ The report compares:
 - `dfa_sample`: hard DFA sampling over mock-LM logits.
 - `product_compact_learner_dfa`: generic compact-head plus DFA product decoding
   through `generate_verify_rerank(...)`.
-- `product_hmm_dfa`: strict HMM+DFA product decoding through the direct
+- `product_hmm_dfa`: Ctrl-G-compatible HMM+DFA decoding through the direct
   `HybridController.decode_hmm_dfa(...)` API.
 
 The strict HMM+DFA path tracks:
@@ -57,7 +57,17 @@ The strict HMM+DFA path tracks:
 (HMM belief h_t, DFA state q_t, generated prefix)
 ```
 
-and uses beam search by default with lookahead scoring:
+and uses beam search by default with Ctrl-G-compatible lookahead scoring:
+
+```text
+base_weight * base_model_label_score
++ lookahead_weight * log P_HMM(DFA success | h_{t+1}, q_{t+1})
+```
+
+The default `hmm_dfa_base="auto"` uses projected backend label logits when they
+are available and falls back to HMM next-label logits otherwise. The log-linear
+product-style objective is available as `hmm_dfa_log_linear` or
+`hmm_dfa_objective="log_linear_blend"`:
 
 ```text
 hf_weight * HF_label_logit
