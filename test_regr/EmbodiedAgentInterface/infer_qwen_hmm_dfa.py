@@ -9,6 +9,7 @@ DFA, and decode with HMM + DFA using that generator's next-label logits.
 import argparse
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -70,8 +71,11 @@ def parse_args():
     parser.add_argument("--hmm", default=str(SCRIPT_DIR / "models/eai_all_qwen25_ctrlg_hmm.npz"))
     parser.add_argument("--hmm-search", choices=["greedy", "beam", "sample"], default="greedy")
     parser.add_argument("--hmm-beam-size", type=int, default=4)
+    parser.add_argument("--hmm-dfa-objective", choices=["ctrl_g", "log_linear_blend"], default="ctrl_g")
+    parser.add_argument("--hmm-dfa-base", choices=["auto", "backend", "hmm"], default="auto")
+    parser.add_argument("--hmm-base-weight", type=float, default=None)
     parser.add_argument("--hmm-weight", type=float, default=1.0)
-    parser.add_argument("--hmm-hf-weight", type=float, default=0.0, help="Optional backend generator label-bias weight. Use 0.0 for Ctrl-G-style HMM+DFA decoding.")
+    parser.add_argument("--hmm-hf-weight", type=float, default=0.0, help="Log-linear blend objective backend label-bias weight.")
     parser.add_argument("--hmm-lookahead-weight", type=float, default=0.0)
     parser.add_argument("--hmm-lookahead-max-steps", type=int, default=8)
     parser.add_argument("--hmm-keep-rejected", action="store_true")
@@ -266,6 +270,9 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
             max_new_tokens=args.max_steps,
             keep_rejected=args.hmm_keep_rejected,
             temperature=0.0 if args.hmm_search != "sample" else 1.0,
+            hmm_dfa_objective=args.hmm_dfa_objective,
+            hmm_dfa_base=args.hmm_dfa_base,
+            base_weight=args.hmm_base_weight,
             hmm_weight=args.hmm_weight,
             hf_weight=args.hmm_hf_weight,
             lookahead_weight=args.hmm_lookahead_weight,
@@ -297,7 +304,9 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
         _add_batch_counts(counts, predictions, [sample], bundle.vocabulary, dfa, args.show, index)
     if failures:
         print(f"4 product HMM+DFA per-example: decode_failures={failures}")
-    print(f"per-example mode: done in {time.perf_counter() - started:.1f}s", flush=True)
+    elapsed_seconds = time.perf_counter() - started
+    performance_line = f"per-example mode: done in {elapsed_seconds:.1f}s"
+    print(performance_line, flush=True)
     return (
         _score_from_counts(
             "DomiKnowS HMM+DFA decoder with Qwen-distilled HMM (no training)",
@@ -314,6 +323,8 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
             ),
             "lookahead_entries_max": lookahead_entries_max if lookahead_entries_count else None,
             "trace_log": trace_log,
+            "elapsed_seconds": elapsed_seconds,
+            "performance_line": performance_line,
         },
     )
 
@@ -322,6 +333,7 @@ def _decode_batched(args, all_examples, examples):
     from domiknows.generation import constraints_to_dfa_from_graph
 
     counts = _new_counts()
+    started = time.perf_counter()
     batch_size = int(args.batch_size)
     if args.dfa_build_mode == "combined":
         build_batches = [(list(all_examples), list(examples))]
@@ -360,6 +372,7 @@ def _decode_batched(args, all_examples, examples):
         _capture_shared_llm(args, program)
         offset += len(decode_examples)
         print(f"batch {batch_index}/{len(build_batches)}: done in {time.perf_counter() - batch_started:.1f}s", flush=True)
+    elapsed_seconds = time.perf_counter() - started
     return (
         _score_from_counts(
             "DomiKnowS HMM+DFA decoder with Qwen-distilled HMM (no training)",
@@ -369,6 +382,8 @@ def _decode_batched(args, all_examples, examples):
             "base_dfa_states": dfa_state_counts[0] if len(dfa_state_counts) == 1 else dfa_state_counts,
             "batches": len(build_batches),
             "trace_log": getattr(args, "_hmm_dfa_trace_log", None),
+            "elapsed_seconds": elapsed_seconds,
+            "performance_line": f"{args.dfa_build_mode} mode: done in {elapsed_seconds:.1f}s",
         },
     )
 
@@ -406,13 +421,18 @@ def main():
     if metadata.get("trace_log"):
         dfa_metadata += f" trace_log={metadata['trace_log']}"
 
+    experiment_date = datetime.now().astimezone().isoformat(timespec="seconds")
     lines = [
         "EAI inference-only DomiKnowS HMM+DFA decoder with Qwen-distilled HMM",
+        f"experiment_date={experiment_date}",
+        f"performance={metadata['performance_line']}",
         f"dataset={args.dataset} eval_split={args.eval_split} examples={len(examples)} loaded_examples={len(all_examples)} dfa_build_mode={args.dfa_build_mode} batch_size={args.batch_size} max_steps={args.max_steps}",
         dfa_metadata,
         f"generator={args.baseline_model} qwen={args.llm_backbone_path}",
         f"hmm={args.hmm}",
-        f"hmm_search={args.hmm_search} hmm_weight={args.hmm_weight} backend_generator_weight={args.hmm_hf_weight} lookahead_weight={args.hmm_lookahead_weight}",
+        f"hmm_search={args.hmm_search} hmm_dfa_objective={args.hmm_dfa_objective} hmm_dfa_base={args.hmm_dfa_base} "
+        f"hmm_base_weight={args.hmm_base_weight} hmm_weight={args.hmm_weight} "
+        f"log_linear_backend_generator_weight={args.hmm_hf_weight} lookahead_weight={args.hmm_lookahead_weight}",
         "",
         ev.format_score(score),
         "",
@@ -422,7 +442,7 @@ def main():
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n")
-    for line in lines[:6] + [ev.format_score(score)]:
+    for line in lines[:8] + [ev.format_score(score)]:
         print(line)
     print(f"saved_results={output}")
     return 0

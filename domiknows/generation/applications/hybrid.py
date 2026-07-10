@@ -536,7 +536,9 @@ class HybridController:
         # Product decode paths are routed early because they do not call
         # transformers.generate(...); they run custom token/label loops that
         # jointly enforce DFA constraints with compact-model structure.
-        if strategy == "product_hmm_dfa":
+        if strategy in {"product_hmm_dfa", "hmm_dfa_log_linear"}:
+            if strategy == "hmm_dfa_log_linear":
+                generate_kwargs.setdefault("hmm_dfa_objective", "log_linear_blend")
             return self._generate_product_hmm_dfa_candidates(
                 prompt_ids,
                 num_candidates,
@@ -1000,7 +1002,7 @@ def _next_label_logits(model, input_ids: Sequence[int], prompt_ids: torch.Tensor
 def _resolve_decode_strategy(decode_strategy: str | None, hard_decode: bool) -> str:
     """Normalize public decode-strategy names to internal routing keys.
 
-    This keeps legacy aliases stable while exposing the new product paths
+    This keeps compatibility aliases stable while exposing the new product paths
     under explicit names.
     """
     if decode_strategy is None:
@@ -1021,13 +1023,15 @@ def _resolve_decode_strategy(decode_strategy: str | None, hard_decode: bool) -> 
         "product_hmm_dfa": "product_hmm_dfa",
         "hmm_dfa": "product_hmm_dfa",
         "strict_hmm_dfa": "product_hmm_dfa",
+        "hmm_dfa_log_linear": "hmm_dfa_log_linear",
+        "log_linear_hmm_dfa": "hmm_dfa_log_linear",
     }
     try:
         return aliases[strategy]
     except KeyError as exc:
         raise ValueError(
             "decode_strategy must be one of hard_dfa, unconstrained, "
-            "product_compact_learner_dfa, or product_hmm_dfa"
+            "product_compact_learner_dfa, product_hmm_dfa, or hmm_dfa_log_linear"
         ) from exc
 
 

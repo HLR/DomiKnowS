@@ -175,6 +175,39 @@ def _disabled_trace() -> _HMMDFATrace:
     return _HMMDFATrace(logger=None, path=None, decode_id=0)
 
 
+def _normalize_hmm_dfa_objective(value: Any) -> str:
+    """Normalize HMM+DFA scoring objective names."""
+    objective = str(value).strip().lower().replace("-", "_")
+    aliases = {
+        "ctrl_g": "ctrl_g",
+        "ctrlg": "ctrl_g",
+        "conditional_control": "ctrl_g",
+        "log_linear_blend": "log_linear_blend",
+        "product": "log_linear_blend",
+        "product_style": "log_linear_blend",
+    }
+    try:
+        return aliases[objective]
+    except KeyError as exc:
+        raise ValueError("hmm_dfa_objective must be 'ctrl_g' or 'log_linear_blend'") from exc
+
+
+def _normalize_hmm_dfa_base(value: Any) -> str:
+    """Normalize Ctrl-G base model source names."""
+    base = str(value).strip().lower().replace("-", "_")
+    aliases = {
+        "auto": "auto",
+        "backend": "backend",
+        "hf": "backend",
+        "lm": "backend",
+        "hmm": "hmm",
+    }
+    try:
+        return aliases[base]
+    except KeyError as exc:
+        raise ValueError("hmm_dfa_base must be 'auto', 'backend', or 'hmm'") from exc
+
+
 @dataclass(frozen=True)
 class HMMDFAStaticLookahead:
     """Lazy static HMM+DFA success table indexed by depth and DFA state."""
@@ -329,6 +362,10 @@ class HMMDFADecoder:
 
         prompt_ids_t = self._prompt_tensor(prompt_ids)
         policy = stop_policy_from_legacy(max_new_tokens=max_new_tokens, stop_policy=stop_policy)
+        objective = _normalize_hmm_dfa_objective(kwargs.pop("hmm_dfa_objective", "ctrl_g"))
+        base = _normalize_hmm_dfa_base(kwargs.pop("hmm_dfa_base", "auto"))
+        base_weight_value = kwargs.pop("base_weight", None)
+        base_weight = None if base_weight_value is None else float(base_weight_value)
         hmm_weight = float(kwargs.pop("hmm_weight", kwargs.pop("compact_logit_weight", 1.0)))
         hf_weight = float(kwargs.pop("hf_weight", kwargs.pop("backend_logit_weight", 1.0)))
         lookahead_weight = float(kwargs.pop("lookahead_weight", 1.0))
@@ -376,6 +413,9 @@ class HMMDFADecoder:
                 "hmm_weight": hmm_weight,
                 "backend_weight": hf_weight,
                 "lookahead_weight": lookahead_weight,
+                "hmm_dfa_objective": objective,
+                "hmm_dfa_base": base,
+                "base_weight": 1.0 if base_weight is None else base_weight,
                 "lookahead_backend": lookahead_backend,
                 "lookahead_depth": getattr(static_lookahead, "max_depth", None),
                 "setup_ms": setup_ms,
@@ -399,6 +439,9 @@ class HMMDFADecoder:
             "hmm_weight": hmm_weight,
             "hf_weight": hf_weight,
             "lookahead_weight": lookahead_weight,
+            "hmm_dfa_objective": objective,
+            "hmm_dfa_base": base,
+            "base_weight": base_weight,
             "lookahead_max_steps": lookahead_max_steps,
             "static_lookahead": static_lookahead,
             "recursive_cache": recursive_cache,
@@ -475,12 +518,15 @@ class HMMDFADecoder:
                 prompt_ids_t,
                 search=search_n,
                 metadata={
-                    "decode_strategy": "product_hmm_dfa",
+                    "decode_strategy": "hmm_dfa_log_linear" if objective == "log_linear_blend" else "product_hmm_dfa",
                     "tracks_hmm_belief": True,
                     "backend_logit_integration": "one_token_label_bias" if hf_weight else "none",
                     "hmm_weight": hmm_weight,
                     "hf_weight": hf_weight,
                     "lookahead_weight": lookahead_weight,
+                    "hmm_dfa_objective": objective,
+                    "hmm_dfa_base": base,
+                    "standalone_hmm_term": objective == "log_linear_blend" or (objective == "ctrl_g" and base == "hmm"),
                     "lookahead_backend": lookahead_backend,
                     **lookahead_metadata,
                     **trace_metadata,
@@ -510,6 +556,9 @@ class HMMDFADecoder:
         step_index: int,
         emittable: set[int],
         eos_label: int,
+        hmm_dfa_objective: str,
+        hmm_dfa_base: str,
+        base_weight: float | None,
         hmm_weight: float,
         hf_weight: float,
         lookahead_weight: float,
@@ -564,12 +613,56 @@ class HMMDFADecoder:
             "lookahead_backend": "disabled" if not lookahead_weight else ("static_dp" if static_lookahead is not None else "recursive"),
             "lookahead_depth": getattr(static_lookahead, "max_depth", None),
             "lookahead_entries": getattr(static_lookahead, "entries_computed", None),
+            "hmm_dfa_objective": hmm_dfa_objective,
+            "hmm_dfa_base_requested": hmm_dfa_base,
         }
         if not allowed:
             stats["score_ms"] = _elapsed_ms(score_started)
             return HMMDFAStepScores(torch.full_like(hmm_logits, -1e9), set(), {}, {}, stats)
 
-        combined = hmm_logits * float(hmm_weight)
+        hf_logits = None
+        if float(hf_weight) or hmm_dfa_objective == "ctrl_g":
+            backend_started = time.perf_counter()
+            hf_logits = self._cached_backend_label_logits(
+                product_state.full_ids,
+                product_state.hmm_belief.device,
+                label_count=hmm_logits.numel(),
+                backend_logits_cache=backend_logits_cache,
+            )
+            stats["backend_ms"] = _elapsed_ms(backend_started)
+            stats["backend_cache_size"] = len(backend_logits_cache)
+
+        effective_base = None
+        standalone_hmm_term = False
+        if hmm_dfa_objective == "log_linear_blend":
+            combined = hmm_logits * float(hmm_weight)
+            standalone_hmm_term = bool(float(hmm_weight))
+        elif hmm_dfa_objective == "ctrl_g":
+            if hmm_dfa_base == "backend":
+                if hf_logits is None:
+                    raise ValueError("hmm_dfa_base='backend' requires backend label logits")
+                effective_base = "backend"
+                weight = 1.0 if base_weight is None else float(base_weight)
+                combined = hf_logits.to(device=hmm_logits.device, dtype=hmm_logits.dtype) * weight
+            elif hmm_dfa_base == "hmm":
+                effective_base = "hmm"
+                weight = float(hmm_weight) if base_weight is None else float(base_weight)
+                combined = hmm_logits * weight
+                standalone_hmm_term = bool(weight)
+            else:
+                if hf_logits is not None:
+                    effective_base = "backend"
+                    weight = 1.0 if base_weight is None else float(base_weight)
+                    combined = hf_logits.to(device=hmm_logits.device, dtype=hmm_logits.dtype) * weight
+                else:
+                    effective_base = "hmm"
+                    weight = float(hmm_weight) if base_weight is None else float(base_weight)
+                    combined = hmm_logits * weight
+                    standalone_hmm_term = bool(weight)
+        else:
+            raise ValueError(f"unsupported HMM+DFA objective {hmm_dfa_objective!r}")
+        stats["hmm_dfa_base_effective"] = effective_base
+        stats["standalone_hmm_term"] = standalone_hmm_term
         next_beliefs: dict[int, torch.Tensor] = {}
         next_dfa_states: dict[int, Any] = {label: next_state for label, next_state in allowed_pairs}
 
@@ -624,18 +717,9 @@ class HMMDFADecoder:
             stats["lookahead_entries"] = getattr(static_lookahead, "entries_computed", None)
             stats["recursive_cache_size"] = len(recursive_cache)
 
-        if float(hf_weight):
-            backend_started = time.perf_counter()
-            hf_logits = self._cached_backend_label_logits(
-                product_state.full_ids,
-                product_state.hmm_belief.device,
-                label_count=hmm_logits.numel(),
-                backend_logits_cache=backend_logits_cache,
-            )
+        if hmm_dfa_objective == "log_linear_blend" and float(hf_weight):
             if hf_logits is not None:
                 combined = combined + hf_logits.to(device=combined.device, dtype=combined.dtype) * float(hf_weight)
-            stats["backend_ms"] = _elapsed_ms(backend_started)
-            stats["backend_cache_size"] = len(backend_logits_cache)
 
         try:
             mask_started = time.perf_counter()
@@ -721,6 +805,9 @@ class HMMDFADecoder:
         policy: StopPolicy,
         emittable: set[int],
         eos_label: int,
+        hmm_dfa_objective: str,
+        hmm_dfa_base: str,
+        base_weight: float | None,
         hmm_weight: float,
         hf_weight: float,
         lookahead_weight: float,
@@ -747,6 +834,9 @@ class HMMDFADecoder:
                 step_index=len(product.labels),
                 emittable=emittable,
                 eos_label=eos_label,
+                hmm_dfa_objective=hmm_dfa_objective,
+                hmm_dfa_base=hmm_dfa_base,
+                base_weight=base_weight,
                 hmm_weight=hmm_weight,
                 hf_weight=hf_weight,
                 lookahead_weight=lookahead_weight,
@@ -802,6 +892,9 @@ class HMMDFADecoder:
         policy: StopPolicy,
         emittable: set[int],
         eos_label: int,
+        hmm_dfa_objective: str,
+        hmm_dfa_base: str,
+        base_weight: float | None,
         hmm_weight: float,
         hf_weight: float,
         lookahead_weight: float,
@@ -841,6 +934,9 @@ class HMMDFADecoder:
                     step_index=len(product.labels),
                     emittable=emittable,
                     eos_label=eos_label,
+                    hmm_dfa_objective=hmm_dfa_objective,
+                    hmm_dfa_base=hmm_dfa_base,
+                    base_weight=base_weight,
                     hmm_weight=hmm_weight,
                     hf_weight=hf_weight,
                     lookahead_weight=lookahead_weight,
@@ -902,6 +998,9 @@ class HMMDFADecoder:
         policy: StopPolicy,
         emittable: set[int],
         eos_label: int,
+        hmm_dfa_objective: str,
+        hmm_dfa_base: str,
+        base_weight: float | None,
         hmm_weight: float,
         hf_weight: float,
         lookahead_weight: float,
@@ -947,6 +1046,9 @@ class HMMDFADecoder:
                     step_index=len(product.labels),
                     emittable=emittable,
                     eos_label=eos_label,
+                    hmm_dfa_objective=hmm_dfa_objective,
+                    hmm_dfa_base=hmm_dfa_base,
+                    base_weight=base_weight,
                     hmm_weight=hmm_weight,
                     hf_weight=hf_weight,
                     lookahead_weight=lookahead_weight,
