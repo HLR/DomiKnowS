@@ -146,7 +146,31 @@ class LogicalConstraintConstructor:
                 return tOneSqueezed
             else:
                 sampleSize = p
-                
+
+                # Semantic sampling stores the complete assignment table under
+                # the ``-1`` key.  Reuse it instead of trying to allocate a
+                # tensor with a negative dimension.
+                if sampleSize == -1:
+                    sample_values = dn.getAttributes().get(sampleKey, {}).get(-1, {}).get(e[1])
+                    if sample_values is None:
+                        semantic_sample_size = getattr(self, 'semantic_sample_size', None)
+                        if semantic_sample_size is None:
+                            raise RuntimeError(
+                                'Semantic sample size is unavailable for a structural node.'
+                            )
+                        sample_values = torch.ones(
+                            semantic_sample_size,
+                            dtype=torch.bool,
+                            device=self.current_device,
+                        )
+                    xVarName = "%s_%s_is_%s" % (e[0], dn.getInstanceID(), e[1])
+                    xP = torch.ones(
+                        sample_values.shape[0],
+                        device=self.current_device,
+                        dtype=self._get_dtype(),
+                    )
+                    return (sample_values, (xP, sample_values, xVarName))
+
                 if sampleSize not in dn.getAttributes()[sampleKey]: 
                     dn.getAttributes()[sampleKey][sampleSize] = {}
                     

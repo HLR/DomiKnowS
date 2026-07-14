@@ -431,7 +431,9 @@ class SampleLossCalculator:
                 dn.getAttributes()[mConceptInfo['xkey']][sampleSize] = OrderedDict()
                 
                 for i, e in enumerate(mConceptInfo["e"]):
-                    isFiexd = self.solver.isVariableFixed(dn, mConcept, e)
+                    isFiexd = self.solver.constraintConstructor.isVariableFixed(
+                        dn, mConcept, e
+                    )
                     
                     if mConceptInfo["binary"]:
                         i = 1
@@ -459,10 +461,14 @@ class SampleLossCalculator:
                         pass
                     index += 1
         
+        # Structural/root nodes may not have their own semantic sample table.
+        # Keep the assignment count on the constructor so it can create a
+        # correctly sized constant vector for those nodes.
+        self.solver.constraintConstructor.semantic_sample_size = productSize
         return productSize
     
     def isConceptFixed(self, conceptName):
-        for graph in self.myGraph: # Loop through graphs
+        for graph in self.solver.myGraph: # Loop through graphs
             for _, lc in graph.allLogicalConstrains: # loop trough lcs in the graph
                 if not lc.headLC or not lc.active: # Process only active and head lcs
                     continue

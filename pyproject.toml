@@ -60,6 +60,10 @@ cu126 = [
   "torch==2.11.*",
   "torchvision==0.26.*"
 ]
+cu132 = [
+  "torch==2.13.*",
+  "torchvision==0.28.*"
+]
 xpu = [
   "torch==2.8.*",
   "torchvision==0.23.*",

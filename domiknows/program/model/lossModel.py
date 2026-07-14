@@ -801,7 +801,11 @@ class SampleLossModel(LossModel):
                         loss_ = -1 * torch.log(loss_value)
                         key_loss += loss_
                 else:
-                    if constr_loss["globalSuccessCounter"] > 0:
+                    # Keep per-constraint successes when global aggregation is
+                    # disabled.  Previously this replacement happened whenever
+                    # a global-success sample existed, effectively making
+                    # ``sampleGlobalLoss=False`` behave like global sampling.
+                    if self.sampleGlobalLoss and constr_loss["globalSuccessCounter"] > 0:
                         lcSuccesses = constr_loss["globalSuccesses"]
                     if lossTensor.sum().item() != 0:
                         tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
