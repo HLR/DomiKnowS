@@ -334,7 +334,7 @@ def build_sample_loss_program(
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         sample=True,
         sampleSize=args.sample_size,
-        sampleGlobalLoss=True,
+        sampleGlobalLoss=False,
         beta=args.beta,
         device=device,
     )
@@ -358,7 +358,7 @@ def build_gumbel_sample_loss_program(
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         sample=True,
         sampleSize=args.sample_size,
-        sampleGlobalLoss=True,
+        sampleGlobalLoss=False,
         beta=args.beta,
         device=device,
         use_gumbel=True,
@@ -544,6 +544,15 @@ def _print_grad_report(prefix: str, value_label: str, value: float, summary: dic
             print(f"    {name}: norm={norm:.6f}, max={max_grad:.6f}")
 
 
+def _loss_value(loss: Any) -> float:
+    """Convert tensor and scalar diagnostic losses to a printable float."""
+    if torch.is_tensor(loss):
+        return float(loss.detach().item())
+    if isinstance(loss, (int, float, np.number)):
+        return float(loss)
+    return float("nan")
+
+
 def sample_loss_gradient_report(
     built: BuiltProgram,
     item: dict[str, Any],
@@ -565,7 +574,7 @@ def sample_loss_gradient_report(
     if torch.is_tensor(loss) and loss.requires_grad:
         loss.backward()
     summary = _grad_summary(built.program)
-    value = float(loss.detach().item()) if torch.is_tensor(loss) else float("nan")
+    value = _loss_value(loss)
     _print_grad_report(f"{program_name} {label}", "sampled constraint loss", value, summary)
     _zero_grads(built.program)
 
@@ -587,7 +596,7 @@ def reinforcement_gradient_report(
     if torch.is_tensor(loss) and loss.requires_grad:
         loss.backward()
     summary = _grad_summary(built.program)
-    loss_value = float(loss.detach().item()) if torch.is_tensor(loss) else float("nan")
+    loss_value = _loss_value(loss)
     _print_grad_report(
         f"ReinforcementProgram {label}",
         f"reinforcement loss (mean reward {mean_reward:.6f})",
