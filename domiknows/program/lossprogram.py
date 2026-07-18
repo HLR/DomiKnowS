@@ -8,7 +8,12 @@ from .program import LearningBasedProgram, get_len
 from ..utils import consume, setup_logger
 from tqdm import tqdm
 
-from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
+from .model.lossModel import (
+    PrimalDualModel,
+    SampleLossModel,
+    SemanticLossModel,
+    InferenceModel,
+)
 from .model.base import Mode
 from .model.gbi import GBIModel
 
@@ -1517,6 +1522,24 @@ class SampleLossProgram(LossProgram):
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
+
+
+class SemanticLossProgram(SampleLossProgram):
+    """Train with differentiable exact ``-log(WMC)`` constraint loss."""
+
+    DEFAULTCMODEL = SemanticLossModel
+
+    def __init__(self, graph, Model, beta=1, **kwargs):
+        # Reuse SampleLossProgram's optimizer setup and train_epoch, whose
+        # objective is exactly mloss + beta * closs after warmup.
+        LossProgram.__init__(
+            self,
+            graph,
+            Model,
+            CModel=SemanticLossModel,
+            beta=beta,
+            **kwargs,
+        )
 
 #=============================================================================
 # Gumbel Sample Loss Program

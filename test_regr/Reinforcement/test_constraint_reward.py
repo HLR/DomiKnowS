@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import pytest
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -88,3 +89,104 @@ def test_constraint_reward_works_without_reward_function():
         Optim=lambda p: torch.optim.Adam(p, lr=5e-3), device="cpu")
     trained = program.evaluate_reward(dataset, num_samples=300)
     assert trained > baseline, f"constraint reward did not improve: {baseline} -> {trained}"
+
+
+def test_exact_cardinality_circuit_matches_poisson_binomial_and_backprops():
+    """The exactL integration path agrees with its hand-written DP oracle."""
+    np.random.seed(0); torch.manual_seed(0)
+    program, dataset, b_answer = _build()
+    _mloss, _metric, datanode, _builder = program.model(dataset[0])
+
+    constraint = next(iter(program.graph.logicalConstrains.values()))
+    result = datanode.calculateLcLoss(circuit=True)[constraint.lcName]
+
+    root_concept = datanode.findRootConceptOrRelation(b_answer.name)
+    b_nodes = datanode.findDatanodes(select=root_concept)
+    zero_probabilities = [
+        node.getAttribute(f"<{b_answer.name}>/local/softmax").squeeze()[0]
+        for node in b_nodes
+    ]
+    distribution = zero_probabilities[0].new_zeros(len(zero_probabilities) + 1)
+    distribution[0] = 1.0
+    for probability in zero_probabilities:
+        previous = distribution.clone()
+        distribution[0] = previous[0] * (1.0 - probability)
+        for count in range(1, len(zero_probabilities) + 1):
+            distribution[count] = (
+                previous[count] * (1.0 - probability)
+                + previous[count - 1] * probability
+            )
+
+    assert result["probability"].detach().item() == pytest.approx(
+        distribution[EXPECTED_ZEROS].detach().item()
+    )
+    cached = datanode.calculateLcLoss(circuit=True)[constraint.lcName]
+    assert cached["cacheHit"] is True
+    assert cached["probability"].detach().item() == pytest.approx(
+        result["probability"].detach().item()
+    )
+    enumeration = datanode.calculateLcLoss(
+        sample=True,
+        sampleSize=-1,
+        sampleGlobalLoss=False,
+    )[constraint.lcName]
+    assignment_weights = enumeration["lossTensor"][0]
+    satisfying = enumeration["lcSuccesses"][0].bool()
+    assert result["probability"].detach().item() == pytest.approx(
+        assignment_weights[satisfying].sum().detach().item(),
+        abs=1e-6,
+    )
+    with pytest.warns(RuntimeWarning, match="Falling back to Product t-norm"):
+        fallback = datanode.calculateLcLoss(
+            circuit=True,
+            circuitBackend="bdd",
+            circuitMaxNodes=2,
+        )[constraint.lcName]
+    assert fallback["backend"] == "tnorm"
+    assert fallback["fallback"] == "circuit-size-limit"
+    assert fallback["exact"] is False
+    assert torch.isfinite(fallback["loss"]).all()
+    result["loss"].backward()
+    gradients = [
+        parameter.grad
+        for parameter in program.model.parameters()
+        if parameter.grad is not None
+    ]
+    assert gradients
+    assert all(torch.isfinite(gradient).all() for gradient in gradients)
+
+
+def test_semantic_loss_program_improves_exact_constraint_probability():
+    from domiknows.program import SemanticLossProgram
+    from domiknows.program.model.pytorch import PoiModel
+
+    np.random.seed(0); torch.manual_seed(0)
+    base_program, dataset, b_answer = _build()
+    graph = base_program.graph
+    program = SemanticLossProgram(
+        graph,
+        PoiModel,
+        poi=[graph.concepts["a"], graph.concepts["b"], b_answer],
+        circuit_backend="bdd",
+        device="cpu",
+    )
+    program.to("cpu")
+    constraint = next(iter(graph.logicalConstrains.values()))
+
+    def satisfaction_probability():
+        _mloss, _metric, datanode, _builder = program.model(dataset[0])
+        return datanode.calculateLcLoss(circuit=True)[constraint.lcName][
+            "probability"
+        ].detach().item()
+
+    before = satisfaction_probability()
+    program.train(
+        dataset,
+        train_epoch_num=12,
+        Optim=lambda parameters: torch.optim.Adam(parameters, lr=2e-2),
+        c_lr=1e-2,
+        c_warmup_iters=0,
+        device="cpu",
+    )
+    after = satisfaction_probability()
+    assert after > before + 0.02, f"exact satisfaction did not improve: {before} -> {after}"

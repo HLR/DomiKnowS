@@ -20,6 +20,8 @@ from domiknows.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 from domiknows.solver.booleanMethodsCalculator import booleanMethodsCalculator
+from domiknows.solver.circuitBooleanMethods import circuitBooleanMethods
+from domiknows.solver.circuitLossCalculator import CircuitLossCalculator
 
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
@@ -38,7 +40,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
+        self.myCircuitBooleanMethods = circuitBooleanMethods()
         self.constraintConstructor = LogicalConstraintConstructor(self.myLogger)
+        self.circuitLossCalculator = CircuitLossCalculator(self)
 
         self.logical_constraints = {}
         for g in graph:
@@ -49,6 +53,46 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.reuse_model = True
             
         self.model = collections.deque([], 20)
+
+    def configureCircuitBackend(self, *, backend=None, max_nodes=None, size_limit_action=None):
+        """Reconfigure the exact circuit backend and discard incompatible cache."""
+        current = self.myCircuitBooleanMethods
+        backend = current.requested_backend if backend is None else backend
+        max_nodes = current.max_nodes if max_nodes is None else max_nodes
+        size_limit_action = (
+            current.size_limit_action
+            if size_limit_action is None
+            else size_limit_action
+        )
+        requested = (backend, max_nodes, size_limit_action)
+        active = (
+            current.requested_backend,
+            current.max_nodes,
+            current.size_limit_action,
+        )
+        if requested != active:
+            self.myCircuitBooleanMethods = circuitBooleanMethods(
+                backend=backend,
+                max_nodes=max_nodes,
+                size_limit_action=size_limit_action,
+            )
+            self.circuitLossCalculator._compile_cache.clear()
+
+    def calculateCircuitLoss(
+        self,
+        dn,
+        *,
+        backend=None,
+        max_nodes=None,
+        size_limit_action=None,
+    ):
+        """Calculate exact ``-log(WMC)`` losses for active head constraints."""
+        self.configureCircuitBackend(
+            backend=backend,
+            max_nodes=max_nodes,
+            size_limit_action=size_limit_action,
+        )
+        return self.circuitLossCalculator.calculateCircuitLoss(dn)
         
     def set_logical_constraints(self, new_logical_constraints):
         self.logical_constraints = new_logical_constraints

@@ -19,6 +19,7 @@ This directory contains the constraint solver implementations for the DomiKnows 
 | `lcLossBooleanMethods` | `lcLossBooleanMethods.py` | `constraintsProcessor` | Differentiable t-norm logic |
 | `lcLossSampleBooleanMethods` | `lcLossSampleBooleanMethods.py` | `constraintsProcessor` | Sample-based logic evaluation |
 | `booleanMethodsCalculator` | `ilpBooleanMethodsCalculator.py` | `constraintsProcessor` | Numeric logic evaluation |
+| `circuitBooleanMethods` | `circuitBooleanMethods.py` | `constraintsProcessor` | Exact SDD/BDD semantic loss |
 | **Factory** | | | |
 | `ilpOntSolverFactory` | `ilpOntSolverFactory.py` | - | Solver instance management |
 
@@ -28,6 +29,7 @@ This directory contains the constraint solver implementations for the DomiKnows 
 
 - **Constraint-based inference**: `gurobiILPOntSolver` (requires Gurobi license)
 - **Differentiable constraint learning**: Use `lcLossBooleanMethods` with loss models
+- **Exact differentiable semantic loss**: Use `SemanticLossProgram`; see [README_SEMANTIC_LOSS.md](README_SEMANTIC_LOSS.md)
 - **Constraint verification**: Use `booleanMethodsCalculator` 
 - **No inference needed**: `dummyILPOntSolver`
 

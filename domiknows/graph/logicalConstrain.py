@@ -790,9 +790,41 @@ class LogicalConstrain(LcElement):
         zVars = []
         
         condition_vars = []
-        for i, _ in enumerate(lcVariableSet0):
-            # Collect all condition variables for this grounding
-            condition_vars.extend(lcVariableSet0[i])
+        if getattr(myConstraintVarProcessor, "is_exact_circuit", False):
+            # Exact iota semantics are over entities, not over duplicated
+            # candidate rows.  Combine every operand into phi(entity), then OR
+            # relational/candidate expansions that share the same primary
+            # grounded entity.  The legacy soft/sample backends keep their
+            # historical layout below.
+            setups = self._collectVariableSetups(
+                lcVariableName0, lcVariableNames[1:], v
+            )
+            grouped_conditions = {}
+            group_order = []
+            for row in setups:
+                for grounding in row:
+                    valid = [value for value in grounding if value is not None]
+                    if not valid:
+                        continue
+                    primary = valid[0]
+                    primary_key = getattr(
+                        primary,
+                        "key",
+                        getattr(primary, "node_id", id(primary)),
+                    )
+                    condition = myConstraintVarProcessor.andVar(model, *valid)
+                    if primary_key not in grouped_conditions:
+                        grouped_conditions[primary_key] = condition
+                        group_order.append(primary_key)
+                    else:
+                        grouped_conditions[primary_key] = myConstraintVarProcessor.orVar(
+                            model, grouped_conditions[primary_key], condition
+                        )
+            condition_vars = [grouped_conditions[key] for key in group_order]
+        else:
+            for i, _ in enumerate(lcVariableSet0):
+                # Collect all condition variables for this grounding
+                condition_vars.extend(lcVariableSet0[i])
             
         # Call the boolean processor's iotaVar method
         result = myConstraintVarProcessor.iotaVar(

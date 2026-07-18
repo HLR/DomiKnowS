@@ -461,6 +461,73 @@ class PrimalDualModel(LossModel):
         else:
             self.primalDualLogger.info("=== PrimalDualModel Operations Logger Initialized ===")
 
+
+class SemanticLossModel(LossModel):
+    """Constraint model using exact circuit weighted model counting.
+
+    The default objective is the direct sum of ``-log(WMC)`` values. Set
+    ``lambda_weighted=True`` to reuse :class:`LossModel`'s learned per-template
+    multipliers.
+    """
+
+    def __init__(
+        self,
+        graph,
+        *,
+        lambda_weighted=False,
+        circuit_backend=None,
+        circuit_max_nodes=None,
+        circuit_size_limit_action=None,
+        device="auto",
+    ):
+        super().__init__(graph=graph, device=device)
+        self.lambda_weighted = bool(lambda_weighted)
+        self.circuit_backend = circuit_backend
+        self.circuit_max_nodes = circuit_max_nodes
+        self.circuit_size_limit_action = circuit_size_limit_action
+
+    def forward(self, builder, build=None, **_):
+        if build is None:
+            build = self.build
+        if not build and not isinstance(builder, DataNodeBuilder):
+            raise ValueError(
+                "SemanticLossModel must be invoked with `build` on or with "
+                "a provided DataNode Builder."
+            )
+
+        builder.createBatchRootDN()
+        datanode = builder.getDataNode(device=self.device)
+        datanode.inferLocal(keys=("softmax",))
+        constraint_losses = datanode.calculateLcLoss(
+            circuit=True,
+            circuitBackend=self.circuit_backend,
+            circuitMaxNodes=self.circuit_max_nodes,
+            circuitSizeLimitAction=self.circuit_size_limit_action,
+        )
+
+        losses = []
+        for key, loss_info in constraint_losses.items():
+            constraint_key = key
+            if constraint_key not in self.constr:
+                constraint_key = getattr(loss_info.get("lc"), "lcName", key)
+            if constraint_key not in self.constr or loss_info.get("lossTensor") is None:
+                continue
+            loss_tensor = loss_info["lossTensor"]
+            if self.lambda_weighted:
+                loss_value = self._weighted_constraint_loss(constraint_key, loss_tensor)
+            else:
+                loss_value = loss_tensor.mean()
+            self.loss[constraint_key](loss_value)
+            losses.append(loss_value)
+
+        if losses:
+            total = torch.stack([loss.reshape(()) for loss in losses]).sum()
+        else:
+            dtype = getattr(datanode, "current_dtype", torch.float32)
+            device = getattr(datanode, "current_device", self.device)
+            total = torch.zeros((), device=device, dtype=dtype)
+        return total, datanode, builder
+
 class InferenceModel(LossModel):
     """
     Class used to train from the program execution loss.

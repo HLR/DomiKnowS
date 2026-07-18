@@ -116,3 +116,19 @@ def test_differentL_loss(program, dataset):
                 print(f"\ndifferentL loss (tnorm={tnorm}): shape={loss.shape}, values={loss}")
                 assert torch.is_tensor(loss), "Loss should be a tensor"
                 assert not torch.isnan(loss).any(), "Loss should not contain NaN"
+
+
+def test_same_and_different_exact_circuit_loss(program, dataset):
+    """The circuit path preserves identity when an entity is compared to itself."""
+    from .graph import same_color, diff_color
+
+    datanode = next(program.populate(dataset=dataset))
+    results = datanode.calculateLcLoss(circuit=True)
+
+    same_result = results[same_color.lcName]
+    different_result = results[diff_color.lcName]
+    assert same_result["backend"] in {"bdd", "pysdd"}
+    assert same_result["probability"].item() == pytest.approx(1.0, abs=1e-6)
+    assert same_result["loss"].item() == pytest.approx(0.0, abs=1e-6)
+    assert different_result["probability"].item() == pytest.approx(0.0, abs=1e-6)
+    assert torch.isfinite(different_result["loss"])

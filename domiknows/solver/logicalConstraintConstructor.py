@@ -103,7 +103,107 @@ class LogicalConstraintConstructor:
             
         return dns
     
-    def getMLResult(self, dn, xPkey, e, p, loss=False, sample=False):
+    @staticmethod
+    def _circuit_probability(value, class_index):
+        """Return one scalar class probability without detaching autograd."""
+        if not torch.is_tensor(value):
+            return torch.as_tensor(value, dtype=torch.get_default_dtype()).reshape(())
+        squeezed = value.squeeze()
+        if squeezed.numel() == 1:
+            return squeezed.reshape(())
+        return squeezed.reshape(-1)[int(class_index)]
+
+    def _circuit_leaf(self, dn, xPkey, e, concept):
+        """Create a stable, categorical-aware circuit leaf handle."""
+        from domiknows.solver.circuitBooleanMethods import CircuitLeaf
+
+        concept_name, label_index, class_index = e
+        instance_id = dn.getInstanceID()
+        raw = dn.getAttribute(xPkey)
+        fixed_value = self.isVariableFixed(dn, concept_name, e)
+
+        if isinstance(concept, EnumConcept):
+            values = raw.squeeze().reshape(-1)
+            domain_size = len(concept.enum)
+            if values.numel() < domain_size:
+                raise ValueError(
+                    f"EnumConcept {concept_name!r} exposes {values.numel()} probabilities "
+                    f"for a {domain_size}-value domain"
+                )
+            probabilities = tuple(values[index] for index in range(domain_size))
+            variable_key = ("categorical", concept_name, instance_id)
+            value_index = int(label_index)
+            probability = probabilities[value_index]
+            categorical = True
+        else:
+            # is_a sibling concepts are one categorical variable when a parent
+            # has multiple subclasses.  Gather all sibling true-probabilities
+            # now so a formula mentioning only one sibling still has a complete
+            # categorical distribution for WMC.
+            categorical_parent = None
+            siblings = None
+            for relation in getattr(concept, "_out", {}).get("is_a", []):
+                parent = relation.dst
+                candidates = [rel.src for rel in getattr(parent, "_in", {}).get("is_a", [])]
+                # A property-family parent (e.g. object -> material ->
+                # {metal,rubber}) is itself an is_a child.  A root/container
+                # concept (e.g. entity -> {selected,material}) merely owns
+                # independent predicates and must not make them one-hot.
+                parent_is_property_family = bool(
+                    getattr(parent, "_out", {}).get("is_a", [])
+                )
+                if len(candidates) > 1 and parent_is_property_family:
+                    categorical_parent = parent
+                    siblings = candidates
+                    break
+
+            if categorical_parent is not None:
+                probabilities_list = []
+                for sibling in siblings:
+                    sibling_key = f"<{sibling.name}>" + xPkey[xPkey.index("/") :]
+                    sibling_raw = dn.getAttribute(sibling_key)
+                    if sibling_raw is None:
+                        raise ValueError(
+                            f"Missing probability for categorical sibling {sibling.name!r}"
+                        )
+                    sibling_values = sibling_raw.squeeze().reshape(-1)
+                    sibling_probability = sibling_values[-1]
+                    probabilities_list.append(sibling_probability)
+                probabilities = tuple(probabilities_list)
+                value_index = siblings.index(concept)
+                probability = probabilities[value_index]
+                variable_key = ("categorical", categorical_parent.name, instance_id)
+                categorical = True
+            else:
+                probability = self._circuit_probability(raw, label_index)
+                probabilities = (1.0 - probability, probability)
+                variable_key = ("binary", (concept_name, instance_id, int(class_index)))
+                value_index = 1
+                categorical = False
+
+        if fixed_value is not None:
+            # isVariableFixed historically compares binary labels with the
+            # storage index (0), whereas this handle denotes the positive
+            # class (label 1). Recover the literal truth from the label value.
+            if not isinstance(concept, EnumConcept):
+                label = self.getLabel(dn, concept_name)
+                if label is not None:
+                    label_value = int(label.detach().reshape(-1)[0].item())
+                    fixed_value = int(label_value == int(label_index))
+            fixed_value = int(fixed_value)
+
+        return CircuitLeaf(
+            key=(concept_name, instance_id, int(class_index)),
+            probability=probability,
+            variable_key=variable_key,
+            value_index=value_index,
+            probabilities=probabilities,
+            categorical=categorical,
+            fixed_value=fixed_value,
+        )
+
+    def getMLResult(self, dn, xPkey, e, p, loss=False, sample=False,
+                    circuit=False, concept=None):
         """
         Get ML result for a datanode and concept.
         
@@ -114,6 +214,8 @@ class LogicalConstraintConstructor:
             p: Sample size (for sampling) or priority (for ILP)
             loss: Whether calculating loss
             sample: Whether generating samples
+            circuit: Whether returning a stable exact-circuit leaf handle
+            concept: Concrete Concept object used to recover categorical groups
             
         Returns:
             For ILP: ILP variable
@@ -134,6 +236,8 @@ class LogicalConstraintConstructor:
             dn.getAttributes()[sampleKey] = {}
         
         if dn.ontologyNode.name == conceptName:
+            if circuit:
+                return True
             if not sample:
                 if "xP" in xPkey:
                     return 1
@@ -186,6 +290,11 @@ class LogicalConstraintConstructor:
                 return None
             else:   
                 return ([None], (None, [None]))
+
+        if circuit:
+            if concept is None:
+                raise ValueError("Circuit leaf construction requires the Concept object")
+            return self._circuit_leaf(dn, xPkey, e, concept)
         
         if not loss:
             if "xP" in xPkey:
@@ -449,7 +558,8 @@ class LogicalConstraintConstructor:
 
     def constructLogicalConstrains(self, lc, booleanProcessor, m, dn, p, key=None,
                                    lcVariablesDns=None, lcVariables=None, headLC=False, 
-                                   loss=False, sample=False, vNo=None, verify=False, label=None):
+                                   loss=False, sample=False, vNo=None, verify=False, label=None,
+                                   circuit=False):
         """
         Construct logical constraints by processing concepts and variables.
         
@@ -468,6 +578,7 @@ class LogicalConstraintConstructor:
             vNo: Variable numbering counter [concept_counter, lc_counter]
             verify: Whether verifying constraints
             labels: Optional labels for the constraint
+            circuit: Return stable leaf handles for an exact circuit backend
             
         Returns:
             For sample=True: (result, sampleInfo, lcVariablesSet, lcVariables)
@@ -569,26 +680,26 @@ class LogicalConstraintConstructor:
                                     for i, _ in enumerate(eList):
                                         eT = (e[0].name, i, i)
                                         if sample:
-                                            vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                            vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                             _sampleInfoForVariable.append(vDnSampleInfo)
                                         else:
-                                            vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                            vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                         _vDns.append(vDn)
                                 elif isinstance(e[0], EnumConcept) and e[2] != None:
                                     eT = (e[0].name, e[2], e[2])
                                     if sample:
-                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                         _sampleInfoForVariable.append(vDnSampleInfo)
                                     else:
-                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                     _vDns.append(vDn)
                                 else:
                                     eT = (conceptName, 1, 0)
                                     if sample:
-                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                         _sampleInfoForVariable.append(vDnSampleInfo)
                                     else:
-                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                     _vDns.append(vDn)
 
                             vDns.append(_vDns)
@@ -723,10 +834,10 @@ class LogicalConstraintConstructor:
                                 for i, _ in enumerate(eList):
                                     eT = (e[0].name, i, i)
                                     if sample:
-                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                         _sampleInfoForVariable.append(vDnSampleInfo)
                                     else:
-                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                     
                                     if lc.__str__() == "fixedL":
                                         vDn = self.fixedLSupport(_dn, conceptName, vDn, i, m)
@@ -736,10 +847,10 @@ class LogicalConstraintConstructor:
                                 eT = (e[0].name, e[2], e[2])
                                 
                                 if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)                                    
+                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                     _sampleInfoForVariable.append(vDnSampleInfo)
                                 else:
-                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                 
                                 if lc.__str__() == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
@@ -748,10 +859,10 @@ class LogicalConstraintConstructor:
                             else:
                                 eT = (conceptName, 1, 0)
                                 if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                     _sampleInfoForVariable.append(vDnSampleInfo)
                                 else:
-                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample)
+                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss=loss, sample=sample, circuit=circuit, concept=e[0])
                                 
                                 if lc.__str__() == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, 1, m)
@@ -792,7 +903,8 @@ class LogicalConstraintConstructor:
                         lcVariablesDnsNew = self.constructLogicalConstrains(
                             e, booleanProcessor, m, dn, p, key=key, 
                             lcVariablesDns=lcVariablesDns, lcVariables=lcVariables, 
-                            headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify, label=label)
+                            headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify, label=label,
+                            circuit=circuit)
                          
                         lcVariablesDns = lcVariablesDnsNew
                         vDns = None
@@ -814,7 +926,8 @@ class LogicalConstraintConstructor:
                             vDns, sampleInfoLC, lcVariablesLC, lcVariableUpdated = self.constructLogicalConstrains(
                                 e, booleanProcessor, m, dn, p, key=key, 
                                 lcVariablesDns=lcVariablesDns, lcVariables=lcVariables, 
-                                headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify)
+                                headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify,
+                                circuit=circuit)
                             sampleInfo = {**sampleInfo, **sampleInfoLC}
                             lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
                             lcVariables = lcVariableUpdated 
@@ -822,7 +935,8 @@ class LogicalConstraintConstructor:
                             vDns, lcVariableUpdated = self.constructLogicalConstrains(
                                 e, booleanProcessor, m, dn, p, key=key, 
                                 lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
-                                headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify)
+                                headLC=False, loss=loss, sample=sample, vNo=vNo, verify=verify,
+                                circuit=circuit)
                             
                             # Ensure vDns has the correct structure
                             if verify and not loss and not sample:

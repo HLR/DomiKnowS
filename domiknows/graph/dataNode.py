@@ -2347,7 +2347,10 @@ class DataNode:
 
         return result
     
-    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False, compiled=False):
+    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0,
+                        sampleGlobalLoss=False, compiled=False, circuit=False,
+                        circuitBackend=None, circuitMaxNodes=None,
+                        circuitSizeLimitAction=None):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2366,6 +2369,12 @@ class DataNode:
             Use the compiled (batched-gather) constraint evaluator instead of the
             per-datanode interpreter. Falls back to the interpreter per constraint
             for unsupported constraint types. Ignored when sample is True.
+        - circuit: bool, optional
+            Compile each active head constraint to an exact logical circuit and
+            return differentiable ``-log(weighted_model_count)`` losses.
+        - circuitBackend, circuitMaxNodes, circuitSizeLimitAction: optional
+            Configure the circuit implementation (``auto``, ``pysdd``, or
+            ``bdd``), node budget, and budget action (``raise`` or ``warn``).
 
         Returns:
         - lcResult: object
@@ -2383,7 +2392,16 @@ class DataNode:
         """Calculate loss values for logical constraints."""
         start = perf_counter()
                 
-        if sample:
+        if sample and circuit:
+            raise ValueError("sample and circuit loss modes are mutually exclusive")
+        if circuit:
+            lcLosses = myilpOntSolver.calculateCircuitLoss(
+                self,
+                backend=circuitBackend,
+                max_nodes=circuitMaxNodes,
+                size_limit_action=circuitSizeLimitAction,
+            )
+        elif sample:
             sampleCalculator = SampleLossCalculator(myilpOntSolver)
             lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
         elif compiled:

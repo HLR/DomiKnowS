@@ -270,6 +270,21 @@ class constraintsProcessor(object, metaclass=abc.ABCMeta):
             Exception: In ILP mode, if model is infeasible (no entity can satisfy)
         """
 
+    @abc.abstractmethod
+    def queryVar(
+        self,
+        m,
+        concept,
+        subclasses,
+        selection_vars,
+        *,
+        subclass_data=None,
+        onlyConstrains: bool = False,
+        temperature: float = 1.0,
+        logicMethodName: str = "QUERY",
+    ):
+        """Resolve the subclass of an entity selection produced by iotaL."""
+
     # ------------------------------------------------------------------
     # Same Attribute (sameL / differentL support)
     # ------------------------------------------------------------------
