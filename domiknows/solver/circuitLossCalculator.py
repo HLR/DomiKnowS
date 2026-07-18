@@ -27,13 +27,41 @@ def _collect_circuit_nodes(value):
     return nodes
 
 
+#: How a head constraint's groundings are combined into its loss.
+#:
+#: ``"joint"`` (default) compiles the conjunction of every grounding into one
+#: circuit and reports ``-log P(all groundings hold)``. This is the exact joint
+#: semantics: a concept variable appearing in several groundings is *one*
+#: logical variable, so cross-grounding dependence is preserved (which
+#: per-grounding factorisation — and the t-norm path — silently discards).
+#:
+#: ``"per_grounding"`` reports ``-log P(g)`` separately per grounding, giving a
+#: ``[G]`` loss vector. It loses the cross-grounding dependence but (a) keeps the
+#: loss scale independent of how many groundings a data item happens to have
+#: (the joint ``-log`` grows roughly linearly with the grounding count, so
+#: ``beta`` otherwise has to be retuned per task size), and (b) is required by
+#: per-grounding dual mechanisms such as the amortized DualCritic (R5B), which
+#: need one violation entry per grounding to attribute against.
+AGGREGATIONS = ("joint", "per_grounding")
+
+
 class CircuitLossCalculator:
     """Drive the shared DSL traversal with the exact circuit processor."""
 
-    def __init__(self, solver, epsilon=1e-12):
+    def __init__(self, solver, epsilon=1e-12, aggregation="joint"):
         self.solver = solver
         self.epsilon = float(epsilon)
+        self.aggregation = self._check_aggregation(aggregation)
         self._compile_cache = {}
+
+    @staticmethod
+    def _check_aggregation(aggregation):
+        if aggregation is None:
+            return "joint"
+        if aggregation not in AGGREGATIONS:
+            raise ValueError(
+                f"aggregation must be one of {AGGREGATIONS}, got {aggregation!r}")
+        return aggregation
 
     @staticmethod
     def _label_index(label):
@@ -57,9 +85,12 @@ class CircuitLossCalculator:
         *,
         force_root=False,
         label_name=None,
+        aggregation=None,
     ):
         if (not lc.headLC and not force_root) or not lc.active or type(lc) is fixedL:
             return None
+
+        aggregation = self._check_aggregation(aggregation or self.aggregation)
 
         start = perf_counter_ns()
         processor = self.solver.myCircuitBooleanMethods
@@ -119,41 +150,62 @@ class CircuitLossCalculator:
             grounded_nodes = _collect_circuit_nodes(output)
             if not grounded_nodes:
                 return None
-            # A head LC means every grounding must hold.  Compiling their
-            # conjunction in one circuit is what preserves shared-leaf identity.
-            root = processor.manager.and_all(grounded_nodes)
-            cache_key = (
-                id(lc),
-                processor.grounding_signature(),
-                processor.leaf_key_signature,
-                processor.backend_name,
-            )
-            cached = self._compile_cache.get(cache_key)
-            root_identity = getattr(root, "node_id", getattr(root, "id", None))
-            cached_identity = getattr(cached, "node_id", getattr(cached, "id", None))
-            cache_hit = cached is not None and cached_identity == root_identity
-            if cache_hit:
-                root = cached
+
+            result["aggregation"] = aggregation
+
+            if aggregation == "per_grounding":
+                # One -log P per grounding. Keeps the loss scale independent of
+                # the grounding count and gives per-grounding dual mechanisms
+                # (R5B) something to attribute against; the trade-off is that
+                # dependence between groundings that share a variable is lost.
+                probabilities = torch.stack(
+                    [processor.wmc(node).reshape(()) for node in grounded_nodes])
+                losses = -torch.log(probabilities.clamp_min(self.epsilon))
+                result.update(
+                    probability=probabilities,
+                    lossTensor=losses,
+                    loss=losses.mean(),
+                    cacheHit=False,
+                    groundingCount=len(grounded_nodes),
+                )
             else:
-                self._compile_cache[cache_key] = root
-            probability = processor.wmc(root)
-            loss = -torch.log(probability.clamp_min(self.epsilon))
-            result.update(
-                probability=probability,
-                lossTensor=loss.reshape(1),
-                loss=loss,
-                cacheHit=cache_hit,
-            )
+                # A head LC means every grounding must hold.  Compiling their
+                # conjunction in one circuit is what preserves shared-leaf identity.
+                root = processor.manager.and_all(grounded_nodes)
+                cache_key = (
+                    id(lc),
+                    processor.grounding_signature(),
+                    processor.leaf_key_signature,
+                    processor.backend_name,
+                )
+                cached = self._compile_cache.get(cache_key)
+                root_identity = getattr(root, "node_id", getattr(root, "id", None))
+                cached_identity = getattr(cached, "node_id", getattr(cached, "id", None))
+                cache_hit = cached is not None and cached_identity == root_identity
+                if cache_hit:
+                    root = cached
+                else:
+                    self._compile_cache[cache_key] = root
+                probability = processor.wmc(root)
+                loss = -torch.log(probability.clamp_min(self.epsilon))
+                result.update(
+                    probability=probability,
+                    lossTensor=loss.reshape(1),
+                    loss=loss,
+                    cacheHit=cache_hit,
+                    groundingCount=len(grounded_nodes),
+                )
 
         result["conversionSigmoid"] = result.get("probability")
         result["elapsedInMsLC"] = (perf_counter_ns() - start) / 1_000_000
         return result
 
-    def calculateCircuitLoss(self, dn):
+    def calculateCircuitLoss(self, dn, aggregation=None):
         processor = self.solver.myCircuitBooleanMethods
         processor.current_device = dn.current_device
         processor.current_dtype = getattr(dn, "current_dtype", None)
         dn.setActiveExecutableLCs()
+        aggregation = self._check_aggregation(aggregation or self.aggregation)
 
         losses = {}
 
@@ -165,6 +217,7 @@ class CircuitLossCalculator:
                     label=label,
                     force_root=force_root,
                     label_name=label_name,
+                    aggregation=aggregation,
                 )
             except CircuitSizeLimitExceeded as error:
                 warnings.warn(

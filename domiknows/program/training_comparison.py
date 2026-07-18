@@ -47,18 +47,31 @@ import torch
 class Variant:
     """One training mechanism to compare.
 
-    ``program_kwargs`` are merged into the caller's ``PrimalDualProgram``
-    construction; future R mechanisms are added by registering more variants
-    (or, when a mechanism needs a different Program class, by having the
-    caller's ``build_program`` dispatch on ``name``).
+    ``program_kwargs`` are merged into the caller's program construction.
+    ``program_class`` lets a mechanism require a *different* Program class
+    (R2's semantic loss needs ``SemanticLossProgram`` rather than
+    ``PrimalDualProgram``); builders should honour it via
+    ``variant.program_class or <their default>`` so future R mechanisms need no
+    builder changes.
     """
     name: str
     program_kwargs: Dict[str, Any] = field(default_factory=dict)
     description: str = ''
+    program_class: Optional[type] = None
+
+    def resolve_program_class(self, default):
+        """The Program class to build for this variant."""
+        return self.program_class if self.program_class is not None else default
+
+
+def _semantic_loss_program():
+    """Imported lazily so this module stays free of a Program-layer import cycle."""
+    from domiknows.program.lossprogram import SemanticLossProgram
+    return SemanticLossProgram
 
 
 #: Baseline vs. the mechanisms delivered so far. Extend this list as new R
-#: mechanisms land (e.g. Variant('r2_semantic', {...})).
+#: mechanisms land (e.g. R3/R4).
 DEFAULT_VARIANTS: List[Variant] = [
     Variant('baseline', {},
             'ascent duals + interpreter LC loss (pre-R1/R5)'),
@@ -72,6 +85,13 @@ DEFAULT_VARIANTS: List[Variant] = [
             'R1 + R5A combined'),
     Variant('r1_r5b', {'compile_lc': True, 'dual_granularity': 'amortized'},
             'R1 + R5B combined (critic reads compiled literal features)'),
+    Variant('r2_semantic', {},
+            'R2: exact semantic loss, -log P(constraint) via circuit WMC',
+            program_class=_semantic_loss_program()),
+    Variant('r2_r5a', {'lambda_weighted': True, 'dual_algorithm': 'augmented',
+                       'training_style': 'primal_dual'},
+            'R2 + R5A: exact semantic loss under augmented-Lagrangian duals',
+            program_class=_semantic_loss_program()),
 ]
 
 

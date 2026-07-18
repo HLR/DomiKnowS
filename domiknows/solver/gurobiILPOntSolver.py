@@ -85,6 +85,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         backend=None,
         max_nodes=None,
         size_limit_action=None,
+        aggregation=None,
     ):
         """Calculate exact ``-log(WMC)`` losses for active head constraints."""
         self.configureCircuitBackend(
@@ -92,7 +93,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             max_nodes=max_nodes,
             size_limit_action=size_limit_action,
         )
-        return self.circuitLossCalculator.calculateCircuitLoss(dn)
+        return self.circuitLossCalculator.calculateCircuitLoss(
+            dn, aggregation=aggregation)
         
     def set_logical_constraints(self, new_logical_constraints):
         self.logical_constraints = new_logical_constraints

@@ -2350,7 +2350,7 @@ class DataNode:
     def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0,
                         sampleGlobalLoss=False, compiled=False, circuit=False,
                         circuitBackend=None, circuitMaxNodes=None,
-                        circuitSizeLimitAction=None):
+                        circuitSizeLimitAction=None, circuitAggregation=None):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2375,6 +2375,12 @@ class DataNode:
         - circuitBackend, circuitMaxNodes, circuitSizeLimitAction: optional
             Configure the circuit implementation (``auto``, ``pysdd``, or
             ``bdd``), node budget, and budget action (``raise`` or ``warn``).
+        - circuitAggregation: str, optional
+            ``'joint'`` (default) returns one ``-log P(all groundings hold)`` per
+            constraint, preserving dependence between groundings that share a
+            variable. ``'per_grounding'`` returns a ``[G]`` vector of
+            ``-log P(grounding)``, which keeps the loss scale independent of the
+            grounding count and is required by per-grounding dual mechanisms.
 
         Returns:
         - lcResult: object
@@ -2400,6 +2406,7 @@ class DataNode:
                 backend=circuitBackend,
                 max_nodes=circuitMaxNodes,
                 size_limit_action=circuitSizeLimitAction,
+                aggregation=circuitAggregation,
             )
         elif sample:
             sampleCalculator = SampleLossCalculator(myilpOntSolver)

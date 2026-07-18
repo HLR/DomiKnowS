@@ -1524,12 +1524,36 @@ class SampleLossProgram(LossProgram):
         c_session['iter'] = iter_count
 
 
-class SemanticLossProgram(SampleLossProgram):
-    """Train with differentiable exact ``-log(WMC)`` constraint loss."""
+class SemanticLossProgram(SampleLossProgram, PrimalDualProgram):
+    """Train with differentiable exact ``-log(WMC)`` constraint loss.
+
+    Inherits both epoch implementations (both are ``LossProgram`` subclasses, so
+    the MRO linearises cleanly) and dispatches on ``training_style``. Real
+    inheritance — rather than calling the other class's methods unbound — is
+    what keeps the zero-argument ``super()`` inside those methods valid.
+
+    Two training styles:
+
+    * ``'fixed'`` (default) — the classic semantic-loss objective
+      ``model_loss + beta * semantic_loss``, reusing ``SampleLossProgram``'s
+      epoch.
+    * ``'primal_dual'`` — run the constraint loss through
+      :class:`PrimalDualProgram`'s epoch so the R5 dual machinery applies to the
+      exact loss (learned multipliers, augmented-Lagrangian closed-form updates,
+      or the amortized per-grounding critic). Requires ``lambda_weighted=True``
+      on the constraint model for the multipliers to actually be used; the
+      amortized critic additionally needs per-grounding aggregation, which
+      :class:`SemanticLossModel` selects automatically.
+    """
 
     DEFAULTCMODEL = SemanticLossModel
 
-    def __init__(self, graph, Model, beta=1, **kwargs):
+    def __init__(self, graph, Model, beta=1, training_style='fixed', **kwargs):
+        if training_style not in ('fixed', 'primal_dual'):
+            raise ValueError(
+                "training_style must be 'fixed' or 'primal_dual', "
+                f"got {training_style!r}")
+        self.training_style = training_style
         # Reuse SampleLossProgram's optimizer setup and train_epoch, whose
         # objective is exactly mloss + beta * closs after warmup.
         LossProgram.__init__(
@@ -1540,6 +1564,24 @@ class SemanticLossProgram(SampleLossProgram):
             beta=beta,
             **kwargs,
         )
+
+    def train(self, *args, **kwargs):
+        # PrimalDualProgram.train is what builds ``copt`` and records ``_c_freq``
+        # for the dual schedule; inheriting SampleLossProgram.train would leave
+        # c_update_freq at its default so the dual step would never fire.
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram.train(self, *args, **kwargs)
+        return super().train(*args, **kwargs)
+
+    def train_epoch(self, dataset, **kwargs):
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram.train_epoch(self, dataset, **kwargs)
+        return super().train_epoch(dataset, **kwargs)
+
+    def _init_session(self):
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram._init_session(self)
+        return super()._init_session()
 
 #=============================================================================
 # Gumbel Sample Loss Program

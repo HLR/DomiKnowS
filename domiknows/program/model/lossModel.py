@@ -478,13 +478,43 @@ class SemanticLossModel(LossModel):
         circuit_backend=None,
         circuit_max_nodes=None,
         circuit_size_limit_action=None,
+        circuit_aggregation=None,
         device="auto",
+        dual_algorithm='ascent',
+        dual_granularity='constraint',
+        al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
+        al_stagnation_tau=0.9,
+        critic_embed_dim=8, critic_hidden=32,
     ):
-        super().__init__(graph=graph, device=device)
+        """
+        :param lambda_weighted: weight each constraint's exact loss with the
+            learned dual multipliers instead of summing raw ``-log(WMC)``. This
+            is what composes semantic loss with the R5 dual mechanisms.
+        :param circuit_aggregation: ``'joint'`` (default) or ``'per_grounding'``.
+            Per-grounding is required for ``dual_granularity='amortized'``
+            (R5B), which needs one violation entry per grounding.
+        :param dual_algorithm / dual_granularity / al_* / critic_*: forwarded to
+            :class:`LossModel`; they take effect only when ``lambda_weighted``.
+        """
+        if dual_granularity == 'amortized' and circuit_aggregation is None:
+            # The amortized critic attributes per grounding; a joint scalar
+            # would collapse it to a single row and defeat the mechanism.
+            circuit_aggregation = 'per_grounding'
+
+        super().__init__(
+            graph=graph, device=device,
+            dual_algorithm=dual_algorithm, dual_granularity=dual_granularity,
+            al_rho_init=al_rho_init, al_rho_growth=al_rho_growth,
+            al_rho_max=al_rho_max, al_stagnation_tau=al_stagnation_tau,
+            critic_embed_dim=critic_embed_dim, critic_hidden=critic_hidden,
+        )
         self.lambda_weighted = bool(lambda_weighted)
         self.circuit_backend = circuit_backend
         self.circuit_max_nodes = circuit_max_nodes
         self.circuit_size_limit_action = circuit_size_limit_action
+        self.circuit_aggregation = circuit_aggregation
+        self.constraints_seen = 0
+        self.constraints_inexact = 0
 
     def forward(self, builder, build=None, **_):
         if build is None:
@@ -503,7 +533,13 @@ class SemanticLossModel(LossModel):
             circuitBackend=self.circuit_backend,
             circuitMaxNodes=self.circuit_max_nodes,
             circuitSizeLimitAction=self.circuit_size_limit_action,
+            circuitAggregation=self.circuit_aggregation,
         )
+        # Fraction of constraints that had to abandon the exact circuit and fall
+        # back to the Product t-norm (circuit budget exceeded). Surfaced so a
+        # run can report how much of its "exact" loss really was exact.
+        total_lc = 0
+        inexact_lc = 0
 
         losses = []
         for key, loss_info in constraint_losses.items():
@@ -513,12 +549,19 @@ class SemanticLossModel(LossModel):
             if constraint_key not in self.constr or loss_info.get("lossTensor") is None:
                 continue
             loss_tensor = loss_info["lossTensor"]
+            total_lc += 1
+            if loss_info.get("exact") is False:
+                inexact_lc += 1
             if self.lambda_weighted:
                 loss_value = self._weighted_constraint_loss(constraint_key, loss_tensor)
             else:
                 loss_value = loss_tensor.mean()
             self.loss[constraint_key](loss_value)
             losses.append(loss_value)
+
+        # Running exactness tally across the epoch (reset by LossModel.reset()).
+        self.constraints_seen += total_lc
+        self.constraints_inexact += inexact_lc
 
         if losses:
             total = torch.stack([loss.reshape(()) for loss in losses]).sum()
@@ -527,6 +570,23 @@ class SemanticLossModel(LossModel):
             device = getattr(datanode, "current_device", self.device)
             total = torch.zeros((), device=device, dtype=dtype)
         return total, datanode, builder
+
+    @property
+    def exact_fraction(self):
+        """Fraction of evaluated constraints that used the exact circuit.
+
+        ``1.0`` means every constraint was compiled exactly; anything lower
+        means the circuit budget was exceeded and those constraints silently
+        degraded to the Product t-norm, so the reported loss is not fully exact.
+        """
+        if not self.constraints_seen:
+            return float('nan')
+        return 1.0 - (self.constraints_inexact / self.constraints_seen)
+
+    def reset(self):
+        super().reset()
+        self.constraints_seen = 0
+        self.constraints_inexact = 0
 
 class InferenceModel(LossModel):
     """

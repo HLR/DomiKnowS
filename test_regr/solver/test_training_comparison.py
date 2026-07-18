@@ -80,7 +80,10 @@ def _build_program(variant, dataset):
     b[answer] = ModuleLearner(acb, 'index', module=Net(N), device='cpu')
     b[answer] = FunctionalSensor(acb, 'temp', forward=lambda _, l: l, label=True)
 
-    program = PrimalDualProgram(
+    # Honour the variant's Program class (R2 needs SemanticLossProgram); any
+    # future mechanism that needs its own Program works without a change here.
+    program_cls = variant.resolve_program_class(PrimalDualProgram)
+    program = program_cls(
         graph, SolverModel, poi=[a, b, answer], inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()), device='cpu', beta=1.0,
         **variant.program_kwargs)
@@ -153,6 +156,18 @@ def test_amortized_variants_present(comparison_result):
         r = comparison_result.by_name(name)
         assert r is not None
         assert r.variant.program_kwargs.get('dual_granularity') == 'amortized'
+        assert r.error is None
+        assert not np.isnan(r.violation_after)
+
+
+def test_semantic_variants_use_their_own_program_class(comparison_result):
+    """R2 needs SemanticLossProgram, which the harness supplies via
+    Variant.program_class without any builder-side special-casing."""
+    from domiknows.program.lossprogram import SemanticLossProgram
+    for name in ('r2_semantic', 'r2_r5a'):
+        r = comparison_result.by_name(name)
+        assert r is not None
+        assert r.variant.program_class is SemanticLossProgram
         assert r.error is None
         assert not np.isnan(r.violation_after)
 

@@ -49,6 +49,53 @@ program.train(train_data, train_epoch_num=20, c_warmup_iters=0)
 semantic model sums exact losses directly. Pass `lambda_weighted=True` to use
 the existing learned per-constraint multipliers.
 
+## Grounding aggregation
+
+A head constraint has many groundings. `circuit_aggregation` chooses how they
+become a loss:
+
+| value | loss | when to use |
+|---|---|---|
+| `"joint"` (default) | one `-log P(all groundings hold)` | exact joint semantics — a variable shared by several groundings stays **one** logical variable, so cross-grounding dependence is preserved (the t-norm path loses this) |
+| `"per_grounding"` | a `[G]` vector of `-log P(grounding)` | keeps the loss scale independent of the grounding count (joint `-log` grows roughly linearly with `G`, so `beta` otherwise needs retuning per task size), and is required by per-grounding dual mechanisms |
+
+```python
+losses = datanode.calculateLcLoss(circuit=True, circuitAggregation="per_grounding")
+```
+
+Each result also reports `aggregation` and `groundingCount`.
+
+## Composing with the dual mechanisms
+
+`SemanticLossProgram(training_style="primal_dual")` runs the exact loss through
+the primal-dual epoch, so the dual machinery applies to it. Set
+`lambda_weighted=True` so the multipliers are actually used:
+
+```python
+# exact semantic loss under augmented-Lagrangian duals
+program = SemanticLossProgram(
+    graph, Model, lambda_weighted=True,
+    dual_algorithm="augmented", training_style="primal_dual",
+)
+
+# exact semantic loss under amortized per-grounding duals;
+# per-grounding aggregation is selected automatically
+program = SemanticLossProgram(
+    graph, Model, lambda_weighted=True,
+    dual_granularity="amortized", training_style="primal_dual",
+)
+```
+
+`training_style="fixed"` (the default) keeps the classic
+`model_loss + beta * semantic_loss` objective.
+
+## Reporting how exact a run really was
+
+Constraints whose circuit exceeds the node budget fall back to the Product
+t-norm. `SemanticLossModel.exact_fraction` is the fraction of evaluated
+constraints that used the exact circuit (`1.0` = fully exact); it resets each
+epoch. Check it before trusting a run labelled "exact".
+
 ## Backends and installation
 
 The built-in multi-valued BDD backend has no extra dependency. It treats an
