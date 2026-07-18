@@ -192,7 +192,12 @@ def build_program(variant, device='cpu'):
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    program = CallbackPrimalProgram(
+    # Honour the variant's Program class: R2's semantic-loss variants need
+    # SemanticLossProgram rather than the primal-dual program. Any future
+    # mechanism that carries its own Program works here unchanged.
+    program_cls = variant.resolve_program_class(CallbackPrimalProgram)
+
+    program = program_cls(
         graph, Model=SolverModelDictLoss, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
         dictloss={
             str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([4.5341, 0.5620]).to(device)),
@@ -229,7 +234,16 @@ def make_evaluate(test_reader, device):
     def evaluate(program):
         program.test(test_reader, device=device)
         metrics = program.model.metric['argmax'].value()
-        return {'macro_F1': compute_scores(metrics, criteria="F1")}
+        results = {'macro_F1': compute_scores(metrics, criteria="F1")}
+
+        # For the exact semantic-loss variants, report how much of the loss was
+        # genuinely exact: constraints whose circuit exceeded the node budget
+        # silently degrade to the Product t-norm, so a value below 1.0 means the
+        # run was only partially exact and the budget should be reconsidered.
+        exact_fraction = getattr(program.cmodel, 'exact_fraction', None)
+        if exact_fraction is not None and exact_fraction == exact_fraction:
+            results['circuit_exact'] = float(exact_fraction)
+        return results
     return evaluate
 
 
