@@ -1830,7 +1830,17 @@ class DataNode:
             # ---- loop through dns (LOCAL CALCULATION MODE)
             # IMPORTANT: Each datanode is processed INDEPENDENTLY without comparing across datanodes
             # Each datanode finds its own local argmax/softmax within its own values
-            dns = self.findDatanodes(select = cRoot)
+            # findDatanodes is a full graph traversal with quadratic membership
+            # checks; reuse the builder's per-root-concept cache (shared with
+            # domiknows.graph.candidates.findDatanodesForRootConcept).
+            cRootName = cRoot if isinstance(cRoot, str) else cRoot.name
+            dnsCache = self.myBuilder["DataNodesConcepts"] if (self.myBuilder is not None and "DataNodesConcepts" in self.myBuilder) else None
+            if dnsCache is not None and cRootName in dnsCache:
+                dns = dnsCache[cRootName]
+            else:
+                dns = self.findDatanodes(select = cRoot)
+                if dnsCache is not None:
+                    dnsCache[cRootName] = dns
             if not dns:
                 continue
 
@@ -2337,7 +2347,7 @@ class DataNode:
 
         return result
     
-    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
+    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False, compiled=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2352,6 +2362,10 @@ class DataNode:
             Default is 0.
         - sampleGlobalLoss: bool, optional
             Specifies whether to calculate the global loss in case of sampling. Default is False.
+        - compiled: bool, optional
+            Use the compiled (batched-gather) constraint evaluator instead of the
+            per-datanode interpreter. Falls back to the interpreter per constraint
+            for unsupported constraint types. Ignored when sample is True.
 
         Returns:
         - lcResult: object
@@ -2372,6 +2386,10 @@ class DataNode:
         if sample:
             sampleCalculator = SampleLossCalculator(myilpOntSolver)
             lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
+        elif compiled:
+            from domiknows.solver.compiled import CompiledLossCalculator
+            lossCalculator = CompiledLossCalculator(myilpOntSolver)
+            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
         else:
             lossCalculator = LossCalculator(myilpOntSolver)
             lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)

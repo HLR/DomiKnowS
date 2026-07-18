@@ -960,31 +960,43 @@ class PrimalDualProgram(LossProgram):
                     self.opt.zero_grad()
                 
                 iter_count += 1
-                
-                # Dual step: update lambda params (with reversed gradient for ascent)
+
+                # Dual step: update lambda params.
+                # ascent: gradient ascent via copt (reversed-sign gradient).
+                # augmented (Augmented Lagrangian): closed-form multiplier update
+                #   on the cmodel; no copt exists (lambda/rho are buffers), so the
+                #   schedule must still fire — gate on the AL updater instead.
+                al_mode = getattr(self.cmodel, 'dual_algorithm', 'ascent') == 'augmented'
+                dual_updater_ready = (self.copt is not None) or al_mode
                 should_update_dual = (
-                    self.copt is not None and
+                    dual_updater_ready and
                     iter_count > c_warmup_iters and
                     iter_count - c_update_iter > c_update_freq
                 )
-                
+
                 if should_update_dual:
-                    # Reverse gradients for lambda (gradient ascent)
-                    reverse_sign_grad(self.cmodel.parameters())
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
-                    self.copt.step()
-                    _project_cmodel_lambdas(self.cmodel)
-                    
+                    if al_mode:
+                        # Closed-form Augmented-Lagrangian dual update + rho schedule.
+                        self.cmodel.al_dual_update_()
+                    else:
+                        # Reverse gradients for lambda (gradient ascent)
+                        reverse_sign_grad(self.cmodel.parameters())
+                        torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                        self.copt.step()
+                        _project_cmodel_lambdas(self.cmodel)
+
                     c_update_iter = iter_count
                     c_update += 1
-                    
+
                     # Update dual frequency
                     if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
                         c_update_freq += c_freq_increase
-                    
-                    # Update dual learning rate
-                    self._update_dual_lr(c_lr_decay, c_lr_decay_param, c_update, c_lr)
-                
+
+                    # Update dual learning rate (only meaningful for the gradient
+                    # ascent optimizer; AL has no copt learning rate).
+                    if self.copt is not None:
+                        self._update_dual_lr(c_lr_decay, c_lr_decay_param, c_update, c_lr)
+
                 if self.copt is not None:
                     self.copt.zero_grad()
                 

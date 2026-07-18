@@ -26,14 +26,26 @@ class LossModel(torch.nn.Module):
     """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, 
+    #: Supported dual-optimization algorithms (R5 Phase A).
+    DUAL_ALGORITHMS = ('ascent', 'augmented')
+    #: Supported dual-variable granularities. 'constraint' = one dual per
+    #: constraint template (Phase A); 'amortized' = per-grounding duals from a
+    #: DualCritic network (Phase B).
+    DUAL_GRANULARITIES = ('constraint', 'amortized')
+
+    def __init__(self, graph,
                  tnorm='P',
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
-                 use_gumbel=False, temperature=1.0, hard_gumbel=False):
+                 use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 compile_lc=False,
+                 dual_algorithm='ascent', dual_granularity='constraint',
+                 al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
+                 al_stagnation_tau=0.9,
+                 critic_embed_dim=8, critic_hidden=32):
         """
         Initialize LossModel.
-        
+
         :param graph: Graph representing the logical constraints
         :param tnorm: T-norm type for fuzzy logic ('P' for product)
         :param counting_tnorm: T-norm for counting constraints (None uses tnorm)
@@ -44,55 +56,121 @@ class LossModel(torch.nn.Module):
         :param use_gumbel: If True, apply Gumbel-Softmax to local inference
         :param temperature: Gumbel-Softmax temperature (lower = more discrete)
         :param hard_gumbel: If True, use straight-through estimator
+        :param compile_lc: If True, evaluate the constraint loss with the compiled
+            (batched-gather) evaluator instead of the per-datanode interpreter;
+            unsupported constraint types fall back to the interpreter per
+            constraint. Ignored when sample is True.
+        :param dual_algorithm: 'ascent' (default) keeps the plain gradient-ascent
+            Lagrangian dual updated by the program's constraint optimizer.
+            'augmented' switches to an Augmented Lagrangian whose per-constraint
+            multipliers are updated in closed form (no constraint optimizer) and
+            adds a quadratic penalty ``(rho/2)*sum(v^2)``; see ``al_dual_update_``.
+        :param dual_granularity: 'constraint' (default) — one dual per constraint
+            template. 'amortized' — a DualCritic network predicts a per-grounding
+            multiplier from detached features (R5 Phase B); supported only with
+            ``dual_algorithm='ascent'`` (the critic is optimised by the program's
+            constraint optimizer).
+        :param al_rho_init: Initial per-constraint penalty coefficient (augmented).
+        :param al_rho_growth: Multiplicative growth applied to a constraint's rho
+            when its violation fails to shrink by ``al_stagnation_tau`` (augmented).
+        :param al_rho_max: Upper bound on rho (augmented).
+        :param al_stagnation_tau: A constraint is "stagnating" when its mean
+            violation this dual window exceeds ``tau`` times the previous window's;
+            rho then grows (augmented).
+        :param critic_embed_dim: per-constraint embedding width for the DualCritic
+            (amortized granularity).
+        :param critic_hidden: hidden width of the DualCritic MLP (amortized).
         """
         super().__init__()
         self.graph = graph
         self.build = True
-        
+
         self.tnorm = tnorm
         self.counting_tnorm = counting_tnorm
+        self.compile_lc = compile_lc
         self.device = device
-        
+
+        if dual_algorithm not in self.DUAL_ALGORITHMS:
+            raise ValueError(
+                f"dual_algorithm must be one of {self.DUAL_ALGORITHMS}, got {dual_algorithm!r}")
+        if dual_granularity not in self.DUAL_GRANULARITIES:
+            raise ValueError(
+                f"dual_granularity must be one of {self.DUAL_GRANULARITIES}, got {dual_granularity!r}")
+        if dual_granularity == 'amortized' and dual_algorithm != 'ascent':
+            # Regressing the critic onto Augmented-Lagrangian targets is the
+            # deferred amortized x augmented combination.
+            raise NotImplementedError(
+                "dual_granularity='amortized' currently supports only "
+                "dual_algorithm='ascent' (amortized + augmented is deferred)")
+        self.dual_algorithm = dual_algorithm
+        self.dual_granularity = dual_granularity
+        self.al_rho_growth = float(al_rho_growth)
+        self.al_rho_max = float(al_rho_max)
+        self.al_stagnation_tau = float(al_stagnation_tau)
+        self.critic_embed_dim = int(critic_embed_dim)
+        self.critic_hidden = int(critic_hidden)
+
         self.sample = sample
         self.sampleSize = sampleSize
         self.sampleGlobalLoss = sampleGlobalLoss
-        
+
         # Gumbel-Softmax parameters
         self.use_gumbel = use_gumbel
         self.temperature = temperature
         self.hard_gumbel = hard_gumbel
-        
+
         # Extract all logical constraints from the graph recursively
         self.constr = OrderedDict(graph.allLogicalConstrainsRecursive)
         nconstr = len(self.constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
                           'PrimalDualModel will not generate any constraint loss.')
-            
-        # Initialize lambda (Lagrange multipliers) as learnable parameters for Primal-Dual optimization
-        # Each constraint gets its own lambda value that balances its contribution to the total loss
-        self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
-        
+
+        # Lagrange multipliers, one per constraint.
+        # - constraint x ascent: learnable Parameter, gradient ascent (copt).
+        # - constraint x augmented: buffer, closed-form update (al_dual_update_);
+        #   a buffer keeps it out of cmodel.parameters() so no copt is built and
+        #   it still round-trips via state_dict.
+        # - amortized x ascent: the multiplier is produced per grounding by a
+        #   DualCritic (below); lmbd is kept as an unused buffer so shared code
+        #   (reset_parameters/project_lmbd_/to) stays a harmless no-op.
+        self.dual_critic = None
+        if dual_granularity == 'amortized':
+            from domiknows.program.model.dualCritic import DualCritic
+            self.dual_critic = DualCritic(nconstr, embed_dim=self.critic_embed_dim,
+                                          hidden=self.critic_hidden)
+            self.register_buffer('lmbd', torch.ones(nconstr))
+        elif dual_algorithm == 'augmented':
+            self.register_buffer('lmbd', torch.empty(nconstr))
+            # Per-constraint quadratic-penalty coefficient and the running
+            # violation statistics consumed by al_dual_update_.
+            self.register_buffer('rho', torch.full((nconstr,), float(al_rho_init)))
+            self.register_buffer('_al_viol_accum', torch.zeros(nconstr))
+            self.register_buffer('_al_viol_count', torch.zeros(nconstr))
+            self.register_buffer('_al_prev_mean_viol', torch.full((nconstr,), float('nan')))
+        else:
+            self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
+
         # Penalty terms (upper bounds) for lambda values, derived from constraint priorities
         self.lmbd_p = torch.empty(nconstr)
-        
+
         # Mapping from constraint keys to their index positions in lambda tensors
         self.lmbd_index = {}
-        
+
         # Initialize penalty terms based on constraint priority values (p)
         for i, (key, lc) in enumerate(self.constr.items()):
             self.lmbd_index[key] = i
-            
+
             # Convert percentage priority to probability (0-1 range)
             p = float(lc.p) / 100.
-            
+
             # Avoid log(0) by capping probability just below 1
             if p == 1:
                 p = 0.999999999999999
-            
+
             # Compute penalty term: -log(1-p) ensures higher priority constraints have higher penalties
             self.lmbd_p[i] = -np.log(1 - p)
-            
+
         # Initialize lambda values (default: all set to 1.0)
         self.reset_parameters()
         
@@ -147,6 +225,93 @@ class LossModel(torch.nn.Module):
             self.lmbd.clamp_(min=0)
             self.lmbd.copy_(torch.minimum(self.lmbd, upper))
 
+    def _weighted_constraint_loss(self, key, lossTensor, groundingFeatures=None):
+        """Weight one constraint's per-grounding violation vector into a scalar.
+
+        constraint x ascent (default): reproduces the original behaviour exactly
+        — ``lambda_c * sum(clamp(v, 0))`` over the NaN-filtered violations.
+
+        constraint x augmented: Augmented-Lagrangian term ``lambda_c * S_c +
+        (rho_c/2) * Q_c`` with ``S_c = sum(v)`` and ``Q_c = sum(v^2)``, and
+        records ``S_c`` into the running statistics consumed by
+        ``al_dual_update_`` (lambda/rho are buffers, so this adds no autograd
+        path through the multipliers — the primal gradient stays
+        ``lambda_c * dS_c/dtheta + rho_c * sum(v * dv/dtheta)``).
+
+        amortized x ascent: ``sum_g lambda_g * v_g`` where ``lambda_g`` is the
+        DualCritic's per-grounding multiplier (bounded to ``[0, lmbd_p_c]``).
+        The critic reads *detached* features, so ``lambda_g`` carries gradient
+        only to the critic (used by the ascent step) while ``v_g`` carries the
+        primal gradient to the classifiers.
+        """
+        loss_value = lossTensor.clamp(min=0)
+        finite_mask = (loss_value == loss_value)  # drop NaN groundings
+        finite = loss_value[finite_mask]
+
+        index = self.lmbd_index[key]
+
+        if self.dual_granularity == 'amortized':
+            if finite.numel() == 0:
+                return loss_value.sum() * 0.0  # keeps a grad-connected zero
+            feats = None
+            if groundingFeatures is not None and torch.is_tensor(groundingFeatures):
+                gf = groundingFeatures
+                if gf.dim() == 1:
+                    gf = gf.unsqueeze(-1)
+                if gf.shape[0] == loss_value.shape[0]:
+                    feats = gf[finite_mask]
+            lam = self.dual_critic(index, finite.detach(), feats)  # [G'] in (0,1)
+            lam = lam * self.lmbd_p[index]                          # scale to [0, lmbd_p]
+            return (lam * finite).sum()
+
+        loss_nansum = finite.sum()
+
+        if self.dual_algorithm != 'augmented':
+            return self.get_lmbd(key) * loss_nansum
+
+        with torch.no_grad():
+            self._al_viol_accum[index] += loss_nansum.detach()
+            self._al_viol_count[index] += 1
+
+        lmbd = self.lmbd[index].clamp(min=0, max=self.lmbd_p[index])
+        rho = self.rho[index]
+        quad = (finite * finite).sum()
+        return lmbd * loss_nansum + 0.5 * rho * quad
+
+    def al_dual_update_(self):
+        """Closed-form Augmented-Lagrangian multiplier update + penalty schedule.
+
+        Invoked by the program at its dual-update points (in place of the
+        gradient-ascent step). Consumes and resets the per-constraint violation
+        statistics accumulated across the forward passes since the previous
+        call. No-op unless ``dual_algorithm == 'augmented'``.
+        """
+        if self.dual_algorithm != 'augmented':
+            return
+        with torch.no_grad():
+            has_data = self._al_viol_count > 0
+            count = self._al_viol_count.clamp(min=1)
+            mean_viol = self._al_viol_accum / count  # mean S_c over this window
+
+            # Multiplier ascent, projected to [0, lmbd_p]; only touch constraints
+            # that were actually evaluated this window.
+            upper = self.lmbd_p.to(device=self.lmbd.device, dtype=self.lmbd.dtype)
+            new_lmbd = torch.clamp(self.lmbd + self.rho * mean_viol, min=0)
+            new_lmbd = torch.minimum(new_lmbd, upper)
+            self.lmbd.copy_(torch.where(has_data, new_lmbd, self.lmbd))
+
+            # Grow rho where the violation did not shrink by factor tau versus the
+            # previous window (never on the first window — prev is NaN there).
+            prev = self._al_prev_mean_viol
+            stagnated = has_data & ~torch.isnan(prev) & (mean_viol > self.al_stagnation_tau * prev)
+            grown = torch.minimum(self.rho * self.al_rho_growth,
+                                  torch.full_like(self.rho, self.al_rho_max))
+            self.rho.copy_(torch.where(stagnated, grown, self.rho))
+
+            self._al_prev_mean_viol.copy_(torch.where(has_data, mean_viol, prev))
+            self._al_viol_accum.zero_()
+            self._al_viol_count.zero_()
+
     def _apply_gumbel_softmax(self, datanode, temperature=None, hard=None):
         """
         Apply Gumbel-Softmax to softmax predictions in the datanode.
@@ -199,9 +364,10 @@ class LossModel(torch.nn.Module):
         
         constr_loss = datanode.calculateLcLoss(
             tnorm=self.tnorm,
-            counting_tnorm=self.counting_tnorm, 
-            sample=self.sample, 
-            sampleSize=self.sampleSize
+            counting_tnorm=self.counting_tnorm,
+            sample=self.sample,
+            sampleSize=self.sampleSize,
+            compiled=self.compile_lc and not self.sample
         )
 
         lmbd_loss = []
@@ -214,14 +380,16 @@ class LossModel(torch.nn.Module):
             for key, loss in constr_loss.items():
                 if key not in self.constr:
                     continue
-                
+
                 if loss['lossTensor'] is not None:
-                    loss_value = loss['lossTensor'].clamp(min=0)
-                    loss_nansum = loss_value[loss_value == loss_value].sum()
-                    loss_ = self.get_lmbd(key) * loss_nansum
+                    # groundingFeatures (per-grounding literal probabilities) are
+                    # present only on the compiled path; the DualCritic zero-fills
+                    # when they are absent (interpreter path).
+                    features = loss.get('groundingFeatures') if isinstance(loss, dict) else None
+                    loss_ = self._weighted_constraint_loss(key, loss['lossTensor'], features)
                     self.loss[key](loss_)
                     lmbd_loss.append(loss_)
-               
+
             lmbd_loss = sum(lmbd_loss)
         
         self.lossModelLogger.info(f"Total loss: {lmbd_loss.item() if hasattr(lmbd_loss, 'item') else lmbd_loss}")
@@ -233,11 +401,15 @@ class PrimalDualModel(LossModel):
     """
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm='P', counting_tnorm=None, device='auto'):
+    def __init__(self, graph, tnorm='P', counting_tnorm=None, device='auto', compile_lc=False,
+                 dual_algorithm='ascent', dual_granularity='constraint',
+                 al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
+                 al_stagnation_tau=0.9,
+                 critic_embed_dim=8, critic_hidden=32):
         """
         The above function is the constructor for a class that initializes an object with a graph,
         tnorm, and device parameters.
-        
+
         :param graph: The `graph` parameter is the input graph that the coding assistant is being
         initialized with. It represents the structure of the graph and can be used to perform various
         operations on the graph, such as adding or removing nodes and edges, calculating node and edge
@@ -248,8 +420,25 @@ class PrimalDualModel(LossModel):
         (optional)
         :param device: The `device` parameter specifies the device on which the computations will be
         performed. It can take the following values:, defaults to auto (optional)
+        :param compile_lc: If True, evaluate the constraint loss with the compiled
+        (batched-gather) evaluator; unsupported constraints fall back to the interpreter
+        :param dual_algorithm: 'ascent' (default) or 'augmented' (Augmented Lagrangian);
+            see :class:`LossModel`.
+        :param dual_granularity: 'constraint' (default) or 'amortized' (R5 Phase B,
+            per-grounding DualCritic; ascent only).
+        :param al_rho_init: Initial augmented-Lagrangian penalty coefficient.
+        :param al_rho_growth: rho growth factor on stagnation (augmented).
+        :param al_rho_max: rho upper bound (augmented).
+        :param al_stagnation_tau: stagnation threshold for rho growth (augmented).
+        :param critic_embed_dim: DualCritic per-constraint embedding width (amortized).
+        :param critic_hidden: DualCritic MLP hidden width (amortized).
         """
-        super().__init__(graph, tnorm=tnorm, counting_tnorm = counting_tnorm, device=device)
+        super().__init__(graph, tnorm=tnorm, counting_tnorm=counting_tnorm, device=device,
+                         compile_lc=compile_lc,
+                         dual_algorithm=dual_algorithm, dual_granularity=dual_granularity,
+                         al_rho_init=al_rho_init, al_rho_growth=al_rho_growth,
+                         al_rho_max=al_rho_max, al_stagnation_tau=al_stagnation_tau,
+                         critic_embed_dim=critic_embed_dim, critic_hidden=critic_hidden)
         self._setup_primaldual_logger()
 
     def _setup_primaldual_logger(self):
