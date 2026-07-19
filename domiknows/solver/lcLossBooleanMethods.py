@@ -1088,6 +1088,32 @@ class lcLossBooleanMethods(constraintsProcessor):
             else:
                 return selection
 
+    def _queryDistribution(self, subclass_scores, temperature):
+        """Turn the per-subclass mixture weights into the answer distribution.
+
+        ``subclass_scores[j] = sum_i sel_i * c_ij`` is *already* the marginal
+        probability that the selected entity has subclass ``j``: ``sel`` is a
+        distribution over entities and each ``c_i`` a distribution over
+        subclasses, so the product already sums to 1.
+
+        Running softmax over it — as this did — treats a probability as a logit
+        and squashes the answer toward uniform. With two subclasses the output
+        can then never leave ``[0.27, 0.73]`` however certain the model is,
+        which is why Product/Lukasiewicz looked uninformative while Godel (which
+        hard-argmaxes instead) did not. Renormalise instead, and sharpen in
+        probability space so ``temperature`` still means what it did.
+        """
+        scores = torch.clamp(subclass_scores, min=0.0)
+        total = scores.sum()
+        if not torch.is_nonzero(total.detach()):
+            return torch.full_like(scores, 1.0 / scores.numel())
+
+        distribution = scores / total
+        if temperature and temperature > 0 and temperature != 1.0:
+            sharpened = distribution.clamp_min(1e-12) ** (1.0 / temperature)
+            distribution = sharpened / sharpened.sum()
+        return distribution
+
     def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Differentiable query operator for multiclass attribute selection.
@@ -1229,7 +1255,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         # -- Apply t-norm specific selection
         if self.tnorm == 'G':  # GÃ¶del - hard argmax
             self.countLogger.debug("Using GÃ¶del t-norm (hard argmax)")
-            soft_selection = torch.softmax(subclass_scores / temperature, dim=0)
+            soft_selection = self._queryDistribution(subclass_scores, temperature)
             max_idx = torch.argmax(subclass_scores)
             selection = torch.zeros(num_subclasses, device=self.current_device, dtype=self._get_dtype())
             selection[max_idx] = 1.0
@@ -1247,9 +1273,7 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         elif self.tnorm == 'L':  # Åukasiewicz
             self.countLogger.debug("Using Åukasiewicz t-norm")
-            # Softmax selection with temperature
-            logits = subclass_scores / temperature
-            selection = torch.softmax(logits, dim=0)
+            selection = self._queryDistribution(subclass_scores, temperature)
             
             if onlyConstrains:
                 # Existence: at least one subclass should have high score
@@ -1269,10 +1293,8 @@ class lcLossBooleanMethods(constraintsProcessor):
                 return selection
         
         else:  # Product ('P') or Simplified Product ('SP')
-            self.countLogger.debug(f"Using {self.tnorm} t-norm (softmax)")
-            # Standard softmax selection
-            logits = subclass_scores / temperature
-            selection = torch.softmax(logits, dim=0)
+            self.countLogger.debug(f"Using {self.tnorm} t-norm")
+            selection = self._queryDistribution(subclass_scores, temperature)
             
             if onlyConstrains:
                 # Product existence: 1 - Î (1 - score_j)

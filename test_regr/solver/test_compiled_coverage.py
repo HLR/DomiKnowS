@@ -9,6 +9,8 @@ Each test constructs its graph fresh (``Sensor.clear()`` + ``Graph.clear()``)
 because property-sensor assignments stack across a pytest process.
 """
 
+from collections import OrderedDict
+
 import numpy as np
 import pytest
 import torch
@@ -428,3 +430,151 @@ def test_graph_without_executables_is_unaffected_by_the_flag():
 
 if __name__ == '__main__':
     pytest.main([__file__])
+
+
+# ---------------------------------------------------------------------------
+# Multi-relation conjunctions: operands enumerated over different tuples
+# ---------------------------------------------------------------------------
+
+def test_shared_variable_conjunction_keeps_operands_independent():
+    """`andL(A('z','x'), B('z','y'))` must not conflate x with y.
+
+    Both relations are enumerated as 4x4 = 16 rows with `z` on the outer axis,
+    so multiplying them row-by-row pairs A's (z,x) with B's (z,y) at the *same*
+    inner index — silently imposing x == y. The correct reading quantifies the
+    unshared variables away independently:
+
+        phi(z) = (exists x. A(z,x)) and (exists y. B(z,y))
+
+    This fixture makes the difference observable: A only ever holds at x == 0
+    and B only at y == 1, so for every z there IS an x and a y satisfying both,
+    but never with x == y. The conflating evaluation therefore reports the
+    conjunction as unsatisfiable everywhere, while the correct one does not.
+    """
+    from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
+    from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
+
+    processor = lcLossBooleanMethods()
+    processor.current_device = torch.device('cpu')
+    processor.setTNorm('P')
+
+    n = 4
+    # A(z,x) true only when x == 0 ; B(z,y) true only when y == 1
+    a = torch.tensor([1.0 if (r % n) == 0 else 0.0 for r in range(n * n)])
+    b = torch.tensor([1.0 if (r % n) == 1 else 0.0 for r in range(n * n)])
+
+    variables = OrderedDict([('A', [[a]]), ('B', [[b]])])
+    bindings = {
+        'A': (('z', 'x'), [(r // n, r % n) for r in range(n * n)]),
+        'B': (('z', 'y'), [(r // n, r % n) for r in range(n * n)]),
+    }
+
+    reduced = LogicalConstraintConstructor.reduceToCommonGrounding(
+        variables, bindings, processor)
+
+    assert reduced is not variables, 'reduction should engage on differing tuples'
+    for name in ('A', 'B'):
+        column = reduced[name][0][0]
+        assert column.shape == (n,), f'{name} should reduce onto z, got {tuple(column.shape)}'
+        assert torch.allclose(column, torch.ones(n)), \
+            f'{name}: exists-quantification should hold for every z, got {column}'
+
+    # The conjunction is now satisfiable for every z ...
+    joined = processor.andVar(None, reduced['A'][0][0], reduced['B'][0][0],
+                              onlyConstrains=False)
+    assert torch.allclose(joined, torch.ones(n))
+
+    # ... whereas the old row-by-row product forced x == y and vanished.
+    conflated = processor.andVar(None, a, b, onlyConstrains=False)
+    assert torch.allclose(conflated, torch.zeros(n * n))
+
+
+def test_cogrounded_conjunction_is_untouched():
+    """Operands sharing one variable tuple keep their exact current behaviour."""
+    from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
+    from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
+
+    processor = lcLossBooleanMethods()
+    processor.current_device = torch.device('cpu')
+    processor.setTNorm('P')
+
+    keys = [(r,) for r in range(4)]
+    variables = OrderedDict([
+        ('A', [[torch.rand(4)]]),
+        ('B', [[torch.rand(4)]]),
+    ])
+    bindings = {'A': (('z',), keys), 'B': (('z',), keys)}
+
+    reduced = LogicalConstraintConstructor.reduceToCommonGrounding(
+        variables, bindings, processor)
+    assert reduced is variables, 'co-grounded operands must not be rewritten'
+
+
+# ---------------------------------------------------------------------------
+# queryVar: the answer must track the model under every t-norm
+# ---------------------------------------------------------------------------
+
+def _query_answer(tnorm, class_probs, selection, temperature=1.0):
+    """Run queryVar directly with a known selection and class matrix."""
+    from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
+
+    processor = lcLossBooleanMethods()
+    processor.current_device = torch.device('cpu')
+    processor.setTNorm(tnorm)
+
+    subclasses = [(None, 'a', 0), (None, 'b', 1)]
+    subclass_data = [[torch.tensor(p) for p in row] for row in class_probs]
+    return processor.queryVar(
+        None, None, subclasses, [torch.tensor(selection)],
+        subclass_data=subclass_data, onlyConstrains=False,
+        temperature=temperature, logicMethodName='QUERY')
+
+
+@pytest.mark.parametrize('tnorm', ['P', 'L'])
+def test_query_answer_is_not_squashed_toward_uniform(tnorm):
+    """A confident model must yield a confident answer.
+
+    ``subclass_scores = sum_i sel_i * c_ij`` is already the marginal
+    probability of each class, because ``sel`` is a distribution over entities
+    and each ``c_i`` a distribution over classes. Running softmax over it treats
+    a probability as a logit: for two classes the answer could then never leave
+    ``[0.27, 0.73]``, no matter how certain the model was.
+    """
+    # Selection is certain about entity 0, whose class is certain too.
+    answer = _query_answer(tnorm, class_probs=[[1.0, 0.0], [0.0, 1.0]],
+                           selection=[1.0, 0.0])
+
+    assert answer.sum().item() == pytest.approx(1.0, abs=1e-5)
+    assert answer[0].item() > 0.9, \
+        f'{tnorm}: confident model gave a squashed answer {answer}'
+
+
+@pytest.mark.parametrize('tnorm', ['P', 'L'])
+def test_query_answer_tracks_the_model(tnorm):
+    """Flipping the model's class prediction must flip the answer."""
+    favours_a = _query_answer(tnorm, [[0.9, 0.1], [0.5, 0.5]], [1.0, 0.0])
+    favours_b = _query_answer(tnorm, [[0.1, 0.9], [0.5, 0.5]], [1.0, 0.0])
+
+    assert favours_a[0].item() > favours_a[1].item()
+    assert favours_b[1].item() > favours_b[0].item()
+    assert favours_a[0].item() == pytest.approx(favours_b[1].item(), abs=1e-5)
+
+
+@pytest.mark.parametrize('tnorm', ['P', 'L'])
+def test_query_answer_follows_the_selection(tnorm):
+    """Selecting a different entity must return that entity's class."""
+    class_probs = [[1.0, 0.0], [0.0, 1.0]]
+    first = _query_answer(tnorm, class_probs, [1.0, 0.0])
+    second = _query_answer(tnorm, class_probs, [0.0, 1.0])
+
+    assert first[0].item() > 0.9
+    assert second[1].item() > 0.9
+
+
+def test_query_temperature_sharpens():
+    """Temperature still sharpens, now in probability space."""
+    soft = _query_answer('P', [[0.6, 0.4]], [1.0], temperature=1.0)
+    sharp = _query_answer('P', [[0.6, 0.4]], [1.0], temperature=0.25)
+
+    assert sharp[0].item() > soft[0].item()
+    assert sharp.sum().item() == pytest.approx(1.0, abs=1e-5)

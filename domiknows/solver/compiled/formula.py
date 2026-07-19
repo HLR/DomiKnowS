@@ -131,6 +131,10 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
             lcVariables = OrderedDict()
 
         usedVariablesNames = set()
+        # Mirrors the interpreter's grounding bookkeeping so operands
+        # enumerated over different variable tuples are aligned identically.
+        lcVariableBindings = OrderedDict()
+        lcVariableVs = OrderedDict()
 
         if vNo is None:
             vNo = [1, 1]
@@ -204,6 +208,11 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
 
                     lcVariablesDns[variableName] = dnsList
 
+                    lcVariableVs[variableName] = variable
+                    binding = self.groundingBinding(variable, dnsList, lcVariablesDns)
+                    if binding is not None:
+                        lcVariableBindings[variableName] = binding
+
                     if expansionInfo is not None:
                         # Realign previously collected variable tensors with
                         # the expanded grounding rows (same as interpreter).
@@ -218,6 +227,11 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                             old_structure = lcVariables[var_name]
                             if old_structure and len(old_structure) == pre_expansion_len:
                                 vars_to_expand.add(var_name)
+
+                        # Expansion re-grounds earlier variables onto this one.
+                        if binding is not None:
+                            for var_name in vars_to_expand:
+                                lcVariableBindings[var_name] = binding
 
                         for var_name in vars_to_expand:
                             if var_name not in lcVariables:
@@ -318,6 +332,11 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
 
         # Same per-element split the interpreter applies in loss mode when a
         # sibling variable kept a multi-group (fallback) structure.
+        self.fillPathBindings(useLcVariables, lcVariableVs,
+                              lcVariablesDns, lcVariableBindings)
+        useLcVariables = self.reduceToCommonGrounding(
+            useLcVariables, lcVariableBindings, booleanProcessor)
+
         slpitT = False
         for v in useLcVariables:
             if useLcVariables[v] and len(useLcVariables[v]) > 1:

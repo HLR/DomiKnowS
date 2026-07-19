@@ -1016,8 +1016,25 @@ class LogicalConstrain(LcElement):
         if num_sel_iterations == 1:
             # Verification / ILP mode — collect ALL entity rows
             if len(sub_var_names) == 1:
-                # EnumConcept: single var, K values per entity row
-                return [list(row) for row in v[sub_var_names[0]]]
+                # EnumConcept: single var, K values per entity row.
+                #
+                # In loss mode the variable is batched: one group holding K
+                # column tensors of length N (one entry per entity), rather than
+                # N rows of K scalars. Transpose it back, otherwise queryVar's
+                # per-row read keeps only entity 0 and the answer collapses to
+                # that single entity's class distribution.
+                rows = []
+                for group in v[sub_var_names[0]]:
+                    columns = list(group)
+                    batched = (columns
+                               and all(torch.is_tensor(c) and c.numel() > 1 for c in columns)
+                               and len({c.numel() for c in columns}) == 1)
+                    if batched:
+                        for entity in range(columns[0].numel()):
+                            rows.append([c.reshape(-1)[entity] for c in columns])
+                    else:
+                        rows.append(columns)
+                return rows
             else:
                 # is_a subtypes: K vars, 1 value per entity per var
                 num_entities = len(v[sub_var_names[0]])

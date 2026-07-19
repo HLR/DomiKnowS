@@ -481,6 +481,149 @@ class LogicalConstraintConstructor:
             return None
         return [columns]
 
+    @classmethod
+    def fillPathBindings(cls, useLcVariables, variableVs, lcVariablesDns, bindings):
+        """Give path-derived variables the grounding of the variable they walk from.
+
+        ``big(path=('right_of_0', arg1))`` is enumerated row-for-row alongside
+        ``right_of_0``, so it shares that variable's grounding. It only varies
+        along the argument it projects, which ``reduceToCommonGrounding``
+        discovers numerically (its rows are constant along the other axis).
+        Runs to a fixpoint so chained paths resolve.
+        """
+        for _ in range(len(useLcVariables) + 1):
+            progressed = False
+            for name in useLcVariables:
+                if name in bindings or name not in lcVariablesDns:
+                    continue
+                variable = variableVs.get(name)
+                path = getattr(variable, 'v', None) if variable is not None else None
+                if not (isinstance(path, tuple) and path and isinstance(path[0], str)):
+                    continue
+                source = bindings.get(path[0])
+                if source is None:
+                    continue
+                if len(lcVariablesDns[name]) != len(source[1]):
+                    continue
+                bindings[name] = source
+                progressed = True
+            if not progressed:
+                break
+        return bindings
+
+    @staticmethod
+    def groundingBinding(variable, dnsList, lcVariablesDns):
+        """Which logical variables a candidate set ranges over, and per-row indices.
+
+        Returns ``(names, keys)`` where ``names`` are the constraint's logical
+        variable names (e.g. ``('z', 'x')`` for ``right_of('z','x')``) and
+        ``keys[r]`` holds that row's index into each of those variables'
+        candidate lists. Returns None when the grounding cannot be determined,
+        in which case callers must leave the variable alone.
+
+        A relation variable is enumerated as a nested loop over its source and
+        destination candidates (see ``getDatanoteForVariable``), so row ``r``
+        decomposes arithmetically into ``(r // n_dest, r % n_dest)``.
+        """
+        if variable is None:
+            return None
+        rows = len(dnsList)
+        if rows == 0:
+            return None
+
+        relVarInfo = getattr(variable, 'relVarInfo', None)
+        if relVarInfo:
+            names = tuple(relVarInfo.keys())
+            if len(names) != 2 or any(n not in lcVariablesDns for n in names):
+                return None
+            n_src = len(lcVariablesDns[names[0]])
+            n_dest = len(lcVariablesDns[names[1]])
+            if not n_dest or rows != n_src * n_dest:
+                return None
+            return names, [(r // n_dest, r % n_dest) for r in range(rows)]
+
+        # A plain logical variable ranges over itself, one row per candidate.
+        if getattr(variable, 'name', None) and getattr(variable, 'v', None) is None:
+            return (variable.name,), [(r,) for r in range(rows)]
+
+        return None
+
+    @staticmethod
+    def reduceToCommonGrounding(useLcVariables, bindings, booleanProcessor):
+        """Existentially quantify each operand down to the shared variables.
+
+        Two relations that share a variable — ``andL(right_of('z','x'),
+        left_of('z','y'))`` — are enumerated over different tuples, ``(z,x)``
+        and ``(z,y)``. Multiplying them row-by-row silently forces ``x == y``,
+        because both enumerations happen to place ``z`` on the same axis. The
+        correct reading quantifies the unshared variables away first::
+
+            phi(z) = (exists x. right_of(z,x)) and (exists y. left_of(z,y))
+
+        so every operand is reduced onto the variables common to all of them and
+        the conjunction is then well-posed. Existential quantification is OR over
+        the quantified axis, using the active t-norm. When an operand does not
+        actually vary along the axis (its rows are duplicates, as for a predicate
+        on ``z`` that expansion replicated across ``x``) the group is collapsed by
+        taking one representative instead — OR-ing identical values would inflate
+        them under a non-idempotent t-norm.
+
+        No-ops unless at least two operands have known, *differing* variable
+        sets, so co-grounded constraints keep their exact current behaviour.
+        """
+        bound = {n: bindings[n] for n in useLcVariables if n in bindings}
+        varSets = {n: set(b[0]) for n, b in bound.items()}
+        if len(bound) < 2 or len({frozenset(s) for s in varSets.values()}) < 2:
+            return useLcVariables
+
+        common = set.intersection(*varSets.values())
+        if not common:
+            return useLcVariables
+
+        # Any operand we cannot place in the shared frame would be left at the
+        # wrong length; rather than guess, decline the whole reduction.
+        for name, groups in useLcVariables.items():
+            if name in bound:
+                continue
+            if not (groups and len(groups) == 1 and len(groups[0]) >= 1
+                    and torch.is_tensor(groups[0][0]) and groups[0][0].numel() == 1):
+                return useLcVariables
+
+        reduced = OrderedDict()
+        commonOrder = None
+        for name, groups in useLcVariables.items():
+            if name not in bound:
+                reduced[name] = groups  # scalar: broadcasts, nothing to align
+                continue
+
+            names, keys = bound[name]
+            keepIdx = [i for i, v in enumerate(names) if v in common]
+            buckets = OrderedDict()
+            for row, key in enumerate(keys):
+                buckets.setdefault(tuple(key[i] for i in keepIdx), []).append(row)
+
+            if commonOrder is None:
+                commonOrder = list(buckets.keys())
+
+            columns = []
+            for column in groups[0]:
+                values = []
+                for bucketKey in commonOrder:
+                    rowsInBucket = buckets.get(bucketKey, [])
+                    if not rowsInBucket:
+                        values.append(torch.zeros((), dtype=column.dtype, device=column.device))
+                        continue
+                    picked = column[rowsInBucket]
+                    if picked.numel() == 1 or bool(torch.allclose(picked, picked[:1].expand_as(picked))):
+                        values.append(picked[0])  # constant along the axis
+                    else:
+                        values.append(booleanProcessor.orVar(
+                            None, *[p.reshape(1) for p in picked]).reshape(()))
+                columns.append(torch.stack(values, dim=0))
+            reduced[name] = [columns]
+
+        return reduced
+
     @staticmethod
     def splitLossColumns(variable):
         """Tear a single batched group back into one group per row.
@@ -652,6 +795,11 @@ class LogicalConstraintConstructor:
             lcVariables = OrderedDict()
             
         usedVariablesNames = set()
+        # Which logical variables each candidate set ranges over, used to align
+        # operands that were enumerated over different tuples (see
+        # reduceToCommonGrounding).
+        lcVariableBindings = OrderedDict()
+        lcVariableVs = OrderedDict()
 
         if sample:
             sampleInfo = OrderedDict()
@@ -791,7 +939,12 @@ class LogicalConstraintConstructor:
                     dnsList, referedVariables, expansionInfo = result
                     
                     lcVariablesDns[variableName] = dnsList
-                    
+
+                    lcVariableVs[variableName] = variable
+                    binding = self.groundingBinding(variable, dnsList, lcVariablesDns)
+                    if binding is not None:
+                        lcVariableBindings[variableName] = binding
+
                     # Apply expansion to lcVariables if expansion occurred
                     if expansionInfo is not None:
                         mapping = expansionInfo['mapping']
@@ -812,7 +965,13 @@ class LogicalConstraintConstructor:
                                 vars_to_expand.add(var_name)
                         
                         self.myLogger.info(f"Applying expansion to lcVariables for: {vars_to_expand}")
-                        
+
+                        # Expansion re-grounds earlier variables onto this one's
+                        # candidate rows, so they inherit its grounding too.
+                        if binding is not None:
+                            for var_name in vars_to_expand:
+                                lcVariableBindings[var_name] = binding
+
                         for var_name in vars_to_expand:
                             if var_name not in lcVariables:
                                 continue
@@ -1035,6 +1194,13 @@ class LogicalConstraintConstructor:
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         else:
             if loss:
+                # Align operands enumerated over different variable tuples
+                # before combining them (no-op when they are co-grounded).
+                self.fillPathBindings(useLcVariables, lcVariableVs,
+                                      lcVariablesDns, lcVariableBindings)
+                useLcVariables = self.reduceToCommonGrounding(
+                    useLcVariables, lcVariableBindings, booleanProcessor)
+
                 slpitT = False
                 for v in useLcVariables:
                     if useLcVariables[v] and len(useLcVariables[v]) > 1:

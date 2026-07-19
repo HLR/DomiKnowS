@@ -815,9 +815,24 @@ class InferenceModel(LossModel):
                 inner_lc = getattr(lc, "innerLC", lc)
                 is_sumL = isinstance(inner_lc, sumL)
                 constr_out = loss_dict['conversionSigmoid']
-                lbl = raw_lbl.float().to(device=constr_out.device)
-                if lbl.shape != constr_out.shape and lbl.numel() == 1:
-                    lbl = torch.ones_like(constr_out, dtype=constr_out.dtype, device=constr_out.device) * lbl.reshape(-1)[0]
+                if is_sumL:
+                    # The numeric label has already been consumed while
+                    # calculating the sum constraint.  conversionSigmoid is
+                    # the resulting satisfaction probability, so its training
+                    # target is true rather than the requested count itself.
+                    lbl = torch.ones_like(
+                        constr_out,
+                        dtype=constr_out.dtype,
+                        device=constr_out.device,
+                    )
+                else:
+                    lbl = raw_lbl.float().to(device=constr_out.device)
+                    if lbl.shape != constr_out.shape and lbl.numel() == 1:
+                        lbl = torch.ones_like(
+                            constr_out,
+                            dtype=constr_out.dtype,
+                            device=constr_out.device,
+                        ) * lbl.reshape(-1)[0]
                 #if torch.equal(constr_out, lbl):
                 #    print(f"Constraint {lcName}: loss={constr_out}, label={lbl}" + (f", is_sumL={is_sumL}" if is_sumL else ""))
                 # Avoid BCELoss saturation cliff using a STRAIGHT-THROUGH clamp:
@@ -832,15 +847,7 @@ class InferenceModel(LossModel):
                     _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
                     # Straight-through: forward = clamped, backward = identity.
                     constr_out = constr_out + (_co_clamped - constr_out).detach()
-                use_scalar_loss = is_sumL or constr_out.dim() == 0 or constr_out.shape[-1] == 1
-                if use_scalar_loss:
-                    flat_out = constr_out.float().view(-1)
-                    flat_lbl = lbl.float().view(-1)
-                    if flat_lbl.numel() == 1 and flat_out.numel() != 1:
-                        flat_lbl = torch.ones_like(flat_out) * flat_lbl[0]
-                    constraint_loss = torch.nn.functional.mse_loss(flat_out, flat_lbl)
-                else:
-                    constraint_loss = self.loss_func(constr_out.float(), lbl)
+                constraint_loss = self.loss_func(constr_out.float(), lbl.float())
 
                 if self._diag_step < self._diag_budget:
                     try:
