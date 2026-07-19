@@ -1,8 +1,30 @@
 import sys
+import importlib.util
 import torch
 from pathlib import Path
 
 RUN_DIR = Path(__file__).resolve().parent
+
+
+def _load_local_module(module_name: str, filename: str):
+    """Load an example module without colliding with another test directory."""
+    qualified_name = f"domiknows_hard_example_{module_name}"
+    existing = sys.modules.get(qualified_name)
+    if existing is not None:
+        return existing
+
+    module_path = RUN_DIR / filename
+    spec = importlib.util.spec_from_file_location(qualified_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load {module_name!r} from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[qualified_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _local_graph_module():
+    return _load_local_module("graph", "graph.py")
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -447,8 +469,17 @@ def parse_arguments():
 
 
 def main(args):
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
+    graph_module = _local_graph_module()
+    graph = graph_module.graph
+    sentence = graph_module.sentence
+    word = graph_module.word
+    phrase = graph_module.phrase
+    pair = graph_module.pair
+    people = graph_module.people
+    organization = graph_module.organization
+    location = graph_module.location
+    other = graph_module.other
+    o = graph_module.o
 
     # Resolve a concrete device (the sensors/modules cannot take 'auto').
     device = args.device
