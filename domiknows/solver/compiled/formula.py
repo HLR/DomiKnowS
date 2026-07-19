@@ -49,19 +49,8 @@ SUPPORTED_LC_TYPES = (
     atMostL, atLeastL, exactL, existsL,
     atMostAL, atLeastAL, exactAL, existsAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL, notEqualCountsL,
-    sumL, sameL, differentL,
+    sumL, sameL, differentL, iotaL, queryL,
 )
-
-#: Deliberately NOT in SUPPORTED_LC_TYPES: ``queryL`` and ``iotaL``.
-#:
-#: R1's contract is to be gradient-identical to the interpreter, so a type is
-#: only promoted once a parity case proves it. The interpreter's *t-norm loss*
-#: for these two currently raises (a shape mismatch inside ``andVar`` — see
-#: test_regr/examples/iota) so there is no working reference to compare
-#: against; they are usable through ILP/verify and the exact-circuit (R2) path,
-#: but not through the t-norm loss on either implementation. The result
-#: plumbing below is kept ready, so promoting them is a one-line change once
-#: the interpreter's loss path works.
 
 
 def lc_tree_supported(lc):
@@ -416,8 +405,6 @@ class CompiledLossCalculator(LossCalculator):
 
         try:
             if isinstance(lc, queryL):
-                # Unreachable while queryL is absent from SUPPORTED_LC_TYPES
-                # (see the note there); kept so promotion is a one-line change.
                 # queryL is evaluated as a non-head expression and post-processed
                 # into a class distribution rather than a violation vector.
                 query_output, _ = self._evaluator.constructCompiled(

@@ -29,7 +29,11 @@ with Graph('visual_qa_enum') as graph:
     # =========================================================
     # Material as EnumConcept with explicit values
     # =========================================================
-    material = EnumConcept(name='material', values=['metal', 'rubber'])
+    # Declared ON object_node (not free-standing): the is_a link is what gives
+    # the attribute datanodes, without which queryL's gather finds nothing and
+    # the answer distribution silently degrades to uniform.
+    material = object_node(name='material', ConceptClass=EnumConcept,
+                           values=['metal', 'rubber'])
 
     # =========================================================
     # Query: "What material is the big object that is 

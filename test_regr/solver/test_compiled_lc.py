@@ -203,17 +203,31 @@ def test_compiled_calculator_excludes_unverified_types():
     * ``eqL`` as a direct LC element — its ``__call__`` takes no
       ``headConstrain``/``integrate``, so the evaluator's call would TypeError.
       (``eqL`` inside a ``path=`` is fine; it is resolved structurally.)
-    * ``queryL`` / ``iotaL`` — the interpreter's own t-norm loss for these
-      raises, so there is no working reference to compare against.
 
     Without this assertion, widening the tuple by accident would be invisible.
     """
-    from domiknows.graph.logicalConstrain import eqL, queryL, iotaL
+    from domiknows.graph.logicalConstrain import eqL
     from domiknows.solver.compiled import SUPPORTED_LC_TYPES as SUPPORTED
 
-    for lcType in (eqL, queryL, iotaL):
-        assert not issubclass(lcType, SUPPORTED), \
-            f'{lcType.__name__} is in SUPPORTED_LC_TYPES without a parity case'
+    assert not issubclass(eqL, SUPPORTED), \
+        'eqL is in SUPPORTED_LC_TYPES without a parity case'
+
+
+def test_iota_and_query_are_supported():
+    """iotaL/queryL are compiled now that the t-norm loss produces a value.
+
+    They used to crash the interpreter: a nested iotaL returned a selection
+    distribution over its own candidates, which has a different length from its
+    siblings' groundings, so ``andVar`` hit a shape mismatch. A nested iotaL now
+    contributes its uniqueness truth degree instead (a broadcastable scalar);
+    only queryL, which needs to know *which* entity was picked, still receives
+    the distribution. Parity is asserted in test_regr/examples/iota.
+    """
+    from domiknows.graph.logicalConstrain import iotaL, queryL
+    from domiknows.solver.compiled import SUPPORTED_LC_TYPES as SUPPORTED
+
+    assert issubclass(iotaL, SUPPORTED)
+    assert issubclass(queryL, SUPPORTED)
 
 
 def test_compile_lc_flag_reaches_cmodel():

@@ -826,7 +826,20 @@ class LogicalConstrain(LcElement):
                 # Collect all condition variables for this grounding
                 condition_vars.extend(lcVariableSet0[i])
             
-        # Call the boolean processor's iotaVar method
+        # What an iotaL contributes depends on who consumes it.
+        #
+        # ``queryL`` needs the *selection distribution* — which entity was
+        # picked — so it can read that entity's attribute. Any other context
+        # consumes iotaL as a truth value inside a boolean combinator, and there
+        # the distribution is the wrong thing: it is a vector over this iota's
+        # own candidates, which generally has a different length from its
+        # siblings' groundings (e.g. entity-level 4 vs relation-level 16), so
+        # combining them raised a shape error. The well-defined truth value is
+        # the degree to which the definite description holds — "exactly one
+        # candidate satisfies phi" — which is a scalar and broadcasts against
+        # any sibling shape.
+        wants_selection = headConstrain or getattr(self, 'returnsSelection', False)
+
         result = myConstraintVarProcessor.iotaVar(
             model,
             *condition_vars,
@@ -834,7 +847,19 @@ class LogicalConstrain(LcElement):
             temperature=temperature,
             logicMethodName=logicMethodName,
         )
-        
+
+        if not wants_selection and torch.is_tensor(result) and result.numel() > 1:
+            # iotaVar(onlyConstrains=True) reports the presupposition *loss*;
+            # the satisfaction degree its boolean parent needs is 1 - loss.
+            uniqueness_loss = myConstraintVarProcessor.iotaVar(
+                model,
+                *condition_vars,
+                onlyConstrains=True,
+                temperature=temperature,
+                logicMethodName=logicMethodName,
+            )
+            result = 1.0 - uniqueness_loss
+
         if len(condition_vars) == 0:
             zVars.append([None])
     
@@ -848,6 +873,28 @@ class LogicalConstrain(LcElement):
         
         return zVars
    
+    def _warnIfNoSubclassData(self, subclass_data, logicMethodName):
+        """Flag a queryL whose attribute concept resolved to no datanodes.
+
+        ``queryVar`` degrades to a uniform distribution when it gets no
+        per-entity class predictions, which looks like a working answer but
+        carries no information. The usual cause is declaring the attribute as a
+        free-standing ``EnumConcept(name=...)``: with no ``is_a`` link to the
+        entity concept it owns no datanodes, so the gather finds nothing.
+        Declare it on the entity instead —
+        ``object_node(name='material', ConceptClass=EnumConcept, values=[...])``.
+        """
+        if subclass_data:
+            return
+        attrName = getattr(getattr(self, 'concept', None), 'name', 'attribute')
+        myLogger.warning(
+            "%s: attribute concept '%s' resolved to no datanodes, so the query "
+            "distribution is uninformative. Declare the attribute on its entity "
+            "concept, e.g. entity(name='%s', ConceptClass=EnumConcept, values=[...]), "
+            "rather than as a free-standing EnumConcept.",
+            logicMethodName, attrName, attrName,
+        )
+
     def createQuerySelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName):
             """Build query selection over attribute subclasses.
 
@@ -892,6 +939,7 @@ class LogicalConstrain(LcElement):
                 if sub_var_names:
                     subclass_data = self._collect_query_subclass_data(
                         v, sub_var_names, 0, 1, len(subclasses))
+                    self._warnIfNoSubclassData(subclass_data, logicMethodName)
 
                 result = myConstraintVarProcessor.queryVar(
                     model,
@@ -1533,6 +1581,16 @@ class queryL(LogicalConstrain):
 
             super().__init__(*e, *attr_elements, p=p, active=active,
                             sampleEntries=sampleEntries, name=name)
+
+            # queryL is the one consumer that needs an iotaL's *selection
+            # distribution* (which entity was picked) rather than a truth
+            # degree. Mark the iotaL operands so createIotaSelection knows to
+            # hand back the distribution; every other (boolean) context gets a
+            # broadcastable satisfaction scalar instead.
+            for element in self.e:
+                if isinstance(element, iotaL):
+                    element.returnsSelection = True
+
             self.concept = concept
             self.temperature = temperature
             self._returns_value = True
