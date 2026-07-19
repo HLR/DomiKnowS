@@ -442,6 +442,61 @@ class LogicalConstraintConstructor:
             else:
                 return 0
     
+    @staticmethod
+    def lossVariableWidth(e):
+        """How many values a concept element contributes per candidate.
+
+        A bare ``EnumConcept`` reference (``e[2] is None``) contributes one
+        value per class; everything else contributes a single value.
+        """
+        concept = e[0]
+        if isinstance(concept, EnumConcept) and e[2] is None:
+            return len(concept.enum)
+        return 1
+
+    @staticmethod
+    def stackLossColumns(vDns, width=1):
+        """Batch N candidate groups into one group of ``width`` ``[N]`` tensors.
+
+        Loss mode batches a variable across all of its groundings. A binary or
+        class-indexed concept contributes one value per group, which yields the
+        familiar single ``[[tensor[N]]]`` layout. A *bare* ``EnumConcept``
+        contributes K values per group (one per class) and all K have to
+        survive as separate entries, because consumers index them by class —
+        ``sameVar`` reads ``group[j]`` per subclass and
+        ``_collect_query_subclass_data`` documents "each row already contains K
+        values". Keeping only ``v[0]`` silently reduces every such constraint to
+        "is the first class", which is what the non-loss backends (ILP, verify,
+        exact circuit) never did.
+
+        Returns None when the groups cannot be stacked (a ``None`` candidate or
+        a group narrower than ``width``), so the caller can fall back to the
+        per-group layout.
+        """
+        if width < 1:
+            return None
+        try:
+            columns = [torch.stack([v[j] for v in vDns], dim=0) for j in range(width)]
+        except (TypeError, IndexError):
+            return None
+        return [columns]
+
+    @staticmethod
+    def splitLossColumns(variable):
+        """Tear a single batched group back into one group per row.
+
+        Loss mode keeps a variable as one group of ``K`` ``[N]`` tensors. When a
+        sibling variable ends up with multiple groups, every single-group
+        variable has to be split along the row axis so all operands agree on the
+        row count. All K columns must be split *in parallel* — splitting only
+        column 0 would silently re-collapse a bare ``EnumConcept`` to its first
+        class, which is the very defect this layout exists to avoid.
+        """
+        group = variable[0]
+        splits = [torch.split(column, 1) for column in group]
+        rows = len(splits[0]) if splits else 0
+        return [[column_split[row] for column_split in splits] for row in range(rows)]
+
     def addLossTovDns(self, loss, vDns):
         """Add loss tensor to vDns.
         
@@ -546,9 +601,9 @@ class LogicalConstraintConstructor:
         for row_name, row_data in data_dict_target.items():
             if len(row_data) == 1:
                 try:
-                    original_tensor = row_data[0][0]
-                    filtered_tensor = original_tensor[columns_to_keep]
-                    result[row_name] = [[filtered_tensor]]
+                    # A batched group may hold several class columns; filter the
+                    # kept rows out of every one of them, not just the first.
+                    result[row_name] = [[column[columns_to_keep] for column in row_data[0]]]
                 except (TypeError, IndexError):
                     result[row_name] = [row_data[i] for i in columns_to_keep]
             else:
@@ -707,14 +762,10 @@ class LogicalConstraintConstructor:
                                 sampleInfoForVariable.append(_sampleInfoForVariable)
 
                         if vDns and loss and not sample:
-                            vDnsList = [v[0] for v in vDns]
-                            try:
-                                tStack = torch.stack(vDnsList, dim=0)
-                                tsqueezed = torch.squeeze(tStack, dim=0)
-                                if not len(tsqueezed.shape):
-                                    tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                                lcVariables[newVariableName] = [[tStack]]
-                            except TypeError:
+                            columns = self.stackLossColumns(vDns, self.lossVariableWidth(e))
+                            if columns is not None:
+                                lcVariables[newVariableName] = columns
+                            else:
                                 for v in vDns:
                                     if v[0] != None and torch.is_tensor(v[0]):
                                         v[0] = torch.unsqueeze(v[0], 0)
@@ -876,18 +927,14 @@ class LogicalConstraintConstructor:
                         
                     # Store values/variables
                     if vDns and loss and not sample:
-                        vDnsList = [v[0] for v in vDns]
-                        try:
-                            tStack = torch.stack(vDnsList, dim=0)
-                            tsqueezed = torch.squeeze(tStack, dim=0)
-                            if not len(tsqueezed.shape):
-                                tsqueezed = torch.unsqueeze(tsqueezed, 0)
-                            lcVariables[variableName] = [[tStack]]
-                        except TypeError:
+                        columns = self.stackLossColumns(vDns, self.lossVariableWidth(e))
+                        if columns is not None:
+                            lcVariables[variableName] = columns
+                        else:
                             for v in vDns:
                                 if v[0] != None and torch.is_tensor(v[0]):
                                     v[0] = torch.unsqueeze(v[0], 0)
-                                                                    
+
                             lcVariables[variableName] = vDns
                     else:
                         lcVariables[variableName] = vDns
@@ -999,10 +1046,6 @@ class LogicalConstraintConstructor:
                         if useLcVariables[v] and len(useLcVariables[v]) > 1:
                             continue
                          
-                        lcVSplitted = torch.split(useLcVariables[v][0][0], 1)
-                        useLcVariables[v] = []
-                        
-                        for s in lcVSplitted:
-                            useLcVariables[v].append([s]) 
-                    
+                        useLcVariables[v] = self.splitLossColumns(useLcVariables[v])
+
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables

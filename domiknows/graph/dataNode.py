@@ -2350,7 +2350,8 @@ class DataNode:
     def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0,
                         sampleGlobalLoss=False, compiled=False, circuit=False,
                         circuitBackend=None, circuitMaxNodes=None,
-                        circuitSizeLimitAction=None, circuitAggregation=None):
+                        circuitSizeLimitAction=None, circuitAggregation=None,
+                        includeExecutable=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2375,6 +2376,12 @@ class DataNode:
         - circuitBackend, circuitMaxNodes, circuitSizeLimitAction: optional
             Configure the circuit implementation (``auto``, ``pysdd``, or
             ``bdd``), node budget, and budget action (``raise`` or ``warn``).
+        - includeExecutable: bool, optional
+            Also score ``execute()``-wrapped constraints, which live in
+            ``graph.executableLCs`` and are excluded by default so
+            ``InferenceProgram`` does not double-count them. Enable when one
+            number must cover every constraint (e.g. comparing against the
+            exact-circuit path, which always iterates both populations).
         - circuitAggregation: str, optional
             ``'joint'`` (default) returns one ``-log P(all groundings hold)`` per
             constraint, preserving dependence between groundings that share a
@@ -2414,10 +2421,12 @@ class DataNode:
         elif compiled:
             from domiknows.solver.compiled import CompiledLossCalculator
             lossCalculator = CompiledLossCalculator(myilpOntSolver)
-            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
+            lcLosses = lossCalculator.calculateLoss(
+                self, tnorm, counting_tnorm, include_executable=includeExecutable)
         else:
             lossCalculator = LossCalculator(myilpOntSolver)
-            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
+            lcLosses = lossCalculator.calculateLoss(
+                self, tnorm, counting_tnorm, include_executable=includeExecutable)
         
         end = perf_counter()
         elapsedInS = end - start

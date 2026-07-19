@@ -189,7 +189,7 @@ class LossCalculator:
         result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
         return result
 
-    def calculateLoss(self, dn, tnorm='L', counting_tnorm=None):
+    def calculateLoss(self, dn, tnorm='L', counting_tnorm=None, include_executable=False):
         """
         Calculate loss with per-constraint t-norm selection.
 
@@ -197,6 +197,19 @@ class LossCalculator:
             dn: Data node.
             tnorm: T-norm mode — "L","P","SP","G","default", or "auto".
             counting_tnorm: Deprecated — depricated but still accepted for backward compatibility. Ignored if tnorm is "auto".
+            include_executable: Also evaluate ``execute()``-wrapped constraints.
+
+                ``execute()`` *moves* a constraint out of ``graph.logicalConstrains``
+                into ``graph.executableLCs``, so by default this method never sees
+                it. That default is deliberate and load-bearing: ``InferenceProgram``
+                scores executable constraints itself and adds a separately weighted
+                graph-global term, relying on this exclusion to avoid double-counting
+                (see domiknows/program/README_inference.md).
+
+                Turn it on only when you want one number covering *every* constraint
+                — e.g. comparing this path against the exact-circuit path, which does
+                iterate both populations, so the two otherwise score different
+                constraint sets on the same graph.
         """
         myBooleanMethods = self.solver.myLcLossBooleanMethods
         myBooleanMethods.current_device = dn.current_device
@@ -215,5 +228,29 @@ class LossCalculator:
                 result = self.calculate_single_lc_loss(lc, dn, key, tnorm=tnorm, counting_tnorm=counting_tnorm, label=None)
                 if result is not None:
                     lcLosses[lc.lcName] = result
+
+            if not include_executable:
+                continue
+
+            # Executable wrappers hold their real expression in `innerLC`, which
+            # is intentionally marked non-head; a runtime label makes it a root.
+            for executable_name, executable in graph.executableLCs.items():
+                label = dn.getExecutableConstraintLabel(executable_name)
+                inner = getattr(executable, 'innerLC', None)
+                if label is None or inner is None:
+                    continue
+
+                old_head = inner.headLC
+                inner.headLC = True
+                try:
+                    result = self.calculate_single_lc_loss(
+                        inner, dn, key, tnorm=tnorm, counting_tnorm=counting_tnorm,
+                        label=label)
+                finally:
+                    inner.headLC = old_head
+
+                if result is not None:
+                    result['executableName'] = executable_name
+                    lcLosses[executable_name] = result
 
         return lcLosses

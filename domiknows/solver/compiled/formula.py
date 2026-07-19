@@ -14,9 +14,10 @@ loss path (``loss=True, sample=False, verify=False, m=None``):
   numerics are shared with the interpreter by construction, not duplicated.
 
 ``CompiledLossCalculator`` mirrors ``LossCalculator`` and falls back to the
-interpreter per constraint for unsupported types (``sumL``, ``queryL``,
-``iotaL``, ``sameL``, ``differentL``, eqL-as-element, graphs with active
-``fixedL``) or on any evaluation error.
+interpreter per constraint for unsupported types (eqL-as-element, ``execute``
+wrappers) or on any evaluation error. ``fixedL`` no longer disables the whole
+graph: the pinned concept's hard 0/1 substitution is replicated per concept in
+``ProbabilityStore`` (see ``_fixed_spec`` / ``_apply_fixed``).
 """
 
 from collections import OrderedDict
@@ -32,6 +33,7 @@ from domiknows.graph.logicalConstrain import (
     atMostL, atLeastL, exactL, existsL,
     atMostAL, atLeastAL, exactAL, existsAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL, notEqualCountsL,
+    sumL, queryL, iotaL, sameL, differentL,
 )
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
 from domiknows.solver.lossCalculator import LossCalculator
@@ -47,7 +49,19 @@ SUPPORTED_LC_TYPES = (
     atMostL, atLeastL, exactL, existsL,
     atMostAL, atLeastAL, exactAL, existsAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL, notEqualCountsL,
+    sumL, sameL, differentL,
 )
+
+#: Deliberately NOT in SUPPORTED_LC_TYPES: ``queryL`` and ``iotaL``.
+#:
+#: R1's contract is to be gradient-identical to the interpreter, so a type is
+#: only promoted once a parity case proves it. The interpreter's *t-norm loss*
+#: for these two currently raises (a shape mismatch inside ``andVar`` — see
+#: test_regr/examples/iota) so there is no working reference to compare
+#: against; they are usable through ILP/verify and the exact-circuit (R2) path,
+#: but not through the t-norm loss on either implementation. The result
+#: plumbing below is kept ready, so promoting them is a one-line change once
+#: the interpreter's loss path works.
 
 
 def lc_tree_supported(lc):
@@ -113,7 +127,7 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
 
     def constructCompiled(self, lc, booleanProcessor, dn, key=None,
                           lcVariablesDns=None, lcVariables=None, headLC=False,
-                          vNo=None):
+                          vNo=None, label=None):
         """Port of ``constructLogicalConstrains`` for the loss path.
 
         Returns the same ``(lc_result, lcVariables)`` tuple the interpreter
@@ -283,7 +297,7 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                         vDns, lcVariableUpdated = self.constructCompiled(
                             e, booleanProcessor, dn, key=key,
                             lcVariablesDns=lcVariablesDns, lcVariables=lcVariables,
-                            headLC=False, vNo=vNo)
+                            headLC=False, vNo=vNo, label=label)
 
                         vDns = self.addLossTovDns(True, vDns)
                         lcVariables = lcVariableUpdated
@@ -326,14 +340,15 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
                 if useLcVariables[v] and len(useLcVariables[v]) > 1:
                     continue
 
-                lcVSplitted = torch.split(useLcVariables[v][0][0], 1)
-                useLcVariables[v] = []
+                # Splits every column in parallel (see splitLossColumns); doing
+                # only column 0 would re-collapse a bare EnumConcept.
+                useLcVariables[v] = self.splitLossColumns(useLcVariables[v])
 
-                for s in lcVSplitted:
-                    useLcVariables[v].append([s])
-
+        # sumL is the one operator that needs the runtime label (its target
+        # count); mirror the interpreter's conditional kwarg exactly.
         return lc(None, booleanProcessor, useLcVariables, headConstrain=headLC,
-                  integrate=integrate), lcVariables
+                  integrate=integrate,
+                  **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
 
 
 class CompiledLossCalculator(LossCalculator):
@@ -349,30 +364,25 @@ class CompiledLossCalculator(LossCalculator):
         super().__init__(solver, tnorm_selector)
         self._prob_store = None
         self._evaluator = None
-        self._graphs_have_fixedL = False
 
-    def _detect_fixedL(self):
-        for graph in self.solver.myGraph:
-            for _, lc in graph.allLogicalConstrains:
-                if type(lc) is fixedL and lc.headLC and lc.active:
-                    return True
-        return False
-
-    def calculateLoss(self, dn, tnorm='L', counting_tnorm=None):
-        self._prob_store = ProbabilityStore(dn, "/local/softmax")
+    def calculateLoss(self, dn, tnorm='L', counting_tnorm=None, include_executable=False):
+        # The graphs are handed to the store so it can honour ``fixedL`` per
+        # concept; previously any active fixedL disabled compilation for the
+        # whole graph, including constraints that never touch the pinned concept.
+        self._prob_store = ProbabilityStore(
+            dn, "/local/softmax", graphs=self.solver.myGraph)
         self._evaluator = CompiledConstraintEvaluator(self.solver.myLogger, self._prob_store)
-        self._graphs_have_fixedL = self._detect_fixedL()
-        return super().calculateLoss(dn, tnorm, counting_tnorm)
+        return super().calculateLoss(dn, tnorm, counting_tnorm,
+                                     include_executable=include_executable)
 
     def calculate_single_lc_loss(self, lc, dn, key, tnorm='L', counting_tnorm=None, label=None):
-        if (self._prob_store is None
-                or self._graphs_have_fixedL
-                or label is not None
-                or not lc_tree_supported(lc)):
+        if self._prob_store is None or not lc_tree_supported(lc):
             return super().calculate_single_lc_loss(
                 lc, dn, key, tnorm=tnorm, counting_tnorm=counting_tnorm, label=label)
 
         if not lc.headLC or not lc.active:
+            return None
+        if type(lc) is fixedL:
             return None
 
         selector = self._external_selector if self._external_selector is not None else TNormSelector(tnorm, counting_tnorm)
@@ -387,6 +397,14 @@ class CompiledLossCalculator(LossCalculator):
 
         myBooleanMethods.setTNorm(selected_tnorm)
 
+        # sumL needs its runtime target count; the interpreter reads it from the
+        # constraint datanode when the caller did not supply one.
+        if isinstance(lc, sumL) and label is None:
+            _rawLabel = dn.getExecutableConstraintLabel(lc.lcName)
+            if _rawLabel is None:
+                return None
+            label = _rawLabel.float()
+
         self.solver.myLogger.info(f'Processing {lc} (compiled) with t-norm {selected_tnorm}')
 
         self.solver.constraintConstructor.current_device = self.solver.current_device
@@ -397,8 +415,29 @@ class CompiledLossCalculator(LossCalculator):
         self._evaluator._gathered_probs = []  # reset per head constraint
 
         try:
+            if isinstance(lc, queryL):
+                # Unreachable while queryL is absent from SUPPORTED_LC_TYPES
+                # (see the note there); kept so promotion is a one-line change.
+                # queryL is evaluated as a non-head expression and post-processed
+                # into a class distribution rather than a violation vector.
+                query_output, _ = self._evaluator.constructCompiled(
+                    lc, myBooleanMethods, dn, key=key, headLC=False)
+                query_distribution = self._normalize_query_distribution(
+                    query_output, lc.num_subclasses)
+                result['queryDistribution'] = query_distribution
+                result['lossTensor'] = None
+                if query_distribution is not None:
+                    result['conversionSigmoid'] = query_distribution
+                    result['loss'] = 1.0 - query_distribution.max()
+                else:
+                    result['conversionSigmoid'] = None
+                    result['loss'] = None
+                result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
+                return result
+
             lossTensor = self._evaluator.constructCompiled(
-                lc, myBooleanMethods, dn, key=key, headLC=True)
+                lc, myBooleanMethods, dn, key=key, headLC=True,
+                label=int(label) if label is not None else None)
         except Exception as exc:  # fall back to the interpreter on any failure
             self.solver.myLogger.warning(
                 'Compiled evaluation of %s failed (%s: %s) - falling back to interpreter',
@@ -427,6 +466,8 @@ class CompiledLossCalculator(LossCalculator):
 
         if lossTensor is not None:
             result['conversionSigmoid'] = 1.0 - lossTensor
+            if isinstance(lc, sumL) or (hasattr(lc, 'innerLC') and isinstance(lc.innerLC, sumL)):
+                result['expectedCount'] = lossTensor
         else:
             result['conversionSigmoid'] = None
 

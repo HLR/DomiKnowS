@@ -280,6 +280,10 @@ class TrainingComparison:
         """
         tnorm = self.violation_tnorm or getattr(program.cmodel, 'tnorm', 'P')
         counting_tnorm = getattr(program.cmodel, 'counting_tnorm', None)
+        # Score executable-wrapped constraints too, so this metric covers the
+        # same constraint population the exact-circuit path evaluates. Without
+        # it, a graph using execute() would have its t-norm variants measured on
+        # a strictly smaller constraint set than the semantic-loss variants.
 
         program.model.eval()
         totals: List[float] = []
@@ -289,7 +293,9 @@ class TrainingComparison:
                 builder = out[-1]
                 builder.createBatchRootDN()
                 datanode = builder.getDataNode(device=self.device)
-                lc_losses = datanode.calculateLcLoss(tnorm=tnorm, counting_tnorm=counting_tnorm)
+                lc_losses = datanode.calculateLcLoss(
+                    tnorm=tnorm, counting_tnorm=counting_tnorm,
+                    includeExecutable=True)
                 for res in lc_losses.values():
                     lt = res.get('lossTensor') if isinstance(res, dict) else None
                     if lt is None:

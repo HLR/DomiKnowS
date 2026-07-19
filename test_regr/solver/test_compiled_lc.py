@@ -194,6 +194,28 @@ def test_compiled_calculator_reports_supported_types():
     assert issubclass(iffL, SUPPORTED_LC_TYPES)
 
 
+def test_compiled_calculator_excludes_unverified_types():
+    """The negative half of the contract.
+
+    A type only belongs in SUPPORTED_LC_TYPES once a parity case proves the
+    compiled result matches the interpreter. These are excluded on purpose:
+
+    * ``eqL`` as a direct LC element — its ``__call__`` takes no
+      ``headConstrain``/``integrate``, so the evaluator's call would TypeError.
+      (``eqL`` inside a ``path=`` is fine; it is resolved structurally.)
+    * ``queryL`` / ``iotaL`` — the interpreter's own t-norm loss for these
+      raises, so there is no working reference to compare against.
+
+    Without this assertion, widening the tuple by accident would be invisible.
+    """
+    from domiknows.graph.logicalConstrain import eqL, queryL, iotaL
+    from domiknows.solver.compiled import SUPPORTED_LC_TYPES as SUPPORTED
+
+    for lcType in (eqL, queryL, iotaL):
+        assert not issubclass(lcType, SUPPORTED), \
+            f'{lcType.__name__} is in SUPPORTED_LC_TYPES without a parity case'
+
+
 def test_compile_lc_flag_reaches_cmodel():
     """PrimalDualProgram(..., compile_lc=True) must forward the flag into the
     constraint model via LossProgram's signature matching."""
