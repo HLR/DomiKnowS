@@ -62,7 +62,7 @@ class _DataNode:
         return self.loss_dict
 
 
-def _inference_model(constraint, loss_func):
+def _inference_model(constraint, loss_func, query_loss_func=None):
     model = object.__new__(InferenceModel)
     torch.nn.Module.__init__(model)
     model.build = True
@@ -76,6 +76,7 @@ def _inference_model(constraint, loss_func):
     model.global_constraint_loss_weight = 1.0
     model.executable_constraint_loss_weight = 1.0
     model.loss_func = loss_func
+    model.query_loss_func = query_loss_func or loss_func
     model.loss = {}
     model.pos_weight = 1.0
     model._diag_budget = 0
@@ -167,3 +168,27 @@ def test_queryl_executable_constraints_work_with_multiclass_loss_and_gumbel(use_
     )
     assert loss.item() == pytest.approx(expected.item())
     assert bool(datanode.infer_gumbel_calls) is use_gumbel
+
+
+def test_queryl_uses_dedicated_multiclass_loss_in_mixed_program():
+    query_distribution = torch.tensor([0.1, 0.7, 0.2], dtype=torch.float32)
+    datanode = _DataNode(
+        label=torch.tensor([1]),
+        loss_dict={
+            "loss": torch.tensor(0.3),
+            "conversionSigmoid": query_distribution,
+            "queryDistribution": query_distribution,
+        },
+    )
+    model = _inference_model(
+        _Constraint(inner_lc=object.__new__(queryL)),
+        torch.nn.BCELoss(),
+        NBCrossEntropyLoss(),
+    )
+
+    loss, *_ = model.forward(_Builder(datanode))
+
+    expected = torch.nn.functional.cross_entropy(
+        query_distribution.reshape(1, -1), torch.tensor([1])
+    )
+    assert loss.item() == pytest.approx(expected.item())

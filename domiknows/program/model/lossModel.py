@@ -597,6 +597,7 @@ class InferenceModel(LossModel):
     def __init__(self, graph,
                  tnorm='P',
                  loss=torch.nn.BCELoss,
+                 query_loss=None,
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
@@ -612,6 +613,8 @@ class InferenceModel(LossModel):
         :param tnorm: Sets the method used to perform the soft-logic translation of the logical expressions.
             Defaults to 'P' (Product).
         :param loss: Loss function to use for binary program outputs.
+        :param query_loss: Optional loss function for multiclass ``queryL``
+            outputs. When omitted, ``loss`` is used for backward compatibility.
         :counting_tnorm: Sets the method used to perform the soft-logic translation of the counting logical
             expressions. If set to None, uses the same method as `tnorm`. Defaults to None.
         :param sample: The `sample` parameter is a boolean flag that determines whether to use sampling
@@ -640,6 +643,7 @@ class InferenceModel(LossModel):
                          hard_gumbel=hard_gumbel)
 
         self.loss_func = loss()
+        self.query_loss_func = query_loss() if query_loss is not None else self.loss_func
         self.include_global_constraint_loss = bool(include_global_constraint_loss)
         self.global_constraint_loss_weight = float(global_constraint_loss_weight)
         self.executable_constraint_loss_weight = float(executable_constraint_loss_weight)
@@ -788,7 +792,9 @@ class InferenceModel(LossModel):
                 query_distribution = loss_dict.get('queryDistribution')
                 if query_distribution is not None:
                     try:
-                        constraint_loss = self.loss_func(query_distribution.float(), raw_lbl.long())
+                        constraint_loss = self.query_loss_func(
+                            query_distribution.float(), raw_lbl.long()
+                        )
                     except Exception as exc:
                         raise TypeError(
                             "queryL executable constraints produce a multiclass distribution. "
