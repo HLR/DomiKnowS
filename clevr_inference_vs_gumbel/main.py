@@ -273,7 +273,8 @@ def build_program(
     executable_constraint_loss_weight = getattr(args, "executable_constraint_loss_weight", 1.0)
 
     program_kwargs = {
-        "loss": NBCrossEntropyLoss,
+        "loss": torch.nn.BCELoss,
+        "query_loss": NBCrossEntropyLoss,
         "poi": poi,
         "device": device,
         "tnorm": args.tnorm,
