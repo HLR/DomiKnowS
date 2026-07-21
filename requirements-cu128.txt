@@ -223,7 +223,7 @@ packaging==25.0
     #   weasel
 pandas==2.3.2
     # via domiknows
-pillow==11.3.0
+pillow==12.3.0
     # via
     #   domiknows
     #   matplotlib
