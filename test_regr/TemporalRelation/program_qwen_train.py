@@ -689,6 +689,14 @@ def _pair_count_stats(instances, max_events_per_instance=None, pair_selection="a
 def parse_args():
     parser = argparse.ArgumentParser(description="Train TemporalRelation with DomiKnowS program.train and Qwen learner.")
     parser.add_argument("--path", type=Path, default=DEFAULT_TEMPORAL_DATA_ROOT / "MATRES" / "timebank.txt")
+    parser.add_argument(
+        "--train-paths",
+        default=None,
+        help=(
+            "Comma-separated dataset files to concatenate for training. "
+            "When unset, --path is used. Eval-only still scores --path."
+        ),
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--row-level", action="store_true", help="Use the old row-level setup with only the annotated event pair. Off by default; document-level query expansion is the full experiment.")
     parser.add_argument("--max-events-per-instance", type=int, default=None, help="Optional document event budget. Query endpoints are always retained.")
@@ -782,16 +790,32 @@ def parse_args():
     return parser.parse_args()
 
 
+def _parse_data_paths(value):
+    if not value:
+        return []
+    paths = [Path(item.strip()) for item in str(value).split(",") if item.strip()]
+    if not paths:
+        raise ValueError("--train-paths was provided but no dataset paths were parsed")
+    return paths
+
+
 def main():
     global _TEMPORAL_CLASS_WEIGHTS
     args = parse_args()
     _TEMPORAL_CLASS_WEIGHTS = _parse_temporal_class_weights(args)
     torch.manual_seed(args.seed)
+    data_paths = _parse_data_paths(args.train_paths) if (args.train_paths and not args.eval_only) else [args.path]
     if args.row_level:
-        instances = load_temporal_instances(args.path, limit=args.limit, group_by_document=False)
+        instances = []
+        for data_path in data_paths:
+            instances.extend(load_temporal_instances(data_path, limit=None, group_by_document=False))
+        if args.limit is not None:
+            instances = instances[: args.limit]
         documents = None
     else:
-        documents = load_temporal_instances(args.path, limit=None, group_by_document=True)
+        documents = []
+        for data_path in data_paths:
+            documents.extend(load_temporal_instances(data_path, limit=None, group_by_document=True))
         instances = expand_document_query_instances(documents)
         if args.limit is not None:
             instances = instances[: args.limit]
@@ -802,6 +826,8 @@ def main():
         train = list(instances)
         dev = list(instances)
     print(f"dataset={args.path}", flush=True)
+    if len(data_paths) > 1:
+        print(f"train_paths={[str(path) for path in data_paths]}", flush=True)
     if documents is not None:
         print(f"documents={len(documents)} query_instances={len(instances)}", flush=True)
     print(f"loaded={len(instances)} train={len(train)} dev={len(dev)} device={args.device}", flush=True)
