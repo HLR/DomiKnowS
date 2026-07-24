@@ -1,5 +1,6 @@
 import unittest
-from tempfile import NamedTemporaryFile
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from .dataset import discover_temporal_datasets, load_temporal_instances
 from .execution import (
@@ -301,11 +302,10 @@ class TestTemporalRelationAdapter(unittest.TestCase):
             "d1\tA packed left arrived\tpacked_bag\tleft_house\tBEFORE\tpacked\tleft\t1\t2\n"
             "d1\tA packed left arrived\tleft_house\tarrived_work\tBEFORE\tleft\tarrived\t2\t3\n"
         )
-        with NamedTemporaryFile("w", suffix=".tsv") as data_file:
-            data_file.write(rows)
-            data_file.flush()
-
-            instances = load_temporal_instances(data_file.name)
+        with TemporaryDirectory() as temp_dir:
+            data_file = Path(temp_dir) / "temporal_rows.tsv"
+            data_file.write_text(rows)
+            instances = load_temporal_instances(data_file)
 
         self.assertEqual(len(instances), 1)
         self.assertEqual(len(instances[0]["events"]), 3)
