@@ -6,7 +6,7 @@ from domiknows.graph.concept import Concept, EnumConcept
 from domiknows.graph import LcElement, LogicalConstrain, V
 from domiknows.graph import CandidateSelection
 from domiknows.graph.candidates import getCandidates
-from domiknows.graph.logicalConstrain import sumL
+from domiknows.graph.logicalConstrain import sumL, queryL
 
 
 class LogicalConstraintConstructor:
@@ -318,6 +318,12 @@ class LogicalConstraintConstructor:
         constraints produce multi-element tensors.
         """
         if loss and vDns:
+            # Some supervised labels intentionally use ignore_index=-100.
+            # getEdgeDataNodeValue returns None for those rows; they should not
+            # participate in constraint-loss aggregation.
+            vDns = [v for v in vDns if v and v[0] is not None]
+            if not vDns:
+                return vDns
             vDnsList = [v[0] for v in vDns]
             
             updatedVDns = []
@@ -840,9 +846,9 @@ class LogicalConstraintConstructor:
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
         elif sample:
             lcVariablesSet[lc] = useLcVariables
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), sampleInfo, lcVariablesSet, lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, (sumL, queryL)) else {})), sampleInfo, lcVariablesSet, lcVariables
         elif verify and headLC:
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, (sumL, queryL)) else {})), lcVariables
         else:
             if loss:
                 slpitT = False
@@ -862,4 +868,4 @@ class LogicalConstraintConstructor:
                         for s in lcVSplitted:
                             useLcVariables[v].append([s]) 
                     
-            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
+            return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, (sumL, queryL)) else {})), lcVariables

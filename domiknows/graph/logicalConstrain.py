@@ -685,6 +685,7 @@ class LogicalConstrain(LcElement):
                     diff=diff,
                     onlyConstrains=headConstrain,
                     logicMethodName=logicMethodName,
+                    label=label,
                 )
                 zVars.append([r])
 
@@ -816,7 +817,7 @@ class LogicalConstrain(LcElement):
         
         return zVars
    
-    def createQuerySelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName):
+    def createQuerySelection(self, model, concept, subclasses, myConstraintVarProcessor, v, headConstrain, integrate, temperature, logicMethodName, label=None):
             """Build query selection over attribute subclasses.
 
             Variables in *v* fall into two groups:
@@ -1510,7 +1511,7 @@ class queryL(LogicalConstrain):
             return None
         
         def __call__(self, model, myConstraintVarProcessor, v, 
-                    headConstrain=False, integrate=False):
+                    headConstrain=False, integrate=False, label=None):
             with torch.set_grad_enabled(myConstraintVarProcessor.grad):
                 return self.createQuerySelection(
                     model,
@@ -1522,6 +1523,7 @@ class queryL(LogicalConstrain):
                     integrate,
                     temperature=self.temperature,
                     logicMethodName=str(self),
+                    label=label,
                 )
 
 class sameL(LogicalConstrain):

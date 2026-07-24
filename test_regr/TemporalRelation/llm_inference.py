@@ -1,9 +1,9 @@
-"""Small-LLM inference helpers for the TemporalRelation adapter.
+"""Zero-shot text-generation baseline for the TemporalRelation adapter.
 
-The adapter keeps the DomiKnowS graph generic. This module provides the learned
-front-end that predicts query-event marker predicates and temporal-relation
-labels from multiple-choice prompts, similar in spirit to CLEVR concept
-prediction from compositional prompts.
+This module is intentionally separate from ``modules.py``. It asks a causal LM
+to generate one multiple-choice answer and parses the text. The CLEVR-style
+training path should use ``modules.py`` instead, where the model returns fixed
+DomiKnowS-aligned predicate logits.
 """
 
 import re
@@ -30,19 +30,21 @@ class ChoiceBackend:
 
 
 class SmallCausalLMChoiceBackend(ChoiceBackend):
-    """Multiple-choice wrapper around a small Hugging Face causal LM.
+    """Multiple-choice wrapper around a Hugging Face causal LM baseline.
 
-    The model is asked to output exactly one candidate answer. We then parse the
-    generated text back into one of the provided choices. This intentionally does
-    not introduce new DomiKnowS APIs; it only supplies predicate labels/logits at
-    the adapter boundary.
+    The model generates text, so this is useful for zero-shot evaluation and
+    debugging. It is not the concept-logit learner used for DomiKnowS training.
     """
 
     def __init__(self, model_path="Qwen/Qwen2.5-0.5B-Instruct", device="cpu", max_new_tokens=16):
+        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
+        model_kwargs = {"trust_remote_code": True, "low_cpu_mem_usage": True}
+        if str(device).startswith("cuda"):
+            model_kwargs["dtype"] = torch.float16
+        self.model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
         self.device = device
         self.max_new_tokens = max_new_tokens
         self.model.to(device)
@@ -91,7 +93,7 @@ def format_choice_prompt(prompt, choices):
     for index, choice in enumerate(choices):
         lines.append(f"{choice_letter(index)}. {choice}")
     lines.append("")
-    lines.append("Return exactly one candidate answer. You may return the letter or the answer text.")
+    lines.append("You may think briefly, but end with exactly: Final answer: <one candidate answer>.")
     return "\n".join(lines)
 
 
@@ -100,31 +102,43 @@ def parse_choice(text, choices):
     if not choices:
         raise ValueError("Expected at least one choice")
     raw = str(text).strip()
+
+    candidates = [raw]
+    # Qwen3 often emits a long <think> block. Prefer the final response after it.
+    if "</think>" in raw:
+        candidates.insert(0, raw.split("</think>", 1)[1].strip())
+    final_match = re.search(r"(?:final\s+answer|answer)\s*[:\-]\s*([^\n.;]*)", raw, flags=re.IGNORECASE)
+    if final_match:
+        candidates.insert(0, final_match.group(1).strip())
+
+    for candidate in candidates:
+        normalized = _normalize(candidate)
+        for choice in choices:
+            if normalized == _normalize(choice):
+                return choice
+
+        letter_matches = list(re.finditer(r"\b([A-Z])\b", candidate.upper()))
+        if letter_matches:
+            # Use the last standalone letter; earlier letters often occur in reasoning.
+            index = ord(letter_matches[-1].group(1)) - ord("A")
+            if 0 <= index < len(choices):
+                return choices[index]
+
+        number_matches = list(re.finditer(r"\b(\d+)\b", candidate))
+        if number_matches:
+            index = int(number_matches[-1].group(1)) - 1
+            if 0 <= index < len(choices):
+                return choices[index]
+
+        matches = []
+        for choice in choices:
+            choice_norm = _normalize(choice)
+            if choice_norm in normalized or normalized in choice_norm:
+                matches.append(choice)
+        if len(matches) == 1:
+            return matches[0]
+
     normalized = _normalize(raw)
-
-    for choice in choices:
-        if normalized == _normalize(choice):
-            return choice
-
-    letter_match = re.search(r"\b([A-Z])\b", raw.upper())
-    if letter_match:
-        index = ord(letter_match.group(1)) - ord("A")
-        if 0 <= index < len(choices):
-            return choices[index]
-
-    number_match = re.search(r"\b(\d+)\b", raw)
-    if number_match:
-        index = int(number_match.group(1)) - 1
-        if 0 <= index < len(choices):
-            return choices[index]
-
-    matches = []
-    for choice in choices:
-        choice_norm = _normalize(choice)
-        if choice_norm in normalized or normalized in choice_norm:
-            matches.append(choice)
-    if len(matches) == 1:
-        return matches[0]
 
     # Event choices use "event_id: text (...)"; accept a returned event id.
     id_matches = [
@@ -218,9 +232,17 @@ def choice_letter(index):
 
 def _query_event_prompt(instance, role):
     text = instance.get("text") or instance.get("doc_id") or ""
+    query_pair = instance.get("query_pair") or (instance.get("event_pairs") or [{}])[0]
+    e1, e2, _label = unpack_pair(query_pair)
+    target_id = e1 if role == "first" else e2
+    target = _event_lookup(instance, target_id)
+    target_text = target.get("text") or target_id
     return chr(10).join(
         [
             f"Select the event that should be used as the {role} event in the temporal-relation query.",
+            f"The query is TemporalRelation(first={e1}, second={e2}).",
+            f"For this question, the {role} event is {target_id}: {target_text}.",
+            "Choose exactly one candidate event that matches that query slot.",
             "",
             f"Text: {text}",
         ]
@@ -261,6 +283,13 @@ def _choice_event_id(choice):
 
 def _event_id(event):
     return event.get("id") if isinstance(event, dict) else event
+
+
+def _event_lookup(instance, event_id):
+    for event in instance.get("events", []):
+        if _event_id(event) == event_id:
+            return event if isinstance(event, dict) else {"id": event}
+    return {"id": event_id, "text": event_id}
 
 
 def _normalize(value):

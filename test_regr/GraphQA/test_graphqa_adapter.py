@@ -10,6 +10,8 @@ from .dataset import (
 from .execution import (
     assert_convertible,
     compile_graphqa_dataset,
+    create_candidate_membership_instance,
+    create_candidate_membership_logic,
     create_executable_instance,
     create_query_logic,
     materialize_bounded_facts,
@@ -28,8 +30,8 @@ SAMPLE_INSTANCE = {
         ("LeftOf", "o1", "o2"),
     ],
     "kb_facts": [
-        ("Hypernym", "dog", "mammal"),
-        ("Hypernym", "mammal", "animal"),
+        ("TypeOf", "dog", "mammal"),
+        ("TypeOf", "mammal", "animal"),
     ],
     "query": {
         "target_type": "animal",
@@ -39,6 +41,7 @@ SAMPLE_INSTANCE = {
         ],
         "answer_type": "object",
     },
+    "expected_answer": "o1",
 }
 
 
@@ -57,8 +60,8 @@ MULTI_RELATION_DATASET = [
             ("Behind", "o3", "o2"),
         ],
         "kb_facts": [
-            ("Hypernym", "dog", "mammal"),
-            ("Hypernym", "mammal", "animal"),
+            ("TypeOf", "dog", "mammal"),
+            ("TypeOf", "mammal", "animal"),
         ],
         "query": {
             "target_type": "animal",
@@ -70,15 +73,16 @@ MULTI_RELATION_DATASET = [
             ],
             "answer_type": "object",
         },
+        "expected_answer": "o2",
     },
 ]
 
 
 class TestGraphQAAdapter(unittest.TestCase):
-    def test_bounded_hypernym_propagation_materializes_object_category(self):
+    def test_bounded_type_of_propagation_materializes_object_category(self):
         facts = set(materialize_bounded_facts(SAMPLE_INSTANCE))
 
-        self.assertIn(("ObjectClass", "o1", "mammal"), facts)
+        self.assertIn(("ObjectType", "o1", "mammal"), facts)
         self.assertIn(("ObjectCategory", "o1", "animal"), facts)
         self.assertNotIn(("ObjectCategory", "o1", "mammal"), facts)
 
@@ -95,10 +99,16 @@ class TestGraphQAAdapter(unittest.TestCase):
 
     def test_graphqa_query_is_convertible_to_domiknows_execute_logic(self):
         context = create_graphqa_graph(SAMPLE_INSTANCE)
-        executable = create_executable_instance(SAMPLE_INSTANCE)
+        executable = create_executable_instance(
+            SAMPLE_INSTANCE,
+            answer_label_space=[str(value) for value in context.object_values],
+        )
 
         self.assertTrue(assert_convertible(SAMPLE_INSTANCE))
         self.assertEqual(create_query_logic(SAMPLE_INSTANCE), executable["logic_str"])
+        self.assertIn("queryL", executable["logic_str"])
+        self.assertIn("iotaL", executable["logic_str"])
+        self.assertEqual(executable["logic_label"], 0)
 
         compiled = compile_graphqa_dataset([SAMPLE_INSTANCE], context)
         self.assertEqual(len(compiled), 1)
@@ -114,6 +124,39 @@ class TestGraphQAAdapter(unittest.TestCase):
         self.assertEqual(answer_object(SAMPLE_INSTANCE), "o1")
         self.assertTrue(check_oracle(SAMPLE_INSTANCE, "o1"))
         self.assertEqual(answer_object(MULTI_RELATION_DATASET[1]), "o2")
+
+    def test_set_answer_candidate_membership_logic_compiles(self):
+        multi_answer = {
+            "objects": ["o1", "o2", "o3"],
+            "symbols": ["dog"],
+            "visual_facts": [
+                ("Name", "o1", "dog"),
+                ("Name", "o2", "dog"),
+            ],
+            "kb_facts": [],
+            "query": {
+                "target_type": "__any_object__",
+                "conditions": [("Name", "o", "dog")],
+                "answer_type": "object",
+            },
+            "expected_answer": None,
+            "expected_answers": ["o1", "o2"],
+        }
+        context = create_graphqa_graph(multi_answer)
+        executable_rows = [
+            create_candidate_membership_instance(multi_answer, "o1", True),
+            create_candidate_membership_instance(multi_answer, "o2", True),
+            create_candidate_membership_instance(multi_answer, "o3", False),
+        ]
+
+        self.assertIn("existsL", create_candidate_membership_logic(multi_answer, "o1"))
+        compiled = context.graph.compile_executable(
+            executable_rows,
+            logic_keyword="logic_str",
+            logic_label_keyword="logic_label",
+            extra_namespace_values=context.namespace,
+        )
+        self.assertEqual(len(compiled), 3)
 
     def test_converter_rejects_unbounded_or_unsupported_shapes(self):
         unsupported = {
@@ -155,14 +198,41 @@ class TestGraphQAAdapter(unittest.TestCase):
 
         instance = vqar_task_to_graphqa_instance(
             task,
-            kb_facts=[("Hypernym", "dog", "mammal"), ("Hypernym", "mammal", "animal")],
+            kb_facts=[("TypeOf", "dog", "mammal"), ("TypeOf", "mammal", "animal")],
         )
 
+        instance["expected_answer"] = "1"
+
+        self.assertEqual(instance["expected_answers"], ["1"])
         self.assertEqual(instance["query"]["target_type"], "__any_object__")
         self.assertIn(("SemanticClass", "o", "animal"), instance["query"]["conditions"])
         self.assertIn(("Attribute", "o", "white"), instance["query"]["conditions"])
         self.assertTrue(assert_convertible(instance))
         self.assertEqual(answer_object(instance), "1")
+
+    def test_vqar_task_preserves_multi_answer_outputs(self):
+        task = {
+            "image_id": "img1",
+            "scene_graph": {
+                "names": {"1": "dog", "2": "dog"},
+                "attributes": {"1": ["white"], "2": ["black"]},
+                "relations": {},
+            },
+            "question": {
+                "question_id": "q_multi",
+                "input": ["1", "2"],
+                "output": ["1", "2"],
+                "clauses": [
+                    {"function": "Initial"},
+                    {"function": "Find_Name", "text_input": "dog"},
+                ],
+            },
+        }
+
+        instance = vqar_task_to_graphqa_instance(task)
+
+        self.assertIsNone(instance["expected_answer"])
+        self.assertEqual(instance["expected_answers"], ["1", "2"])
 
 
 if __name__ == "__main__":

@@ -963,6 +963,10 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         # -- Normalize inputs using existing _fixVar helper
         var = self._fixVar(var)
+        # Some path-based constraints can legitimately produce an empty tensor
+        # for a sample. Treat that as an empty selection rather than crashing on
+        # view(1); the zero satisfaction below yields an existence penalty.
+        var = tuple(v for v in var if not (torch.is_tensor(v) and v.numel() == 0))
         
         # Concatenate all inputs into single tensor
         if len(var) == 0:
@@ -1056,7 +1060,7 @@ class lcLossBooleanMethods(constraintsProcessor):
             else:
                 return selection
 
-    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY", label=None):
         """
         Differentiable query operator for multiclass attribute selection.
         
@@ -1194,6 +1198,16 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         self.countLogger.info(f"Subclass scores: {subclass_scores}")
         
+        def label_conditioned_loss(selection_tensor):
+            if label is None:
+                return None
+            label_idx = int(label.item()) if hasattr(label, "item") else int(label)
+            if label_idx < 0 or label_idx >= num_subclasses:
+                self.countLogger.error(f"{logicMethodName} label index out of range: {label_idx}")
+                return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            gold_prob = torch.clamp(selection_tensor[label_idx], 0.0, 1.0)
+            return 1.0 - gold_prob
+
         # -- Apply t-norm specific selection
         if self.tnorm == 'G':  # GÃ¶del - hard argmax
             self.countLogger.debug("Using GÃ¶del t-norm (hard argmax)")
@@ -1202,6 +1216,10 @@ class lcLossBooleanMethods(constraintsProcessor):
             selection[max_idx] = 1.0
             
             if onlyConstrains:
+                label_loss = label_conditioned_loss(subclass_scores)
+                if label_loss is not None:
+                    self.countLogger.info(f"GÃ¶del label-conditioned query loss: {label_loss.item()}")
+                    return label_loss
                 # Loss: penalize if max score is low
                 max_val = subclass_scores[max_idx]
                 loss = 1.0 - max_val
@@ -1218,6 +1236,10 @@ class lcLossBooleanMethods(constraintsProcessor):
             selection = torch.softmax(logits, dim=0)
             
             if onlyConstrains:
+                label_loss = label_conditioned_loss(selection)
+                if label_loss is not None:
+                    self.countLogger.info(f"Åukasiewicz label-conditioned query loss: {label_loss.item()}")
+                    return label_loss
                 # Existence: at least one subclass should have high score
                 sum_scores = torch.sum(subclass_scores)
                 existence_success = torch.clamp(sum_scores, max=tOne)
@@ -1241,6 +1263,10 @@ class lcLossBooleanMethods(constraintsProcessor):
             selection = torch.softmax(logits, dim=0)
             
             if onlyConstrains:
+                label_loss = label_conditioned_loss(selection)
+                if label_loss is not None:
+                    self.countLogger.info(f"Product label-conditioned query loss: {label_loss.item()}")
+                    return label_loss
                 # Product existence: 1 - Î (1 - score_j)
                 existence_prob = 1.0 - torch.prod(1.0 - torch.clamp(subclass_scores, 0.0, 1.0))
                 existence_loss = 1.0 - existence_prob

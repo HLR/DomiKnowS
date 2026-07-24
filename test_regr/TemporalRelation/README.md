@@ -5,9 +5,10 @@ This adapter models MATRES temporal relation classification in a CLEVR-style Dom
 1. Build generic graph concepts in `graph.py`.
 2. Convert MATRES rows into document events and event pairs in `dataset.py`.
 3. Build query logic and learner-facing examples in `execution.py`.
-4. Run the learned front-end through multiple-choice small-LLM prompts in `llm_inference.py`.
-5. Check oracle labels and global temporal consistency in `oracle.py`.
-6. Validate behavior in `test_temporal_relation_adapter.py` and `smoke_test_dataset.py`.
+4. Predict graph-aligned predicate logits with `modules.py`.
+5. Optionally run the zero-shot text-generation baseline in `llm_inference.py`.
+6. Check oracle labels and global temporal consistency in `oracle.py`.
+7. Validate behavior in `test_temporal_relation_adapter.py` and `smoke_test_dataset.py`.
 
 ## Graph Concepts
 
@@ -66,10 +67,10 @@ queryL(
     iotaL(
         andL(
             EventPair("p"),
-            event(path=("p", pair_event1)),
-            event(path=("p", pair_event2)),
-            query_event1(path=("p", pair_event1)),
-            query_event2(path=("p", pair_event2))
+            event("p1", path=("p", pair_event1)),
+            event("p2", path=("p", pair_event2)),
+            query_event1("p1"),
+            query_event2("p2")
         )
     )
 )
@@ -94,7 +95,7 @@ Before
 ]
 ```
 
-In the learned version, a small LM predicts these markers from the input question/task text.
+In the learned version, a Qwen-style classifier head predicts these markers as binary logits over event nodes.
 
 `create_pair_learner_examples(instance)` returns one classification example per ordered event pair:
 
@@ -111,25 +112,233 @@ In the learned version, a small LM predicts these markers from the input questio
 
 This is the normal pair-classification learner target.
 
-## Small-LLM Inference
+## Predicate Classifier
 
-`llm_inference.py` adds the actual learned front-end used by the adapter:
-
-- `build_query_event_choice_examples(instance)` asks the model to select exactly one event from all candidate events for `query_event1`, then exactly one event for `query_event2`.
-- `build_temporal_relation_choice_examples(instance)` asks the model to classify every ordered candidate event pair into one label from `Before`, `After`, `Equal`, `Vague`.
-- `SmallCausalLMChoiceBackend` wraps a Hugging Face causal LM such as `Qwen/Qwen2.5-0.5B-Instruct`.
-- `StaticChoiceBackend` is used in tests to verify the parsing and grounding loop without loading a model.
-
-The prompt style is deliberately bounded multiple choice. For query-event selection, the model sees all detected document events as candidate answers and must return one candidate by letter or answer text. The selected events become the learned predicate groundings for:
+`modules.py` is the CLEVR-style learner-facing implementation. It does not generate text. It returns tensors whose dimensions match the DomiKnowS concepts exactly:
 
 ```python
-query_event1(e)
-query_event2(e)
+event_logits:             [num_events, 2]
+query_event1_logits:      [num_events, 2]
+query_event2_logits:      [num_events, 2]
+temporal_relation_logits: [num_event_pairs, 4]
 ```
 
-For temporal-relation classification, the model sees text with `[E1]...[/E1]` and `[E2]...[/E2]` markers and returns one temporal label. These predictions provide the learner-side values/logits for `temporal_relation(p)`.
+The four temporal classes are:
 
-Run a real small-LLM pass on one grouped MATRES document:
+```python
+("Before", "After", "Equal", "Vague")
+```
+
+`OracleTemporalPredicateClassifier` is the perfect predicate module used by tests and oracle execution. `TemporalPredicateClassifier` is the Qwen-backed module: it encodes event and event-pair prompts, pools hidden states, and applies linear heads for the graph concepts. This is the correct path for training/fine-tuning because DomiKnowS receives concept logits directly.
+
+## Predicate Training
+
+Fast oracle smoke test:
+
+```bash
+conda run -n CLEVER python -m test_regr.TemporalRelation.train_predicate_classifier \
+  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
+  --limit 3 \
+  --max-events 30 \
+  --oracle \
+  --device cpu
+```
+
+Train Qwen3-8B as the underlying predicate model on CUDA 6 with a frozen backbone and learned DomiKnowS concept heads:
+
+```bash
+CUDA_VISIBLE_DEVICES=6 conda run -n CLEVER python -m test_regr.TemporalRelation.train_predicate_classifier \
+  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
+  --limit 20 \
+  --max-events 30 \
+  --model-path Qwen/Qwen3-8B \
+  --device cuda \
+  --freeze-backbone \
+  --epochs 3 \
+  --lr 1e-3 \
+  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_heads.pt
+```
+
+For full MATRES training, remove `--limit` and either remove `--max-events` or raise it after the smoke run is healthy. `--freeze-backbone` trains only the predicate heads; use `--no-freeze-backbone` for full fine-tuning, which is much more expensive. The checkpoint saves the four concept heads by default and only saves the full 8B model if `--save-full-model` is passed.
+
+
+
+## DomiKnowS `program.train` Workflow
+
+The production TemporalQA path follows the CLEVR-style DomiKnowS execution route:
+
+```text
+MATRES file -> document/event/pair instances -> graph.compile_executable(...)
+-> InferenceProgram(..., TemporalSolverModel) -> program.train(...)
+```
+
+The final executable query is stored in each compiled example as `logic_str`, and the answer label is stored as `logic_label`. This is important: the learner is not trained by parsing generated text. Qwen encodes event-pair prompts and returns logits aligned with DomiKnowS concepts, then DomiKnowS applies `queryL(...)`, `iotaL(...)`, and optional global temporal constraints.
+
+Current graph-level execution query:
+
+```python
+queryL(
+    temporal_relation,
+    iotaL(
+        andL(
+            EventPair("p"),
+            event("p1", path=("p", pair_event1)),
+            event("p2", path=("p", pair_event2)),
+            query_event1("p1"),
+            query_event2("p2"),
+        )
+    ),
+)
+```
+
+### 8B Warmup Training
+
+This trains the `temporal_relation` ModuleLearner on the target pair only. It is the stable supervised warmup stage.
+
+```bash
+CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+conda run --no-capture-output -n CLEVER \
+python -m test_regr.TemporalRelation.program_qwen_train \
+  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/timebank.txt \
+  --model-path /localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
+  --device cuda \
+  --freeze-backbone \
+  --lora-r 4 \
+  --lora-alpha 8 \
+  --lora-dropout 0.05 \
+  --lora-target-modules q_proj,v_proj \
+  --max-length 96 \
+  --encode-batch-size 1 \
+  --max-events-per-instance 8 \
+  --pair-selection target \
+  --max-pairs-per-instance 2 \
+  --warmup-epochs 2 \
+  --constraint-epochs 0 \
+  --lr 3e-5 \
+  --skip-condition-eval \
+  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_target_warmup_lora4_lr3e5_e2.pt
+```
+
+### Execution / Global-Constraint Continuation
+
+This starts from a warmup checkpoint and trains through executable DomiKnowS logic over query-related event pairs. Keeping `pair-selection=related` lets the global rules see inverse/related pairs while avoiding all-pairs OOM.
+
+```bash
+CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+conda run --no-capture-output -n CLEVER \
+python -m test_regr.TemporalRelation.program_qwen_train \
+  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/timebank.txt \
+  --model-path /localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
+  --device cuda \
+  --freeze-backbone \
+  --lora-r 4 \
+  --lora-alpha 8 \
+  --lora-dropout 0.05 \
+  --lora-target-modules q_proj,v_proj \
+  --max-length 96 \
+  --encode-batch-size 1 \
+  --max-events-per-instance 16 \
+  --pair-selection related \
+  --max-pairs-per-instance 8 \
+  --warmup-epochs 0 \
+  --constraint-epochs 2 \
+  --lr 5e-7 \
+  --beta 0.3 \
+  --checkpoint /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_warmup_exec_then_global_related8_lr1e6_beta01_e2.pt \
+  --skip-condition-eval \
+  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_exec_global_related8_lr5e7_beta03_e2.pt
+```
+
+Use `--no-global-consistency` for the execution-only ablation.
+
+### Evaluation on Platinum
+
+`--eval-only` evaluates the full file passed with `--path`; it does not split off a random dev set.
+
+```bash
+CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+conda run --no-capture-output -n CLEVER \
+python -m test_regr.TemporalRelation.program_qwen_train \
+  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
+  --model-path /localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
+  --device cuda \
+  --freeze-backbone \
+  --lora-r 4 \
+  --lora-alpha 8 \
+  --lora-dropout 0.05 \
+  --lora-target-modules q_proj,v_proj \
+  --max-length 96 \
+  --encode-batch-size 1 \
+  --max-events-per-instance 16 \
+  --pair-selection related \
+  --max-pairs-per-instance 8 \
+  --eval-only \
+  --checkpoint /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_gumbel_related8_beta03_lr5e7_e2.pt \
+  --skip-condition-eval
+```
+
+### ILP Inference
+
+The Qwen runner exposes DomiKnowS inference outputs through `--infer-types`. To request ILP output in addition to local predictions, add:
+
+```bash
+--infer-types local/softmax,local/argmax,ILP
+```
+
+A fast CPU oracle smoke test for the ILP path is:
+
+```bash
+conda run --no-capture-output -n CLEVER python -c \
+"from test_regr.TemporalRelation.program import make_packed_left_example, temporal_program_declaration; \
+ds, ctx, program = temporal_program_declaration([make_packed_left_example()], device='cpu', infer_types=['local/argmax','ILP']); \
+print(program.evaluate_condition(ds, device='cpu'))"
+```
+
+Expected result: `100.0` on the toy `packed before left` example. ILP requires the DomiKnowS ILP solver stack to be available; if Gurobi/licensing is unavailable, keep `local/softmax,local/argmax` for training/evaluation and use the oracle smoke above to verify solver availability.
+
+### 1B / 1.5B Model Run
+
+For a smaller underlying LLM, use the same DomiKnowS program path and swap `--model-path`. A true 1B-ish Qwen command is:
+
+```bash
+CUDA_VISIBLE_DEVICES=6 PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+conda run --no-capture-output -n CLEVER \
+python -m test_regr.TemporalRelation.program_qwen_train \
+  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/timebank.txt \
+  --limit 200 \
+  --model-path Qwen/Qwen2.5-1.5B-Instruct \
+  --device cuda \
+  --freeze-backbone \
+  --lora-r 4 \
+  --lora-alpha 8 \
+  --lora-dropout 0.05 \
+  --lora-target-modules q_proj,v_proj \
+  --max-length 96 \
+  --encode-batch-size 1 \
+  --max-events-per-instance 8 \
+  --pair-selection target \
+  --max-pairs-per-instance 2 \
+  --warmup-epochs 1 \
+  --constraint-epochs 0 \
+  --lr 3e-5 \
+  --skip-condition-eval \
+  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen25_1p5b_temporal_target_warmup_lora4_smoke.pt
+```
+
+If the 1.5B model is not cached, omit `HF_HUB_OFFLINE=1` for the first download. On this machine, the currently verified cached small Qwen fallback is `Qwen/Qwen2.5-0.5B-Instruct`; use it for a quick smoke test by replacing the `--model-path` value.
+
+## Text-Generation Baseline
+
+`llm_inference.py` is kept as a zero-shot/debug baseline only. It asks a causal LM to return one candidate answer as text and then parses that text. Because it uses generation, it has `--max-new-tokens`; that flag should not appear in the final trained predicate-classifier path.
+
+Run the text-generation baseline on one grouped MATRES document:
 
 ```bash
 conda run -n CLEVER python -m test_regr.TemporalRelation.run_llm_inference \
@@ -184,8 +393,10 @@ conda run -n CLEVER python -m unittest \
 - `graph.py`: DomiKnowS concepts and relations.
 - `dataset.py`: MATRES/TB-Dense style file discovery and normalization.
 - `execution.py`: final `queryL` logic, candidate event-pair generation, query-event marker labels, and local learner examples.
-- `llm_inference.py`: multiple-choice small-LLM loop for `query_event1`, `query_event2`, and `temporal_relation`.
-- `run_llm_inference.py`: CLI for running the LLM loop over real MATRES files.
+- `modules.py`: CLEVR-style predicate classifiers returning DomiKnowS-aligned logits.
+- `train_predicate_classifier.py`: training/evaluation runner for Qwen-backed concept heads and oracle smoke checks.
+- `llm_inference.py`: zero-shot multiple-choice text-generation baseline for `query_event1`, `query_event2`, and `temporal_relation`.
+- `run_llm_inference.py`: CLI for running the text-generation baseline over real MATRES files.
 - `oracle.py`: expected answer lookup and temporal consistency checks.
 - `test_temporal_relation_adapter.py`: unit tests for graph, query, learner examples, oracle, and dataset grouping.
 - `smoke_test_dataset.py`: whole-dataset conversion/oracle smoke.

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import re
 
 from domiknows.graph import Concept, Graph, Relation
+from domiknows.graph.logicalConstrain import andL, exactL, ifL, notL
 
 
 TEMPORAL_LABELS = ("Before", "After", "Equal", "Vague")
@@ -36,7 +37,7 @@ class TemporalRelationContext:
     namespace: dict
 
 
-def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relation"):
+def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relation", include_global_constraints=True):
     """
     Build a MATRES-style temporal relation graph.
 
@@ -66,6 +67,66 @@ def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relatio
 
         temporal_relation = event_pair(name="temporal_relation")
         label_concepts = {label: temporal_relation(name=label) for label in TEMPORAL_LABELS}
+        before = label_concepts["Before"]
+        after = label_concepts["After"]
+        equal = label_concepts["Equal"]
+        vague = label_concepts["Vague"]
+
+        if include_global_constraints:
+            # Graph-level temporal consistency losses. Disable these for the
+            # first CLEVR-style executable-query-only baseline.
+            ifL(
+                event_pair("p"),
+                exactL(before("p"), after("p"), equal("p"), vague("p"), limit=1),
+                name="temporal_exactly_one_label",
+            )
+            ifL(
+                andL(
+                    before("p"),
+                    event("p1", path=("p", pair_event1)),
+                    event("p2", path=("p", pair_event2)),
+                ),
+                after("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed))),
+                name="temporal_before_inverse_after",
+            )
+            ifL(
+                andL(
+                    after("p"),
+                    event("p1", path=("p", pair_event1)),
+                    event("p2", path=("p", pair_event2)),
+                ),
+                before("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed))),
+                name="temporal_after_inverse_before",
+            )
+            ifL(
+                andL(
+                    equal("p"),
+                    event("p1", path=("p", pair_event1)),
+                    event("p2", path=("p", pair_event2)),
+                ),
+                equal("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed))),
+                name="temporal_equal_symmetric",
+            )
+            ifL(
+                andL(
+                    before("p"),
+                    event("p1", path=("p", pair_event1)),
+                    event("p2", path=("p", pair_event2)),
+                ),
+                notL(before("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed)))),
+                name="temporal_before_no_cycle_2",
+            )
+            ifL(
+                andL(
+                    before("xy"),
+                    event("x", path=("xy", pair_event1)),
+                    event("y", path=("xy", pair_event2)),
+                    before("yz", path=("y", pair_event1.reversed)),
+                    event("z", path=("yz", pair_event2)),
+                ),
+                before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                name="temporal_before_transitive",
+            )
 
     concepts = {
         "document": document,

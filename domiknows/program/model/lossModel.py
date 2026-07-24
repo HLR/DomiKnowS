@@ -8,7 +8,7 @@ import torch
 from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
 from domiknows import setup_logger, getProductionModeStatus
-from domiknows.graph.logicalConstrain import sumL
+from domiknows.graph.logicalConstrain import sumL, queryL
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
@@ -404,7 +404,10 @@ class InferenceModel(LossModel):
                 )
                 
             is_sumL = isinstance(lc, sumL)
-            if is_sumL:
+            is_queryL = isinstance(lc, queryL)
+            if is_sumL or is_queryL:
+                # sumL/queryL compute the label-conditioned success internally;
+                # the executable target is therefore always "the queried answer is correct".
                 lbl = torch.tensor(1.0, dtype=dtype, device=self.device, requires_grad=True)
                 
             constr_out = loss_dict['conversionSigmoid']

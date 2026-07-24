@@ -113,7 +113,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     Returns:
         dict or float: Full results dictionary or primary metric value
     """
-    from domiknows.graph.logicalConstrain import sumL
+    from domiknows.graph.logicalConstrain import sumL, queryL
     from domiknows.step_notebook import (
         StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
     )
@@ -189,6 +189,7 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                 continue
 
             is_counting = isinstance(lc.innerLC, sumL)
+            is_query = isinstance(lc.innerLC, queryL)
 
             # ── AnswerSolver (experimental, opt-in) ─────────────────
             # Only runs when DOMIKNOWS_USE_ANSWER_SOLVER=1. Kept here for
@@ -208,6 +209,10 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                         # For sumL the label is the expected count
                         expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
                         answer_correct = (answer_result == expected_count)
+                    elif is_query:
+                        expected_idx = int(label.item() if torch.is_tensor(label) else label)
+                        expected_answer = lc.innerLC.get_subclass_name(expected_idx)
+                        answer_correct = (answer_result == expected_answer)
                     else:
                         # For boolean constraints the label is 1 (True) or 0 (False)
                         expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
@@ -217,18 +222,31 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             verify_correct = None
             verify_result = None
             try:
-                if is_counting:
-                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
+                if is_query:
+                    # queryL labels are multiclass indices. The discrete verifier
+                    # expects Boolean atoms, so use the same label-conditioned
+                    # executable loss path as training and threshold its success.
+                    loss_dict = datanode.calculateSingleLcLoss(lc_name, label=label)
+                    success = loss_dict.get("conversionSigmoid")
+                    if torch.is_tensor(success):
+                        success_value = float(success.detach().mean().item())
+                    else:
+                        success_value = float(success) if success is not None else 0.0
+                    verify_result = {"satisfied": 100.0 if success_value >= threshold else 0.0, "query_success": success_value}
+                    verify_correct = success_value >= threshold
                 else:
-                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
+                    if is_counting:
+                        verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
+                    else:
+                        verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
 
-                is_satisfied = verify_result["satisfied"] == 100.0
+                    is_satisfied = verify_result["satisfied"] == 100.0
 
-                if is_counting:
-                    verify_correct = (is_satisfied == True)
-                else:
-                    expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
-                    verify_correct = (is_satisfied == expected_satisfied)
+                    if is_counting:
+                        verify_correct = (is_satisfied == True)
+                    else:
+                        expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
+                        verify_correct = (is_satisfied == expected_satisfied)
             except Exception as e:
                 logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
 
@@ -1115,6 +1133,27 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
         super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
         self._init_gumbel(use_gumbel, initial_temp, final_temp,
                           anneal_start_epoch, anneal_epochs, hard_gumbel)
+
+    def _update_dual_lr(self, c_lr_decay, c_lr_decay_param, c_update, c_lr):
+        """Update learning rate for the inference primal-dual constraint optimizer."""
+        if self.copt is None:
+            return
+        if c_lr_decay == 0:
+            new_lr = lambda lr: c_lr * 1. / (1 + c_lr_decay_param * c_update)
+        elif c_lr_decay == 1:
+            new_lr = lambda lr: lr * np.sqrt(((c_update - 1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
+        elif c_lr_decay == 2:
+            new_lr = lambda lr: lr * (((c_update - 1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
+        elif c_lr_decay == 3:
+            assert c_lr_decay_param <= 1.
+            new_lr = lambda lr: lr * c_lr_decay_param
+        elif c_lr_decay == 4:
+            new_lr = lambda lr: lr * np.sqrt((c_update + 1) / (c_update + 2))
+        else:
+            raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
+
+        for param_group in self.copt.param_groups:
+            param_group['lr'] = new_lr(param_group['lr'])
 
     # ------------------------------------------------------------------
     # Session / training setup

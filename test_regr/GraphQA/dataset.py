@@ -3,6 +3,8 @@ import os
 import pickle
 from pathlib import Path
 
+from .graph import alias_values
+
 
 DEFAULT_VQAR_ROOT = Path(os.environ.get("GRAPHQA_VQAR_ROOT", "/egr/research-hlr2/premsrit/VQAR_data"))
 FALLBACK_VQAR_ROOT = Path("/localscratch2/VQAR/VQAR_all/VQAR")
@@ -85,7 +87,7 @@ def load_vqar_graphqa_instances(path, limit=None, kb_dir=None):
 
 
 def load_kb_facts(kb_dir=None):
-    """Load Hypernym and open-attribute KG facts from VQAR knowledge_base files."""
+    """Load TypeOf and open-attribute KG facts from VQAR knowledge_base files."""
     facts = []
     candidates = []
     if kb_dir is not None:
@@ -113,7 +115,7 @@ def load_kb_facts(kb_dir=None):
 
 
 def load_isa_facts(kb_dir=None):
-    return [fact for fact in load_kb_facts(kb_dir=kb_dir) if fact[0] == "Hypernym"]
+    return [fact for fact in load_kb_facts(kb_dir=kb_dir) if fact[0] == "TypeOf"]
 
 
 def vqar_task_to_graphqa_instance(task, kb_facts=None):
@@ -139,6 +141,7 @@ def vqar_task_to_graphqa_instance(task, kb_facts=None):
         "kb_facts": kb_facts,
         "query": query,
         "expected_answer": _single_answer(question.get("output", [])),
+        "expected_answers": _answer_list(question.get("output", [])),
         "source_question_id": question.get("question_id"),
         "source_image_id": task.get("image_id") or question.get("image_id"),
     }
@@ -149,7 +152,7 @@ def _scene_graph_to_facts(scene_graph):
     symbols = set()
 
     for obj, name in scene_graph.get("names", {}).items():
-        name = _normalize_symbol(name)
+        name = _normalize_gqa_symbol("name", name)
         if name is None:
             continue
         facts.append(("Name", str(obj), name))
@@ -157,7 +160,7 @@ def _scene_graph_to_facts(scene_graph):
 
     for obj, attrs in scene_graph.get("attributes", {}).items():
         for attr in _as_list(attrs):
-            attr = _normalize_symbol(attr)
+            attr = _normalize_gqa_symbol("attr", attr)
             if attr is None:
                 continue
             facts.append(("Attribute", str(obj), attr))
@@ -166,7 +169,7 @@ def _scene_graph_to_facts(scene_graph):
     for subject, object_info in scene_graph.get("relations", {}).items():
         for obj, rels in object_info.items():
             for rel in _as_list(rels):
-                rel = _normalize_relation(rel)
+                rel = _normalize_gqa_relation(rel)
                 if rel is None:
                     continue
                 facts.append((rel, str(subject), str(obj)))
@@ -266,8 +269,13 @@ def _clause_condition(clause, function, text_input):
     if function == "KG_Find":
         return _kg_find_condition(text_input)
     if function in {"Relate", "Relate_Reverse"}:
+        rel = _normalize_relation(text_input)
         object_ids = [str(obj) for obj in clause.get("object_ids", [])]
-        return ("OneOf", "o", object_ids) if object_ids else None
+        if rel is None or not object_ids:
+            return None
+        if function == "Relate":
+            return ("RelationFrom", "o", (rel, object_ids))
+        return ("RelationTo", "o", (rel, object_ids))
     return None
 
 def _read_isa_path(path):
@@ -281,7 +289,7 @@ def _read_isa_path(path):
                 src, dst = parts[1], parts[2]
             else:
                 src, dst = parts[0], parts[1]
-            facts.append(("Hypernym", _normalize_symbol(src), _normalize_symbol(dst)))
+            facts.append(("TypeOf", _normalize_symbol(src), _normalize_symbol(dst)))
     return facts
 
 
@@ -308,8 +316,12 @@ def _symbols_from_query(query):
     condition_groups.extend(query.get("alternatives", []))
     for conditions in condition_groups:
         for pred, _left, right in conditions:
-            if pred in {"Name", "Attribute", "ObjectCategory", "SemanticClass"}:
+            if pred in {"Name", "ObjectType", "ObjectCategory"}:
                 symbols.add(right)
+            elif pred == "Attribute":
+                symbols.update(alias_values("Attribute", right))
+            elif pred == "SemanticClass":
+                symbols.update(alias_values("SemanticClass", right))
             elif pred == "KG":
                 _rel, dst = right
                 symbols.add(dst)
@@ -330,11 +342,61 @@ def _kg_find_condition(text_input):
 
 
 def _single_answer(output):
-    if isinstance(output, (list, tuple, set)):
-        return str(next(iter(output))) if len(output) == 1 else None
+    answers = _answer_list(output)
+    return answers[0] if len(answers) == 1 else None
+
+
+def _answer_list(output):
     if output is None:
-        return None
-    return str(output)
+        return []
+    if isinstance(output, (list, tuple, set)):
+        return [str(item) for item in output]
+    return [str(output)]
+
+
+_GQA_INFO_CACHE = None
+_GQA_REVERSE_INDEX_CACHE = {}
+
+
+def _load_gqa_info():
+    global _GQA_INFO_CACHE
+    if _GQA_INFO_CACHE is not None:
+        return _GQA_INFO_CACHE
+    candidates = [
+        DEFAULT_DATA_DIR / "gqa_info.json",
+        FALLBACK_VQAR_ROOT / "data" / "gqa_info.json",
+    ]
+    for path in candidates:
+        if path.is_file():
+            with open(path, "r") as info_file:
+                _GQA_INFO_CACHE = json.load(info_file)
+            return _GQA_INFO_CACHE
+    _GQA_INFO_CACHE = {}
+    return _GQA_INFO_CACHE
+
+
+def _reverse_gqa_index(kind):
+    if kind in _GQA_REVERSE_INDEX_CACHE:
+        return _GQA_REVERSE_INDEX_CACHE[kind]
+    info = _load_gqa_info().get(kind, {})
+    index = info.get("idx", {}) if isinstance(info, dict) else {}
+    reverse = {str(idx): label for label, idx in index.items()}
+    _GQA_REVERSE_INDEX_CACHE[kind] = reverse
+    return reverse
+
+
+def _normalize_gqa_symbol(kind, value):
+    if isinstance(value, (list, tuple)):
+        value = next((part for part in value if part not in ("", "BLANK", None)), None)
+    mapped = _reverse_gqa_index(kind).get(str(value))
+    return _normalize_symbol(mapped if mapped is not None else value)
+
+
+def _normalize_gqa_relation(value):
+    if isinstance(value, (list, tuple)):
+        value = next((part for part in value if part not in ("", "BLANK", None)), None)
+    mapped = _reverse_gqa_index("rel").get(str(value))
+    return _normalize_relation(mapped if mapped is not None else value)
 
 
 def _normalize_symbol(value):
@@ -345,10 +407,25 @@ def _normalize_symbol(value):
     return str(value).strip().replace(" ", "_")
 
 
+RELATION_TEXT_ALIASES = {
+    "left": "to_the_left_of",
+    "right": "to_the_right_of",
+    "above": "at_top_of",
+    "over": "at_top_of",
+    "below": "at_bottom_of",
+    "under": "at_bottom_of",
+    "front": "in_front_of",
+    "behind": "standing_behind",
+    "on": "at_top_of",
+    "under": "supporting",
+}
+
+
 def _normalize_relation(value):
     value = _normalize_symbol(value)
-    if value is None:
+    if value is None or str(value).isdigit():
         return None
+    value = RELATION_TEXT_ALIASES.get(value.lower(), value)
     return "".join(part.capitalize() for part in value.replace("-", "_").split("_") if part)
 
 

@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from .graph import OBJECT_SYMBOL_RELATIONS, collect_kb_relations, collect_object_relations, safe_name
+from .graph import OBJECT_SYMBOL_RELATIONS, alias_values, canonical_relation, collect_kb_relations, collect_object_relations, safe_name
 
 
 SUPPORTED_ANSWER_TYPES = {"object"}
@@ -8,27 +8,30 @@ SUPPORTED_ANSWER_TYPES = {"object"}
 
 def materialize_bounded_facts(instance, max_depth=2):
     """
-    Materialize ObjectClass/ObjectCategory from Name and Hypernym with a fixed depth.
+    Materialize ObjectType/ObjectCategory from Name and TypeOf with a fixed depth.
 
     This is deliberately bounded and non-recursive:
-      Name(o, x) and Hypernym(x, y) -> ObjectClass(o, y)
-      ObjectClass(o, x) and Hypernym(x, y) -> ObjectCategory(o, y)
+      Name(o, x) and TypeOf(x, y) -> ObjectType(o, y)
+      ObjectType(o, x) and TypeOf(x, y) -> ObjectCategory(o, y)
     """
-    facts = list(instance.get("visual_facts", [])) + list(instance.get("kb_facts", []))
-    hypernym_by_src = defaultdict(set)
+    facts = [
+        (canonical_relation(pred), left, right)
+        for pred, left, right in list(instance.get("visual_facts", [])) + list(instance.get("kb_facts", []))
+    ]
+    type_of_by_src = defaultdict(set)
     names_by_level = {0: set(), 1: set(), 2: set()}
-    level_predicates = {0: "Name", 1: "ObjectClass", 2: "ObjectCategory"}
+    level_predicates = {0: "Name", 1: "ObjectType", 2: "ObjectCategory"}
 
     for pred, left, right in facts:
-        if pred == "Hypernym":
-            hypernym_by_src[left].add(right)
+        if pred == "TypeOf":
+            type_of_by_src[left].add(right)
         elif pred == "Name":
             names_by_level[0].add((left, right))
 
     for depth in range(1, max_depth + 1):
         prev = names_by_level[depth - 1]
         for obj, src_symbol in prev:
-            for dst_symbol in hypernym_by_src.get(src_symbol, set()):
+            for dst_symbol in type_of_by_src.get(src_symbol, set()):
                 names_by_level[depth].add((obj, dst_symbol))
 
     for depth in range(1, max_depth + 1):
@@ -62,7 +65,11 @@ def validate_dataset_convertible(instances):
 
 
 def compile_graphqa_dataset(instances, graph_context):
-    executable_instances = [create_executable_instance(instance) for instance in instances]
+    object_label_space = [str(value) for value in getattr(graph_context, "object_values", [])]
+    executable_instances = [
+        create_executable_instance(instance, answer_label_space=object_label_space)
+        for instance in instances
+    ]
     return graph_context.graph.compile_executable(
         executable_instances,
         logic_keyword="logic_str",
@@ -81,6 +88,14 @@ def create_query_logic(instance):
     if target_type != "__any_object__" and target_type not in instance.get("symbols", []):
         raise ValueError(f"Unknown target_type symbol: {target_type!r}")
 
+    body = create_object_query_body(instance)
+    selector = create_object_selector_logic(instance, body=body)
+    return f"queryL(\n        obj,\n        {selector}\n    )"
+
+
+def create_object_query_body(instance):
+    query = instance["query"]
+    target_type = query.get("target_type")
     base_predicates = ['obj("o")']
     if target_type != "__any_object__":
         base_predicates.extend(_object_symbol_predicate("ObjectCategory", "o", target_type, "target_type"))
@@ -93,41 +108,80 @@ def create_query_logic(instance):
             for condition_index, condition in enumerate(conditions):
                 predicates.extend(_condition_predicates(instance, condition, alt_index * 100 + condition_index))
             branches.append(_and_body(predicates, indent="                "))
-        body = "orL(\n" + ",\n".join(branches) + "\n            )"
-    else:
-        predicates = list(base_predicates)
-        for index, condition in enumerate(query.get("conditions", [])):
-            predicates.extend(_condition_predicates(instance, condition, index))
-        body = _and_body(predicates, indent="            ")
+        return "orL(\n" + ",\n".join(branches) + "\n            )"
 
+    predicates = list(base_predicates)
+    for index, condition in enumerate(query.get("conditions", [])):
+        predicates.extend(_condition_predicates(instance, condition, index))
+    return _and_body(predicates, indent="            ")
+
+
+def create_candidate_membership_logic(instance, candidate_object):
+    body = create_object_query_body(instance)
+    candidate_predicate = f'{safe_name(candidate_object)}(path="o")'
+    membership_body = _and_body([body, candidate_predicate], indent="            ")
+    return f"existsL(\n        {membership_body}\n    )"
+
+
+def create_object_selector_logic(instance, body=None):
+    if body is None:
+        body = create_object_query_body(instance)
     return f"iotaL(\n        {body}\n    )"
 
 
 def _and_body(predicates, indent="            "):
     return "andL(\n" + indent + (",\n" + indent).join(predicates) + "\n" + indent[:-4] + ")"
 
-def create_executable_instance(instance, label=0):
+def create_executable_instance(instance, label=None, answer_label_space=None):
     converted = dict(instance)
     converted["facts"] = materialize_bounded_facts(instance)
     converted["logic_str"] = create_query_logic(instance)
-    converted["logic_label"] = label
+    converted["logic_label"] = _resolve_answer_label(instance, label, answer_label_space)
+    converted["answer_mode"] = "single_object_query"
     return converted
+
+
+def create_candidate_membership_instance(instance, candidate_object, label):
+    converted = dict(instance)
+    converted["facts"] = materialize_bounded_facts(instance)
+    converted["logic_str"] = create_candidate_membership_logic(instance, candidate_object)
+    converted["logic_label"] = bool(label)
+    converted["answer_mode"] = "candidate_membership"
+    converted["candidate_object"] = str(candidate_object)
+    return converted
+
+
+def _resolve_answer_label(instance, label=None, answer_label_space=None):
+    if label is not None:
+        return label
+    answer = instance.get("expected_answer")
+    if answer is None:
+        return None
+    answer = str(answer)
+    if answer_label_space is None:
+        answer_label_space = [str(obj) for obj in instance.get("objects", [])]
+    else:
+        answer_label_space = [str(obj) for obj in answer_label_space]
+    if answer not in answer_label_space:
+        raise ValueError(f"Answer object {answer!r} is not in the queryL(obj, ...) label space")
+    return answer_label_space.index(answer)
 
 
 def _condition_predicates(instance, condition, index):
     if len(condition) != 3:
         raise ValueError(f"Invalid GraphQA condition: {condition!r}")
     pred, left, right = condition
+    pred = canonical_relation(pred)
     if left != "o":
         raise ValueError(f"Only target variable 'o' is supported, got {left!r}")
     if pred in OBJECT_SYMBOL_RELATIONS:
-        _require_symbol(instance, right)
-        return _object_symbol_predicate(pred, "o", right, f"{pred.lower()}{index}")
+        return _aliased_object_symbol_predicate(instance, pred, right, f"{pred.lower()}{index}")
     if pred == "SemanticClass":
-        _require_symbol(instance, right)
-        return [_semantic_class_predicate(right, f"semantic{index}")]
+        return [_semantic_class_predicate(instance, right, f"semantic{index}")]
     if pred == "KG":
         return _kg_condition_predicates(instance, right, index)
+    if pred in {"RelationFrom", "RelationTo"}:
+        return _candidate_relation_predicate(instance, pred, right, index)
     if pred == "OneOf":
         return _one_of_predicate(instance, right, index)
     if pred in collect_kb_relations(instance):
@@ -157,16 +211,35 @@ def _object_symbol_predicate(pred, obj_var, symbol, var_prefix):
     ]
 
 
-def _semantic_class_predicate(symbol, var_prefix):
-    type_body = _and_body(
-        _object_symbol_predicate("ObjectClass", "o", symbol, f"{var_prefix}_class"),
-        indent="        ",
-    )
-    category_body = _and_body(
-        _object_symbol_predicate("ObjectCategory", "o", symbol, f"{var_prefix}_object_category"),
-        indent="        ",
-    )
-    return "orL(\n" + type_body + ",\n" + category_body + "\n    )"
+def _aliased_object_symbol_predicate(instance, pred, symbol, var_prefix):
+    bodies = []
+    for alias_index, alias in enumerate(alias_values(pred, symbol)):
+        if alias not in instance.get("symbols", []):
+            continue
+        bodies.append(_and_body(_object_symbol_predicate(pred, "o", alias, f"{var_prefix}_{alias_index}"), indent="        "))
+    if not bodies:
+        _require_symbol(instance, symbol)
+        return _object_symbol_predicate(pred, "o", symbol, var_prefix)
+    if len(bodies) == 1:
+        return [bodies[0]]
+    return ["orL(\n" + ",\n".join(bodies) + "\n    )"]
+
+
+def _semantic_class_predicate(instance, symbol, var_prefix):
+    bodies = []
+    for alias_index, alias in enumerate(alias_values("SemanticClass", symbol)):
+        if alias not in instance.get("symbols", []):
+            continue
+        bodies.append(_and_body(_object_symbol_predicate("ObjectType", "o", alias, f"{var_prefix}_type_{alias_index}"), indent="        "))
+        bodies.append(_and_body(_object_symbol_predicate("ObjectCategory", "o", alias, f"{var_prefix}_category_{alias_index}"), indent="        "))
+        bodies.append(_and_body(_object_symbol_predicate("Name", "o", alias, f"{var_prefix}_name_{alias_index}"), indent="        "))
+    if not bodies:
+        _require_symbol(instance, symbol)
+        bodies.append(_and_body(_object_symbol_predicate("ObjectType", "o", symbol, f"{var_prefix}_class"), indent="        "))
+        bodies.append(_and_body(_object_symbol_predicate("ObjectCategory", "o", symbol, f"{var_prefix}_object_category"), indent="        "))
+    if len(bodies) == 1:
+        return bodies[0]
+    return "orL(\n" + ",\n".join(bodies) + "\n    )"
 
 
 def _object_relation_predicate(pred, obj_var, other_obj, var_prefix):
@@ -184,6 +257,7 @@ def _kg_condition_predicates(instance, value, index):
     if not isinstance(value, (list, tuple)) or len(value) != 2:
         raise ValueError(f"Invalid KG condition payload: {value!r}")
     rel, dst_symbol = value
+    rel = canonical_relation(rel)
     if rel not in collect_kb_relations(instance):
         raise ValueError(f"Unknown KG relation in condition: {rel!r}")
     _require_symbol(instance, dst_symbol)
@@ -191,11 +265,45 @@ def _kg_condition_predicates(instance, value, index):
     kg_pair = f"kg{index}_pair"
     rel_name = safe_name(rel)
     dst_name = safe_name(dst_symbol)
-    return [
-        f'ObjectCategory("{name_pair}", path=("o", object_symbol_object.reversed))',
-        f'{rel_name}("{kg_pair}", path=("{name_pair}", object_symbol_symbol, symbol_pair_src.reversed))',
-        f'{dst_name}(path=("{kg_pair}", symbol_pair_dst))',
-    ]
+    source_bodies = []
+    for source_index, source_pred in enumerate(("Name", "ObjectType", "ObjectCategory")):
+        source_pair = f"kg_source{index}_{source_index}_pair"
+        source_bodies.append(_and_body([
+            f'{source_pred}("{source_pair}", path=("o", object_symbol_object.reversed))',
+            f'{rel_name}("{kg_pair}_{source_index}", path=("{source_pair}", object_symbol_symbol, symbol_pair_src.reversed))',
+            f'{dst_name}(path=("{kg_pair}_{source_index}", symbol_pair_dst))',
+        ], indent="        "))
+    return ["orL(\n" + ",\n".join(source_bodies) + "\n    )"]
+
+
+def _candidate_relation_predicate(instance, pred, value, index):
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ValueError(f"Invalid relation condition payload: {value!r}")
+    rel, object_ids = value
+    rel = canonical_relation(rel)
+    if rel not in collect_object_relations(instance):
+        raise ValueError(f"Unknown object relation in condition: {rel!r}")
+    candidates = [str(obj) for obj in object_ids if str(obj) in instance.get("objects", [])]
+    if not candidates:
+        raise ValueError("Relation condition has no candidate anchor objects in this instance")
+    calls = []
+    rel_name = safe_name(rel)
+    for candidate_index, candidate in enumerate(candidates):
+        pair_var = f"rel{index}_{candidate_index}_pair"
+        candidate_name = safe_name(candidate)
+        if pred == "RelationFrom":
+            calls.append(_and_body([
+                f'{rel_name}("{pair_var}", path=("o", object_pair_dst.reversed))',
+                f'{candidate_name}(path=("{pair_var}", object_pair_src))',
+            ], indent="        "))
+        else:
+            calls.append(_and_body([
+                f'{rel_name}("{pair_var}", path=("o", object_pair_src.reversed))',
+                f'{candidate_name}(path=("{pair_var}", object_pair_dst))',
+            ], indent="        "))
+    if len(calls) == 1:
+        return calls
+    return ["orL(\n" + ",\n".join(calls) + "\n    )"]
 
 
 def _one_of_predicate(instance, object_ids, index):

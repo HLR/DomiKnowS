@@ -13,10 +13,10 @@ def create_query_logic(instance):
         iotaL(
             andL(
                 EventPair("p"),
-                event(path=("p", pair_event1)),
-                event(path=("p", pair_event2)),
-                query_event1(path=("p", pair_event1)),
-                query_event2(path=("p", pair_event2))
+                event("p1", path=("p", pair_event1)),
+                event("p2", path=("p", pair_event2)),
+                query_event1("p1"),
+                query_event2("p2")
             )
         )
     )"""

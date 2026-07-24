@@ -20,7 +20,14 @@ from .llm_inference import (
     parse_choice,
     run_llm_inference,
 )
+from .modules import (
+    OracleTemporalPredicateClassifier,
+    event_prompt,
+    pair_prompt,
+    predictions_from_logits,
+)
 from .oracle import answer_label, check_oracle, consistency_violations, infer_transitive_before
+from .program import evaluate_packed_left_example
 from .smoke_test_dataset import consistency_failures_for_each_sample
 
 
@@ -83,8 +90,8 @@ class TestTemporalRelationAdapter(unittest.TestCase):
         self.assertIn("temporal_relation", logic)
         self.assertIn("iotaL", logic)
         self.assertIn("EventPair", logic)
-        self.assertIn('event(path=("p", pair_event1))', logic)
-        self.assertIn('event(path=("p", pair_event2))', logic)
+        self.assertIn('event("p1", path=("p", pair_event1))', logic)
+        self.assertIn('event("p2", path=("p", pair_event2))', logic)
         self.assertIn("query_event1", logic)
         self.assertIn("query_event2", logic)
         self.assertNotIn("packed_bag", logic)
@@ -169,6 +176,45 @@ class TestTemporalRelationAdapter(unittest.TestCase):
         self.assertIn("[E1]", first.prompt)
         self.assertIn("[E2]", first.prompt)
 
+    def test_oracle_predicate_classifier_outputs_domiknows_concept_logits(self):
+        classifier = OracleTemporalPredicateClassifier()
+        batch = classifier(SAMPLE_INSTANCE)
+
+        self.assertEqual(batch.event_logits.shape, (3, 2))
+        self.assertEqual(batch.query_event1_logits.shape, (3, 2))
+        self.assertEqual(batch.query_event2_logits.shape, (3, 2))
+        self.assertEqual(batch.temporal_relation_logits.shape, (6, len(TEMPORAL_LABELS)))
+        self.assertEqual(batch.event_ids, ["packed_bag", "left_house", "arrived_work"])
+        self.assertEqual(batch.pair_ids[0], ("packed_bag", "left_house"))
+
+    def test_oracle_predicate_classifier_predictions_match_all_supervised_pairs(self):
+        result = predictions_from_logits(OracleTemporalPredicateClassifier()(SAMPLE_INSTANCE))
+
+        self.assertEqual(
+            result["query_event_groundings"],
+            [
+                {"event_id": "packed_bag", "query_event1": True, "query_event2": False},
+                {"event_id": "left_house", "query_event1": False, "query_event2": True},
+                {"event_id": "arrived_work", "query_event1": False, "query_event2": False},
+            ],
+        )
+        labels_by_pair = {
+            (prediction["e1"], prediction["e2"]): prediction["label"]
+            for prediction in result["event_pair_predictions"]
+        }
+        for pair in SAMPLE_INSTANCE["event_pairs"]:
+            self.assertEqual(labels_by_pair[(pair["e1"], pair["e2"])], pair["label"])
+
+    def test_qwen_classifier_inputs_are_fixed_concept_classification_prompts(self):
+        event_text = event_prompt(SAMPLE_INSTANCE, SAMPLE_INSTANCE["events"][0])
+        pair_text = pair_prompt(SAMPLE_INSTANCE, "packed_bag", "left_house")
+
+        self.assertIn("TemporalRelation query pair", event_text)
+        self.assertIn("Candidate event: packed_bag", event_text)
+        self.assertIn("Labels: Before, After, Equal, Vague", pair_text)
+        self.assertIn("[E1]packed[/E1]", pair_text)
+        self.assertIn("[E2]left[/E2]", pair_text)
+
     def test_candidate_pairs_cover_all_ordered_document_events(self):
         candidates = create_candidate_event_pairs(SAMPLE_INSTANCE)
         candidate_keys = {(pair["e1"], pair["e2"]) for pair in candidates}
@@ -201,6 +247,10 @@ class TestTemporalRelationAdapter(unittest.TestCase):
     def test_oracle_returns_expected_query_label(self):
         self.assertEqual(answer_label(SAMPLE_INSTANCE), "Before")
         self.assertTrue(check_oracle(SAMPLE_INSTANCE, "Before"))
+
+    def test_inference_program_executes_temporal_query(self):
+        self.assertEqual(evaluate_packed_left_example(device="cpu"), 100.0)
+
 
     def test_oracle_passes_for_all_labeled_event_pairs(self):
         for pair in SAMPLE_INSTANCE["event_pairs"]:
