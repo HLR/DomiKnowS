@@ -10,6 +10,32 @@ This adapter models MATRES temporal relation classification in a CLEVR-style Dom
 6. Check oracle labels and global temporal consistency in `oracle.py`.
 7. Validate behavior in `test_temporal_relation_adapter.py` and `smoke_test_dataset.py`.
 
+## Bundled MATRES Data
+
+The processed MATRES split files are included with this adapter so the examples run without relying on lab-local paths:
+
+```text
+test_regr/TemporalRelation/data/MATRES/timebank.txt
+test_regr/TemporalRelation/data/MATRES/aquaint.txt
+test_regr/TemporalRelation/data/MATRES/platinum.txt
+test_regr/TemporalRelation/data/MATRES/README.md
+```
+
+`dataset.py` defaults to `test_regr/TemporalRelation/data` when that folder is present. You can still pass an explicit `--path` or `--train-paths` pointing to `/egr/research-hlr2/premsrit/TemporalRelation` for local experiment storage, logs, and checkpoints.
+
+Recommended official-style setup:
+
+```bash
+python -m test_regr.TemporalRelation.program_qwen_train \
+  --train-paths test_regr/TemporalRelation/data/MATRES/timebank.txt,test_regr/TemporalRelation/data/MATRES/aquaint.txt \
+  --path test_regr/TemporalRelation/data/MATRES/timebank.txt
+
+python -m test_regr.TemporalRelation.program_qwen_train \
+  --eval-only \
+  --path test_regr/TemporalRelation/data/MATRES/platinum.txt \
+  --checkpoint /path/to/checkpoint.pt
+```
+
 ## Graph Concepts
 
 Defined in `graph.py`:
