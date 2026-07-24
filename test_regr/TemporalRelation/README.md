@@ -136,7 +136,7 @@ The four temporal classes are:
 Fast oracle smoke test:
 
 ```bash
-conda run -n CLEVER python -m test_regr.TemporalRelation.train_predicate_classifier \
+python -m test_regr.TemporalRelation.train_predicate_classifier \
   --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
   --limit 3 \
   --max-events 30 \
@@ -147,7 +147,7 @@ conda run -n CLEVER python -m test_regr.TemporalRelation.train_predicate_classif
 Train Qwen3-8B as the underlying predicate model on CUDA 6 with a frozen backbone and learned DomiKnowS concept heads:
 
 ```bash
-CUDA_VISIBLE_DEVICES=6 conda run -n CLEVER python -m test_regr.TemporalRelation.train_predicate_classifier \
+CUDA_VISIBLE_DEVICES=6 python -m test_regr.TemporalRelation.train_predicate_classifier \
   --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
   --limit 20 \
   --max-events 30 \
@@ -341,7 +341,7 @@ If the 1.5B model is not cached, omit `HF_HUB_OFFLINE=1` for the first download.
 Run the text-generation baseline on one grouped MATRES document:
 
 ```bash
-conda run -n CLEVER python -m test_regr.TemporalRelation.run_llm_inference \
+python -m test_regr.TemporalRelation.run_llm_inference \
   --root /egr/research-hlr2/premsrit/TemporalRelation \
   --limit 1 \
   --model Qwen/Qwen2.5-0.5B-Instruct \
@@ -366,13 +366,13 @@ These rules operate over all document-level event pairs, not only the final quer
 From the DomiKnowS repo root:
 
 ```bash
-conda run -n CLEVER python -m unittest test_regr.TemporalRelation.test_temporal_relation_adapter
+python -m unittest test_regr.TemporalRelation.test_temporal_relation_adapter
 ```
 
 Run the MATRES smoke test with per-sample consistency checks:
 
 ```bash
-conda run -n CLEVER python -m test_regr.TemporalRelation.smoke_test_dataset \
+python -m test_regr.TemporalRelation.smoke_test_dataset \
   --root /egr/research-hlr2/premsrit/TemporalRelation \
   --materialize-candidates \
   --check-consistency
@@ -383,7 +383,7 @@ Expected current MATRES result: `convert_failures=0`, `oracle_failures=0`, and `
 Combined adapter regression:
 
 ```bash
-conda run -n CLEVER python -m unittest \
+python -m unittest \
   test_regr.GraphQA.test_graphqa_adapter \
   test_regr.TemporalRelation.test_temporal_relation_adapter
 ```
