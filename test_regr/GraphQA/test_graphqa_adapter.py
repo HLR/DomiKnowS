@@ -1,7 +1,8 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from .dataset import (
-    DEFAULT_VQAR_ROOT,
     GraphQADatasetNotFound,
     discover_vqar_dataset,
     require_vqar_dataset,
@@ -167,14 +168,16 @@ class TestGraphQAAdapter(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_query_logic(unsupported)
 
-    def test_real_vqar_dataset_location_is_discovered(self):
-        discovered = discover_vqar_dataset(DEFAULT_VQAR_ROOT)
+    def test_vqar_dataset_discovery_reports_missing_optional_data(self):
+        with TemporaryDirectory() as temp_dir:
+            dataset_root = Path(temp_dir)
+            discovered = discover_vqar_dataset(dataset_root)
 
-        self.assertTrue(discovered["root"].is_dir())
-        self.assertEqual(discovered["data_dir"], DEFAULT_VQAR_ROOT / "data")
-        if not discovered["task_paths"]:
+            self.assertEqual(discovered["root"], dataset_root)
+            self.assertEqual(discovered["data_dir"], dataset_root / "data")
+            self.assertEqual(discovered["task_paths"], [])
             with self.assertRaises(GraphQADatasetNotFound):
-                require_vqar_dataset(DEFAULT_VQAR_ROOT)
+                require_vqar_dataset(dataset_root)
 
     def test_vqar_task_can_convert_to_graphqa_instance(self):
         task = {
