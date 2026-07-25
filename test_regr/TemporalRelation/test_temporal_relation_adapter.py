@@ -1,7 +1,11 @@
+import json
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+from .config import CONFIG_ENV_VAR, load_temporal_config
 from .dataset import discover_temporal_datasets, load_temporal_instances
 from .execution import (
     compile_temporal_dataset,
@@ -316,6 +320,31 @@ class TestTemporalRelationAdapter(unittest.TestCase):
         discovered = discover_temporal_datasets()
         self.assertIn("matres", discovered)
         self.assertIn("tbdense", discovered)
+
+    def test_config_resolves_portable_paths_relative_to_config_file(self):
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "temporal-config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "python_path": "../source",
+                        "data_root": "datasets",
+                        "training_model": "./models/qwen",
+                        "inference_model": "Qwen/Qwen2.5-0.5B-Instruct",
+                        "output_dir": "checkpoints",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {CONFIG_ENV_VAR: str(config_path)}):
+                config = load_temporal_config()
+
+        self.assertEqual(config.data_root, config_path.parent / "datasets")
+        self.assertEqual(config.python_path, config_path.parent.parent / "source")
+        self.assertEqual(config.training_model, str(config_path.parent / "models" / "qwen"))
+        self.assertEqual(config.inference_model, "Qwen/Qwen2.5-0.5B-Instruct")
+        self.assertEqual(config.output_path("run.pt"), config_path.parent / "checkpoints" / "run.pt")
 
 
 if __name__ == "__main__":

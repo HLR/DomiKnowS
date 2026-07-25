@@ -7,12 +7,13 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
+from .config import TEMPORAL_CONFIG
 from .dataset import DEFAULT_TEMPORAL_DATA_ROOT, discover_temporal_datasets, load_temporal_instances
 from .graph import TEMPORAL_LABELS, unpack_pair
 from .modules import OracleTemporalPredicateClassifier, TemporalPredicateClassifier, predictions_from_logits
 
 
-DEFAULT_OUTPUT = Path("/egr/research-hlr2/premsrit/TemporalRelation/models/temporal_predicate_heads.pt")
+DEFAULT_OUTPUT = TEMPORAL_CONFIG.output_path("temporal_predicate_heads.pt")
 
 
 def progress_iter(iterable, args, desc):
@@ -235,7 +236,7 @@ def parse_args():
     parser.add_argument("--dev-fraction", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=13)
 
-    parser.add_argument("--model-path", default="Qwen/Qwen3-8B")
+    parser.add_argument("--model-path", default=TEMPORAL_CONFIG.training_model)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--encode-batch-size", type=int, default=None)

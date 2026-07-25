@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .config import TEMPORAL_CONFIG
 from .dataset import DEFAULT_TEMPORAL_DATA_ROOT, discover_temporal_datasets, load_temporal_instances
 from .llm_inference import SmallCausalLMChoiceBackend, run_llm_inference
 
@@ -25,7 +26,7 @@ def main():
     parser.add_argument("--root", type=Path, default=DEFAULT_TEMPORAL_DATA_ROOT)
     parser.add_argument("--path", type=Path, default=None)
     parser.add_argument("--limit", type=int, default=1)
-    parser.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
+    parser.add_argument("--model", default=TEMPORAL_CONFIG.inference_model)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--max-new-tokens", type=int, default=16)
     args = parser.parse_args()

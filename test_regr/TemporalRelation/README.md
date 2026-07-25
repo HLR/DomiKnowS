@@ -10,6 +10,47 @@ This adapter models MATRES temporal relation classification in a CLEVR-style Dom
 6. Check oracle labels and global temporal consistency in `oracle.py`.
 7. Validate behavior in `test_temporal_relation_adapter.py` and `smoke_test_dataset.py`.
 
+## Configuration
+
+All machine-specific defaults live in `config.json`:
+
+```json
+{
+  "python_path": "../..",
+  "data_root": "data",
+  "training_model": "Qwen/Qwen3-8B",
+  "inference_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "output_dir": "models"
+}
+```
+
+Relative filesystem paths, including `python_path`, are resolved from the directory containing the config file. Model values beginning with `.` or `~` are treated as filesystem paths; values such as `Qwen/Qwen3-8B` remain Hugging Face model identifiers.
+
+The checked-in config uses the bundled dataset and portable model identifiers. To use another environment, copy the file, edit the copy, and select it before running a command:
+
+```powershell
+$env:TEMPORAL_RELATION_CONFIG = "C:\experiments\temporal-relation.json"
+python test_regr/TemporalRelation/launcher.py smoke
+```
+
+```bash
+export TEMPORAL_RELATION_CONFIG=/cluster/config/temporal-relation.json
+python test_regr/TemporalRelation/launcher.py smoke
+```
+
+The launcher prepends `python_path` to both Python's import search path and the `PYTHONPATH` environment variable before loading DomiKnowS. Python handles path resolution and environment separators on Windows, Linux, and macOS.
+
+Available launcher commands are:
+
+```text
+smoke
+predicate-train
+program-train
+inference
+```
+
+Arguments after the command are forwarded unchanged. CLI options such as `--path`, `--model-path`, and `--output` still override the configured defaults for an individual run.
+
 ## Bundled MATRES Data
 
 The processed MATRES split files are included with this adapter so the examples run without relying on lab-local paths:
@@ -21,19 +62,19 @@ test_regr/TemporalRelation/data/MATRES/platinum.txt
 test_regr/TemporalRelation/data/MATRES/README.md
 ```
 
-`dataset.py` defaults to `test_regr/TemporalRelation/data` when that folder is present. You can still pass an explicit `--path` or `--train-paths` pointing to `/egr/research-hlr2/premsrit/TemporalRelation` for local experiment storage, logs, and checkpoints.
+`dataset.py` reads its default root from `config.json`. The checked-in value is `data`, which resolves to `test_regr/TemporalRelation/data`.
 
 Recommended official-style setup:
 
 ```bash
-python -m test_regr.TemporalRelation.program_qwen_train \
+python test_regr/TemporalRelation/launcher.py program-train \
   --train-paths test_regr/TemporalRelation/data/MATRES/timebank.txt,test_regr/TemporalRelation/data/MATRES/aquaint.txt \
   --path test_regr/TemporalRelation/data/MATRES/timebank.txt
 
-python -m test_regr.TemporalRelation.program_qwen_train \
+python test_regr/TemporalRelation/launcher.py program-train \
   --eval-only \
   --path test_regr/TemporalRelation/data/MATRES/platinum.txt \
-  --checkpoint /path/to/checkpoint.pt
+  --checkpoint test_regr/TemporalRelation/models/qwen3_8b_temporal_domiknows_program.pt
 ```
 
 ## Graph Concepts
@@ -162,8 +203,7 @@ The four temporal classes are:
 Fast oracle smoke test:
 
 ```bash
-python -m test_regr.TemporalRelation.train_predicate_classifier \
-  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
+python test_regr/TemporalRelation/launcher.py predicate-train \
   --limit 3 \
   --max-events 30 \
   --oracle \
@@ -173,16 +213,13 @@ python -m test_regr.TemporalRelation.train_predicate_classifier \
 Train Qwen3-8B as the underlying predicate model on CUDA 6 with a frozen backbone and learned DomiKnowS concept heads:
 
 ```bash
-CUDA_VISIBLE_DEVICES=6 python -m test_regr.TemporalRelation.train_predicate_classifier \
-  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
+CUDA_VISIBLE_DEVICES=6 python test_regr/TemporalRelation/launcher.py predicate-train \
   --limit 20 \
   --max-events 30 \
-  --model-path Qwen/Qwen3-8B \
   --device cuda \
   --freeze-backbone \
   --epochs 3 \
-  --lr 1e-3 \
-  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_heads.pt
+  --lr 1e-3
 ```
 
 For full MATRES training, remove `--limit` and either remove `--max-events` or raise it after the smoke run is healthy. `--freeze-backbone` trains only the predicate heads; use `--no-freeze-backbone` for full fine-tuning, which is much more expensive. The checkpoint saves the four concept heads by default and only saves the full 8B model if `--save-full-model` is passed.
@@ -223,12 +260,10 @@ This trains the `temporal_relation` ModuleLearner on the target pair only. It is
 
 ```bash
 CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
-PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTHONUNBUFFERED=1 \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 conda run --no-capture-output -n CLEVER \
-python -m test_regr.TemporalRelation.program_qwen_train \
-  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/timebank.txt \
-  --model-path /localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
+python test_regr/TemporalRelation/launcher.py program-train \
   --device cuda \
   --freeze-backbone \
   --lora-r 4 \
@@ -243,8 +278,7 @@ python -m test_regr.TemporalRelation.program_qwen_train \
   --warmup-epochs 2 \
   --constraint-epochs 0 \
   --lr 3e-5 \
-  --skip-condition-eval \
-  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_target_warmup_lora4_lr3e5_e2.pt
+  --skip-condition-eval
 ```
 
 ### Execution / Global-Constraint Continuation
@@ -253,12 +287,10 @@ This starts from a warmup checkpoint and trains through executable DomiKnowS log
 
 ```bash
 CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
-PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTHONUNBUFFERED=1 \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 conda run --no-capture-output -n CLEVER \
-python -m test_regr.TemporalRelation.program_qwen_train \
-  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/timebank.txt \
-  --model-path /localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
+python test_regr/TemporalRelation/launcher.py program-train \
   --device cuda \
   --freeze-backbone \
   --lora-r 4 \
@@ -274,9 +306,8 @@ python -m test_regr.TemporalRelation.program_qwen_train \
   --constraint-epochs 2 \
   --lr 5e-7 \
   --beta 0.3 \
-  --checkpoint /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_warmup_exec_then_global_related8_lr1e6_beta01_e2.pt \
-  --skip-condition-eval \
-  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_exec_global_related8_lr5e7_beta03_e2.pt
+  --checkpoint test_regr/TemporalRelation/models/qwen3_8b_temporal_domiknows_program.pt \
+  --skip-condition-eval
 ```
 
 Use `--no-global-consistency` for the execution-only ablation.
@@ -287,12 +318,11 @@ Use `--no-global-consistency` for the execution-only ablation.
 
 ```bash
 CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
-PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+PYTHONUNBUFFERED=1 \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 conda run --no-capture-output -n CLEVER \
-python -m test_regr.TemporalRelation.program_qwen_train \
-  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/platinum.txt \
-  --model-path /localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
+python test_regr/TemporalRelation/launcher.py program-train \
+  --path test_regr/TemporalRelation/data/MATRES/platinum.txt \
   --device cuda \
   --freeze-backbone \
   --lora-r 4 \
@@ -305,7 +335,7 @@ python -m test_regr.TemporalRelation.program_qwen_train \
   --pair-selection related \
   --max-pairs-per-instance 8 \
   --eval-only \
-  --checkpoint /egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_gumbel_related8_beta03_lr5e7_e2.pt \
+  --checkpoint test_regr/TemporalRelation/models/qwen3_8b_temporal_domiknows_program.pt \
   --skip-condition-eval
 ```
 
@@ -333,11 +363,10 @@ Expected result: `100.0` on the toy `packed before left` example. ILP requires t
 For a smaller underlying LLM, use the same DomiKnowS program path and swap `--model-path`. A true 1B-ish Qwen command is:
 
 ```bash
-CUDA_VISIBLE_DEVICES=6 PYTHONPATH=/localscratch2/premsrit/DomiKnowS PYTHONUNBUFFERED=1 \
+CUDA_VISIBLE_DEVICES=6 PYTHONUNBUFFERED=1 \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 conda run --no-capture-output -n CLEVER \
-python -m test_regr.TemporalRelation.program_qwen_train \
-  --path /egr/research-hlr2/premsrit/TemporalRelation/MATRES/timebank.txt \
+python test_regr/TemporalRelation/launcher.py program-train \
   --limit 200 \
   --model-path Qwen/Qwen2.5-1.5B-Instruct \
   --device cuda \
@@ -354,8 +383,7 @@ python -m test_regr.TemporalRelation.program_qwen_train \
   --warmup-epochs 1 \
   --constraint-epochs 0 \
   --lr 3e-5 \
-  --skip-condition-eval \
-  --output /egr/research-hlr2/premsrit/TemporalRelation/models/qwen25_1p5b_temporal_target_warmup_lora4_smoke.pt
+  --skip-condition-eval
 ```
 
 If the 1.5B model is not cached, omit `HF_HUB_OFFLINE=1` for the first download. On this machine, the currently verified cached small Qwen fallback is `Qwen/Qwen2.5-0.5B-Instruct`; use it for a quick smoke test by replacing the `--model-path` value.
@@ -367,10 +395,8 @@ If the 1.5B model is not cached, omit `HF_HUB_OFFLINE=1` for the first download.
 Run the text-generation baseline on one grouped MATRES document:
 
 ```bash
-python -m test_regr.TemporalRelation.run_llm_inference \
-  --root /egr/research-hlr2/premsrit/TemporalRelation \
+python test_regr/TemporalRelation/launcher.py inference \
   --limit 1 \
-  --model Qwen/Qwen2.5-0.5B-Instruct \
   --device cpu
 ```
 
@@ -398,8 +424,7 @@ python -m unittest test_regr.TemporalRelation.test_temporal_relation_adapter
 Run the MATRES smoke test with per-sample consistency checks:
 
 ```bash
-python -m test_regr.TemporalRelation.smoke_test_dataset \
-  --root /egr/research-hlr2/premsrit/TemporalRelation \
+python test_regr/TemporalRelation/launcher.py smoke \
   --materialize-candidates \
   --check-consistency
 ```
@@ -416,6 +441,9 @@ python -m unittest \
 
 ## Implementation Map
 
+- `config.json`: portable dataset, model, and output defaults.
+- `config.py`: config loading, validation, environment override, and relative-path resolution.
+- `launcher.py`: cross-platform `python_path`/`PYTHONPATH` bootstrap and command dispatch.
 - `graph.py`: DomiKnowS concepts and relations.
 - `dataset.py`: MATRES/TB-Dense style file discovery and normalization.
 - `execution.py`: final `queryL` logic, candidate event-pair generation, query-event marker labels, and local learner examples.

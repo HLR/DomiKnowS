@@ -4,14 +4,10 @@ import re
 from collections import OrderedDict
 from pathlib import Path
 
+from .config import TEMPORAL_CONFIG
 
-_LOCAL_TEMPORAL_DATA_ROOT = Path(__file__).resolve().parent / "data"
-_EXTERNAL_TEMPORAL_DATA_ROOT = Path("/egr/research-hlr2/premsrit/TemporalRelation")
-DEFAULT_TEMPORAL_DATA_ROOT = (
-    _LOCAL_TEMPORAL_DATA_ROOT
-    if (_LOCAL_TEMPORAL_DATA_ROOT / "MATRES").is_dir()
-    else _EXTERNAL_TEMPORAL_DATA_ROOT
-)
+
+DEFAULT_TEMPORAL_DATA_ROOT = TEMPORAL_CONFIG.data_root
 
 
 class TemporalDatasetNotFound(FileNotFoundError):

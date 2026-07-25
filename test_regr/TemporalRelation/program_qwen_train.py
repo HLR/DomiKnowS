@@ -21,13 +21,14 @@ from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateReaderSensor
 from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalSensor
 
+from .config import TEMPORAL_CONFIG
 from .dataset import DEFAULT_TEMPORAL_DATA_ROOT, load_temporal_instances
 from .execution import create_executable_instance, mark_text_for_pair
 from .graph import TEMPORAL_LABELS, create_temporal_graph, unpack_pair
 from .program import BinaryOracleLearner, _tensor
 
-DEFAULT_MODEL = "/localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218"
-DEFAULT_OUTPUT = Path("/egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_domiknows_program.pt")
+DEFAULT_MODEL = TEMPORAL_CONFIG.training_model
+DEFAULT_OUTPUT = TEMPORAL_CONFIG.output_path("qwen3_8b_temporal_domiknows_program.pt")
 LOCAL_IGNORE_LABEL = -100
 _TEMPORAL_CLASS_WEIGHTS = None
 
