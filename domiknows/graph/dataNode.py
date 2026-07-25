@@ -1301,7 +1301,11 @@ class DataNode:
             set: Set of active executable constraint name strings.
         """
         read_labels = self.getExecutableConstraintLabels()
-        return set(x.split('/')[0] for x in read_labels)
+        return {
+            key[:-len('/label')]
+            for key in read_labels
+            if isinstance(key, str) and key.endswith('/label')
+        }
     
     def setActiveExecutableLCs(self):
         # If no builder or no executive LC datanode then return
@@ -2084,14 +2088,63 @@ class DataNode:
             keys = (key[1],)
             self.inferLocal(keys=keys, Acc=Acc)
 
+        def _infer_single_ilp_target(target_dn):
+            active_executable_names = (
+                target_dn.getActiveExecutableConstraintNames()
+            )
+            if not active_executable_names:
+                myILPOntSolver.calculateILPSelection(
+                    target_dn,
+                    *conceptsRelations,
+                    key=key,
+                    fun=fun,
+                    epsilon=epsilon,
+                    minimizeObjective=minimizeObjective,
+                    ignorePinLCs=ignorePinLCs,
+                )
+                return
+
+            # Keep graph-level active flags synchronized for diagnostics and
+            # other executable-constraint consumers.  The label values
+            # themselves are not used to select an inference hypothesis.
+            target_dn.setActiveExecutableLCs()
+
+            from domiknows.solver.answerModule import AnswerSolver
+
+            _DataNode__Logger.info(
+                "Running hypothesis-aware ILP inference for active "
+                "executable constraints: %s",
+                sorted(active_executable_names),
+            )
+            answer_solver = AnswerSolver(
+                target_dn.graph,
+                solver=myILPOntSolver,
+            )
+            answer_solver.solve_active_constraints(
+                target_dn,
+                active_executable_names,
+                conceptsRelations,
+                key=key,
+                fun=fun,
+                epsilon=epsilon,
+                minimize_objective=minimizeObjective,
+                ignore_pin_lcs=ignorePinLCs,
+                populate=True,
+                raise_on_infeasible=True,
+            )
+
         startILPInfer = perf_counter()
-        if self.graph.batch and self.ontologyNode == self.graph.batch and 'contains' in self.relationLinks:
+        if (
+            self.graph.batch is not None
+            and self.ontologyNode == self.graph.batch
+            and 'contains' in self.relationLinks
+        ):
             batchConcept = self.graph.batch
             self.myLoggerTime.info(f'Batch processing ILP for {batchConcept}')
 
             for batchIndex, dn in enumerate(self.relationLinks['contains']):
                 startILPBatchStepInfer = perf_counter()
-                myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+                _infer_single_ilp_target(dn)
                 endILPBatchStepInfer = perf_counter()
 
                 elapsed = endILPBatchStepInfer - startILPBatchStepInfer
@@ -2100,7 +2153,7 @@ class DataNode:
                 else:
                     self.myLoggerTime.info(f'Finished step {batchIndex} for batch ILP Inference - time: {elapsed*1000:.2f}ms')
         else:
-            myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+            _infer_single_ilp_target(self)
 
         endILPInfer = perf_counter()
 

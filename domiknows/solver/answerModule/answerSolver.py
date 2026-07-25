@@ -1,5 +1,6 @@
 import logging
 from collections import OrderedDict
+from itertools import product
 from time import perf_counter
 
 from gurobipy import GRB, Model, Env
@@ -155,33 +156,22 @@ class AnswerSolver:
 
         constraint_name = question[len('execute('):-1].strip()
 
-        # AnswerSolver builds fresh Gurobi models. Cached ILP vars on the
-        # DataNode tree may still point to a previous model and must be purged
-        # before model construction.
-        self._clear_ilp_cache(dn)
-
         try:
             elc = self._resolve_constraint(constraint_name, dn.graph)
             lc = elc.innerLC
             reg_key, elc_id, elc_label, elc_expr = self._format_executable_constraint(elc, dn.graph)
 
-            m, x, conceptsRelations = self._build_base_model(dn)
-
-            # Dispatch to per-type handler
-            if isinstance(lc, queryL):
-                answer_value = self._answer_queryL(lc, dn, m, x)
-            elif isinstance(lc, existsL):
-                answer_value = self._answer_existsL(lc, dn, m, x)
-            elif isinstance(lc, sumL):
-                answer_value = self._answer_sumL(lc, dn, m, x)
-            elif isinstance(lc, greaterL):
-                answer_value = self._answer_greaterL(lc, dn, m, x)
-            elif isinstance(lc, atLeastL):
-                answer_value = self._answer_atLeastL(lc, dn, m, x)
-            elif isinstance(lc, exactL):
-                answer_value = self._answer_exactL(lc, dn, m, x)
-            else:
-                raise ValueError(f"Unsupported constraint type: {type(lc).__name__}")
+            result = self.solve_active_constraints(
+                dn,
+                [reg_key],
+                populate=False,
+                raise_on_infeasible=False,
+            )
+            answer_value = (
+                None
+                if result is None
+                else result['hypotheses'][reg_key]
+            )
 
             elapsed_ms = (perf_counter() - answer_started) * 1000.0
             logger.info(
@@ -248,6 +238,271 @@ class AnswerSolver:
         raise ValueError(
             f"No executable constraint of type '{constraint_name}' found in graph.executableLCs"
         )
+
+    def _sum_hypothesis_upper_bound(self, lc, dn, concepts_relations):
+        """Return a safe entity-count bound for a ``sumL`` hypothesis."""
+        concept_names = lc.getLcConcepts()
+        candidate_counts = []
+
+        for concept_relation in concepts_relations:
+            concept_name = self.solver.getConceptName(concept_relation)
+            if concept_name not in concept_names:
+                continue
+
+            root_concept = dn.findRootConceptOrRelation(concept_relation[0])
+            candidate_counts.append(
+                len(dn.findDatanodes(select=root_concept))
+            )
+
+        if not candidate_counts:
+            logger.warning(
+                "No ILP candidates found for sumL concepts: %s",
+                concept_names,
+            )
+            return 0
+
+        # Sum the relevant positive-variable domains. This can overestimate
+        # conjunction counts, but it remains a safe upper bound for relation
+        # groundings and constraints spanning more than one entity domain.
+        return sum(candidate_counts)
+
+    def _hypothesis_spec(self, elc, dn, concepts_relations):
+        """Return ordered hypothesis values and an LC compiler for one ELC."""
+        lc = elc.innerLC
+        graph = lc.graph
+
+        if isinstance(lc, queryL):
+            subclass_names = list(lc._subclass_names)
+            subclasses = list(lc._subclasses)
+            iota_elements = list(lc.e)
+
+            def build_query(subclass_name):
+                idx = subclass_names.index(subclass_name)
+                concept, name, subclass_index = subclasses[idx]
+
+                from domiknows.graph.concept import EnumConcept
+                if isinstance(lc.concept, EnumConcept):
+                    subclass_tuple = (
+                        lc.concept,
+                        name,
+                        subclass_index,
+                        len(subclass_names),
+                    )
+                else:
+                    subclass_tuple = (concept, concept.name, None, 1)
+
+                return self._compile_hypothesis(
+                    andL,
+                    [subclass_tuple] + iota_elements,
+                    graph,
+                )
+
+            return subclass_names, build_query
+
+        if isinstance(lc, sumL):
+            max_count = self._sum_hypothesis_upper_bound(
+                lc,
+                dn,
+                concepts_relations,
+            )
+            base_elements = [e for e in lc.e if not isinstance(e, int)]
+
+            def build_sum(count):
+                return self._compile_hypothesis(
+                    exactL,
+                    list(base_elements) + [count],
+                    graph,
+                )
+
+            return list(range(0, max_count + 1)), build_sum
+
+        if isinstance(lc, (existsL, greaterL, atLeastL, exactL)):
+            lc_class = type(lc)
+            constructor_kwargs = {}
+            explicit_limit = getattr(lc, '_explicitLimit', None)
+            if explicit_limit is not None:
+                constructor_kwargs['limit'] = explicit_limit
+
+            def build_boolean(hypothesis):
+                inner = self._compile_hypothesis(
+                    lc_class,
+                    lc.e,
+                    graph,
+                    **constructor_kwargs,
+                )
+                if hypothesis:
+                    return inner
+                return self._compile_hypothesis(notL, [inner], graph)
+
+            return [True, False], build_boolean
+
+        raise ValueError(
+            "Unsupported executable constraint type "
+            f"'{type(lc).__name__}' for {getattr(elc, 'lcName', elc)}"
+        )
+
+    @staticmethod
+    def _is_infeasible_error(error):
+        return "infeasible" in str(error).lower()
+
+    def solve_active_constraints(
+        self,
+        dn,
+        active_constraint_names,
+        concepts_relations=None,
+        *,
+        key=("local", "softmax"),
+        fun=None,
+        epsilon=0.00001,
+        minimize_objective=False,
+        ignore_pin_lcs=False,
+        populate=True,
+        raise_on_infeasible=True,
+    ):
+        """Solve every joint hypothesis for the active executable constraints.
+
+        Returns a dictionary containing the selected hypotheses, objective, and
+        detached variable assignment.  Only the winning assignment is written
+        to ``dn`` when ``populate`` is true.
+        """
+        requested_names = set(active_constraint_names)
+        unknown_names = requested_names.difference(dn.graph.executableLCs)
+        if unknown_names:
+            unknown_text = ", ".join(sorted(unknown_names))
+            raise ValueError(
+                f"Unknown active executable constraint name(s): {unknown_text}"
+            )
+
+        ordered_names = [
+            name
+            for name in dn.graph.executableLCs
+            if name in requested_names
+        ]
+        if not ordered_names:
+            return None
+
+        required_solver_api = (
+            '_calculateILPSelection',
+            'populateILPSelection',
+        )
+        missing_api = [
+            api for api in required_solver_api if not hasattr(self.solver, api)
+        ]
+        if missing_api:
+            raise TypeError(
+                "Hypothesis-aware executable inference requires a Gurobi "
+                f"ILP solver supporting {', '.join(missing_api)}"
+            )
+
+        if concepts_relations is None:
+            concepts_relations = dn.collectConceptsAndRelations()
+        concepts_relations = tuple(concepts_relations)
+
+        specs = []
+        for name in ordered_names:
+            elc = dn.graph.executableLCs[name]
+            values, builder = self._hypothesis_spec(
+                elc,
+                dn,
+                concepts_relations,
+            )
+            specs.append((name, values, builder))
+
+        best_result = None
+        best_hypotheses = None
+
+        try:
+            for hypothesis_values in product(
+                *(values for _, values, _ in specs)
+            ):
+                self._clear_ilp_cache(dn)
+                hypothesis_lcs = [
+                    builder(value)
+                    for (_, _, builder), value in zip(
+                        specs,
+                        hypothesis_values,
+                    )
+                ]
+
+                try:
+                    candidate = self.solver._calculateILPSelection(
+                        dn,
+                        *concepts_relations,
+                        key=key,
+                        fun=fun,
+                        epsilon=epsilon,
+                        minimizeObjective=minimize_objective,
+                        ignorePinLCs=ignore_pin_lcs,
+                        extraLogicalConstraints=hypothesis_lcs,
+                        populate=False,
+                        forceFreshModel=True,
+                        raiseOnInfeasible=False,
+                    )
+                except Exception as error:
+                    if self._is_infeasible_error(error):
+                        logger.debug(
+                            "Joint hypothesis %r is structurally infeasible: %s",
+                            hypothesis_values,
+                            error,
+                        )
+                        continue
+                    raise
+
+                if candidate is None:
+                    continue
+
+                if best_result is None:
+                    is_better = True
+                elif minimize_objective:
+                    is_better = (
+                        candidate['objective'] < best_result['objective']
+                    )
+                else:
+                    is_better = (
+                        candidate['objective'] > best_result['objective']
+                    )
+
+                # Strict comparison intentionally preserves the first
+                # graph/hypothesis-order candidate on exact objective ties.
+                if is_better:
+                    best_result = {
+                        'objective': candidate['objective'],
+                        'values': dict(candidate['values']),
+                    }
+                    best_hypotheses = OrderedDict(
+                        zip(ordered_names, hypothesis_values)
+                    )
+        finally:
+            self._clear_ilp_cache(dn)
+
+        if best_result is None:
+            message = (
+                "All joint hypotheses were infeasible for active executable "
+                f"constraints: {', '.join(ordered_names)}"
+            )
+            logger.warning(message)
+            if raise_on_infeasible:
+                raise RuntimeError(message)
+            return None
+
+        if populate:
+            self.solver.populateILPSelection(
+                dn,
+                concepts_relations,
+                best_result['values'],
+            )
+
+        result = {
+            'hypotheses': best_hypotheses,
+            'objective': best_result['objective'],
+            'values': best_result['values'],
+        }
+        logger.info(
+            "Selected executable hypotheses %s with objective %.6f",
+            dict(best_hypotheses),
+            best_result['objective'],
+        )
+        return result
 
     # ── hypothesis compilation ──────────────────────────────────────────
 
