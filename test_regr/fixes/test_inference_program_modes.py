@@ -16,6 +16,7 @@ import inspect
 import pytest
 import torch
 
+import domiknows.program.lossprogram as lossprogram_module
 from domiknows.program.lossprogram import (
     GumbelPrimalDualProgram,
     GumbelTemperatureMixin,
@@ -80,7 +81,7 @@ class TestInferenceProgramSignature:
         monkeypatch.setattr(LossProgram, '__init__', fake_init)
         InferenceProgram(graph=None, Model=None, training_style='primal_dual')
 
-        assert captured['include_global_constraint_loss'] is False
+        assert captured['cmodel_kwargs']['include_global_constraint_loss'] is False
 
     def test_default_style_defaults_global_loss_off(self, monkeypatch):
         captured = {}
@@ -91,7 +92,7 @@ class TestInferenceProgramSignature:
         monkeypatch.setattr(LossProgram, '__init__', fake_init)
         InferenceProgram(graph=None, Model=None, training_style='default')
 
-        assert captured['include_global_constraint_loss'] is False
+        assert captured['cmodel_kwargs']['include_global_constraint_loss'] is False
 
     def test_simple_style_alias_maps_to_default(self, monkeypatch):
         def fake_init(self, graph, Model, CModel=None, beta=1, **kwargs):
@@ -116,7 +117,44 @@ class TestInferenceProgramSignature:
             include_global_constraint_loss=True,
         )
 
-        assert captured['include_global_constraint_loss'] is True
+        assert captured['cmodel_kwargs']['include_global_constraint_loss'] is True
+
+    def test_constraint_options_do_not_leak_into_wrapped_solver_model(self, monkeypatch):
+        class StrictSolver(torch.nn.Module):
+            def __init__(self, graph):
+                super().__init__()
+                self.graph = graph
+
+        class WrappedSolver(StrictSolver):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+
+        class ConstraintModel(torch.nn.Module):
+            def __init__(
+                self,
+                graph,
+                include_global_constraint_loss=False,
+                global_constraint_loss_weight=1.0,
+                executable_constraint_loss_weight=1.0,
+            ):
+                super().__init__()
+                self.include_global_constraint_loss = include_global_constraint_loss
+                self.global_constraint_loss_weight = global_constraint_loss_weight
+                self.executable_constraint_loss_weight = executable_constraint_loss_weight
+
+        monkeypatch.setattr(lossprogram_module, 'InferenceModel', ConstraintModel)
+
+        program = InferenceProgram(
+            graph=None,
+            Model=WrappedSolver,
+            include_global_constraint_loss=True,
+            global_constraint_loss_weight=2.0,
+            executable_constraint_loss_weight=3.0,
+        )
+
+        assert program.cmodel.include_global_constraint_loss is True
+        assert program.cmodel.global_constraint_loss_weight == 2.0
+        assert program.cmodel.executable_constraint_loss_weight == 3.0
 
     def test_invalid_training_style_rejected_before_construction(self):
         # The validation runs before the heavy super().__init__, so we can

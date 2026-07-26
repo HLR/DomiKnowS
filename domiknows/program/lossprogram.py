@@ -506,7 +506,8 @@ class LossProgram(LearningBasedProgram):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, CModel=None, beta=1,
-                 copt_class=None, copt_kwargs=None, **kwargs):
+                 copt_class=None, copt_kwargs=None, cmodel_kwargs=None,
+                 **kwargs):
         """
         Initializes an instance of the LossProgram.
 
@@ -524,6 +525,10 @@ class LossProgram(LearningBasedProgram):
         :param copt_kwargs: Optional ``dict`` of extra keyword arguments passed to
             ``copt_class`` (for example ``{'momentum': 0.9}`` for SGD). The learning rate is
             set from ``c_lr`` in ``train()`` and must not be included here.
+        :param cmodel_kwargs: Optional keyword arguments intended only for ``CModel``.
+            These are not forwarded to the regular ``Model``. This is useful when
+            ``Model`` is a thin ``*args, **kwargs`` wrapper around a stricter base
+            model.
         :params kwargs: Keyword arguments are passed to both the parent class and the CModel.
             (if found in the signature).
         """
@@ -544,10 +549,14 @@ class LossProgram(LearningBasedProgram):
         from inspect import signature
         cmodelSignature = signature(CModel.__init__)
 
+        effective_cmodel_kwargs = dict(kwargs)
+        if cmodel_kwargs:
+            effective_cmodel_kwargs.update(cmodel_kwargs)
+
         cmodelKwargs = {}
         for param in cmodelSignature.parameters.values():
-            if param.name in kwargs:
-                cmodelKwargs[param.name] = kwargs[param.name]
+            if param.name in effective_cmodel_kwargs:
+                cmodelKwargs[param.name] = effective_cmodel_kwargs[param.name]
 
         self.cmodel = CModel(graph, **cmodelKwargs)
         self.copt = None
@@ -1309,11 +1318,20 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                 f"training_style must be one of {_INFERENCE_STYLES}, got {training_style!r}"
             )
         self.training_style = 'default' if training_style == 'simple' else training_style
-        kwargs['include_global_constraint_loss'] = bool(include_global_constraint_loss)
-        kwargs['global_constraint_loss_weight'] = global_constraint_loss_weight
-        kwargs['executable_constraint_loss_weight'] = executable_constraint_loss_weight
+        cmodel_kwargs = {
+            'include_global_constraint_loss': bool(include_global_constraint_loss),
+            'global_constraint_loss_weight': global_constraint_loss_weight,
+            'executable_constraint_loss_weight': executable_constraint_loss_weight,
+        }
 
-        super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
+        super().__init__(
+            graph,
+            Model,
+            CModel=InferenceModel,
+            beta=beta,
+            cmodel_kwargs=cmodel_kwargs,
+            **kwargs,
+        )
         self._init_gumbel(use_gumbel, initial_temp, final_temp,
                           anneal_start_epoch, anneal_epochs, hard_gumbel)
 
