@@ -39,6 +39,10 @@ class GraphQASolverModel(SolverModel):
     """SolverModel with supervised CE warmup for DomiKnowS program.train."""
 
     def __init__(self, *args, **kwargs):
+        # Historical GraphQA commands passed this flag through InferenceProgram,
+        # but DomiKnowS forwards unknown kwargs into SolverModel before CModel.
+        # Consume it here so old commands fail safe without requiring a new API.
+        kwargs.pop("include_global_constraint_loss", None)
         kwargs.setdefault("loss", MacroAverageTracker(NBCrossEntropyLoss()))
         super().__init__(*args, **kwargs)
 
@@ -79,7 +83,7 @@ class GraphQAFamilyLearner(torch.nn.Module):
         return self.shared.forward_examples([{"kind": self.kind, "prompt": prompt} for prompt in prompts])
 
 
-def build_graphqa_program(instances, args):
+def build_graphqa_context(instances, args):
     ctx = create_graphqa_graph(instances)
     spaces = label_spaces(instances)
     spaces["answer_object"] = [str(value) for value in ctx.object_values]
@@ -88,6 +92,10 @@ def build_graphqa_program(instances, args):
     spaces["_max_set_answer_candidates"] = args.max_set_answer_candidates
     spaces["_max_set_answer_negatives"] = args.max_set_answer_negatives
     attach_program_train_sensors(ctx, spaces, args)
+    return ctx, spaces
+
+
+def create_graphqa_program(ctx, args):
     poi = [
         ctx.scene,
         ctx.obj,
@@ -104,7 +112,7 @@ def build_graphqa_program(instances, args):
         *ctx.object_concepts.values(),
         ctx.graph.constraint,
     ]
-    program = InferenceProgram(
+    return InferenceProgram(
         ctx.graph,
         GraphQASolverModel,
         poi=poi,
@@ -112,7 +120,16 @@ def build_graphqa_program(instances, args):
         inferTypes=["local/argmax"],
         beta=args.beta,
     )
-    return None, ctx, program, spaces
+
+
+def build_graphqa_program(instances, args):
+    """Build a GraphQA program for legacy callers.
+
+    Training code should compile executable datasets before calling
+    create_graphqa_program, matching CLEVR/Temporal.
+    """
+    ctx, spaces = build_graphqa_context(instances, args)
+    return None, ctx, create_graphqa_program(ctx, args), spaces
 
 
 def attach_program_train_sensors(ctx, spaces, args):
@@ -740,9 +757,14 @@ def main():
             f"schema_limit={args.schema_limit}",
             flush=True,
         )
-    train_data, ctx, program, spaces = build_graphqa_program(graph_instances, args)
+    ctx, spaces = build_graphqa_context(graph_instances, args)
+    # CLEVR-style executable training requires compile_executable before the
+    # InferenceProgram is constructed. InferenceModel snapshots graph logical
+    # constraints at construction time, so compiling afterward leaves the
+    # datanode with no active executable constraint labels.
     train_data = compile_program_train_dataset(train, ctx, spaces, device=args.device)
     dev_data = compile_program_train_dataset(dev, ctx, spaces, device=args.device) if dev else None
+    program = create_graphqa_program(ctx, args)
     if args.checkpoint:
         program.load(args.checkpoint, map_location=args.device)
         print(f"loaded_checkpoint={args.checkpoint}", flush=True)
