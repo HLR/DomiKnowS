@@ -491,7 +491,10 @@ argmax = dn.getAttribute('<person>/argmax')
 
 #### `inferILPResults(*conceptsRelations, key=("local", "softmax"), ...)`
 
-Integer Linear Programming inference with logical constraints.
+Run Integer Linear Programming (ILP) inference and write the selected
+classification into the DataNode graph. The method operates in place and
+returns `None`; results use the same `<concept>/ILP` attributes whether or not
+executable constraints are active.
 
 ```python
 # ILP inference
@@ -508,13 +511,88 @@ ilp_work_for = dn.getAttribute('<work_for>/ILP')
 ```
 
 **Parameters:**
-- `*conceptsRelations`: Concepts to include (empty = all)
-- `key`: Source probabilities ("local"/"ILP", "softmax"/"argmax")
-- `fun`: Custom objective function
-- `epsilon`: Tolerance for solver
-- `minimizeObjective`: Minimize vs maximize
-- `ignorePinLCs`: Ignore fixed constraints
-- `Acc`: Accuracy weights per concept
+
+- `*conceptsRelations`: Concepts and relations to include. When omitted, they
+  are discovered from the DataNode graph.
+- `key`: Attribute path containing the objective probabilities. The default,
+  `("local", "softmax")`, reads `<concept>/local/softmax`.
+- `fun`: Optional transformation applied to each probability vector before it
+  contributes to the objective.
+- `epsilon`: Optional lower/upper clamp for softmax probabilities. Pass `None`
+  to disable clamping.
+- `minimizeObjective`: Select the lowest-objective solution instead of the
+  default highest-objective solution.
+- `ignorePinLCs`: Treat active logical constraints as priority `100` instead of
+  using their configured `p` priorities.
+- `Acc`: Optional accumulator passed to the local-inference preparation step.
+
+##### Active executable constraints
+
+Executable constraints are constraints created with `execute(...)` and stored
+in `graph.executableLCs`. A constraint is active for a DataNode when its
+constraint DataNode contains a string attribute named
+`<executable-name>/label`, such as `ELC0/label`. The label's value is ground
+truth used by training or evaluation; during ILP inference it activates the
+constraint but **does not force the predicted answer**.
+
+`inferILPResults` chooses one of two paths:
+
+1. If no executable constraint label is present, it uses the legacy ILP path:
+   one model is optimized using the graph, ontology, multiclass, and ordinary
+   active logical constraints.
+2. If one or more executable constraints are active, it delegates to
+   `AnswerSolver`. The solver creates a fresh ILP model for every joint
+   hypothesis, adds that hypothesis as a hard constraint, and includes the same
+   probabilities and ordinary constraints used by the legacy path.
+
+For multiple active executable constraints, hypotheses are evaluated as a
+Cartesian product. For example, two Boolean constraints produce four models:
+`(True, True)`, `(True, False)`, `(False, True)`, and `(False, False)`. This
+selects one globally coherent DataNode assignment, but the number of models
+grows as the product of the hypothesis counts.
+
+Supported executable constraint types and their hypotheses are:
+
+| Executable type | Hypotheses |
+| --- | --- |
+| `queryL` | Every subclass or enum value of the queried concept |
+| `sumL` | Every integer from `0` through the computed upper bound |
+| `existsL` | `True` and `False` |
+| `greaterL` | `True` and `False` |
+| `atLeastL` | `True` and `False` |
+| `exactL` | `True` and `False` |
+
+Infeasible hypothesis models are skipped. The feasible model with the highest
+objective is selected by default; `minimizeObjective=True` selects the lowest
+objective instead. Exact objective ties retain the first hypothesis in graph
+registration and hypothesis order. If every hypothesis is infeasible, inference
+raises `RuntimeError`. An active unsupported type, such as `andL`, `orL`, or
+`ifL`, raises a descriptive `ValueError` rather than silently falling back to
+ordinary ILP inference.
+
+Only the winning model populates `<concept>/ILP` (or the corresponding
+`variableSet` tensors in skeleton mode). Temporary Gurobi variable handles are
+cleared between hypotheses, so repeated inference on the same DataNode builds
+independent models.
+
+```python
+# Inspect which executable constraints this sample activates.
+active = dn.getActiveExecutableConstraintNames()
+
+# If active is non-empty, hypothesis-aware ILP inference runs automatically.
+dn.inferILPResults(
+    person, organization, work_for,
+    key=("local", "softmax"),
+)
+
+# Access the winning hypothesis model's ordinary ILP assignment.
+person_ilp = dn.getAttribute("<person>/ILP")
+```
+
+For a batch root, the active executable names and hypothesis search are
+evaluated independently for every contained DataNode. Different samples in the
+same batch may therefore activate different executable constraints and select
+different hypotheses.
 
 #### `inferGBIResults(*conceptsRelations, model, kwargs)`
 
@@ -1274,6 +1352,11 @@ batch_root = batch_builder.getDataNode()
 # Process batch inference
 batch_root.inferILPResults(person, organization)
 ```
+
+`inferILPResults` processes each DataNode contained by a configured batch
+concept independently. A sample with active executable-constraint labels runs
+its own joint hypothesis search, while a sample without such labels uses the
+legacy single-model path.
 
 ### 9. Relation Discovery
 
