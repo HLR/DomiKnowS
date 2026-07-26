@@ -257,9 +257,13 @@ def build_temporal_program(instances, args):
         anneal_start_epoch=args.gumbel_anneal_start_epoch,
         anneal_epochs=args.gumbel_anneal_epochs,
         hard_gumbel=args.hard_gumbel,
+        query_loss=functools.partial(
+            _make_temporal_ce_loss,
+            _TEMPORAL_CLASS_WEIGHTS,
+        ),
     )
-    # This local DomiKnowS branch forwards InferenceProgram kwargs into the
-    # main SolverModel. Set the constraint-model tnorm after construction.
+    # Configure the remaining constraint-model execution options after
+    # construction; query_loss is routed there without leaking to SolverModel.
     if hasattr(program, "cmodel"):
         program.cmodel.tnorm = args.tnorm
         program.cmodel.counting_tnorm = getattr(program.cmodel, "counting_tnorm", None) or args.tnorm

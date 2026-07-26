@@ -62,7 +62,8 @@ class TestInferenceProgramSignature:
                      'anneal_start_epoch', 'anneal_epochs', 'hard_gumbel',
                      'include_global_constraint_loss',
                      'global_constraint_loss_weight',
-                     'executable_constraint_loss_weight'):
+                     'executable_constraint_loss_weight',
+                     'query_loss'):
             assert name in params, f"InferenceProgram.__init__ missing {name}"
 
     def test_defaults_preserve_backward_compat(self):
@@ -70,6 +71,7 @@ class TestInferenceProgramSignature:
         assert sig.parameters['training_style'].default == 'default'
         assert sig.parameters['use_gumbel'].default is False
         assert sig.parameters['include_global_constraint_loss'].default is False
+        assert sig.parameters['query_loss'].default is None
         # If these defaults change, existing users will see different behaviour.
 
     def test_primal_dual_style_defaults_global_loss_off(self, monkeypatch):
@@ -155,6 +157,36 @@ class TestInferenceProgramSignature:
         assert program.cmodel.include_global_constraint_loss is True
         assert program.cmodel.global_constraint_loss_weight == 2.0
         assert program.cmodel.executable_constraint_loss_weight == 3.0
+
+    def test_query_loss_is_forwarded_only_to_constraint_model(self, monkeypatch):
+        class StrictSolver(torch.nn.Module):
+            def __init__(self, graph):
+                super().__init__()
+                self.graph = graph
+
+        class WrappedSolver(StrictSolver):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+
+        class QueryLoss(torch.nn.Module):
+            def forward(self, input, target):
+                return input.sum() + target.float().sum()
+
+        class ConstraintModel(torch.nn.Module):
+            def __init__(self, graph, query_loss=None):
+                super().__init__()
+                self.graph = graph
+                self.query_loss_func = query_loss()
+
+        monkeypatch.setattr(lossprogram_module, 'InferenceModel', ConstraintModel)
+
+        program = InferenceProgram(
+            graph=None,
+            Model=WrappedSolver,
+            query_loss=QueryLoss,
+        )
+
+        assert isinstance(program.cmodel.query_loss_func, QueryLoss)
 
     def test_invalid_training_style_rejected_before_construction(self):
         # The validation runs before the heavy super().__init__, so we can

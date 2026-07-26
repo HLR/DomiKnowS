@@ -1295,6 +1295,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                  include_global_constraint_loss=False,
                  global_constraint_loss_weight=1.0,
                  executable_constraint_loss_weight=1.0,
+                 query_loss=None,
                  **kwargs):
         """
         Initializes an InferenceProgram instance.
@@ -1312,6 +1313,9 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             parameters control the annealing schedule (see ``GumbelTemperatureMixin``).
         :param include_global_constraint_loss: If ``True``, add graph-global
             constraint loss to executable-constraint loss.
+        :param query_loss: Optional loss factory for multiclass ``queryL``
+            outputs. It is forwarded only to the constraint model; scalar
+            executable constraints continue to use that model's binary loss.
         """
         if training_style not in _INFERENCE_STYLES:
             raise ValueError(
@@ -1323,6 +1327,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             'global_constraint_loss_weight': global_constraint_loss_weight,
             'executable_constraint_loss_weight': executable_constraint_loss_weight,
         }
+        if query_loss is not None:
+            cmodel_kwargs['query_loss'] = query_loss
 
         super().__init__(
             graph,
