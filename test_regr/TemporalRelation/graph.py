@@ -37,7 +37,9 @@ class TemporalRelationContext:
     namespace: dict
 
 
-def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relation", include_global_constraints=True):
+def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relation",
+                          include_global_constraints=True,
+                          include_exactly_one=True, include_transitivity=True):
     """
     Build a MATRES-style temporal relation graph.
 
@@ -46,6 +48,11 @@ def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relatio
     query_event2 marker predicates over events, and a multiclass temporal label
     over each EventPair. MATRES annotations provide oracle labels for the marker
     predicates, while the normal learner predicts the temporal relation label.
+
+    ``include_exactly_one`` / ``include_transitivity`` gate two constraints that
+    behave differently than they appear under the default training setup; both
+    default to on, so the constraint set is unchanged unless asked. See the
+    notes at their definitions below.
     """
     Graph.clear()
     Concept.clear()
@@ -75,11 +82,14 @@ def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relatio
         if include_global_constraints:
             # Graph-level temporal consistency losses. Disable these for the
             # first CLEVR-style executable-query-only baseline.
-            ifL(
-                event_pair("p"),
-                exactL(before("p"), after("p"), equal("p"), vague("p"), limit=1),
-                name="temporal_exactly_one_label",
-            )
+            if include_exactly_one:
+                # Kept on by default; use
+                # ``--no-exactly-one-label`` to measure its effect.
+                ifL(
+                    event_pair("p"),
+                    exactL(before("p"), after("p"), equal("p"), vague("p"), limit=1),
+                    name="temporal_exactly_one_label",
+                )
             ifL(
                 andL(
                     before("p"),
@@ -116,17 +126,20 @@ def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relatio
                 notL(before("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed)))),
                 name="temporal_before_no_cycle_2",
             )
-            ifL(
-                andL(
-                    before("xy"),
-                    event("x", path=("xy", pair_event1)),
-                    event("y", path=("xy", pair_event2)),
-                    before("yz", path=("y", pair_event1.reversed)),
-                    event("z", path=("yz", pair_event2)),
-                ),
-                before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
-                name="temporal_before_transitive",
-            )
+            if include_transitivity:
+                # Kept on by default; ``--no-transitivity``
+                # disables it, and the trainer warns when it cannot ground.
+                ifL(
+                    andL(
+                        before("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        before("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_before_transitive",
+                )
 
     concepts = {
         "document": document,

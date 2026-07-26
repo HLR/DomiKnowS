@@ -215,7 +215,12 @@ class QwenTemporalRelationLearner(torch.nn.Module):
         return label_scores.view(len(prompts), len(TEMPORAL_LABELS)).float()
 
 def build_temporal_program(instances, args):
-    ctx = create_temporal_graph(instances, include_global_constraints=not args.no_global_consistency)
+    ctx = create_temporal_graph(
+        instances,
+        include_global_constraints=not args.no_global_consistency,
+        include_exactly_one=getattr(args, "exactly_one_label", True),
+        include_transitivity=getattr(args, "transitivity", True),
+    )
     attach_program_train_sensors(ctx, args)
     dataset = compile_program_train_dataset(
         instances,
@@ -719,7 +724,41 @@ def parse_args():
     parser.add_argument("--constraint-epochs", type=int, default=0, help="Number of executable queryL/iotaL constraint epochs after optional warmup.")
     parser.add_argument("--allow-unstable-constraint-training", action="store_true", help="Deprecated compatibility flag; constraint training is controlled by --constraint-epochs.")
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--tnorm", default="G")
+    parser.add_argument(
+        "--tnorm",
+        default="P",
+        choices=["P", "G", "L", "SP"],
+        help=(
+            "T-norm for the constraint loss. Default changed G->P: every consistency "
+            "rule in graph.py is an implication, and under Godel an implication gives "
+            "its ANTECEDENT exactly zero gradient. Symmetry is two-sided (an "
+            "inconsistent pair should both raise the consequent and lower the "
+            "antecedent), so Godel discards half of each correction. Pass --tnorm G "
+            "to reproduce the previous behaviour."
+        ),
+    )
+    parser.add_argument(
+        "--no-exactly-one-label",
+        dest="exactly_one_label",
+        action="store_false",
+        help=(
+            "Drop the exactL(...limit=1) label constraint. It is already guaranteed "
+            "at decode time by the shared multiclass head, so under a t-norm it acts "
+            "as a sharpening penalty rather than logical enforcement."
+        ),
+    )
+    parser.set_defaults(exactly_one_label=True)
+    parser.add_argument(
+        "--no-transitivity",
+        dest="transitivity",
+        action="store_false",
+        help=(
+            "Drop the before-transitivity constraint. It needs three chained pairs, "
+            "so with --pair-selection target and --max-pairs-per-instance < 3 it has "
+            "zero groundings and can never fire."
+        ),
+    )
+    parser.set_defaults(transitivity=True)
     parser.add_argument("--beta", type=float, default=1.0)
     parser.add_argument(
         "--infer-types",
@@ -841,10 +880,35 @@ def main():
     warmup_epochs = args.epochs if args.warmup_epochs is None else args.warmup_epochs
     constraint_epochs = args.constraint_epochs
     set_boolean_executable_assertion(args.boolean_executable_assertion)
+
+    if args.tnorm == "G" and not args.no_global_consistency:
+        print(
+            "WARNING: --tnorm G (Godel) with the consistency constraints enabled. Every "
+            "rule in graph.py is an implication, and Godel gives an implication's "
+            "ANTECEDENT exactly zero gradient — so e.g. before(p)->after(p_rev) can only "
+            "raise after(p_rev), never lower an inconsistent before(p). Half of each "
+            "symmetry correction is discarded. Use --tnorm P (the default) unless you are "
+            "deliberately reproducing the old behaviour.",
+            flush=True,
+        )
+
+    if (args.transitivity and not args.no_global_consistency
+            and args.max_pairs_per_instance is not None
+            and int(args.max_pairs_per_instance) < 3):
+        print(
+            f"WARNING: transitivity is enabled but --max-pairs-per-instance="
+            f"{args.max_pairs_per_instance} < 3, so it cannot ground (it needs three "
+            "chained pairs x->y, y->z, x->z). It will be compiled and evaluated every "
+            "step without ever firing. Use --no-transitivity, or raise the cap.",
+            flush=True,
+        )
+
     print(
         f"warmup_epochs={warmup_epochs} constraint_epochs={constraint_epochs} "
         f"lr={args.lr} supervise_local_predicates={args.supervise_local_predicates} "
         f"global_consistency={not args.no_global_consistency} "
+        f"tnorm={args.tnorm} exactly_one_label={args.exactly_one_label} "
+        f"transitivity={args.transitivity} "
         f"boolean_executable_assertion={args.boolean_executable_assertion} "
         f"class_weights={_TEMPORAL_CLASS_WEIGHTS} "
         f"training_style={args.training_style} constraint_only={args.constraint_only} "
