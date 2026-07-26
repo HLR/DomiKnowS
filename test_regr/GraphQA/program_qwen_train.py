@@ -661,6 +661,16 @@ def parse_args():
     parser.add_argument("--kb-depth", type=int, default=2)
     parser.add_argument("--max-extra-kg-facts", type=int, default=256)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--schema-limit",
+        type=int,
+        default=None,
+        help=(
+            "Optional number of task instances used only to build the graph/label schema. "
+            "Use this when evaluating a checkpoint on a smaller --limit so relation heads "
+            "match the training-time schema."
+        ),
+    )
     parser.add_argument("--dev-fraction", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--model-path", default=DEFAULT_MODEL)
@@ -720,6 +730,16 @@ def main():
     # declare every object/symbol/relation that can appear in executable logic;
     # otherwise dev examples with unseen object IDs fail at compile time.
     graph_instances = list(train) + list(dev)
+    if args.schema_limit is not None and args.schema_limit != args.limit:
+        schema_args = argparse.Namespace(**vars(args))
+        schema_args.limit = args.schema_limit
+        _schema_task_path, schema_instances, schema_failures = load_instances(schema_args)
+        graph_instances = schema_instances
+        print(
+            f"schema_loaded={len(schema_instances)} schema_failures={len(schema_failures)} "
+            f"schema_limit={args.schema_limit}",
+            flush=True,
+        )
     train_data, ctx, program, spaces = build_graphqa_program(graph_instances, args)
     train_data = compile_program_train_dataset(train, ctx, spaces, device=args.device)
     dev_data = compile_program_train_dataset(dev, ctx, spaces, device=args.device) if dev else None

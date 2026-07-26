@@ -18,8 +18,8 @@ from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
-from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateReaderSensor
-from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalSensor, JointReaderSensor
 
 from .dataset import DEFAULT_TEMPORAL_DATA_ROOT, load_temporal_instances
 from .execution import create_executable_instance, mark_text_for_pair
@@ -29,6 +29,18 @@ from .program import BinaryOracleLearner, _tensor
 DEFAULT_MODEL = "/localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218"
 DEFAULT_OUTPUT = Path("/egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_domiknows_program.pt")
 LOCAL_IGNORE_LABEL = -100
+
+
+def _relation_class_metrics(correct_by_label, total_by_label):
+    per_label = {}
+    recalls = []
+    for label in TEMPORAL_LABELS:
+        total = total_by_label.get(label, 0)
+        recall = correct_by_label.get(label, 0) / total if total else 0.0
+        per_label[label] = {"correct": correct_by_label.get(label, 0), "total": total, "recall": recall}
+        if total:
+            recalls.append(recall)
+    return per_label, sum(recalls) / len(recalls) if recalls else 0.0
 _TEMPORAL_CLASS_WEIGHTS = None
 
 
@@ -286,25 +298,37 @@ def attach_program_train_sensors(ctx, args):
         ctx.token[f"{name}_label"] = FunctionalReaderSensor(keyword=keyword, forward=lambda data, _device=device: _tensor(data, device=_device))
         ctx.token[concept] = ModuleLearner(f"{name}_label", module=BinaryOracleLearner(), device=device)
 
-    ctx.event_pair[ctx.pair_event1.reversed, ctx.pair_event2.reversed] = CompositionCandidateReaderSensor(
-        ctx.token["index"],
-        relations=(ctx.pair_event1.reversed, ctx.pair_event2.reversed),
-        keyword="event_pair_candidates",
-        forward=_candidate_event_pair_from_allowed,
+    # Match the explicit relation-row pattern used by CLEVR-style relation
+    # examples: first create EventPair datanodes, then attach e1/e2 has_a maps.
+    # This gives ILP concrete pair variables to optimize and decode.
+    ctx.event_pair["index"] = FunctionalReaderSensor(keyword="event_pair_indices", forward=lambda data, _device=device: _tensor(data, device=_device))
+    ctx.event_pair[ctx.pair_event1.reversed, ctx.pair_event2.reversed] = JointReaderSensor(
+        ctx.event_pair["index"],
+        keyword="event_pair_relation_maps",
+        forward=lambda *_args, data: data,
     )
-    ctx.event_pair["pair_prompts"] = FunctionalReaderSensor(keyword="pair_prompts", forward=lambda data: data)
-    ctx.event_pair["temporal_relation_label"] = FunctionalReaderSensor(
-        keyword="temporal_relation_label",
-        forward=lambda data, _device=device: torch.as_tensor(data, dtype=torch.long, device=_device),
+    ctx.event_pair["pair_prompts"] = DataNodeReaderSensor(
+        ctx.pair_event1.reversed,
+        ctx.pair_event2.reversed,
+        keyword="pair_prompt_by_candidate",
+        forward=_read_pair_prompt_from_datanode,
+    )
+    ctx.event_pair["temporal_relation_label"] = DataNodeReaderSensor(
+        ctx.pair_event1.reversed,
+        ctx.pair_event2.reversed,
+        keyword="pair_label_by_candidate",
+        forward=lambda *_, datanode, data: _read_pair_label_from_datanode(datanode, data, device=device),
     )
     if args.supervise_local_predicates:
         # Optional diagnostic/warmup mode. This appends a label sensor to the
         # same concept property; the ModuleLearner below remains the learnable
         # predicate, matching the DomiKnowS/CLEVR pattern.
-        ctx.event_pair[ctx.temporal_relation] = FunctionalReaderSensor(
-            keyword="temporal_relation_label",
+        ctx.event_pair[ctx.temporal_relation] = DataNodeReaderSensor(
+            ctx.pair_event1.reversed,
+            ctx.pair_event2.reversed,
+            keyword="pair_label_by_candidate",
             label=True,
-            forward=lambda data, _device=device: torch.as_tensor(data, dtype=torch.long, device=_device),
+            forward=lambda *_, datanode, data: _read_pair_label_from_datanode(datanode, data, device=device),
         )
     ctx.event_pair[ctx.temporal_relation] = ModuleLearner(
         "pair_prompts",
@@ -344,12 +368,29 @@ def _binary_logits_from_multiclass(logits, index):
     return torch.stack([negative, positive], dim=-1)
 
 
-def _candidate_event_pair_from_allowed(index, data, arg1=None, arg2=None, **_kwargs):
-    if arg1 is None or arg2 is None:
-        return False
-    left = int(arg1.getAttribute("index").detach().cpu().view(-1)[0].item())
-    right = int(arg2.getAttribute("index").detach().cpu().view(-1)[0].item())
-    return (left, right) in set(tuple(pair) for pair in data)
+def _pair_indices_from_datanode(datanode):
+    left = int(datanode.relationLinks["e1"][0].getAttribute("index").detach().cpu().view(-1)[0].item())
+    right = int(datanode.relationLinks["e2"][0].getAttribute("index").detach().cpu().view(-1)[0].item())
+    return left, right
+
+
+def _read_pair_prompt_from_datanode(*_, datanode, data):
+    return data[_pair_indices_from_datanode(datanode)]
+
+
+def _read_pair_label_from_datanode(datanode, data, device="cpu"):
+    label = data.get(_pair_indices_from_datanode(datanode), LOCAL_IGNORE_LABEL)
+    return torch.as_tensor(label, dtype=torch.long, device=device)
+
+
+def _event_pair_relation_maps(event_pair_candidates, num_events, device="cpu"):
+    rows = len(event_pair_candidates)
+    e1_map = torch.zeros((rows, num_events), dtype=torch.float32, device=device)
+    e2_map = torch.zeros((rows, num_events), dtype=torch.float32, device=device)
+    for row, (left, right) in enumerate(event_pair_candidates):
+        e1_map[row, int(left)] = 1.0
+        e2_map[row, int(right)] = 1.0
+    return e1_map, e2_map
 
 
 _BOOLEAN_EXECUTABLE_ASSERTION = False
@@ -419,8 +460,8 @@ def _to_program_train_data(instance, device="cpu", max_events_per_instance=None,
     events = _select_events_for_query(instance, all_events, query_e1, query_e2, max_events_per_instance)
     event_ids = [_event_id(event) for event in events]
 
-    pair_prompts = []
-    pair_labels = []
+    pair_prompt_by_candidate = {}
+    pair_label_by_candidate = {}
     labels_by_pair = {}
     for pair in instance.get("event_pairs", []):
         e1, e2, label = unpack_pair(pair)
@@ -436,13 +477,16 @@ def _to_program_train_data(instance, device="cpu", max_events_per_instance=None,
     event_index = {event_id: idx for idx, event_id in enumerate(event_ids)}
     event_pair_candidates = []
     for left, right in candidate_pairs:
-        pair_prompts.append(mark_text_for_pair(instance, left, right))
-        event_pair_candidates.append((event_index[left], event_index[right]))
+        candidate = (event_index[left], event_index[right])
+        event_pair_candidates.append(candidate)
+        pair_prompt_by_candidate[candidate] = mark_text_for_pair(instance, left, right)
         label = labels_by_pair.get((left, right))
         # Warmup/local supervision must only use genuinely annotated pair
         # directions. Inverse and related-but-unlabeled pairs stay in the graph
         # for execution/global constraints but are ignored by CE loss.
-        pair_labels.append(TEMPORAL_LABELS.index(label) if label in TEMPORAL_LABELS else LOCAL_IGNORE_LABEL)
+        pair_label_by_candidate[candidate] = TEMPORAL_LABELS.index(label) if label in TEMPORAL_LABELS else LOCAL_IGNORE_LABEL
+
+    relation_maps = _event_pair_relation_maps(event_pair_candidates, len(event_ids), device=device)
 
     converted.update({
         "document_indices": torch.tensor([0], dtype=torch.long, device=device),
@@ -451,9 +495,11 @@ def _to_program_train_data(instance, device="cpu", max_events_per_instance=None,
         "is_event": torch.ones(len(events), dtype=torch.long, device=device),
         "is_query_event1": torch.tensor([1 if event_id == query_e1 else 0 for event_id in event_ids], dtype=torch.long, device=device),
         "is_query_event2": torch.tensor([1 if event_id == query_e2 else 0 for event_id in event_ids], dtype=torch.long, device=device),
+        "event_pair_indices": torch.arange(len(event_pair_candidates), dtype=torch.long, device=device),
+        "event_pair_relation_maps": relation_maps,
         "event_pair_candidates": event_pair_candidates,
-        "pair_prompts": pair_prompts,
-        "temporal_relation_label": torch.tensor(pair_labels, dtype=torch.long, device=device),
+        "pair_prompt_by_candidate": pair_prompt_by_candidate,
+        "pair_label_by_candidate": pair_label_by_candidate,
     })
     if converted.get("logic_label") is not None:
         if args_boolean_executable_assertion():
@@ -469,47 +515,101 @@ def _to_program_train_data(instance, device="cpu", max_events_per_instance=None,
 
 
 def evaluate_temporal_relation_accuracy(dataset, ctx, program, device="cpu"):
-    """Direct dev accuracy and prediction distribution for the multiclass head."""
+    """Direct dev accuracy decoded from materialized EventPair datanodes."""
+    return _evaluate_temporal_relation_from_datanodes(dataset, ctx, program, infer_key="local/argmax")
+
+
+def evaluate_temporal_relation_ilp_accuracy(dataset, ctx, program, device="cpu"):
+    """ILP accuracy decoded from Before/After/Equal/Vague child concepts."""
+    return _evaluate_temporal_relation_from_datanodes(dataset, ctx, program, infer_key="ILP")
+
+
+def _evaluate_temporal_relation_from_datanodes(dataset, ctx, program, infer_key="local/argmax"):
     from collections import Counter
 
     correct = 0
     total = 0
     pred_counts = Counter()
     gold_counts = Counter()
+    correct_by_label = Counter()
+    missing = 0
     was_training = program.model.training
     program.model.eval()
     with torch.no_grad():
         for row in dataset:
-            program.model(row)
-            logits = ctx.event_pair[ctx.temporal_relation](row)
-            labels = row.get("temporal_relation_label")
-            if labels is None or logits is None or logits.numel() == 0:
+            output = program.model(row)
+            datanode = output[2] if isinstance(output, tuple) and len(output) > 2 else output
+            pair_nodes = datanode.findDatanodes(select=ctx.event_pair) if datanode is not None else []
+            if not pair_nodes:
+                missing += 1
                 continue
-            labels = labels.to(logits.device).view(-1)
-            preds = logits.argmax(dim=-1).view(-1)
-            n = min(preds.numel(), labels.numel())
-            if n == 0:
-                continue
-            labels = labels[:n]
-            preds = preds[:n]
-            valid = labels != LOCAL_IGNORE_LABEL
-            if not bool(valid.any()):
-                continue
-            labels = labels[valid]
-            preds = preds[valid]
-            correct += int((preds == labels).sum().item())
-            total += int(labels.numel())
-            pred_counts.update(TEMPORAL_LABELS[int(i)] for i in preds.detach().cpu().tolist())
-            gold_counts.update(TEMPORAL_LABELS[int(i)] for i in labels.detach().cpu().tolist())
+            for pair_node in pair_nodes:
+                try:
+                    label_tensor = pair_node.getAttribute(ctx.temporal_relation, "label")
+                except Exception:
+                    continue
+                if label_tensor is None:
+                    continue
+                label_value = int(label_tensor.detach().cpu().view(-1)[0].item() if hasattr(label_tensor, "detach") else label_tensor)
+                if label_value == LOCAL_IGNORE_LABEL:
+                    continue
+                pred_value = _decode_pair_prediction(pair_node, ctx, infer_key)
+                if pred_value is None:
+                    missing += 1
+                    continue
+                gold_label = TEMPORAL_LABELS[label_value]
+                pred_label = TEMPORAL_LABELS[pred_value]
+                correct += int(pred_value == label_value)
+                total += 1
+                pred_counts.update([pred_label])
+                gold_counts.update([gold_label])
+                if pred_value == label_value:
+                    correct_by_label[gold_label] += 1
     if was_training:
         program.model.train()
+    per_label, macro_recall = _relation_class_metrics(correct_by_label, gold_counts)
     return {
         "temporal_relation_correct": correct,
         "temporal_relation_total": total,
         "temporal_relation_acc": correct / total if total else 0.0,
+        "temporal_relation_macro_recall": macro_recall,
+        "temporal_relation_per_label": per_label,
         "pred_counts": dict(pred_counts),
         "gold_counts": dict(gold_counts),
+        "missing": missing,
+        "infer_key": infer_key,
     }
+
+
+def _decode_pair_prediction(pair_node, ctx, infer_key):
+    if infer_key == "ILP":
+        scores = []
+        for label in TEMPORAL_LABELS:
+            try:
+                value = pair_node.getAttribute(ctx.label_concepts[label], "ILP")
+            except Exception:
+                return None
+            if value is None:
+                return None
+            value = value.detach().cpu().view(-1)[0].item() if hasattr(value, "detach") else float(value)
+            scores.append(float(value))
+        return int(max(range(len(scores)), key=lambda idx: scores[idx]))
+
+    try:
+        value = pair_node.getAttribute(ctx.temporal_relation, infer_key)
+    except Exception:
+        return None
+    if value is None:
+        return None
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().view(-1)
+        if value.numel() == 1:
+            return int(value.item())
+        return int(value.argmax().item())
+    if isinstance(value, (list, tuple)):
+        return int(max(range(len(value)), key=lambda idx: value[idx]))
+    return int(value)
+
 
 def split_instances(instances, dev_fraction=0.2, seed=13):
     import random
@@ -895,6 +995,10 @@ def main():
     if dev_data:
         relation_metrics = evaluate_temporal_relation_accuracy(dev_data, _ctx, program, device=args.device)
         print(f"dev_temporal_relation={relation_metrics}", flush=True)
+        infer_types = [item.strip() for item in args.infer_types.split(",") if item.strip()]
+        if "ILP" in infer_types:
+            ilp_metrics = evaluate_temporal_relation_ilp_accuracy(dev_data, _ctx, program, device=args.device)
+            print(f"dev_temporal_relation_ilp={ilp_metrics}", flush=True)
         if not args.skip_condition_eval:
             condition = program.evaluate_condition(dev_data, device=args.device, return_dict=True)
             print(f"dev_condition={condition}", flush=True)

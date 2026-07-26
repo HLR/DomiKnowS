@@ -15,6 +15,45 @@ from .modules import OracleTemporalPredicateClassifier, TemporalPredicateClassif
 DEFAULT_OUTPUT = Path("/egr/research-hlr2/premsrit/TemporalRelation/models/temporal_predicate_heads.pt")
 
 
+def parse_label_weights(args, instances=None):
+    if args.label_weights:
+        values = [float(value.strip()) for value in args.label_weights.split(",") if value.strip()]
+        if len(values) != len(TEMPORAL_LABELS):
+            raise ValueError(
+                f"--label-weights must provide {len(TEMPORAL_LABELS)} comma-separated values "
+                f"in {TEMPORAL_LABELS} order"
+            )
+    elif args.balanced_relation_loss and instances is not None:
+        counts = Counter()
+        for instance in instances:
+            for pair in instance.get("event_pairs", []):
+                _e1, _e2, label = unpack_pair(pair)
+                if label in TEMPORAL_LABELS:
+                    counts[label] += 1
+        total = sum(counts.values())
+        values = []
+        for label in TEMPORAL_LABELS:
+            count = counts[label]
+            values.append(total / (len(TEMPORAL_LABELS) * count) if count else 0.0)
+    else:
+        values = [1.0] * len(TEMPORAL_LABELS)
+    values[TEMPORAL_LABELS.index("Vague")] *= float(args.vague_weight)
+    values[TEMPORAL_LABELS.index("Equal")] *= float(args.equal_weight)
+    return values
+
+
+def relation_class_metrics(correct_by_label, total_by_label):
+    per_label = {}
+    recalls = []
+    for label in TEMPORAL_LABELS:
+        total = total_by_label.get(label, 0)
+        recall = correct_by_label.get(label, 0) / total if total else 0.0
+        per_label[label] = {"correct": correct_by_label.get(label, 0), "total": total, "recall": recall}
+        if total:
+            recalls.append(recall)
+    return per_label, sum(recalls) / len(recalls) if recalls else 0.0
+
+
 def progress_iter(iterable, args, desc):
     if not getattr(args, "progress", True):
         return iterable
@@ -81,7 +120,7 @@ def relation_targets(instance, pair_ids, device):
     )
 
 
-def predicate_loss(batch, instance, args, device):
+def predicate_loss(batch, instance, args, device, relation_class_weights=None):
     event_target, q1_target, q2_target = query_targets(instance, batch.event_ids, device)
     supervised_pair_indices, relation_target = relation_targets(instance, batch.pair_ids, device)
 
@@ -93,7 +132,11 @@ def predicate_loss(batch, instance, args, device):
         losses["query_event2"] = F.cross_entropy(batch.query_event2_logits, q2_target) * args.query_loss_weight
     if len(relation_target) > 0:
         relation_logits = batch.temporal_relation_logits.index_select(0, supervised_pair_indices)
-        losses["temporal_relation"] = F.cross_entropy(relation_logits, relation_target) * args.relation_loss_weight
+        losses["temporal_relation"] = F.cross_entropy(
+            relation_logits,
+            relation_target,
+            weight=relation_class_weights,
+        ) * args.relation_loss_weight
 
     if not losses:
         zero = batch.temporal_relation_logits.sum() * 0.0
@@ -112,6 +155,7 @@ class MetricAccumulator:
         self.relation_total = 0
         self.relation_pred_counts = Counter()
         self.relation_gold_counts = Counter()
+        self.relation_correct_by_label = Counter()
 
     def update(self, batch, instance, loss_value, device):
         self.instances += 1
@@ -131,21 +175,28 @@ class MetricAccumulator:
             self.relation_correct += int((relation_pred == relation_target).sum().item())
             self.relation_total += int(relation_target.numel())
             self.relation_pred_counts.update(TEMPORAL_LABELS[int(index)] for index in relation_pred.detach().cpu().tolist())
-            self.relation_gold_counts.update(TEMPORAL_LABELS[int(index)] for index in relation_target.detach().cpu().tolist())
+            gold_labels = [TEMPORAL_LABELS[int(index)] for index in relation_target.detach().cpu().tolist()]
+            self.relation_gold_counts.update(gold_labels)
+            for pred_index, gold_label in zip(relation_pred.detach().cpu().tolist(), gold_labels):
+                if TEMPORAL_LABELS[int(pred_index)] == gold_label:
+                    self.relation_correct_by_label[gold_label] += 1
 
     def summary(self):
+        per_label, macro_recall = relation_class_metrics(self.relation_correct_by_label, self.relation_gold_counts)
         return {
             "instances": self.instances,
             "loss": self.loss / self.instances if self.instances else 0.0,
             "query_event_acc": self.query_event_correct / self.query_event_total if self.query_event_total else 0.0,
             "temporal_relation_acc": self.relation_correct / self.relation_total if self.relation_total else 0.0,
+            "temporal_relation_macro_recall": macro_recall,
+            "temporal_relation_per_label": per_label,
             "relation_total": self.relation_total,
             "relation_pred_counts": dict(self.relation_pred_counts),
             "relation_gold_counts": dict(self.relation_gold_counts),
         }
 
 
-def run_epoch(model, instances, args, device, optimizer=None, epoch=None):
+def run_epoch(model, instances, args, device, optimizer=None, epoch=None, relation_class_weights=None):
     training = optimizer is not None
     model.train(training)
     if (
@@ -164,7 +215,7 @@ def run_epoch(model, instances, args, device, optimizer=None, epoch=None):
             optimizer.zero_grad(set_to_none=True)
         with torch.set_grad_enabled(training):
             batch = model(instance)
-            loss, _losses = predicate_loss(batch, instance, args, device)
+            loss, _losses = predicate_loss(batch, instance, args, device, relation_class_weights=relation_class_weights)
         if optimizer is not None:
             loss.backward()
             if args.max_grad_norm > 0:
@@ -268,6 +319,18 @@ def parse_args():
     parser.add_argument("--event-loss-weight", type=float, default=0.0)
     parser.add_argument("--query-loss-weight", type=float, default=1.0)
     parser.add_argument("--relation-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--label-weights",
+        default=None,
+        help=f"Optional comma-separated relation CE weights in {TEMPORAL_LABELS} order.",
+    )
+    parser.add_argument(
+        "--balanced-relation-loss",
+        action="store_true",
+        help="Use inverse-frequency class weights computed from the training split.",
+    )
+    parser.add_argument("--vague-weight", type=float, default=1.0, help="Additional multiplier for the Vague class.")
+    parser.add_argument("--equal-weight", type=float, default=1.0, help="Additional multiplier for the Equal class.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--eval-only", action="store_true")
@@ -292,11 +355,14 @@ def main():
         f"freeze_backbone={args.freeze_backbone} lora_r={args.lora_r}",
         flush=True,
     )
+    relation_class_weight_values = parse_label_weights(args, train)
+    relation_class_weights = torch.tensor(relation_class_weight_values, dtype=torch.float32, device=device)
+    print(f"relation_class_weights={dict(zip(TEMPORAL_LABELS, relation_class_weight_values))}", flush=True)
 
     if args.oracle:
         model = OracleTemporalPredicateClassifier(device=device)
-        train_score = run_epoch(model, train, args, device, optimizer=None)
-        dev_score = run_epoch(model, dev, args, device, optimizer=None)
+        train_score = run_epoch(model, train, args, device, optimizer=None, relation_class_weights=relation_class_weights)
+        dev_score = run_epoch(model, dev, args, device, optimizer=None, relation_class_weights=relation_class_weights)
         print("oracle_train", json.dumps(train_score, sort_keys=True), flush=True)
         print("oracle_dev", json.dumps(dev_score, sort_keys=True), flush=True)
         if args.show_predictions and instances:
@@ -329,7 +395,7 @@ def main():
 
     if args.eval_only:
         with torch.no_grad():
-            eval_score = run_epoch(model, instances, args, device, optimizer=None, epoch="eval_only")
+            eval_score = run_epoch(model, instances, args, device, optimizer=None, epoch="eval_only", relation_class_weights=relation_class_weights)
         print(f"eval={json.dumps(eval_score, sort_keys=True)}", flush=True)
         if args.show_predictions and instances:
             with torch.no_grad():
@@ -341,9 +407,9 @@ def main():
 
     best_dev = None
     for epoch in range(1, args.epochs + 1):
-        train_score = run_epoch(model, train, args, device, optimizer=optimizer, epoch=epoch)
+        train_score = run_epoch(model, train, args, device, optimizer=optimizer, epoch=epoch, relation_class_weights=relation_class_weights)
         with torch.no_grad():
-            dev_score = run_epoch(model, dev, args, device, optimizer=None, epoch=epoch)
+            dev_score = run_epoch(model, dev, args, device, optimizer=None, epoch=epoch, relation_class_weights=relation_class_weights)
         print(f"epoch={epoch} train={json.dumps(train_score, sort_keys=True)}", flush=True)
         print(f"epoch={epoch} dev={json.dumps(dev_score, sort_keys=True)}", flush=True)
         current = dev_score["temporal_relation_acc"]

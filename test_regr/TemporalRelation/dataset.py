@@ -35,6 +35,10 @@ def load_temporal_instances(path, limit=None, group_by_document=True):
     else:
         raise ValueError(f"Unsupported temporal dataset format: {path.suffix}")
 
+    if rows and _is_normalized_instance(rows[0]):
+        instances = [_normalize_instance(row) for row in rows]
+        return instances[:limit] if limit is not None else instances
+
     if group_by_document:
         return _normalize_grouped_rows(rows, limit=limit)
     instances = [_normalize_row(row) for row in rows]
@@ -83,6 +87,25 @@ def _read_matres_txt(path):
                 }
             )
     return rows
+
+
+def _is_normalized_instance(row):
+    return isinstance(row, dict) and "event_pairs" in row and "events" in row
+
+
+def _normalize_instance(row):
+    instance = dict(row)
+    instance["event_pairs"] = [
+        {
+            **pair,
+            "label": _normalize_label(pair["label"]) if pair.get("label") is not None else None,
+        }
+        for pair in instance.get("event_pairs", [])
+    ]
+    if instance.get("query_pair") is None and instance["event_pairs"]:
+        pair = instance["event_pairs"][0]
+        instance["query_pair"] = {"e1": pair["e1"], "e2": pair["e2"]}
+    return instance
 
 
 def _normalize_grouped_rows(rows, limit=None):
