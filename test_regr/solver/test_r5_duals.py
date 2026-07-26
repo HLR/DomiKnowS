@@ -89,10 +89,21 @@ def test_invalid_dual_options(one_constraint_graph):
         PrimalDualModel(graph, device='cpu', dual_algorithm='nope')
     with pytest.raises(ValueError):
         PrimalDualModel(graph, device='cpu', dual_granularity='nope')
-    # amortized (R5B) is valid on its own but not yet with augmented duals.
-    with pytest.raises(NotImplementedError):
-        PrimalDualModel(graph, device='cpu', dual_granularity='amortized',
-                        dual_algorithm='augmented')
+
+
+def test_amortized_augmented_is_supported(one_constraint_graph):
+    """R5 Phase F: the combination the plan deferred now builds.
+
+    It used to raise ``NotImplementedError``. The critic is regressed onto the
+    AL target rather than ascended, so it needs the AL penalty state alongside
+    its own parameters.
+    """
+    graph, _ = one_constraint_graph
+    model = PrimalDualModel(graph, device='cpu', dual_granularity='amortized',
+                            dual_algorithm='augmented')
+    assert model.dual_critic is not None
+    buffers = {name for name, _ in model.named_buffers()}
+    assert {'lmbd', 'rho', '_al_viol_accum', '_al_viol_count'} <= buffers
 
 
 # ---------------------------------------------------------------------------

@@ -796,7 +796,26 @@ class PrimalDualProgram(LossProgram):
     
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, beta=1, **kwargs):
+    def __init__(self, graph, Model, beta=1, grad_surgery='none', cagrad_c=0.5,
+                 **kwargs):
+        """
+        :param grad_surgery: R5 Phase C. ``'none'`` (default) keeps the single
+            fused backward pass. ``'diagnose'`` splits the two gradients and
+            records their conflict *without changing the update* — run this
+            first: resolving costs an extra backward pass on every step, which
+            is only worth paying if conflict actually occurs. ``'pcgrad'`` and
+            ``'cagrad'`` additionally resolve it. Read the measurement from
+            ``program.conflict_stats``.
+        :param cagrad_c: CAGrad's trust-region coefficient.
+        """
+        from .model.gradSurgery import GRAD_SURGERY, ConflictStats
+        if grad_surgery not in GRAD_SURGERY:
+            raise ValueError(f'grad_surgery must be one of {GRAD_SURGERY}')
+        self.grad_surgery = grad_surgery
+        self.cagrad_c = cagrad_c
+        #: Populated whenever ``grad_surgery != 'none'``; a diagnostic in its
+        #: own right, and what should decide whether a resolver earns its cost.
+        self.conflict_stats = ConflictStats()
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
 
     def _init_session(self):
@@ -953,7 +972,20 @@ class PrimalDualProgram(LossProgram):
             # Accumulate gradients
             scaled_loss = loss / batch_size
             batch_loss += scaled_loss.item()
-            scaled_loss.backward()
+
+            surgery = getattr(self, 'grad_surgery', 'none')
+            if surgery != 'none' and closs is not None and torch.is_tensor(closs):
+                # R5 Phase C. The two gradients must be taken separately — a
+                # fused backward cannot be decomposed afterwards — so this costs
+                # an extra pass and stays opt-in.
+                from .model.gradSurgery import conflict_report
+                conflict_report(
+                    mloss / batch_size, (self.beta * closs) / batch_size,
+                    list(self.model.parameters()),
+                    method=surgery, stats=self.conflict_stats,
+                    cagrad_c=getattr(self, 'cagrad_c', 0.5))
+            else:
+                scaled_loss.backward()
 
             if do_update:
                 # Gradient clipping
@@ -983,6 +1015,16 @@ class PrimalDualProgram(LossProgram):
                     if al_mode:
                         # Closed-form Augmented-Lagrangian dual update + rho schedule.
                         self.cmodel.al_dual_update_()
+                        if self.copt is not None:
+                            # R5 Phase F: an amortized critic under AL is
+                            # *regressed* onto the closed-form target, not
+                            # ascended, so it takes an ordinary descent step —
+                            # no sign flip. Without this the critic's parameters
+                            # would never be updated at all, since AL otherwise
+                            # bypasses the constraint optimizer.
+                            torch.nn.utils.clip_grad_norm_(
+                                self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                            self.copt.step()
                     else:
                         # Reverse gradients for lambda (gradient ascent)
                         reverse_sign_grad(self.cmodel.parameters())
@@ -1582,6 +1624,170 @@ class SemanticLossProgram(SampleLossProgram, PrimalDualProgram):
         if self.training_style == 'primal_dual':
             return PrimalDualProgram._init_session(self)
         return super()._init_session()
+
+#=============================================================================
+# Structured Program (R3 factor-graph heads + R4 refinement)
+#=============================================================================
+
+class StructuredProgram(PrimalDualProgram):
+    """Train with constraint structure *inside* the model, not only in the loss.
+
+    The R-line mechanisms compose along two independent axes:
+
+    * **model side** — R3 factor-graph heads and R4 refinement, supplied by
+      :class:`~domiknows.program.model.structured.StructuredModel`;
+    * **cmodel side** — R1 ``compile_lc``, R5 ``dual_algorithm`` /
+      ``dual_granularity``, all inherited from :class:`PrimalDualProgram`.
+
+    Because ``Model`` is a parameter of every Program, the model side alone
+    needs no new Program. What this class adds is the **constraint partition**
+    R3 makes necessary: a constraint the architecture enforces structurally has
+    zero violation by construction, so keeping it in the loss allocates a
+    multiplier pinned at zero and feeds ``al_dual_update_`` an all-zero window —
+    a dual that can only ever learn nothing. Those constraints are excluded from
+    the cmodel entirely.
+
+    :param refine: enable R4B refinement (default True).
+    :param factor_graph: enable R3 exact constrained marginals (default False —
+      exact but one circuit per grounding).
+    :param belief_flow: ``'write_back'`` | ``'constraint_only'``; see
+        :class:`StructuredModel`.
+    :param partition:
+        ``'auto'`` (default) — exclude structurally-enforced constraints from
+        the loss and the dual system at construction, **only when**
+        ``factor_graph=True``. No multiplier is allocated for them. Cheapest,
+        but the decision is permanent: if a constraint's circuit falls back at
+        runtime it is left enforced by nothing (reported, loudly).
+        ``'adaptive'`` — keep every constraint in the cmodel, and skip its
+        penalty *per step* for exactly those the model reports as enforced that
+        step. Costs one unused multiplier per structural constraint, and in
+        exchange a fallback silently restores the penalty instead of leaving a
+        gap. Prefer this when the circuit budget is tight.
+        ``'none'`` — keep every constraint in the loss.
+
+    Only ``factor_graph`` licenses exclusion. Refinement *moves* beliefs toward
+    satisfaction but guarantees nothing, so a refined-only constraint keeps its
+    loss term and its dual.
+    """
+
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model=None, beta=1, *,
+                 refine=True, factor_graph=False, belief_flow='write_back',
+                 partition='auto', poi=None, loss=None, metric=None,
+                 inferTypes=None, structure_kwargs=None, **kwargs):
+        if partition not in ('auto', 'adaptive', 'none'):
+            raise ValueError("partition must be 'auto', 'adaptive' or 'none'")
+
+        from .model.structured import StructuredModel
+
+        structure = dict(refine=refine, factor_graph=factor_graph,
+                         belief_flow=belief_flow)
+        structure.update(structure_kwargs or {})
+        if Model is None:
+            # A plain factory (not model_helper's lambda): LearningBasedProgram
+            # introspects ``signature(Model.__init__)``, which for any function
+            # resolves to ``object.__init__`` and so reports ``**kwargs`` —
+            # meaning *every* program kwarg is forwarded here. Absorb them and
+            # keep only what StructuredModel actually accepts, so cmodel-only
+            # options (``compile_lc``, ``dual_algorithm``, ``exclude_constraints``)
+            # do not reach the model.
+            def Model(graph_, **extra):
+                from inspect import signature
+                allowed = signature(StructuredModel.__init__).parameters
+                passthrough = {k: v for k, v in extra.items()
+                               if k in allowed and k not in structure}
+                return StructuredModel(graph_, poi=poi, loss=loss, metric=metric,
+                                       inferTypes=inferTypes,
+                                       **structure, **passthrough)
+
+        exclude = set()
+        if factor_graph and partition == 'auto':
+            exclude = self.structural_candidates(graph)
+
+        #: constraints excluded from the loss because structure enforces them.
+        self.structural_partition = exclude
+        self.partition = partition
+        self._warned_fallback = False
+
+        super().__init__(graph, Model, beta=beta,
+                         exclude_constraints=exclude, **kwargs)
+
+        if factor_graph and partition == 'adaptive':
+            # Consulted per forward. The model runs before the cmodel in every
+            # train_epoch, so its report is already current for this step, and a
+            # constraint that fell back simply reappears in the loss.
+            self.cmodel.skip_provider = (
+                lambda: getattr(self.model, 'enforced_constraints', set()))
+            self.structural_partition = self.structural_candidates(graph)
+
+    @staticmethod
+    def structural_candidates(graph):
+        """Constraint names a factor-graph head can enforce structurally.
+
+        Purely syntactic (constraint *type* and limit), so it is available at
+        construction time — before any datanode exists. Whether a particular
+        grounding's circuit fits the budget is only known at runtime;
+        :meth:`report_partition` cross-checks that and warns if an excluded
+        constraint actually fell back.
+        """
+        from .model.refinement import _factor_kind
+
+        names = set()
+        rec = getattr(graph, 'logicalConstrainsRecursive', None)
+        constraints = rec if rec is not None else getattr(graph, 'logicalConstrains', {}).items()
+        for key, lc in constraints:
+            if not getattr(lc, 'headLC', False) or not getattr(lc, 'active', True):
+                continue
+            if _factor_kind(lc) is not None:
+                names.add(getattr(lc, 'lcName', key))
+        return names
+
+    def report_partition(self):
+        """Human-readable split, and a loud warning if exclusion over-reached.
+
+        A constraint that was excluded from the loss but whose circuit fell back
+        at runtime is enforced by *nothing* — neither structure nor penalty. That
+        is the one failure mode of partitioning, so it is surfaced rather than
+        left to be inferred from a metric.
+        """
+        model = getattr(self, 'model', None)
+        report = getattr(model, 'report', None)
+        enforced = set(getattr(model, 'enforced_constraints', set()) or ())
+
+        if self.partition == 'adaptive':
+            lines = [f'structural partition (adaptive): {len(enforced)} constraint(s) '
+                     f'skipped this step, {len(self.cmodel.constr) - len(enforced)} '
+                     f'penalised; {len(self.cmodel.constr)} kept in the dual system']
+        else:
+            lines = [f'structural partition: {len(self.structural_partition)} '
+                     f'constraint(s) excluded from loss/duals, '
+                     f'{len(self.cmodel.constr)} still penalised']
+        if report is not None:
+            lines.append('  ' + report.render().replace('\n', '\n  '))
+
+        # 'adaptive' re-penalises whatever was not enforced, so there is no gap
+        # to warn about; only a permanent exclusion can leave one.
+        unenforced = (set() if self.partition == 'adaptive'
+                      else self.structural_partition - enforced)
+        if unenforced:
+            # Deliberately NOT gated on ``enforced`` being non-empty: the worst
+            # case is precisely the one where nothing was enforced and everything
+            # was excluded, leaving those constraints held by neither structure
+            # nor penalty. Suppressing the warning there would silence the only
+            # state it exists to report.
+            scope = ('nothing was enforced structurally, so every excluded '
+                     'constraint is unconstrained'
+                     if not enforced else
+                     'excluded from the loss but NOT enforced structurally at runtime')
+            message = (f'{scope}: {sorted(unenforced)} — these are currently '
+                       'unconstrained; re-run with partition="none"')
+            lines.append('  WARNING: ' + message)
+            if not self._warned_fallback:
+                self.logger.warning('StructuredProgram: %s', message)
+                self._warned_fallback = True
+        return '\n'.join(lines)
+
 
 #=============================================================================
 # Gumbel Sample Loss Program

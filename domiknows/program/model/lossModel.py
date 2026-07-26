@@ -42,7 +42,9 @@ class LossModel(torch.nn.Module):
                  dual_algorithm='ascent', dual_granularity='constraint',
                  al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
                  al_stagnation_tau=0.9,
-                 critic_embed_dim=8, critic_hidden=32):
+                 critic_embed_dim=8, critic_hidden=32,
+                 critic_fit_weight=1.0,
+                 exclude_constraints=None):
         """
         Initialize LossModel.
 
@@ -67,9 +69,12 @@ class LossModel(torch.nn.Module):
             adds a quadratic penalty ``(rho/2)*sum(v^2)``; see ``al_dual_update_``.
         :param dual_granularity: 'constraint' (default) — one dual per constraint
             template. 'amortized' — a DualCritic network predicts a per-grounding
-            multiplier from detached features (R5 Phase B); supported only with
-            ``dual_algorithm='ascent'`` (the critic is optimised by the program's
-            constraint optimizer).
+            multiplier from detached features (R5 Phase B). With
+            ``dual_algorithm='ascent'`` the critic is optimised by the program's
+            constraint optimizer; with ``'augmented'`` (R5 Phase F) it is instead
+            *regressed* onto the AL target ``lambda_c + rho_c * v_g``, since an
+            augmented Lagrangian moves its multipliers in closed form and so has
+            no ascent objective for a critic to maximise.
         :param al_rho_init: Initial per-constraint penalty coefficient (augmented).
         :param al_rho_growth: Multiplicative growth applied to a constraint's rho
             when its violation fails to shrink by ``al_stagnation_tau`` (augmented).
@@ -96,12 +101,6 @@ class LossModel(torch.nn.Module):
         if dual_granularity not in self.DUAL_GRANULARITIES:
             raise ValueError(
                 f"dual_granularity must be one of {self.DUAL_GRANULARITIES}, got {dual_granularity!r}")
-        if dual_granularity == 'amortized' and dual_algorithm != 'ascent':
-            # Regressing the critic onto Augmented-Lagrangian targets is the
-            # deferred amortized x augmented combination.
-            raise NotImplementedError(
-                "dual_granularity='amortized' currently supports only "
-                "dual_algorithm='ascent' (amortized + augmented is deferred)")
         self.dual_algorithm = dual_algorithm
         self.dual_granularity = dual_granularity
         self.al_rho_growth = float(al_rho_growth)
@@ -109,6 +108,8 @@ class LossModel(torch.nn.Module):
         self.al_stagnation_tau = float(al_stagnation_tau)
         self.critic_embed_dim = int(critic_embed_dim)
         self.critic_hidden = int(critic_hidden)
+        #: Weight of the critic's regression onto the AL target (Phase F only).
+        self.critic_fit_weight = float(critic_fit_weight)
 
         self.sample = sample
         self.sampleSize = sampleSize
@@ -119,8 +120,26 @@ class LossModel(torch.nn.Module):
         self.temperature = temperature
         self.hard_gumbel = hard_gumbel
 
-        # Extract all logical constraints from the graph recursively
-        self.constr = OrderedDict(graph.allLogicalConstrainsRecursive)
+        # Extract all logical constraints from the graph recursively.
+        #
+        # ``exclude_constraints`` drops constraints that something else already
+        # guarantees — under an R3 factor-graph head a compiled hard constraint
+        # has zero mass *by construction*, so its violation is identically zero.
+        # Leaving it in would allocate a multiplier pinned at zero and feed
+        # ``al_dual_update_`` an all-zero window, i.e. a dual that can only ever
+        # learn nothing. Excluding it here keeps the dual system scoped to the
+        # constraints that are actually still being fought for.
+        self.exclude_constraints = set(exclude_constraints or ())
+        #: Optional ``callable() -> set`` of constraint names to skip *this*
+        #: step. Where ``exclude_constraints`` is a permanent construction-time
+        #: decision, this is consulted per forward, so a constraint whose
+        #: structural enforcement fell back at runtime gets its penalty back
+        #: automatically instead of being left unconstrained.
+        self.skip_provider = None
+        self.constr = OrderedDict(
+            (key, lc) for key, lc in graph.allLogicalConstrainsRecursive
+            if key not in self.exclude_constraints
+            and getattr(lc, 'lcName', key) not in self.exclude_constraints)
         nconstr = len(self.constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
@@ -140,6 +159,15 @@ class LossModel(torch.nn.Module):
             self.dual_critic = DualCritic(nconstr, embed_dim=self.critic_embed_dim,
                                           hidden=self.critic_hidden)
             self.register_buffer('lmbd', torch.ones(nconstr))
+            if dual_algorithm == 'augmented':
+                # R5 Phase F: the critic is regressed onto the AL target, so the
+                # same penalty/statistics state the constraint-granular AL keeps
+                # is needed here too.
+                self.register_buffer('rho', torch.full((nconstr,), float(al_rho_init)))
+                self.register_buffer('_al_viol_accum', torch.zeros(nconstr))
+                self.register_buffer('_al_viol_count', torch.zeros(nconstr))
+                self.register_buffer('_al_prev_mean_viol',
+                                     torch.full((nconstr,), float('nan')))
         elif dual_algorithm == 'augmented':
             self.register_buffer('lmbd', torch.empty(nconstr))
             # Per-constraint quadratic-penalty coefficient and the running
@@ -262,7 +290,31 @@ class LossModel(torch.nn.Module):
                     feats = gf[finite_mask]
             lam = self.dual_critic(index, finite.detach(), feats)  # [G'] in (0,1)
             lam = lam * self.lmbd_p[index]                          # scale to [0, lmbd_p]
-            return (lam * finite).sum()
+
+            if self.dual_algorithm != 'augmented':
+                return (lam * finite).sum()
+
+            # R5 Phase F — amortized x augmented. Ascent maximises the critic's
+            # own objective, which the AL has no equivalent of: its multipliers
+            # move in closed form. So the critic is *regressed* onto the AL
+            # target lambda_c + rho_c * v_g instead — the per-grounding value
+            # the closed-form update would assign — while the primal keeps the
+            # quadratic penalty. Both stay per-grounding, which is the point of
+            # combining them.
+            with torch.no_grad():
+                self._al_viol_accum[index] += finite.sum().detach()
+                self._al_viol_count[index] += 1
+                target = (self.lmbd[index] + self.rho[index] * finite.detach()
+                          ).clamp(min=0, max=float(self.lmbd_p[index]))
+
+            critic_fit = torch.nn.functional.mse_loss(lam, target)
+            quad = (finite * finite).sum()
+            # The critic term carries no primal gradient (``finite`` is detached
+            # inside the target and ``lam`` reaches only critic parameters), so
+            # adding it here trains the critic through the existing constraint
+            # optimizer without perturbing the learners' update.
+            return (lam.detach() * finite).sum() + 0.5 * self.rho[index] * quad \
+                + self.critic_fit_weight * critic_fit
 
         loss_nansum = finite.sum()
 
@@ -377,8 +429,13 @@ class LossModel(torch.nn.Module):
             dtype = getattr(datanode, 'current_dtype', torch.float32)
             lmbd_loss = torch.tensor(globalLoss, dtype=dtype, requires_grad=True)
         else:
+            skip = self.skip_provider() if self.skip_provider is not None else ()
             for key, loss in constr_loss.items():
                 if key not in self.constr:
+                    continue
+                if key in skip:
+                    # Enforced structurally this step: its violation is zero by
+                    # construction, so a penalty term would only add noise.
                     continue
 
                 if loss['lossTensor'] is not None:
@@ -405,7 +462,9 @@ class PrimalDualModel(LossModel):
                  dual_algorithm='ascent', dual_granularity='constraint',
                  al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
                  al_stagnation_tau=0.9,
-                 critic_embed_dim=8, critic_hidden=32):
+                 critic_embed_dim=8, critic_hidden=32,
+                 critic_fit_weight=1.0,
+                 exclude_constraints=None):
         """
         The above function is the constructor for a class that initializes an object with a graph,
         tnorm, and device parameters.
@@ -438,7 +497,9 @@ class PrimalDualModel(LossModel):
                          dual_algorithm=dual_algorithm, dual_granularity=dual_granularity,
                          al_rho_init=al_rho_init, al_rho_growth=al_rho_growth,
                          al_rho_max=al_rho_max, al_stagnation_tau=al_stagnation_tau,
-                         critic_embed_dim=critic_embed_dim, critic_hidden=critic_hidden)
+                         critic_embed_dim=critic_embed_dim, critic_hidden=critic_hidden,
+                         critic_fit_weight=critic_fit_weight,
+                         exclude_constraints=exclude_constraints)
         self._setup_primaldual_logger()
 
     def _setup_primaldual_logger(self):

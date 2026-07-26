@@ -40,6 +40,9 @@ class PySDDCircuitManager:
     """
 
     backend_name = "pysdd"
+    #: Weights here are per-literal scalars keyed into a shared dict, so there is
+    #: no row axis to broadcast over; batched evaluation is a BDD-only fast path.
+    supports_batched_weights = False
 
     def __init__(self, max_nodes=100_000, size_limit_action="raise"):
         from pysdd.sdd import SddManager
@@ -57,6 +60,7 @@ class PySDDCircuitManager:
         self._binary_literals = set()
         self._registered_leaf_keys = set()
         self._warned_size = False
+        self._vtree_scope_cache = {}
 
     def begin_evaluation(self):
         self._weights.clear()
@@ -162,11 +166,8 @@ class PySDDCircuitManager:
             root &= at_least_one & at_most_one
         return self._check_size(root)
 
-    def wmc(self, root):
-        root = self._with_categorical_axioms(root)
-        reference = next(iter(self._weights.values()), torch.tensor(1.0))
-        zero, one = reference.new_zeros(()), reference.new_ones(())
-        memo = {}
+    def _evaluation_weights(self, zero, one):
+        """Literal weights with each categorical group renormalised to a simplex."""
         weights = dict(self._weights)
         for group_key in self._active_categorical_groups:
             literals = self._categorical_groups[group_key]
@@ -175,6 +176,26 @@ class PySDDCircuitManager:
                 safe_total = total.clamp_min(torch.finfo(total.dtype).tiny)
                 for literal in literals:
                     weights[literal] = weights[literal] / safe_total
+        return weights
+
+    def _literal_value(self, node, weights, zero, one):
+        literal = int(node.literal)
+        positive = abs(literal)
+        probability = weights[positive]
+        if literal > 0:
+            return probability
+        if positive in self._binary_literals:
+            return one - probability
+        # A negated categorical class carries no weight of its own; the
+        # exactly-one axioms already account for the group.
+        return one
+
+    def wmc(self, root):
+        root = self._with_categorical_axioms(root)
+        reference = next(iter(self._weights.values()), torch.tensor(1.0))
+        zero, one = reference.new_zeros(()), reference.new_ones(())
+        memo = {}
+        weights = self._evaluation_weights(zero, one)
 
         def evaluate(node):
             node_id = int(node.id)
@@ -185,15 +206,7 @@ class PySDDCircuitManager:
             if node.is_true():
                 return one
             if node.is_literal():
-                literal = int(node.literal)
-                positive = abs(literal)
-                probability = weights[positive]
-                if literal > 0:
-                    value = probability
-                elif positive in self._binary_literals:
-                    value = one - probability
-                else:
-                    value = one
+                value = self._literal_value(node, weights, zero, one)
             else:
                 value = sum(
                     (evaluate(prime) * evaluate(sub) for prime, sub in node.elements()),
@@ -203,6 +216,158 @@ class PySDDCircuitManager:
             return value
 
         return evaluate(root)
+
+    def _vtree_scope(self, vtree):
+        """Variables under *vtree* (cached) — the scope a node there must cover."""
+        if vtree is None:
+            return frozenset()
+        key = int(vtree.position())
+        cached = self._vtree_scope_cache.get(key)
+        if cached is None:
+            if vtree.is_leaf():
+                cached = frozenset({int(vtree.var())})
+            else:
+                cached = (self._vtree_scope(vtree.left())
+                          | self._vtree_scope(vtree.right()))
+            self._vtree_scope_cache[key] = cached
+        return cached
+
+    def map_assignment(self, root, variables=None):
+        """Most probable satisfying assignment (max-product with vtree smoothing).
+
+        An SDD is decomposable and deterministic but **not smooth**, and unlike
+        weighted model counting max-product has no identity that makes an
+        omitted variable free: a normalised group sums to one, but
+        ``max_k w_k < 1``.  Scoring a path without charging the variables it
+        omits overstates it and elects the wrong assignment.
+
+        Smoothing is therefore explicit: every node is evaluated against the
+        scope it is *expected* to cover (its vtree), and any variable the node
+        does not mention is charged its own best branch.  Categorical classes
+        are handled by the exactly-one axioms conjoined into the root, so an
+        unmentioned class literal is correctly charged weight one for being
+        false.
+
+        Returns ``(value, {variable_key: value_index})``.
+        """
+        root = self._with_categorical_axioms(root)
+        reference = next(iter(self._weights.values()), torch.tensor(1.0))
+        zero, one = reference.new_zeros(()), reference.new_ones(())
+        weights = self._evaluation_weights(zero, one)
+
+        # literal -> (variable_key, true_index); binary literals also encode False.
+        meaning, is_categorical = {}, {}
+        for group_key, literals in self._categorical_groups.items():
+            if group_key in self._active_categorical_groups:
+                for index, literal in enumerate(literals):
+                    meaning[literal] = (group_key, index)
+                    is_categorical[literal] = True
+        for key, literal in self._literal_by_key.items():
+            if literal in self._binary_literals:
+                meaning[literal] = (("binary", key), 1)
+                is_categorical[literal] = False
+
+        def branch_weights(literal):
+            """``(weight_false, weight_true)`` for one SDD variable."""
+            positive = weights[literal]
+            if is_categorical.get(literal, False):
+                # A class literal's "false" carries no weight of its own; the
+                # exactly-one axioms account for the group.
+                return one, positive
+            return one - positive, positive
+
+        def charge_missing(missing):
+            """Best completion over variables a node does not mention."""
+            value, choices = one, {}
+            for literal in missing:
+                if literal not in meaning:
+                    continue
+                w_false, w_true = branch_weights(literal)
+                variable_key, true_index = meaning[literal]
+                if float(w_true.detach()) >= float(w_false.detach()):
+                    value = value * w_true
+                    choices[variable_key] = true_index
+                else:
+                    value = value * w_false
+                    if not is_categorical.get(literal, False):
+                        choices[variable_key] = 0
+            return value, choices
+
+        memo = {}
+
+        def evaluate(node, scope):
+            key = (int(node.id), scope)
+            cached = memo.get(key)
+            if cached is not None:
+                return cached
+
+            if node.is_false():
+                return zero, None
+            if node.is_true():
+                base, covered, choices = one, frozenset(), {}
+            elif node.is_literal():
+                literal = int(node.literal)
+                positive = abs(literal)
+                w_false, w_true = branch_weights(positive)
+                base = w_true if literal > 0 else w_false
+                covered = frozenset({positive})
+                choices = {}
+                if positive in meaning:
+                    variable_key, true_index = meaning[positive]
+                    if literal > 0:
+                        choices = {variable_key: true_index}
+                    elif not is_categorical.get(positive, False):
+                        choices = {variable_key: 0}
+            else:
+                node_vtree = node.vtree()
+                left = self._vtree_scope(node_vtree.left())
+                right = self._vtree_scope(node_vtree.right())
+                base, choices = zero, None
+                for prime, sub in node.elements():
+                    prime_value, prime_choices = evaluate(prime, left)
+                    if prime_choices is None:
+                        continue
+                    sub_value, sub_choices = evaluate(sub, right)
+                    if sub_choices is None:
+                        continue
+                    candidate = prime_value * sub_value
+                    if (choices is None
+                            or float(candidate.detach()) > float(base.detach())):
+                        base, choices = candidate, {**prime_choices, **sub_choices}
+                if choices is None:
+                    memo[key] = (zero, None)
+                    return zero, None
+                covered = self._vtree_scope(node_vtree)
+
+            extra_value, extra_choices = charge_missing(scope - covered)
+            result = (base * extra_value, {**choices, **extra_choices})
+            memo[key] = result
+            return result
+
+        if root.is_true() or root.is_false():
+            scope = frozenset()
+        else:
+            scope = self._vtree_scope(root.vtree())
+
+        # Variables the compilation eliminated must still be scored and
+        # reported (``A and (B or not B)`` drops ``B`` from the diagram).
+        if variables is not None:
+            declared = set()
+            for variable_key in variables:
+                group = self._categorical_groups.get(variable_key)
+                if group is not None:
+                    declared.update(group)
+                elif (isinstance(variable_key, tuple) and len(variable_key) == 2
+                      and variable_key[0] == "binary"):
+                    literal = self._literal_by_key.get(variable_key[1])
+                    if literal is not None:
+                        declared.add(literal)
+            scope = scope | frozenset(declared)
+
+        value, choices = evaluate(root, scope)
+        if choices is None:
+            return zero, {}
+        return value, choices
 
 
 def make_circuit_manager(backend="auto", max_nodes=100_000, size_limit_action="raise"):
@@ -484,6 +649,112 @@ class circuitBooleanMethods(constraintsProcessor):
 
     def wmc(self, node):
         return self.manager.wmc(self._node(node))
+
+    # ------------------------------------------------------------------ #
+    # R3 — constrained inference on the compiled circuit
+    # ------------------------------------------------------------------ #
+
+    def marginals(self, node, leaves, method="auto"):
+        """Exact constrained marginals ``P(leaf | phi)``, differentiable.
+
+        Two exact implementations, both verified against brute-force
+        enumeration:
+
+        ``'gradient'``
+            The arithmetic-circuit identity ``P(l|phi) = w_l * dZ/dw_l / Z``.
+            **One** backward pass yields every class of every variable. It was
+            unusable until two defects were fixed: the diagrams are *reduced*
+            and so not smooth (a variable skipped on a path got no derivative,
+            yielding ``None``/NaN), and the derivative must be taken w.r.t. the
+            *registered branch weights* — differentiating w.r.t. a source ``p``
+            from which a binary leaf's ``(1-p, p)`` are both built mixes the two
+            literals and can leave ``[0, 1]``. See
+            :meth:`BDDManager.marginals`.
+
+        ``'conditioning'``
+            ``WMC(phi and l) / WMC(phi)``. Assumes nothing about the circuit
+            beyond a correct ``wmc``, so it is the reference implementation, but
+            costs one weighted model count *per queried leaf*.
+
+        ``'auto'`` (default) uses the gradient path where the backend provides
+        it and falls back to conditioning otherwise. The two agree to numerical
+        precision — a parity test pins that.
+
+        Returns a list of scalar tensors aligned with ``leaves``.
+        """
+        if method not in ("auto", "gradient", "conditioning"):
+            raise ValueError("method must be 'auto', 'gradient' or 'conditioning'")
+
+        root = self._node(node)
+        manager_marginals = getattr(self.manager, "marginals", None)
+        if method != "conditioning" and manager_marginals is not None:
+            for leaf in leaves:  # register leaves the reduction may have dropped
+                self._node(leaf)
+            table = manager_marginals(
+                root, variables=[leaf.variable_key for leaf in leaves])
+            resolved = []
+            for leaf in leaves:
+                row = table.get(leaf.variable_key)
+                if row is None:  # variable absent from the circuit entirely
+                    resolved = None
+                    break
+                # ``row`` is [K] unbatched and [R, K] batched — index the class
+                # axis from the end so both layouts work.
+                resolved.append(row[..., leaf.value_index])
+            if resolved is not None:
+                return resolved
+        if method == "gradient":
+            raise NotImplementedError(
+                f"{self.backend_name} backend has no gradient marginals; "
+                "use method='conditioning'")
+
+        partition = self.manager.wmc(root)
+        if float(partition.detach()) <= 0.0:
+            # Match the gradient path, which raises: conditioning on an
+            # unsatisfiable constraint is undefined, and dividing would hand the
+            # caller a silent inf/nan instead of a reportable failure.
+            raise ValueError("Cannot condition on an unsatisfiable constraint")
+        return [self.manager.wmc(self.manager.conjunction(root, self._node(leaf)))
+                / partition for leaf in leaves]
+
+    #: Backends whose MAP is exact. Both are smoothed explicitly — the BDD by
+    #: charging every variable in scope, the SDD by charging what each node's
+    #: vtree scope omits.
+    MAP_BACKENDS = ("bdd", "pysdd")
+
+    @property
+    def supports_map(self):
+        return hasattr(self.manager, "map_assignment")
+
+    def map_assignment(self, node, leaves=None):
+        """Most probable assignment satisfying the constraint (max-product).
+
+        Returns ``(value, {variable_key: value_index})``. Constraint-respecting
+        by construction, so it replaces ILP for anything that compiles.
+
+        :param leaves: optional ``CircuitLeaf`` iterable declaring the variables
+            the answer must cover, for leaves the reduction may eliminate.
+
+        Exact on the BDD backend only. The SDD backend is not smooth, and
+        max-product — unlike weighted model counting — cannot treat a skipped
+        variable as free, so MAP there would be quietly wrong; it raises instead.
+        """
+        manager_map = getattr(self.manager, "map_assignment", None)
+        if manager_map is None:
+            raise NotImplementedError(
+                f"MAP inference is exact only on the {'/'.join(self.MAP_BACKENDS)} "
+                f"backend; this processor uses {self.backend_name!r}. Construct "
+                f"circuitBooleanMethods(backend='bdd') for MAP. (Weighted model "
+                f"counting and marginals are exact on every backend.)")
+        variables = None
+        if leaves is not None:
+            variables = []
+            for leaf in leaves:
+                # Register the leaf so a variable simplified out of the diagram
+                # still has weights available to score and report.
+                self._node(leaf)
+                variables.append(leaf.variable_key)
+        return manager_map(self._node(node), variables=variables)
 
     def grounding_signature(self):
         by_concept = {}

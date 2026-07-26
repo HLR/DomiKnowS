@@ -58,6 +58,9 @@ class Variant:
     program_kwargs: Dict[str, Any] = field(default_factory=dict)
     description: str = ''
     program_class: Optional[type] = None
+    #: builder hints for mechanisms that change the model rather than the
+    #: Program (e.g. R4's ``{'r4': 'synth'|'refine'}``); ignored by the harness.
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def resolve_program_class(self, default):
         """The Program class to build for this variant."""
@@ -92,6 +95,47 @@ DEFAULT_VARIANTS: List[Variant] = [
                        'training_style': 'primal_dual'},
             'R2 + R5A: exact semantic loss under augmented-Lagrangian duals',
             program_class=_semantic_loss_program()),
+]
+
+
+def _structured_program():
+    """Imported lazily so this module stays free of a Program-layer import cycle."""
+    from domiknows.program.lossprogram import StructuredProgram
+    return StructuredProgram
+
+
+#: R3/R4 change the model's *forward pass*, not just the Program's kwargs. Since
+#: ``StructuredProgram`` builds a ``StructuredModel`` itself, these behave like
+#: any other variant — the builder only has to honour
+#: ``variant.resolve_program_class(...)``, exactly as it already does for R2.
+#:
+#: Kept out of :data:`DEFAULT_VARIANTS` because they change the architecture, so
+#: a run should opt into comparing them explicitly.
+R4_VARIANTS: List[Variant] = [
+    Variant('r4_refine', {'refine': True, 'factor_graph': False},
+            'R4B: constraint refinement layer (violation-gradient messages)',
+            program_class=_structured_program(), metadata={'r4': 'refine'}),
+    Variant('r4_refine_ablate', {'refine': True, 'factor_graph': False,
+                                 'belief_flow': 'constraint_only'},
+            'R4B ablation: refinement kept out of the supervised loss',
+            program_class=_structured_program(), metadata={'r4': 'refine'}),
+]
+
+
+#: R3 replaces the head with exact inference in ``p(y | x, phi)`` and, with
+#: ``partition='auto'``, drops the constraints it enforces from the loss/duals.
+R3_VARIANTS: List[Variant] = [
+    Variant('r3_factorgraph', {'refine': False, 'factor_graph': True},
+            'R3: factor-graph head — constrained marginals as the forward pass',
+            program_class=_structured_program(), metadata={'r3': 'factorgraph'}),
+    Variant('r3_r4', {'refine': True, 'factor_graph': True},
+            'R3 + R4B: refinement then exact constrained marginals',
+            program_class=_structured_program(), metadata={'r3': 'factorgraph',
+                                                           'r4': 'refine'}),
+    Variant('r3_r1_r5a', {'refine': False, 'factor_graph': True,
+                          'compile_lc': True, 'dual_algorithm': 'augmented'},
+            'R3 + R1 + R5A: structure in the model, compiled AL-dual loss outside',
+            program_class=_structured_program(), metadata={'r3': 'factorgraph'}),
 ]
 
 

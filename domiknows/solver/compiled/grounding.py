@@ -245,6 +245,33 @@ class ProbabilityStore:
     # Public API
     # ------------------------------------------------------------------ #
 
+    def concept_matrix(self, conceptName):
+        """Public view of a concept's batched belief matrix.
+
+        Returns ``{'matrix': [N x K] or None, 'dns': [DataNode], 'row_by_id':
+        {id(dn): row}}`` — the per-concept node features R4's refinement layer
+        reads. ``matrix`` is None when the concept has no complete prediction
+        tensor (the same condition the loss path falls back on); callers should
+        treat that concept as having no refinable nodes.
+        """
+        entry = self._entry(conceptName)
+        return {'matrix': entry['matrix'], 'dns': entry['dns'],
+                'row_by_id': entry['row_by_id']}
+
+    @staticmethod
+    def decode_relation_rows(n_rows, n_dest):
+        """Source/destination node rows for a binary-relation enumeration.
+
+        A relation variable is enumerated as a nested loop over its source and
+        destination candidates, so row ``r`` decomposes as
+        ``(r // n_dest, r % n_dest)`` — identical to
+        :meth:`LogicalConstraintConstructor.groundingBinding`. Returned as two
+        long tensors ``(src_rows[R], dst_rows[R])``, the edge index map R4's
+        refinement layer scatters messages along.
+        """
+        r = torch.arange(n_rows, dtype=torch.long)
+        return r // n_dest, r % n_dest
+
     def gather_variable(self, dnsList, e):
         """Build the ``lcVariables`` entry for one concept element.
 

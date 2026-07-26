@@ -471,11 +471,26 @@ class SolverModel(PoiModel):
                     'softmax': lambda :datanode.infer(),
                     'ILP': lambda :datanode.inferILPResults(*self.inference_with, key=self.probKey, fun=None, epsilon=None, Acc=self.probAcc),
                     'GBI': lambda :datanode.inferGBIResults(*self.inference_with, model=self, kwargs = self.kwargs),
+                    'MAP': lambda :self.inferMAPResults(datanode),
                 }[infertype]()
                 # sub_end = time.time()
                 # print("Time taken for inference of type ", infertype, " : ", sub_end-sub_start)
     #         print("Done with the inference")
         return datanode
+
+    def inferMAPResults(self, datanode):
+        """Constraint-respecting MAP decoding (R6: one semantics end-to-end).
+
+        Overridden by
+        :class:`~domiknows.program.model.structured.StructuredModel`, which owns
+        the compiled-circuit machinery. Declared here so ``inferTypes=['MAP']``
+        fails with an explanation rather than a ``KeyError``.
+        """
+        raise NotImplementedError(
+            "inferTypes=['MAP'] requires StructuredModel, which compiles the "
+            "graph's constraints to circuits and decodes with max-product. Use "
+            "StructuredProgram (or pass StructuredModel as Model); ILP remains "
+            "available on any SolverModel.")
 
     def populate(self, builder, run=True):
         """

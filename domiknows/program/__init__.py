@@ -6,6 +6,7 @@ from .lossprogram import (
     SampleLossModel,
     SemanticLossModel,
     SemanticLossProgram,
+    StructuredProgram,
     GBIProgram,
 )
 
