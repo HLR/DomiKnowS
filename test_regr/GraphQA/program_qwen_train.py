@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import json
 import random
 from pathlib import Path
 
@@ -84,8 +85,10 @@ class GraphQAFamilyLearner(torch.nn.Module):
 
 
 def build_graphqa_context(instances, args):
-    ctx = create_graphqa_graph(instances)
-    spaces = label_spaces(instances)
+    schema = _load_label_schema(getattr(args, "schema_path", None))
+    graph_instances = _augment_instances_for_schema(instances, schema)
+    ctx = create_graphqa_graph(graph_instances)
+    spaces = schema or label_spaces(graph_instances)
     spaces["answer_object"] = [str(value) for value in ctx.object_values]
     spaces["_require_oracle_clean"] = not args.allow_oracle_inconsistent_executables
     spaces["_enable_set_answer_execution"] = args.enable_set_answer_execution
@@ -688,6 +691,7 @@ def parse_args():
             "match the training-time schema."
         ),
     )
+    parser.add_argument("--schema-path", type=Path, default=None, help="JSON label-space schema saved beside a GraphQA checkpoint.")
     parser.add_argument("--dev-fraction", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--model-path", default=DEFAULT_MODEL)
@@ -730,6 +734,39 @@ def parse_args():
     return parser.parse_args()
 
 
+
+def _load_label_schema(path):
+    if path is None:
+        return None
+    data = json.loads(Path(path).read_text())
+    return {
+        "object_symbol": list(data.get("object_symbol", [])),
+        "symbol_pair": list(data.get("symbol_pair", [])),
+        "object_pair": list(data.get("object_pair", [])),
+    }
+
+
+def _augment_instances_for_schema(instances, schema):
+    if not schema:
+        return instances
+    augmented = list(instances)
+    dummy = {
+        "objects": ["__schema_o1__", "__schema_o2__"],
+        "symbols": ["__schema_s1__", "__schema_s2__"],
+        "visual_facts": [],
+        "kb_facts": [],
+        "facts": [],
+        "query": {"target_type": "__any_object__", "conditions": [], "answer_type": "object"},
+    }
+    for rel in schema.get("symbol_pair", []):
+        dummy["kb_facts"].append((rel, "__schema_s1__", "__schema_s2__"))
+        dummy["facts"].append((rel, "__schema_s1__", "__schema_s2__"))
+    for rel in schema.get("object_pair", []):
+        dummy["visual_facts"].append((rel, "__schema_o1__", "__schema_o2__"))
+        dummy["facts"].append((rel, "__schema_o1__", "__schema_o2__"))
+    augmented.append(dummy)
+    return augmented
+
 def main():
     args = parse_args()
     random.seed(args.seed)
@@ -763,7 +800,12 @@ def main():
     # constraints at construction time, so compiling afterward leaves the
     # datanode with no active executable constraint labels.
     train_data = compile_program_train_dataset(train, ctx, spaces, device=args.device)
-    dev_data = compile_program_train_dataset(dev, ctx, spaces, device=args.device) if dev else None
+    dev_data = None
+    if dev:
+        try:
+            dev_data = compile_program_train_dataset(dev, ctx, spaces, device=args.device)
+        except ValueError as exc:
+            print(f"dev_compile_skipped={exc}", flush=True)
     program = create_graphqa_program(ctx, args)
     if args.checkpoint:
         program.load(args.checkpoint, map_location=args.device)
@@ -785,6 +827,9 @@ def main():
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         program.save(args.output)
+        schema_path = args.output.with_suffix(args.output.suffix + ".schema.json")
+        schema_path.write_text(json.dumps(spaces, indent=2, sort_keys=True))
+        print(f"saved_schema={schema_path}", flush=True)
         print(f"saved={args.output}", flush=True)
     if dev_data:
         print(f"dev_family={evaluate_family_accuracy(dev_data, ctx, program)}", flush=True)
