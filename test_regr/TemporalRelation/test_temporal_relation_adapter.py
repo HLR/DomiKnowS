@@ -445,6 +445,33 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
         self.assertGreater(len(seen), 1,
                            "exactly-one loss did not respond to the prediction")
 
+    def test_dev_split_constraints_are_evaluated(self):
+        """A split compiled after construction must still reach the metrics.
+
+        ``poi`` is snapshotted when the program is built, so the dev split's
+        executable-constraint properties are missing from it and every dev
+        constraint counter silently reads zero — while the same evaluation on
+        the training split reports real numbers.
+        """
+        import test_regr.TemporalRelation.program_qwen_train as P
+
+        train_data, ctx, program = self._build(["--no-transitivity"])
+        instances = P.expand_document_query_instances(
+            load_temporal_instances(
+                Path(__file__).parent / "data" / "MATRES" / "timebank.txt"))[3:6]
+        dev_data = P.compile_program_train_dataset(
+            instances, ctx, device="cpu", max_events_per_instance=8,
+            pair_selection="target", max_pairs_per_instance=2)
+
+        before = program.evaluate_condition(dev_data, device="cpu", return_dict=True)
+        self.assertEqual(before["query_total"], 0, "expected the stale-POI symptom")
+
+        added = P.refresh_constraint_poi(program, ctx)
+        self.assertEqual(added, len(instances))
+
+        after = program.evaluate_condition(dev_data, device="cpu", return_dict=True)
+        self.assertEqual(after["query_total"], len(dev_data))
+
     def test_splitLossColumns_tolerates_an_empty_variable(self):
         """An ungroundable variable must not raise (pre-existing IndexError)."""
         from domiknows.solver.logicalConstraintConstructor import (

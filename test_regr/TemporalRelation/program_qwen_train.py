@@ -279,6 +279,32 @@ def build_temporal_program(instances, args):
     return dataset, ctx, program
 
 
+def refresh_constraint_poi(program, ctx):
+    """Add constraint properties compiled *after* the program was constructed.
+
+    ``PoiModel`` snapshots ``poi`` into a list at construction, expanding each
+    Concept into the properties it had *at that moment*. ``compile_executable``
+    adds one property per executable constraint, so any dataset compiled after
+    the program — typically the dev/test split — contributes ``ELC`` properties
+    that are absent from that snapshot and therefore never evaluated.
+
+    The visible symptom is an evaluation whose counters stay at zero while the
+    progress bar completes: the constraint datanode exists and carries
+    ``label/label``, but not the ``ELC<n>/label`` entry the active constraint is
+    looked up by. Training on the split the graph was built with looks fine,
+    which is what makes it easy to miss.
+
+    Returns the number of properties added.
+    """
+    poi = getattr(getattr(program, "model", None), "poi", None)
+    if poi is None:
+        return 0
+    known = {id(prop) for prop in poi}
+    added = [prop for prop in ctx.graph.constraint.values() if id(prop) not in known]
+    poi.extend(added)
+    return len(added)
+
+
 def _report_constraint_groundings(ctx, program, dataset):
     """Per-constraint grounding report on one item, plus the EventPair count.
 
@@ -1130,6 +1156,13 @@ def main():
         pair_selection=args.pair_selection,
         max_pairs_per_instance=args.max_pairs_per_instance,
     ) if dev else None
+    if dev_data is not None:
+        # The dev split's executable constraints were compiled after the program
+        # snapshotted its POI, so their properties must be added or every dev
+        # constraint metric silently reports zero.
+        added = refresh_constraint_poi(program, _ctx)
+        print(f"[constraints] dev split added {added} executable constraint "
+              f"propert{'y' if added == 1 else 'ies'} to the POI", flush=True)
     if args.checkpoint:
         program.load(args.checkpoint, map_location=args.device)
         print(f"loaded_checkpoint={args.checkpoint}", flush=True)
