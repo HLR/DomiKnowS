@@ -13,7 +13,7 @@ from domiknows.program.lossprogram import InferenceProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor
+from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, ReaderSensor
 
 from .execution import create_executable_instance
 from .graph import TEMPORAL_LABELS, create_temporal_graph, unpack_pair
@@ -104,6 +104,11 @@ def evaluate_packed_left_example(device="cpu"):
 
 
 def _attach_temporal_sensors(ctx, device="cpu"):
+    # Label for the executable queryL/iotaL constraint. Without it no constraint
+    # datanode exists, so getExecutableConstraintLabels() returns {} and
+    # evaluate_condition skips every item. Matches test_regr/Clever/main.py.
+    ctx.graph.constraint["label"] = ReaderSensor(keyword="logic_label", label=True)
+
     ctx.document["index"] = FunctionalReaderSensor(
         keyword="document_indices",
         forward=lambda data: _tensor(data, device=device),

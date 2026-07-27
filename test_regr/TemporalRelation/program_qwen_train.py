@@ -19,7 +19,7 @@ from domiknows.program.metric import MacroAverageTracker
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor.pytorch import EdgeSensor, ModuleLearner
 from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateReaderSensor
-from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalSensor
+from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalSensor, ReaderSensor
 
 from .config import TEMPORAL_CONFIG
 from .dataset import DEFAULT_TEMPORAL_DATA_ROOT, load_temporal_instances
@@ -274,6 +274,17 @@ def build_temporal_program(instances, args):
 
 def attach_program_train_sensors(ctx, args):
     device = args.device
+
+    # The executable queryL/iotaL objective is driven by a label on the graph's
+    # constraint concept. Without this sensor no constraint datanode is ever
+    # built, so ``getExecutableConstraintLabels()`` returns {} and
+    # ``InferenceProgram.evaluate_condition`` skips every item (visible as
+    # boolean_total=0 / query_total=0 while the progress bar still completes) —
+    # and the executable constraint loss silently contributes nothing during
+    # training. Same one-line wiring as the CLEVR reference path
+    # (``test_regr/Clever/main.py``).
+    ctx.graph.constraint["label"] = ReaderSensor(keyword="logic_label", label=True)
+
     ctx.document["index"] = FunctionalReaderSensor(keyword="document_indices", forward=lambda data: _tensor(data, device=device))
     ctx.sentence["index"] = FunctionalReaderSensor(keyword="sentence_indices", forward=lambda data: _tensor(data, device=device))
     ctx.token["index"] = FunctionalReaderSensor(keyword="event_indices", forward=lambda data: _tensor(data, device=device))
