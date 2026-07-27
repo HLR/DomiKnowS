@@ -1,7 +1,10 @@
 import json
 import os
+import sys
 import unittest
 from pathlib import Path
+
+import torch
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -345,6 +348,108 @@ class TestTemporalRelationAdapter(unittest.TestCase):
         self.assertEqual(config.training_model, str(config_path.parent / "models" / "qwen"))
         self.assertEqual(config.inference_model, "Qwen/Qwen2.5-0.5B-Instruct")
         self.assertEqual(config.output_path("run.pt"), config_path.parent / "checkpoints" / "run.pt")
+
+
+class ConstraintsActuallyTrainTest(unittest.TestCase):
+    """Guards the four ways this example's constraints have been silently inert.
+
+    Each of these failed at some point while training completed normally and
+    reported a plausible accuracy: no constraint label sensor, the global
+    constraint loss defaulted off, an IndexError on an empty variable, and — the
+    subtlest — a candidate sensor that built *zero* EventPair datanodes, so every
+    rule quantified over EventPair was vacuous.
+
+    Runs on CPU with a stub in place of the 8B backbone, so it needs no GPU.
+    """
+
+    @staticmethod
+    def _build(extra_argv=()):
+        import torch
+        import test_regr.TemporalRelation.program_qwen_train as P
+        from test_regr.TemporalRelation.dataset import load_temporal_instances
+
+        class _StubLearner(torch.nn.Module):
+            def __init__(self, *a, **k):
+                super().__init__()
+                self.lin = torch.nn.Linear(1, 4)
+
+            def forward(self, prompts):
+                n = 1 if isinstance(prompts, str) else len(list(prompts))
+                return self.lin(torch.zeros(n, 1))
+
+        original = P.QwenTemporalRelationLearner
+        P.QwenTemporalRelationLearner = _StubLearner
+        try:
+            data_path = (Path(__file__).parent / "data" / "MATRES" / "timebank.txt")
+            instances = P.expand_document_query_instances(
+                load_temporal_instances(data_path))[:3]
+            argv = sys.argv
+            sys.argv = ["test", *extra_argv]
+            try:
+                args = P.parse_args()
+            finally:
+                sys.argv = argv
+            args.device = "cpu"
+            args.max_events_per_instance = 8
+            args.pair_selection = "target"
+            args.max_pairs_per_instance = 2
+            args.lora_r = 0
+            return P.build_temporal_program(instances, args)
+        finally:
+            P.QwenTemporalRelationLearner = original
+
+    def test_event_pair_datanodes_are_created(self):
+        """Zero EventPair groundings makes every constraint vacuous."""
+        dataset, ctx, program = self._build(["--no-transitivity"])
+        datanode = next(iter(program.populate([dataset[0]], device="cpu")))
+        pairs = datanode.findDatanodes(select=ctx.event_pair)
+        self.assertEqual(len(pairs), 2, "EventPair candidates were not built")
+
+    def test_every_global_rule_grounds(self):
+        """All five rules must produce a lossTensor, not None."""
+        dataset, ctx, program = self._build(["--no-transitivity"])
+        datanode = next(iter(program.populate([dataset[0]], device="cpu")))
+        datanode.inferLocal(keys=("softmax",))
+        losses = datanode.calculateLcLoss(tnorm="P")
+        heads = [lc.lcName for _k, lc in ctx.graph.logicalConstrainsRecursive
+                 if getattr(lc, "headLC", False)]
+        self.assertEqual(len(heads), 5)
+        for name in heads:
+            with self.subTest(rule=name):
+                self.assertIsNotNone(losses[name]["lossTensor"],
+                                     f"{name} produced no grounding")
+
+    def test_constraint_loss_reaches_model_parameters(self):
+        """closs must be differentiable *and* touch a learnable weight."""
+        import test_regr.TemporalRelation.program_qwen_train as P
+        dataset, _ctx, program = self._build(
+            ["--no-transitivity", "--constraint-epochs", "1"])
+        args = type("A", (), {"constraint_epochs": 1})()
+        reached = P.verify_constraint_gradient_flow(program, dataset, args)
+        self.assertIsNotNone(reached)
+        self.assertGreater(reached, 0)
+
+    def test_exactly_one_loss_is_not_constant(self):
+        """A constant loss carries no gradient, however plausible its value."""
+        dataset, ctx, program = self._build(["--no-transitivity"])
+        seen = set()
+        for bias in ([0.0, 0.0, 0.0, 0.0], [8.0, 0.0, 0.0, 0.0]):
+            with torch.no_grad():
+                for module in program.model.modules():
+                    if isinstance(module, torch.nn.Linear) and module.out_features == 4:
+                        module.bias.copy_(torch.tensor(bias))
+            datanode = next(iter(program.populate([dataset[0]], device="cpu")))
+            datanode.inferLocal(keys=("softmax",))
+            tensor = datanode.calculateLcLoss(tnorm="P")["LC1"]["lossTensor"]
+            seen.add(round(float(tensor.detach().flatten()[0]), 6))
+        self.assertGreater(len(seen), 1,
+                           "exactly-one loss did not respond to the prediction")
+
+    def test_splitLossColumns_tolerates_an_empty_variable(self):
+        """An ungroundable variable must not raise (pre-existing IndexError)."""
+        from domiknows.solver.logicalConstraintConstructor import (
+            LogicalConstraintConstructor)
+        self.assertEqual(LogicalConstraintConstructor.splitLossColumns([]), [])
 
 
 if __name__ == "__main__":

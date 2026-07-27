@@ -634,7 +634,19 @@ class LogicalConstraintConstructor:
         row count. All K columns must be split *in parallel* — splitting only
         column 0 would silently re-collapse a bare ``EnumConcept`` to its first
         class, which is the very defect this layout exists to avoid.
+
+        A variable with *no* groups has no groundings, so there is nothing to
+        split: return it unchanged. The caller's guard
+        (``if useLcVariables[v] and len(...) > 1: continue``) only skips
+        *multi-group* variables, so an empty one reaches here — and both this
+        and the pre-refactor ``torch.split(useLcVariables[v][0][0], 1)`` raised
+        IndexError on it. That is reachable whenever a constraint mentions a
+        variable some data item cannot ground, e.g. the reversed-pair operand of
+        a symmetry rule when only one direction of the pair exists.
         """
+        if not variable:
+            return variable
+
         group = variable[0]
         splits = [torch.split(column, 1) for column in group]
         rows = len(splits[0]) if splits else 0

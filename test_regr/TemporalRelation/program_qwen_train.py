@@ -274,7 +274,90 @@ def build_temporal_program(instances, args):
             program.cmodel.pos_weight = float(args.executable_pos_weight)
 
     report_constraint_wiring(ctx, program, dataset, args)
+    if getattr(args, "constraint_gradient_check", True):
+        verify_constraint_gradient_flow(program, dataset, args)
     return dataset, ctx, program
+
+
+def _report_constraint_groundings(ctx, program, dataset):
+    """Per-constraint grounding report on one item, plus the EventPair count.
+
+    Wiring can be correct while every constraint still has *zero groundings* —
+    that is what happened when the candidate sensor produced no EventPair
+    datanodes: the rules compiled, evaluated, and returned ``None`` or a
+    constant. These two numbers localise that immediately.
+    """
+    if not dataset:
+        return
+    try:
+        datanode = next(iter(program.populate([dataset[0]], device=program.device)))
+        pairs = len(datanode.findDatanodes(select=ctx.event_pair))
+        datanode.inferLocal(keys=("softmax",))
+        losses = datanode.calculateLcLoss(tnorm=getattr(program.cmodel, "tnorm", "P"))
+    except Exception as exc:  # noqa: BLE001 - diagnostics must never block training
+        print(f"[constraints] grounding probe skipped ({type(exc).__name__}: {exc})", flush=True)
+        return
+
+    name_of = {lc.lcName: lc.name for _k, lc in ctx.graph.logicalConstrainsRecursive
+               if getattr(lc, "headLC", False)}
+    parts = []
+    for key, result in losses.items():
+        tensor = result.get("lossTensor") if isinstance(result, dict) else None
+        label = name_of.get(key, key)
+        parts.append(f"{label}={'NO-GROUNDING' if tensor is None else tensor.numel()}")
+    print(f"[constraints] EventPair groundings={pairs} | per-rule: {', '.join(parts)}",
+          flush=True)
+    if pairs == 0:
+        print("[constraints] WARNING: zero EventPair groundings — every rule "
+              "quantified over EventPair is vacuous.", flush=True)
+
+
+def verify_constraint_gradient_flow(program, dataset, args):
+    """Assert the constraint loss actually reaches the model's parameters.
+
+    ``report_constraint_wiring`` checks that the constraint *pathways* are on.
+    That is not enough: the loss can be non-zero and differentiable while its
+    autograd graph never touches a learnable parameter — which is exactly what
+    happened here (``closs=3.3863, requires_grad=True``, yet 0 of 2 parameters
+    received a gradient), because the rules had no groundings to bind to.
+
+    One forward/backward on a single item, before training starts, converts that
+    silent no-op into an immediate failure.
+    """
+    if not dataset or args.constraint_epochs <= 0:
+        return None
+
+    was_training = program.model.training
+    program.model.train()
+    program.cmodel.train()
+    program.model.zero_grad(set_to_none=True)
+    try:
+        _mloss, _metric, *output = program.model(dataset[0])
+        closs, *_ = program.cmodel(output[1])
+        if not (torch.is_tensor(closs) and closs.requires_grad):
+            raise RuntimeError(
+                f"constraint loss is not differentiable (closs={closs!r}). "
+                "Training cannot be influenced by any constraint.")
+        closs.backward()
+        params = list(program.model.parameters())
+        reached = [p for p in params if p.grad is not None and p.grad.abs().sum() > 0]
+        print(f"[constraints] gradient flow: closs={float(closs.detach()):.4f} -> "
+              f"{len(reached)}/{len(params)} model parameter tensors receive a "
+              f"non-zero gradient", flush=True)
+        if not reached:
+            raise RuntimeError(
+                f"constraint loss is non-zero (closs={float(closs.detach()):.4f}) but "
+                "reaches NO model parameter — training would be identical with and "
+                "without constraints. Usual cause: the rules have zero groundings "
+                "(check the EventPair grounding count above). Use "
+                "--no-constraint-gradient-check to bypass this assertion."
+            )
+        return len(reached)
+    finally:
+        program.model.zero_grad(set_to_none=True)
+        program.cmodel.zero_grad(set_to_none=True)
+        if not was_training:
+            program.model.eval()
 
 
 def report_constraint_wiring(ctx, program, dataset, args):
@@ -316,6 +399,8 @@ def report_constraint_wiring(ctx, program, dataset, args):
     )
     if global_heads:
         print(f"[constraints] global rules: {', '.join(global_heads)}", flush=True)
+
+    _report_constraint_groundings(ctx, program, dataset)
 
     executable_live = has_label_sensor and n_exec > 0
     global_live = global_on and bool(global_heads)
@@ -424,10 +509,27 @@ def _binary_logits_from_multiclass(logits, index):
 
 
 def _candidate_event_pair_from_allowed(index, data, arg1=None, arg2=None, **_kwargs):
-    if arg1 is None or arg2 is None:
+    """Whether this ordered token pair is an allowed EventPair candidate.
+
+    ``CompositionCandidateSensor.forward_wrap`` passes the candidate datanodes
+    as keywords named after the relation's ``has_a`` arguments — here ``e1`` and
+    ``e2`` (see ``event_pair.has_a(e1=token, e2=token)`` in graph.py), *not*
+    ``arg1``/``arg2``. Keying only on ``arg1``/``arg2`` therefore left them None
+    and returned False for every combination, so **no EventPair datanode was
+    ever built** and every constraint quantified over EventPair silently had
+    zero groundings. Read the datanodes positionally from the keywords, keeping
+    the explicit names as a fallback.
+    """
+    nodes = [arg for arg in (arg1, arg2) if arg is not None]
+    if len(nodes) < 2:
+        nodes = [value for value in _kwargs.values() if hasattr(value, "getAttribute")]
+    if len(nodes) < 2:
         return False
-    left = int(arg1.getAttribute("index").detach().cpu().view(-1)[0].item())
-    right = int(arg2.getAttribute("index").detach().cpu().view(-1)[0].item())
+
+    def position(node):
+        return int(node.getAttribute("index").detach().cpu().view(-1)[0].item())
+
+    left, right = position(nodes[0]), position(nodes[1])
     return (left, right) in set(tuple(pair) for pair in data)
 
 
@@ -847,6 +949,17 @@ def parse_args():
         ),
     )
     parser.add_argument("--global-constraint-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--constraint-gradient-check",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Before training, assert the constraint loss actually reaches a model "
+            "parameter. Catches the case where closs is non-zero and differentiable "
+            "but its graph never touches a learnable weight, so constraint training "
+            "is silently identical to supervised training."
+        ),
+    )
     parser.add_argument(
         "--executable-constraint-loss-weight", type=float, default=1.0,
         help="Weight of the executable queryL/iotaL constraint loss.",
