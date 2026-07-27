@@ -257,6 +257,9 @@ def build_temporal_program(instances, args):
         anneal_start_epoch=args.gumbel_anneal_start_epoch,
         anneal_epochs=args.gumbel_anneal_epochs,
         hard_gumbel=args.hard_gumbel,
+        include_global_constraint_loss=args.global_constraint_loss,
+        global_constraint_loss_weight=args.global_constraint_loss_weight,
+        executable_constraint_loss_weight=args.executable_constraint_loss_weight,
         query_loss=functools.partial(
             _make_temporal_ce_loss,
             _TEMPORAL_CLASS_WEIGHTS,
@@ -269,7 +272,62 @@ def build_temporal_program(instances, args):
         program.cmodel.counting_tnorm = getattr(program.cmodel, "counting_tnorm", None) or args.tnorm
         if hasattr(program.cmodel, "pos_weight"):
             program.cmodel.pos_weight = float(args.executable_pos_weight)
+
+    report_constraint_wiring(ctx, program, dataset, args)
     return dataset, ctx, program
+
+
+def report_constraint_wiring(ctx, program, dataset, args):
+    """Print, and sanity-check, which constraint pathways are actually live.
+
+    Two independent switches have to be on for a constraint to affect training,
+    and each has silently defaulted to off at some point:
+
+    * the **executable** queryL/iotaL loss needs a label sensor on the graph's
+      constraint concept, otherwise no constraint datanode is built and every
+      item is skipped (seen as ``query_total=0``);
+    * the **global** consistency loss needs ``include_global_constraint_loss``,
+      which ``InferenceModel`` defaults to False — with it off, the rules are
+      compiled and evaluated but their loss is discarded.
+
+    With both off, a "constraint" run is byte-identical to a supervised one.
+    That happened, and it cost a full grid of GPU-hours to notice, so it is now
+    reported up front and raises rather than training on a silent no-op.
+    """
+    cmodel = getattr(program, "cmodel", None)
+    constraint_props = list(ctx.graph.get_constraint_concept().keys())
+    has_label_sensor = any(str(p) == "label" for p in constraint_props)
+    n_exec = len(getattr(ctx.graph, "executableLCs", {}) or {})
+    global_heads = [lc.name for _k, lc in ctx.graph.logicalConstrainsRecursive
+                    if getattr(lc, "headLC", False)]
+    global_on = bool(getattr(cmodel, "include_global_constraint_loss", False))
+
+    print(
+        "[constraints] executable: "
+        f"{'LIVE' if (has_label_sensor and n_exec) else 'INERT'} "
+        f"(label_sensor={has_label_sensor}, compiled_lcs={n_exec}, "
+        f"weight={getattr(cmodel, 'executable_constraint_loss_weight', None)}) | "
+        "global: "
+        f"{'LIVE' if (global_on and global_heads) else 'INERT'} "
+        f"(enabled={global_on}, head_lcs={len(global_heads)}, "
+        f"weight={getattr(cmodel, 'global_constraint_loss_weight', None)}) | "
+        f"tnorm={getattr(cmodel, 'tnorm', None)}",
+        flush=True,
+    )
+    if global_heads:
+        print(f"[constraints] global rules: {', '.join(global_heads)}", flush=True)
+
+    executable_live = has_label_sensor and n_exec > 0
+    global_live = global_on and bool(global_heads)
+    if args.constraint_epochs > 0 and not (executable_live or global_live):
+        raise RuntimeError(
+            "constraint_epochs > 0 but NO constraint pathway is live: "
+            f"executable(label_sensor={has_label_sensor}, compiled_lcs={n_exec}), "
+            f"global(enabled={global_on}, head_lcs={len(global_heads)}). "
+            "Training would be identical to a supervised run. Enable "
+            "--global-constraint-loss, attach the constraint label sensor, or set "
+            "--constraint-epochs 0 to run supervised on purpose."
+        )
 
 
 def attach_program_train_sensors(ctx, args):
@@ -774,6 +832,25 @@ def parse_args():
         ),
     )
     parser.set_defaults(transitivity=True)
+    parser.add_argument(
+        "--global-constraint-loss",
+        dest="global_constraint_loss",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Include the graph-global consistency constraints (symmetry, inverse, "
+            "exactly-one, transitivity) in the training loss. InferenceModel "
+            "defaults this to False, so before this flag existed those constraints "
+            "were compiled and evaluated but their loss was DISCARDED — training "
+            "was identical with and without them. Use --no-global-constraint-loss "
+            "for a constraint-free control."
+        ),
+    )
+    parser.add_argument("--global-constraint-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--executable-constraint-loss-weight", type=float, default=1.0,
+        help="Weight of the executable queryL/iotaL constraint loss.",
+    )
     parser.add_argument("--beta", type=float, default=1.0)
     parser.add_argument(
         "--infer-types",
