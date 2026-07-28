@@ -575,6 +575,15 @@ Only the winning model populates `<concept>/ILP` (or the corresponding
 cleared between hypotheses, so repeated inference on the same DataNode builds
 independent models.
 
+The winning hypothesis answer is also stored on the sample's `constraint`
+child DataNode under `<executable-name>/answer`, alongside its activation
+label. For example, `ELC0/label` activates `ELC0` and `ELC0/answer` contains
+the answer selected by ILP inference. `queryL` answers are class-name strings,
+`sumL` answers are integers, and Boolean hypotheses are stored as `bool`.
+Ground-truth label values are never copied into the answer. When multiple
+executable constraints are active, each selected joint-hypothesis value is
+stored under its own name.
+
 ```python
 # Inspect which executable constraints this sample activates.
 active = dn.getActiveExecutableConstraintNames()
@@ -587,12 +596,19 @@ dn.inferILPResults(
 
 # Access the winning hypothesis model's ordinary ILP assignment.
 person_ilp = dn.getAttribute("<person>/ILP")
+
+# Access the winning executable answer next to ELC0/label.
+constraint_dn = dn.getChildDataNodes(
+    conceptName=dn.graph.get_constraint_concept()
+)[0]
+answer = constraint_dn.getAttributes()["ELC0/answer"]
 ```
 
 For a batch root, the active executable names and hypothesis search are
 evaluated independently for every contained DataNode. Different samples in the
 same batch may therefore activate different executable constraints and select
-different hypotheses.
+different hypotheses. Each sample's answers are written to its own constraint
+child.
 
 #### `inferGBIResults(*conceptsRelations, model, kwargs)`
 

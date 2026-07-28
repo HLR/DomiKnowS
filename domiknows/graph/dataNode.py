@@ -1243,12 +1243,89 @@ class DataNode:
         return None
 
     # ----------------- Active Executable LC methods
+
+    def _getExecutableConstraintDataNode(self):
+        """Return this sample's constraint DataNode, if one exists.
+
+        Constraint DataNodes are normally direct children of the sample root.
+        The builder lookup is retained as a fallback for older construction
+        paths where the constraint node is registered but not linked through
+        ``contains``.
+
+        Raises:
+            ValueError: If the selected lookup path finds multiple constraint
+                DataNodes for this sample.
+        """
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_name = constraint_concept.name
+
+        direct_matches = self.getChildDataNodes(
+            conceptName=constraint_concept
+        ) or []
+        if len(direct_matches) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_name}) '
+                f'found: {len(direct_matches)}, expected one.'
+            )
+        if direct_matches:
+            return direct_matches[0]
+
+        if not self.myBuilder:
+            return None
+
+        builder_matches = self.myBuilder.findDataNodesInBuilder(
+            select=constraint_name
+        )
+        if len(builder_matches) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_name}) '
+                f'found: {len(builder_matches)}, expected one.'
+            )
+        if not builder_matches:
+            return None
+
+        return builder_matches[0]
+
+    def _clearExecutableConstraintAnswers(self):
+        """Remove persisted answers for executable constraints in this graph.
+
+        Returns:
+            bool: ``True`` when a constraint DataNode was found, otherwise
+                ``False``.
+        """
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name in self.graph.executableLCs:
+            constraint_dn.attributes.pop(f'{lc_name}/answer', None)
+
+        return True
+
+    def _writeExecutableConstraintAnswers(self, answers):
+        """Write winning native hypothesis values to the constraint DataNode.
+
+        Args:
+            answers: Mapping from executable constraint name to its selected
+                hypothesis value.
+
+        Returns:
+            bool: ``True`` when the answers were written, otherwise ``False``.
+        """
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name, answer in answers.items():
+            constraint_dn.attributes[f'{lc_name}/answer'] = answer
+
+        return True
     
     def getExecutableConstraintLabels(self):
         """Get all active executable constraint labels from the constraint datanode.
         
-        Finds the constraint concept's datanode via the builder and returns
-        its attributes dict (format: {'LC{n}/label': label_value, ...}).
+        Finds the constraint concept's DataNode and returns its attributes dict
+        (format: {'LC{n}/label': label_value, ...}).
         
         Returns:
             dict: Executable constraint labels dict, or empty dict if no constraint datanode found.
@@ -1256,21 +1333,11 @@ class DataNode:
         Raises:
             ValueError: If multiple constraint datanodes are found.
         """
-        if not self.myBuilder:
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
             return {}
 
-        constraint_concept = self.graph.get_constraint_concept()
-        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
-        
-        if len(constraint_dn_search) == 0:
-            return {}
-        elif len(constraint_dn_search) > 1:
-            raise ValueError(
-                f'Multiple constraint datanodes (for concept {constraint_concept.name}) '
-                f'found: {len(constraint_dn_search)}, expected one.'
-            )
-
-        return constraint_dn_search[0].getAttributes()
+        return constraint_dn.getAttributes()
 
     def getExecutableConstraintLabel(self, lcName):
         """Get the label for a specific active executable constraint.
@@ -1308,10 +1375,6 @@ class DataNode:
         }
     
     def setActiveExecutableLCs(self):
-        # If no builder or no executive LC datanode then return
-        if not self.myBuilder:
-            return
-
         read_labels = self.getExecutableConstraintLabels()
         if not read_labels:
             return
@@ -2093,6 +2156,10 @@ class DataNode:
                 target_dn.getActiveExecutableConstraintNames()
             )
             if not active_executable_names:
+                # A previous hypothesis-aware inference may have populated
+                # answers on a reused DataNode. Legacy inference has no
+                # executable answer, so remove those stale values first.
+                target_dn._clearExecutableConstraintAnswers()
                 myILPOntSolver.calculateILPSelection(
                     target_dn,
                     *conceptsRelations,

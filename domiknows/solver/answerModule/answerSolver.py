@@ -363,8 +363,23 @@ class AnswerSolver:
 
         Returns a dictionary containing the selected hypotheses, objective, and
         detached variable assignment.  Only the winning assignment is written
-        to ``dn`` when ``populate`` is true.
+        to ``dn`` when ``populate`` is true. Winning hypothesis answers are
+        also written to the sample's constraint DataNode as
+        ``<constraint-name>/answer`` attributes.
         """
+        answer_target_available = False
+        if populate:
+            # Clear answers before validation/model construction so failures
+            # cannot leave a previous inference's hypothesis visible.
+            answer_target_available = (
+                dn._clearExecutableConstraintAnswers()
+            )
+            if not answer_target_available:
+                logger.warning(
+                    "No constraint DataNode found; executable hypothesis "
+                    "answers will not be persisted"
+                )
+
         requested_names = set(active_constraint_names)
         unknown_names = requested_names.difference(dn.graph.executableLCs)
         if unknown_names:
@@ -491,6 +506,8 @@ class AnswerSolver:
                 concepts_relations,
                 best_result['values'],
             )
+            if answer_target_available:
+                dn._writeExecutableConstraintAnswers(best_hypotheses)
 
         result = {
             'hypotheses': best_hypotheses,

@@ -77,34 +77,91 @@ def _add_binary_items(root, item, flag, logits):
     return children
 
 
-def test_active_constraint_names_ignore_non_label_attributes():
-    _, root, _, _ = _binary_scene('active_names')
-    root.getExecutableConstraintLabels = types.MethodType(
-        lambda self: {
-            'ELC0/label': torch.tensor(1.0),
-            'rootDataNode': object(),
-            '<constraint>/local/softmax': torch.tensor([0.0, 1.0]),
-        },
-        root,
+def _add_constraint_child(root, *active_names):
+    constraint_child = DataNode(
+        instanceID=0,
+        ontologyNode=root.graph.get_constraint_concept(),
     )
+    for name in active_names:
+        constraint_child.attributes[f'{name}/label'] = torch.tensor(1.0)
+    root.addChildDataNode(constraint_child)
+    return constraint_child
+
+
+def test_active_constraint_names_ignore_non_label_attributes():
+    _, root, _, _ = _binary_scene(
+        'active_names',
+        executable_factory=lambda concept: execute(existsL(concept('x'))),
+    )
+    constraint_child = _add_constraint_child(root, 'ELC0')
+    constraint_child.attributes.update({
+        'rootDataNode': object(),
+        '<constraint>/local/softmax': torch.tensor([0.0, 1.0]),
+        'ELC0/answer': True,
+    })
 
     assert root.getActiveExecutableConstraintNames() == {'ELC0'}
+    assert root._getExecutableConstraintDataNode() is constraint_child
+
+
+def test_constraint_child_lookup_retains_builder_fallback_and_multiple_error():
+    _, root, _, _ = _binary_scene('constraint_lookup')
+    constraint_concept = root.graph.get_constraint_concept()
+    builder_constraint = DataNode(
+        instanceID=0,
+        ontologyNode=constraint_concept,
+    )
+    builder_constraint.attributes['ELC0/label'] = torch.tensor(1.0)
+    root.myBuilder = types.SimpleNamespace(
+        findDataNodesInBuilder=lambda select: [builder_constraint],
+    )
+
+    assert root._getExecutableConstraintDataNode() is builder_constraint
+    assert root.getExecutableConstraintLabels() == (
+        builder_constraint.attributes
+    )
+
+    second_constraint = DataNode(
+        instanceID=1,
+        ontologyNode=constraint_concept,
+    )
+    root.myBuilder = types.SimpleNamespace(
+        findDataNodesInBuilder=lambda select: [
+            builder_constraint,
+            second_constraint,
+        ],
+    )
+    with pytest.raises(ValueError, match='Multiple constraint datanodes'):
+        root._getExecutableConstraintDataNode()
+
+    root.myBuilder = None
+    root.addChildDataNode(builder_constraint)
+    root.addChildDataNode(second_constraint)
+
+    with pytest.raises(ValueError, match='Multiple constraint datanodes'):
+        root._getExecutableConstraintDataNode()
 
 
 @pytest.mark.gurobi
 def test_infer_ilp_without_active_executable_constraint_uses_legacy_path():
-    _, root, item, flag = _binary_scene('legacy')
+    _, root, item, flag = _binary_scene(
+        'legacy',
+        executable_factory=lambda concept: execute(existsL(concept('x'))),
+    )
     children = _add_binary_items(
         root,
         item,
         flag,
         ((0.1, 2.0), (2.0, 0.1)),
     )
+    constraint_child = _add_constraint_child(root)
+    constraint_child.attributes['ELC0/answer'] = True
 
     root.inferILPResults(flag)
 
     assert [child.attributes[f'<{flag.name}>/ILP'].item()
             for child in children] == [1.0, 0.0]
+    assert 'ELC0/answer' not in constraint_child.attributes
 
 
 @pytest.mark.gurobi
@@ -119,11 +176,13 @@ def test_active_exists_populates_winning_model_and_repeats_cleanly():
         flag,
         ((0.1, 2.0), (2.0, 0.1)),
     )
-    _activate(root, 'ELC0')
+    constraint_child = _add_constraint_child(root, 'ELC0')
 
     root.inferILPResults(flag)
     assert [child.attributes[f'<{flag.name}>/ILP'].item()
             for child in children] == [1.0, 0.0]
+    assert constraint_child.attributes['ELC0/answer'] is True
+    assert isinstance(constraint_child.attributes['ELC0/answer'], bool)
 
     # Change the preferred entity and force local probabilities to be
     # recomputed. A stale Gurobi variable from the first hypothesis run would
@@ -137,6 +196,7 @@ def test_active_exists_populates_winning_model_and_repeats_cleanly():
     root.inferILPResults(flag)
     assert [child.attributes[f'<{flag.name}>/ILP'].item()
             for child in children] == [0.0, 1.0]
+    assert constraint_child.attributes['ELC0/answer'] is True
     assert graph.executableLCs['ELC0'].innerLC.active
 
 
@@ -152,6 +212,7 @@ def test_answer_api_returns_hypothesis_without_populating_ilp_results():
         flag,
         ((0.1, 2.0), (2.0, 0.1)),
     )
+    constraint_child = _add_constraint_child(root, 'ELC0')
     root.inferLocal()
 
     answer = AnswerSolver(graph).answer('execute(ELC0)', root)
@@ -165,6 +226,7 @@ def test_answer_api_returns_hypothesis_without_populating_ilp_results():
         not any('/ILP/' in key for key in child.attributes)
         for child in children
     )
+    assert 'ELC0/answer' not in constraint_child.attributes
 
 
 @pytest.mark.gurobi
@@ -180,6 +242,7 @@ def test_batch_root_dispatches_hypothesis_inference_per_contained_datanode():
 
     batch_root = DataNode(instanceID=0, ontologyNode=batch)
     rows = []
+    constraint_children = []
     row_logits = (
         ((0.1, 2.0), (2.0, 0.1)),
         ((2.0, 0.1), (0.1, 2.0)),
@@ -200,7 +263,9 @@ def test_batch_root_dispatches_hypothesis_inference_per_contained_datanode():
             scene_root.addChildDataNode(child)
             row.append(child)
         rows.append(row)
-        _activate(scene_root, 'ELC0')
+        constraint_children.append(
+            _add_constraint_child(scene_root, 'ELC0')
+        )
 
     batch_root.inferILPResults(flag)
 
@@ -213,6 +278,10 @@ def test_batch_root_dispatches_hypothesis_inference_per_contained_datanode():
         for row in rows
         for child in row
     )
+    assert [
+        constraint_child.attributes['ELC0/answer']
+        for constraint_child in constraint_children
+    ] == [True, True]
     assert graph.batch is batch
 
 
@@ -228,13 +297,17 @@ def test_counting_and_multiclass_query_populate_standard_ilp_outputs():
         flag,
         ((0.1, 2.0), (2.0, 0.1)),
     )
-    _activate(root, 'ELC0')
+    constraint_child = _add_constraint_child(root, 'ELC0')
 
     root.inferILPResults(flag)
     assert sum(
         child.attributes[f'<{flag.name}>/ILP'].item()
         for child in children
     ) == 1.0
+    count_answer = constraint_child.attributes['ELC0/answer']
+    assert count_answer == 1
+    assert isinstance(count_answer, int)
+    assert not isinstance(count_answer, bool)
 
     Graph.clear()
     Concept.clear()
@@ -259,7 +332,7 @@ def test_counting_and_multiclass_query_populate_standard_ilp_outputs():
     query_child.attributes['<query_target>'] = torch.tensor([0.1, 2.0])
     query_child.attributes['<query_color>'] = torch.tensor([2.0, 0.1])
     query_root.addChildDataNode(query_child)
-    _activate(query_root, 'ELC0')
+    query_constraint_child = _add_constraint_child(query_root, 'ELC0')
 
     query_root.inferILPResults(target, color)
 
@@ -268,6 +341,11 @@ def test_counting_and_multiclass_query_populate_standard_ilp_outputs():
         torch.tensor([1.0, 0.0]),
     )
     assert query_child.attributes['<query_target>/ILP'].item() == 1.0
+    assert query_constraint_child.attributes['ELC0/answer'] == 'red'
+    assert isinstance(
+        query_constraint_child.attributes['ELC0/answer'],
+        str,
+    )
     assert query_graph.executableLCs['ELC0'].innerLC.active
 
 
@@ -289,6 +367,7 @@ def test_multiple_active_constraints_evaluate_joint_cartesian_product(
     child.attributes['<joint_red>/local/softmax'] = torch.tensor([0.1, 0.9])
     child.attributes['<joint_blue>/local/softmax'] = torch.tensor([0.9, 0.1])
     root.addChildDataNode(child)
+    constraint_child = _add_constraint_child(root, 'ELC0', 'ELC1')
 
     answer_solver = AnswerSolver(graph)
     real_calculate = answer_solver.solver._calculateILPSelection
@@ -319,6 +398,22 @@ def test_multiple_active_constraints_evaluate_joint_cartesian_product(
     assert len(calls) == 4
     assert child.attributes['<joint_red>/ILP'].item() == 1.0
     assert child.attributes['<joint_blue>/ILP'].item() == 0.0
+    assert constraint_child.attributes['ELC0/answer'] is True
+    assert constraint_child.attributes['ELC1/answer'] is False
+
+    constraint_child.attributes.pop('ELC0/label')
+    repeated_result = answer_solver.solve_active_constraints(
+        root,
+        {'ELC1'},
+        (
+            (red, red.name, None, 1),
+            (blue, blue.name, None, 1),
+        ),
+    )
+
+    assert repeated_result['hypotheses'] == OrderedDict([('ELC1', False)])
+    assert 'ELC0/answer' not in constraint_child.attributes
+    assert constraint_child.attributes['ELC1/answer'] is False
 
 
 class _SequencedSolver:
@@ -341,6 +436,7 @@ def test_objective_direction_ties_and_all_infeasible():
         'objective',
         executable_factory=lambda concept: execute(existsL(concept('x'))),
     )
+    constraint_child = _add_constraint_child(root, 'ELC0')
 
     tied = AnswerSolver(graph, solver=_SequencedSolver([5.0, 5.0]))
     tied_result = tied.solve_active_constraints(
@@ -350,6 +446,7 @@ def test_objective_direction_ties_and_all_infeasible():
         populate=False,
     )
     assert tied_result['hypotheses']['ELC0'] is True
+    assert 'ELC0/answer' not in constraint_child.attributes
 
     minimized = AnswerSolver(graph, solver=_SequencedSolver([5.0, 3.0]))
     minimized_result = minimized.solve_active_constraints(
@@ -357,18 +454,57 @@ def test_objective_direction_ties_and_all_infeasible():
         {'ELC0'},
         (),
         minimize_objective=True,
-        populate=False,
     )
     assert minimized_result['hypotheses']['ELC0'] is False
+    assert constraint_child.attributes['ELC0/answer'] is False
 
+    constraint_child.attributes['ELC0/answer'] = 'stale'
     infeasible = AnswerSolver(graph, solver=_SequencedSolver([None, None]))
     with pytest.raises(RuntimeError, match='All joint hypotheses were infeasible'):
         infeasible.solve_active_constraints(
             root,
             {'ELC0'},
             (),
-            populate=False,
         )
+    assert 'ELC0/answer' not in constraint_child.attributes
+
+
+def test_missing_constraint_child_does_not_block_hypothesis_population():
+    graph, root, _, _ = _binary_scene(
+        'missing_constraint_child',
+        executable_factory=lambda concept: execute(existsL(concept('x'))),
+    )
+    solver = _SequencedSolver([2.0, 1.0])
+
+    result = AnswerSolver(graph, solver=solver).solve_active_constraints(
+        root,
+        {'ELC0'},
+        (),
+    )
+
+    assert result['hypotheses']['ELC0'] is True
+    assert solver.populated == {}
+
+
+def test_skeleton_mode_preserves_constraint_answer_population():
+    graph, root, _, _ = _binary_scene(
+        'skeleton_answer',
+        executable_factory=lambda concept: execute(existsL(concept('x'))),
+    )
+    constraint_child = _add_constraint_child(root, 'ELC0')
+    setDnSkeletonMode(True)
+
+    result = AnswerSolver(
+        graph,
+        solver=_SequencedSolver([2.0, 1.0]),
+    ).solve_active_constraints(
+        root,
+        {'ELC0'},
+        (),
+    )
+
+    assert result['hypotheses']['ELC0'] is True
+    assert constraint_child.attributes['ELC0/answer'] is True
 
 
 def test_unknown_and_unsupported_active_constraints_fail_clearly():
