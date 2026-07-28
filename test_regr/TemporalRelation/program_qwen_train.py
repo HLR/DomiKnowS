@@ -24,36 +24,93 @@ from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalS
 from .config import TEMPORAL_CONFIG
 from .dataset import DEFAULT_TEMPORAL_DATA_ROOT, load_temporal_instances
 from .execution import create_executable_instance, mark_text_for_pair
-from .graph import TEMPORAL_LABELS, create_temporal_graph, unpack_pair
+from .graph import (
+    EXTENDED_LABELS,
+    MATRES_LABELS,
+    TEMPORAL_LABELS,
+    create_temporal_graph,
+    unpack_pair,
+)
 from .program import BinaryOracleLearner, _tensor
 
 DEFAULT_MODEL = TEMPORAL_CONFIG.training_model
 DEFAULT_OUTPUT = TEMPORAL_CONFIG.output_path("qwen3_8b_temporal_domiknows_program.pt")
 LOCAL_IGNORE_LABEL = -100
 _TEMPORAL_CLASS_WEIGHTS = None
+_TEMPORAL_DATASET_MASK = None
+
+
+#: Relations each corpus can actually express. Under a union label space the
+#: joint head has one output per relation across *all* corpora, but a MATRES row
+#: can never be ``Includes`` and a TB-Dense row never uses MATRES's start-point
+#: ``Equal``. Training the head to rank a label its source corpus could not have
+#: produced teaches it that the label is simply rare, rather than inapplicable.
+DATASET_LEGAL_LABELS = {
+    "matres": ("Before", "After", "Equal", "Vague"),
+    "tbdense": ("Before", "After", "Includes", "IsIncluded", "Simultaneous", "Vague"),
+}
+
+
+def legal_label_mask(dataset_name, labels):
+    """Boolean ``[K]`` mask of relations ``dataset_name`` can express."""
+    legal = DATASET_LEGAL_LABELS.get(str(dataset_name).lower())
+    if legal is None:
+        return torch.ones(len(labels), dtype=torch.bool)
+    return torch.tensor([label in legal for label in labels], dtype=torch.bool)
+
+
+def apply_dataset_mask(logits, dataset_mask):
+    """Apply a per-row corpus legality mask to temporal-relation logits."""
+    if dataset_mask is None:
+        return logits
+    mask = torch.as_tensor(dataset_mask, dtype=torch.bool, device=logits.device)
+    if mask.ndim == 1:
+        mask = mask.unsqueeze(0)
+    if mask.shape[0] == 1 and logits.shape[0] != 1:
+        mask = mask.expand(logits.shape[0], -1)
+    if mask.shape != logits.shape:
+        raise ValueError(
+            f"dataset_mask shape {tuple(mask.shape)} does not match "
+            f"temporal logits {tuple(logits.shape)}")
+    if not bool(mask.any(dim=-1).all()):
+        raise ValueError("dataset_mask must permit at least one label per row")
+    return logits.masked_fill(~mask, float("-inf"))
 
 
 class WeightedTemporalCrossEntropyLoss(torch.nn.Module):
-    """Cross-entropy with optional temporal class weights and ignored rows."""
+    """Cross-entropy with optional temporal class weights and ignored rows.
 
-    def __init__(self, weights=None):
+    ``dataset_mask`` (a ``[K]`` bool) restricts the head to the relations the
+    current corpus can express by driving the others to ``-inf`` before the
+    softmax, so they receive no gradient and can never be predicted.
+    """
+
+    def __init__(self, weights=None, dataset_mask=None):
         super().__init__()
         if weights is None:
             self.register_buffer("weights", None, persistent=False)
         else:
             self.register_buffer("weights", torch.as_tensor(weights, dtype=torch.float32), persistent=False)
+        if dataset_mask is None:
+            self.register_buffer("dataset_mask", None, persistent=False)
+        else:
+            self.register_buffer("dataset_mask", torch.as_tensor(dataset_mask, dtype=torch.bool), persistent=False)
 
     def forward(self, input, target, *args, **kwargs):
         input = input.view(-1, input.shape[-1])
         target = target.view(-1).to(dtype=torch.long, device=input.device)
+        if self.dataset_mask is not None and self.dataset_mask.numel() == input.shape[-1]:
+            illegal = ~self.dataset_mask.to(input.device)
+            if illegal.any():
+                input = input.masked_fill(illegal.unsqueeze(0), float("-inf"))
         weight = self.weights.to(input.device) if self.weights is not None else None
         return F.cross_entropy(input, target, weight=weight, ignore_index=LOCAL_IGNORE_LABEL)
 
 
-def _make_temporal_ce_loss(weights=None):
-    if weights is None:
+def _make_temporal_ce_loss(weights=None, dataset_mask=None):
+    if weights is None and dataset_mask is None:
         return NBCrossEntropyLoss()
-    return WeightedTemporalCrossEntropyLoss(weights)
+    return WeightedTemporalCrossEntropyLoss(weights, dataset_mask=dataset_mask)
 
 
 def _parse_temporal_class_weights(args):
@@ -77,7 +134,11 @@ class TemporalSolverModel(SolverModel):
     """SolverModel with supervised CE loss for DomiKnowS program.train warmup."""
 
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("loss", MacroAverageTracker(_make_temporal_ce_loss(_TEMPORAL_CLASS_WEIGHTS)))
+        kwargs.setdefault(
+            "loss",
+            MacroAverageTracker(_make_temporal_ce_loss(
+                _TEMPORAL_CLASS_WEIGHTS, _TEMPORAL_DATASET_MASK)),
+        )
         super().__init__(*args, **kwargs)
 
 
@@ -158,14 +219,15 @@ class QwenTemporalRelationLearner(torch.nn.Module):
 
     @staticmethod
     def _format_prompt(marked_text):
+        choices = ", ".join(TEMPORAL_LABELS)
         return (
             "Classify the temporal relation from event E1 to event E2. "
-            "Choose exactly one label from: Before, After, Equal, Vague.\n"
+            f"Choose exactly one label from: {choices}.\n"
             f"Text: {marked_text}\n"
             "Answer:"
         )
 
-    def forward(self, prompts):
+    def forward(self, prompts, dataset_mask=None):
         if isinstance(prompts, str):
             prompts = [prompts]
         prompts = list(prompts)
@@ -177,7 +239,8 @@ class QwenTemporalRelationLearner(torch.nn.Module):
         for start in range(0, len(prompts), self.encode_batch_size):
             batch = prompts[start : start + self.encode_batch_size]
             chunks.append(self._score_label_sequences(batch, grad_enabled))
-        return torch.cat(chunks, dim=0)
+        scores = torch.cat(chunks, dim=0)
+        return apply_dataset_mask(scores, dataset_mask)
 
     def _score_label_sequences(self, prompts, grad_enabled):
         rows = []
@@ -215,11 +278,19 @@ class QwenTemporalRelationLearner(torch.nn.Module):
         return label_scores.view(len(prompts), len(TEMPORAL_LABELS)).float()
 
 def build_temporal_program(instances, args):
+    global _TEMPORAL_DATASET_MASK
+    labels, dataset_names = _activate_labels_for_instances(
+        instances, getattr(args, "_active_dataset_names", None))
+    _TEMPORAL_DATASET_MASK = (
+        legal_label_mask(next(iter(dataset_names)), labels)
+        if len(dataset_names) == 1 else None
+    )
     ctx = create_temporal_graph(
         instances,
         include_global_constraints=not args.no_global_consistency,
         include_exactly_one=getattr(args, "exactly_one_label", True),
         include_transitivity=getattr(args, "transitivity", True),
+        labels=labels,
     )
     attach_program_train_sensors(ctx, args)
     dataset = compile_program_train_dataset(
@@ -263,6 +334,7 @@ def build_temporal_program(instances, args):
         query_loss=functools.partial(
             _make_temporal_ce_loss,
             _TEMPORAL_CLASS_WEIGHTS,
+            _TEMPORAL_DATASET_MASK,
         ),
     )
     # Configure the remaining constraint-model execution options after
@@ -314,7 +386,7 @@ def _report_constraint_groundings(ctx, program, dataset):
     constant. These two numbers localise that immediately.
     """
     if not dataset:
-        return
+        return {}
     try:
         datanode = next(iter(program.populate([dataset[0]], device=program.device)))
         pairs = len(datanode.findDatanodes(select=ctx.event_pair))
@@ -322,20 +394,23 @@ def _report_constraint_groundings(ctx, program, dataset):
         losses = datanode.calculateLcLoss(tnorm=getattr(program.cmodel, "tnorm", "P"))
     except Exception as exc:  # noqa: BLE001 - diagnostics must never block training
         print(f"[constraints] grounding probe skipped ({type(exc).__name__}: {exc})", flush=True)
-        return
+        return {}
 
     name_of = {lc.lcName: lc.name for _k, lc in ctx.graph.logicalConstrainsRecursive
                if getattr(lc, "headLC", False)}
     parts = []
+    counts = {}
     for key, result in losses.items():
         tensor = result.get("lossTensor") if isinstance(result, dict) else None
         label = name_of.get(key, key)
+        counts[label] = 0 if tensor is None else tensor.numel()
         parts.append(f"{label}={'NO-GROUNDING' if tensor is None else tensor.numel()}")
     print(f"[constraints] EventPair groundings={pairs} | per-rule: {', '.join(parts)}",
           flush=True)
     if pairs == 0:
         print("[constraints] WARNING: zero EventPair groundings — every rule "
               "quantified over EventPair is vacuous.", flush=True)
+    return counts
 
 
 def verify_constraint_gradient_flow(program, dataset, args):
@@ -426,7 +501,8 @@ def report_constraint_wiring(ctx, program, dataset, args):
     if global_heads:
         print(f"[constraints] global rules: {', '.join(global_heads)}", flush=True)
 
-    _report_constraint_groundings(ctx, program, dataset)
+    program.constraint_grounding_counts = _report_constraint_groundings(
+        ctx, program, dataset)
 
     executable_live = has_label_sensor and n_exec > 0
     global_live = global_on and bool(global_heads)
@@ -483,6 +559,11 @@ def attach_program_train_sensors(ctx, args):
         forward=_candidate_event_pair_from_allowed,
     )
     ctx.event_pair["pair_prompts"] = FunctionalReaderSensor(keyword="pair_prompts", forward=lambda data: data)
+    ctx.event_pair["dataset_mask"] = FunctionalReaderSensor(
+        keyword="dataset_mask",
+        forward=lambda data, _device=device: torch.as_tensor(
+            data, dtype=torch.bool, device=_device),
+    )
     ctx.event_pair["temporal_relation_label"] = FunctionalReaderSensor(
         keyword="temporal_relation_label",
         forward=lambda data, _device=device: torch.as_tensor(data, dtype=torch.long, device=_device),
@@ -498,6 +579,7 @@ def attach_program_train_sensors(ctx, args):
         )
     ctx.event_pair[ctx.temporal_relation] = ModuleLearner(
         "pair_prompts",
+        "dataset_mask",
         module=QwenTemporalRelationLearner(
             model_path=args.model_path,
             device=device,
@@ -509,7 +591,8 @@ def attach_program_train_sensors(ctx, args):
             max_length=args.max_length,
             encode_batch_size=args.encode_batch_size,
         ),
-        loss=_make_temporal_ce_loss(_TEMPORAL_CLASS_WEIGHTS),
+        loss=_make_temporal_ce_loss(
+            _TEMPORAL_CLASS_WEIGHTS, _TEMPORAL_DATASET_MASK),
         device=device,
     )
     # queryL reads the child concepts (Before/After/Equal/Vague). Expose each
@@ -661,6 +744,10 @@ def _to_program_train_data(instance, device="cpu", max_events_per_instance=None,
         "event_pair_candidates": event_pair_candidates,
         "pair_prompts": pair_prompts,
         "temporal_relation_label": torch.tensor(pair_labels, dtype=torch.long, device=device),
+        "dataset": _instance_dataset(instance),
+        "dataset_mask": legal_label_mask(
+            _instance_dataset(instance), TEMPORAL_LABELS
+        ).to(device).unsqueeze(0).expand(len(candidate_pairs), -1).clone(),
     })
     if converted.get("logic_label") is not None:
         if args_boolean_executable_assertion():
@@ -746,6 +833,28 @@ def expand_document_query_instances(documents):
             instance["query_pair"] = {"e1": e1, "e2": e2, "label": _label}
             instances.append(instance)
     return instances
+
+
+def _instance_dataset(instance):
+    dataset_name = str(instance.get("dataset") or "matres").lower()
+    if dataset_name not in DATASET_LEGAL_LABELS:
+        raise ValueError(
+            f"Unsupported or missing temporal dataset identity {dataset_name!r}; "
+            f"expected one of {sorted(DATASET_LEGAL_LABELS)}")
+    return dataset_name
+
+
+def _activate_labels_for_instances(instances, dataset_names=None):
+    dataset_names = (
+        set(dataset_names)
+        if dataset_names is not None
+        else {_instance_dataset(instance) for instance in instances}
+    )
+    if not dataset_names:
+        dataset_names = {"matres"}
+    labels = EXTENDED_LABELS if "tbdense" in dataset_names else MATRES_LABELS
+    TEMPORAL_LABELS.set(labels)
+    return labels, dataset_names
 
 
 
@@ -897,11 +1006,25 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train TemporalRelation with DomiKnowS program.train and Qwen learner.")
     parser.add_argument("--path", type=Path, default=DEFAULT_TEMPORAL_DATA_ROOT / "MATRES" / "timebank.txt")
     parser.add_argument(
+        "--dataset",
+        choices=["auto", "matres", "tbdense"],
+        default="auto",
+        help="Corpus identity for --path. Auto uses row metadata or the path name.",
+    )
+    parser.add_argument(
         "--train-paths",
         default=None,
         help=(
             "Comma-separated dataset files to concatenate for training. "
             "When unset, --path is used. Eval-only still scores --path."
+        ),
+    )
+    parser.add_argument(
+        "--train-datasets",
+        default=None,
+        help=(
+            "Comma-separated corpus identities aligned with --train-paths "
+            "(auto, matres, or tbdense). Defaults to auto for every path."
         ),
     )
     parser.add_argument("--limit", type=int, default=None)
@@ -1043,6 +1166,14 @@ def parse_args():
     parser.add_argument("--checkpoint", type=Path, default=None, help="Checkpoint to load for --eval-only; defaults to --output.")
     parser.add_argument("--skip-condition-eval", action="store_true", help="Skip slow executable queryL/iotaL condition evaluation.")
     parser.add_argument(
+        "--grounding-only",
+        action="store_true",
+        help=(
+            "Build one program, print constraint groundings, require positive "
+            "before-transitivity groundings when enabled, and exit before training."
+        ),
+    )
+    parser.add_argument(
         "--supervise-local-predicates",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1070,26 +1201,57 @@ def _parse_data_paths(value):
     return paths
 
 
+def _parse_dataset_names(value, expected):
+    if not value:
+        return ["auto"] * expected
+    names = [item.strip().lower() for item in str(value).split(",") if item.strip()]
+    invalid = [name for name in names if name not in {"auto", "matres", "tbdense"}]
+    if invalid:
+        raise ValueError(f"Unsupported --train-datasets value(s): {invalid}")
+    if len(names) != expected:
+        raise ValueError(
+            f"--train-datasets supplied {len(names)} value(s) for {expected} "
+            "--train-paths entries")
+    return names
+
+
 def main():
     global _TEMPORAL_CLASS_WEIGHTS
     args = parse_args()
-    _TEMPORAL_CLASS_WEIGHTS = _parse_temporal_class_weights(args)
     torch.manual_seed(args.seed)
-    data_paths = _parse_data_paths(args.train_paths) if (args.train_paths and not args.eval_only) else [args.path]
+    if args.train_datasets and (not args.train_paths or args.eval_only):
+        raise ValueError("--train-datasets requires active --train-paths training")
+    data_paths = (
+        _parse_data_paths(args.train_paths)
+        if (args.train_paths and not args.eval_only)
+        else [args.path]
+    )
+    dataset_names = (
+        _parse_dataset_names(args.train_datasets, len(data_paths))
+        if (args.train_paths and not args.eval_only)
+        else [args.dataset]
+    )
     if args.row_level:
         instances = []
-        for data_path in data_paths:
-            instances.extend(load_temporal_instances(data_path, limit=None, group_by_document=False))
+        for data_path, dataset_name in zip(data_paths, dataset_names):
+            instances.extend(load_temporal_instances(
+                data_path, limit=None, group_by_document=False,
+                dataset_name=dataset_name))
         if args.limit is not None:
             instances = instances[: args.limit]
         documents = None
     else:
         documents = []
-        for data_path in data_paths:
-            documents.extend(load_temporal_instances(data_path, limit=None, group_by_document=True))
+        for data_path, dataset_name in zip(data_paths, dataset_names):
+            documents.extend(load_temporal_instances(
+                data_path, limit=None, group_by_document=True,
+                dataset_name=dataset_name))
         instances = expand_document_query_instances(documents)
         if args.limit is not None:
             instances = instances[: args.limit]
+    _labels, active_dataset_names = _activate_labels_for_instances(instances)
+    args._active_dataset_names = active_dataset_names
+    _TEMPORAL_CLASS_WEIGHTS = _parse_temporal_class_weights(args)
     train, dev = split_instances(instances, args.dev_fraction, args.seed)
     if args.eval_only:
         # Test/eval-only mode should score the full requested file, e.g.
@@ -1099,6 +1261,8 @@ def main():
     print(f"dataset={args.path}", flush=True)
     if len(data_paths) > 1:
         print(f"train_paths={[str(path) for path in data_paths]}", flush=True)
+    print(f"dataset_identities={sorted({_instance_dataset(item) for item in instances})}",
+          flush=True)
     if documents is not None:
         print(f"documents={len(documents)} query_instances={len(instances)}", flush=True)
     print(f"loaded={len(instances)} train={len(train)} dev={len(dev)} device={args.device}", flush=True)
@@ -1148,6 +1312,19 @@ def main():
         flush=True,
     )
     train_data, _ctx, program = build_temporal_program(train, args)
+    if args.grounding_only:
+        transitive = getattr(program, "constraint_grounding_counts", {}).get(
+            "temporal_before_transitive", 0)
+        if args.transitivity and not args.no_global_consistency and transitive <= 0:
+            raise RuntimeError(
+                "temporal_before_transitive has zero groundings; mixed-corpus "
+                "training is blocked")
+        print(
+            f"[constraints] grounding-only validation passed: "
+            f"temporal_before_transitive={transitive}",
+            flush=True,
+        )
+        return 0
     dev_data = compile_program_train_dataset(
         dev,
         _ctx,

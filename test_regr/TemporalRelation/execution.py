@@ -1,7 +1,29 @@
 from .graph import TEMPORAL_LABELS, unpack_pair
 
 
-SUPPORTED_LABELS = set(TEMPORAL_LABELS)
+class _SupportedLabels:
+    """Live view of the active label vocabulary.
+
+    ``TEMPORAL_LABELS`` can be switched (MATRES's four relations vs the extended
+    TB-Dense set) when the graph is built. A ``set()`` snapshot taken at import
+    would freeze the old vocabulary and then reject perfectly valid relations,
+    so membership is resolved on each check instead.
+    """
+
+    def __contains__(self, value):
+        return value in TEMPORAL_LABELS
+
+    def __iter__(self):
+        return iter(TEMPORAL_LABELS)
+
+    def __len__(self):
+        return len(TEMPORAL_LABELS)
+
+    def __repr__(self):
+        return repr(tuple(TEMPORAL_LABELS))
+
+
+SUPPORTED_LABELS = _SupportedLabels()
 
 
 def create_query_logic(instance):

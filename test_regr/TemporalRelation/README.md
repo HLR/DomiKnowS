@@ -64,6 +64,55 @@ test_regr/TemporalRelation/data/MATRES/README.md
 
 `dataset.py` reads its default root from `config.json`. The checked-in value is `data`, which resolves to `test_regr/TemporalRelation/data`.
 
+## Local TB-Dense Data
+
+The public [`muk343/TimeBank-dense`](https://github.com/muk343/TimeBank-dense)
+mirror is a TimeML tree, not a four-column
+relation file. Clone it outside this repository and convert all official splits:
+
+```powershell
+git clone https://github.com/muk343/TimeBank-dense.git "$HOME/datasets/TimeBank-dense"
+python -m test_regr.TemporalRelation.convert_tbdense `
+  --source "$HOME/datasets/TimeBank-dense" `
+  --output-dir test_regr/TemporalRelation/data/TBDense `
+  --conflict-policy last
+```
+
+This writes `train.jsonl`, `dev.jsonl`, and `test.jsonl`. The converter keeps
+only event-to-event `TLINK` records, maps the mirror's `NONE` relation to
+`Vague`, and prints document, relation, byte, label, and source-anomaly counts.
+Strict conflict rejection is the default. The explicit `last` policy is needed
+for this mirror because it contains a small number of pairs whose later dense
+annotation conflicts with an earlier TimeBank `TLINK`; the summary reports the
+exact number selected this way.
+
+Before mixed-corpus training, require a real transitivity grounding:
+
+```powershell
+python test_regr/TemporalRelation/launcher.py program-train `
+  --path test_regr/TemporalRelation/data/TBDense/train.jsonl `
+  --dataset tbdense `
+  --limit 1 `
+  --max-events-per-instance 8 `
+  --pair-selection all `
+  --grounding-only
+```
+
+The command fails unless the diagnostic reports
+`temporal_before_transitive=<positive number>`.
+
+For a mixed MATRES/TB-Dense run, identify each training source explicitly:
+
+```powershell
+python test_regr/TemporalRelation/launcher.py program-train `
+  --train-paths test_regr/TemporalRelation/data/MATRES/timebank.txt,test_regr/TemporalRelation/data/TBDense/train.jsonl `
+  --train-datasets matres,tbdense
+```
+
+The program uses the seven-label union head and applies a different legal-label
+mask to every example. MATRES cannot train or predict TB-Dense-only containment
+or simultaneity labels, while TB-Dense cannot train or predict MATRES `Equal`.
+
 Recommended official-style setup:
 
 ```bash
@@ -446,6 +495,7 @@ python -m unittest \
 - `launcher.py`: cross-platform `python_path`/`PYTHONPATH` bootstrap and command dispatch.
 - `graph.py`: DomiKnowS concepts and relations.
 - `dataset.py`: MATRES/TB-Dense style file discovery and normalization.
+- `convert_tbdense.py`: strict TimeML/delimited conversion with split preservation.
 - `execution.py`: final `queryL` logic, candidate event-pair generation, query-event marker labels, and local learner examples.
 - `modules.py`: CLEVR-style predicate classifiers returning DomiKnowS-aligned logits.
 - `train_predicate_classifier.py`: training/evaluation runner for Qwen-backed concept heads and oracle smoke checks.

@@ -350,6 +350,120 @@ class TestTemporalRelationAdapter(unittest.TestCase):
         self.assertEqual(config.output_path("run.pt"), config_path.parent / "checkpoints" / "run.pt")
 
 
+class TBDenseTimeMLConverterTest(unittest.TestCase):
+    @staticmethod
+    def _timeml(extra_tlinks="", second_relation="BEFORE"):
+        return f"""<?xml version="1.0" encoding="utf-8"?>
+<TimeML>
+  <DOCID>dense-1</DOCID>
+  <TEXT>Alice <EVENT eid="e1">arrived</EVENT> before Bob
+    <EVENT eid="e2">left</EVENT> on <TIMEX3 tid="t1">Monday</TIMEX3>.</TEXT>
+  <MAKEINSTANCE eventID="e1" eiid="ei1" />
+  <MAKEINSTANCE eventID="e2" eiid="ei2" />
+  <TLINK lid="l1" eventInstanceID="ei1"
+         relatedToEventInstance="ei2" relType="{second_relation}" />
+  <TLINK lid="l2" eventInstanceID="ei1"
+         relatedToTime="t1" relType="IS_INCLUDED" />
+  <TLINK lid="l3" timeID="t1" relatedToEventInstance="ei2" relType="BEFORE" />
+  {extra_tlinks}
+</TimeML>"""
+
+    def test_timeml_parser_maps_instances_and_filters_time_links(self):
+        from test_regr.TemporalRelation.convert_tbdense import convert_timeml_file
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "doc.tml"
+            path.write_text(self._timeml(), encoding="utf-8")
+            rows = convert_timeml_file(path, split="train")
+
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(
+            (row["event_pairs"][0]["e1"], row["event_pairs"][0]["e2"],
+             row["event_pairs"][0]["label"]),
+                         ("e1", "e2", "Before"))
+        events = {event["id"]: event for event in row["events"]}
+        self.assertEqual((events["e1"]["text"], events["e2"]["text"]),
+                         ("arrived", "left"))
+        self.assertEqual(row["dataset"], "tbdense")
+        self.assertEqual(row["split"], "train")
+        token_ids = {token["id"] for token in row["tokens"]}
+        self.assertIn(events["e1"]["token_id"], token_ids)
+        self.assertIn(events["e2"]["token_id"], token_ids)
+        self.assertIn("Alice arrived before Bob left on Monday .", row["text"])
+
+    def test_clone_root_conversion_preserves_splits(self):
+        from test_regr.TemporalRelation.convert_tbdense import convert_timeml_source
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "TimeBank-dense"
+            output = Path(directory) / "converted"
+            for split in ("train", "dev", "test"):
+                split_dir = root / split
+                split_dir.mkdir(parents=True)
+                xml = self._timeml().replace(
+                    "<DOCID>dense-1</DOCID>", f"<DOCID>{split}-doc</DOCID>")
+                (split_dir / f"{split}.tml").write_text(xml, encoding="utf-8")
+
+            converted = convert_timeml_source(root, output_dir=output)
+            self.assertEqual(set(converted), {"train", "dev", "test"})
+            doc_sets = []
+            for split in ("train", "dev", "test"):
+                path = output / f"{split}.jsonl"
+                self.assertTrue(path.is_file())
+                loaded = load_temporal_instances(path, dataset_name="tbdense")
+                self.assertEqual(loaded[0]["dataset"], "tbdense")
+                self.assertEqual(loaded[0]["split"], split)
+                doc_sets.append({item["doc_id"] for item in loaded})
+            self.assertTrue(doc_sets[0].isdisjoint(doc_sets[1]))
+            self.assertTrue(doc_sets[0].isdisjoint(doc_sets[2]))
+            self.assertTrue(doc_sets[1].isdisjoint(doc_sets[2]))
+
+    def test_timeml_parser_rejects_unknown_instance_conflict_and_label(self):
+        from test_regr.TemporalRelation.convert_tbdense import convert_timeml_file
+
+        cases = {
+            "missing": self._timeml().replace(
+                'relatedToEventInstance="ei2"', 'relatedToEventInstance="ei404"', 1),
+            "conflict": self._timeml(
+                '<TLINK lid="l4" eventInstanceID="ei1" '
+                'relatedToEventInstance="ei2" relType="AFTER" />'),
+            "unknown": self._timeml(second_relation="OVERLAP"),
+        }
+        with TemporaryDirectory() as directory:
+            for name, xml in cases.items():
+                with self.subTest(case=name):
+                    path = Path(directory) / f"{name}.tml"
+                    path.write_text(xml, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, str(path).replace("\\", "\\\\")):
+                        convert_timeml_file(path)
+
+    def test_timeml_conflict_policy_last_is_explicit_and_counted(self):
+        from collections import Counter
+        from test_regr.TemporalRelation.convert_tbdense import convert_timeml_file
+
+        xml = self._timeml(
+            '<TLINK lid="l4" eventInstanceID="ei1" '
+            'relatedToEventInstance="ei2" relType="AFTER" />')
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "conflict.tml"
+            path.write_text(xml, encoding="utf-8")
+            stats = Counter()
+            rows = convert_timeml_file(
+                path, conflict_policy="last", stats=stats)
+        self.assertEqual(rows[0]["event_pairs"][0]["label"], "After")
+        self.assertEqual(stats["conflicting_tlinks_resolved"], 1)
+
+    def test_timeml_parser_reports_malformed_xml(self):
+        from test_regr.TemporalRelation.convert_tbdense import convert_timeml_file
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "broken.tml"
+            path.write_text("<TimeML><DOCID>x", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "malformed TimeML XML"):
+                convert_timeml_file(path)
+
+
 class ConstraintsActuallyTrainTest(unittest.TestCase):
     """Guards the four ways this example's constraints have been silently inert.
 
@@ -363,7 +477,8 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
     """
 
     @staticmethod
-    def _build(extra_argv=()):
+    def _build(extra_argv=(), instances=None, pair_selection="target",
+               max_pairs_per_instance=2):
         import torch
         import test_regr.TemporalRelation.program_qwen_train as P
         from test_regr.TemporalRelation.dataset import load_temporal_instances
@@ -371,18 +486,20 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
         class _StubLearner(torch.nn.Module):
             def __init__(self, *a, **k):
                 super().__init__()
-                self.lin = torch.nn.Linear(1, 4)
+                self.lin = torch.nn.Linear(1, len(P.TEMPORAL_LABELS))
 
-            def forward(self, prompts):
+            def forward(self, prompts, dataset_mask=None):
                 n = 1 if isinstance(prompts, str) else len(list(prompts))
-                return self.lin(torch.zeros(n, 1))
+                logits = self.lin(torch.zeros(n, 1))
+                return P.apply_dataset_mask(logits, dataset_mask)
 
         original = P.QwenTemporalRelationLearner
         P.QwenTemporalRelationLearner = _StubLearner
         try:
             data_path = (Path(__file__).parent / "data" / "MATRES" / "timebank.txt")
-            instances = P.expand_document_query_instances(
-                load_temporal_instances(data_path))[:3]
+            if instances is None:
+                instances = P.expand_document_query_instances(
+                    load_temporal_instances(data_path))[:3]
             argv = sys.argv
             sys.argv = ["test", *extra_argv]
             try:
@@ -391,8 +508,8 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
                 sys.argv = argv
             args.device = "cpu"
             args.max_events_per_instance = 8
-            args.pair_selection = "target"
-            args.max_pairs_per_instance = 2
+            args.pair_selection = pair_selection
+            args.max_pairs_per_instance = max_pairs_per_instance
             args.lora_r = 0
             return P.build_temporal_program(instances, args)
         finally:
@@ -418,6 +535,28 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
             with self.subTest(rule=name):
                 self.assertIsNotNone(losses[name]["lossTensor"],
                                      f"{name} produced no grounding")
+
+    def test_transitivity_has_positive_groundings(self):
+        import copy
+
+        instance = copy.deepcopy(SAMPLE_INSTANCE)
+        instance["dataset"] = "matres"
+        dataset, ctx, program = self._build(
+            ["--no-constraint-gradient-check"],
+            instances=[instance],
+            pair_selection="all",
+            max_pairs_per_instance=None,
+        )
+        datanode = next(iter(program.populate([dataset[0]], device="cpu")))
+        datanode.inferLocal(keys=("softmax",))
+        losses = datanode.calculateLcLoss(tnorm="P")
+        key = next(
+            lc.lcName for _key, lc in ctx.graph.logicalConstrainsRecursive
+            if getattr(lc, "name", None) == "temporal_before_transitive"
+        )
+        tensor = losses[key]["lossTensor"]
+        self.assertIsNotNone(tensor)
+        self.assertGreater(tensor.numel(), 0)
 
     def test_constraint_loss_reaches_model_parameters(self):
         """closs must be differentiable *and* touch a learnable weight."""
@@ -471,6 +610,180 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
 
         after = program.evaluate_condition(dev_data, device="cpu", return_dict=True)
         self.assertEqual(after["query_total"], len(dev_data))
+
+    def test_matres_label_space_and_rules_are_unchanged(self):
+        """The extended vocabulary must be opt-in, not the new default."""
+        from test_regr.TemporalRelation.graph import MATRES_LABELS, TEMPORAL_LABELS
+
+        ctx = create_temporal_graph()
+        self.assertEqual(tuple(TEMPORAL_LABELS), MATRES_LABELS)
+        rules = [lc.name for _k, lc in ctx.graph.logicalConstrainsRecursive
+                 if getattr(lc, "headLC", False)]
+        self.assertEqual(len(rules), 6)
+
+    def test_extended_label_space_adds_containment_rules(self):
+        from test_regr.TemporalRelation.graph import (
+            EXTENDED_LABELS, MATRES_LABELS, TEMPORAL_LABELS)
+
+        base = {lc.name for _k, lc in create_temporal_graph().graph.logicalConstrainsRecursive
+                if getattr(lc, "headLC", False)}
+        ctx = create_temporal_graph(labels=EXTENDED_LABELS)
+        try:
+            self.assertEqual(len(TEMPORAL_LABELS), 7)
+            extended = {lc.name for _k, lc in ctx.graph.logicalConstrainsRecursive
+                        if getattr(lc, "headLC", False)}
+            added = extended - base
+            self.assertIn("temporal_includes_inverse_is_included", added)
+            self.assertIn("temporal_simultaneous_symmetric", added)
+            self.assertIn("temporal_includes_transitive", added)
+            # Allen composition is disjunctive in general; the ambiguous entry
+            # Includes o Before must NOT be encoded as a definite implication.
+            self.assertNotIn("temporal_includes_before_is_before", added)
+        finally:
+            create_temporal_graph(labels=MATRES_LABELS)
+
+    def test_simultaneous_is_not_collapsed_into_equal(self):
+        """The old normaliser folded SIMULTANEOUS into Equal, losing the relation."""
+        from test_regr.TemporalRelation.dataset import _normalize_label
+
+        self.assertEqual(_normalize_label("SIMULTANEOUS"), "Simultaneous")
+        self.assertEqual(_normalize_label("EQUAL"), "Equal")
+        self.assertEqual(_normalize_label("IS_INCLUDED"), "IsIncluded")
+        self.assertEqual(_normalize_label("i"), "Includes")
+        self.assertEqual(_normalize_label("NONE"), "Vague")
+        with self.assertRaises(ValueError):
+            _normalize_label("OVERLAP")
+
+    def test_matres_files_use_only_matres_relations(self):
+        """Guards the assumption that dropping SIMULTANEOUS->Equal is safe."""
+        from test_regr.TemporalRelation.dataset import _normalize_label
+
+        path = Path(__file__).parent / "data" / "MATRES" / "timebank.txt"
+        seen = set()
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                fields = line.rstrip("\n").split("\t")
+                if len(fields) == 6:
+                    seen.add(_normalize_label(fields[5]))
+        self.assertEqual(seen, {"Before", "After", "Equal", "Vague"})
+
+    def test_legal_label_mask_blocks_out_of_corpus_relations(self):
+        """A MATRES row must never be trainable toward a TB-Dense-only relation."""
+        import test_regr.TemporalRelation.program_qwen_train as P
+        from test_regr.TemporalRelation.graph import EXTENDED_LABELS
+
+        mask = P.legal_label_mask("matres", EXTENDED_LABELS)
+        illegal = [label for label, ok in zip(EXTENDED_LABELS, mask.tolist()) if not ok]
+        self.assertEqual(set(illegal), {"Includes", "IsIncluded", "Simultaneous"})
+
+        loss = P.WeightedTemporalCrossEntropyLoss(None, dataset_mask=mask)
+        logits = torch.zeros(1, len(EXTENDED_LABELS))
+        target = torch.tensor([0])
+        value = loss(logits, target)
+        self.assertTrue(torch.isfinite(value))
+        # softmax over the masked logits gives the illegal classes zero mass
+        masked = logits.masked_fill(~mask.unsqueeze(0), float("-inf"))
+        probs = torch.softmax(masked, dim=-1)
+        self.assertAlmostEqual(float(probs[0, EXTENDED_LABELS.index("Includes")]), 0.0)
+        self.assertAlmostEqual(float(probs.sum()), 1.0, places=5)
+
+        trainable = torch.zeros(1, len(EXTENDED_LABELS), requires_grad=True)
+        P.WeightedTemporalCrossEntropyLoss(None, dataset_mask=mask)(
+            trainable, target).backward()
+        self.assertEqual(
+            float(trainable.grad[0, EXTENDED_LABELS.index("Includes")]), 0.0)
+
+    def test_tbdense_converter_emits_loader_ready_rows(self):
+        from test_regr.TemporalRelation.convert_tbdense import convert_rows
+        from test_regr.TemporalRelation.dataset import _normalize_grouped_rows
+
+        source = [
+            ["doc1", "e1", "e2", "b"],
+            ["doc1", "e2", "e3", "i"],
+            ["doc1", "e1", "e3", "s"],
+        ]
+        rows = list(convert_rows(iter(source)))
+        self.assertEqual([row["label"] for row in rows],
+                         ["Before", "Includes", "Simultaneous"])
+        self.assertTrue(all(row["dataset"] == "tbdense" for row in rows))
+
+        # the existing loader consumes them with no new parser
+        instances = _normalize_grouped_rows(rows)
+        self.assertEqual(len(instances), 1)
+        self.assertEqual(len(instances[0]["event_pairs"]), 3)
+        self.assertEqual(instances[0]["dataset"], "tbdense")
+
+    def test_mixed_corpus_rows_receive_different_masks(self):
+        import copy
+        import test_regr.TemporalRelation.program_qwen_train as P
+        from test_regr.TemporalRelation.graph import EXTENDED_LABELS
+
+        matres = copy.deepcopy(SAMPLE_INSTANCE)
+        matres["dataset"] = "matres"
+        tbdense = copy.deepcopy(SAMPLE_INSTANCE)
+        tbdense["doc_id"] = "dense_doc"
+        tbdense["dataset"] = "tbdense"
+        tbdense["event_pairs"][0]["label"] = "Includes"
+        tbdense["query_pair"] = {
+            "e1": "packed_bag", "e2": "left_house", "label": "Includes"}
+
+        labels, names = P._activate_labels_for_instances([matres, tbdense])
+        self.assertEqual(labels, EXTENDED_LABELS)
+        self.assertEqual(names, {"matres", "tbdense"})
+        ctx = create_temporal_graph(labels=labels)
+        rows = P.compile_program_train_dataset(
+            [matres, tbdense], ctx, device="cpu",
+            pair_selection="target", max_pairs_per_instance=2)
+        matres_mask = rows[0]["dataset_mask"][0]
+        dense_mask = rows[1]["dataset_mask"][0]
+        self.assertFalse(bool(matres_mask[EXTENDED_LABELS.index("Includes")]))
+        self.assertTrue(bool(dense_mask[EXTENDED_LABELS.index("Includes")]))
+        self.assertTrue(bool(matres_mask[EXTENDED_LABELS.index("Equal")]))
+        self.assertFalse(bool(dense_mask[EXTENDED_LABELS.index("Equal")]))
+
+    def test_dataset_cli_alignment_and_loader_conflict_are_rejected(self):
+        import test_regr.TemporalRelation.program_qwen_train as P
+
+        with self.assertRaisesRegex(ValueError, "supplied 1 value"):
+            P._parse_dataset_names("matres", expected=2)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "rows.jsonl"
+            path.write_text(json.dumps({
+                "doc_id": "d", "e1": "e1", "e2": "e2",
+                "label": "Before", "dataset": "matres",
+            }) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "conflicts"):
+                load_temporal_instances(path, dataset_name="tbdense")
+
+    def test_mixed_corpus_program_masks_logits_before_all_consumers(self):
+        import copy
+        from test_regr.TemporalRelation.graph import EXTENDED_LABELS
+
+        matres = copy.deepcopy(SAMPLE_INSTANCE)
+        matres["dataset"] = "matres"
+        tbdense = copy.deepcopy(SAMPLE_INSTANCE)
+        tbdense["doc_id"] = "dense_doc"
+        tbdense["dataset"] = "tbdense"
+        tbdense["event_pairs"][0]["label"] = "Includes"
+        tbdense["query_pair"] = {
+            "e1": "packed_bag", "e2": "left_house", "label": "Includes"}
+
+        dataset, ctx, program = self._build(
+            ["--no-transitivity", "--no-constraint-gradient-check"],
+            instances=[matres, tbdense],
+        )
+        illegal = {
+            "matres": ["Includes", "IsIncluded", "Simultaneous"],
+            "tbdense": ["Equal"],
+        }
+        for row, dataset_name in zip(dataset, ("matres", "tbdense")):
+            _mloss, _metric, *output = program.model(row)
+            constraint_loss, *_ = program.cmodel(output[1])
+            self.assertTrue(torch.isfinite(constraint_loss))
+            logits = ctx.event_pair[ctx.temporal_relation](row)
+            for label in illegal[dataset_name]:
+                self.assertTrue(torch.isneginf(
+                    logits[:, EXTENDED_LABELS.index(label)]).all())
 
     def test_splitLossColumns_tolerates_an_empty_variable(self):
         """An ungroundable variable must not raise (pre-existing IndexError)."""
