@@ -113,6 +113,28 @@ The program uses the seven-label union head and applies a different legal-label
 mask to every example. MATRES cannot train or predict TB-Dense-only containment
 or simultaneity labels, while TB-Dense cannot train or predict MATRES `Equal`.
 
+Long program-training runs write an atomic resume bundle after every completed
+epoch by default. For an output such as `models/matres-tbdense.pt`, the bundles
+are named `models/matres-tbdense.epoch-001.resume.pt`, and so on. They contain
+only trainable model weights plus optimizer, constraint-session, and random
+state; the frozen backbone is reloaded from `--model-path`. Resume with the same
+dataset and training schedule:
+
+```bash
+python test_regr/TemporalRelation/launcher.py program-train \
+  --train-paths <same-comma-separated-paths> \
+  --train-datasets matres,matres,tbdense \
+  --warmup-epochs 2 --constraint-epochs 3 \
+  --resume test_regr/TemporalRelation/models/matres-tbdense.epoch-003.resume.pt \
+  --output test_regr/TemporalRelation/models/matres-tbdense.pt
+```
+
+Resume rejects a changed epoch schedule, label/corpus vocabulary, training
+style, or backbone path instead of silently restarting a different experiment.
+Use `--checkpoint-every N` to save less often or `--checkpoint-every 0` to
+disable resumable checkpoints. The final `--output` remains the existing
+model-only checkpoint used by `--eval-only`.
+
 Recommended official-style setup:
 
 ```bash

@@ -632,11 +632,24 @@ class LossProgram(LearningBasedProgram):
               batch_size=1, dataset_size=None, print_loss=True,
               warmup_epochs=0, constraint_epochs=0,
               persist_c_session=False, reset_c_session=False,
+              start_epoch=0, resume_c_session=None,
+              resume_copt_state=None, epoch_end_callback=None,
               **kwargs):
         """
         Base training loop. Subclasses pass algorithm-specific kwargs.
         """
-        if persist_c_session:
+        if resume_copt_state is not None:
+            if self.copt is None:
+                raise ValueError(
+                    "Cannot restore constraint optimizer state because this "
+                    "program has no constraint optimizer")
+            self.copt.load_state_dict(resume_copt_state)
+
+        if resume_c_session is not None:
+            c_session = dict(resume_c_session)
+            if persist_c_session:
+                self._persistent_c_session = c_session
+        elif persist_c_session:
             if reset_c_session or getattr(self, '_persistent_c_session', None) is None:
                 self._persistent_c_session = self._init_session()
             c_session = self._persistent_c_session
@@ -648,7 +661,9 @@ class LossProgram(LearningBasedProgram):
                 training_set, valid_set, test_set,
                 warmup_epochs, constraint_epochs,
                 batch_size, dataset_size, print_loss,
-                c_session, persist_c_session=persist_c_session, **kwargs
+                c_session, persist_c_session=persist_c_session,
+                start_epoch=start_epoch,
+                epoch_end_callback=epoch_end_callback, **kwargs
             )
         else:
             return super().train(
@@ -666,8 +681,15 @@ class LossProgram(LearningBasedProgram):
     def _phased_training(self, training_set, valid_set, test_set,
                          warmup_epochs, constraint_epochs,
                          batch_size, dataset_size, print_loss,
-                         c_session, persist_c_session=False, **kwargs):
+                         c_session, persist_c_session=False, start_epoch=0,
+                         epoch_end_callback=None, **kwargs):
         """Execute phased training (warmup -> constraint)."""
+        total_epochs = int(warmup_epochs) + int(constraint_epochs)
+        start_epoch = int(start_epoch)
+        if start_epoch < 0 or start_epoch > total_epochs:
+            raise ValueError(
+                f"start_epoch must be between 0 and {total_epochs}, got "
+                f"{start_epoch}")
         self.stop = False
         epoch_counter = 0
         
@@ -677,6 +699,8 @@ class LossProgram(LearningBasedProgram):
                 if self.stop:
                     break
                 epoch_counter += 1
+                if epoch_counter <= start_epoch:
+                    continue
                 self.epoch = epoch_counter
                 logger.info(f'Epoch: {self.epoch}')
                 self.call_epoch(
@@ -688,6 +712,9 @@ class LossProgram(LearningBasedProgram):
                 )
                 if valid_set is not None:
                     self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+                if epoch_end_callback is not None:
+                    epoch_end_callback(
+                        self, epoch_counter, 'warmup', dict(c_session))
         
         if constraint_epochs > 0 and not self.stop:
             logger.info(f"[Phase 2] Constraint training for {constraint_epochs} epochs")
@@ -695,6 +722,8 @@ class LossProgram(LearningBasedProgram):
                 if self.stop:
                     break
                 epoch_counter += 1
+                if epoch_counter <= start_epoch:
+                    continue
                 self.epoch = epoch_counter
                 logger.info(f'Epoch: {self.epoch}')
                 self.call_epoch(
@@ -706,6 +735,9 @@ class LossProgram(LearningBasedProgram):
                 )
                 if valid_set is not None:
                     self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+                if epoch_end_callback is not None:
+                    epoch_end_callback(
+                        self, epoch_counter, 'constraint', dict(c_session))
         
         if test_set is not None:
             self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)

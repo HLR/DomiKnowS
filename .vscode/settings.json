@@ -31,5 +31,6 @@
         "tnorm",
         "tnorms",
         "warmpup"
-    ]
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

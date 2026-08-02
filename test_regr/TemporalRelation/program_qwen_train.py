@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import functools
+import os
+import random
 from pathlib import Path
 
 import torch
@@ -38,6 +40,24 @@ DEFAULT_OUTPUT = TEMPORAL_CONFIG.output_path("qwen3_8b_temporal_domiknows_progra
 LOCAL_IGNORE_LABEL = -100
 _TEMPORAL_CLASS_WEIGHTS = None
 _TEMPORAL_DATASET_MASK = None
+TRAINING_CHECKPOINT_FORMAT = "temporal-relation-training-v1"
+_RESUME_SIGNATURE_FIELDS = (
+    "path", "dataset", "train_paths", "train_datasets", "limit",
+    "row_level", "max_events_per_instance", "pair_selection",
+    "max_pairs_per_instance", "dev_fraction", "seed", "model_path",
+    "freeze_backbone", "lora_r", "lora_alpha", "lora_dropout",
+    "lora_target_modules", "max_length", "encode_batch_size", "lr",
+    "tnorm", "exactly_one_label", "transitivity", "global_constraint_loss",
+    "global_constraint_loss_weight", "executable_constraint_loss_weight",
+    "beta", "training_style", "constraint_only", "constraint_loss_scale",
+    "c_warmup_iters", "c_freq", "c_freq_increase",
+    "c_freq_increase_freq", "c_lr_decay", "c_lr_decay_param",
+    "executable_pos_weight", "use_gumbel", "hard_gumbel",
+    "gumbel_temp_start", "gumbel_temp_end", "gumbel_anneal_start_epoch",
+    "gumbel_anneal_epochs", "label_weights", "vague_weight", "equal_weight",
+    "supervise_local_predicates", "no_global_consistency",
+    "boolean_executable_assertion",
+)
 
 
 #: Relations each corpus can actually express. Under a union label space the
@@ -111,6 +131,189 @@ def _make_temporal_ce_loss(weights=None, dataset_mask=None):
     if weights is None and dataset_mask is None:
         return NBCrossEntropyLoss()
     return WeightedTemporalCrossEntropyLoss(weights, dataset_mask=dataset_mask)
+
+
+def _cpu_checkpoint_value(value):
+    """Detach checkpoint tensors to CPU without changing the live optimizer."""
+    if torch.is_tensor(value):
+        return value.detach().cpu()
+    if isinstance(value, dict):
+        return {key: _cpu_checkpoint_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_cpu_checkpoint_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_cpu_checkpoint_value(item) for item in value)
+    return value
+
+
+def _trainable_model_state(model):
+    """Return only learned parameters; the frozen backbone reloads by model id."""
+    state = model.state_dict()
+    names = {name for name, parameter in model.named_parameters()
+             if parameter.requires_grad}
+    missing = sorted(name for name in names if name not in state)
+    if missing:
+        raise RuntimeError(
+            f"Trainable parameters missing from model state_dict: {missing[:5]}")
+    return {
+        name: state[name].detach().cpu().clone()
+        for name in sorted(names)
+    }
+
+
+def _training_checkpoint_path(output, completed_epoch):
+    suffix = output.suffix or ".pt"
+    return output.with_name(
+        f"{output.stem}.epoch-{int(completed_epoch):03d}.resume{suffix}")
+
+
+def _resume_signature(args):
+    def stable(value):
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, (set, frozenset)):
+            return sorted(value)
+        if isinstance(value, tuple):
+            return list(value)
+        return value
+
+    return {
+        "active_labels": list(TEMPORAL_LABELS),
+        "active_datasets": sorted(args._active_dataset_names),
+        "arguments": {
+            name: stable(getattr(args, name, None))
+            for name in _RESUME_SIGNATURE_FIELDS
+        },
+        "class_weights": (
+            list(_TEMPORAL_CLASS_WEIGHTS)
+            if _TEMPORAL_CLASS_WEIGHTS is not None else None
+        ),
+    }
+
+
+def _atomic_torch_save(payload, path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        torch.save(payload, temporary)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def save_training_checkpoint(program, args, completed_epoch, phase, c_session,
+                             warmup_epochs, constraint_epochs):
+    """Write a compact, atomic bundle capable of exact epoch-boundary resume."""
+    path = _training_checkpoint_path(args.output, completed_epoch)
+    cuda_rng_state = None
+    if torch.cuda.is_available() and str(args.device).startswith("cuda"):
+        cuda_rng_state = torch.cuda.get_rng_state(args.device).cpu()
+    payload = {
+        "format": TRAINING_CHECKPOINT_FORMAT,
+        "completed_epoch": int(completed_epoch),
+        "phase": str(phase),
+        "schedule": {
+            "warmup_epochs": int(warmup_epochs),
+            "constraint_epochs": int(constraint_epochs),
+        },
+        "training_signature": _resume_signature(args),
+        "model_trainable_state": _trainable_model_state(program.model),
+        "cmodel_state": _cpu_checkpoint_value(program.cmodel.state_dict()),
+        "optimizer_state": (
+            _cpu_checkpoint_value(program.opt.state_dict())
+            if program.opt is not None else None
+        ),
+        "constraint_optimizer_state": (
+            _cpu_checkpoint_value(program.copt.state_dict())
+            if program.copt is not None else None
+        ),
+        "c_session": dict(c_session),
+        "torch_rng_state": torch.get_rng_state(),
+        "cuda_rng_state": cuda_rng_state,
+        "python_rng_state": random.getstate(),
+    }
+    _atomic_torch_save(payload, path)
+    print(
+        f"checkpoint={path} completed_epoch={completed_epoch} phase={phase}",
+        flush=True,
+    )
+    return path
+
+
+def load_training_checkpoint(path, program, args, warmup_epochs,
+                             constraint_epochs):
+    """Restore a training bundle and return state consumed by program.train."""
+    checkpoint = torch.load(path, map_location=args.device, weights_only=False)
+    if not isinstance(checkpoint, dict) or checkpoint.get("format") != TRAINING_CHECKPOINT_FORMAT:
+        raise ValueError(
+            f"{path} is not a {TRAINING_CHECKPOINT_FORMAT} resume checkpoint")
+
+    expected_schedule = {
+        "warmup_epochs": int(warmup_epochs),
+        "constraint_epochs": int(constraint_epochs),
+    }
+    if checkpoint.get("schedule") != expected_schedule:
+        raise ValueError(
+            f"Resume checkpoint schedule {checkpoint.get('schedule')} conflicts "
+            f"with requested schedule {expected_schedule}")
+    expected_signature = _resume_signature(args)
+    if checkpoint.get("training_signature") != expected_signature:
+        raise ValueError(
+            "Resume checkpoint training configuration conflicts with the "
+            "current datasets, model, graph, or optimizer arguments")
+
+    saved_state = checkpoint.get("model_trainable_state")
+    if not isinstance(saved_state, dict) or not saved_state:
+        raise ValueError("Resume checkpoint has no trainable model state")
+    current_trainable = {
+        name for name, parameter in program.model.named_parameters()
+        if parameter.requires_grad
+    }
+    if set(saved_state) != current_trainable:
+        missing = sorted(current_trainable - set(saved_state))
+        unexpected = sorted(set(saved_state) - current_trainable)
+        raise ValueError(
+            "Resume checkpoint trainable parameter mismatch: "
+            f"missing={missing[:5]} unexpected={unexpected[:5]}")
+    incompatible = program.model.load_state_dict(saved_state, strict=False)
+    if incompatible.unexpected_keys:
+        raise ValueError(
+            f"Unexpected model keys in resume checkpoint: "
+            f"{incompatible.unexpected_keys[:5]}")
+    program.cmodel.load_state_dict(checkpoint.get("cmodel_state", {}))
+
+    optimizer_state = checkpoint.get("optimizer_state")
+    if optimizer_state is not None:
+        if program.opt is None:
+            raise ValueError(
+                "Resume checkpoint contains optimizer state but the program "
+                "has no optimizer")
+        program.opt.load_state_dict(optimizer_state)
+
+    torch.set_rng_state(checkpoint["torch_rng_state"].cpu())
+    cuda_rng_state = checkpoint.get("cuda_rng_state")
+    if cuda_rng_state is not None:
+        if not torch.cuda.is_available() or not str(args.device).startswith("cuda"):
+            raise ValueError(
+                "CUDA resume checkpoint requires a CUDA training device")
+        torch.cuda.set_rng_state(cuda_rng_state.cpu(), device=args.device)
+    if checkpoint.get("python_rng_state") is not None:
+        random.setstate(checkpoint["python_rng_state"])
+
+    completed_epoch = int(checkpoint.get("completed_epoch", -1))
+    total_epochs = int(warmup_epochs) + int(constraint_epochs)
+    if completed_epoch < 0 or completed_epoch > total_epochs:
+        raise ValueError(
+            f"Resume checkpoint completed_epoch={completed_epoch} is outside "
+            f"the requested {total_epochs}-epoch schedule")
+    return {
+        "completed_epoch": completed_epoch,
+        "c_session": checkpoint.get("c_session") or {},
+        "constraint_optimizer_state": checkpoint.get(
+            "constraint_optimizer_state"),
+    }
 
 
 def _parse_temporal_class_weights(args):
@@ -1163,7 +1366,25 @@ def parse_args():
     parser.add_argument("--equal-weight", type=float, default=1.0, help="Multiplier for the Equal class CE weight.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--eval-only", action="store_true", help="Load --checkpoint/--output and only run dev evaluation.")
-    parser.add_argument("--checkpoint", type=Path, default=None, help="Checkpoint to load for --eval-only; defaults to --output.")
+    parser.add_argument("--checkpoint", type=Path, default=None, help="Model weights to load for evaluation or warm-start training.")
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help=(
+            "Resume training at the next epoch from an *.epoch-NNN.resume.pt "
+            "bundle, restoring optimizer, constraint schedule, and RNG state."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=1,
+        help=(
+            "Write an atomic resumable bundle every N completed epochs beside "
+            "--output (default: 1; use 0 to disable)."
+        ),
+    )
     parser.add_argument("--skip-condition-eval", action="store_true", help="Skip slow executable queryL/iotaL condition evaluation.")
     parser.add_argument(
         "--grounding-only",
@@ -1219,6 +1440,12 @@ def main():
     global _TEMPORAL_CLASS_WEIGHTS
     args = parse_args()
     torch.manual_seed(args.seed)
+    if args.checkpoint_every < 0:
+        raise ValueError("--checkpoint-every must be zero or positive")
+    if args.resume and args.checkpoint:
+        raise ValueError("--resume and --checkpoint are mutually exclusive")
+    if args.resume and (args.eval_only or args.grounding_only):
+        raise ValueError("--resume is only valid for training")
     if args.train_datasets and (not args.train_paths or args.eval_only):
         raise ValueError("--train-datasets requires active --train-paths training")
     data_paths = (
@@ -1352,6 +1579,32 @@ def main():
         # DomiKnowS phased training executes warmup/constraint epochs directly,
         # so initialize the main optimizer here like the examples do externally.
         program.opt = Optim(program.model.parameters())
+        resume_state = {
+            "completed_epoch": 0,
+            "c_session": None,
+            "constraint_optimizer_state": None,
+        }
+        if args.resume:
+            resume_state = load_training_checkpoint(
+                args.resume, program, args, warmup_epochs, constraint_epochs)
+            print(
+                f"resumed={args.resume} "
+                f"completed_epoch={resume_state['completed_epoch']}",
+                flush=True,
+            )
+
+        def checkpoint_after_epoch(active_program, completed_epoch, phase,
+                                   c_session):
+            if args.checkpoint_every <= 0:
+                return
+            total_epochs = warmup_epochs + constraint_epochs
+            if (completed_epoch % args.checkpoint_every != 0
+                    and completed_epoch != total_epochs):
+                return
+            save_training_checkpoint(
+                active_program, args, completed_epoch, phase, c_session,
+                warmup_epochs, constraint_epochs)
+
         program.train(
             train_data,
             valid_set=dev_data,
@@ -1368,6 +1621,10 @@ def main():
             constraint_only=args.constraint_only,
             constraint_loss_scale=args.constraint_loss_scale,
             num_epochs=warmup_epochs + constraint_epochs,
+            start_epoch=resume_state["completed_epoch"],
+            resume_c_session=resume_state["c_session"],
+            resume_copt_state=resume_state["constraint_optimizer_state"],
+            epoch_end_callback=checkpoint_after_epoch,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         program.save(args.output)

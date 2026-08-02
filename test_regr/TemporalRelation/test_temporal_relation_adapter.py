@@ -568,6 +568,74 @@ class ConstraintsActuallyTrainTest(unittest.TestCase):
         self.assertIsNotNone(reached)
         self.assertGreater(reached, 0)
 
+    def test_epoch_checkpoint_round_trips_trainable_and_session_state(self):
+        import types
+        import test_regr.TemporalRelation.program_qwen_train as P
+
+        dataset, _ctx, program = self._build(
+            ["--no-transitivity", "--no-constraint-gradient-check"])
+        program.opt = torch.optim.AdamW(program.model.parameters(), lr=1e-3)
+        trainable = {
+            name: parameter.detach().clone()
+            for name, parameter in program.model.named_parameters()
+            if parameter.requires_grad
+        }
+        self.assertTrue(trainable)
+
+        with TemporaryDirectory() as directory:
+            args = types.SimpleNamespace(
+                output=Path(directory) / "temporal.pt",
+                device="cpu",
+                _active_dataset_names={"matres"},
+                training_style="simple",
+                model_path="stub-model",
+            )
+            path = P.save_training_checkpoint(
+                program, args, completed_epoch=1, phase="warmup",
+                c_session={"iter": len(dataset)}, warmup_epochs=1,
+                constraint_epochs=1)
+            self.assertTrue(path.is_file())
+            self.assertLess(path.stat().st_size, 1_000_000)
+
+            with torch.no_grad():
+                for parameter in program.model.parameters():
+                    if parameter.requires_grad:
+                        parameter.add_(10.0)
+            args.tnorm = "G"
+            with self.assertRaisesRegex(ValueError, "configuration conflicts"):
+                P.load_training_checkpoint(
+                    path, program, args, warmup_epochs=1,
+                    constraint_epochs=1)
+            args.tnorm = None
+            restored = P.load_training_checkpoint(
+                path, program, args, warmup_epochs=1,
+                constraint_epochs=1)
+
+        self.assertEqual(restored["completed_epoch"], 1)
+        self.assertEqual(restored["c_session"], {"iter": len(dataset)})
+        for name, parameter in program.model.named_parameters():
+            if parameter.requires_grad:
+                self.assertTrue(torch.equal(parameter, trainable[name]))
+
+    def test_phased_resume_skips_completed_epoch_and_calls_checkpoint_hook(self):
+        dataset, _ctx, program = self._build(
+            ["--no-transitivity", "--no-constraint-gradient-check"])
+        program.opt = torch.optim.AdamW(program.model.parameters(), lr=1e-3)
+        completed = []
+
+        program.train(
+            [dataset[0]], warmup_epochs=1, constraint_epochs=1,
+            start_epoch=1, resume_c_session={"iter": 1},
+            epoch_end_callback=(
+                lambda _program, epoch, phase, session:
+                completed.append((epoch, phase, dict(session)))
+            ),
+        )
+
+        self.assertEqual(len(completed), 1)
+        self.assertEqual(completed[0][0:2], (2, "constraint"))
+        self.assertGreater(completed[0][2]["iter"], 1)
+
     def test_exactly_one_loss_is_not_constant(self):
         """A constant loss carries no gradient, however plausible its value."""
         dataset, ctx, program = self._build(["--no-transitivity"])
