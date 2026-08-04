@@ -123,10 +123,10 @@ class TorchModel(torch.nn.Module):
                 data_item = {None: data_item}
         data_item = self.move(data_item)
 
-        for sensor in self.graph.get_sensors(CacheSensor, lambda s: s.cache):
+        for sensor in self.graph.get_active_sensors(CacheSensor, lambda s: s.cache):
             data_hash = data_hash or self.data_hash(data_item)
             sensor.fill_hash(data_hash)
-        for sensor in self.graph.get_sensors(ReaderSensor):
+        for sensor in self.graph.get_active_sensors(ReaderSensor):
             sensor.fill_data(data_item)
             
         if build:
@@ -153,6 +153,12 @@ class TorchModel(torch.nn.Module):
 
     def populate(self):
         raise NotImplementedError
+
+    def iter_active_poi(self):
+        """Iterate POI properties enabled for the graph's current step."""
+        for prop in self.poi:
+            if self.graph.is_property_active(prop):
+                yield prop
 
 def model_helper(Model, *args, **kwargs):
     return lambda graph: Model(graph, *args, **kwargs)
@@ -333,7 +339,7 @@ class PoiModel(TorchModel):
         # import time
         # counter = 0
         # start = time.time()
-        for prop in self.poi:
+        for prop in self.iter_active_poi():
             # make sure the sensors are evaluated
             if run:
                 for sensor in prop.find(TorchSensor):
@@ -435,7 +441,7 @@ class SolverModel(PoiModel):
             curr_lc = builder[execute_lc_key]
 
         do_switch = LogicDataset.do_switch_key in builder
-        for i, prop in enumerate(self.poi):
+        for i, prop in enumerate(self.iter_active_poi()):
             if do_switch and isinstance(prop.prop_name, LogicalConstrain):
                 if prop.prop_name.lcName != curr_lc:
                     continue
@@ -589,7 +595,7 @@ class GumbelSolverModel(SolverModel):
             curr_lc = builder[execute_lc_key]
 
         do_switch = LogicDataset.do_switch_key in builder
-        for i, prop in enumerate(self.poi):
+        for i, prop in enumerate(self.iter_active_poi()):
             if do_switch and isinstance(prop.prop_name, LogicalConstrain):
                 if prop.prop_name.lcName != curr_lc:
                     continue
@@ -654,7 +660,7 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def populate(self, builder):
         losses = {}
         metrics = {}
-        for prop in self.poi:
+        for prop in self.iter_active_poi():
             targets = []
             predictors = []
             for sensor in prop.find(TorchSensor):
@@ -757,7 +763,7 @@ class SolverModelDictLoss(PoiModelDictLoss):
         self.inferTypes = inferTypes
 
     def inference(self, builder):
-        for prop in self.poi:
+        for prop in self.iter_active_poi():
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
 #             for output_sensor, target_sensor in self.find_sensors(prop):
@@ -836,7 +842,7 @@ class GumbelSolverModelDictLoss(SolverModelDictLoss):
     
     def inference(self, builder):
         """Override inference to support Gumbel-Softmax."""
-        for prop in self.poi:
+        for prop in self.iter_active_poi():
             for sensor in prop.find(TorchSensor):
                 sensor(builder)
 

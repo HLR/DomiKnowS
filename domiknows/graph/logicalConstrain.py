@@ -184,6 +184,27 @@ class LogicalConstrain(LcElement):
                 lcConcepts.add(eItem[0].name)
                 
         return lcConcepts
+
+    @property
+    def declared_active(self):
+        """The explicit activation flag, before graph concept filtering."""
+        return self._active
+
+    @property
+    def active(self):
+        """Whether this constraint is active in the current graph step."""
+        if not self._active:
+            return False
+        checker = getattr(self.graph, 'are_concepts_active', None)
+        return checker(self.getLcConcepts()) if callable(checker) else True
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+
+    def effective_active(self):
+        """Property-compatible callable for graph execution filtering."""
+        return self.active
         
     # Get string representation of  Logical Constraint
     def strEs(self):
@@ -1871,7 +1892,7 @@ class execute:
         
         # Copy relevant attributes from wrapped constraint
         self.headLC = self.innerLC.headLC
-        self.active = self.innerLC.active
+        self.active = self.innerLC.declared_active
         self.p = self.innerLC.p
         self.e = self.innerLC.e
         self.sampleEntries = self.innerLC.sampleEntries
@@ -1893,3 +1914,25 @@ class execute:
     def getLcConcepts(self):
         """Delegate to wrapped constraint's getLcConcepts method."""
         return self.innerLC.getLcConcepts()
+
+    @property
+    def declared_active(self):
+        """The wrapper's explicit activation flag before concept filtering."""
+        return self._active
+
+    @property
+    def active(self):
+        """Whether both the wrapper and its inner constraint are active."""
+        return self._active and self.innerLC.active
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+        # Executable wrappers and their inner constraint represent one logical
+        # activation flag.  Some established call paths update only the
+        # wrapper, while others update both explicitly.
+        self.innerLC.active = value
+
+    def effective_active(self):
+        """Property-compatible callable for graph execution filtering."""
+        return self.active

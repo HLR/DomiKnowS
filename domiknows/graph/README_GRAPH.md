@@ -122,6 +122,29 @@ info = graph.findConceptInfo(person)
 # }
 ```
 
+#### `set_active_concepts(concepts)`
+
+Select the concepts that participate in subsequent graph execution without
+rebuilding the schema or model. Names and `Concept` objects can be mixed.
+Required `is_a` ancestors and `graph.constraint` are enabled automatically;
+all other concepts in this graph and its subgraphs are disabled.
+
+```python
+graph.set_active_concepts([red, "dog"])
+
+graph.is_concept_active(red)       # True
+graph.is_concept_active(cat)       # False
+graph.get_active_concepts()        # constraint, ancestors, red, dog
+
+graph.set_active_concepts(None)    # Restore the default: all concepts active
+```
+
+Inactive concept properties and sensors are skipped, and constraints that
+reference an inactive concept are treated as inactive. The explicit
+logical constraint `.active` flag remains independently writable. Concept activation is
+mutable graph state intended for sequential steps; synchronize externally if a
+graph is shared across concurrent executions.
+
 #### `visualize(filename, open_image=False)`
 ```python
 # Generate graph visualization using Graphviz

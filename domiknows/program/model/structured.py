@@ -232,6 +232,9 @@ class StructuredModel(SolverModel):
         """
         if self._concept_props is None:
             mapping = {}
+            # Cache the complete schema.  Activation can change between
+            # forwards, so filtering here would permanently omit concepts that
+            # become active in a later step.
             for prop in self.poi:
                 prop_name = getattr(prop, 'prop_name', None)
                 if isinstance(prop_name, Concept):

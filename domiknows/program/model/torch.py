@@ -113,6 +113,8 @@ class PoiModel(TorchModel):
         metric = {}
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
+            if not self.graph.is_property_active(prop):
+                continue
             # make sure the sensors are evaluated
             output = output_sensor(data_item)
             target = target_sensor(data_item)
