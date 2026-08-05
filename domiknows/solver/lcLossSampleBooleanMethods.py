@@ -421,6 +421,19 @@ class lcLossSampleBooleanMethods(constraintsProcessor):
                                         torch.tensor(-1, device=selected_indices.device))
             
             return selected_indices
+
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        if self.ifNone(var):
+            return None
+        samples_list = []
+        for value in var:
+            if not torch.is_tensor(value):
+                continue
+            samples_list.append(value.unsqueeze(1) if value.dim() == 1 else value)
+        if not samples_list:
+            return None
+        return (torch.cat(samples_list, dim=1) >= threshold).to(self._get_dtype())
         
     def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """

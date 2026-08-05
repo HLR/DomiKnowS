@@ -8,7 +8,7 @@ import warnings
 import torch
 
 from domiknows.graph import fixedL
-from domiknows.graph.logicalConstrain import queryL, sumL
+from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
 
 from .bdd import BDDNode, CircuitSizeLimitExceeded
 from .circuitBooleanMethods import circuitBooleanMethods
@@ -99,7 +99,7 @@ class CircuitLossCalculator:
         constructor.current_device = self.solver.current_device
         constructor.myGraph = self.solver.myGraph
 
-        if isinstance(lc, (sumL, queryL)) and label is None:
+        if isinstance(lc, (sumL, queryL, miotaL)) and label is None:
             label = dn.getExecutableConstraintLabel(label_name or lc.lcName)
         if isinstance(lc, sumL) and label is None:
             return None
@@ -111,7 +111,7 @@ class CircuitLossCalculator:
             dn,
             0,
             key=key,
-            headLC=not isinstance(lc, queryL),
+            headLC=not isinstance(lc, (queryL, miotaL)),
             loss=False,
             sample=False,
             label=self._label_index(label) if isinstance(lc, sumL) else None,
@@ -125,7 +125,39 @@ class CircuitLossCalculator:
             "groundingSignature": processor.grounding_signature(),
         }
 
-        if isinstance(lc, queryL):
+        if isinstance(lc, miotaL):
+            selection_nodes = _collect_circuit_nodes(output)
+            probabilities = [processor.wmc(node).reshape(()) for node in selection_nodes]
+            distribution = torch.stack(probabilities) if probabilities else None
+            if distribution is None and label is not None:
+                target_probe = torch.as_tensor(label).reshape(-1)
+                if target_probe.numel() != 0:
+                    raise ValueError(
+                        f"miotaL label has {target_probe.numel()} values, but the "
+                        "constraint grounded 0 candidates"
+                    )
+                distribution = torch.empty(0, device=self.solver.current_device)
+            result['selectionDistribution'] = distribution
+            result['conversionSigmoid'] = distribution
+            if label is None:
+                result['probability'] = None
+                result['lossTensor'] = None
+                result['loss'] = None
+            else:
+                target = torch.as_tensor(label, device=distribution.device).float().reshape(-1)
+                if target.numel() != distribution.numel():
+                    raise ValueError(
+                        f"miotaL label has {target.numel()} values, but the constraint "
+                        f"grounded {distribution.numel()} candidates"
+                    )
+                if not torch.all((target == 0) | (target == 1)):
+                    raise ValueError("miotaL label must be a binary multi-hot vector")
+                selected_probability = torch.where(target.bool(), distribution, 1.0 - distribution)
+                losses = -torch.log(selected_probability.clamp_min(self.epsilon))
+                result['probability'] = selected_probability
+                result['lossTensor'] = losses
+                result['loss'] = losses.mean() if losses.numel() else distribution.sum() * 0.0
+        elif isinstance(lc, queryL):
             class_nodes = _collect_circuit_nodes(output)
             probabilities = [processor.wmc(node) for node in class_nodes]
             result["queryProbabilities"] = (
@@ -196,7 +228,10 @@ class CircuitLossCalculator:
                     groundingCount=len(grounded_nodes),
                 )
 
-        result["conversionSigmoid"] = result.get("probability")
+        if isinstance(lc, miotaL):
+            result["conversionSigmoid"] = result.get("selectionDistribution")
+        else:
+            result["conversionSigmoid"] = result.get("probability")
         result["elapsedInMsLC"] = (perf_counter_ns() - start) / 1_000_000
         return result
 

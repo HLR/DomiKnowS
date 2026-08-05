@@ -838,9 +838,32 @@ class InferenceModel(LossModel):
                     _context=lc_context
                 )
 
+                selection_distribution = loss_dict.get('selectionDistribution')
+                if selection_distribution is not None:
+                    predicted = selection_distribution.float().reshape(-1)
+                    target = raw_lbl.float().to(predicted.device).reshape(-1)
+                    if target.numel() != predicted.numel():
+                        raise ValueError(
+                            f"miotaL label for {lcName} has {target.numel()} values, "
+                            f"but the constraint grounded {predicted.numel()} candidates"
+                        )
+                    if not torch.all((target == 0) | (target == 1)):
+                        raise ValueError(
+                            f"miotaL label for {lcName} must be a binary multi-hot vector"
+                        )
+                    if predicted.numel() == 0:
+                        executable_losses.append(predicted.sum() * 0.0)
+                        continue
+                    eps = 1e-6
+                    clamped = predicted.clamp(eps, 1.0 - eps)
+                    predicted = predicted + (clamped - predicted).detach()
+                    constraint_loss = self.loss_func(predicted, target)
+                    executable_losses.append(constraint_loss)
+                    continue
+
                 if loss_dict.get('loss') is None:
                     continue
-                    
+
                 if MONITORING_AVAILABLE:
                     lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
                     log_single_lc(

@@ -138,7 +138,7 @@ def _evaluate_condition_impl(
     Returns:
         dict or float: Full results dictionary or primary metric value
     """
-    from domiknows.graph.logicalConstrain import queryL, sumL
+    from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
     from domiknows.step_notebook import (
         StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
     )
@@ -151,6 +151,11 @@ def _evaluate_condition_impl(
 
     query_correct = 0
     query_total = 0
+
+    miota_exact_correct = 0
+    miota_exact_total = 0
+    miota_position_correct = 0
+    miota_position_total = 0
 
     total = 0
 
@@ -233,6 +238,57 @@ def _evaluate_condition_impl(
             inner_lc = getattr(lc, "innerLC", lc)
             is_query = isinstance(inner_lc, queryL)
             is_counting = isinstance(inner_lc, sumL)
+
+            if isinstance(inner_lc, miotaL):
+                if lc_loss_context is None:
+                    cmodel = getattr(program, "cmodel", None)
+                    lc_loss_context = datanode._prepareLcLossContext(
+                        tnorm=getattr(cmodel, "tnorm", "P"),
+                        counting_tnorm=getattr(cmodel, "counting_tnorm", None),
+                    )
+                loss_dict = datanode.calculateSingleLcLoss(
+                    lc_name,
+                    tnorm=getattr(getattr(program, "cmodel", None), "tnorm", "P"),
+                    counting_tnorm=getattr(getattr(program, "cmodel", None), "counting_tnorm", None),
+                    _context=lc_loss_context,
+                )
+                distribution = loss_dict.get("selectionDistribution")
+                if distribution is None:
+                    continue
+                probabilities = distribution.detach().reshape(-1)
+                expected = torch.as_tensor(label, device=probabilities.device).reshape(-1)
+                if expected.numel() != probabilities.numel():
+                    raise ValueError(
+                        f"miotaL label for {lc_name} has {expected.numel()} values, "
+                        f"but the constraint grounded {probabilities.numel()} candidates"
+                    )
+                if not torch.all((expected == 0) | (expected == 1)):
+                    raise ValueError(
+                        f"miotaL label for {lc_name} must be a binary multi-hot vector"
+                    )
+                predicted = (probabilities >= inner_lc.threshold).to(expected.dtype)
+                position_matches = predicted == expected
+                exact_match = bool(position_matches.all().item())
+                miota_exact_total += 1
+                miota_exact_correct += int(exact_match)
+                miota_position_total += position_matches.numel()
+                miota_position_correct += int(position_matches.sum().item())
+                if _step_results is not None:
+                    _step_results[lc_name] = {
+                        'answer_result': predicted.cpu().tolist(),
+                        'verify_result': {
+                            'selectionDistribution': probabilities.cpu().tolist(),
+                            'expectedLabel': expected.cpu().tolist(),
+                            'threshold': inner_lc.threshold,
+                            'positionCorrect': int(position_matches.sum().item()),
+                            'positionTotal': position_matches.numel(),
+                        },
+                        'correct': exact_match,
+                        'is_counting': False,
+                        'is_query': False,
+                        'is_miota': True,
+                    }
+                continue
 
             if is_query:
                 query_total += 1
@@ -384,6 +440,10 @@ def _evaluate_condition_impl(
         'counting_total': counting_total,
         'query_correct': query_correct,
         'query_total': query_total,
+        'miota_exact_correct': miota_exact_correct,
+        'miota_exact_total': miota_exact_total,
+        'miota_position_correct': miota_position_correct,
+        'miota_position_total': miota_position_total,
     }
 
     if total == 0:
@@ -414,11 +474,27 @@ def _evaluate_condition_impl(
     else:
         results['query_accuracy'] = None
 
+    if miota_exact_total > 0:
+        results['miota_exact_accuracy'] = (miota_exact_correct / miota_exact_total) * 100
+        results['miota_position_accuracy'] = (
+            miota_position_correct / miota_position_total
+        ) * 100 if miota_position_total else 0.0
+        print(
+            f"miotaL exact-set accuracy: {results['miota_exact_accuracy']:.2f}% "
+            f"({miota_exact_correct}/{miota_exact_total}); position accuracy: "
+            f"{results['miota_position_accuracy']:.2f}% "
+            f"({miota_position_correct}/{miota_position_total})"
+        )
+    else:
+        results['miota_exact_accuracy'] = None
+        results['miota_position_accuracy'] = None
+
     # Primary metric
     accuracy_parts = [
         (results['boolean_accuracy'], boolean_total),
         (results['counting_accuracy'], counting_total),
         (results['query_accuracy'], query_total),
+        (results['miota_exact_accuracy'], miota_exact_total),
     ]
     active_accuracy_parts = [
         (accuracy, count)
@@ -437,6 +513,8 @@ def _evaluate_condition_impl(
     results["boolean_total"] = boolean_total
     results["counting_total"] = counting_total
     results["query_total"] = query_total
+    results["miota_exact_total"] = miota_exact_total
+    results["miota_position_total"] = miota_position_total
     results["evaluation_mode"] = "gumbel" if use_gumbel else "deterministic"
 
     return results if return_dict else results['accuracy']

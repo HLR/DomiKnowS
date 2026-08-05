@@ -271,6 +271,18 @@ class constraintsProcessor(object, metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
+    def miotaVar(
+        self,
+        m,
+        *_var,
+        onlyConstrains: bool = False,
+        threshold: float = 0.5,
+        hard: bool = False,
+        logicMethodName: str = "MIOTA",
+    ):
+        """Return one independent membership value for every candidate."""
+
+    @abc.abstractmethod
     def queryVar(
         self,
         m,

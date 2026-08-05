@@ -754,6 +754,30 @@ existsL(left('x', iotaL(andL(blue('y'), sphere('y')))))
 1. **Existence** — at least one entity must satisfy the condition (Σ cᵢ ≥ 1)
 2. **Uniqueness** — exactly one entity is selected (Σ sᵢ = 1, sᵢ ≤ cᵢ)
 
+#### `miotaL` - Multi-Answer Entity Selection
+
+`miotaL` keeps one independent membership probability for every grounded
+candidate and returns every candidate at or above its threshold. Its output is
+multi-hot rather than one-hot, and it does not require existence or uniqueness.
+
+```python
+from domiknows.graph import miotaL, andL
+
+# Returns a vector such as [1, 0, 0, 1, 0].
+miotaL(andL(red("x"), cube(path="x")), threshold=0.5)
+```
+
+The signature is `miotaL(*e, threshold=0.5, hard=False, ...)`. Soft mode keeps
+the unnormalized per-candidate probabilities for vector BCE training. With
+`hard=True`, the forward result is thresholded while gradients use the soft
+scores (a straight-through estimator). Selection is inclusive (`>=`), so an
+exactly `0.5` score is selected by the default threshold; an empty set is a
+valid result.
+
+The selector can be nested into predicates, relations, Boolean constraints,
+and counting constraints. `queryL(attribute, miotaL(...))` is rejected because
+`queryL` represents one multiclass answer rather than one answer per entity.
+
 #### `queryL` - Query Multiclass Attribute of Selected Entity
 
 Given a multiclass concept (parent with subclasses via `is_a`, or `EnumConcept`) and an entity selection (typically from `iotaL`), returns which subclass the selected entity belongs to.

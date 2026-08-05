@@ -2,6 +2,7 @@ from typing import Sequence, TypeVar, Any
 import ast
 import importlib
 import inspect
+import torch
 
 from domiknows.graph import Graph
 from domiknows.sensor.pytorch.sensors import ReaderSensor
@@ -97,11 +98,13 @@ class LogicDataset(Sequence[data_type]):
         lc_name_list: list[str],
         logic_keyword: str = 'constraint',
         logic_label_keyword: str = 'label',
+        vector_label_names=None,
     ):
         self.data = data # must attach each item to a sequence
         self.logic_keyword = logic_keyword
         self.logic_label_keyword = logic_label_keyword
         self.lc_name_list = lc_name_list
+        self.vector_label_names = set(vector_label_names or ())
 
     @staticmethod
     @property
@@ -132,10 +135,19 @@ class LogicDataset(Sequence[data_type]):
     def __getitem__(self, index: int) -> data_type:
         data_item = self.data[index]
         curr_lc_name = self.lc_name_list[index]
+        label = data_item[self.logic_label_keyword]
+        if curr_lc_name in self.vector_label_names:
+            if torch.is_tensor(label) and label.dim() == 1:
+                label = label.unsqueeze(0)
+            elif isinstance(label, (list, tuple)) and (
+                not label or not isinstance(label[0], (list, tuple))
+            ):
+                label = [label]
+
         return {
             # store the label in the datanode with key self.KEYWORD_FMT
             # this indicates which constraint to use
-            self.KEYWORD_FMT.format(lc_name=curr_lc_name): data_item[self.logic_label_keyword],
+            self.KEYWORD_FMT.format(lc_name=curr_lc_name): label,
             self.curr_lc_key: curr_lc_name,
             self.do_switch_key: None, # the value has no meaning
             **data_item

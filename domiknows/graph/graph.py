@@ -979,7 +979,8 @@ class Graph(BaseGraphTree):
         Args:
             data: Iterable of dicts containing keys specified by logic_keyword and logic_label_keyword
             logic_keyword: Key in data items containing constraint string expression
-            logic_label_keyword: Key in data items containing the label (True/False)
+            logic_label_keyword: Key in data items containing the label. Boolean
+                constraints use True/False; miotaL uses a multi-hot vector.
             extra_namespace_values: Additional variables to add to evaluation namespace
             verbose: If True, print debug information during compilation
             
@@ -1007,11 +1008,17 @@ class Graph(BaseGraphTree):
                 extra_namespace_values, verbose, elc_name_list
             )
     
+        from .logicalConstrain import miotaL
+        vector_label_names = {
+            name for name in elc_name_list
+            if isinstance(self.executableLCs[name].innerLC, miotaL)
+        }
         return LogicDataset(
                 data,
                 elc_name_list,
                 logic_keyword=logic_keyword,
-                logic_label_keyword=logic_label_keyword
+                logic_label_keyword=logic_label_keyword,
+                vector_label_names=vector_label_names,
             )
 
     def _process_executable(
@@ -1025,7 +1032,7 @@ class Graph(BaseGraphTree):
         1. Reads the constraint string expression
         2. Compiles and evaluates to create LogicalConstrain
         3. Wraps with execute() if not already wrapped
-        4. Stores label in executableLCsLabels dictionary
+        4. Stores the scalar or vector label in executableLCsLabels
         
         Args:
             data: Iterable of data items

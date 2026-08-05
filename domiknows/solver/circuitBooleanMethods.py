@@ -592,6 +592,17 @@ class circuitBooleanMethods(constraintsProcessor):
             return self.manager.or_all(selections)
         return selections
 
+    def miotaVar(
+        self,
+        _,
+        *var,
+        onlyConstrains=False,
+        threshold=0.5,
+        hard=False,
+        logicMethodName="MIOTA",
+    ):
+        return self._nodes(var)
+
     def queryVar(
         self,
         _,

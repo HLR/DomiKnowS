@@ -33,7 +33,7 @@ from domiknows.graph.logicalConstrain import (
     atMostL, atLeastL, exactL, existsL,
     atMostAL, atLeastAL, exactAL, existsAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL, notEqualCountsL,
-    sumL, queryL, iotaL, sameL, differentL,
+    sumL, queryL, iotaL, miotaL, sameL, differentL,
 )
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
 from domiknows.solver.lossCalculator import LossCalculator
@@ -49,7 +49,7 @@ SUPPORTED_LC_TYPES = (
     atMostL, atLeastL, exactL, existsL,
     atMostAL, atLeastAL, exactAL, existsAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL, notEqualCountsL,
-    sumL, sameL, differentL, iotaL, queryL,
+    sumL, sameL, differentL, iotaL, miotaL, queryL,
 )
 
 
@@ -423,6 +423,18 @@ class CompiledLossCalculator(LossCalculator):
         self._evaluator._gathered_probs = []  # reset per head constraint
 
         try:
+            if isinstance(lc, miotaL):
+                selection_output, _ = self._evaluator.constructCompiled(
+                    lc, myBooleanMethods, dn, key=key, headLC=False)
+                selection_distribution = self._normalize_selection_distribution(
+                    selection_output)
+                result['selectionDistribution'] = selection_distribution
+                result['lossTensor'] = None
+                result['conversionSigmoid'] = selection_distribution
+                result['loss'] = None
+                result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
+                return result
+
             if isinstance(lc, queryL):
                 # queryL is evaluated as a non-head expression and post-processed
                 # into a class distribution rather than a violation vector.

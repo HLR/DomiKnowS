@@ -4,9 +4,10 @@ from itertools import product
 from time import perf_counter
 
 from gurobipy import GRB, Model, Env
+import torch
 
 from domiknows.graph.logicalConstrain import (
-    LogicalConstrain, queryL, existsL, sumL, greaterL, atLeastL, exactL,
+    LogicalConstrain, queryL, miotaL, existsL, sumL, greaterL, atLeastL, exactL,
     notL, andL,
 )
 from domiknows.utils import setup_logger
@@ -15,6 +16,7 @@ from domiknows.utils import setup_logger
 # Map from constraint type name (as used in "execute(...)") to class
 _TYPE_MAP = {
     'queryL': queryL,
+    'miotaL': miotaL,
     'existsL': existsL,
     'sumL': sumL,
     'greaterL': greaterL,
@@ -147,7 +149,7 @@ class AnswerSolver:
 
         Returns:
             The answer: str for queryL, int for sumL, bool for boolean types,
-            or None if no feasible hypothesis exists.
+            a multi-hot list for miotaL, or None if no feasible result exists.
         """
         answer_started = perf_counter()
 
@@ -341,6 +343,32 @@ class AnswerSolver:
             f"'{type(lc).__name__}' for {getattr(elc, 'lcName', elc)}"
         )
 
+    def _decode_miota(self, lc, dn, key=("local", "softmax")):
+        """Decode a miotaL directly; it has no powerset hypotheses to search."""
+        key_text = "/" + "/".join(key) if isinstance(key, (tuple, list)) else key
+        processor = self.solver.myLcLossBooleanMethods
+        processor.current_device = dn.current_device
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key=key_text,
+            headLC=False, loss=True, sample=False,
+        )
+        tensors = []
+
+        def collect(value):
+            if torch.is_tensor(value):
+                tensors.append(value.reshape(-1))
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    collect(item)
+
+        collect(output)
+        if not tensors:
+            return []
+        probabilities = torch.cat(tensors)
+        return (probabilities >= lc.threshold).to(torch.int64).detach().cpu().tolist()
+
     @staticmethod
     def _is_infeasible_error(error):
         return "infeasible" in str(error).lower()
@@ -414,8 +442,12 @@ class AnswerSolver:
         concepts_relations = tuple(concepts_relations)
 
         specs = []
+        miota_names = []
         for name in ordered_names:
             elc = dn.graph.executableLCs[name]
+            if isinstance(elc.innerLC, miotaL):
+                miota_names.append(name)
+                continue
             values, builder = self._hypothesis_spec(
                 elc,
                 dn,
@@ -499,6 +531,18 @@ class AnswerSolver:
             if raise_on_infeasible:
                 raise RuntimeError(message)
             return None
+
+        if miota_names:
+            decoded_miota = {
+                name: self._decode_miota(
+                    dn.graph.executableLCs[name].innerLC, dn, key=key
+                )
+                for name in miota_names
+            }
+            best_hypotheses = OrderedDict(
+                (name, decoded_miota[name] if name in decoded_miota else best_hypotheses[name])
+                for name in ordered_names
+            )
 
         if populate:
             self.solver.populateILPSelection(

@@ -1036,7 +1036,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                 return loss
             else:
                 return selection
-        
+
         elif self.tnorm == 'L':  # Łukasiewicz - softmax with straight-through flavor
             # Scale logits by temperature
             logits = t / temperature
@@ -1087,6 +1087,19 @@ class lcLossBooleanMethods(constraintsProcessor):
                 return loss
             else:
                 return selection
+
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        """Differentiable independent multi-candidate selection."""
+        var = self._fixVar(var)
+        if len(var) == 0:
+            return torch.empty(0, device=self.current_device, dtype=self._get_dtype())
+        parts = [v.flatten() if v.numel() > 1 else v.view(1) for v in var]
+        scores = torch.clamp(torch.cat(parts), 0.0, 1.0)
+        if not hard:
+            return scores
+        decoded = (scores >= threshold).to(scores.dtype)
+        return scores + (decoded - scores).detach()
 
     def _queryDistribution(self, subclass_scores, temperature):
         """Turn the per-subclass mixture weights into the answer distribution.

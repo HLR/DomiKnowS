@@ -3854,6 +3854,18 @@ class DataNodeBuilder(dict):
         if isinstance(value, torch.Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
 
+        # Executable multi-answer labels are intentionally wrapped as [1, N]
+        # so the builder creates one constraint DataNode while retaining the
+        # N-position vector as that node's label value.
+        if (
+            keyDataName.startswith('ELC')
+            and keyDataName.endswith('/label')
+            and isinstance(value, torch.Tensor)
+            and dimV >= 2
+            and lenV == 1
+        ):
+            return ValueInfo(len=1, value=value.squeeze(0), dim=0)
+
         if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
             if isinstance(value, list) and not isinstance(value[0], (torch.Tensor, list)) : # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)

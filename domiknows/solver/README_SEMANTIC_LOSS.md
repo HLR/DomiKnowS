@@ -125,11 +125,14 @@ processor = circuitBooleanMethods(backend="bdd")
 The backend implements Boolean operators (`notL`, `andL`, `orL`, `nandL`,
 `norL`, `xorL`, `ifL`, and equivalence/`iffL`), cardinality constraints,
 count-to-count comparisons, labeled `sumL`, multiclass `sameL`/`differentL`,
-and exact unique-selection semantics for `iotaL` and `queryL`.
+exact unique-selection semantics for `iotaL` and `queryL`, and independent
+multi-answer selection semantics for `miotaL`.
 
 For `iotaL`, candidate expansions for the same primary entity are OR-combined
 into one entity predicate before uniqueness is imposed. For `queryL`, class
 `c` is compiled as `OR_i(selection_i AND entity_i_has_class_c)`.
+For `miotaL`, each candidate condition remains an independent circuit output;
+there is no existence or uniqueness cardinality constraint.
 
 ## Circuit size and fallback
 

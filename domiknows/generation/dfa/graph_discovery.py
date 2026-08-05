@@ -931,7 +931,7 @@ def _walk_lc(lc):
 def _unsupported_reason(lc, bundle) -> str:
     """Return a compact reason why a generation-relevant LC is unsupported."""
     cls_name = getattr(lc, "__class__", None).__name__
-    if cls_name in {"sumL", "iotaL", "queryL", "sameL", "differentL"}:
+    if cls_name in {"sumL", "iotaL", "miotaL", "queryL", "sameL", "differentL"}:
         return f"{cls_name} depends on numeric selection/query semantics, not a regular token language"
     if cls_name in {"greaterL", "greaterEqL", "lessL", "lessEqL", "equalCountsL", "notEqualCountsL"}:
         return f"{cls_name} comparative count semantics are not compiled to DFA in this pass"

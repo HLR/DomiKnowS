@@ -386,6 +386,22 @@ class booleanMethodsCalculator(constraintsProcessor):
                 # Violation: zero or multiple satisfy
                 return -1
 
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        values = []
+        for value in var:
+            if value is None:
+                values.append(0)
+            elif torch.is_tensor(value):
+                values.extend(
+                    int(item.item() >= threshold) for item in value.flatten()
+                )
+            elif hasattr(value, "item"):
+                values.append(int(value.item() >= threshold))
+            else:
+                values.append(int(float(value) >= threshold))
+        return values
+
     def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Query operator for multiclass attribute selection in verification mode.

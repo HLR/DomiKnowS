@@ -974,6 +974,11 @@ class gurobiILPBooleanProcessor(constraintsProcessor):
         
         return select_vars
 
+    def miotaVar(self, m, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        """ILP multi-selection is exactly the vector of condition literals."""
+        return [0 if value is None else value for value in var]
+
     def queryVar(self, m, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
         """
         Query operator for multiclass attribute selection in ILP.

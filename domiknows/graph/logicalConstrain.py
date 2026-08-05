@@ -893,6 +893,70 @@ class LogicalConstrain(LcElement):
             model.update()
         
         return zVars
+
+    def createMiotaSelection(self, model, myConstraintVarProcessor, v, headConstrain,
+                             integrate, threshold, hard, logicMethodName):
+        """Return independent membership scores for every grounded candidate."""
+        try:
+            lcVariableNames = [name for name in iter(v)]
+        except StopIteration:
+            return []
+
+        if not lcVariableNames:
+            myLogger.error(f"{logicMethodName} has no variables")
+            return []
+
+        lcVariableName0 = lcVariableNames[0]
+        condition_vars = []
+        if getattr(myConstraintVarProcessor, "is_exact_circuit", False):
+            setups = self._collectVariableSetups(
+                lcVariableName0, lcVariableNames[1:], v
+            )
+            grouped_conditions = {}
+            group_order = []
+            for row in setups:
+                for grounding in row:
+                    valid = [value for value in grounding if value is not None]
+                    if not valid:
+                        continue
+                    primary = valid[0]
+                    primary_key = getattr(
+                        primary, "key", getattr(primary, "node_id", id(primary))
+                    )
+                    condition = myConstraintVarProcessor.andVar(model, *valid)
+                    if primary_key not in grouped_conditions:
+                        grouped_conditions[primary_key] = condition
+                        group_order.append(primary_key)
+                    else:
+                        grouped_conditions[primary_key] = myConstraintVarProcessor.orVar(
+                            model, grouped_conditions[primary_key], condition
+                        )
+            condition_vars = [grouped_conditions[key] for key in group_order]
+        else:
+            setups = self._collectVariableSetups(
+                lcVariableName0, lcVariableNames[1:], v
+            )
+            for row in setups:
+                for grounding in row:
+                    valid = [value for value in grounding if value is not None]
+                    if valid:
+                        condition_vars.append(
+                            myConstraintVarProcessor.andVar(model, *valid)
+                        )
+
+        result = myConstraintVarProcessor.miotaVar(
+            model,
+            *condition_vars,
+            onlyConstrains=headConstrain,
+            threshold=threshold,
+            hard=hard,
+            logicMethodName=logicMethodName,
+        )
+        if result is None:
+            return [[None]] if not condition_vars else []
+        if isinstance(result, (list, tuple)):
+            return [list(result)]
+        return [[result]]
    
     def _warnIfNoSubclassData(self, subclass_data, logicMethodName):
         """Flag a queryL whose attribute concept resolved to no datanodes.
@@ -1572,6 +1636,42 @@ class iotaL(LogicalConstrain):
                 temperature=self.temperature,
                 logicMethodName=str(self),
             )
+
+class miotaL(LogicalConstrain):
+    """Multi-answer entity selector.
+
+    Unlike :class:`iotaL`, this operator has no existence or uniqueness
+    presupposition.  It retains one independent membership score per grounded
+    candidate and decodes every score greater than or equal to ``threshold``.
+    """
+
+    def __init__(self, *e, threshold=0.5, hard=False, p=100, active=True,
+                 sampleEntries=False, name=None):
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+            raise TypeError("miotaL: threshold must be a number in [0, 1]")
+        if not 0.0 <= float(threshold) <= 1.0:
+            raise ValueError("miotaL: threshold must be in [0, 1]")
+        if not isinstance(hard, bool):
+            raise TypeError("miotaL: hard must be a bool")
+        super().__init__(*e, p=p, active=active,
+                         sampleEntries=sampleEntries, name=name)
+        self.threshold = float(threshold)
+        self.hard = hard
+        self._returns_selection = True
+
+    def __call__(self, model, myConstraintVarProcessor, v,
+                 headConstrain=False, integrate=False):
+        with torch.set_grad_enabled(myConstraintVarProcessor.grad):
+            return self.createMiotaSelection(
+                model,
+                myConstraintVarProcessor,
+                v,
+                headConstrain,
+                integrate,
+                threshold=self.threshold,
+                hard=self.hard,
+                logicMethodName=str(self),
+            )
     
 class queryL(LogicalConstrain):
         """
@@ -1599,6 +1699,18 @@ class queryL(LogicalConstrain):
         def __init__(self, concept, *e, p=100, temperature=1.0, active=True,
                     sampleEntries=False, name=None):
             from domiknows.graph.concept import EnumConcept
+
+            def contains_miota(element):
+                return isinstance(element, miotaL) or (
+                    isinstance(element, LogicalConstrain)
+                    and any(contains_miota(child) for child in element.e)
+                )
+
+            if any(contains_miota(element) for element in e):
+                raise ValueError(
+                    "queryL does not support miotaL because queryL returns one "
+                    "multiclass answer; use iotaL or query each selected entity separately"
+                )
 
             # Build concept variable bindings so the constraint constructor
             # collects per-entity subclass predictions into v.  This lets

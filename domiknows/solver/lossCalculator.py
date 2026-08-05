@@ -13,7 +13,7 @@ import torch
 from typing import Dict, Optional
 
 from domiknows.graph import fixedL
-from domiknows.graph.logicalConstrain import queryL, sumL
+from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
 
 from domiknows.solver.adaptiveTNormLossCalculator import (TNormSelector, get_constraint_type)
 
@@ -100,6 +100,13 @@ class LossCalculator:
             distribution = distribution / total
         return distribution
 
+    def _normalize_selection_distribution(self, selection_output):
+        """Flatten a vector-valued selector without normalizing its mass."""
+        tensors = _collect_tensors(selection_output)
+        if not tensors:
+            return None
+        return torch.cat([tensor.reshape(-1) for tensor in tensors])
+
     def calculate_single_lc_loss(self, lc, dn, key, tnorm='L', counting_tnorm=None, label=None):
         """
         Calculate loss for a single logical constraint.
@@ -140,6 +147,18 @@ class LossCalculator:
 
         self.solver.constraintConstructor.current_device = self.solver.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
+
+        if isinstance(lc, miotaL):
+            selection_output, _lc_variables = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, myBooleanMethods, None, dn, 0,
+                key=key, headLC=False, loss=True, sample=False)
+            selection_distribution = self._normalize_selection_distribution(selection_output)
+            result['selectionDistribution'] = selection_distribution
+            result['lossTensor'] = None
+            result['conversionSigmoid'] = selection_distribution
+            result['loss'] = None
+            result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
+            return result
 
         if isinstance(lc, queryL):
             query_output, _lc_variables = self.solver.constraintConstructor.constructLogicalConstrains(
