@@ -1,11 +1,13 @@
 import logging
 from collections import OrderedDict
+from itertools import product
 from time import perf_counter
 
 from gurobipy import GRB, Model, Env
+import torch
 
 from domiknows.graph.logicalConstrain import (
-    LogicalConstrain, queryL, existsL, sumL, greaterL, atLeastL, exactL,
+    LogicalConstrain, queryL, miotaL, existsL, sumL, greaterL, atLeastL, exactL,
     notL, andL,
 )
 from domiknows.utils import setup_logger
@@ -14,6 +16,7 @@ from domiknows.utils import setup_logger
 # Map from constraint type name (as used in "execute(...)") to class
 _TYPE_MAP = {
     'queryL': queryL,
+    'miotaL': miotaL,
     'existsL': existsL,
     'sumL': sumL,
     'greaterL': greaterL,
@@ -145,8 +148,9 @@ class AnswerSolver:
             dn: Root DataNode containing predictions.
 
         Returns:
-            The answer: str for queryL, int for sumL, bool for boolean types,
-            or None if no feasible hypothesis exists.
+            The answer: str for single-answer queryL, an aligned class-ID list
+            for multi-answer queryL, int for sumL, bool for boolean types, a
+            multi-hot list for miotaL, or None if no feasible result exists.
         """
         answer_started = perf_counter()
 
@@ -155,33 +159,22 @@ class AnswerSolver:
 
         constraint_name = question[len('execute('):-1].strip()
 
-        # AnswerSolver builds fresh Gurobi models. Cached ILP vars on the
-        # DataNode tree may still point to a previous model and must be purged
-        # before model construction.
-        self._clear_ilp_cache(dn)
-
         try:
             elc = self._resolve_constraint(constraint_name, dn.graph)
             lc = elc.innerLC
             reg_key, elc_id, elc_label, elc_expr = self._format_executable_constraint(elc, dn.graph)
 
-            m, x, conceptsRelations = self._build_base_model(dn)
-
-            # Dispatch to per-type handler
-            if isinstance(lc, queryL):
-                answer_value = self._answer_queryL(lc, dn, m, x)
-            elif isinstance(lc, existsL):
-                answer_value = self._answer_existsL(lc, dn, m, x)
-            elif isinstance(lc, sumL):
-                answer_value = self._answer_sumL(lc, dn, m, x)
-            elif isinstance(lc, greaterL):
-                answer_value = self._answer_greaterL(lc, dn, m, x)
-            elif isinstance(lc, atLeastL):
-                answer_value = self._answer_atLeastL(lc, dn, m, x)
-            elif isinstance(lc, exactL):
-                answer_value = self._answer_exactL(lc, dn, m, x)
-            else:
-                raise ValueError(f"Unsupported constraint type: {type(lc).__name__}")
+            result = self.solve_active_constraints(
+                dn,
+                [reg_key],
+                populate=False,
+                raise_on_infeasible=False,
+            )
+            answer_value = (
+                None
+                if result is None
+                else result['hypotheses'][reg_key]
+            )
 
             elapsed_ms = (perf_counter() - answer_started) * 1000.0
             logger.info(
@@ -248,6 +241,463 @@ class AnswerSolver:
         raise ValueError(
             f"No executable constraint of type '{constraint_name}' found in graph.executableLCs"
         )
+
+    def _sum_hypothesis_upper_bound(self, lc, dn, concepts_relations):
+        """Return a safe entity-count bound for a ``sumL`` hypothesis."""
+        concept_names = lc.getLcConcepts()
+        candidate_counts = []
+
+        for concept_relation in concepts_relations:
+            concept_name = self.solver.getConceptName(concept_relation)
+            if concept_name not in concept_names:
+                continue
+
+            root_concept = dn.findRootConceptOrRelation(concept_relation[0])
+            candidate_counts.append(
+                len(dn.findDatanodes(select=root_concept))
+            )
+
+        if not candidate_counts:
+            logger.warning(
+                "No ILP candidates found for sumL concepts: %s",
+                concept_names,
+            )
+            return 0
+
+        # Sum the relevant positive-variable domains. This can overestimate
+        # conjunction counts, but it remains a safe upper bound for relation
+        # groundings and constraints spanning more than one entity domain.
+        return sum(candidate_counts)
+
+    def _hypothesis_spec(self, elc, dn, concepts_relations):
+        """Return ordered hypothesis values and an LC compiler for one ELC."""
+        lc = elc.innerLC
+        graph = lc.graph
+
+        if isinstance(lc, queryL):
+            subclass_names = list(lc._subclass_names)
+            subclasses = list(lc._subclasses)
+            iota_elements = list(lc.e)
+
+            def build_query(subclass_name):
+                idx = subclass_names.index(subclass_name)
+                concept, name, subclass_index = subclasses[idx]
+
+                from domiknows.graph.concept import EnumConcept
+                if isinstance(lc.concept, EnumConcept):
+                    subclass_tuple = (
+                        lc.concept,
+                        name,
+                        subclass_index,
+                        len(subclass_names),
+                    )
+                else:
+                    subclass_tuple = (concept, concept.name, None, 1)
+
+                return self._compile_hypothesis(
+                    andL,
+                    [subclass_tuple] + iota_elements,
+                    graph,
+                )
+
+            return subclass_names, build_query
+
+        if isinstance(lc, sumL):
+            max_count = self._sum_hypothesis_upper_bound(
+                lc,
+                dn,
+                concepts_relations,
+            )
+            base_elements = [e for e in lc.e if not isinstance(e, int)]
+
+            def build_sum(count):
+                return self._compile_hypothesis(
+                    exactL,
+                    list(base_elements) + [count],
+                    graph,
+                )
+
+            return list(range(0, max_count + 1)), build_sum
+
+        if isinstance(lc, (existsL, greaterL, atLeastL, exactL)):
+            lc_class = type(lc)
+            constructor_kwargs = {}
+            explicit_limit = getattr(lc, '_explicitLimit', None)
+            if explicit_limit is not None:
+                constructor_kwargs['limit'] = explicit_limit
+
+            def build_boolean(hypothesis):
+                inner = self._compile_hypothesis(
+                    lc_class,
+                    lc.e,
+                    graph,
+                    **constructor_kwargs,
+                )
+                if hypothesis:
+                    return inner
+                return self._compile_hypothesis(notL, [inner], graph)
+
+            return [True, False], build_boolean
+
+        raise ValueError(
+            "Unsupported executable constraint type "
+            f"'{type(lc).__name__}' for {getattr(elc, 'lcName', elc)}"
+        )
+
+    def _decode_miota(self, lc, dn, key=("local", "softmax")):
+        """Decode a miotaL directly; it has no powerset hypotheses to search."""
+        key_text = "/" + "/".join(key) if isinstance(key, (tuple, list)) else key
+        processor = self.solver.myLcLossBooleanMethods
+        processor.current_device = dn.current_device
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key=key_text,
+            headLC=False, loss=True, sample=False,
+        )
+        tensors = []
+
+        def collect(value):
+            if torch.is_tensor(value):
+                tensors.append(value.reshape(-1))
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    collect(item)
+
+        collect(output)
+        if not tensors:
+            return []
+        probabilities = torch.cat(tensors)
+        return (probabilities >= lc.threshold).to(torch.int64).detach().cpu().tolist()
+
+    def _decode_multi_query(self, lc, dn, key=("local", "softmax")):
+        """Decode every candidate row without enumerating class products."""
+        key_text = "/" + "/".join(key) if isinstance(key, (tuple, list)) else key
+        processor = self.solver.myLcLossBooleanMethods
+        processor.current_device = dn.current_device
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key=key_text,
+            headLC=False, loss=True, sample=False,
+        )
+        matrices = []
+
+        def collect(value):
+            if torch.is_tensor(value) and value.dim() >= 2:
+                if value.shape[-1] == lc.num_subclasses:
+                    matrices.append(value.reshape(-1, lc.num_subclasses))
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    collect(item)
+
+        collect(output)
+        if not matrices:
+            return []
+        distribution = matrices[0] if len(matrices) == 1 else torch.cat(matrices)
+        membership = distribution.sum(dim=-1)
+        answers = distribution.argmax(dim=-1).long()
+        answers = torch.where(
+            membership >= lc.threshold,
+            answers,
+            torch.full_like(answers, -1),
+        )
+        return answers.detach().cpu().tolist()
+
+    def _decode_multi_query_ilp(self, lc, dn):
+        """Decode candidate/class conjunctions from a populated ILP solution."""
+        processor = self.solver.booleanMethodsCalculator
+        processor.current_device = dn.current_device
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key="/ILP",
+            headLC=False, loss=False, sample=False, verify=True,
+        )
+        rows = []
+
+        def collect(value):
+            if isinstance(value, (list, tuple)):
+                if (
+                    len(value) == lc.num_subclasses
+                    and all(not isinstance(item, (list, tuple)) for item in value)
+                ):
+                    rows.append([
+                        float(item.item()) if hasattr(item, 'item') else float(item)
+                        for item in value
+                    ])
+                else:
+                    for item in value:
+                        collect(item)
+
+        collect(output)
+        if not rows:
+            return None
+        return [
+            max(range(lc.num_subclasses), key=row.__getitem__)
+            if any(value > 0.5 for value in row) else -1
+            for row in rows
+        ]
+
+    @staticmethod
+    def _snapshot_ilp_attributes(dn):
+        """Capture ILP attributes so populate=False remains non-mutating."""
+        snapshot = []
+        visited = set()
+
+        def visit(node):
+            if id(node) in visited:
+                return
+            visited.add(id(node))
+            snapshot.append((
+                node,
+                {key: value for key, value in node.attributes.items() if '/ILP' in key},
+            ))
+            for child in node.getChildDataNodes() or []:
+                visit(child)
+            for linked in getattr(node, 'relationLinks', {}).values():
+                for relation_node in linked:
+                    visit(relation_node)
+
+        visit(dn)
+        return snapshot
+
+    @staticmethod
+    def _restore_ilp_attributes(snapshot):
+        for node, saved in snapshot:
+            for key in [key for key in node.attributes if '/ILP' in key]:
+                del node.attributes[key]
+            node.attributes.update(saved)
+
+    @staticmethod
+    def _is_infeasible_error(error):
+        return "infeasible" in str(error).lower()
+
+    def solve_active_constraints(
+        self,
+        dn,
+        active_constraint_names,
+        concepts_relations=None,
+        *,
+        key=("local", "softmax"),
+        fun=None,
+        epsilon=0.00001,
+        minimize_objective=False,
+        ignore_pin_lcs=False,
+        populate=True,
+        raise_on_infeasible=True,
+    ):
+        """Solve every joint hypothesis for the active executable constraints.
+
+        Returns a dictionary containing the selected hypotheses, objective, and
+        detached variable assignment.  Only the winning assignment is written
+        to ``dn`` when ``populate`` is true. Winning hypothesis answers are
+        also written to the sample's constraint DataNode as
+        ``<constraint-name>/answer`` attributes.
+        """
+        answer_target_available = False
+        if populate:
+            # Clear answers before validation/model construction so failures
+            # cannot leave a previous inference's hypothesis visible.
+            answer_target_available = (
+                dn._clearExecutableConstraintAnswers()
+            )
+            if not answer_target_available:
+                logger.warning(
+                    "No constraint DataNode found; executable hypothesis "
+                    "answers will not be persisted"
+                )
+
+        requested_names = set(active_constraint_names)
+        unknown_names = requested_names.difference(dn.graph.executableLCs)
+        if unknown_names:
+            unknown_text = ", ".join(sorted(unknown_names))
+            raise ValueError(
+                f"Unknown active executable constraint name(s): {unknown_text}"
+            )
+
+        ordered_names = [
+            name
+            for name in dn.graph.executableLCs
+            if name in requested_names
+        ]
+        if not ordered_names:
+            return None
+
+        required_solver_api = (
+            '_calculateILPSelection',
+            'populateILPSelection',
+        )
+        missing_api = [
+            api for api in required_solver_api if not hasattr(self.solver, api)
+        ]
+        if missing_api:
+            raise TypeError(
+                "Hypothesis-aware executable inference requires a Gurobi "
+                f"ILP solver supporting {', '.join(missing_api)}"
+            )
+
+        if concepts_relations is None:
+            concepts_relations = dn.collectConceptsAndRelations()
+        concepts_relations = tuple(concepts_relations)
+
+        specs = []
+        direct_decode_names = []
+        for name in ordered_names:
+            elc = dn.graph.executableLCs[name]
+            if (
+                isinstance(elc.innerLC, miotaL)
+                or (
+                    isinstance(elc.innerLC, queryL)
+                    and elc.innerLC.is_multi_answer
+                )
+            ):
+                direct_decode_names.append(name)
+                continue
+            values, builder = self._hypothesis_spec(
+                elc,
+                dn,
+                concepts_relations,
+            )
+            specs.append((name, values, builder))
+
+        best_result = None
+        best_hypotheses = None
+
+        try:
+            for hypothesis_values in product(
+                *(values for _, values, _ in specs)
+            ):
+                self._clear_ilp_cache(dn)
+                hypothesis_lcs = [
+                    builder(value)
+                    for (_, _, builder), value in zip(
+                        specs,
+                        hypothesis_values,
+                    )
+                ]
+
+                try:
+                    candidate = self.solver._calculateILPSelection(
+                        dn,
+                        *concepts_relations,
+                        key=key,
+                        fun=fun,
+                        epsilon=epsilon,
+                        minimizeObjective=minimize_objective,
+                        ignorePinLCs=ignore_pin_lcs,
+                        extraLogicalConstraints=hypothesis_lcs,
+                        populate=False,
+                        forceFreshModel=True,
+                        raiseOnInfeasible=False,
+                    )
+                except Exception as error:
+                    if self._is_infeasible_error(error):
+                        logger.debug(
+                            "Joint hypothesis %r is structurally infeasible: %s",
+                            hypothesis_values,
+                            error,
+                        )
+                        continue
+                    raise
+
+                if candidate is None:
+                    continue
+
+                if best_result is None:
+                    is_better = True
+                elif minimize_objective:
+                    is_better = (
+                        candidate['objective'] < best_result['objective']
+                    )
+                else:
+                    is_better = (
+                        candidate['objective'] > best_result['objective']
+                    )
+
+                # Strict comparison intentionally preserves the first
+                # graph/hypothesis-order candidate on exact objective ties.
+                if is_better:
+                    best_result = {
+                        'objective': candidate['objective'],
+                        'values': dict(candidate['values']),
+                    }
+                    best_hypotheses = OrderedDict(
+                        (name, value)
+                        for (name, _values, _builder), value in zip(
+                            specs, hypothesis_values
+                        )
+                    )
+        finally:
+            self._clear_ilp_cache(dn)
+
+        if best_result is None:
+            message = (
+                "All joint hypotheses were infeasible for active executable "
+                f"constraints: {', '.join(ordered_names)}"
+            )
+            logger.warning(message)
+            if raise_on_infeasible:
+                raise RuntimeError(message)
+            return None
+
+        populated_winner = False
+        temporary_ilp_snapshot = None
+        multi_query_names = [
+            name for name in direct_decode_names
+            if isinstance(dn.graph.executableLCs[name].innerLC, queryL)
+        ]
+        if multi_query_names:
+            if not populate:
+                temporary_ilp_snapshot = self._snapshot_ilp_attributes(dn)
+            self.solver.populateILPSelection(
+                dn,
+                concepts_relations,
+                best_result['values'],
+            )
+            populated_winner = populate
+
+        if direct_decode_names:
+            decoded_direct = {}
+            try:
+                for name in direct_decode_names:
+                    inner = dn.graph.executableLCs[name].innerLC
+                    if isinstance(inner, miotaL):
+                        decoded_direct[name] = self._decode_miota(inner, dn, key=key)
+                    else:
+                        decoded = self._decode_multi_query_ilp(inner, dn)
+                        decoded_direct[name] = (
+                            decoded if decoded is not None
+                            else self._decode_multi_query(inner, dn, key=key)
+                        )
+            finally:
+                if temporary_ilp_snapshot is not None:
+                    self._restore_ilp_attributes(temporary_ilp_snapshot)
+            best_hypotheses = OrderedDict(
+                (name, decoded_direct[name] if name in decoded_direct else best_hypotheses[name])
+                for name in ordered_names
+            )
+
+        if populate and not populated_winner:
+            self.solver.populateILPSelection(
+                dn,
+                concepts_relations,
+                best_result['values'],
+            )
+        if populate and answer_target_available:
+            dn._writeExecutableConstraintAnswers(best_hypotheses)
+
+        result = {
+            'hypotheses': best_hypotheses,
+            'objective': best_result['objective'],
+            'values': best_result['values'],
+        }
+        logger.info(
+            "Selected executable hypotheses %s with objective %.6f",
+            dict(best_hypotheses),
+            best_result['objective'],
+        )
+        return result
 
     # ── hypothesis compilation ──────────────────────────────────────────
 

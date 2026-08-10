@@ -1243,12 +1243,89 @@ class DataNode:
         return None
 
     # ----------------- Active Executable LC methods
+
+    def _getExecutableConstraintDataNode(self):
+        """Return this sample's constraint DataNode, if one exists.
+
+        Constraint DataNodes are normally direct children of the sample root.
+        The builder lookup is retained as a fallback for older construction
+        paths where the constraint node is registered but not linked through
+        ``contains``.
+
+        Raises:
+            ValueError: If the selected lookup path finds multiple constraint
+                DataNodes for this sample.
+        """
+        constraint_concept = self.graph.get_constraint_concept()
+        constraint_name = constraint_concept.name
+
+        direct_matches = self.getChildDataNodes(
+            conceptName=constraint_concept
+        ) or []
+        if len(direct_matches) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_name}) '
+                f'found: {len(direct_matches)}, expected one.'
+            )
+        if direct_matches:
+            return direct_matches[0]
+
+        if not self.myBuilder:
+            return None
+
+        builder_matches = self.myBuilder.findDataNodesInBuilder(
+            select=constraint_name
+        )
+        if len(builder_matches) > 1:
+            raise ValueError(
+                f'Multiple constraint datanodes (for concept {constraint_name}) '
+                f'found: {len(builder_matches)}, expected one.'
+            )
+        if not builder_matches:
+            return None
+
+        return builder_matches[0]
+
+    def _clearExecutableConstraintAnswers(self):
+        """Remove persisted answers for executable constraints in this graph.
+
+        Returns:
+            bool: ``True`` when a constraint DataNode was found, otherwise
+                ``False``.
+        """
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name in self.graph.executableLCs:
+            constraint_dn.attributes.pop(f'{lc_name}/answer', None)
+
+        return True
+
+    def _writeExecutableConstraintAnswers(self, answers):
+        """Write winning native hypothesis values to the constraint DataNode.
+
+        Args:
+            answers: Mapping from executable constraint name to its selected
+                hypothesis value.
+
+        Returns:
+            bool: ``True`` when the answers were written, otherwise ``False``.
+        """
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name, answer in answers.items():
+            constraint_dn.attributes[f'{lc_name}/answer'] = answer
+
+        return True
     
     def getExecutableConstraintLabels(self):
         """Get all active executable constraint labels from the constraint datanode.
         
-        Finds the constraint concept's datanode via the builder and returns
-        its attributes dict (format: {'LC{n}/label': label_value, ...}).
+        Finds the constraint concept's DataNode and returns its attributes dict
+        (format: {'LC{n}/label': label_value, ...}).
         
         Returns:
             dict: Executable constraint labels dict, or empty dict if no constraint datanode found.
@@ -1256,21 +1333,11 @@ class DataNode:
         Raises:
             ValueError: If multiple constraint datanodes are found.
         """
-        if not self.myBuilder:
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
             return {}
 
-        constraint_concept = self.graph.get_constraint_concept()
-        constraint_dn_search = self.myBuilder.findDataNodesInBuilder(select=constraint_concept.name)
-        
-        if len(constraint_dn_search) == 0:
-            return {}
-        elif len(constraint_dn_search) > 1:
-            raise ValueError(
-                f'Multiple constraint datanodes (for concept {constraint_concept.name}) '
-                f'found: {len(constraint_dn_search)}, expected one.'
-            )
-
-        return constraint_dn_search[0].getAttributes()
+        return constraint_dn.getAttributes()
 
     def getExecutableConstraintLabel(self, lcName):
         """Get the label for a specific active executable constraint.
@@ -1301,13 +1368,13 @@ class DataNode:
             set: Set of active executable constraint name strings.
         """
         read_labels = self.getExecutableConstraintLabels()
-        return set(x.split('/')[0] for x in read_labels)
+        return {
+            key[:-len('/label')]
+            for key in read_labels
+            if isinstance(key, str) and key.endswith('/label')
+        }
     
     def setActiveExecutableLCs(self):
-        # If no builder or no executive LC datanode then return
-        if not self.myBuilder:
-            return
-
         read_labels = self.getExecutableConstraintLabels()
         if not read_labels:
             return
@@ -1830,7 +1897,17 @@ class DataNode:
             # ---- loop through dns (LOCAL CALCULATION MODE)
             # IMPORTANT: Each datanode is processed INDEPENDENTLY without comparing across datanodes
             # Each datanode finds its own local argmax/softmax within its own values
-            dns = self.findDatanodes(select = cRoot)
+            # findDatanodes is a full graph traversal with quadratic membership
+            # checks; reuse the builder's per-root-concept cache (shared with
+            # domiknows.graph.candidates.findDatanodesForRootConcept).
+            cRootName = cRoot if isinstance(cRoot, str) else cRoot.name
+            dnsCache = self.myBuilder["DataNodesConcepts"] if (self.myBuilder is not None and "DataNodesConcepts" in self.myBuilder) else None
+            if dnsCache is not None and cRootName in dnsCache:
+                dns = dnsCache[cRootName]
+            else:
+                dns = self.findDatanodes(select = cRoot)
+                if dnsCache is not None:
+                    dnsCache[cRootName] = dns
             if not dns:
                 continue
 
@@ -2074,14 +2151,67 @@ class DataNode:
             keys = (key[1],)
             self.inferLocal(keys=keys, Acc=Acc)
 
+        def _infer_single_ilp_target(target_dn):
+            active_executable_names = (
+                target_dn.getActiveExecutableConstraintNames()
+            )
+            if not active_executable_names:
+                # A previous hypothesis-aware inference may have populated
+                # answers on a reused DataNode. Legacy inference has no
+                # executable answer, so remove those stale values first.
+                target_dn._clearExecutableConstraintAnswers()
+                myILPOntSolver.calculateILPSelection(
+                    target_dn,
+                    *conceptsRelations,
+                    key=key,
+                    fun=fun,
+                    epsilon=epsilon,
+                    minimizeObjective=minimizeObjective,
+                    ignorePinLCs=ignorePinLCs,
+                )
+                return
+
+            # Keep graph-level active flags synchronized for diagnostics and
+            # other executable-constraint consumers.  The label values
+            # themselves are not used to select an inference hypothesis.
+            target_dn.setActiveExecutableLCs()
+
+            from domiknows.solver.answerModule import AnswerSolver
+
+            _DataNode__Logger.info(
+                "Running hypothesis-aware ILP inference for active "
+                "executable constraints: %s",
+                sorted(active_executable_names),
+            )
+            answer_solver = AnswerSolver(
+                target_dn.graph,
+                solver=myILPOntSolver,
+            )
+            answer_solver.solve_active_constraints(
+                target_dn,
+                active_executable_names,
+                conceptsRelations,
+                key=key,
+                fun=fun,
+                epsilon=epsilon,
+                minimize_objective=minimizeObjective,
+                ignore_pin_lcs=ignorePinLCs,
+                populate=True,
+                raise_on_infeasible=True,
+            )
+
         startILPInfer = perf_counter()
-        if self.graph.batch and self.ontologyNode == self.graph.batch and 'contains' in self.relationLinks:
+        if (
+            self.graph.batch is not None
+            and self.ontologyNode == self.graph.batch
+            and 'contains' in self.relationLinks
+        ):
             batchConcept = self.graph.batch
             self.myLoggerTime.info(f'Batch processing ILP for {batchConcept}')
 
             for batchIndex, dn in enumerate(self.relationLinks['contains']):
                 startILPBatchStepInfer = perf_counter()
-                myILPOntSolver.calculateILPSelection(dn, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+                _infer_single_ilp_target(dn)
                 endILPBatchStepInfer = perf_counter()
 
                 elapsed = endILPBatchStepInfer - startILPBatchStepInfer
@@ -2090,7 +2220,7 @@ class DataNode:
                 else:
                     self.myLoggerTime.info(f'Finished step {batchIndex} for batch ILP Inference - time: {elapsed*1000:.2f}ms')
         else:
-            myILPOntSolver.calculateILPSelection(self, *conceptsRelations, key=key, fun=fun, epsilon=epsilon, minimizeObjective=minimizeObjective, ignorePinLCs=ignorePinLCs)
+            _infer_single_ilp_target(self)
 
         endILPInfer = perf_counter()
 
@@ -2337,7 +2467,11 @@ class DataNode:
 
         return result
     
-    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0, sampleGlobalLoss=False):
+    def calculateLcLoss(self, tnorm='P', counting_tnorm=None, sample=False, sampleSize=0,
+                        sampleGlobalLoss=False, compiled=False, circuit=False,
+                        circuitBackend=None, circuitMaxNodes=None,
+                        circuitSizeLimitAction=None, circuitAggregation=None,
+                        includeExecutable=False):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2352,6 +2486,28 @@ class DataNode:
             Default is 0.
         - sampleGlobalLoss: bool, optional
             Specifies whether to calculate the global loss in case of sampling. Default is False.
+        - compiled: bool, optional
+            Use the compiled (batched-gather) constraint evaluator instead of the
+            per-datanode interpreter. Falls back to the interpreter per constraint
+            for unsupported constraint types. Ignored when sample is True.
+        - circuit: bool, optional
+            Compile each active head constraint to an exact logical circuit and
+            return differentiable ``-log(weighted_model_count)`` losses.
+        - circuitBackend, circuitMaxNodes, circuitSizeLimitAction: optional
+            Configure the circuit implementation (``auto``, ``pysdd``, or
+            ``bdd``), node budget, and budget action (``raise`` or ``warn``).
+        - includeExecutable: bool, optional
+            Also score ``execute()``-wrapped constraints, which live in
+            ``graph.executableLCs`` and are excluded by default so
+            ``InferenceProgram`` does not double-count them. Enable when one
+            number must cover every constraint (e.g. comparing against the
+            exact-circuit path, which always iterates both populations).
+        - circuitAggregation: str, optional
+            ``'joint'`` (default) returns one ``-log P(all groundings hold)`` per
+            constraint, preserving dependence between groundings that share a
+            variable. ``'per_grounding'`` returns a ``[G]`` vector of
+            ``-log P(grounding)``, which keeps the loss scale independent of the
+            grounding count and is required by per-grounding dual mechanisms.
 
         Returns:
         - lcResult: object
@@ -2369,12 +2525,28 @@ class DataNode:
         """Calculate loss values for logical constraints."""
         start = perf_counter()
                 
-        if sample:
+        if sample and circuit:
+            raise ValueError("sample and circuit loss modes are mutually exclusive")
+        if circuit:
+            lcLosses = myilpOntSolver.calculateCircuitLoss(
+                self,
+                backend=circuitBackend,
+                max_nodes=circuitMaxNodes,
+                size_limit_action=circuitSizeLimitAction,
+                aggregation=circuitAggregation,
+            )
+        elif sample:
             sampleCalculator = SampleLossCalculator(myilpOntSolver)
             lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
+        elif compiled:
+            from domiknows.solver.compiled import CompiledLossCalculator
+            lossCalculator = CompiledLossCalculator(myilpOntSolver)
+            lcLosses = lossCalculator.calculateLoss(
+                self, tnorm, counting_tnorm, include_executable=includeExecutable)
         else:
             lossCalculator = LossCalculator(myilpOntSolver)
-            lcLosses = lossCalculator.calculateLoss(self, tnorm, counting_tnorm)
+            lcLosses = lossCalculator.calculateLoss(
+                self, tnorm, counting_tnorm, include_executable=includeExecutable)
         
         end = perf_counter()
         elapsedInS = end - start
@@ -3681,6 +3853,18 @@ class DataNodeBuilder(dict):
 
         if isinstance(value, torch.Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
+
+        # Executable multi-answer labels are intentionally wrapped as [1, N]
+        # so the builder creates one constraint DataNode while retaining the
+        # N-position vector as that node's label value.
+        if (
+            keyDataName.startswith('ELC')
+            and keyDataName.endswith('/label')
+            and isinstance(value, torch.Tensor)
+            and dimV >= 2
+            and lenV == 1
+        ):
+            return ValueInfo(len=1, value=value.squeeze(0), dim=0)
 
         if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
             if isinstance(value, list) and not isinstance(value[0], (torch.Tensor, list)) : # Unpack the value

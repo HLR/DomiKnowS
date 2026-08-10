@@ -67,6 +67,10 @@ class Graph(BaseGraphTree):
         self.varContext = None # None before calling `with graph...`, dictionary after
         self.constraint = None  # Will hold the constraint concept
         self._processed_lcs = set()  # Track which LCs have been processed
+        # ``None`` preserves the historical behavior: every declared concept is
+        # active.  A frozenset is installed by ``set_active_concepts`` when a
+        # caller opts into per-step schema activation.
+        self._active_concepts = None
 
 
     def __iter__(self):
@@ -379,6 +383,151 @@ class Graph(BaseGraphTree):
         )
         return list(all_concepts.keys())
 
+    def _activation_concepts(self):
+        """Return concepts whose activation is managed by this graph.
+
+        Activation follows the same boundary as graph execution: this graph and
+        its subgraphs, never its parent or siblings.
+        """
+        return self.collectAllConcepts(
+            include_subgraphs=True,
+            include_supergraph=False,
+            include_siblings=False,
+        )
+
+    def _resolve_activation_concept(self, concept, available):
+        from .concept import Concept
+
+        if isinstance(concept, str):
+            try:
+                return available[concept]
+            except KeyError:
+                raise ValueError(
+                    f"Unknown concept {concept!r} for graph {self.name!r}. "
+                    f"Available concepts: {list(available)}"
+                ) from None
+
+        if not isinstance(concept, Concept):
+            raise TypeError(
+                "Active concepts must be specified as concept names or Concept "
+                f"instances, got {type(concept).__name__}."
+            )
+
+        if not any(concept is candidate for candidate in available.values()):
+            raise ValueError(
+                f"Concept {concept.name!r} does not belong to graph {self.name!r} "
+                "or one of its subgraphs."
+            )
+        return concept
+
+    def _activation_controller(self):
+        """Return the nearest graph that defines an activation set."""
+        graph = self
+        while isinstance(graph, Graph):
+            if graph._active_concepts is not None:
+                return graph
+            graph = graph.sup
+        return None
+
+    def set_active_concepts(self, concepts=None):
+        """Replace the concepts active for subsequent sequential execution.
+
+        ``concepts`` may contain concept names and/or :class:`Concept` objects.
+        Transitive ``is_a`` ancestors and the graph's constraint concept are
+        enabled automatically.  Passing ``None`` restores the default in which
+        every concept is active.
+
+        The activation set is mutable graph state.  Callers sharing a graph
+        concurrently must provide their own synchronization.
+
+        Returns:
+            tuple: Active concepts in graph declaration order.
+        """
+        if concepts is None:
+            self._active_concepts = None
+            return self.get_active_concepts()
+
+        if isinstance(concepts, (str, bytes)):
+            raise TypeError(
+                "set_active_concepts expects an iterable of concept names or "
+                "Concept instances, not a single string."
+            )
+
+        try:
+            requested = list(concepts)
+        except TypeError:
+            raise TypeError(
+                "set_active_concepts expects an iterable of concept names or "
+                "Concept instances, or None."
+            ) from None
+
+        available = self._activation_concepts()
+        available_values = set(available.values())
+        active = set()
+        pending = [self._resolve_activation_concept(item, available) for item in requested]
+
+        while pending:
+            concept = pending.pop()
+            if concept in active:
+                continue
+            active.add(concept)
+            for relation in concept.is_a():
+                if relation.dst in available_values:
+                    pending.append(relation.dst)
+
+        for concept in available_values:
+            owner = concept.getOntologyGraph()
+            if isinstance(owner, Graph) and owner.constraint is concept:
+                active.add(concept)
+
+        self._active_concepts = frozenset(active)
+        return self.get_active_concepts()
+
+    def get_active_concepts(self):
+        """Return active concepts in graph declaration order."""
+        available = self._activation_concepts()
+        controller = self._activation_controller()
+        if controller is None:
+            return tuple(available.values())
+        return tuple(
+            concept for concept in available.values()
+            if concept in controller._active_concepts
+        )
+
+    def is_concept_active(self, concept):
+        """Return whether a graph concept is active for the current step."""
+        controller = self._activation_controller()
+        if controller is not None and controller is not self:
+            return controller.is_concept_active(concept)
+        available = self._activation_concepts()
+        resolved = self._resolve_activation_concept(concept, available)
+        return controller is None or resolved in controller._active_concepts
+
+    def are_concepts_active(self, concepts):
+        """Return whether every supplied concept or concept name is active."""
+        controller = self._activation_controller()
+        if controller is None:
+            return True
+        return all(controller.is_concept_active(concept) for concept in concepts)
+
+    def is_property_active(self, prop):
+        """Return whether a property should participate in this graph step."""
+        from .concept import Concept
+
+        prop_name = getattr(prop, 'prop_name', None)
+        if isinstance(prop_name, Concept) and not self.is_concept_active(prop_name):
+            return False
+
+        owner = getattr(prop, 'sup', None)
+        if isinstance(owner, Concept) and not self.is_concept_active(owner):
+            return False
+
+        get_lc_concepts = getattr(prop_name, 'getLcConcepts', None)
+        if callable(get_lc_concepts) and not self.are_concepts_active(get_lc_concepts()):
+            return False
+
+        return True
+
     def findConceptInfo(self, concept):
         '''Finds and returns various information related to a given concept.
     
@@ -527,6 +676,14 @@ class Graph(BaseGraphTree):
         list: A list of sensors that meet all the given test conditions.
         '''
         return list(chain(*(prop.find(*tests) for prop in self.get_properties())))
+
+    def get_active_properties(self, *tests):
+        """Return properties enabled by the current concept activation set."""
+        return [prop for prop in self.get_properties(*tests) if self.is_property_active(prop)]
+
+    def get_active_sensors(self, *tests):
+        """Return sensors attached to currently active properties."""
+        return list(chain(*(prop.find(*tests) for prop in self.get_active_properties())))
 
     def get_apply(self, name):
         '''Finds and returns the concept or relation with the given name.
@@ -822,7 +979,8 @@ class Graph(BaseGraphTree):
         Args:
             data: Iterable of dicts containing keys specified by logic_keyword and logic_label_keyword
             logic_keyword: Key in data items containing constraint string expression
-            logic_label_keyword: Key in data items containing the label (True/False)
+            logic_label_keyword: Key in data items containing the label. Boolean
+                constraints use True/False; miotaL uses a multi-hot vector.
             extra_namespace_values: Additional variables to add to evaluation namespace
             verbose: If True, print debug information during compilation
             
@@ -850,11 +1008,23 @@ class Graph(BaseGraphTree):
                 extra_namespace_values, verbose, elc_name_list
             )
     
+        from .logicalConstrain import miotaL, queryL
+        vector_label_names = {
+            name for name in elc_name_list
+            if (
+                isinstance(self.executableLCs[name].innerLC, miotaL)
+                or (
+                    isinstance(self.executableLCs[name].innerLC, queryL)
+                    and self.executableLCs[name].innerLC.is_multi_answer
+                )
+            )
+        }
         return LogicDataset(
                 data,
                 elc_name_list,
                 logic_keyword=logic_keyword,
-                logic_label_keyword=logic_label_keyword
+                logic_label_keyword=logic_label_keyword,
+                vector_label_names=vector_label_names,
             )
 
     def _process_executable(
@@ -868,7 +1038,7 @@ class Graph(BaseGraphTree):
         1. Reads the constraint string expression
         2. Compiles and evaluates to create LogicalConstrain
         3. Wraps with execute() if not already wrapped
-        4. Stores label in executableLCsLabels dictionary
+        4. Stores the scalar or vector label in executableLCsLabels
         
         Args:
             data: Iterable of data items

@@ -200,6 +200,7 @@ def test_lazy_static_lookahead_avoids_full_composed_state_table():
         search="beam",
         beam_size=2,
         max_new_tokens=3,
+        hmm_dfa_base="hmm",
         lookahead_weight=1.0,
         lookahead_max_steps=3,
         hf_weight=0.0,

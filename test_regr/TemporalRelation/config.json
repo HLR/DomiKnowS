@@ -1,0 +1,7 @@
+{
+  "python_path": "../..",
+  "data_root": "data",
+  "training_model": "Qwen/Qwen3-8B",
+  "inference_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "output_dir": "models"
+}

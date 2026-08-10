@@ -20,6 +20,8 @@ from domiknows.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 from domiknows.solver.booleanMethodsCalculator import booleanMethodsCalculator
+from domiknows.solver.circuitBooleanMethods import circuitBooleanMethods
+from domiknows.solver.circuitLossCalculator import CircuitLossCalculator
 
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
@@ -38,7 +40,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
+        self.myCircuitBooleanMethods = circuitBooleanMethods()
         self.constraintConstructor = LogicalConstraintConstructor(self.myLogger)
+        self.circuitLossCalculator = CircuitLossCalculator(self)
 
         self.logical_constraints = {}
         for g in graph:
@@ -49,6 +53,48 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.reuse_model = True
             
         self.model = collections.deque([], 20)
+
+    def configureCircuitBackend(self, *, backend=None, max_nodes=None, size_limit_action=None):
+        """Reconfigure the exact circuit backend and discard incompatible cache."""
+        current = self.myCircuitBooleanMethods
+        backend = current.requested_backend if backend is None else backend
+        max_nodes = current.max_nodes if max_nodes is None else max_nodes
+        size_limit_action = (
+            current.size_limit_action
+            if size_limit_action is None
+            else size_limit_action
+        )
+        requested = (backend, max_nodes, size_limit_action)
+        active = (
+            current.requested_backend,
+            current.max_nodes,
+            current.size_limit_action,
+        )
+        if requested != active:
+            self.myCircuitBooleanMethods = circuitBooleanMethods(
+                backend=backend,
+                max_nodes=max_nodes,
+                size_limit_action=size_limit_action,
+            )
+            self.circuitLossCalculator._compile_cache.clear()
+
+    def calculateCircuitLoss(
+        self,
+        dn,
+        *,
+        backend=None,
+        max_nodes=None,
+        size_limit_action=None,
+        aggregation=None,
+    ):
+        """Calculate exact ``-log(WMC)`` losses for active head constraints."""
+        self.configureCircuitBackend(
+            backend=backend,
+            max_nodes=max_nodes,
+            size_limit_action=size_limit_action,
+        )
+        return self.circuitLossCalculator.calculateCircuitLoss(
+            dn, aggregation=aggregation)
         
     def set_logical_constraints(self, new_logical_constraints):
         self.logical_constraints = new_logical_constraints
@@ -723,13 +769,53 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
     # ---------------
                 
-    # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification  
+    # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification
     def calculateILPSelection(self, dn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
+        """Run ordinary ILP inference and populate the DataNode in place.
+
+        The signature and in-place return contract of this public entry point
+        intentionally remain unchanged.  Hypothesis-aware inference uses the
+        private variant below so it can compare detached candidate solutions
+        before writing exactly one winner.
+        """
+        self._calculateILPSelection(
+            dn,
+            *conceptsRelations,
+            key=key,
+            fun=fun,
+            epsilon=epsilon,
+            minimizeObjective=minimizeObjective,
+            ignorePinLCs=ignorePinLCs,
+        )
+
+    def _calculateILPSelection(
+        self,
+        dn,
+        *conceptsRelations,
+        key=("local", "softmax"),
+        fun=None,
+        epsilon=0.00001,
+        minimizeObjective=False,
+        ignorePinLCs=False,
+        extraLogicalConstraints=(),
+        populate=True,
+        forceFreshModel=False,
+        raiseOnInfeasible=True,
+    ):
+        """Internal ILP run used by executable-constraint hypotheses.
+
+        ``extraLogicalConstraints`` are hard constraints added to every
+        priority run.  When ``populate`` is false the method returns a
+        detached objective/assignment dictionary and leaves final ``/ILP``
+        tensors untouched.  Temporary Gurobi variable handles are still
+        created on the DataNode because the logical-constraint compiler uses
+        them; callers must clear those handles between fresh models.
+        """
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning')
             self.myLoggerTime.warning('ILP solver not provided - returning')
             
-            return 
+            return None
         
         self.current_device = dn.current_device
         
@@ -747,7 +833,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             ilpVarCount = self.countLCVariables(dn, *conceptsRelations)
 
             reusingModel = False
-            if self.reuse_model:
+            if self.reuse_model and not forceFreshModel:
                 # Find it there is saved ILP model with this count of instances per concept
                 for modelDec in self.model:
                     if ilpVarCount == modelDec[0]:
@@ -758,7 +844,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
             if not reusingModel:
                 # If not reusing the model or if the right model was yet saved - create new Gurabi model
-                if dn.gurobiModel == None:
+                if forceFreshModel:
+                    m = Model("hypothesisClassificationResult" + str(start), gurobiEnv)
+                elif dn.gurobiModel == None:
                     m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
                     dn.gurobiModel = m
                 else:
@@ -807,7 +895,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Collect head logical constraints
             dn.setActiveExecutableLCs() # Set active executive LCs in the data node if executive LC datanode set
             _lcP = {}
-            _lcP[100] = []
+            _lcP[100] = list(extraLogicalConstraints)
             pUsed = False
             for graph in self.myGraph:
                 for _, lc in graph.logicalConstrains.items():
@@ -835,7 +923,19 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             #  -----------  Run ILP solver for each p
             for p in lcP:
-                self.processILPModelForP(p, lcP, m, x, dn, pUsed, reusingModel, ilpVarCount, minimizeObjective, lcRun)
+                self.processILPModelForP(
+                    p,
+                    lcP,
+                    m,
+                    x,
+                    dn,
+                    pUsed,
+                    reusingModel,
+                    ilpVarCount,
+                    minimizeObjective,
+                    lcRun,
+                    cacheModel=not forceFreshModel,
+                )
 
             endOptimize = perf_counter()
 
@@ -843,7 +943,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             maxP = None
             for p in lcRun:
                 if lcRun[p]['solved']:
-                    if maxP:
+                    if maxP is not None:
                         if minimizeObjective and lcRun[maxP]['objValue'] >= lcRun[p]['objValue']:
                             maxP = p
                         elif not minimizeObjective and lcRun[maxP]['objValue'] <= lcRun[p]['objValue']:
@@ -851,125 +951,31 @@ class gurobiILPOntSolver(ilpOntSolver):
                     else:
                         maxP = p
                
-            # ----------- If solution found model - return best result          
-            if maxP:
+            selectionResult = None
+
+            # ----------- If solution found model - return best result
+            if maxP is not None:
                 self.myLogger.info('Best  solution found for p - %i'%(maxP))
                 #self.myLoggerTime.info('Best  solution found for p - %i'%(maxP))
                 
-                lcRun[maxP]['mP'].update()
-                xVars = list(lcRun[maxP]['xP'].values())
-                xVarsIndex = 0
-                solutions_to_log = set()
+                selectedModel = lcRun[maxP]['mP']
+                selectedVariables = lcRun[maxP]['xP']
+                selectedModel.update()
+                detachedValues = self._snapshotILPVariables(selectedVariables)
+                selectionResult = {
+                    'objective': lcRun[maxP]['objValue'],
+                    'values': detachedValues,
+                    'variables': selectedVariables,
+                    'priority': maxP,
+                }
 
-                # Initialize at the beginning of your method
-                solutions_to_log = set()
-
-                for c in conceptsRelations:
-                    if c[2] is None:
-                        index = 0
-                    else:
-                        index = c[2] # multiclass
-                        
-                    c_root = dn.findRootConceptOrRelation(c[0])
-                    c_root_dns = dn.findDatanodes(select = c_root)
-                    
-                    ILPkey = '<' + c[0].name + '>/ILP'
-                    
-                    xkey = ILPkey + '/x'
-                    xPkey = ILPkey + '/xP'
-                    xNotPkey = ILPkey + '/notxP'
-                    
-                    ilpTensor = None
-                    if getDnSkeletonMode() and "variableSet" in dn.attributes:
-                        ilpKeyInVariableSet = c_root.name + "/<" + c[0].name +">" + "/ILP"
-                        
-                        if ilpKeyInVariableSet in dn.attributes["variableSet"]:
-                            ilpTensor = dn.attributes["variableSet"][ilpKeyInVariableSet]
-                        else:
-                            ilpTensor = torch.zeros([len(c_root_dns), c[3]], dtype=torch.float, device=self.current_device)
-                
-                    for i, cDn in enumerate(c_root_dns):
-                        dnAtt = cDn.getAttributes()
-                        
-                        if xkey not in dnAtt and xPkey not in dnAtt:
-                            if xVars[xVarsIndex] == None or not reusingModel:
-                                
-                                if ilpTensor is not None:
-                                    ilpTensor[i][index] = float("nan")
-                                else:
-                                    if ILPkey not in dnAtt:
-                                        dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
-                                    
-                                    dnAtt[ILPkey][index] = float("nan")
-
-                                # Update index for x variables 
-                                if c[2] is None:
-                                    xVarsIndex +=2 # skip Not variable
-                                else:
-                                    xVarsIndex +=1
-                                    
-                                continue 
-                            else:
-                                if pUsed: 
-                                    dnAtt[xPkey] = {}
-                                    dnAtt[xPkey][maxP] = [None] * c[3]
-                                    dnAtt[xPkey][maxP][index] = xVars[xVarsIndex]
-                                else:
-                                    dnAtt[xkey] = [None] * c[3]
-                                    dnAtt[xkey][index] = xVars[xVarsIndex]
-                        
-                        if pUsed: 
-                            if dnAtt[xPkey][maxP][index] == None:
-                                dnAtt[xPkey][maxP][index] = xVars[xVarsIndex]
-                        else:
-                            if dnAtt[xkey][index] == None:
-                                dnAtt[xkey][index] = xVars[xVarsIndex]
-                                    
-                        # Update index for x variables           
-                        if c[2] is None:
-                            xVarsIndex +=2 # skip Not variable
-                        else:
-                            xVarsIndex +=1
-                            
-                        #  Get solution    
-                        if pUsed:
-                            solution = dnAtt[xPkey][maxP][index].X
-                        else:
-                            solution = dnAtt[xkey][index].X
-                            
-                        if solution == 0:
-                            solution = 0
-                        elif solution == 1: 
-                            solution = 1
-
-                        if ilpTensor is None and ILPkey not in dnAtt:
-                            dnAtt[ILPkey] = torch.full((c[3],), float("nan"))
-                        
-                        if xkey not in dnAtt:
-                            dnAtt[xkey] = torch.full((c[3],), float("nan"))
-                    
-                        if ilpTensor is not None:
-                            ilpTensor[i][index] = solution
-                        else:
-                            dnAtt[ILPkey][index] = solution
-                            
-                        if pUsed: # Set main ILP variable x based on max P ILP variable x
-                            dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
-                            if xNotPkey in dnAtt: # do this for not x as well
-                                dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
-
-                        # Only log positive concepts when solution == 1
-                        # Skip negative concepts (those with "not_" in the name)
-                        if solution == 1 and not c[1].startswith("not_"):
-                            solutions_to_log.add((cDn, c[1]))
-                    
-                    if ilpTensor is not None:
-                        dn.attributes["variableSet"][ilpKeyInVariableSet] = ilpTensor
-                        
-                # Log all solutions in sorted order (only positive concepts)
-                if solutions_to_log:
-                    self.log_sorted_solutions(solutions_to_log)
-                    solutions_to_log.clear()
+                if populate:
+                    self.populateILPSelection(
+                        dn,
+                        conceptsRelations,
+                        detachedValues,
+                        variables=selectedVariables,
+                    )
                     
             else:
                 end = perf_counter()
@@ -985,7 +991,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('')
 
                 # Raise exception if no solution found
-                raise Exception('ILP Model Infeasible - no solution found')
+                if raiseOnInfeasible:
+                    raise Exception('ILP Model Infeasible - no solution found')
                                        
         except Exception as inst:
             self.myLogger.error('Error returning solutions -  %s'%(inst))
@@ -1012,7 +1019,113 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info('')
         
         # ----------- Return
-        return
+        return selectionResult
+
+    @staticmethod
+    def _snapshotILPVariables(variables):
+        """Detach a solved Gurobi variable mapping into plain numeric values."""
+        values = {}
+        for variable_key, variable in variables.items():
+            if variable is None:
+                values[variable_key] = None
+                continue
+
+            value = variable.X
+            if value == 0:
+                value = 0
+            elif value == 1:
+                value = 1
+            values[variable_key] = value
+
+        return values
+
+    def populateILPSelection(self, dn, conceptsRelations, values, *, variables=None):
+        """Write a detached ILP assignment into the standard DataNode outputs.
+
+        ``values`` uses the same tuple keys as ``createILPVariables``.  Keeping
+        this writer independent of a live Gurobi model lets AnswerSolver retain
+        the best hypothesis assignment after later candidate models have been
+        constructed and disposed.
+        """
+        solutions_to_log = set()
+        initialized_outputs = set()
+        use_skeleton = getDnSkeletonMode() and "variableSet" in dn.attributes
+        output_device = getattr(self, 'current_device', dn.current_device)
+
+        for concept_relation in conceptsRelations:
+            index = 0 if concept_relation[2] is None else concept_relation[2]
+            concept = self.getConcept(concept_relation)
+            concept_name = concept_relation[0].name
+            label = concept_relation[1]
+            label_count = concept_relation[3]
+
+            root_concept = dn.findRootConceptOrRelation(concept_relation[0])
+            root_dns = dn.findDatanodes(select=root_concept)
+            ilp_key = f'<{concept_name}>/ILP'
+            x_key = ilp_key + '/x'
+            not_x_key = ilp_key + '/notx'
+            output_identity = (root_concept.name, concept_name)
+
+            ilp_tensor = None
+            skeleton_key = None
+            if use_skeleton:
+                skeleton_key = root_concept.name + "/" + ilp_key
+                if output_identity not in initialized_outputs:
+                    dn.attributes["variableSet"][skeleton_key] = torch.full(
+                        (len(root_dns), label_count),
+                        float("nan"),
+                        dtype=torch.float,
+                        device=output_device,
+                    )
+                ilp_tensor = dn.attributes["variableSet"][skeleton_key]
+
+            for dn_index, concept_dn in enumerate(root_dns):
+                attributes = concept_dn.getAttributes()
+                if not use_skeleton and output_identity not in initialized_outputs:
+                    attributes[ilp_key] = torch.full(
+                        (label_count,),
+                        float("nan"),
+                        dtype=torch.float,
+                        device=output_device,
+                    )
+
+                variable_key = (
+                    concept,
+                    label,
+                    concept_dn.getInstanceID(),
+                    index,
+                )
+                solution = values.get(variable_key)
+                if solution is not None:
+                    if ilp_tensor is not None:
+                        ilp_tensor[dn_index][index] = solution
+                    else:
+                        attributes[ilp_key][index] = solution
+
+                    if solution == 1 and not label.startswith("not_"):
+                        solutions_to_log.add((concept_dn, label))
+
+                if variables is not None:
+                    attributes.setdefault(x_key, [None] * label_count)
+                    attributes[x_key][index] = variables.get(variable_key)
+
+                    if concept_relation[2] is None:
+                        not_variable_key = (
+                            concept,
+                            'Not_' + label,
+                            concept_dn.getInstanceID(),
+                            index,
+                        )
+                        attributes.setdefault(not_x_key, [None] * label_count)
+                        attributes[not_x_key][index] = variables.get(not_variable_key)
+
+            initialized_outputs.add(output_identity)
+
+            if ilp_tensor is not None:
+                dn.attributes["variableSet"][skeleton_key] = ilp_tensor
+
+        if solutions_to_log:
+            self.log_sorted_solutions(solutions_to_log)
 
     def log_sorted_solutions(self, solutions_to_log):
         """
@@ -1038,7 +1151,20 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.info('"%s" is "%s"', dn_str, concept)
             
-    def processILPModelForP(self, p, lcP, m, x, dn, pUsed, reusingModel, ilpVarCount, minimizeObjective, lcRun):
+    def processILPModelForP(
+        self,
+        p,
+        lcP,
+        m,
+        x,
+        dn,
+        pUsed,
+        reusingModel,
+        ilpVarCount,
+        minimizeObjective,
+        lcRun,
+        cacheModel=True,
+    ):
         ps = []
         ps.append(p)
         
@@ -1102,7 +1228,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.addLogicalConstrains(mP, dn, lcs, p, key=lckey)  # <--- LC constraints
             
             # Save model
-            if self.reuse_model:
+            if self.reuse_model and cacheModel:
                 self.model.append((ilpVarCount, mP, xP))
                 import sys
                 memoryUsage = sys.getsizeof(mP)

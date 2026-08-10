@@ -258,6 +258,7 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         shared_tokenizer=None,
     ):
         super().__init__()
+        _prepare_transformers_imports()
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.label_count = label_count

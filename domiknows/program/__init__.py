@@ -1,7 +1,14 @@
 from .program import LearningBasedProgram
 from .model_program import POIProgram, IMLProgram, POILossProgram, SolverPOIProgram, SolverPOIDictLossProgram
 from .callbackprogram import CallbackProgram
-from .lossprogram import PrimalDualModel, SampleLossModel, GBIProgram
+from .lossprogram import (
+    PrimalDualModel,
+    SampleLossModel,
+    SemanticLossModel,
+    SemanticLossProgram,
+    StructuredProgram,
+    GBIProgram,
+)
 
 
 def __getattr__(name):

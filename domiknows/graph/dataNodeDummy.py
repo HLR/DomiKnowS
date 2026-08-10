@@ -561,8 +561,8 @@ def verifyExecutableConstraints(graph):
         constraint_desc = _describe_constraint(elc)
 
         # Ensure the constraint is active for verification
-        prev_active = elc.active
-        prev_inner_active = elc.innerLC.active
+        prev_active = elc.declared_active
+        prev_inner_active = elc.innerLC.declared_active
         elc.active = True
         elc.innerLC.active = True
 

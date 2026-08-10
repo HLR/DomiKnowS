@@ -458,23 +458,63 @@ class LearningBasedProgram():
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
 
-    def save(self, path, **kwargs):
+    def _should_bundle_cmodel(self):
+        """Whether to also checkpoint the constraint model's state.
+
+        The constraint model (if any) carries non-gradient dual state that the
+        optimizer will not reconstruct — most importantly the Augmented
+        Lagrangian multipliers/penalty coefficients (R5). Bundle it so the
+        save-best / reload cycle does not silently reset that state. Plain
+        gradient-ascent duals keep the historical flat (model-only) format.
+        """
+        cmodel = getattr(self, 'cmodel', None)
+        if cmodel is None:
+            return False
+        return getattr(cmodel, 'dual_algorithm', 'ascent') == 'augmented'
+
+    def save(self, path, save_cmodel=None, **kwargs):
         """
         The function saves the state dictionary of a model to a specified path using the torch.save()
         function.
-        
+
         :param path: The path where the model's state dictionary will be saved
+        :param save_cmodel: If True, save a ``{'model', 'cmodel'}`` bundle so the
+            constraint model's non-gradient dual state (e.g. Augmented Lagrangian
+            multipliers/penalties) round-trips. If None (default), auto-enabled
+            whenever the constraint model carries such state. If False, always
+            save the historical flat (model-only) checkpoint.
         """
-        torch.save(self.model.state_dict(), path, **kwargs)
+        if save_cmodel is None:
+            save_cmodel = self._should_bundle_cmodel()
+
+        cmodel = getattr(self, 'cmodel', None)
+        if save_cmodel and cmodel is not None:
+            torch.save(
+                {'model': self.model.state_dict(), 'cmodel': cmodel.state_dict()},
+                path, **kwargs)
+        else:
+            torch.save(self.model.state_dict(), path, **kwargs)
 
     def load(self, path, **kwargs):
         """
         The function loads a saved model state dictionary from a specified path.
-        
+
+        Transparently accepts both the historical flat (model-only) checkpoint
+        and the ``{'model', 'cmodel'}`` bundle written when the constraint model
+        carries dual state.
+
         :param path: The path parameter is the file path to the saved model state dictionary
         """
         kwargs.setdefault('weights_only', True)
-        self.model.load_state_dict(torch.load(path, **kwargs))
+        checkpoint = torch.load(path, **kwargs)
+
+        if isinstance(checkpoint, dict) and 'model' in checkpoint and 'cmodel' in checkpoint:
+            self.model.load_state_dict(checkpoint['model'])
+            cmodel = getattr(self, 'cmodel', None)
+            if cmodel is not None:
+                cmodel.load_state_dict(checkpoint['cmodel'])
+        else:
+            self.model.load_state_dict(checkpoint)
 
     def verifyResultsLC(self,data,constraint_names=None,device=None):
         """

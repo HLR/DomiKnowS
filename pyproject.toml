@@ -60,6 +60,10 @@ cu126 = [
   "torch==2.11.*",
   "torchvision==0.26.*"
 ]
+cu132 = [
+  "torch==2.13.*",
+  "torchvision==0.28.*"
+]
 xpu = [
   "torch==2.8.*",
   "torchvision==0.23.*",
@@ -83,6 +87,10 @@ generation-guided = [
   "openai>=1.0.0",
 ]
 
+semantic-loss = [
+  "pysdd>=1.0.0",
+]
+
 [tool.uv]
 conflicts = [
     # Torch flavors are mutually exclusive
@@ -90,6 +98,7 @@ conflicts = [
         { extra = "cpu" },
         { extra = "cu128" },
         { extra = "cu126" },
+        { extra = "cu132" },
         { extra = "xpu" },
     ],
     # vllm only works with cu128 (needs matching torch+torchvision)
@@ -104,6 +113,10 @@ conflicts = [
     [
         { extra = "vllm" },
         { extra = "xpu" },
+    ],
+    [
+        { extra = "vllm" },
+        { extra = "cu132" },
     ],
 ]
 

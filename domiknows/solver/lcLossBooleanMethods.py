@@ -8,16 +8,23 @@ from domiknows.solver.ilpConfig import ilpConfig
 from domiknows import setup_logger, getProductionModeStatus
 
 class lcLossBooleanMethods(constraintsProcessor):
-    
+
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
         self.tnorm = 'P'
         self.counting_tnorm = None
         self.grad = True
         self.current_dtype = None
-        
+
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
+
+        # Formatting whole tensors into count-log messages costs more than the
+        # actual t-norm math (f-strings are evaluated even when the record is
+        # filtered). The detailed per-variable/tensor dumps are therefore
+        # opt-in via DOMIKNOWS_COUNT_LOG_DETAIL=1; coarse operation logs stay on.
+        import os
+        self._detailedLog = os.environ.get('DOMIKNOWS_COUNT_LOG_DETAIL', '0') == '1'
         
         # Set up dedicated logger for count operations
         self._setup_count_logger(_ildConfig)
@@ -124,7 +131,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def notVar(self, _, var, onlyConstrains = False):
         logicMethodName = "NOT"
                 
-        if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s called with : %s", logicMethodName, var)
         
         var, = self._fixVar((var,))
             
@@ -140,89 +147,105 @@ class lcLossBooleanMethods(constraintsProcessor):
     def andVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "AND"
             
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, var)
         
         # Enhanced logging for AND operations
         self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
-        self.countLogger.info(f"Input parameters: onlyConstrains={onlyConstrains}")
-        self.countLogger.info(f"Number of input variables: {len(var)}")
-        self.countLogger.info(f"T-norm method: {self.tnorm}")
-        
-        # Log input variables before fixing
-        for i, v in enumerate(var):
-            self.countLogger.debug(f"Input variable {i}: {v} (type: {type(v)})")
-              
+        if self._detailedLog:
+            self.countLogger.info(f"Input parameters: onlyConstrains={onlyConstrains}")
+            self.countLogger.info(f"Number of input variables: {len(var)}")
+            self.countLogger.info(f"T-norm method: {self.tnorm}")
+
+            # Log input variables before fixing
+            for i, v in enumerate(var):
+                self.countLogger.debug(f"Input variable {i}: {v} (type: {type(v)})")
+
         var = self._fixVar(var)
-        
-        # Log variables after fixing with additional debug info
-        self.countLogger.debug(f"Total variables after fixing: {len(var)}")
-        for i, v in enumerate(var):
-            self.countLogger.debug(f"Fixed variable {i}: {v.item() if v.numel() == 1 else v} (shape: {v.shape})")
-            # Force log flush for each variable to ensure visibility
-            for handler in self.countLogger.handlers:
-                handler.flush()
-            
-        self.countLogger.debug(f"Variable indices range: 0 to {len(var)-1}")
+
+        if self._detailedLog:
+            # Log variables after fixing with additional debug info
+            self.countLogger.debug(f"Total variables after fixing: {len(var)}")
+            for i, v in enumerate(var):
+                self.countLogger.debug(f"Fixed variable {i}: {v.item() if v.numel() == 1 else v} (shape: {v.shape})")
+                # Force log flush for each variable to ensure visibility
+                for handler in self.countLogger.handlers:
+                    handler.flush()
+
+            self.countLogger.debug(f"Variable indices range: 0 to {len(var)-1}")
                     
         if self.tnorm =='L':
-            self.countLogger.debug("Using Łukasiewicz t-norm for AND")
             N = len(var)
-            self.countLogger.debug(f"Number of variables N: {N}")
-            
+            if self._detailedLog:
+                self.countLogger.debug("Using Łukasiewicz t-norm for AND")
+                self.countLogger.debug(f"Number of variables N: {N}")
+
             nTorch = torch.tensor([N], device=self.current_device, requires_grad=True, dtype=self._get_dtype())
             varSum = torch.clone(var[0])
             for i, v in enumerate(var[1:], 1):
                 varSum.add_(v)
-                self.countLogger.debug(f"After adding var[{i}], sum: {varSum.item() if varSum.numel() == 1 else varSum}")
-            
-            self.countLogger.debug(f"Final sum of variables: {varSum.item() if varSum.numel() == 1 else varSum}")
-            
+                if self._detailedLog:
+                    self.countLogger.debug(f"After adding var[{i}], sum: {varSum.item() if varSum.numel() == 1 else varSum}")
+
+            if self._detailedLog:
+                self.countLogger.debug(f"Final sum of variables: {varSum.item() if varSum.numel() == 1 else varSum}")
+
             tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
             tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
 
             # max(varSum - N + 1, 0)
             intermediate = torch.add(torch.sub(varSum, nTorch), tOne)  # varSum - N + 1
-            self.countLogger.debug(f"Intermediate calculation (sum - N + 1): {intermediate.item() if intermediate.numel() == 1 else intermediate}")
-            
             andSuccess = torch.maximum(intermediate, tZero)
-            self.countLogger.debug(f"AND success (max(intermediate, 0)): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
-            
+            if self._detailedLog:
+                self.countLogger.debug(f"Intermediate calculation (sum - N + 1): {intermediate.item() if intermediate.numel() == 1 else intermediate}")
+                self.countLogger.debug(f"AND success (max(intermediate, 0)): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+
         elif self.tnorm =='G':
-            self.countLogger.debug("Using Gödel t-norm for AND")
             andSuccess = torch.clone(var[0])
-            self.countLogger.debug(f"Initial value (var[0]): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
-            
+            if self._detailedLog:
+                self.countLogger.debug("Using Gödel t-norm for AND")
+                self.countLogger.debug(f"Initial value (var[0]): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+
             for i, v in enumerate(var[1:], 1):
-                prev_value = andSuccess.clone()
-                andSuccess = torch.minimum(andSuccess, v)
-                self.countLogger.debug(f"After min with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
-                
+                if self._detailedLog:
+                    prev_value = andSuccess.clone()
+                    andSuccess = torch.minimum(andSuccess, v)
+                    self.countLogger.debug(f"After min with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+                else:
+                    andSuccess = torch.minimum(andSuccess, v)
+
         elif self.tnorm =='P':
-            self.countLogger.debug("Using Product t-norm for AND")
             andSuccess = torch.clone(var[0])
-            self.countLogger.debug(f"Initial value (var[0]): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
-            
+            if self._detailedLog:
+                self.countLogger.debug("Using Product t-norm for AND")
+                self.countLogger.debug(f"Initial value (var[0]): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+
             for i, v in enumerate(var[1:], 1):
-                prev_value = andSuccess.clone()
-                
+                if self._detailedLog:
+                    prev_value = andSuccess.clone()
+
                 # Check shapes before in-place multiplication
                 if andSuccess.shape != v.shape:
-                    self.countLogger.debug(f"Shape mismatch detected: andSuccess {andSuccess.shape} vs v {v.shape}")
+                    if self._detailedLog:
+                        self.countLogger.debug(f"Shape mismatch detected: andSuccess {andSuccess.shape} vs v {v.shape}")
                     # Use broadcasting-compatible operation instead of in-place
                     andSuccess = torch.mul(andSuccess, v)
                 else:
                     andSuccess.mul_(v)
-                    
-                self.countLogger.debug(f"After multiply with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
 
-        self.countLogger.info(f"Final AND success value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+                if self._detailedLog:
+                    self.countLogger.debug(f"After multiply with var[{i}] ({v.item() if v.numel() == 1 else v}): {prev_value.item() if prev_value.numel() == 1 else prev_value} → {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+
+        if self._detailedLog:
+            self.countLogger.info(f"Final AND success value: {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
 
         if onlyConstrains:
             andLoss = 1 - andSuccess
-            self.countLogger.info(f"Returning loss (onlyConstrains=True): {andLoss.item() if andLoss.numel() == 1 else andLoss}")
+            if self._detailedLog:
+                self.countLogger.info(f"Returning loss (onlyConstrains=True): {andLoss.item() if andLoss.numel() == 1 else andLoss}")
             result = andLoss
         else:
-            self.countLogger.info(f"Returning success (onlyConstrains=False): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
+            if self._detailedLog:
+                self.countLogger.info(f"Returning success (onlyConstrains=False): {andSuccess.item() if andSuccess.numel() == 1 else andSuccess}")
             result = andSuccess
         
         self.countLogger.info(f"=== {logicMethodName} Operation Completed ===\n")
@@ -231,7 +254,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def orVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "OR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, var)
 
         var = self._fixVar(var)
 
@@ -247,10 +270,10 @@ class lcLossBooleanMethods(constraintsProcessor):
             for v in var[1:]:
                 orSuccess = torch.maximum(orSuccess, v)  # Fixed: was orSuccess.maximum(v)
         elif self.tnorm =='P':
-            varPod = torch.clone(var[0])
-            for v in var[1:]:
-                varPod.mul_(v)
-            orSuccess = torch.sub(varSum, varPod) # varSum - math.prod(var)
+            complement_product = torch.ones_like(var[0])
+            for v in var:
+                complement_product = complement_product * (1 - v)
+            orSuccess = 1 - complement_product
             
         if onlyConstrains:
             orLoss = torch.sub(tOne, orSuccess) # 1 - orSuccess
@@ -262,7 +285,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def nandVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "NAND"
        
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, var)
         
         # nand(var) = not(and(var))
         nandSuccess = self.notVar(_, self.andVar(_, *var))
@@ -309,7 +332,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "IF"
 
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s", logicMethodName, var1, var2)
                 
         # check if separate tensors used
         if torch.is_tensor(var1) and (len(var1.shape) == 0 or len(var1.shape) == 1 and var1.shape[0] == 1):
@@ -368,7 +391,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def norVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "NOR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, var)
 
         # nor(var) = not(or(var)
         norSucess = self.notVar(_, self.orVar(_, *var))
@@ -384,7 +407,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def xorVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "XOR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, var)
 
         if len(var) == 0:
             # XOR of no variables is False
@@ -428,7 +451,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def equivalenceVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "EQUIVALENCE"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, var)
 
         if len(var) == 0:
             # Equivalence of no variables is True (vacuous truth)
@@ -542,23 +565,27 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         # Enhanced logging for count operations
         self.countLogger.info(f"=== {logicMethodName} Operation Started ===")
-        self.countLogger.info(f"Input parameters: limitOp='{limitOp}', limit={limit}, onlyConstrains={onlyConstrains}")
-        self.countLogger.info(f"Number of input variables: {len(var)}")
-        self.countLogger.info(f"T-norm method: {self.counting_tnorm if getattr(self, 'counting_tnorm', None) else self.tnorm}")
+        if self._detailedLog:
+            self.countLogger.info(f"Input parameters: limitOp='{limitOp}', limit={limit}, onlyConstrains={onlyConstrains}")
+            self.countLogger.info(f"Number of input variables: {len(var)}")
+            self.countLogger.info(f"T-norm method: {self.counting_tnorm if getattr(self, 'counting_tnorm', None) else self.tnorm}")
 
         # ---- Normalize inputs: skip None, move to correct device/dtype, clamp to [0,1]
         vals = []
         for i, v in enumerate(var):
-            self.countLogger.debug(f"Processing variable {i}: {v} (type: {type(v)})")
+            if self._detailedLog:
+                self.countLogger.debug(f"Processing variable {i}: {v} (type: {type(v)})")
             if v is None:
-                self.countLogger.debug(f"Variable {i} is None, skipping")
+                if self._detailedLog:
+                    self.countLogger.debug(f"Variable {i} is None, skipping")
                 continue
             tv = self._fixVar((v,))[0] if not isinstance(v, torch.Tensor) else v
             tv = tv.to(device=self.current_device, dtype=self._get_dtype())
             tv = torch.clamp(tv, 0.0, 1.0)
-            self.countLogger.debug(f"Variable {i} after processing: {tv.item() if tv.numel() == 1 else tv}")
+            if self._detailedLog:
+                self.countLogger.debug(f"Variable {i} after processing: {tv.item() if tv.numel() == 1 else tv}")
             vals.append(tv)
-            
+
         if len(vals) == 0:
             self.countLogger.info("No valid variables found, using zero tensor")
             t = torch.zeros(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
@@ -572,13 +599,15 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         n = t.numel()
         s = int(limit)  # ensure Python int
-        
-        self.countLogger.info(f"Final tensor t: {t}")
-        self.countLogger.info(f"Tensor length n: {n}, target count s: {s}")
+
+        if self._detailedLog:
+            self.countLogger.info(f"Final tensor t: {t}")
+            self.countLogger.info(f"Tensor length n: {n}, target count s: {s}")
 
         # ---- Choose t-norm family for counting
         method = self.counting_tnorm if getattr(self, "counting_tnorm", None) else self.tnorm
-        self.countLogger.info(f"Using method: {method}")
+        if self._detailedLog:
+            self.countLogger.info(f"Using method: {method}")
 
         # Helpers return a **loss in [0,1]** (0 = satisfied, 1 = maximally violated).
         if method == "G":  # Gödel
@@ -710,7 +739,8 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.countLogger.error(f"Unsupported limitOp: {limitOp}")
             raise ValueError(f"Unsupported limitOp: {limitOp}")
 
-        self.countLogger.info(f"Computed loss: {loss.item() if hasattr(loss, 'item') else loss}")
+        if self._detailedLog:
+            self.countLogger.info(f"Computed loss: {loss.item() if hasattr(loss, 'item') else loss}")
 
         # Ensure result has gradient tracking
         if isinstance(loss, torch.Tensor) and not loss.requires_grad:
@@ -726,12 +756,14 @@ class lcLossBooleanMethods(constraintsProcessor):
 
         if onlyConstrains:
             result = loss  # loss in [0,1]
-            self.countLogger.info(f"Returning loss (onlyConstrains=True): {result.item() if hasattr(result, 'item') else result}")
+            if self._detailedLog:
+                self.countLogger.info(f"Returning loss (onlyConstrains=True): {result.item() if hasattr(result, 'item') else result}")
         else:
             success = 1.0 - loss
             result = torch.clamp(success, 0.0, 1.0)
-            self.countLogger.info(f"Returning success (onlyConstrains=False): {result.item() if hasattr(result, 'item') else result}")
-            
+            if self._detailedLog:
+                self.countLogger.info(f"Returning success (onlyConstrains=False): {result.item() if hasattr(result, 'item') else result}")
+
         self.countLogger.info(f"=== {logicMethodName} Operation Completed ===\n")
         return result
             
@@ -870,7 +902,7 @@ class lcLossBooleanMethods(constraintsProcessor):
     def fixedVar(self, _, _var, onlyConstrains = False):
         logicMethodName = "FIXED"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,_var))
+        if self.ifLog: self.myLogger.debug("%s called with: %s", logicMethodName, _var)
         
         fixedSuccess = torch.ones(1, device=self.current_device, requires_grad=True, dtype=self._get_dtype())
         
@@ -963,10 +995,6 @@ class lcLossBooleanMethods(constraintsProcessor):
         
         # -- Normalize inputs using existing _fixVar helper
         var = self._fixVar(var)
-        # Some path-based constraints can legitimately produce an empty tensor
-        # for a sample. Treat that as an empty selection rather than crashing on
-        # view(1); the zero satisfaction below yields an existence penalty.
-        var = tuple(v for v in var if not (torch.is_tensor(v) and v.numel() == 0))
         
         # Concatenate all inputs into single tensor
         if len(var) == 0:
@@ -1008,7 +1036,7 @@ class lcLossBooleanMethods(constraintsProcessor):
                 return loss
             else:
                 return selection
-        
+
         elif self.tnorm == 'L':  # Łukasiewicz - softmax with straight-through flavor
             # Scale logits by temperature
             logits = t / temperature
@@ -1060,7 +1088,48 @@ class lcLossBooleanMethods(constraintsProcessor):
             else:
                 return selection
 
-    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY", label=None):
+    def miotaVar(self, _, *var, onlyConstrains=False, threshold=0.5,
+                 hard=False, logicMethodName="MIOTA"):
+        """Differentiable independent multi-candidate selection."""
+        var = self._fixVar(var)
+        if len(var) == 0:
+            return torch.empty(0, device=self.current_device, dtype=self._get_dtype())
+        parts = [v.flatten() if v.numel() > 1 else v.view(1) for v in var]
+        scores = torch.clamp(torch.cat(parts), 0.0, 1.0)
+        if not hard:
+            return scores
+        decoded = (scores >= threshold).to(scores.dtype)
+        return scores + (decoded - scores).detach()
+
+    def _queryDistribution(self, subclass_scores, temperature):
+        """Turn the per-subclass mixture weights into the answer distribution.
+
+        ``subclass_scores[j] = sum_i sel_i * c_ij`` is *already* the marginal
+        probability that the selected entity has subclass ``j``: ``sel`` is a
+        distribution over entities and each ``c_i`` a distribution over
+        subclasses, so the product already sums to 1.
+
+        Running softmax over it — as this did — treats a probability as a logit
+        and squashes the answer toward uniform. With two subclasses the output
+        can then never leave ``[0.27, 0.73]`` however certain the model is,
+        which is why Product/Lukasiewicz looked uninformative while Godel (which
+        hard-argmaxes instead) did not. Renormalise instead, and sharpen in
+        probability space so ``temperature`` still means what it did.
+        """
+        scores = torch.clamp(subclass_scores, min=0.0)
+        total = scores.sum()
+        if not torch.is_nonzero(total.detach()):
+            return torch.full_like(scores, 1.0 / scores.numel())
+
+        distribution = scores / total
+        if temperature and temperature > 0 and temperature != 1.0:
+            sharpened = distribution.clamp_min(1e-12) ** (1.0 / temperature)
+            distribution = sharpened / sharpened.sum()
+        return distribution
+
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None,
+                 onlyConstrains=False, temperature=1.0, multi_answer=False,
+                 threshold=None, logicMethodName="QUERY"):
         """
         Differentiable query operator for multiclass attribute selection.
         
@@ -1131,6 +1200,11 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.countLogger.warning(f"{logicMethodName} called with empty selection_vars after fixing")
             if onlyConstrains:
                 return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            if multi_answer:
+                return torch.empty(
+                    (0, num_subclasses), device=self.current_device,
+                    dtype=self._get_dtype(), requires_grad=True,
+                )
             # Return uniform distribution over subclasses
             return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(), 
                             requires_grad=True) / num_subclasses
@@ -1161,6 +1235,12 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.countLogger.error(f"{logicMethodName} called without subclass_data")
             if onlyConstrains:
                 return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            if multi_answer:
+                class_rows = torch.full(
+                    (n_entities, num_subclasses), 1.0 / num_subclasses,
+                    device=self.current_device, dtype=self._get_dtype(),
+                )
+                return t.unsqueeze(-1) * class_rows
             return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(),
                             requires_grad=True) / num_subclasses
 
@@ -1192,54 +1272,45 @@ class lcLossBooleanMethods(constraintsProcessor):
         elif sel_weights.numel() > c_matrix.shape[0]:
             sel_weights = sel_weights[:c_matrix.shape[0]]
 
+        if multi_answer:
+            # Preserve one row per candidate.  Each normalized class row is
+            # weighted by that candidate's independent miotaL membership, so
+            # row mass is exactly the selection probability.
+            class_rows = torch.stack([
+                self._queryDistribution(row, temperature) for row in c_matrix
+            ]) if c_matrix.shape[0] else c_matrix
+            return sel_weights.unsqueeze(-1) * class_rows
+
         # r_j = Σ_i s_i * c_{j,i}
         subclass_scores = torch.matmul(sel_weights, c_matrix)  # [num_subclasses]
         self.countLogger.debug(f"Computed subclass_scores from subclass_data: {subclass_scores}")
         
         self.countLogger.info(f"Subclass scores: {subclass_scores}")
         
-        def label_conditioned_loss(selection_tensor):
-            if label is None:
-                return None
-            label_idx = int(label.item()) if hasattr(label, "item") else int(label)
-            if label_idx < 0 or label_idx >= num_subclasses:
-                self.countLogger.error(f"{logicMethodName} label index out of range: {label_idx}")
-                return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
-            gold_prob = torch.clamp(selection_tensor[label_idx], 0.0, 1.0)
-            return 1.0 - gold_prob
-
         # -- Apply t-norm specific selection
         if self.tnorm == 'G':  # GÃ¶del - hard argmax
             self.countLogger.debug("Using GÃ¶del t-norm (hard argmax)")
+            soft_selection = self._queryDistribution(subclass_scores, temperature)
             max_idx = torch.argmax(subclass_scores)
             selection = torch.zeros(num_subclasses, device=self.current_device, dtype=self._get_dtype())
             selection[max_idx] = 1.0
             
             if onlyConstrains:
-                label_loss = label_conditioned_loss(subclass_scores)
-                if label_loss is not None:
-                    self.countLogger.info(f"GÃ¶del label-conditioned query loss: {label_loss.item()}")
-                    return label_loss
                 # Loss: penalize if max score is low
                 max_val = subclass_scores[max_idx]
                 loss = 1.0 - max_val
                 self.countLogger.info(f"GÃ¶del loss: {loss.item()}")
                 return loss
             else:
+                selection = soft_selection + (selection - soft_selection).detach()
                 self.countLogger.info(f"GÃ¶del selection: subclass {max_idx.item()}")
                 return selection
         
         elif self.tnorm == 'L':  # Åukasiewicz
             self.countLogger.debug("Using Åukasiewicz t-norm")
-            # Softmax selection with temperature
-            logits = subclass_scores / temperature
-            selection = torch.softmax(logits, dim=0)
+            selection = self._queryDistribution(subclass_scores, temperature)
             
             if onlyConstrains:
-                label_loss = label_conditioned_loss(selection)
-                if label_loss is not None:
-                    self.countLogger.info(f"Åukasiewicz label-conditioned query loss: {label_loss.item()}")
-                    return label_loss
                 # Existence: at least one subclass should have high score
                 sum_scores = torch.sum(subclass_scores)
                 existence_success = torch.clamp(sum_scores, max=tOne)
@@ -1257,16 +1328,10 @@ class lcLossBooleanMethods(constraintsProcessor):
                 return selection
         
         else:  # Product ('P') or Simplified Product ('SP')
-            self.countLogger.debug(f"Using {self.tnorm} t-norm (softmax)")
-            # Standard softmax selection
-            logits = subclass_scores / temperature
-            selection = torch.softmax(logits, dim=0)
+            self.countLogger.debug(f"Using {self.tnorm} t-norm")
+            selection = self._queryDistribution(subclass_scores, temperature)
             
             if onlyConstrains:
-                label_loss = label_conditioned_loss(selection)
-                if label_loss is not None:
-                    self.countLogger.info(f"Product label-conditioned query loss: {label_loss.item()}")
-                    return label_loss
                 # Product existence: 1 - Î (1 - score_j)
                 existence_prob = 1.0 - torch.prod(1.0 - torch.clamp(subclass_scores, 0.0, 1.0))
                 existence_loss = 1.0 - existence_prob

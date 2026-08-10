@@ -39,6 +39,10 @@ setup(
        'scikit-learn',
        'tqdm'
     ],
+
+    extras_require={
+        'semantic-loss': ['pysdd>=1.0.0'],
+    },
     
     license='MIT',
     

@@ -15,7 +15,11 @@ high-reward decodings.
 ### Reward from a Python function
 
 ```python
+import torch
 from domiknows.program import ReinforcementProgram
+
+def reward_fn(generator_output):
+    return torch.tensor([1.0 if generator_output == "yes" else 0.0])
 
 program = ReinforcementProgram(
     graph,
@@ -29,6 +33,19 @@ program.train(dataset, train_epoch_num=200,
 
 print(program.evaluate_reward(dataset))   # mean reward of sampled decodings
 ```
+
+Reward functions can also accept optional context keywords when they need the
+current data item or sampled assignment:
+
+```python
+def reward_fn(generator_output, *, data_item=None, samples=None, targets=None, **_):
+    expected = data_item["logic_label"]
+    return torch.tensor([1.0 if generator_output == expected else 0.0])
+```
+
+Both forms are valid. This keeps the reward method a single plain Python
+function: simple rewards close over metadata or take one argument; richer rewards
+accept context.
 
 ### Reward from the graph's declared constraints
 
@@ -126,10 +143,26 @@ both (added together).
 
 ### 1. Reward function
 
-A callable `reward_function(generator_output) -> Tensor | list | float`. Tensor
-outputs are reduced to a scalar with `.mean()`. Provide it globally via
-`reward_function=…`, or per data item under `reward_key` (default
-`"reward_function"`); the per-item function takes precedence.
+A callable returning `Tensor | list | float`. Old-style rewards use
+`reward_function(generator_output)`. Context-aware rewards may accept any of
+`data_item`, `datanode`, `samples`, or `targets` as keyword-only or `**kwargs`
+parameters. Outputs are normalized to a reward tensor and reduced to a scalar
+with `.mean()`.
+
+Provide a reward globally via `reward_function=...`, or per data item under
+`reward_key` (default `"reward_function"`); the per-item function takes
+precedence. Per-item closures are useful for examples with different labels or
+constraints:
+
+```python
+from domiknows.reinforcement import make_binary_reward_function
+
+data_item = {
+    "logic_str": "question label",
+    "logic_label": "yes",
+    "reward_function": make_binary_reward_function("question label", "yes"),
+}
+```
 
 The bridge from a sampled decoding to `generator_output` is the **decoder**:
 
@@ -168,6 +201,23 @@ reward = function_reward + constraint_reward_weight * constraint_reward
 ```
 
 At least one source must be enabled, or `reinforcement_loss` raises.
+
+### Reusable reward helpers
+
+`domiknows.reinforcement` exports small helpers for common reward plumbing:
+
+- `flatten_generator_output(...)`
+- `normalize_text(...)`
+- `binary_label(...)`
+- `binary_label_name(...)`
+- `coerce_label_tensor(...)`
+- `binary_match_reward(...)`
+- `count_reward(...)`
+- `make_binary_reward_function(...)`
+- `make_count_reward_function(...)`
+
+Domain-specific dense rewards should compose these helpers locally instead of
+moving task-specific scoring formulas into the core reinforcement package.
 
 ---
 

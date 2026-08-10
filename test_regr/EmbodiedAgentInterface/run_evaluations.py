@@ -35,6 +35,9 @@ def parse_args():
     parser.add_argument("--lora-target-modules", nargs="*", default=["q_proj", "v_proj"])
     parser.add_argument("--hmm-alpha", type=float, default=1.0)
     parser.add_argument("--hmm-search", choices=["greedy", "beam", "sample"], default="greedy")
+    parser.add_argument("--hmm-dfa-objective", choices=["ctrl_g", "log_linear_blend"], default="ctrl_g")
+    parser.add_argument("--hmm-dfa-base", choices=["auto", "backend", "hmm"], default="auto")
+    parser.add_argument("--hmm-base-weight", type=float, default=None)
     parser.add_argument("--hmm-lookahead-weight", type=float, default=0.0)
     parser.add_argument("--hmm-lookahead-max-steps", type=int, default=8)
     parser.add_argument("--skip-raw-qwen", action="store_true")
@@ -102,6 +105,8 @@ def main():
             "--gradient-checkpointing",
             "--hmm-alpha", str(args.hmm_alpha),
             "--hmm-search", args.hmm_search,
+            "--hmm-dfa-objective", args.hmm_dfa_objective,
+            "--hmm-dfa-base", args.hmm_dfa_base,
             "--hmm-lookahead-weight", str(args.hmm_lookahead_weight),
             "--hmm-lookahead-max-steps", str(args.hmm_lookahead_max_steps),
             "--output", str(output),
@@ -110,6 +115,8 @@ def main():
             cmd.extend(["--model", str(model)])
         if needs_hmm:
             cmd.extend(["--hmm", str(hmm)])
+        if args.hmm_base_weight is not None:
+            cmd.extend(["--hmm-base-weight", str(args.hmm_base_weight)])
         if args.constraint_modes:
             cmd.extend(["--constraint-modes", *args.constraint_modes])
         if args.eval_limit is not None:

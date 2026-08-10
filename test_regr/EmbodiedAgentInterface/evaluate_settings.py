@@ -110,6 +110,9 @@ def parse_args():
     parser.add_argument("--hmm-soft-mask", action="store_true", help="Legacy wrapper option; strict product HMM+DFA ignores this.")
     parser.add_argument("--hmm-search", choices=["greedy", "beam", "sample"], default="greedy")
     parser.add_argument("--hmm-beam-size", type=int, default=4)
+    parser.add_argument("--hmm-dfa-objective", choices=["ctrl_g", "log_linear_blend"], default="ctrl_g")
+    parser.add_argument("--hmm-dfa-base", choices=["auto", "backend", "hmm"], default="auto")
+    parser.add_argument("--hmm-base-weight", type=float, default=None)
     parser.add_argument("--hmm-weight", type=float, default=1.0)
     parser.add_argument("--hmm-hf-weight", type=float, default=0.0)
     parser.add_argument("--hmm-lookahead-weight", type=float, default=0.0)
@@ -769,6 +772,9 @@ def _domiknows_hmm_dfa_predictions(args, dfa, bundle, generator, examples, desc=
             max_new_tokens=args.max_steps,
             keep_rejected=args.hmm_keep_rejected,
             temperature=0.0 if args.hmm_search != "sample" else 1.0,
+            hmm_dfa_objective=args.hmm_dfa_objective,
+            hmm_dfa_base=args.hmm_dfa_base,
+            base_weight=args.hmm_base_weight,
             hmm_weight=args.hmm_weight,
             hf_weight=args.hmm_hf_weight,
             lookahead_weight=args.hmm_lookahead_weight,

@@ -186,6 +186,7 @@ For HuggingFace-backed generation, the controller supports multiple decode strat
 2. unconstrained
 3. product_compact_learner_dfa
 4. product_hmm_dfa
+5. hmm_dfa_log_linear
 
 Alias names are also supported for compatibility (for example compact_dfa, hmm_dfa, strict_hmm_dfa).
 
@@ -267,11 +268,26 @@ This path decodes over an explicit product state:
 
 At each step:
 
-1. HMM emission and current belief produce immediate label logits.
-2. Optional recursive lookahead estimates downstream DFA success probability.
-3. Optional HuggingFace backend token logits are projected to label logits and blended.
+1. A base model score is selected.
+2. Optional recursive lookahead estimates downstream DFA success probability under the HMM+DFA product.
+3. The selected base score and lookahead score are blended.
 4. A label is sampled under DFA masking.
 5. Both HMM belief and DFA state are advanced.
+
+The default objective is Ctrl-G-compatible:
+
+```text
+base_weight * base_model_label_score
++ lookahead_weight * log P_HMM(DFA success | h_{t+1}, q_{t+1})
+```
+
+`hmm_dfa_base="auto"` uses projected HuggingFace/backend label logits when
+available and falls back to HMM next-label logits when no backend logits are
+available. `hmm_dfa_base="backend"` requires backend logits, and
+`hmm_dfa_base="hmm"` uses HMM next-label logits as the base term. In Ctrl-G
+mode, HMM next-label logits are not added again when backend logits are the
+base; the HMM still updates the belief state and supplies the future-success
+lookahead factor.
 
 Conceptually:
 
@@ -279,11 +295,9 @@ Conceptually:
 (HMM Belief, DFA State, Prefix)
                      │
                      ▼
-          HMM Label Logits
+          Base Label Score
                      │
-                     ├── Optional Lookahead (future DFA success)
-                     │
-                     ├── Optional HF Label Bias
+                     ├── Optional HMM+DFA Lookahead
                      │
                      ▼
          DFA-Constrained Sampling
@@ -293,6 +307,19 @@ Conceptually:
 ```
 
 This provides strict constrained decoding while preserving explicit probabilistic state tracking.
+
+## hmm_dfa_log_linear
+
+This alias preserves the older additive product-style objective:
+
+```text
+hf_weight * HF_label_logit
++ hmm_weight * log P_HMM(label | h_t)
++ lookahead_weight * log P_HMM(DFA success | h_{t+1}, q_{t+1})
+```
+
+Use this strategy for experiments that intentionally want the standalone HMM
+next-label term in addition to lookahead and optional backend logits.
 
 ---
 
@@ -311,6 +338,14 @@ Additional controls:
     1. compact_logit_weight
     2. backend_logit_weight
 2. product_hmm_dfa
+    1. hmm_dfa_objective
+    2. hmm_dfa_base
+    3. base_weight
+    4. hmm_weight
+    5. lookahead_weight
+    6. lookahead_max_steps
+    7. transition_potential
+3. hmm_dfa_log_linear
     1. hmm_weight
     2. lookahead_weight
     3. hf_weight

@@ -398,6 +398,16 @@ def _lookahead_branch_hmm():
     )
 
 
+def _equal_success_hmm_prefers_b():
+    return DiscreteHMM(
+        transition=torch.tensor([[1.0]], dtype=torch.float32),
+        emission=torch.tensor([[0.05, 0.05, 0.90]], dtype=torch.float32),
+        initial=torch.tensor([1.0], dtype=torch.float32),
+        symbols=(0, 1, 2),
+        normalize=False,
+    )
+
+
 def _dfa_with_two_accepting_branches():
     tokenizer = TinyTokenizer()
     vocab = TokenVocabulary(["<eos>", "A", "B"], eos_token="<eos>", tokenizer=tokenizer)
@@ -654,6 +664,7 @@ def test_decode_hmm_dfa_lookahead_weight_changes_ranking():
         search="beam",
         beam_size=2,
         max_new_tokens=2,
+        hmm_dfa_objective="log_linear_blend",
         lookahead_weight=0.0,
     )
     with_lookahead = controller.decode_hmm_dfa(
@@ -661,6 +672,7 @@ def test_decode_hmm_dfa_lookahead_weight_changes_ranking():
         search="beam",
         beam_size=2,
         max_new_tokens=2,
+        hmm_dfa_objective="log_linear_blend",
         lookahead_weight=2.0,
     )
 
@@ -668,6 +680,106 @@ def test_decode_hmm_dfa_lookahead_weight_changes_ranking():
     assert with_lookahead[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
     assert immediate_only[0].accepted
     assert with_lookahead[0].accepted
+
+
+def test_product_hmm_dfa_default_ctrl_g_uses_backend_base_when_success_is_equal():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _equal_success_hmm_prefers_b()
+    generator = HuggingFaceGenerationAdapter(
+        BackendLogitModel(
+            {
+                (9,): [0.0, 1.0, 0.0],
+                (9, 1): [1.0, 0.0, 0.0],
+                (9, 2): [1.0, 0.0, 0.0],
+            }
+        ),
+        tokenizer,
+        vocab,
+    )
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    ctrl_g = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="product_hmm_dfa",
+        max_new_tokens=2,
+        temperature=0.0,
+        lookahead_weight=1.0,
+    )
+    log_linear = controller.generate_verify_rerank(
+        prompt_ids,
+        1,
+        decode_strategy="hmm_dfa_log_linear",
+        max_new_tokens=2,
+        temperature=0.0,
+        lookahead_weight=1.0,
+    )
+
+    assert ctrl_g[0].candidate.labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert log_linear[0].candidate.labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert ctrl_g[0].candidate.metadata["hmm_dfa_objective"] == "ctrl_g"
+    assert ctrl_g[0].candidate.metadata["hmm_dfa_base"] == "auto"
+    assert ctrl_g[0].candidate.metadata["standalone_hmm_term"] is False
+    assert log_linear[0].candidate.metadata["hmm_dfa_objective"] == "log_linear_blend"
+    assert log_linear[0].candidate.metadata["standalone_hmm_term"] is True
+
+
+def test_decode_hmm_dfa_backend_base_requires_backend_logits():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _equal_success_hmm_prefers_b()
+    controller = HybridController(generator=None, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    with pytest.raises(ValueError, match="requires backend label logits"):
+        controller.decode_hmm_dfa(
+            prompt_ids,
+            search="greedy",
+            max_new_tokens=2,
+            hmm_dfa_base="backend",
+        )
+
+
+def test_decode_hmm_dfa_hmm_base_uses_hmm_without_double_counting():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _equal_success_hmm_prefers_b()
+    generator = HuggingFaceGenerationAdapter(BackendLogitModel({}), tokenizer, vocab)
+    controller = HybridController(generator=generator, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="greedy",
+        max_new_tokens=2,
+        hmm_dfa_base="hmm",
+        base_weight=0.0,
+        hmm_weight=10.0,
+        lookahead_weight=0.0,
+        hf_weight=0.0,
+    )
+
+    assert results[0].labels == [vocab.label_for_token("A"), vocab.eos_label]
+    assert results[0].metadata["hmm_dfa_objective"] == "ctrl_g"
+    assert results[0].metadata["hmm_dfa_base"] == "hmm"
+    assert results[0].metadata["standalone_hmm_term"] is True
+
+
+def test_decode_hmm_dfa_auto_base_falls_back_to_hmm_without_backend_logits():
+    tokenizer, vocab, dfa = _dfa_with_two_accepting_branches()
+    prompt_ids = torch.tensor([[9]], dtype=torch.long)
+    hmm = _equal_success_hmm_prefers_b()
+    controller = HybridController(generator=None, vocabulary=vocab, dfa=dfa, scorer_head=hmm, tokenizer=tokenizer)
+
+    results = controller.decode_hmm_dfa(
+        prompt_ids,
+        search="greedy",
+        max_new_tokens=2,
+        lookahead_weight=0.0,
+    )
+
+    assert results[0].labels == [vocab.label_for_token("B"), vocab.eos_label]
+    assert results[0].metadata["hmm_dfa_objective"] == "ctrl_g"
+    assert results[0].metadata["hmm_dfa_base"] == "auto"
 
 
 def test_decode_hmm_dfa_static_dp_matches_recursive_lookahead(monkeypatch):
@@ -963,7 +1075,7 @@ def test_product_hmm_dfa_lookahead_scores_future_acceptance_mass():
     immediate_only = controller.generate_verify_rerank(
         prompt_ids,
         1,
-        decode_strategy="product_hmm_dfa",
+        decode_strategy="hmm_dfa_log_linear",
         max_new_tokens=2,
         temperature=0.0,
         lookahead_weight=0.0,
@@ -971,7 +1083,7 @@ def test_product_hmm_dfa_lookahead_scores_future_acceptance_mass():
     with_lookahead = controller.generate_verify_rerank(
         prompt_ids,
         1,
-        decode_strategy="product_hmm_dfa",
+        decode_strategy="hmm_dfa_log_linear",
         max_new_tokens=2,
         temperature=0.0,
         lookahead_weight=2.0,
@@ -993,7 +1105,7 @@ def test_product_hmm_dfa_lookahead_requires_eos_for_default_success():
     immediate_only = controller.generate_verify_rerank(
         prompt_ids,
         1,
-        decode_strategy="product_hmm_dfa",
+        decode_strategy="hmm_dfa_log_linear",
         max_new_tokens=2,
         temperature=0.0,
         lookahead_weight=0.0,
@@ -1001,7 +1113,7 @@ def test_product_hmm_dfa_lookahead_requires_eos_for_default_success():
     with_lookahead = controller.generate_verify_rerank(
         prompt_ids,
         1,
-        decode_strategy="product_hmm_dfa",
+        decode_strategy="hmm_dfa_log_linear",
         max_new_tokens=2,
         temperature=0.0,
         lookahead_weight=5.0,

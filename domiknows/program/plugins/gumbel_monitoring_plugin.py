@@ -23,7 +23,7 @@ class GumbelMonitoringPlugin:
         Configure the plugin and register callbacks.
         
         Args:
-            program: CallbackProgram instance (should be GumbelInferenceProgram)
+            program: CallbackProgram instance, typically InferenceProgram(use_gumbel=True)
             args: Parsed arguments
         """
         self.program = program

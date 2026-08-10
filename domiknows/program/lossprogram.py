@@ -8,7 +8,12 @@ from .program import LearningBasedProgram, get_len
 from ..utils import consume, setup_logger
 from tqdm import tqdm
 
-from .model.lossModel import PrimalDualModel, SampleLossModel, InferenceModel
+from .model.lossModel import (
+    PrimalDualModel,
+    SampleLossModel,
+    SemanticLossModel,
+    InferenceModel,
+)
 from .model.base import Mode
 from .model.gbi import GBIModel
 
@@ -43,6 +48,12 @@ def reverse_sign_grad(parameters, factor=-1.):
     for parameter in parameters:
         if parameter.grad is not None:
             parameter.grad = factor * parameter.grad
+
+
+def _project_cmodel_lambdas(cmodel):
+    project = getattr(cmodel, 'project_lmbd_', None)
+    if callable(project):
+        project()
 
 # =============================================================================
 # Evaluation Helpers  
@@ -81,7 +92,16 @@ def _apply_threshold_to_predictions(program, datanode, threshold=0.5):
                     thresholded = (softmax_probs >= threshold).float()
                     dn.attributes[keyDecision] = thresholded
 
-def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
+def _evaluate_condition_impl(
+    program,
+    evaluate_data,
+    device="cpu",
+    threshold=0.0,
+    return_dict=False,
+    use_gumbel=False,
+    temperature=None,
+    hard_gumbel=False,
+):
     """
     Unified implementation for evaluating constraints with proper metrics.
 
@@ -109,11 +129,16 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         threshold: Threshold for converting probabilities to binary decisions
                   for counting constraints. Defaults to 0.0 - the threshold will not be applied.
         return_dict: If True, return full results dict; if False, return primary_metric float
+        use_gumbel: If True, evaluate executable constraints on Gumbel-Softmax
+            samples instead of the deterministic local softmax.
+        temperature: Gumbel-Softmax temperature. Defaults to the program's
+            current temperature when available.
+        hard_gumbel: If True, use straight-through hard Gumbel samples.
 
     Returns:
         dict or float: Full results dictionary or primary metric value
     """
-    from domiknows.graph.logicalConstrain import sumL, queryL
+    from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
     from domiknows.step_notebook import (
         StepNotebook, write_active_step, reset_vlm_buffer, drain_vlm_buffer,
     )
@@ -123,6 +148,22 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
     counting_correct = 0
     counting_total = 0
+
+    query_correct = 0
+    query_total = 0
+    multi_query_position_correct = 0
+    multi_query_position_total = 0
+    multi_query_selection_exact_correct = 0
+    multi_query_selection_exact_total = 0
+    multi_query_selection_position_correct = 0
+    multi_query_selection_position_total = 0
+    multi_query_class_correct = 0
+    multi_query_class_total = 0
+
+    miota_exact_correct = 0
+    miota_exact_total = 0
+    miota_position_correct = 0
+    miota_position_total = 0
 
     total = 0
 
@@ -170,11 +211,25 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
 
         total += 1
         datanode.inferLocal()
+        if use_gumbel:
+            eval_temperature = temperature
+            if eval_temperature is None:
+                eval_temperature = getattr(program, "current_temp", None)
+            if eval_temperature is None and hasattr(program, "get_temperature"):
+                eval_temperature = program.get_temperature()
+            if eval_temperature is None:
+                eval_temperature = 1.0
+            datanode.inferGumbelLocal(
+                temperature=eval_temperature,
+                hard=hard_gumbel,
+            )
         if threshold > 0.0:
             _apply_threshold_to_predictions(program, datanode, threshold)
             key = "/local/decision"
         else:
             key = "/local/argmax"
+
+        lc_loss_context = None
 
         for lc_name in active_lc_name:
             if lc_name not in program.graph.executableLCs:
@@ -188,8 +243,197 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             if label is None:
                 continue
 
-            is_counting = isinstance(lc.innerLC, sumL)
-            is_query = isinstance(lc.innerLC, queryL)
+            inner_lc = getattr(lc, "innerLC", lc)
+            is_query = isinstance(inner_lc, queryL)
+            is_counting = isinstance(inner_lc, sumL)
+
+            if isinstance(inner_lc, miotaL):
+                if lc_loss_context is None:
+                    cmodel = getattr(program, "cmodel", None)
+                    lc_loss_context = datanode._prepareLcLossContext(
+                        tnorm=getattr(cmodel, "tnorm", "P"),
+                        counting_tnorm=getattr(cmodel, "counting_tnorm", None),
+                    )
+                loss_dict = datanode.calculateSingleLcLoss(
+                    lc_name,
+                    tnorm=getattr(getattr(program, "cmodel", None), "tnorm", "P"),
+                    counting_tnorm=getattr(getattr(program, "cmodel", None), "counting_tnorm", None),
+                    _context=lc_loss_context,
+                )
+                distribution = loss_dict.get("selectionDistribution")
+                if distribution is None:
+                    continue
+                probabilities = distribution.detach().reshape(-1)
+                expected = torch.as_tensor(label, device=probabilities.device).reshape(-1)
+                if expected.numel() != probabilities.numel():
+                    raise ValueError(
+                        f"miotaL label for {lc_name} has {expected.numel()} values, "
+                        f"but the constraint grounded {probabilities.numel()} candidates"
+                    )
+                if not torch.all((expected == 0) | (expected == 1)):
+                    raise ValueError(
+                        f"miotaL label for {lc_name} must be a binary multi-hot vector"
+                    )
+                predicted = (probabilities >= inner_lc.threshold).to(expected.dtype)
+                position_matches = predicted == expected
+                exact_match = bool(position_matches.all().item())
+                miota_exact_total += 1
+                miota_exact_correct += int(exact_match)
+                miota_position_total += position_matches.numel()
+                miota_position_correct += int(position_matches.sum().item())
+                if _step_results is not None:
+                    _step_results[lc_name] = {
+                        'answer_result': predicted.cpu().tolist(),
+                        'verify_result': {
+                            'selectionDistribution': probabilities.cpu().tolist(),
+                            'expectedLabel': expected.cpu().tolist(),
+                            'threshold': inner_lc.threshold,
+                            'positionCorrect': int(position_matches.sum().item()),
+                            'positionTotal': position_matches.numel(),
+                        },
+                        'correct': exact_match,
+                        'is_counting': False,
+                        'is_query': False,
+                        'is_miota': True,
+                    }
+                continue
+
+            if is_query:
+                query_total += 1
+                try:
+                    if lc_loss_context is None:
+                        cmodel = getattr(program, "cmodel", None)
+                        lc_loss_context = datanode._prepareLcLossContext(
+                            tnorm=getattr(cmodel, "tnorm", "P"),
+                            counting_tnorm=getattr(cmodel, "counting_tnorm", None),
+                        )
+                    loss_dict = datanode.calculateSingleLcLoss(
+                        lc_name,
+                        tnorm=getattr(getattr(program, "cmodel", None), "tnorm", "P"),
+                        counting_tnorm=getattr(getattr(program, "cmodel", None), "counting_tnorm", None),
+                        _context=lc_loss_context,
+                    )
+                    query_distribution = loss_dict.get("queryDistribution")
+                    if query_distribution is None:
+                        if _step_results is not None:
+                            _step_results[lc_name] = {
+                                'answer_result': None,
+                                'verify_result': None,
+                                'correct': False,
+                                'is_counting': False,
+                                'is_query': True,
+                            }
+                        continue
+
+                    if inner_lc.is_multi_answer:
+                        distribution = query_distribution.detach()
+                        expected = torch.as_tensor(
+                            label, device=distribution.device
+                        ).reshape(-1)
+                        if expected.dtype.is_floating_point and not torch.all(expected == expected.round()):
+                            raise ValueError(
+                                f"multi-answer queryL label for {lc_name} must contain integer class IDs"
+                            )
+                        expected = expected.long()
+                        if expected.numel() != distribution.shape[0]:
+                            raise ValueError(
+                                f"multi-answer queryL label for {lc_name} has {expected.numel()} values, "
+                                f"but the constraint grounded {distribution.shape[0]} candidates"
+                            )
+                        if torch.any((expected < -1) | (expected >= inner_lc.num_subclasses)):
+                            raise ValueError(
+                                f"multi-answer queryL labels for {lc_name} must be -1 or class IDs "
+                                f"in [0, {inner_lc.num_subclasses - 1}]"
+                            )
+                        predicted = loss_dict.get("queryAnswer")
+                        if predicted is None:
+                            membership = distribution.sum(dim=-1)
+                            predicted = torch.argmax(distribution, dim=-1).long()
+                            predicted = torch.where(
+                                membership >= inner_lc.threshold,
+                                predicted,
+                                torch.full_like(predicted, -1),
+                            )
+                        predicted = predicted.detach().long().reshape(-1)
+                        position_matches = predicted == expected
+                        exact_match = bool(position_matches.all().item())
+                        query_correct += int(exact_match)
+                        multi_query_position_correct += int(position_matches.sum().item())
+                        multi_query_position_total += position_matches.numel()
+
+                        predicted_selection = predicted >= 0
+                        expected_selection = expected >= 0
+                        selection_matches = predicted_selection == expected_selection
+                        selection_exact = bool(selection_matches.all().item())
+                        multi_query_selection_exact_correct += int(selection_exact)
+                        multi_query_selection_exact_total += 1
+                        multi_query_selection_position_correct += int(selection_matches.sum().item())
+                        multi_query_selection_position_total += selection_matches.numel()
+
+                        selected_positions = expected_selection
+                        class_correct = int(
+                            (predicted[selected_positions] == expected[selected_positions]).sum().item()
+                        )
+                        class_total = int(selected_positions.sum().item())
+                        multi_query_class_correct += class_correct
+                        multi_query_class_total += class_total
+
+                        if _step_results is not None:
+                            class_names = [
+                                None if value < 0 else inner_lc.get_subclass_name(value)
+                                for value in predicted.cpu().tolist()
+                            ]
+                            _step_results[lc_name] = {
+                                'answer_result': predicted.cpu().tolist(),
+                                'verify_result': {
+                                    'queryDistribution': distribution.cpu().tolist(),
+                                    'expectedLabel': expected.cpu().tolist(),
+                                    'threshold': inner_lc.threshold,
+                                    'classNames': class_names,
+                                    'positionCorrect': int(position_matches.sum().item()),
+                                    'positionTotal': position_matches.numel(),
+                                    'selectionExact': selection_exact,
+                                    'selectionPositionCorrect': int(selection_matches.sum().item()),
+                                    'classCorrect': class_correct,
+                                    'classTotal': class_total,
+                                },
+                                'correct': exact_match,
+                                'is_counting': False,
+                                'is_query': True,
+                                'is_multi_query': True,
+                            }
+                        continue
+
+                    predicted_label = int(torch.argmax(query_distribution.detach().reshape(-1)).item())
+                    expected_label = int(label.detach().reshape(-1)[0].item() if torch.is_tensor(label) else label)
+                    use_correct = predicted_label == expected_label
+                    if use_correct:
+                        query_correct += 1
+
+                    if _step_results is not None:
+                        _step_results[lc_name] = {
+                            'answer_result': predicted_label,
+                            'verify_result': {
+                                'queryDistribution': query_distribution.detach().cpu().tolist(),
+                                'expectedLabel': expected_label,
+                            },
+                            'correct': bool(use_correct),
+                            'is_counting': False,
+                            'is_query': True,
+                        }
+                except Exception as e:
+                    if inner_lc.is_multi_answer and isinstance(e, ValueError):
+                        raise
+                    logger.warning(f"queryL accuracy evaluation failed for {lc_name}: {e}")
+                    if _step_results is not None:
+                        _step_results[lc_name] = {
+                            'answer_result': None,
+                            'verify_result': None,
+                            'correct': False,
+                            'is_counting': False,
+                            'is_query': True,
+                        }
+                continue
 
             # ── AnswerSolver (experimental, opt-in) ─────────────────
             # Only runs when DOMIKNOWS_USE_ANSWER_SOLVER=1. Kept here for
@@ -209,10 +453,6 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
                         # For sumL the label is the expected count
                         expected_count = int(label.item() if torch.is_tensor(label) else label) # Based on label
                         answer_correct = (answer_result == expected_count)
-                    elif is_query:
-                        expected_idx = int(label.item() if torch.is_tensor(label) else label)
-                        expected_answer = lc.innerLC.get_subclass_name(expected_idx)
-                        answer_correct = (answer_result == expected_answer)
                     else:
                         # For boolean constraints the label is 1 (True) or 0 (False)
                         expected_bool = int(label.item() if torch.is_tensor(label) else label) == 1
@@ -222,31 +462,18 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
             verify_correct = None
             verify_result = None
             try:
-                if is_query:
-                    # queryL labels are multiclass indices. The discrete verifier
-                    # expects Boolean atoms, so use the same label-conditioned
-                    # executable loss path as training and threshold its success.
-                    loss_dict = datanode.calculateSingleLcLoss(lc_name, label=label)
-                    success = loss_dict.get("conversionSigmoid")
-                    if torch.is_tensor(success):
-                        success_value = float(success.detach().mean().item())
-                    else:
-                        success_value = float(success) if success is not None else 0.0
-                    verify_result = {"satisfied": 100.0 if success_value >= threshold else 0.0, "query_success": success_value}
-                    verify_correct = success_value >= threshold
+                if is_counting:
+                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
                 else:
-                    if is_counting:
-                        verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax", label=label)
-                    else:
-                        verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
+                    verify_result = datanode.verifySingleConstraint(lc_name, key="/local/argmax")
 
-                    is_satisfied = verify_result["satisfied"] == 100.0
+                is_satisfied = verify_result["satisfied"] == 100.0
 
-                    if is_counting:
-                        verify_correct = (is_satisfied == True)
-                    else:
-                        expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
-                        verify_correct = (is_satisfied == expected_satisfied)
+                if is_counting:
+                    verify_correct = (is_satisfied == True)
+                else:
+                    expected_satisfied = int(label.item() if torch.is_tensor(label) else label) == 1
+                    verify_correct = (is_satisfied == expected_satisfied)
             except Exception as e:
                 logger.warning(f"verifySingleConstraint failed for {lc_name}: {e}")
 
@@ -299,7 +526,21 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
         'boolean_correct': boolean_correct,
         'boolean_total': boolean_total,
         'counting_correct': counting_correct,
-        'counting_total': counting_total
+        'counting_total': counting_total,
+        'query_correct': query_correct,
+        'query_total': query_total,
+        'multi_query_position_correct': multi_query_position_correct,
+        'multi_query_position_total': multi_query_position_total,
+        'multi_query_selection_exact_correct': multi_query_selection_exact_correct,
+        'multi_query_selection_exact_total': multi_query_selection_exact_total,
+        'multi_query_selection_position_correct': multi_query_selection_position_correct,
+        'multi_query_selection_position_total': multi_query_selection_position_total,
+        'multi_query_class_correct': multi_query_class_correct,
+        'multi_query_class_total': multi_query_class_total,
+        'miota_exact_correct': miota_exact_correct,
+        'miota_exact_total': miota_exact_total,
+        'miota_position_correct': miota_position_correct,
+        'miota_position_total': miota_position_total,
     }
 
     if total == 0:
@@ -323,21 +564,76 @@ def _evaluate_condition_impl(program, evaluate_data, device="cpu", threshold=0.0
     else:
         results['counting_accuracy'] = None
 
+    if query_total > 0:
+        query_accuracy = (query_correct / query_total) * 100
+        results['query_accuracy'] = query_accuracy
+        print(f"Query accuracy: {query_accuracy:.2f}% ({query_correct}/{query_total})")
+    else:
+        results['query_accuracy'] = None
+
+    results['multi_query_position_accuracy'] = (
+        multi_query_position_correct / multi_query_position_total * 100
+        if multi_query_position_total else None
+    )
+    results['multi_query_selection_exact_accuracy'] = (
+        multi_query_selection_exact_correct / multi_query_selection_exact_total * 100
+        if multi_query_selection_exact_total else None
+    )
+    results['multi_query_selection_position_accuracy'] = (
+        multi_query_selection_position_correct / multi_query_selection_position_total * 100
+        if multi_query_selection_position_total else None
+    )
+    results['multi_query_class_accuracy'] = (
+        multi_query_class_correct / multi_query_class_total * 100
+        if multi_query_class_total else None
+    )
+
+    if miota_exact_total > 0:
+        results['miota_exact_accuracy'] = (miota_exact_correct / miota_exact_total) * 100
+        results['miota_position_accuracy'] = (
+            miota_position_correct / miota_position_total
+        ) * 100 if miota_position_total else 0.0
+        print(
+            f"miotaL exact-set accuracy: {results['miota_exact_accuracy']:.2f}% "
+            f"({miota_exact_correct}/{miota_exact_total}); position accuracy: "
+            f"{results['miota_position_accuracy']:.2f}% "
+            f"({miota_position_correct}/{miota_position_total})"
+        )
+    else:
+        results['miota_exact_accuracy'] = None
+        results['miota_position_accuracy'] = None
+
     # Primary metric
-    if results['counting_accuracy'] is not None and results['boolean_accuracy'] is not None:
-        total_constraints = boolean_total + counting_total
-        boolean_weight = boolean_total / total_constraints
-        counting_weight = counting_total / total_constraints
-        results['accuracy'] = boolean_weight * results['boolean_accuracy'] + counting_weight * results['counting_accuracy']
-    elif results['counting_accuracy'] is not None:
-        results['accuracy'] = results['counting_accuracy']
-    elif results['boolean_accuracy'] is not None:
-        results['accuracy'] = results['boolean_accuracy']
+    accuracy_parts = [
+        (results['boolean_accuracy'], boolean_total),
+        (results['counting_accuracy'], counting_total),
+        (results['query_accuracy'], query_total),
+        (results['miota_exact_accuracy'], miota_exact_total),
+    ]
+    active_accuracy_parts = [
+        (accuracy, count)
+        for accuracy, count in accuracy_parts
+        if accuracy is not None and count > 0
+    ]
+    if active_accuracy_parts:
+        total_constraints = sum(count for _accuracy, count in active_accuracy_parts)
+        results['accuracy'] = sum(
+            accuracy * (count / total_constraints)
+            for accuracy, count in active_accuracy_parts
+        )
     else:
         results['accuracy'] = 0.0
 
     results["boolean_total"] = boolean_total
     results["counting_total"] = counting_total
+    results["query_total"] = query_total
+    results["multi_query_position_total"] = multi_query_position_total
+    results["multi_query_selection_exact_total"] = multi_query_selection_exact_total
+    results["multi_query_selection_position_total"] = multi_query_selection_position_total
+    results["multi_query_class_total"] = multi_query_class_total
+    results["miota_exact_total"] = miota_exact_total
+    results["miota_position_total"] = miota_position_total
+    results["evaluation_mode"] = "gumbel" if use_gumbel else "deterministic"
 
     return results if return_dict else results['accuracy']
 
@@ -406,7 +702,8 @@ class LossProgram(LearningBasedProgram):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, CModel=None, beta=1,
-                 copt_class=None, copt_kwargs=None, **kwargs):
+                 copt_class=None, copt_kwargs=None, cmodel_kwargs=None,
+                 **kwargs):
         """
         Initializes an instance of the LossProgram.
 
@@ -424,6 +721,10 @@ class LossProgram(LearningBasedProgram):
         :param copt_kwargs: Optional ``dict`` of extra keyword arguments passed to
             ``copt_class`` (for example ``{'momentum': 0.9}`` for SGD). The learning rate is
             set from ``c_lr`` in ``train()`` and must not be included here.
+        :param cmodel_kwargs: Optional keyword arguments intended only for ``CModel``.
+            These are not forwarded to the regular ``Model``. This is useful when
+            ``Model`` is a thin ``*args, **kwargs`` wrapper around a stricter base
+            model.
         :params kwargs: Keyword arguments are passed to both the parent class and the CModel.
             (if found in the signature).
         """
@@ -444,10 +745,14 @@ class LossProgram(LearningBasedProgram):
         from inspect import signature
         cmodelSignature = signature(CModel.__init__)
 
+        effective_cmodel_kwargs = dict(kwargs)
+        if cmodel_kwargs:
+            effective_cmodel_kwargs.update(cmodel_kwargs)
+
         cmodelKwargs = {}
         for param in cmodelSignature.parameters.values():
-            if param.name in kwargs:
-                cmodelKwargs[param.name] = kwargs[param.name]
+            if param.name in effective_cmodel_kwargs:
+                cmodelKwargs[param.name] = effective_cmodel_kwargs[param.name]
 
         self.cmodel = CModel(graph, **cmodelKwargs)
         self.copt = None
@@ -523,11 +828,24 @@ class LossProgram(LearningBasedProgram):
               batch_size=1, dataset_size=None, print_loss=True,
               warmup_epochs=0, constraint_epochs=0,
               persist_c_session=False, reset_c_session=False,
+              start_epoch=0, resume_c_session=None,
+              resume_copt_state=None, epoch_end_callback=None,
               **kwargs):
         """
         Base training loop. Subclasses pass algorithm-specific kwargs.
         """
-        if persist_c_session:
+        if resume_copt_state is not None:
+            if self.copt is None:
+                raise ValueError(
+                    "Cannot restore constraint optimizer state because this "
+                    "program has no constraint optimizer")
+            self.copt.load_state_dict(resume_copt_state)
+
+        if resume_c_session is not None:
+            c_session = dict(resume_c_session)
+            if persist_c_session:
+                self._persistent_c_session = c_session
+        elif persist_c_session:
             if reset_c_session or getattr(self, '_persistent_c_session', None) is None:
                 self._persistent_c_session = self._init_session()
             c_session = self._persistent_c_session
@@ -539,7 +857,9 @@ class LossProgram(LearningBasedProgram):
                 training_set, valid_set, test_set,
                 warmup_epochs, constraint_epochs,
                 batch_size, dataset_size, print_loss,
-                c_session, persist_c_session=persist_c_session, **kwargs
+                c_session, persist_c_session=persist_c_session,
+                start_epoch=start_epoch,
+                epoch_end_callback=epoch_end_callback, **kwargs
             )
         else:
             return super().train(
@@ -557,8 +877,15 @@ class LossProgram(LearningBasedProgram):
     def _phased_training(self, training_set, valid_set, test_set,
                          warmup_epochs, constraint_epochs,
                          batch_size, dataset_size, print_loss,
-                         c_session, persist_c_session=False, **kwargs):
+                         c_session, persist_c_session=False, start_epoch=0,
+                         epoch_end_callback=None, **kwargs):
         """Execute phased training (warmup -> constraint)."""
+        total_epochs = int(warmup_epochs) + int(constraint_epochs)
+        start_epoch = int(start_epoch)
+        if start_epoch < 0 or start_epoch > total_epochs:
+            raise ValueError(
+                f"start_epoch must be between 0 and {total_epochs}, got "
+                f"{start_epoch}")
         self.stop = False
         epoch_counter = 0
         
@@ -568,6 +895,8 @@ class LossProgram(LearningBasedProgram):
                 if self.stop:
                     break
                 epoch_counter += 1
+                if epoch_counter <= start_epoch:
+                    continue
                 self.epoch = epoch_counter
                 logger.info(f'Epoch: {self.epoch}')
                 self.call_epoch(
@@ -579,6 +908,9 @@ class LossProgram(LearningBasedProgram):
                 )
                 if valid_set is not None:
                     self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+                if epoch_end_callback is not None:
+                    epoch_end_callback(
+                        self, epoch_counter, 'warmup', dict(c_session))
         
         if constraint_epochs > 0 and not self.stop:
             logger.info(f"[Phase 2] Constraint training for {constraint_epochs} epochs")
@@ -586,6 +918,8 @@ class LossProgram(LearningBasedProgram):
                 if self.stop:
                     break
                 epoch_counter += 1
+                if epoch_counter <= start_epoch:
+                    continue
                 self.epoch = epoch_counter
                 logger.info(f'Epoch: {self.epoch}')
                 self.call_epoch(
@@ -597,6 +931,9 @@ class LossProgram(LearningBasedProgram):
                 )
                 if valid_set is not None:
                     self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+                if epoch_end_callback is not None:
+                    epoch_end_callback(
+                        self, epoch_counter, 'constraint', dict(c_session))
         
         if test_set is not None:
             self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
@@ -621,7 +958,7 @@ class GumbelTemperatureMixin:
     Mixin providing Gumbel-Softmax temperature annealing for training programs.
     
     Provides shared temperature management across GumbelPrimalDualProgram,
-    GumbelSampleLossProgram, and GumbelInferenceProgram.
+    GumbelSampleLossProgram, and InferenceProgram(use_gumbel=True).
     """
     
     def _init_gumbel(self, use_gumbel=False, initial_temp=1.0, final_temp=0.1,
@@ -696,7 +1033,26 @@ class PrimalDualProgram(LossProgram):
     
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, beta=1, **kwargs):
+    def __init__(self, graph, Model, beta=1, grad_surgery='none', cagrad_c=0.5,
+                 **kwargs):
+        """
+        :param grad_surgery: R5 Phase C. ``'none'`` (default) keeps the single
+            fused backward pass. ``'diagnose'`` splits the two gradients and
+            records their conflict *without changing the update* — run this
+            first: resolving costs an extra backward pass on every step, which
+            is only worth paying if conflict actually occurs. ``'pcgrad'`` and
+            ``'cagrad'`` additionally resolve it. Read the measurement from
+            ``program.conflict_stats``.
+        :param cagrad_c: CAGrad's trust-region coefficient.
+        """
+        from .model.gradSurgery import GRAD_SURGERY, ConflictStats
+        if grad_surgery not in GRAD_SURGERY:
+            raise ValueError(f'grad_surgery must be one of {GRAD_SURGERY}')
+        self.grad_surgery = grad_surgery
+        self.cagrad_c = cagrad_c
+        #: Populated whenever ``grad_surgery != 'none'``; a diagnostic in its
+        #: own right, and what should decide whether a resolver earns its cost.
+        self.conflict_stats = ConflictStats()
         super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
 
     def _init_session(self):
@@ -853,7 +1209,20 @@ class PrimalDualProgram(LossProgram):
             # Accumulate gradients
             scaled_loss = loss / batch_size
             batch_loss += scaled_loss.item()
-            scaled_loss.backward()
+
+            surgery = getattr(self, 'grad_surgery', 'none')
+            if surgery != 'none' and closs is not None and torch.is_tensor(closs):
+                # R5 Phase C. The two gradients must be taken separately — a
+                # fused backward cannot be decomposed afterwards — so this costs
+                # an extra pass and stays opt-in.
+                from .model.gradSurgery import conflict_report
+                conflict_report(
+                    mloss / batch_size, (self.beta * closs) / batch_size,
+                    list(self.model.parameters()),
+                    method=surgery, stats=self.conflict_stats,
+                    cagrad_c=getattr(self, 'cagrad_c', 0.5))
+            else:
+                scaled_loss.backward()
 
             if do_update:
                 # Gradient clipping
@@ -865,30 +1234,53 @@ class PrimalDualProgram(LossProgram):
                     self.opt.zero_grad()
                 
                 iter_count += 1
-                
-                # Dual step: update lambda params (with reversed gradient for ascent)
+
+                # Dual step: update lambda params.
+                # ascent: gradient ascent via copt (reversed-sign gradient).
+                # augmented (Augmented Lagrangian): closed-form multiplier update
+                #   on the cmodel; no copt exists (lambda/rho are buffers), so the
+                #   schedule must still fire — gate on the AL updater instead.
+                al_mode = getattr(self.cmodel, 'dual_algorithm', 'ascent') == 'augmented'
+                dual_updater_ready = (self.copt is not None) or al_mode
                 should_update_dual = (
-                    self.copt is not None and
+                    dual_updater_ready and
                     iter_count > c_warmup_iters and
                     iter_count - c_update_iter > c_update_freq
                 )
-                
+
                 if should_update_dual:
-                    # Reverse gradients for lambda (gradient ascent)
-                    reverse_sign_grad(self.cmodel.parameters())
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
-                    self.copt.step()
-                    
+                    if al_mode:
+                        # Closed-form Augmented-Lagrangian dual update + rho schedule.
+                        self.cmodel.al_dual_update_()
+                        if self.copt is not None:
+                            # R5 Phase F: an amortized critic under AL is
+                            # *regressed* onto the closed-form target, not
+                            # ascended, so it takes an ordinary descent step —
+                            # no sign flip. Without this the critic's parameters
+                            # would never be updated at all, since AL otherwise
+                            # bypasses the constraint optimizer.
+                            torch.nn.utils.clip_grad_norm_(
+                                self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                            self.copt.step()
+                    else:
+                        # Reverse gradients for lambda (gradient ascent)
+                        reverse_sign_grad(self.cmodel.parameters())
+                        torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
+                        self.copt.step()
+                        _project_cmodel_lambdas(self.cmodel)
+
                     c_update_iter = iter_count
                     c_update += 1
-                    
+
                     # Update dual frequency
                     if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
                         c_update_freq += c_freq_increase
-                    
-                    # Update dual learning rate
-                    self._update_dual_lr(c_lr_decay, c_lr_decay_param, c_update, c_lr)
-                
+
+                    # Update dual learning rate (only meaningful for the gradient
+                    # ascent optimizer; AL has no copt learning rate).
+                    if self.copt is not None:
+                        self._update_dual_lr(c_lr_decay, c_lr_decay_param, c_update, c_lr)
+
                 if self.copt is not None:
                     self.copt.zero_grad()
                 
@@ -940,6 +1332,8 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
     
     def train(self, training_set, valid_set=None, test_set=None,
               num_epochs=None, **kwargs):
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
         self._auto_set_anneal_epochs(num_epochs)
         return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
 
@@ -1040,6 +1434,7 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
                     reverse_sign_grad(self.cmodel.parameters())
                     torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
                     self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
                     
                     c_update_iter = iter_count
                     c_update += 1
@@ -1063,15 +1458,33 @@ class GumbelPrimalDualProgram(GumbelTemperatureMixin, PrimalDualProgram):
         
         self._increment_epoch()
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
+    def evaluate_condition(
+        self,
+        evaluate_data,
+        device="cpu",
+        threshold=0.5,
+        return_dict=False,
+        use_gumbel=False,
+        temperature=None,
+        hard_gumbel=False,
+    ):
+        return _evaluate_condition_impl(
+            self,
+            evaluate_data,
+            device=device,
+            threshold=threshold,
+            return_dict=return_dict,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel,
+        )
 
 #=============================================================================
 # Inference Program
 #=============================================================================
 
 # Supported training styles for InferenceProgram.
-_INFERENCE_STYLES = ('simple', 'primal_dual')
+_INFERENCE_STYLES = ('default', 'primal_dual', 'simple')
 
 
 class InferenceProgram(GumbelTemperatureMixin, LossProgram):
@@ -1085,7 +1498,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
 
     Two training styles are supported (issue #424):
 
-    * ``training_style='simple'`` (default) — one-shot update per batch:
+    * ``training_style='default'`` — one-shot update per batch:
       ``loss = mloss + beta * closs``. This matches the original
       ``InferenceProgram`` behaviour and is fully backward compatible.
     * ``training_style='primal_dual'`` — Lagrangian primal/dual updates with
@@ -1096,18 +1509,21 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
 
     Gumbel-Softmax annealing (``use_gumbel=True``) can be enabled with either
     style; when enabled the constraint model is called through the
-    ``GumbelTemperatureMixin`` helpers so the same annealing schedule you get
-    from ``GumbelInferenceProgram`` / ``GumbelPrimalDualProgram`` is available
-    directly on ``InferenceProgram``.
+    ``GumbelTemperatureMixin`` helpers so the same annealing schedule is
+    available directly on ``InferenceProgram``.
     """
     DEFAULTCMODEL = InferenceModel
 
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, beta=1,
-                 training_style='simple',
+                 training_style='default',
                  use_gumbel=False, initial_temp=1.0, final_temp=0.1,
                  anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 include_global_constraint_loss=False,
+                 global_constraint_loss_weight=1.0,
+                 executable_constraint_loss_weight=1.0,
+                 query_loss=None,
                  **kwargs):
         """
         Initializes an InferenceProgram instance.
@@ -1118,42 +1534,40 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             supervised training (e.g., `SolverModel`).
         :param beta: The weight given to the CModel loss (in this case, the loss from the program
             execution output).
-        :param training_style: Either ``'simple'`` (default) or ``'primal_dual'``. See the class
-            docstring for details.
+        :param training_style: Either ``'default'`` or ``'primal_dual'``.
+            ``'simple'`` is accepted as a legacy alias for ``'default'``.
         :param use_gumbel: If ``True``, apply Gumbel-Softmax sampling to the local decisions when
             computing the constraint loss. Other ``*_temp`` / ``anneal_*`` / ``hard_gumbel``
             parameters control the annealing schedule (see ``GumbelTemperatureMixin``).
+        :param include_global_constraint_loss: If ``True``, add graph-global
+            constraint loss to executable-constraint loss.
+        :param query_loss: Optional loss factory for multiclass ``queryL``
+            outputs. It is forwarded only to the constraint model; scalar
+            executable constraints continue to use that model's binary loss.
         """
         if training_style not in _INFERENCE_STYLES:
             raise ValueError(
                 f"training_style must be one of {_INFERENCE_STYLES}, got {training_style!r}"
             )
-        self.training_style = training_style
+        self.training_style = 'default' if training_style == 'simple' else training_style
+        cmodel_kwargs = {
+            'include_global_constraint_loss': bool(include_global_constraint_loss),
+            'global_constraint_loss_weight': global_constraint_loss_weight,
+            'executable_constraint_loss_weight': executable_constraint_loss_weight,
+        }
+        if query_loss is not None:
+            cmodel_kwargs['query_loss'] = query_loss
 
-        super().__init__(graph, Model, CModel=InferenceModel, beta=beta, **kwargs)
+        super().__init__(
+            graph,
+            Model,
+            CModel=InferenceModel,
+            beta=beta,
+            cmodel_kwargs=cmodel_kwargs,
+            **kwargs,
+        )
         self._init_gumbel(use_gumbel, initial_temp, final_temp,
                           anneal_start_epoch, anneal_epochs, hard_gumbel)
-
-    def _update_dual_lr(self, c_lr_decay, c_lr_decay_param, c_update, c_lr):
-        """Update learning rate for the inference primal-dual constraint optimizer."""
-        if self.copt is None:
-            return
-        if c_lr_decay == 0:
-            new_lr = lambda lr: c_lr * 1. / (1 + c_lr_decay_param * c_update)
-        elif c_lr_decay == 1:
-            new_lr = lambda lr: lr * np.sqrt(((c_update - 1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
-        elif c_lr_decay == 2:
-            new_lr = lambda lr: lr * (((c_update - 1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
-        elif c_lr_decay == 3:
-            assert c_lr_decay_param <= 1.
-            new_lr = lambda lr: lr * c_lr_decay_param
-        elif c_lr_decay == 4:
-            new_lr = lambda lr: lr * np.sqrt((c_update + 1) / (c_update + 2))
-        else:
-            raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
-
-        for param_group in self.copt.param_groups:
-            param_group['lr'] = new_lr(param_group['lr'])
 
     # ------------------------------------------------------------------
     # Session / training setup
@@ -1175,7 +1589,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
               batch_size=1, dataset_size=None, print_loss=True,
               warmup_epochs=0, constraint_epochs=0,
               num_epochs=None,
-              # primal-dual specific scheduling; ignored in 'simple' mode
+              # primal-dual specific scheduling; ignored in default mode
               c_lr=0.05, c_warmup_iters=10, c_freq=10,
               c_freq_increase=5, c_freq_increase_freq=1,
               c_lr_decay=4, c_lr_decay_param=1,
@@ -1184,7 +1598,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
         """Setup optimizer and train.
 
         The ``c_*`` parameters are the Primal-Dual scheduling knobs; they are
-        forwarded to ``train_epoch`` but have no effect in ``'simple'`` mode.
+        forwarded to ``train_epoch`` but have no effect in ``'default'`` mode.
         ``num_epochs`` is used to auto-configure the Gumbel annealing window.
         """
         # Pick the constraint optimizer's learning rate based on style so the
@@ -1198,6 +1612,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             self.copt = None
 
         self._c_freq = c_freq
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
         self._auto_set_anneal_epochs(num_epochs)
 
         return super().train(
@@ -1223,11 +1639,8 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                     training_mode='standard', **kwargs):
         """Dispatch to the correct training loop based on ``training_style``."""
         if self.training_style == 'primal_dual':
-            # GumbelPrimalDualProgram.train_epoch is style-complete: it handles
-            # the Lagrangian update, the c_freq schedule and (optionally) the
-            # Gumbel-Softmax annealing based on ``self.use_gumbel``. Delegating
-            # keeps the PD algorithm in a single place.
-            yield from GumbelPrimalDualProgram.train_epoch(
+            pd_program_cls = GumbelPrimalDualProgram if self.use_gumbel else PrimalDualProgram
+            yield from pd_program_cls.train_epoch(
                 self, dataset,
                 c_session=c_session, batch_size=batch_size,
                 dataset_size=dataset_size, print_loss=print_loss,
@@ -1235,7 +1648,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             )
             return
 
-        # 'simple' style — the original inference loop, with an optional
+        # Default style — the original inference loop, with an optional
         # Gumbel-Softmax hop on the constraint call.
         yield from self._train_epoch_simple(
             dataset, c_session=c_session, batch_size=batch_size,
@@ -1294,103 +1707,40 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                     self.opt.step()
                 if self.copt is not None:
                     self.copt.step()
+                    _project_cmodel_lambdas(self.cmodel)
                 iter_count += 1
 
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
-        self._increment_epoch()
         if _mem_probe and torch.cuda.is_available():
-                _mem_step += 1
-                _alloc = torch.cuda.memory_allocated() / 1e9
-                _res = torch.cuda.memory_reserved() / 1e9
-                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
-
-        yield (loss, metric, *output[:1])
-
-        c_session['iter'] = iter_count
-        c_session['_mem_step'] = _mem_step
-
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.0, return_dict=False):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
-
-#=============================================================================
-# Gumbel Inference Program
-#=============================================================================
-
-class GumbelInferenceProgram(InferenceProgram):
-    """Backward-compatible wrapper around ``InferenceProgram``.
-
-    Since issue #424, ``InferenceProgram`` itself accepts ``use_gumbel`` and
-    the related temperature-annealing kwargs. This subclass is kept so that
-    existing user code constructing ``GumbelInferenceProgram`` keeps working;
-    new code should prefer ``InferenceProgram(..., use_gumbel=True)``.
-    """
-
-    logger = logging.getLogger(__name__)
-    def train_epoch(self, dataset, c_session={}, batch_size=1,
-                    dataset_size=None, print_loss=True,
-                    training_mode='standard', **kwargs):
-        """Inference training epoch with Gumbel-Softmax."""
-        import os as _os
-        _mem_probe = _os.environ.get('DOMIKNOWS_MEM_PROBE') == '1'
-        _mem_step = c_session.get('_mem_step', 0)
-
-        self._update_temperature_for_epoch()
-
-        self.model.mode(Mode.TRAIN)
-        self.model.train()
-        self.model.reset()
-        self.cmodel.train()
-        self.cmodel.reset()
-
-        iter_count = c_session.get('iter', 0)
-
-        for data in dataset:
-            if self.opt is not None:
-                self.opt.zero_grad()
-            if self.copt is not None:
-                self.copt.zero_grad()
-
-            mloss, metric, *output = self.model(data)
-
-            if training_mode == 'warmup':
-                loss = mloss
-            else:
-                closs, *_ = self._call_cmodel_with_gumbel(output[1])
-                if torch.is_tensor(closs):
-                    loss = mloss + self.beta * closs
-                else:
-                    loss = mloss
-
-            if torch.is_tensor(loss) and loss.requires_grad:
-                loss.backward()
-
-                # Gradient clipping to prevent explosion (e.g. constraint losses)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=_grad_clip_norm())
-                if self.copt is not None:
-                    torch.nn.utils.clip_grad_norm_(self.cmodel.parameters(), max_norm=_grad_clip_norm())
-
-                if self.opt is not None:
-                    self.opt.step()
-                if self.copt is not None:
-                    self.copt.step()
-                iter_count += 1
-
-            if _mem_probe and torch.cuda.is_available():
-                _mem_step += 1
-                _alloc = torch.cuda.memory_allocated() / 1e9
-                _res = torch.cuda.memory_reserved() / 1e9
-                print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
-
-            yield (loss, metric, *output[:1])
-
-        c_session['iter'] = iter_count
+            _mem_step += 1
+            _alloc = torch.cuda.memory_allocated() / 1e9
+            _res = torch.cuda.memory_reserved() / 1e9
+            print(f"[mem_probe] step={_mem_step} alloc={_alloc:.2f}GB reserved={_res:.2f}GB", flush=True)
         c_session['_mem_step'] = _mem_step
         self._increment_epoch()
 
-    def evaluate_condition(self, evaluate_data, device="cpu", threshold=0.5, return_dict=False):
-        return _evaluate_condition_impl(self, evaluate_data, device=device, threshold=threshold, return_dict=return_dict)
+    def evaluate_condition(
+        self,
+        evaluate_data,
+        device="cpu",
+        threshold=0.0,
+        return_dict=False,
+        use_gumbel=False,
+        temperature=None,
+        hard_gumbel=False,
+    ):
+        return _evaluate_condition_impl(
+            self,
+            evaluate_data,
+            device=device,
+            threshold=threshold,
+            return_dict=return_dict,
+            use_gumbel=use_gumbel,
+            temperature=temperature,
+            hard_gumbel=hard_gumbel,
+        )
 
 #=============================================================================
 # Sample Loss Program
@@ -1461,10 +1811,235 @@ class SampleLossProgram(LossProgram):
             
             if self.copt is not None and torch.is_tensor(loss) and loss.requires_grad:
                 self.copt.step()
+                _project_cmodel_lambdas(self.cmodel)
             
             yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter_count
+
+
+class SemanticLossProgram(SampleLossProgram, PrimalDualProgram):
+    """Train with differentiable exact ``-log(WMC)`` constraint loss.
+
+    Inherits both epoch implementations (both are ``LossProgram`` subclasses, so
+    the MRO linearises cleanly) and dispatches on ``training_style``. Real
+    inheritance — rather than calling the other class's methods unbound — is
+    what keeps the zero-argument ``super()`` inside those methods valid.
+
+    Two training styles:
+
+    * ``'fixed'`` (default) — the classic semantic-loss objective
+      ``model_loss + beta * semantic_loss``, reusing ``SampleLossProgram``'s
+      epoch.
+    * ``'primal_dual'`` — run the constraint loss through
+      :class:`PrimalDualProgram`'s epoch so the R5 dual machinery applies to the
+      exact loss (learned multipliers, augmented-Lagrangian closed-form updates,
+      or the amortized per-grounding critic). Requires ``lambda_weighted=True``
+      on the constraint model for the multipliers to actually be used; the
+      amortized critic additionally needs per-grounding aggregation, which
+      :class:`SemanticLossModel` selects automatically.
+    """
+
+    DEFAULTCMODEL = SemanticLossModel
+
+    def __init__(self, graph, Model, beta=1, training_style='fixed', **kwargs):
+        if training_style not in ('fixed', 'primal_dual'):
+            raise ValueError(
+                "training_style must be 'fixed' or 'primal_dual', "
+                f"got {training_style!r}")
+        self.training_style = training_style
+        # Reuse SampleLossProgram's optimizer setup and train_epoch, whose
+        # objective is exactly mloss + beta * closs after warmup.
+        LossProgram.__init__(
+            self,
+            graph,
+            Model,
+            CModel=SemanticLossModel,
+            beta=beta,
+            **kwargs,
+        )
+
+    def train(self, *args, **kwargs):
+        # PrimalDualProgram.train is what builds ``copt`` and records ``_c_freq``
+        # for the dual schedule; inheriting SampleLossProgram.train would leave
+        # c_update_freq at its default so the dual step would never fire.
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram.train(self, *args, **kwargs)
+        return super().train(*args, **kwargs)
+
+    def train_epoch(self, dataset, **kwargs):
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram.train_epoch(self, dataset, **kwargs)
+        return super().train_epoch(dataset, **kwargs)
+
+    def _init_session(self):
+        if self.training_style == 'primal_dual':
+            return PrimalDualProgram._init_session(self)
+        return super()._init_session()
+
+#=============================================================================
+# Structured Program (R3 factor-graph heads + R4 refinement)
+#=============================================================================
+
+class StructuredProgram(PrimalDualProgram):
+    """Train with constraint structure *inside* the model, not only in the loss.
+
+    The R-line mechanisms compose along two independent axes:
+
+    * **model side** — R3 factor-graph heads and R4 refinement, supplied by
+      :class:`~domiknows.program.model.structured.StructuredModel`;
+    * **cmodel side** — R1 ``compile_lc``, R5 ``dual_algorithm`` /
+      ``dual_granularity``, all inherited from :class:`PrimalDualProgram`.
+
+    Because ``Model`` is a parameter of every Program, the model side alone
+    needs no new Program. What this class adds is the **constraint partition**
+    R3 makes necessary: a constraint the architecture enforces structurally has
+    zero violation by construction, so keeping it in the loss allocates a
+    multiplier pinned at zero and feeds ``al_dual_update_`` an all-zero window —
+    a dual that can only ever learn nothing. Those constraints are excluded from
+    the cmodel entirely.
+
+    :param refine: enable R4B refinement (default True).
+    :param factor_graph: enable R3 exact constrained marginals (default False —
+      exact but one circuit per grounding).
+    :param belief_flow: ``'write_back'`` | ``'constraint_only'``; see
+        :class:`StructuredModel`.
+    :param partition:
+        ``'auto'`` (default) — exclude structurally-enforced constraints from
+        the loss and the dual system at construction, **only when**
+        ``factor_graph=True``. No multiplier is allocated for them. Cheapest,
+        but the decision is permanent: if a constraint's circuit falls back at
+        runtime it is left enforced by nothing (reported, loudly).
+        ``'adaptive'`` — keep every constraint in the cmodel, and skip its
+        penalty *per step* for exactly those the model reports as enforced that
+        step. Costs one unused multiplier per structural constraint, and in
+        exchange a fallback silently restores the penalty instead of leaving a
+        gap. Prefer this when the circuit budget is tight.
+        ``'none'`` — keep every constraint in the loss.
+
+    Only ``factor_graph`` licenses exclusion. Refinement *moves* beliefs toward
+    satisfaction but guarantees nothing, so a refined-only constraint keeps its
+    loss term and its dual.
+    """
+
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, Model=None, beta=1, *,
+                 refine=True, factor_graph=False, belief_flow='write_back',
+                 partition='auto', poi=None, loss=None, metric=None,
+                 inferTypes=None, structure_kwargs=None, **kwargs):
+        if partition not in ('auto', 'adaptive', 'none'):
+            raise ValueError("partition must be 'auto', 'adaptive' or 'none'")
+
+        from .model.structured import StructuredModel
+
+        structure = dict(refine=refine, factor_graph=factor_graph,
+                         belief_flow=belief_flow)
+        structure.update(structure_kwargs or {})
+        if Model is None:
+            # A plain factory (not model_helper's lambda): LearningBasedProgram
+            # introspects ``signature(Model.__init__)``, which for any function
+            # resolves to ``object.__init__`` and so reports ``**kwargs`` —
+            # meaning *every* program kwarg is forwarded here. Absorb them and
+            # keep only what StructuredModel actually accepts, so cmodel-only
+            # options (``compile_lc``, ``dual_algorithm``, ``exclude_constraints``)
+            # do not reach the model.
+            def Model(graph_, **extra):
+                from inspect import signature
+                allowed = signature(StructuredModel.__init__).parameters
+                passthrough = {k: v for k, v in extra.items()
+                               if k in allowed and k not in structure}
+                return StructuredModel(graph_, poi=poi, loss=loss, metric=metric,
+                                       inferTypes=inferTypes,
+                                       **structure, **passthrough)
+
+        exclude = set()
+        if factor_graph and partition == 'auto':
+            exclude = self.structural_candidates(graph)
+
+        #: constraints excluded from the loss because structure enforces them.
+        self.structural_partition = exclude
+        self.partition = partition
+        self._warned_fallback = False
+
+        super().__init__(graph, Model, beta=beta,
+                         exclude_constraints=exclude, **kwargs)
+
+        if factor_graph and partition == 'adaptive':
+            # Consulted per forward. The model runs before the cmodel in every
+            # train_epoch, so its report is already current for this step, and a
+            # constraint that fell back simply reappears in the loss.
+            self.cmodel.skip_provider = (
+                lambda: getattr(self.model, 'enforced_constraints', set()))
+            self.structural_partition = self.structural_candidates(graph)
+
+    @staticmethod
+    def structural_candidates(graph):
+        """Constraint names a factor-graph head can enforce structurally.
+
+        Purely syntactic (constraint *type* and limit), so it is available at
+        construction time — before any datanode exists. Whether a particular
+        grounding's circuit fits the budget is only known at runtime;
+        :meth:`report_partition` cross-checks that and warns if an excluded
+        constraint actually fell back.
+        """
+        from .model.refinement import _factor_kind
+
+        names = set()
+        rec = getattr(graph, 'logicalConstrainsRecursive', None)
+        constraints = rec if rec is not None else getattr(graph, 'logicalConstrains', {}).items()
+        for key, lc in constraints:
+            if not getattr(lc, 'headLC', False) or not getattr(lc, 'active', True):
+                continue
+            if _factor_kind(lc) is not None:
+                names.add(getattr(lc, 'lcName', key))
+        return names
+
+    def report_partition(self):
+        """Human-readable split, and a loud warning if exclusion over-reached.
+
+        A constraint that was excluded from the loss but whose circuit fell back
+        at runtime is enforced by *nothing* — neither structure nor penalty. That
+        is the one failure mode of partitioning, so it is surfaced rather than
+        left to be inferred from a metric.
+        """
+        model = getattr(self, 'model', None)
+        report = getattr(model, 'report', None)
+        enforced = set(getattr(model, 'enforced_constraints', set()) or ())
+
+        if self.partition == 'adaptive':
+            lines = [f'structural partition (adaptive): {len(enforced)} constraint(s) '
+                     f'skipped this step, {len(self.cmodel.constr) - len(enforced)} '
+                     f'penalised; {len(self.cmodel.constr)} kept in the dual system']
+        else:
+            lines = [f'structural partition: {len(self.structural_partition)} '
+                     f'constraint(s) excluded from loss/duals, '
+                     f'{len(self.cmodel.constr)} still penalised']
+        if report is not None:
+            lines.append('  ' + report.render().replace('\n', '\n  '))
+
+        # 'adaptive' re-penalises whatever was not enforced, so there is no gap
+        # to warn about; only a permanent exclusion can leave one.
+        unenforced = (set() if self.partition == 'adaptive'
+                      else self.structural_partition - enforced)
+        if unenforced:
+            # Deliberately NOT gated on ``enforced`` being non-empty: the worst
+            # case is precisely the one where nothing was enforced and everything
+            # was excluded, leaving those constraints held by neither structure
+            # nor penalty. Suppressing the warning there would silence the only
+            # state it exists to report.
+            scope = ('nothing was enforced structurally, so every excluded '
+                     'constraint is unconstrained'
+                     if not enforced else
+                     'excluded from the loss but NOT enforced structurally at runtime')
+            message = (f'{scope}: {sorted(unenforced)} — these are currently '
+                       'unconstrained; re-run with partition="none"')
+            lines.append('  WARNING: ' + message)
+            if not self._warned_fallback:
+                self.logger.warning('StructuredProgram: %s', message)
+                self._warned_fallback = True
+        return '\n'.join(lines)
+
 
 #=============================================================================
 # Gumbel Sample Loss Program
@@ -1485,6 +2060,8 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
     
     def train(self, training_set, valid_set=None, test_set=None,
               num_epochs=None, **kwargs):
+        if num_epochs is None:
+            num_epochs = kwargs.get('train_epoch_num')
         self._auto_set_anneal_epochs(num_epochs)
         return super().train(training_set, valid_set=valid_set, test_set=test_set, **kwargs)
     
@@ -1534,6 +2111,7 @@ class GumbelSampleLossProgram(GumbelTemperatureMixin, SampleLossProgram):
             
             if self.copt is not None and loss:
                 self.copt.step()
+                _project_cmodel_lambdas(self.cmodel)
             
             yield (loss, metric, *output[:1])
 

@@ -414,7 +414,7 @@ def extract_json_block(text: str) -> dict | None:
 _CONSTRAINT_PATTERN = re.compile(
     r'\b(?:ifL|andL|orL|nandL|norL|xorL|notL|equivalenceL|eqL|fixedL|forAllL|'
     r'existsL|atLeastL|atMostL|exactL|existsAL|atLeastAL|atMostAL|exactAL|'
-    r'greaterL|greaterEqL|lessL|lessEqL|equalCountsL|sumL|iotaL|queryL)\s*\('
+    r'greaterL|greaterEqL|lessL|lessEqL|equalCountsL|sumL|iotaL|miotaL|queryL)\s*\('
 )
 
 
@@ -435,7 +435,7 @@ from domiknows.graph import (
     existsL, atLeastL, atMostL, exactL,
     existsAL, atLeastAL, atMostAL, exactAL,
     greaterL, greaterEqL, lessL, lessEqL, equalCountsL,
-    sumL, iotaL, queryL,
+    sumL, iotaL, miotaL, queryL,
     execute,
 )
 from domiknows.graph import Property
