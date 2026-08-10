@@ -293,6 +293,8 @@ class constraintsProcessor(object, metaclass=abc.ABCMeta):
         subclass_data=None,
         onlyConstrains: bool = False,
         temperature: float = 1.0,
+        multi_answer: bool = False,
+        threshold: float = None,
         logicMethodName: str = "QUERY",
     ):
         """Resolve the subclass of an entity selection produced by iotaL."""

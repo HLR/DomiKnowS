@@ -140,6 +140,30 @@ class LcElement:
 class LogicalConstrain(LcElement):
     def __init__(self, *e, p=100, active = True, sampleEntries  = False, name = None):
         super().__init__(*e, name = name)
+
+        def contains_multi_query(value):
+            if isinstance(value, LogicalConstrain):
+                return getattr(value, "_multi_answer", False)
+            if isinstance(value, V):
+                return (
+                    contains_multi_query(value.v)
+                    or contains_multi_query(value.relVarInfo)
+                )
+            if isinstance(value, dict):
+                return any(contains_multi_query(item) for item in value.values())
+            if isinstance(value, (list, tuple)):
+                return any(contains_multi_query(item) for item in value)
+            return False
+
+        if not isinstance(self, queryL):
+            for e_item in self.e:
+                if not contains_multi_query(e_item):
+                    continue
+                raise ValueError(
+                    "multi-answer queryL is a value-returning expression and "
+                    "cannot be nested inside boolean, counting, predicate, "
+                    "relation, or selector constraints"
+                )
         
         self.headLC = True # Indicate that it is head constraint and should be process individually
         self.active = active
@@ -805,47 +829,10 @@ class LogicalConstrain(LcElement):
             myLogger.error(f"{logicMethodName} has no variables")
             return []
         
-        lcVariableName0 = lcVariableNames[0]
-        lcVariableSet0 = v[lcVariableName0]
-        
         zVars = []
-        
-        condition_vars = []
-        if getattr(myConstraintVarProcessor, "is_exact_circuit", False):
-            # Exact iota semantics are over entities, not over duplicated
-            # candidate rows.  Combine every operand into phi(entity), then OR
-            # relational/candidate expansions that share the same primary
-            # grounded entity.  The legacy soft/sample backends keep their
-            # historical layout below.
-            setups = self._collectVariableSetups(
-                lcVariableName0, lcVariableNames[1:], v
-            )
-            grouped_conditions = {}
-            group_order = []
-            for row in setups:
-                for grounding in row:
-                    valid = [value for value in grounding if value is not None]
-                    if not valid:
-                        continue
-                    primary = valid[0]
-                    primary_key = getattr(
-                        primary,
-                        "key",
-                        getattr(primary, "node_id", id(primary)),
-                    )
-                    condition = myConstraintVarProcessor.andVar(model, *valid)
-                    if primary_key not in grouped_conditions:
-                        grouped_conditions[primary_key] = condition
-                        group_order.append(primary_key)
-                    else:
-                        grouped_conditions[primary_key] = myConstraintVarProcessor.orVar(
-                            model, grouped_conditions[primary_key], condition
-                        )
-            condition_vars = [grouped_conditions[key] for key in group_order]
-        else:
-            for i, _ in enumerate(lcVariableSet0):
-                # Collect all condition variables for this grounding
-                condition_vars.extend(lcVariableSet0[i])
+        condition_vars = self._selectorConditionVars(
+            model, myConstraintVarProcessor, v, lcVariableNames
+        )
             
         # What an iotaL contributes depends on who consumes it.
         #
@@ -906,43 +893,9 @@ class LogicalConstrain(LcElement):
             myLogger.error(f"{logicMethodName} has no variables")
             return []
 
-        lcVariableName0 = lcVariableNames[0]
-        condition_vars = []
-        if getattr(myConstraintVarProcessor, "is_exact_circuit", False):
-            setups = self._collectVariableSetups(
-                lcVariableName0, lcVariableNames[1:], v
-            )
-            grouped_conditions = {}
-            group_order = []
-            for row in setups:
-                for grounding in row:
-                    valid = [value for value in grounding if value is not None]
-                    if not valid:
-                        continue
-                    primary = valid[0]
-                    primary_key = getattr(
-                        primary, "key", getattr(primary, "node_id", id(primary))
-                    )
-                    condition = myConstraintVarProcessor.andVar(model, *valid)
-                    if primary_key not in grouped_conditions:
-                        grouped_conditions[primary_key] = condition
-                        group_order.append(primary_key)
-                    else:
-                        grouped_conditions[primary_key] = myConstraintVarProcessor.orVar(
-                            model, grouped_conditions[primary_key], condition
-                        )
-            condition_vars = [grouped_conditions[key] for key in group_order]
-        else:
-            setups = self._collectVariableSetups(
-                lcVariableName0, lcVariableNames[1:], v
-            )
-            for row in setups:
-                for grounding in row:
-                    valid = [value for value in grounding if value is not None]
-                    if valid:
-                        condition_vars.append(
-                            myConstraintVarProcessor.andVar(model, *valid)
-                        )
+        condition_vars = self._selectorConditionVars(
+            model, myConstraintVarProcessor, v, lcVariableNames
+        )
 
         result = myConstraintVarProcessor.miotaVar(
             model,
@@ -957,6 +910,24 @@ class LogicalConstrain(LcElement):
         if isinstance(result, (list, tuple)):
             return [list(result)]
         return [[result]]
+
+    def _selectorConditionVars(self, model, processor, v, variable_names):
+        """Conjoin each entity-aligned selector row into one membership score."""
+        setups = self._collectVariableSetups(
+            variable_names[0], variable_names[1:], v
+        )
+        conditions = []
+        for row in setups:
+            row_conditions = []
+            for grounding in row:
+                valid = [value for value in grounding if value is not None]
+                if valid:
+                    row_conditions.append(processor.andVar(model, *valid))
+            if len(row_conditions) == 1:
+                conditions.append(row_conditions[0])
+            elif row_conditions:
+                conditions.append(processor.orVar(model, *row_conditions))
+        return conditions
    
     def _warnIfNoSubclassData(self, subclass_data, logicMethodName):
         """Flag a queryL whose attribute concept resolved to no datanodes.
@@ -1034,6 +1005,8 @@ class LogicalConstrain(LcElement):
                     subclass_data=subclass_data,
                     onlyConstrains=False,
                     temperature=temperature,
+                    multi_answer=getattr(self, '_multi_answer', False),
+                    threshold=getattr(self, 'threshold', None),
                     logicMethodName=logicMethodName,
                 )
                 return [[result]]
@@ -1069,6 +1042,8 @@ class LogicalConstrain(LcElement):
                     subclass_data=subclass_data,
                     onlyConstrains=headConstrain,
                     temperature=temperature,
+                    multi_answer=getattr(self, '_multi_answer', False),
+                    threshold=getattr(self, 'threshold', None),
                     logicMethodName=logicMethodName,
                 )
 
@@ -1620,10 +1595,29 @@ class iotaL(LogicalConstrain):
                  sampleEntries=False, name=None):
         super().__init__(*e, p=p, active=active, 
                         sampleEntries=sampleEntries, name=name)
+        self._prepareEntitySelector()
         self.temperature = temperature
         # Mark as returning entity selection rather than boolean
         self._returns_selection = True
-        
+
+    def _prepareEntitySelector(self):
+        """Expose a selector condition and remember its output variable."""
+        condition = self.e[0] if len(self.e) == 1 and isinstance(self.e[0], andL) else None
+        condition_items = condition.e if condition is not None else self.e
+        relational = any(
+            isinstance(item, V)
+            and item.v is not None
+            for item in condition_items
+        )
+        if condition is not None and relational:
+            self.e = list(condition_items)
+
+        self.selection_variable = next(
+            (item.name for item in condition_items
+             if isinstance(item, V) and item.name is not None),
+            None,
+        )
+
     def __call__(self, model, myConstraintVarProcessor, v, 
                  headConstrain=False, integrate=False):
         with torch.set_grad_enabled(myConstraintVarProcessor.grad):
@@ -1655,6 +1649,7 @@ class miotaL(LogicalConstrain):
             raise TypeError("miotaL: hard must be a bool")
         super().__init__(*e, p=p, active=active,
                          sampleEntries=sampleEntries, name=name)
+        iotaL._prepareEntitySelector(self)
         self.threshold = float(threshold)
         self.hard = hard
         self._returns_selection = True
@@ -1677,9 +1672,11 @@ class queryL(LogicalConstrain):
         """
         Query constraint for multiclass attribute concepts.
         
-        Given a multiclass concept (parent with subclasses via is_a, or EnumConcept)
-        and an entity selection (typically from iotaL or other constraints), returns the most probable
-        subclass for the selected entity.
+        Given a multiclass concept (parent with subclasses via is_a, or
+        EnumConcept) and an entity selection, returns the most probable
+        subclass.  ``iotaL`` produces the historical single ``[K]`` answer;
+        one direct ``miotaL`` produces a candidate-aligned ``[N, K]`` joint
+        distribution and decodes unselected positions as ``-1``.
         
         Usage:
             # Define material as parent concept with subclasses
@@ -1706,11 +1703,24 @@ class queryL(LogicalConstrain):
                     and any(contains_miota(child) for child in element.e)
                 )
 
-            if any(contains_miota(element) for element in e):
+            direct_miota = [element for element in e if isinstance(element, miotaL)]
+            has_nested_miota = any(
+                contains_miota(element) and not isinstance(element, miotaL)
+                for element in e
+            )
+            if has_nested_miota:
                 raise ValueError(
-                    "queryL does not support miotaL because queryL returns one "
-                    "multiclass answer; use iotaL or query each selected entity separately"
+                    "multi-answer queryL requires one direct miotaL selector; "
+                    "miotaL cannot be nested indirectly inside another selector"
                 )
+            if direct_miota and (len(direct_miota) != 1 or len(e) != 1):
+                raise ValueError(
+                    "multi-answer queryL requires exactly one direct miotaL "
+                    "selector and no additional selector operands"
+                )
+
+            self._multi_answer = bool(direct_miota)
+            self._multi_selector = direct_miota[0] if direct_miota else None
 
             # Build concept variable bindings so the constraint constructor
             # collects per-entity subclass predictions into v.  This lets
@@ -1747,6 +1757,15 @@ class queryL(LogicalConstrain):
             self._subclasses = None
             self._subclass_names = None
             self._init_subclasses()
+
+        @property
+        def is_multi_answer(self):
+            return getattr(self, '_multi_answer', False)
+
+        @property
+        def threshold(self):
+            selector = getattr(self, '_multi_selector', None)
+            return selector.threshold if selector is not None else None
     
         def _init_subclasses(self):
             """Initialize subclass information from concept."""

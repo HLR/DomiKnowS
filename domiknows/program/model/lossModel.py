@@ -8,7 +8,8 @@ import torch
 from ...graph import DataNodeBuilder
 from ..metric import MetricTracker, MacroAverageTracker
 from domiknows import setup_logger, getProductionModeStatus
-from domiknows.graph.logicalConstrain import sumL
+from domiknows.graph.logicalConstrain import queryL, sumL
+from domiknows.solver.lossCalculator import multi_query_joint_nll
 
 try:
     from monitor.constraint_monitor import ( # type: ignore
@@ -861,10 +862,7 @@ class InferenceModel(LossModel):
                     executable_losses.append(constraint_loss)
                     continue
 
-                if loss_dict.get('loss') is None:
-                    continue
-
-                if MONITORING_AVAILABLE:
+                if MONITORING_AVAILABLE and loss_dict.get('loss') is not None:
                     lcRepr = f'{lc.__class__.__name__} {lc.strEs()}'
                     log_single_lc(
                         constraint_name=lcName,
@@ -875,6 +873,17 @@ class InferenceModel(LossModel):
 
                 query_distribution = loss_dict.get('queryDistribution')
                 if query_distribution is not None:
+                    inner_lc = getattr(lc, "innerLC", lc)
+                    if isinstance(inner_lc, queryL) and inner_lc.is_multi_answer:
+                        distribution = query_distribution.float()
+                        _target, _chosen, _losses, constraint_loss = multi_query_joint_nll(
+                            distribution,
+                            raw_lbl,
+                            inner_lc.num_subclasses,
+                            label_name=f"multi-answer queryL {lcName}",
+                        )
+                        executable_losses.append(constraint_loss)
+                        continue
                     try:
                         constraint_loss = self.query_loss_func(
                             query_distribution.float(), raw_lbl.long()
@@ -900,6 +909,9 @@ class InferenceModel(LossModel):
                             print(f"[INFER_DIAG error] {e}", flush=True)
 
                     executable_losses.append(constraint_loss)
+                    continue
+
+                if loss_dict.get('loss') is None:
                     continue
                     
                 inner_lc = getattr(lc, "innerLC", lc)

@@ -148,8 +148,9 @@ class AnswerSolver:
             dn: Root DataNode containing predictions.
 
         Returns:
-            The answer: str for queryL, int for sumL, bool for boolean types,
-            a multi-hot list for miotaL, or None if no feasible result exists.
+            The answer: str for single-answer queryL, an aligned class-ID list
+            for multi-answer queryL, int for sumL, bool for boolean types, a
+            multi-hot list for miotaL, or None if no feasible result exists.
         """
         answer_started = perf_counter()
 
@@ -369,6 +370,105 @@ class AnswerSolver:
         probabilities = torch.cat(tensors)
         return (probabilities >= lc.threshold).to(torch.int64).detach().cpu().tolist()
 
+    def _decode_multi_query(self, lc, dn, key=("local", "softmax")):
+        """Decode every candidate row without enumerating class products."""
+        key_text = "/" + "/".join(key) if isinstance(key, (tuple, list)) else key
+        processor = self.solver.myLcLossBooleanMethods
+        processor.current_device = dn.current_device
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key=key_text,
+            headLC=False, loss=True, sample=False,
+        )
+        matrices = []
+
+        def collect(value):
+            if torch.is_tensor(value) and value.dim() >= 2:
+                if value.shape[-1] == lc.num_subclasses:
+                    matrices.append(value.reshape(-1, lc.num_subclasses))
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    collect(item)
+
+        collect(output)
+        if not matrices:
+            return []
+        distribution = matrices[0] if len(matrices) == 1 else torch.cat(matrices)
+        membership = distribution.sum(dim=-1)
+        answers = distribution.argmax(dim=-1).long()
+        answers = torch.where(
+            membership >= lc.threshold,
+            answers,
+            torch.full_like(answers, -1),
+        )
+        return answers.detach().cpu().tolist()
+
+    def _decode_multi_query_ilp(self, lc, dn):
+        """Decode candidate/class conjunctions from a populated ILP solution."""
+        processor = self.solver.booleanMethodsCalculator
+        processor.current_device = dn.current_device
+        self.solver.constraintConstructor.current_device = dn.current_device
+        self.solver.constraintConstructor.myGraph = self.solver.myGraph
+        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+            lc, processor, None, dn, 0, key="/ILP",
+            headLC=False, loss=False, sample=False, verify=True,
+        )
+        rows = []
+
+        def collect(value):
+            if isinstance(value, (list, tuple)):
+                if (
+                    len(value) == lc.num_subclasses
+                    and all(not isinstance(item, (list, tuple)) for item in value)
+                ):
+                    rows.append([
+                        float(item.item()) if hasattr(item, 'item') else float(item)
+                        for item in value
+                    ])
+                else:
+                    for item in value:
+                        collect(item)
+
+        collect(output)
+        if not rows:
+            return None
+        return [
+            max(range(lc.num_subclasses), key=row.__getitem__)
+            if any(value > 0.5 for value in row) else -1
+            for row in rows
+        ]
+
+    @staticmethod
+    def _snapshot_ilp_attributes(dn):
+        """Capture ILP attributes so populate=False remains non-mutating."""
+        snapshot = []
+        visited = set()
+
+        def visit(node):
+            if id(node) in visited:
+                return
+            visited.add(id(node))
+            snapshot.append((
+                node,
+                {key: value for key, value in node.attributes.items() if '/ILP' in key},
+            ))
+            for child in node.getChildDataNodes() or []:
+                visit(child)
+            for linked in getattr(node, 'relationLinks', {}).values():
+                for relation_node in linked:
+                    visit(relation_node)
+
+        visit(dn)
+        return snapshot
+
+    @staticmethod
+    def _restore_ilp_attributes(snapshot):
+        for node, saved in snapshot:
+            for key in [key for key in node.attributes if '/ILP' in key]:
+                del node.attributes[key]
+            node.attributes.update(saved)
+
     @staticmethod
     def _is_infeasible_error(error):
         return "infeasible" in str(error).lower()
@@ -442,11 +542,17 @@ class AnswerSolver:
         concepts_relations = tuple(concepts_relations)
 
         specs = []
-        miota_names = []
+        direct_decode_names = []
         for name in ordered_names:
             elc = dn.graph.executableLCs[name]
-            if isinstance(elc.innerLC, miotaL):
-                miota_names.append(name)
+            if (
+                isinstance(elc.innerLC, miotaL)
+                or (
+                    isinstance(elc.innerLC, queryL)
+                    and elc.innerLC.is_multi_answer
+                )
+            ):
+                direct_decode_names.append(name)
                 continue
             values, builder = self._hypothesis_spec(
                 elc,
@@ -517,7 +623,10 @@ class AnswerSolver:
                         'values': dict(candidate['values']),
                     }
                     best_hypotheses = OrderedDict(
-                        zip(ordered_names, hypothesis_values)
+                        (name, value)
+                        for (name, _values, _builder), value in zip(
+                            specs, hypothesis_values
+                        )
                     )
         finally:
             self._clear_ilp_cache(dn)
@@ -532,26 +641,51 @@ class AnswerSolver:
                 raise RuntimeError(message)
             return None
 
-        if miota_names:
-            decoded_miota = {
-                name: self._decode_miota(
-                    dn.graph.executableLCs[name].innerLC, dn, key=key
-                )
-                for name in miota_names
-            }
-            best_hypotheses = OrderedDict(
-                (name, decoded_miota[name] if name in decoded_miota else best_hypotheses[name])
-                for name in ordered_names
-            )
-
-        if populate:
+        populated_winner = False
+        temporary_ilp_snapshot = None
+        multi_query_names = [
+            name for name in direct_decode_names
+            if isinstance(dn.graph.executableLCs[name].innerLC, queryL)
+        ]
+        if multi_query_names:
+            if not populate:
+                temporary_ilp_snapshot = self._snapshot_ilp_attributes(dn)
             self.solver.populateILPSelection(
                 dn,
                 concepts_relations,
                 best_result['values'],
             )
-            if answer_target_available:
-                dn._writeExecutableConstraintAnswers(best_hypotheses)
+            populated_winner = populate
+
+        if direct_decode_names:
+            decoded_direct = {}
+            try:
+                for name in direct_decode_names:
+                    inner = dn.graph.executableLCs[name].innerLC
+                    if isinstance(inner, miotaL):
+                        decoded_direct[name] = self._decode_miota(inner, dn, key=key)
+                    else:
+                        decoded = self._decode_multi_query_ilp(inner, dn)
+                        decoded_direct[name] = (
+                            decoded if decoded is not None
+                            else self._decode_multi_query(inner, dn, key=key)
+                        )
+            finally:
+                if temporary_ilp_snapshot is not None:
+                    self._restore_ilp_attributes(temporary_ilp_snapshot)
+            best_hypotheses = OrderedDict(
+                (name, decoded_direct[name] if name in decoded_direct else best_hypotheses[name])
+                for name in ordered_names
+            )
+
+        if populate and not populated_winner:
+            self.solver.populateILPSelection(
+                dn,
+                concepts_relations,
+                best_result['values'],
+            )
+        if populate and answer_target_available:
+            dn._writeExecutableConstraintAnswers(best_hypotheses)
 
         result = {
             'hypotheses': best_hypotheses,

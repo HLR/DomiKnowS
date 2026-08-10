@@ -774,9 +774,36 @@ scores (a straight-through estimator). Selection is inclusive (`>=`), so an
 exactly `0.5` score is selected by the default threshold; an empty set is a
 valid result.
 
+Relational selectors remain aligned to the first bound variable. For example,
+to return objects that have a `left` pair ending at any ball:
+
+```python
+(pair_src, pair_dst) = pair.has_a(pair_src=object, pair_dst=object)
+
+iotaL(andL(
+    red("x"),
+    left("r", path=("x", pair_src.reversed)),
+    ball("y", path=("r", pair_dst)),
+))
+
+miotaL(andL(
+    object("x"),
+    left("r", path=("x", pair_src.reversed)),
+    ball("y", path=("r", pair_dst)),
+))
+```
+
+`.reversed` walks from an object to pair datanodes through the source role;
+the destination role then walks from each pair to its target object. Complete
+`(x, r, y)` groundings are conjoined first and fuzzy-OR aggregated for each
+`x`, so two matching balls never duplicate an object. Variable order is
+significant: put the desired answer variable first. `iotaL` applies uniqueness
+to this entity vector, whereas `miotaL` thresholds every membership
+independently.
+
 The selector can be nested into predicates, relations, Boolean constraints,
-and counting constraints. `queryL(attribute, miotaL(...))` is rejected because
-`queryL` represents one multiclass answer rather than one answer per entity.
+and counting constraints. When it is the direct selector of `queryL`, the
+query returns one candidate-aligned class row per grounding.
 
 #### `queryL` - Query Multiclass Attribute of Selected Entity
 
@@ -809,6 +836,34 @@ answer = queryL(
     iotaL(andL(small('x'), cube('x')))
 )
 ```
+
+With `miotaL`, `queryL` becomes candidate-aligned instead of pooling the
+selected entities into one answer:
+
+```python
+answer = queryL(
+    color,
+    miotaL(andL(large("x"), visible(path="x")), threshold=0.5),
+)
+```
+
+For `N` candidates and `K` classes, `queryDistribution` has shape `[N, K]`.
+Row `i` is the candidate membership probability multiplied by that candidate's
+conditional class distribution, so its row sum is the membership probability.
+`queryAnswer` is a length-`N` class-index vector and uses `-1` at positions
+below the nested `miotaL` threshold, for example `[2, -1, -1, 0, -1]`.
+
+Executable multi-answer query labels use the same candidate alignment and
+`-1` convention. Training applies joint negative log likelihood: a selected
+position supervises both membership and its class, while `-1` supervises the
+unselected state. Evaluation reports exact vector accuracy, per-position
+assignment accuracy, selection accuracy, and class accuracy over expected
+selected positions. An all-`-1` label and an empty candidate vector are valid.
+
+Multi-answer `queryL` requires exactly one direct `miotaL` selector. It is a
+value-returning head/executable expression and cannot itself be nested inside
+Boolean or counting constraints. Existing `queryL(attribute, iotaL(...))`
+continues to return one `[K]` class distribution and use a scalar class label.
 
 **First argument requirements** — the concept passed to `queryL` must be one of:
 

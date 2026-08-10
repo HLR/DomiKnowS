@@ -151,6 +151,14 @@ def _evaluate_condition_impl(
 
     query_correct = 0
     query_total = 0
+    multi_query_position_correct = 0
+    multi_query_position_total = 0
+    multi_query_selection_exact_correct = 0
+    multi_query_selection_exact_total = 0
+    multi_query_selection_position_correct = 0
+    multi_query_selection_position_total = 0
+    multi_query_class_correct = 0
+    multi_query_class_total = 0
 
     miota_exact_correct = 0
     miota_exact_total = 0
@@ -317,6 +325,85 @@ def _evaluate_condition_impl(
                             }
                         continue
 
+                    if inner_lc.is_multi_answer:
+                        distribution = query_distribution.detach()
+                        expected = torch.as_tensor(
+                            label, device=distribution.device
+                        ).reshape(-1)
+                        if expected.dtype.is_floating_point and not torch.all(expected == expected.round()):
+                            raise ValueError(
+                                f"multi-answer queryL label for {lc_name} must contain integer class IDs"
+                            )
+                        expected = expected.long()
+                        if expected.numel() != distribution.shape[0]:
+                            raise ValueError(
+                                f"multi-answer queryL label for {lc_name} has {expected.numel()} values, "
+                                f"but the constraint grounded {distribution.shape[0]} candidates"
+                            )
+                        if torch.any((expected < -1) | (expected >= inner_lc.num_subclasses)):
+                            raise ValueError(
+                                f"multi-answer queryL labels for {lc_name} must be -1 or class IDs "
+                                f"in [0, {inner_lc.num_subclasses - 1}]"
+                            )
+                        predicted = loss_dict.get("queryAnswer")
+                        if predicted is None:
+                            membership = distribution.sum(dim=-1)
+                            predicted = torch.argmax(distribution, dim=-1).long()
+                            predicted = torch.where(
+                                membership >= inner_lc.threshold,
+                                predicted,
+                                torch.full_like(predicted, -1),
+                            )
+                        predicted = predicted.detach().long().reshape(-1)
+                        position_matches = predicted == expected
+                        exact_match = bool(position_matches.all().item())
+                        query_correct += int(exact_match)
+                        multi_query_position_correct += int(position_matches.sum().item())
+                        multi_query_position_total += position_matches.numel()
+
+                        predicted_selection = predicted >= 0
+                        expected_selection = expected >= 0
+                        selection_matches = predicted_selection == expected_selection
+                        selection_exact = bool(selection_matches.all().item())
+                        multi_query_selection_exact_correct += int(selection_exact)
+                        multi_query_selection_exact_total += 1
+                        multi_query_selection_position_correct += int(selection_matches.sum().item())
+                        multi_query_selection_position_total += selection_matches.numel()
+
+                        selected_positions = expected_selection
+                        class_correct = int(
+                            (predicted[selected_positions] == expected[selected_positions]).sum().item()
+                        )
+                        class_total = int(selected_positions.sum().item())
+                        multi_query_class_correct += class_correct
+                        multi_query_class_total += class_total
+
+                        if _step_results is not None:
+                            class_names = [
+                                None if value < 0 else inner_lc.get_subclass_name(value)
+                                for value in predicted.cpu().tolist()
+                            ]
+                            _step_results[lc_name] = {
+                                'answer_result': predicted.cpu().tolist(),
+                                'verify_result': {
+                                    'queryDistribution': distribution.cpu().tolist(),
+                                    'expectedLabel': expected.cpu().tolist(),
+                                    'threshold': inner_lc.threshold,
+                                    'classNames': class_names,
+                                    'positionCorrect': int(position_matches.sum().item()),
+                                    'positionTotal': position_matches.numel(),
+                                    'selectionExact': selection_exact,
+                                    'selectionPositionCorrect': int(selection_matches.sum().item()),
+                                    'classCorrect': class_correct,
+                                    'classTotal': class_total,
+                                },
+                                'correct': exact_match,
+                                'is_counting': False,
+                                'is_query': True,
+                                'is_multi_query': True,
+                            }
+                        continue
+
                     predicted_label = int(torch.argmax(query_distribution.detach().reshape(-1)).item())
                     expected_label = int(label.detach().reshape(-1)[0].item() if torch.is_tensor(label) else label)
                     use_correct = predicted_label == expected_label
@@ -335,6 +422,8 @@ def _evaluate_condition_impl(
                             'is_query': True,
                         }
                 except Exception as e:
+                    if inner_lc.is_multi_answer and isinstance(e, ValueError):
+                        raise
                     logger.warning(f"queryL accuracy evaluation failed for {lc_name}: {e}")
                     if _step_results is not None:
                         _step_results[lc_name] = {
@@ -440,6 +529,14 @@ def _evaluate_condition_impl(
         'counting_total': counting_total,
         'query_correct': query_correct,
         'query_total': query_total,
+        'multi_query_position_correct': multi_query_position_correct,
+        'multi_query_position_total': multi_query_position_total,
+        'multi_query_selection_exact_correct': multi_query_selection_exact_correct,
+        'multi_query_selection_exact_total': multi_query_selection_exact_total,
+        'multi_query_selection_position_correct': multi_query_selection_position_correct,
+        'multi_query_selection_position_total': multi_query_selection_position_total,
+        'multi_query_class_correct': multi_query_class_correct,
+        'multi_query_class_total': multi_query_class_total,
         'miota_exact_correct': miota_exact_correct,
         'miota_exact_total': miota_exact_total,
         'miota_position_correct': miota_position_correct,
@@ -473,6 +570,23 @@ def _evaluate_condition_impl(
         print(f"Query accuracy: {query_accuracy:.2f}% ({query_correct}/{query_total})")
     else:
         results['query_accuracy'] = None
+
+    results['multi_query_position_accuracy'] = (
+        multi_query_position_correct / multi_query_position_total * 100
+        if multi_query_position_total else None
+    )
+    results['multi_query_selection_exact_accuracy'] = (
+        multi_query_selection_exact_correct / multi_query_selection_exact_total * 100
+        if multi_query_selection_exact_total else None
+    )
+    results['multi_query_selection_position_accuracy'] = (
+        multi_query_selection_position_correct / multi_query_selection_position_total * 100
+        if multi_query_selection_position_total else None
+    )
+    results['multi_query_class_accuracy'] = (
+        multi_query_class_correct / multi_query_class_total * 100
+        if multi_query_class_total else None
+    )
 
     if miota_exact_total > 0:
         results['miota_exact_accuracy'] = (miota_exact_correct / miota_exact_total) * 100
@@ -513,6 +627,10 @@ def _evaluate_condition_impl(
     results["boolean_total"] = boolean_total
     results["counting_total"] = counting_total
     results["query_total"] = query_total
+    results["multi_query_position_total"] = multi_query_position_total
+    results["multi_query_selection_exact_total"] = multi_query_selection_exact_total
+    results["multi_query_selection_position_total"] = multi_query_selection_position_total
+    results["multi_query_class_total"] = multi_query_class_total
     results["miota_exact_total"] = miota_exact_total
     results["miota_position_total"] = miota_position_total
     results["evaluation_mode"] = "gumbel" if use_gumbel else "deterministic"

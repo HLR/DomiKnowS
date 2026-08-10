@@ -36,7 +36,7 @@ from domiknows.graph.logicalConstrain import (
     sumL, queryL, iotaL, miotaL, sameL, differentL,
 )
 from domiknows.solver.logicalConstraintConstructor import LogicalConstraintConstructor
-from domiknows.solver.lossCalculator import LossCalculator
+from domiknows.solver.lossCalculator import LossCalculator, multi_query_joint_nll
 from domiknows.solver.adaptiveTNormLossCalculator import TNormSelector, get_constraint_type
 
 from .grounding import ProbabilityStore
@@ -327,15 +327,23 @@ class CompiledConstraintEvaluator(LogicalConstraintConstructor):
 
         useLcVariables = {k: v for k, v in lcVariables.items() if k in usedVariablesNames}
 
+        isEntitySelector = isinstance(lc, (iotaL, miotaL))
+        if isEntitySelector:
+            self.fillPathBindings(useLcVariables, lcVariableVs,
+                                  lcVariablesDns, lcVariableBindings)
+            useLcVariables = self.reduceSelectorToPrimaryGrounding(
+                lc, useLcVariables, lcVariableBindings, booleanProcessor, None)
+
         if isinstance(lc, CandidateSelection):
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
 
         # Same per-element split the interpreter applies in loss mode when a
         # sibling variable kept a multi-group (fallback) structure.
-        self.fillPathBindings(useLcVariables, lcVariableVs,
-                              lcVariablesDns, lcVariableBindings)
-        useLcVariables = self.reduceToCommonGrounding(
-            useLcVariables, lcVariableBindings, booleanProcessor)
+        if not isEntitySelector:
+            self.fillPathBindings(useLcVariables, lcVariableVs,
+                                  lcVariablesDns, lcVariableBindings)
+            useLcVariables = self.reduceToCommonGrounding(
+                useLcVariables, lcVariableBindings, booleanProcessor)
 
         slpitT = False
         for v in useLcVariables:
@@ -412,6 +420,8 @@ class CompiledLossCalculator(LossCalculator):
             if _rawLabel is None:
                 return None
             label = _rawLabel.float()
+        elif isinstance(lc, queryL) and lc.is_multi_answer and label is None:
+            label = dn.getExecutableConstraintLabel(lc.lcName)
 
         self.solver.myLogger.info(f'Processing {lc} (compiled) with t-norm {selected_tnorm}')
 
@@ -440,13 +450,34 @@ class CompiledLossCalculator(LossCalculator):
                 # into a class distribution rather than a violation vector.
                 query_output, _ = self._evaluator.constructCompiled(
                     lc, myBooleanMethods, dn, key=key, headLC=False)
-                query_distribution = self._normalize_query_distribution(
-                    query_output, lc.num_subclasses)
+                if lc.is_multi_answer:
+                    query_distribution = self._normalize_multi_query_distribution(
+                        query_output, lc.num_subclasses)
+                else:
+                    query_distribution = self._normalize_query_distribution(
+                        query_output, lc.num_subclasses)
                 result['queryDistribution'] = query_distribution
+                if lc.is_multi_answer:
+                    result['queryAnswer'] = self._decode_multi_query(
+                        query_distribution, lc.threshold)
                 result['lossTensor'] = None
                 if query_distribution is not None:
                     result['conversionSigmoid'] = query_distribution
-                    result['loss'] = 1.0 - query_distribution.max()
+                    if lc.is_multi_answer and label is not None:
+                        _target, probability, losses, mean_loss = multi_query_joint_nll(
+                            query_distribution,
+                            label,
+                            lc.num_subclasses,
+                            label_name=f"multi-answer queryL {lc.lcName}",
+                        )
+                        result['probability'] = probability
+                        result['lossTensor'] = losses
+                        result['loss'] = mean_loss
+                    else:
+                        result['loss'] = (
+                            None if lc.is_multi_answer
+                            else 1.0 - query_distribution.max()
+                        )
                 else:
                     result['conversionSigmoid'] = None
                     result['loss'] = None

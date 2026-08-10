@@ -12,7 +12,7 @@ from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
 
 from .bdd import BDDNode, CircuitSizeLimitExceeded
 from .circuitBooleanMethods import circuitBooleanMethods
-from .lossCalculator import LossCalculator
+from .lossCalculator import LossCalculator, multi_query_joint_nll
 
 
 def _collect_circuit_nodes(value):
@@ -160,9 +160,40 @@ class CircuitLossCalculator:
         elif isinstance(lc, queryL):
             class_nodes = _collect_circuit_nodes(output)
             probabilities = [processor.wmc(node) for node in class_nodes]
-            result["queryProbabilities"] = (
-                torch.stack(probabilities) if probabilities else None
-            )
+            flat_distribution = torch.stack(probabilities) if probabilities else None
+            if lc.is_multi_answer:
+                if flat_distribution is None:
+                    distribution = torch.empty(
+                        (0, lc.num_subclasses), device=self.solver.current_device)
+                else:
+                    if flat_distribution.numel() % lc.num_subclasses:
+                        raise ValueError(
+                            "multi-answer queryL circuit output is not candidate aligned"
+                        )
+                    distribution = flat_distribution.reshape(-1, lc.num_subclasses)
+                result["queryProbabilities"] = distribution
+                result["queryDistribution"] = distribution
+                result["conversionSigmoid"] = distribution
+                result["queryAnswer"] = LossCalculator._decode_multi_query(
+                    distribution, lc.threshold)
+                if label is None:
+                    result["probability"] = None
+                    result["lossTensor"] = None
+                    result["loss"] = None
+                else:
+                    _target, probability, losses, mean_loss = multi_query_joint_nll(
+                        distribution,
+                        label,
+                        lc.num_subclasses,
+                        epsilon=self.epsilon,
+                    )
+                    result["probability"] = probability
+                    result["lossTensor"] = losses
+                    result["loss"] = mean_loss
+                result["elapsedInMsLC"] = (perf_counter_ns() - start) / 1_000_000
+                return result
+
+            result["queryProbabilities"] = flat_distribution
             label_index = self._label_index(label)
             if label_index is None:
                 result["probability"] = None
@@ -296,8 +327,21 @@ class CircuitLossCalculator:
                 fallback["exact"] = False
                 fallback["sizeLimitError"] = str(error)
                 if isinstance(lc, queryL) and fallback.get("queryDistribution") is not None:
-                    label_index = self._label_index(label)
-                    if label_index is not None:
+                    if lc.is_multi_answer and label is not None:
+                        distribution = fallback["queryDistribution"]
+                        _target, probability, losses, mean_loss = multi_query_joint_nll(
+                            distribution,
+                            label,
+                            lc.num_subclasses,
+                            epsilon=self.epsilon,
+                        )
+                        fallback["probability"] = probability
+                        fallback["loss"] = mean_loss
+                        fallback["lossTensor"] = losses
+                    else:
+                        label_index = self._label_index(label)
+                        if label_index is None:
+                            return fallback
                         probability = fallback["queryDistribution"][label_index]
                         loss = -torch.log(probability.clamp_min(self.epsilon))
                         fallback["probability"] = probability

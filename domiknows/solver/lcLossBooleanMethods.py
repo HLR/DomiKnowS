@@ -270,10 +270,10 @@ class lcLossBooleanMethods(constraintsProcessor):
             for v in var[1:]:
                 orSuccess = torch.maximum(orSuccess, v)  # Fixed: was orSuccess.maximum(v)
         elif self.tnorm =='P':
-            varPod = torch.clone(var[0])
-            for v in var[1:]:
-                varPod.mul_(v)
-            orSuccess = torch.sub(varSum, varPod) # varSum - math.prod(var)
+            complement_product = torch.ones_like(var[0])
+            for v in var:
+                complement_product = complement_product * (1 - v)
+            orSuccess = 1 - complement_product
             
         if onlyConstrains:
             orLoss = torch.sub(tOne, orSuccess) # 1 - orSuccess
@@ -1127,7 +1127,9 @@ class lcLossBooleanMethods(constraintsProcessor):
             distribution = sharpened / sharpened.sum()
         return distribution
 
-    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None, onlyConstrains=False, temperature=1.0, logicMethodName="QUERY"):
+    def queryVar(self, _, concept, subclasses, selection_vars, *, subclass_data=None,
+                 onlyConstrains=False, temperature=1.0, multi_answer=False,
+                 threshold=None, logicMethodName="QUERY"):
         """
         Differentiable query operator for multiclass attribute selection.
         
@@ -1198,6 +1200,11 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.countLogger.warning(f"{logicMethodName} called with empty selection_vars after fixing")
             if onlyConstrains:
                 return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            if multi_answer:
+                return torch.empty(
+                    (0, num_subclasses), device=self.current_device,
+                    dtype=self._get_dtype(), requires_grad=True,
+                )
             # Return uniform distribution over subclasses
             return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(), 
                             requires_grad=True) / num_subclasses
@@ -1228,6 +1235,12 @@ class lcLossBooleanMethods(constraintsProcessor):
             self.countLogger.error(f"{logicMethodName} called without subclass_data")
             if onlyConstrains:
                 return torch.ones(1, device=self.current_device, dtype=self._get_dtype(), requires_grad=True)
+            if multi_answer:
+                class_rows = torch.full(
+                    (n_entities, num_subclasses), 1.0 / num_subclasses,
+                    device=self.current_device, dtype=self._get_dtype(),
+                )
+                return t.unsqueeze(-1) * class_rows
             return torch.ones(num_subclasses, device=self.current_device, dtype=self._get_dtype(),
                             requires_grad=True) / num_subclasses
 
@@ -1258,6 +1271,15 @@ class lcLossBooleanMethods(constraintsProcessor):
             sel_weights = torch.cat([sel_weights, padding])
         elif sel_weights.numel() > c_matrix.shape[0]:
             sel_weights = sel_weights[:c_matrix.shape[0]]
+
+        if multi_answer:
+            # Preserve one row per candidate.  Each normalized class row is
+            # weighted by that candidate's independent miotaL membership, so
+            # row mass is exactly the selection probability.
+            class_rows = torch.stack([
+                self._queryDistribution(row, temperature) for row in c_matrix
+            ]) if c_matrix.shape[0] else c_matrix
+            return sel_weights.unsqueeze(-1) * class_rows
 
         # r_j = Σ_i s_i * c_{j,i}
         subclass_scores = torch.matmul(sel_weights, c_matrix)  # [num_subclasses]

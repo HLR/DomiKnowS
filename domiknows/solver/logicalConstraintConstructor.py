@@ -6,7 +6,7 @@ from domiknows.graph.concept import Concept, EnumConcept
 from domiknows.graph import LcElement, LogicalConstrain, V
 from domiknows.graph import CandidateSelection
 from domiknows.graph.candidates import getCandidates
-from domiknows.graph.logicalConstrain import sumL
+from domiknows.graph.logicalConstrain import iotaL, miotaL, sumL
 
 
 class LogicalConstraintConstructor:
@@ -476,7 +476,15 @@ class LogicalConstraintConstructor:
         if width < 1:
             return None
         try:
-            columns = [torch.stack([v[j] for v in vDns], dim=0) for j in range(width)]
+            if width == 1 and any(len(group) > 1 for group in vDns):
+                # Relation/path candidates are a matrix of complete groundings;
+                # retain every cell instead of silently keeping destination 0.
+                columns = [torch.stack([
+                    value for group in vDns for value in group
+                ], dim=0)]
+            else:
+                columns = [torch.stack([v[j] for v in vDns], dim=0)
+                           for j in range(width)]
         except (TypeError, IndexError):
             return None
         return [columns]
@@ -491,6 +499,24 @@ class LogicalConstraintConstructor:
         discovers numerically (its rows are constant along the other axis).
         Runs to a fixpoint so chained paths resolve.
         """
+        # A later relation expansion can duplicate values without changing the
+        # original datanode list.  Mirror that deterministic nested-loop
+        # expansion in the saved binding keys.
+        for name, groups in useLcVariables.items():
+            if name not in bindings or not groups:
+                continue
+            row_count = len(groups)
+            if (len(groups) == 1 and groups[0] and torch.is_tensor(groups[0][0])
+                    and groups[0][0].numel() > 1):
+                row_count = groups[0][0].numel()
+            names, keys = bindings[name]
+            if row_count > len(keys) and row_count % len(keys) == 0:
+                repeat = row_count // len(keys)
+                bindings[name] = (
+                    names,
+                    [key for key in keys for _ in range(repeat)],
+                )
+
         for _ in range(len(useLcVariables) + 1):
             progressed = False
             for name in useLcVariables:
@@ -498,18 +524,128 @@ class LogicalConstraintConstructor:
                     continue
                 variable = variableVs.get(name)
                 path = getattr(variable, 'v', None) if variable is not None else None
-                if not (isinstance(path, tuple) and path and isinstance(path[0], str)):
+                source_name = path if isinstance(path, str) else (
+                    path[0] if isinstance(path, tuple) and path
+                    and isinstance(path[0], str) else None
+                )
+                if source_name is None:
                     continue
-                source = bindings.get(path[0])
+                source = bindings.get(source_name)
                 if source is None:
                     continue
-                if len(lcVariablesDns[name]) != len(source[1]):
+                target_count = len(lcVariablesDns[name])
+                if useLcVariables[name]:
+                    target_count = len(useLcVariables[name])
+                    if (len(useLcVariables[name]) == 1
+                            and useLcVariables[name][0]
+                            and torch.is_tensor(useLcVariables[name][0][0])
+                            and useLcVariables[name][0][0].numel() > 1):
+                        target_count = useLcVariables[name][0][0].numel()
+                source_names, source_keys = source
+                if target_count != len(source_keys):
+                    if target_count % len(source_keys) != 0:
+                        continue
+                    repeat = target_count // len(source_keys)
+                    source = (
+                        source_names,
+                        [key for key in source_keys for _ in range(repeat)],
+                    )
+                if target_count != len(source[1]):
                     continue
                 bindings[name] = source
                 progressed = True
             if not progressed:
                 break
         return bindings
+
+    @staticmethod
+    def reduceSelectorToPrimaryGrounding(lc, useLcVariables, bindings,
+                                         booleanProcessor, model=None):
+        """Conjoin complete groundings, then fuzzy-OR them per answer entity."""
+        primary = getattr(lc, 'selection_variable', None)
+        bound = {
+            name: binding for name, binding in bindings.items()
+            if name in useLcVariables and primary in binding[0]
+        }
+        if primary is None or not bound:
+            return useLcVariables
+
+        primary_order = []
+        for names, keys in bound.values():
+            primary_index = names.index(primary)
+            for key in keys:
+                candidate = key[primary_index]
+                if candidate not in primary_order:
+                    primary_order.append(candidate)
+
+        primary_binding = next(iter(bound.values()))
+        primary_index = primary_binding[0].index(primary)
+        row_keys = primary_binding[1]
+        buckets = OrderedDict((candidate, []) for candidate in primary_order)
+        for row, key in enumerate(row_keys):
+            buckets[key[primary_index]].append(row)
+
+        layouts = {}
+        for name, groups in useLcVariables.items():
+            if not groups:
+                continue
+            layouts[name] = next((
+                group for group in groups if group
+                and all(torch.is_tensor(column)
+                        and column.numel() == len(row_keys)
+                        for column in group)
+            ), None)
+
+        aligned = []
+        for candidate in primary_order:
+            candidate_position = primary_order.index(candidate)
+            grounding_conditions = []
+            for row in buckets[candidate]:
+                conjunction = []
+                for name, groups in useLcVariables.items():
+                    if not groups:
+                        continue
+                    if layouts.get(name) is not None:
+                        conjunction.extend(
+                            column.reshape(-1)[row] for column in layouts[name]
+                        )
+                    elif row < len(groups):
+                        conjunction.extend(
+                            value.reshape(-1)[candidate_position]
+                            if torch.is_tensor(value)
+                            and value.numel() == len(primary_order)
+                            else value
+                            for value in groups[row]
+                        )
+                    elif len(groups) == 1:
+                        conjunction.extend(
+                            value.reshape(-1)[candidate_position]
+                            if torch.is_tensor(value)
+                            and value.numel() == len(primary_order)
+                            else value
+                            for value in groups[0]
+                        )
+                conjunction = [value for value in conjunction if value is not None]
+                conjunction = [
+                    value.reshape(())
+                    if torch.is_tensor(value) and value.numel() == 1
+                    else value
+                    for value in conjunction
+                ]
+                if conjunction:
+                    grounding_conditions.append(
+                        booleanProcessor.andVar(model, *conjunction)
+                    )
+            if not grounding_conditions:
+                aligned.append([None])
+            elif len(grounding_conditions) == 1:
+                aligned.append([grounding_conditions[0]])
+            else:
+                aligned.append([
+                    booleanProcessor.orVar(model, *grounding_conditions)
+                ])
+
+        return OrderedDict((('_selector_condition', aligned),))
 
     @staticmethod
     def groundingBinding(variable, dnsList, lcVariablesDns):
@@ -1197,6 +1333,13 @@ class LogicalConstraintConstructor:
 
         useLcVariables = {k: v for k, v in lcVariables.items() if k in usedVariablesNames}
 
+        isEntitySelector = isinstance(lc, (iotaL, miotaL))
+        if isEntitySelector:
+            self.fillPathBindings(useLcVariables, lcVariableVs,
+                                  lcVariablesDns, lcVariableBindings)
+            useLcVariables = self.reduceSelectorToPrimaryGrounding(
+                lc, useLcVariables, lcVariableBindings, booleanProcessor, m)
+
         if isinstance(lc, CandidateSelection):
             return lc(lcVariablesDns, keys=lc.CandidateSelectionVariable)
         elif sample:
@@ -1205,7 +1348,7 @@ class LogicalConstraintConstructor:
         elif verify and headLC:
             return lc(m, booleanProcessor, useLcVariables, headConstrain=headLC, integrate=integrate, **({"label": label} if isinstance(lc, sumL) else {})), lcVariables
         else:
-            if loss:
+            if loss and not isEntitySelector:
                 # Align operands enumerated over different variable tuples
                 # before combining them (no-op when they are co-grounded).
                 self.fillPathBindings(useLcVariables, lcVariableVs,

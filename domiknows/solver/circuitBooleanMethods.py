@@ -613,11 +613,25 @@ class circuitBooleanMethods(constraintsProcessor):
         subclass_data=None,
         onlyConstrains=False,
         temperature=1.0,
+        multi_answer=False,
+        threshold=None,
         logicMethodName="QUERY",
     ):
         selections = self._nodes(selection_vars)
         if subclass_data is None:
             raise ValueError("Exact queryL requires per-entity subclass data")
+        if multi_answer:
+            return [
+                [
+                    self.manager.conjunction(
+                        selection,
+                        self._node(subclass_data[entity_index][class_index]),
+                    )
+                    for class_index in range(len(subclasses))
+                ]
+                for entity_index, selection in enumerate(selections)
+                if entity_index < len(subclass_data)
+            ]
         class_nodes = []
         for class_index in range(len(subclasses)):
             alternatives = []

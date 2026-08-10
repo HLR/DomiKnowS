@@ -555,12 +555,20 @@ Supported executable constraint types and their hypotheses are:
 
 | Executable type | Hypotheses |
 | --- | --- |
-| `queryL` | Every subclass or enum value of the queried concept |
+| `queryL(iotaL(...))` | Every subclass or enum value of the queried concept |
+| `queryL(miotaL(...))` | One solve, then candidate-aligned class decoding from the winning assignment |
 | `sumL` | Every integer from `0` through the computed upper bound |
 | `existsL` | `True` and `False` |
 | `greaterL` | `True` and `False` |
 | `atLeastL` | `True` and `False` |
 | `exactL` | `True` and `False` |
+
+Relational `iotaL` and `miotaL` conditions are aligned to their first bound
+variable. Declare named pair roles with `pair.has_a(...)`, use `.reversed` to
+walk from an entity to pairs through the source role, then walk through the
+destination role to constrain the related entity. All complete relation
+groundings for one primary entity are fuzzy-OR aggregated into one selector
+position, so duplicate matching relations do not duplicate answers.
 
 Infeasible hypothesis models are skipped. The feasible model with the highest
 objective is selected by default; `minimizeObjective=True` selects the lowest
@@ -579,7 +587,9 @@ The winning hypothesis answer is also stored on the sample's `constraint`
 child DataNode under `<executable-name>/answer`, alongside its activation
 label. For example, `ELC0/label` activates `ELC0` and `ELC0/answer` contains
 the answer selected by ILP inference. `queryL` answers are class-name strings,
-`sumL` answers are integers, and Boolean hypotheses are stored as `bool`.
+multi-answer `queryL` answers are candidate-aligned class-index lists using
+`-1` for unselected candidates, `sumL` answers are integers, and Boolean
+hypotheses are stored as `bool`.
 Ground-truth label values are never copied into the answer. When multiple
 executable constraints are active, each selected joint-hypothesis value is
 stored under its own name.

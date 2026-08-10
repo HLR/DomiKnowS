@@ -1008,10 +1008,16 @@ class Graph(BaseGraphTree):
                 extra_namespace_values, verbose, elc_name_list
             )
     
-        from .logicalConstrain import miotaL
+        from .logicalConstrain import miotaL, queryL
         vector_label_names = {
             name for name in elc_name_list
-            if isinstance(self.executableLCs[name].innerLC, miotaL)
+            if (
+                isinstance(self.executableLCs[name].innerLC, miotaL)
+                or (
+                    isinstance(self.executableLCs[name].innerLC, queryL)
+                    and self.executableLCs[name].innerLC.is_multi_answer
+                )
+            )
         }
         return LogicDataset(
                 data,

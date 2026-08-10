@@ -28,6 +28,38 @@ def _collect_tensors(obj):
     return tensors
 
 
+def multi_query_joint_nll(distribution, label, num_subclasses, *, epsilon=1e-6,
+                          label_name="multi-answer queryL"):
+    """Validate an aligned class-ID label and return joint per-position NLL."""
+    target = torch.as_tensor(label, device=distribution.device).reshape(-1)
+    if target.dtype.is_floating_point and not torch.all(target == target.round()):
+        raise ValueError(f"{label_name} label must contain integer class IDs")
+    target = target.long()
+    if target.numel() != distribution.shape[0]:
+        raise ValueError(
+            f"{label_name} label has {target.numel()} values, but the constraint "
+            f"grounded {distribution.shape[0]} candidates"
+        )
+    if torch.any((target < -1) | (target >= num_subclasses)):
+        raise ValueError(
+            f"{label_name} labels must be -1 or class IDs in "
+            f"[0, {num_subclasses - 1}]"
+        )
+    membership = distribution.sum(dim=-1)
+    chosen = torch.empty_like(membership)
+    selected = target >= 0
+    chosen[~selected] = 1.0 - membership[~selected]
+    if selected.any():
+        chosen[selected] = distribution[selected].gather(
+            1, target[selected].unsqueeze(1)
+        ).squeeze(1)
+    clamped = chosen.clamp(epsilon, 1.0)
+    stable = chosen + (clamped - chosen).detach()
+    losses = -torch.log(stable)
+    mean_loss = losses.mean() if losses.numel() else distribution.sum() * 0.0
+    return target, chosen, losses, mean_loss
+
+
 class LossCalculator:
     """
     Loss calculator with per-constraint t-norm selection via TNormSelector.
@@ -100,6 +132,38 @@ class LossCalculator:
             distribution = distribution / total
         return distribution
 
+    def _normalize_multi_query_distribution(self, query_output, num_subclasses):
+        """Preserve the candidate axis of a multi-answer query result."""
+        tensors = _collect_tensors(query_output)
+        candidates = []
+        for tensor in tensors:
+            if tensor is None or tensor.dim() < 2:
+                continue
+            if tensor.shape[-1] == num_subclasses:
+                candidates.append(tensor.reshape(-1, num_subclasses))
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        row_counts = {candidate.shape[0] for candidate in candidates}
+        if len(row_counts) != 1:
+            raise ValueError("multi-answer queryL produced inconsistent candidate counts")
+        return torch.stack(candidates).mean(dim=0)
+
+    @staticmethod
+    def _decode_multi_query(distribution, threshold):
+        if distribution is None:
+            return None
+        if distribution.shape[0] == 0:
+            return torch.empty(0, dtype=torch.long, device=distribution.device)
+        membership = distribution.sum(dim=-1)
+        answers = torch.argmax(distribution, dim=-1).to(torch.long)
+        return torch.where(
+            membership >= threshold,
+            answers,
+            torch.full_like(answers, -1),
+        )
+
     def _normalize_selection_distribution(self, selection_output):
         """Flatten a vector-valued selector without normalizing its mass."""
         tensors = _collect_tensors(selection_output)
@@ -142,6 +206,8 @@ class LossCalculator:
             if _rawLabel is None:
                 return None
             label = _rawLabel.float()
+        elif isinstance(lc, queryL) and lc.is_multi_answer and label is None:
+            label = dn.getExecutableConstraintLabel(lc.lcName)
 
         self.solver.myLogger.info(f'Processing {lc} with t-norm {selected_tnorm}')
 
@@ -164,15 +230,34 @@ class LossCalculator:
             query_output, _lc_variables = self.solver.constraintConstructor.constructLogicalConstrains(
                 lc, myBooleanMethods, None, dn, 0,
                 key=key, headLC=False, loss=True, sample=False)
-            query_distribution = self._normalize_query_distribution(
-                query_output,
-                lc.num_subclasses,
-            )
+            if lc.is_multi_answer:
+                query_distribution = self._normalize_multi_query_distribution(
+                    query_output, lc.num_subclasses)
+            else:
+                query_distribution = self._normalize_query_distribution(
+                    query_output, lc.num_subclasses)
             result['queryDistribution'] = query_distribution
+            if lc.is_multi_answer:
+                result['queryAnswer'] = self._decode_multi_query(
+                    query_distribution, lc.threshold)
             result['lossTensor'] = None
             if query_distribution is not None:
                 result['conversionSigmoid'] = query_distribution
-                result['loss'] = 1.0 - query_distribution.max()
+                if lc.is_multi_answer and label is not None:
+                    _target, probability, losses, mean_loss = multi_query_joint_nll(
+                        query_distribution,
+                        label,
+                        lc.num_subclasses,
+                        label_name=f"multi-answer queryL {lc.lcName}",
+                    )
+                    result['probability'] = probability
+                    result['lossTensor'] = losses
+                    result['loss'] = mean_loss
+                else:
+                    result['loss'] = (
+                        None if lc.is_multi_answer
+                        else 1.0 - query_distribution.max()
+                    )
             else:
                 result['conversionSigmoid'] = None
                 result['loss'] = None
