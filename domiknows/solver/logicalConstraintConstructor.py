@@ -586,17 +586,49 @@ class LogicalConstraintConstructor:
             buckets[key[primary_index]].append(row)
 
         layouts = {}
+        sample_size = getattr(booleanProcessor, 'sampleSize', None)
         for name, groups in useLcVariables.items():
             if not groups:
                 continue
-            layouts[name] = next((
+            compatible_groups = [
                 group for group in groups if group
-                and all(torch.is_tensor(column)
-                        and column.numel() == len(row_keys)
+                and all(torch.is_tensor(column) and column.numel() > 0
+                        and not (sample_size and column.numel() == sample_size)
+                        and len(row_keys) % column.numel() == 0
                         for column in group)
-            ), None)
+            ]
+            layouts[name] = max(
+                compatible_groups,
+                key=lambda group: max(column.numel() for column in group),
+                default=None,
+            )
 
         aligned = []
+
+        def value_for_row(value, row, candidate_position):
+            """Project a value batched on an earlier expansion onto this row.
+
+            Chained paths expand groundings as nested loops.  A first-hop
+            tensor may therefore still have 16 values after the second hop has
+            expanded the complete grounding table to 64 rows.  Each earlier
+            value applies to one contiguous block of four later rows.
+            """
+            if not torch.is_tensor(value):
+                return value
+            flat = value.reshape(-1)
+            if sample_size and flat.numel() == sample_size:
+                return value
+            if flat.numel() == 1:
+                return flat[0]
+            if flat.numel() == len(row_keys):
+                return flat[row]
+            if len(row_keys) % flat.numel() == 0:
+                block_size = len(row_keys) // flat.numel()
+                return flat[row // block_size]
+            if flat.numel() == len(primary_order):
+                return flat[candidate_position]
+            return value
+
         for candidate in primary_order:
             candidate_position = primary_order.index(candidate)
             grounding_conditions = []
@@ -607,22 +639,17 @@ class LogicalConstraintConstructor:
                         continue
                     if layouts.get(name) is not None:
                         conjunction.extend(
-                            column.reshape(-1)[row] for column in layouts[name]
+                            value_for_row(column, row, candidate_position)
+                            for column in layouts[name]
                         )
                     elif row < len(groups):
                         conjunction.extend(
-                            value.reshape(-1)[candidate_position]
-                            if torch.is_tensor(value)
-                            and value.numel() == len(primary_order)
-                            else value
+                            value_for_row(value, row, candidate_position)
                             for value in groups[row]
                         )
                     elif len(groups) == 1:
                         conjunction.extend(
-                            value.reshape(-1)[candidate_position]
-                            if torch.is_tensor(value)
-                            and value.numel() == len(primary_order)
-                            else value
+                            value_for_row(value, row, candidate_position)
                             for value in groups[0]
                         )
                 conjunction = [value for value in conjunction if value is not None]
