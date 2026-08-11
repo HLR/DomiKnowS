@@ -41,10 +41,11 @@ MULTI_CONSTRAINT_TEXT = (
     'ball("y", path=("r", pair_dst))), threshold=0.5, hard=False)'
 )
 FEATURES = torch.tensor([
-    [1.0, 0.0],  # object 1: red, left of the ball
-    [0.0, 0.0],  # object 2: non-red, left of the ball
-    [0.0, 1.0],  # object 3: the reference ball
-    [0.0, 0.0],  # object 4: right-side distractor
+    # red, ball, blue, yellow
+    [1.0, 0.0, 0.0, 0.0],  # object 1: red, left of the ball
+    [0.0, 0.0, 0.0, 0.0],  # object 2: non-red, left of the ball
+    [0.0, 1.0, 1.0, 0.0],  # object 3: the reference blue ball
+    [0.0, 0.0, 0.0, 1.0],  # object 4: yellow distractor
 ])
 
 
@@ -54,9 +55,11 @@ class RelationAnswerExample:
     program: InferenceProgram
     unique: iotaL
     multiple: miotaL
+    object_ids: tuple = OBJECT_IDS
 
 
 def reset_domiknows_state():
+    # These registries are global, so clear them before rebuilding fixture concepts.
     Graph.clear()
     Concept.clear()
     Relation.clear()
@@ -68,15 +71,19 @@ def reset_domiknows_state():
 def build_relation_answer_example(
     device="cpu", threshold=0.5, hard=False, *, left_pairs=None,
     second_ball=False, executable=False, logic=None, logic_label=None,
+    object_ids=OBJECT_IDS, features=None,
 ):
     # Rebuild global DomiKnowS state for each independent regression example.
     reset_domiknows_state()
     with Graph("tiny_relation_answers") as graph:
+        # Object concepts carry unary properties; pair nodes carry relation edges.
         scene = Concept(name="scene")
         object_node = Concept(name="object")
         (contains,) = scene.contains(object_node)
         red = object_node(name="red")
         ball = object_node(name="ball")
+        blue = object_node(name="blue")
+        yellow = object_node(name="yellow")
 
         pair = Concept(name="pair")
         (pair_src, pair_dst) = pair.has_a(
@@ -116,10 +123,16 @@ def build_relation_answer_example(
         ),
     )
     object_node[red] = ModuleLearner(
-        "features", module=TinyConceptClassifier(0, feature_count=2).to(device)
+        "features", module=TinyConceptClassifier(0, feature_count=4).to(device)
     )
     object_node[ball] = ModuleLearner(
-        "features", module=TinyConceptClassifier(1, feature_count=2).to(device)
+        "features", module=TinyConceptClassifier(1, feature_count=4).to(device)
+    )
+    object_node[blue] = ModuleLearner(
+        "features", module=TinyConceptClassifier(2, feature_count=4).to(device)
+    )
+    object_node[yellow] = ModuleLearner(
+        "features", module=TinyConceptClassifier(3, feature_count=4).to(device)
     )
     # Materialize all object-pair candidates; read_left supplies their truth values.
     pair[pair_src.reversed, pair_dst.reversed] = CompositionCandidateSensor(
@@ -141,7 +154,15 @@ def build_relation_answer_example(
         keyword="left_pairs", forward=read_left,
     )
 
-    features = FEATURES.clone()
+    # Keep IDs, feature rows, and relation edges in the same deterministic order.
+    object_ids = tuple(object_ids)
+    features = FEATURES.clone() if features is None else torch.as_tensor(
+        features, dtype=torch.float32
+    ).clone()
+    if len(features) != len(object_ids):
+        raise ValueError("features must contain one row per object ID")
+    if features.ndim != 2 or features.shape[1] != 4:
+        raise ValueError("features must have red, ball, blue, and yellow columns")
     if second_ball:
         # Used by the duplicate-path regression case.
         features[3, 1] = 1.0
@@ -149,11 +170,11 @@ def build_relation_answer_example(
         left_pairs = {(1, REFERENCE_BALL_ID), (2, REFERENCE_BALL_ID)}
     rows = [{
         "scene": torch.tensor([0], device=device),
-        "object_ids": torch.tensor(OBJECT_IDS, device=device),
+        "object_ids": torch.tensor(object_ids, device=device),
         "features": features.to(device),
         "left_pairs": set(left_pairs),
     }]
-    poi = [scene, object_node, pair, red, ball, left]
+    poi = [scene, object_node, pair, red, ball, blue, yellow, left]
     if executable:
         # Compile the same relation-aware selector to exercise labels and training.
         if logic is None:
@@ -180,11 +201,14 @@ def build_relation_answer_example(
                 "object": object_node,
                 "left": left,
                 "ball": ball,
+                "blue": blue,
+                "yellow": yellow,
                 "pair_src": pair_src,
                 "pair_dst": pair_dst,
             },
         )
         multiple = next(iter(graph.executableLCs.values())).innerLC
+        # Include the compiled constraint in the program's points of interest.
         poi.append(graph.constraint)
     else:
         dataset = rows
@@ -193,7 +217,7 @@ def build_relation_answer_example(
         poi=poi,
         device=device, inferTypes=["local/argmax"], beta=1.0,
     )
-    return RelationAnswerExample(dataset, program, unique, multiple)
+    return RelationAnswerExample(dataset, program, unique, multiple, object_ids)
 
 
 def relation_answers(example, device="cpu"):
@@ -208,13 +232,14 @@ def relation_answers(example, device="cpu"):
         key="/local/softmax", headLC=False, loss=True, sample=False,
     )
     unique_distribution = unique_output[0][0].detach().reshape(-1)
+    # miotaL exposes its answer vector directly through the loss calculation.
     multi_result = datanode.calculateSingleLcLoss(example.multiple.lcName, tnorm="G")
     multi_distribution = multi_result["selectionDistribution"].detach().reshape(-1)
     # Distributions share OBJECT_IDS order; miotaL keeps every qualifying position.
-    unique_id = OBJECT_IDS[int(unique_distribution.argmax().item())]
+    unique_id = example.object_ids[int(unique_distribution.argmax().item())]
     multi_hot = (multi_distribution >= example.multiple.threshold).to(torch.int64)
     answer_set = {
-        object_id for object_id, selected in zip(OBJECT_IDS, multi_hot.tolist())
+        object_id for object_id, selected in zip(example.object_ids, multi_hot.tolist())
         if selected
     }
     return unique_id, answer_set, multi_hot, unique_distribution, multi_distribution
@@ -238,6 +263,7 @@ def ilp_relation_answers(device="cpu"):
     pair_src, pair_dst = pair.has_a()
 
     def selected(node, concept):
+        # ILP attributes are binary tensors, one value for this concrete datanode.
         value = node.getAttribute(concept, "ILP")
         return value is not None and bool(value.detach().reshape(-1)[0] >= 0.5)
 
@@ -249,6 +275,7 @@ def ilp_relation_answers(device="cpu"):
         node.getAttribute("index").item() for node in objects if selected(node, ball)
     }
     unique_candidates = set()
+    # Reconstruct iotaL's sole answer from selected predicates and relation edges.
     for pair_node in datanode.findDatanodes(select=pair):
         if not selected(pair_node, left):
             continue
@@ -262,11 +289,12 @@ def ilp_relation_answers(device="cpu"):
         )
 
     labels = datanode.getExecutableConstraintLabels()
+    # The executable miotaL answer remains aligned with the original object order.
     multi_hot = torch.as_tensor(
         labels[f"{example.multiple.lcName}/answer"], dtype=torch.int64
     )
     answer_set = {
-        object_id for object_id, chosen in zip(OBJECT_IDS, multi_hot.tolist())
+        object_id for object_id, chosen in zip(example.object_ids, multi_hot.tolist())
         if chosen
     }
     return next(iter(unique_candidates)), answer_set, multi_hot

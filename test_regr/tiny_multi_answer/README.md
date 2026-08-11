@@ -60,6 +60,54 @@ executable `miotaL` is solved and persisted by `AnswerSolver`, while the
 ordinary relation-aware `iotaL` remains a hard graph constraint. It prints the
 ILP-derived unique object and multi-answer set alongside the soft results.
 
+## Nested Relation Hops
+
+Relation-aware selectors can continue through additional pair variables while
+remaining aligned to the first bound entity. For example:
+
+```python
+miotaL(andL(
+    object("x"),
+    left("r1", path=("x", pair_src.reversed)),
+    ball("y", path=("r1", pair_dst)),
+    left("r2", path=("y", pair_src.reversed)),
+    ball("z", path=("r2", pair_dst)),
+), threshold=0.5)
+```
+
+This means: return every `x` for which there is a complete
+`(x, r1, y, r2, z)` grounding satisfying all predicates. The result still has
+one position per `x`; intermediate objects and relation rows never become
+output positions. Earlier-hop values are projected onto the later expanded
+rows, complete paths are conjoined, and paths sharing the same `x` are
+fuzzy-ORed.
+
+The focused regression generates equivalent constraints with 3, 4, and 5
+relation hops. It uses three objects that are each simultaneously `red` and
+`ball`, and requires both properties at every hop destination. For each depth
+it verifies:
+
+- a closed relation cycle returns `[1, 1, 1]`;
+- a broken chain returns `[0, 0, 0]`;
+- the distribution length remains three rather than growing with relation
+  groundings;
+- gradients remain available through the selector.
+
+A separate property-mismatch regression keeps both relation hops present but
+makes the intermediate object a yellow ball. A chain requiring `blue(y)`
+returns `[0, 0, 0]`; changing only the predicate to `yellow(y)` returns
+`[1, 0, 0]`. This distinguishes an existing object with a false property from
+a missing hop represented by `None`.
+
+`build_relation_answer_example` accepts custom `object_ids` and `features` for
+these fixtures. The feature matrix must contain exactly one row per object ID
+and four columns in `red`, `ball`, `blue`, `yellow` order.
+
+Grounding cost still grows quickly: with `N` candidates and `H` unconstrained
+binary hops, the complete grounding table can approach `N ** (H + 1)`. Product
+fuzzy OR can also accumulate many weak paths. Use Gödel t-norm or ILP when
+checking crisp graph reachability.
+
 Run it with:
 
 ```bash
