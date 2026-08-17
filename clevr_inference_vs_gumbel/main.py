@@ -42,6 +42,7 @@ class BuiltProgram:
     program: Any
     train_dataset: Any
     eval_dataset: Any
+    query_namespace: dict[str, Any]
 
 
 @dataclass
@@ -51,6 +52,13 @@ class EvalStats:
     executable_loss: float
     global_loss: float
     gumbel_sample_accuracy: float | None = None
+
+
+@dataclass
+class AdHocComparison:
+    results: dict[str, dict[str, Any]]
+    answers_agree: bool
+    types_agree: bool
 
 
 class SoftmaxClassifier(nn.Module):
@@ -293,7 +301,27 @@ def build_program(
         })
 
     program = program_cls(graph, SolverModel, **program_kwargs)
-    return BuiltProgram(name=name, program=program, train_dataset=train_dataset, eval_dataset=eval_dataset)
+    query_namespace = {
+        **attribute_names_dict,
+        "obj": objects,
+        "obj1": obj1,
+        "obj2": obj2,
+        "pair_forward": pair_forward,
+    }
+    if obj1_rev is not None:
+        query_namespace["obj1_rev"] = obj1_rev
+    if obj2_rev is not None:
+        query_namespace["obj2_rev"] = obj2_rev
+    if pair_reverse is not None:
+        query_namespace["pair_reverse"] = pair_reverse
+
+    return BuiltProgram(
+        name=name,
+        program=program,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        query_namespace=query_namespace,
+    )
 
 
 def _connect_sensors(
@@ -536,6 +564,79 @@ def print_comparison(before: dict[str, EvalStats], after: dict[str, EvalStats]) 
     )
 
 
+def infer_ad_hoc_example(
+    built: BuiltProgram,
+    device: str,
+) -> tuple[dict[str, Any], AdHocComparison]:
+    """Run and compare t-norm, circuit, and ILP ad hoc inference."""
+    if not built.eval_dataset:
+        raise ValueError(f"{built.name} has no evaluation sample for an ad hoc query")
+
+    sample = built.eval_dataset[0]
+    query = sample.get("logic_str")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("The ad hoc CLEVR example requires a non-empty logic_str")
+
+    built.program.model.eval()
+    built.program.cmodel.eval()
+    with torch.no_grad():
+        _mloss, _metric, _datanode, builder = built.program.model(sample)
+        datanode = builder.getDataNode(device=device)
+        if datanode is None:
+            raise RuntimeError("The learned model did not produce a DataNode")
+
+        mode_results = {}
+        for mode in ("tnorm", "circuit", "ilp"):
+            results = datanode.inferExecutableResults(
+                mode=mode,
+                tnorm=built.program.cmodel.tnorm,
+                queries=query,
+                queryNamespace=built.query_namespace,
+                populate=False,
+            )
+            mode_results[mode] = results["ADHOC0"]
+
+    answers = [result["answer"] for result in mode_results.values()]
+    result_types = [result["type"] for result in mode_results.values()]
+    comparison = AdHocComparison(
+        results=mode_results,
+        answers_agree=all(answer == answers[0] for answer in answers[1:]),
+        types_agree=all(
+            result_type == result_types[0]
+            for result_type in result_types[1:]
+        ),
+    )
+    return sample, comparison
+
+
+def print_post_training_ad_hoc_results(
+    programs: list[BuiltProgram],
+    device: str,
+) -> None:
+    """Print one return-only ad hoc answer from every learned model."""
+    print("\nPost-training ad hoc executable query")
+    for built in programs:
+        sample, comparison = infer_ad_hoc_example(built, device)
+        print(f"{built.name}:")
+        print(f"  question={sample.get('question')!r}")
+        print(f"  expected={sample.get('answer')!r}")
+        for mode, result in comparison.results.items():
+            distribution = result["distribution"]
+            distribution_text = (
+                "None" if distribution is None else str(distribution.tolist())
+            )
+            print(
+                f"  {mode}: type={result['type']}, "
+                f"answer={result['answer']!r}, "
+                f"probability={result['probability']}, "
+                f"distribution={distribution_text}"
+            )
+        print(
+            f"  comparison: answers_agree={comparison.answers_agree}, "
+            f"types_agree={comparison.types_agree}"
+        )
+
+
 def main() -> None:
     args = parse_args()
     device = resolve_device(args.device)
@@ -604,6 +705,7 @@ def main() -> None:
         )
 
     print_comparison(before, after)
+    print_post_training_ad_hoc_results(programs, device)
 
 
 if __name__ == "__main__":
