@@ -1,5 +1,10 @@
 """Reduced ordered multi-valued BDDs used by exact semantic loss.
 
+BDD means binary decision diagram: a graph that represents a Boolean formula
+by branching on variable values until it reaches a true or false terminal.  It
+is reduced by sharing equivalent nodes and ordered by testing variables in a
+fixed sequence, which makes repeated logical operations compact and efficient.
+
 The public name says BDD because binary variables are the common case.  The
 implementation is deliberately multi-valued: an ``EnumConcept`` instance is
 one categorical random variable with K branches, not K independent Bernoulli

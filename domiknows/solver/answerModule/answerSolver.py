@@ -473,6 +473,16 @@ class AnswerSolver:
     def _is_infeasible_error(error):
         return "infeasible" in str(error).lower()
 
+    @staticmethod
+    def _log_probability_objective(probabilities):
+        """Convert local probabilities into additive MAP-world scores."""
+        if not torch.is_tensor(probabilities):
+            probabilities = torch.as_tensor(probabilities)
+        if not probabilities.is_floating_point():
+            probabilities = probabilities.float()
+        smallest = torch.finfo(probabilities.dtype).tiny
+        return torch.log(probabilities.clamp_min(smallest))
+
     def solve_active_constraints(
         self,
         dn,
@@ -493,7 +503,10 @@ class AnswerSolver:
         detached variable assignment.  Only the winning assignment is written
         to ``dn`` when ``populate`` is true. Winning hypothesis answers are
         also written to the sample's constraint DataNode as
-        ``<constraint-name>/answer`` attributes.
+        ``<constraint-name>/answer`` attributes. When ``fun`` is ``None``, the
+        objective uses log probabilities and therefore selects the MAP world
+        under the modeled factorization. An explicit ``fun`` replaces that
+        transform.
         """
         answer_target_available = False
         if populate:
@@ -563,6 +576,9 @@ class AnswerSolver:
 
         best_result = None
         best_hypotheses = None
+        objective_fun = (
+            self._log_probability_objective if fun is None else fun
+        )
 
         try:
             for hypothesis_values in product(
@@ -582,7 +598,7 @@ class AnswerSolver:
                         dn,
                         *concepts_relations,
                         key=key,
-                        fun=fun,
+                        fun=objective_fun,
                         epsilon=epsilon,
                         minimizeObjective=minimize_objective,
                         ignorePinLCs=ignore_pin_lcs,
@@ -690,6 +706,9 @@ class AnswerSolver:
         result = {
             'hypotheses': best_hypotheses,
             'objective': best_result['objective'],
+            'objective_mode': (
+                'log_probability' if fun is None else 'custom'
+            ),
             'values': best_result['values'],
         }
         logger.info(

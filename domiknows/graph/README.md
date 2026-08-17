@@ -9,18 +9,51 @@ This directory contains the runtime data structure components for DomiKnows, ena
 | Component | File | Purpose |
 |-----------|------|---------|
 | **Core Data Structure** | | |
-| `DataNode` | `dataNode.py` | Runtime instance data bound to ontological concepts |
-| `DataNodeBuilder` | `dataNode.py` | Constructs data graphs from sensor outputs during model execution |
+| [`DataNode`](#component-datanode) | [`dataNode.py`](dataNode.py) | Runtime instance data bound to ontological concepts |
+| [`DataNodeBuilder`](#component-datanodebuilder) | [`dataNode.py`](dataNode.py) | Constructs data graphs from sensor outputs during model execution |
 | **Candidate Selection** | | |
-| `CandidateSelection` | `candidates.py` | Base class for logical constraint candidate selection |
-| `combinationC` | `candidates.py` | Cartesian product candidate generation |
+| [`CandidateSelection`](#component-candidate-selection) | [`candidates.py`](candidates.py) | Base class for logical constraint candidate selection |
+| [`combinationC`](#component-combination-c) | [`candidates.py`](candidates.py) | Cartesian product candidate generation |
 | **Utilities** | | |
-| `dataNodeConfig` | `dataNodeConfig.py` | Logging configuration for DataNode components |
-| `dataNodeDummy` | `dataNodeDummy.py` | Dummy DataNode generation for testing |
+| [`dataNodeConfig`](#component-datanode-config) | [`dataNodeConfig.py`](dataNodeConfig.py) | Logging configuration for DataNode components |
+| [`dataNodeDummy`](#component-datanode-dummy) | [`dataNodeDummy.py`](dataNodeDummy.py) | Dummy DataNode generation for testing |
 
 ---
 
+<a id="component-datanode"></a>
+
 ## DataNode Class (`dataNode.py`)
+
+### DataNode section guide
+
+- [Overview](#datanode-overview)
+- [Initialization](#datanode-initialization)
+- [Key attributes](#datanode-key-attributes)
+- [Instance, attribute, relation, and hierarchy methods](#datanode-methods)
+- [Data graph query methods](#datanode-query-methods)
+- [Inference methods](#datanode-inference-methods)
+- [Inference metrics](#datanode-inference-metrics)
+- [Visualization](#datanode-visualization)
+
+### Inference method quick reference
+
+| Method | Scope | Result or side effect | Use when |
+| --- | --- | --- | --- |
+| [`inferLocal()`](#datanode-infer-local) | Local, per concept | Writes local softmax, argmax, or normalized prediction attributes. | You need unconstrained model predictions or inputs for another inference method. |
+| [`inferGumbelLocal()`](#datanode-infer-gumbel-local) | Local, differentiable sampling | Writes Gumbel-Softmax results under local prediction attributes. | Training needs soft or straight-through discrete samples. |
+| [`infer()`](#datanode-infer-global) | Global model output | Writes global softmax and argmax attributes. | You need the standard global prediction pass without executable-query decoding. |
+| [`inferExecutableResults()`](#datanode-infer-executable-results) | Executable queries; t-norm, circuit, or ILP | Returns typed answers, probabilities, and distributions through one generic interface. | You need answers such as Boolean presence, counts, class names, or selections, including ad hoc queries. |
+| [`inferILPResults()`](#datanode-infer-ilp-results) | Joint constrained ILP | Writes the selected `<concept>/ILP` assignment and active executable answers. | You need globally consistent predictions constrained by the graph and logical rules. |
+| [`inferGBIResults()`](#datanode-infer-gbi-results) | Grounded Belief Inference | Runs GBI using the supplied model and configuration. | You want iterative belief adjustment instead of t-norm, circuit, or ILP decoding. |
+| [`calculateLcLoss()`](#datanode-calculate-lc-loss) | Differentiable logical constraints | Returns a mapping of losses and satisfaction information per constraint. | Logical constraints contribute to training loss. |
+| [`verifyResultsLC()`](#datanode-verify-results-lc) | Constraint verification | Returns satisfaction and violation information for existing predictions. | You want to evaluate whether an inference result satisfies logical constraints. |
+
+The most general query-answering entry point is
+[`inferExecutableResults()`](#datanode-infer-executable-results). It can answer
+registered or temporary ad hoc executable queries and lets the caller choose
+t-norm traversal, exact circuit inference, or the existing ILP solver.
+
+<a id="datanode-overview"></a>
 
 ### Overview
 
@@ -53,6 +86,8 @@ This directory contains the runtime data structure components for DomiKnows, ena
 └─────────────────────────────────────────────┘
 ```
 
+<a id="datanode-initialization"></a>
+
 ### Initialization
 
 ```python
@@ -73,6 +108,8 @@ dn = DataNode(
 )
 ```
 
+<a id="datanode-key-attributes"></a>
+
 ### Key Attributes
 
 ```python
@@ -89,6 +126,8 @@ dn.myBuilder             # DataNodeBuilder reference
 ```
 
 ---
+
+<a id="datanode-methods"></a>
 
 ## DataNode Methods
 
@@ -271,6 +310,8 @@ dn1.removeEqualTo(dn2)
 
 ---
 
+<a id="datanode-query-methods"></a>
+
 ## DataNode Query Methods
 
 ### `findDatanodes(dns=None, select=None, indexes=None, visitedDns=None, depth=0)`
@@ -426,9 +467,13 @@ concepts = dn.collectConceptsAndRelations()
 
 ---
 
+<a id="datanode-inference-methods"></a>
+
 ## Inference Methods
 
 ### Local Inference
+
+<a id="datanode-infer-local"></a>
 
 #### `inferLocal(keys=("softmax", "argmax"), Acc=None)`
 
@@ -459,6 +504,8 @@ dn.inferLocal(Acc={'person': 0.95})
 - `normalizedProbAcc`: Accuracy-weighted probabilities
 - `meanNormalizedProb`: Mean-normalized probabilities
 
+<a id="datanode-infer-gumbel-local"></a>
+
 #### `inferGumbelLocal(temperature=1.0, hard=False)`
 
 Apply Gumbel-Softmax for differentiable discrete sampling.
@@ -476,6 +523,8 @@ gumbel_probs = dn.getAttribute('<person>/local/softmax')
 
 ### Global Inference
 
+<a id="datanode-infer-global"></a>
+
 #### `infer()`
 
 Compute global argmax and softmax.
@@ -488,6 +537,323 @@ dn.infer()
 softmax = dn.getAttribute('<person>/softmax')
 argmax = dn.getAttribute('<person>/argmax')
 ```
+
+<a id="datanode-infer-executable-results"></a>
+
+#### `inferExecutableResults(*conceptsRelations, mode="tnorm", ...)`
+
+Use one generic interface to answer executable constraints. The default
+`mode="tnorm"` traverses the DataNode's local probabilities without constructing
+or solving an ILP model. `mode="circuit"` compiles the expression to a BDD/SDD
+and uses weighted model counting, preserving repeated-leaf dependencies.
+`mode="ilp"` delegates to `inferILPResults()` and exposes its persisted
+executable answers through the same return interface.
+
+```python
+results = dn.inferExecutableResults(
+    ball, color,
+    mode="tnorm",
+    tnorm="P",
+)
+
+answer = results["ELC0"]["answer"]
+probability = results["ELC0"]["probability"]
+distribution = results["ELC0"]["distribution"]
+```
+
+##### Important arguments
+
+| Argument | Meaning |
+| --- | --- |
+| `*conceptsRelations` | Concepts and relations whose local predictions are available to the query. When omitted, they are discovered from the DataNode graph. |
+| `mode` | `"tnorm"` (default), `"circuit"`, or `"ilp"`. |
+| `key` | Attribute path containing input scores; the default is `("local", "softmax")`. |
+| `tnorm` | Fuzzy logic used by t-norm mode. The default is Product, `"P"`. |
+| `counting_tnorm` | Optional counting t-norm override retained for compatibility. |
+| `threshold` | Decision threshold for ordinary Boolean result decoding. The default is `0.5`. Selector-based expressions use the threshold configured on their selector. |
+| `constraints` | One registered executable name or a collection of names. Cannot be combined with `queries`. |
+| `queries` | One temporary expression or a mapping of public names to temporary expressions. |
+| `queryNamespace` | Mapping of extra symbols used while evaluating string queries. Valid only with `queries`. |
+| `populate` | Controls persistence for registered queries. Ad hoc queries are always return-only. |
+| `circuitBackend` | Exact circuit backend, such as `"bdd"` or `"sdd"`. |
+| `circuitMaxNodes` | Optional circuit-size limit. |
+| `circuitSizeLimitAction` | Configures circuit size-limit handling, including optional t-norm fallback. |
+| `circuitAggregation` | Aggregation passed to circuit weighted model counting. |
+| `Acc` | Optional accumulator passed to local-inference preparation. |
+| `fun`, `epsilon`, `minimizeObjective`, `ignorePinLCs` | Options forwarded to the existing ILP path when `mode="ilp"`. |
+
+##### Ad hoc queries
+
+Use `queries` to ask a temporary question without registering an `ELC`, adding
+an `ELC*/label`, or changing the DataNode permanently. The accepted forms are:
+
+- A DSL string, for example `existsL(yellow("x"))`.
+- A constructed `LogicalConstrain`, for example `sumL(ball("x"))`.
+- An `execute` wrapper.
+- An ordered mapping from public result names to any of the above expression
+  forms.
+
+A single expression is named `ADHOC0` in the returned mapping. A mapping keeps
+the caller's names and insertion order. Names must be non-empty strings and
+one expression object cannot be reused under multiple names in the same call.
+
+```python
+# A single expression returns one result under the generated ADHOC0 name.
+results = dn.inferExecutableResults(
+    ball,
+    queries='existsL(yellow("x"))',
+)
+
+yellow_result = results["ADHOC0"]
+print(yellow_result["answer"])       # True
+print(yellow_result["probability"])  # for example, 0.86
+print(yellow_result["distribution"]) # tensor([0.14, 0.86])
+```
+
+String expressions use the variables captured when the graph's `with Graph`
+context was created. `queryNamespace` adds aliases or symbols that were not in
+that captured context. A `queryNamespace` value takes precedence when the same
+name exists in both places.
+
+```python
+# This mapping returns results named yellow, count, and color in that order.
+results = dn.inferExecutableResults(
+    ball, color,
+    mode="circuit",
+    queries={
+        "yellow": 'existsL(yellow_ball("x"))',
+        "count": 'sumL(ball("x"))',
+        "color": 'queryL(color, iotaL(selected_ball("x")))',
+    },
+    queryNamespace={
+        "yellow_ball": yellow,
+        "selected_ball": selected,
+    },
+)
+
+assert list(results) == ["yellow", "count", "color"]
+print(results["yellow"]["answer"])  # bool
+print(results["count"]["answer"])   # int
+print(results["color"]["answer"])   # class-name str
+```
+
+Constructed objects are also accepted. They must belong to the same graph as
+the DataNode:
+
+```python
+with graph:
+    count_balls = sumL(ball("x"))
+
+results = dn.inferExecutableResults(
+    ball,
+    queries={"count": count_balls},
+)
+```
+
+`queries` and registered-query selection through `constraints` are mutually
+exclusive. Registered executable constraints do not participate when
+`queries` is supplied. Multiple ad hoc queries are evaluated independently in
+t-norm and circuit modes. In ILP mode they participate together in one joint
+hypothesis search for each sample.
+
+##### Return value
+
+For one sample, the return value is an `OrderedDict`:
+
+```text
+OrderedDict[
+    query_name: {
+        "type": ...,
+        "answer": ...,
+        "probability": ...,
+        "distribution": ...,
+        "mode": ...,
+        "exact": ...,
+        # Additional type- or mode-specific fields
+    }
+]
+```
+
+The outer key is:
+
+- The registered name such as `ELC0` for ordinary registered queries.
+- `ADHOC0` for one ad hoc expression.
+- Each caller-provided mapping key for named ad hoc queries.
+
+For a configured batch root, the return value is a `list` of these ordered
+mappings in batch order. Every sample is evaluated independently:
+
+```python
+batch_results = batch_dn.inferExecutableResults(
+    ball,
+    queries='existsL(yellow("x"))',
+)
+
+first_answer = batch_results[0]["ADHOC0"]["answer"]
+second_answer = batch_results[1]["ADHOC0"]["answer"]
+```
+
+All result records contain these common fields:
+
+| Field | Returned value |
+| --- | --- |
+| `type` | `"boolean"`, `"count"`, `"query"`, `"multi_query"`, or `"selection"`. |
+| `answer` | The decoded native Python answer; its exact form depends on `type`. |
+| `probability` | A Python `float` for t-norm/circuit inference, or `None` for ILP. |
+| `distribution` | A detached CPU `torch.Tensor` for t-norm/circuit inference, or `None` for ILP. |
+| `mode` | The backend that produced the returned result: `"tnorm"`, `"circuit"`, or `"ilp"`. |
+| `exact` | `True` for circuit WMC, `False` for t-norm, and `None` for ILP. |
+
+The meaning of `answer`, `probability`, and `distribution` depends on the
+result type:
+
+| `type` | `answer` | `distribution` | `probability` |
+| --- | --- | --- | --- |
+| `boolean` | Python `bool`. | Shape `[2]`, ordered as `[False, True]`. | Score of the returned Boolean answer. |
+| `count` | Python `int`. | Shape `[N + 1]`, ordered as scores for counts `0` through `N`. | Score at `distribution[answer]`. |
+| `query` | Class-name `str`. | Shape `[K]`, in the order given by `classNames`. | Score of the returned class. |
+| `multi_query` | Candidate-aligned list of class IDs; `-1` means that candidate was not selected. | Shape `[N, K]`; rows are candidates and columns follow `classNames`. | Joint product of the selected per-position scores. |
+| `selection` | Candidate-aligned list containing `0` or `1`. | Shape `[N]`, containing each candidate's selection score. | Joint product of the selected or rejected per-position scores. |
+
+Here `N` is the number of grounded candidates and `K` is the number of class
+names. `query` and `multi_query` records additionally return `classNames`.
+`multi_query` and `selection` records return `positionProbabilities`, a detached
+CPU tensor containing the score chosen at each candidate position. For a
+selected multi-query candidate this is its selected-class score; for an
+unselected candidate it is `1 - sum(class scores)`. For a selection it is the
+selection score when the answer is `1`, and `1 - selection score` otherwise.
+
+Examples of complete non-ILP result records are:
+
+```python
+{
+    "type": "boolean",
+    "answer": True,
+    "probability": 0.86,
+    "distribution": torch.tensor([0.14, 0.86]),
+    "mode": "tnorm",
+    "exact": False,
+    "tnorm": "P",
+}
+
+{
+    "type": "count",
+    "answer": 1,
+    "probability": 0.62,
+    "distribution": torch.tensor([0.14, 0.62, 0.24]),
+    "mode": "circuit",
+    "exact": True,
+    "backend": "bdd",
+}
+
+{
+    "type": "query",
+    "answer": "red",
+    "probability": 0.70,
+    "distribution": torch.tensor([0.70, 0.30]),
+    "classNames": ["red", "blue"],
+    "mode": "circuit",
+    "exact": True,
+    "backend": "bdd",
+}
+```
+
+T-norm records additionally contain `tnorm`, and circuit records contain
+`backend`. If circuit compilation exceeds its configured size and fallback is
+enabled, the returned record describes the actual t-norm result with
+`mode="tnorm"` and `exact=False`; it also contains
+`fallback="circuit-size-limit"` and `sizeLimitError`.
+
+`sumL` tests all possible count answers and returns the one with the strongest
+score. In Product mode its distribution is the Poisson-binomial PMF. Circuit
+mode produces exact logical probabilities under the supplied local atom
+distributions. Other fuzzy t-norms produce soft satisfaction scores; those
+scores and their `probability` fields should not be interpreted as calibrated
+probabilities, and a count distribution is not necessarily normalized.
+
+##### ILP return records
+
+Ad hoc ILP queries use the same outer mapping and native answers, but do not
+claim a probability distribution. For example:
+
+```python
+results = dn.inferExecutableResults(
+    ball, color,
+    mode="ilp",
+    queries={
+        "present": 'existsL(ball("x"))',
+        "count": 'sumL(ball("x"))',
+        "color": 'queryL(color, iotaL(selected("x")))',
+    },
+)
+
+assert results["present"] == {
+    "type": "boolean",
+    "answer": True,
+    "probability": None,
+    "distribution": None,
+    "mode": "ilp",
+    "exact": None,
+}
+assert results["count"]["answer"] == 3
+assert results["color"]["answer"] == "yellow"
+```
+
+`probability` and `distribution` are `None` because the ILP objective chooses a
+globally consistent assignment and is not a calibrated answer probability.
+An ILP `query` result still includes `classNames`. Multiple named ad hoc ILP
+queries are optimized jointly, then their Boolean, count, class-name, or
+candidate-aligned answers are decoded into the same public mapping.
+
+For executable-query hypotheses, the default ILP objective maximizes the sum
+of log probabilities of the selected local assignments. This is equivalent to
+maximizing their product under the ILP model's factorization assumptions, so
+the selected answer belongs to the MAP constraint-consistent world. The
+default epsilon clamp keeps `log(0)` out of the linear objective. Passing
+`fun=` explicitly replaces the log transform; for example,
+`fun=lambda probabilities: probabilities` restores raw-probability scoring.
+
+This MAP-world answer is not a marginal query probability. Circuit inference
+instead aggregates probability mass over every world producing each answer,
+so circuit and ILP may legitimately return different answers.
+
+##### Mutation and lifetime
+
+Ad hoc queries are always ephemeral and return-only: temporary registrations,
+activation labels, answers, constraint DataNodes, solver caches, and generated
+ILP attributes are restored even when parsing or inference raises. `populate`
+therefore governs registered queries only and is ignored for ad hoc queries.
+The same query set is evaluated independently for every sample in a batch.
+
+Existing registered labels, answers, probabilities, active flags, graph
+registries, solver caches, and pre-existing `/ILP` attributes are restored to
+their pre-call values. If an ad hoc ILP call needs a constraint DataNode, one is
+created temporarily and removed before returning.
+
+##### Registered executable queries
+
+When `queries` is omitted, active constraints are the names with `ELC*/label`
+attributes. Pass `constraints="ELC0"` or a collection of names to evaluate
+registered questions that do not have activation labels. With `populate=True`
+(the default), t-norm and circuit inference write `ELC*/answer` and
+`ELC*/probability` on the constraint DataNode. Use `populate=False` for a
+non-mutating registered-query call.
+
+Batch roots return a list of ordered result mappings in batch order and
+persist registered-query results into each sample independently.
+
+ILP mode uses the existing in-place `inferILPResults()` implementation, so it
+requires `populate=True` for registered queries. It evaluates every constraint
+activated by the sample's `ELC*/label` attributes jointly. If `constraints` is
+supplied in ILP mode, it must exactly match that active set. Ad hoc queries are
+the exception: they remain ephemeral even if `populate=False` was supplied.
+The `fun`, `epsilon`, `minimizeObjective`, and `ignorePinLCs` options are
+forwarded to `inferILPResults()`. For hypothesis-aware executable inference,
+`fun=None` selects the default log-probability MAP objective. An explicit
+`fun` overrides that transform. Legacy ILP without active executable queries
+retains its established raw-probability objective when `fun=None`.
+
+<a id="datanode-infer-ilp-results"></a>
 
 #### `inferILPResults(*conceptsRelations, key=("local", "softmax"), ...)`
 
@@ -517,7 +883,8 @@ ilp_work_for = dn.getAttribute('<work_for>/ILP')
 - `key`: Attribute path containing the objective probabilities. The default,
   `("local", "softmax")`, reads `<concept>/local/softmax`.
 - `fun`: Optional transformation applied to each probability vector before it
-  contributes to the objective.
+  contributes to the objective. Active executable-query hypotheses use log
+  probability by default; legacy ILP uses raw probability by default.
 - `epsilon`: Optional lower/upper clamp for softmax probabilities. Pass `None`
   to disable clamping.
 - `minimizeObjective`: Select the lowest-objective solution instead of the
@@ -620,6 +987,8 @@ same batch may therefore activate different executable constraints and select
 different hypotheses. Each sample's answers are written to its own constraint
 child.
 
+<a id="datanode-infer-gbi-results"></a>
+
 #### `inferGBIResults(*conceptsRelations, model, kwargs)`
 
 Grounded Belief Inference.
@@ -634,6 +1003,8 @@ dn.inferGBIResults(
 ```
 
 ### Constraint Loss
+
+<a id="datanode-calculate-lc-loss"></a>
 
 #### `calculateLcLoss(tnorm='P', counting_tnorm=None, sample=False, ...)`
 
@@ -671,6 +1042,8 @@ lc_losses = dn.calculateLcLoss(
 
 ### Verification
 
+<a id="datanode-verify-results-lc"></a>
+
 #### `verifyResultsLC(key="/local/argmax")`
 
 Verify constraint satisfaction.
@@ -691,6 +1064,8 @@ results = dn.verifyResultsLC(key='/ILP')
 ```
 
 ---
+
+<a id="datanode-inference-metrics"></a>
 
 ## Metrics
 
@@ -749,6 +1124,8 @@ probs = dn.collectInferredResults(person, 'local/softmax')
 
 ---
 
+<a id="datanode-visualization"></a>
+
 ## Visualization
 
 ### `visualize(filename, inference_mode="ILP", include_legend=False, open_image=False)`
@@ -786,7 +1163,31 @@ dn.visualize(
             └──────────┘
 ```
 
+<a id="component-datanodebuilder"></a>
+
 ## DataNodeBuilder Class (`dataNode.py`)
+
+### DataNodeBuilder section guide
+
+- [Overview](#datanodebuilder-overview)
+- [Key features](#datanodebuilder-key-features)
+- [Construction modes](#datanodebuilder-modes)
+- [Sensor integration](#datanodebuilder-sensor-integration)
+- [Builder methods](#datanodebuilder-methods)
+- [Builder attributes](#datanodebuilder-attributes)
+
+### Builder method quick reference
+
+| Method | Result or side effect | Use when |
+| --- | --- | --- |
+| [`__setitem__()`](#datanodebuilder-setitem) | Consumes a sensor value and creates or updates DataNodes, attributes, and links. | Sensor execution is incrementally constructing the runtime data graph. |
+| [`getDataNode()`](#datanodebuilder-get-data-node) | Returns the first root DataNode and configures its execution device. | You need the completed root for inference, loss calculation, or querying. |
+| [`getBatchDataNodes()`](#datanodebuilder-get-batch-data-nodes) | Returns all root DataNodes as a list. | A batch contains multiple independent sample roots. |
+| [`createBatchRootDN()`](#datanodebuilder-create-batch-root) | Creates a batch-level root and attaches the existing sample roots below it. | An inference method should dispatch across a configured batch root. |
+| [`createFullDataNode()`](#datanodebuilder-create-full-data-node) | Materializes deferred attributes and links onto a skeleton DataNode. | Full graph traversal or inference is needed after skeleton-mode construction. |
+| [`findDataNodesInBuilder()`](#datanodebuilder-find-data-nodes) | Returns builder-owned DataNodes matching the supplied selection and indexes. | You need to locate nodes before or without starting from a root DataNode. |
+
+<a id="datanodebuilder-overview"></a>
 
 ### Overview
 
@@ -806,12 +1207,16 @@ builder[sensor] = predictions  # Triggers DataNode creation
 root_dn = builder.getDataNode()
 ```
 
+<a id="datanodebuilder-key-features"></a>
+
 ### Key Features
 
 1. **Automatic Graph Construction**: Builds DataNode graph from sensor outputs
 2. **Skeleton Mode**: Fast mode that delays full construction
 3. **Incremental Building**: Handles streaming data
 4. **Relation Discovery**: Automatically creates relation links
+
+<a id="datanodebuilder-modes"></a>
 
 ### Modes
 
@@ -839,6 +1244,8 @@ builder = DataNodeBuilder()
 # Records operations, builds on demand
 ```
 
+<a id="datanodebuilder-sensor-integration"></a>
+
 ### Sensor Integration
 
 ```python
@@ -862,7 +1269,11 @@ sensor_context[sensor] = predictions
 # 3. Links to related DataNodes
 ```
 
+<a id="datanodebuilder-methods"></a>
+
 ### Builder Methods
+
+<a id="datanodebuilder-setitem"></a>
 
 #### `__setitem__(key, value)`
 
@@ -880,6 +1291,8 @@ builder[work_for_sensor] = relation_predictions
 # 4. Attribute storage
 ```
 
+<a id="datanodebuilder-get-data-node"></a>
+
 #### `getDataNode(context="interference", device='auto')`
 
 Retrieve root DataNode.
@@ -895,6 +1308,8 @@ root = builder.getDataNode(
 # Sets device for all tensor operations
 ```
 
+<a id="datanodebuilder-get-batch-data-nodes"></a>
+
 #### `getBatchDataNodes()`
 
 Retrieve all root DataNodes (for batch processing).
@@ -904,6 +1319,8 @@ Retrieve all root DataNodes (for batch processing).
 roots = builder.getBatchDataNodes()
 # Returns: [root_dn1, root_dn2, ...]
 ```
+
+<a id="datanodebuilder-create-batch-root"></a>
 
 #### `createBatchRootDN()`
 
@@ -917,6 +1334,8 @@ builder.createBatchRootDN()
 # All previous roots become children
 ```
 
+<a id="datanodebuilder-create-full-data-node"></a>
+
 #### `createFullDataNode(rootDataNode)`
 
 Build full DataNode from skeleton.
@@ -929,6 +1348,8 @@ builder.createFullDataNode(root_dn)
 # Populates all attributes and links
 ```
 
+<a id="datanodebuilder-find-data-nodes"></a>
+
 #### `findDataNodesInBuilder(select=None, indexes=None)`
 
 Query builder's DataNodes.
@@ -937,6 +1358,8 @@ Query builder's DataNodes.
 # Find specific DataNodes
 persons = builder.findDataNodesInBuilder(select='person')
 ```
+
+<a id="datanodebuilder-attributes"></a>
 
 ### Builder Attributes
 
@@ -951,6 +1374,8 @@ builder['DataNodeTime']   # Time per operation (ns)
 ```
 
 ---
+
+<a id="component-candidate-selection"></a>
 
 ## Candidate Selection (`candidates.py`)
 
@@ -968,6 +1393,8 @@ class MySelection(CandidateSelection):
         # Return: dict mapping keys to selected candidates
         pass
 ```
+
+<a id="component-combination-c"></a>
 
 ### `combinationC`
 
@@ -1019,6 +1446,8 @@ Internal function to collect candidates for constraint variables.
 
 ---
 
+<a id="component-datanode-config"></a>
+
 ## Configuration (`dataNodeConfig.py`)
 
 ```python
@@ -1049,6 +1478,8 @@ _DataNode__Logger.info("Custom log message")
 ```
 
 ---
+
+<a id="component-datanode-dummy"></a>
 
 ## Dummy DataNode Generation (`dataNodeDummy.py`)
 

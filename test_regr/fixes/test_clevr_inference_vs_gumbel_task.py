@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
+
+import pytest
 
 TASK_DIR = Path(__file__).resolve().parents[2] / "Tasks" / "clevr_inference_vs_gumbel"
 if str(TASK_DIR) not in sys.path:
@@ -92,3 +95,140 @@ def test_task_defaults_keep_global_constraints_downweighted(monkeypatch):
     assert args.eval_items is None
     assert args.global_constraint_loss_weight == 0.1
     assert args.executable_constraint_loss_weight == 1.0
+
+
+def test_post_training_example_uses_ephemeral_ad_hoc_query():
+    calls = {}
+
+    class FakeDataNode:
+        def inferExecutableResults(self, **kwargs):
+            calls.setdefault("inference", []).append(kwargs)
+            return {
+                "ADHOC0": {
+                    "type": "count",
+                    "answer": 2,
+                    "probability": 0.75,
+                    "distribution": None,
+                    "mode": "tnorm",
+                    "exact": False,
+                }
+            }
+
+    class FakeBuilder:
+        def getDataNode(self, *, device):
+            calls["device"] = device
+            return FakeDataNode()
+
+    class FakeModel:
+        def eval(self):
+            calls["model_eval"] = True
+
+        def __call__(self, sample):
+            calls["sample"] = sample
+            return None, None, None, FakeBuilder()
+
+    class FakeConstraintModel:
+        tnorm = "P"
+
+        def eval(self):
+            calls["constraint_model_eval"] = True
+
+    sample = {
+        "question": "How many red objects are there?",
+        "answer": 2,
+        "logic_str": 'sumL(red("x"))',
+    }
+    red = object()
+    built = clevr_main.BuiltProgram(
+        name="learned",
+        program=SimpleNamespace(
+            model=FakeModel(),
+            cmodel=FakeConstraintModel(),
+        ),
+        train_dataset=[],
+        eval_dataset=[sample],
+        query_namespace={"red": red},
+    )
+
+    returned_sample, comparison = clevr_main.infer_ad_hoc_example(built, "cpu")
+
+    assert returned_sample is sample
+    assert list(comparison.results) == ["tnorm", "circuit", "ilp"]
+    assert all(result["answer"] == 2 for result in comparison.results.values())
+    assert comparison.answers_agree is True
+    assert comparison.types_agree is True
+    assert [call["mode"] for call in calls["inference"]] == [
+        "tnorm",
+        "circuit",
+        "ilp",
+    ]
+    assert all(
+        call["queries"] == 'sumL(red("x"))'
+        for call in calls["inference"]
+    )
+    assert all(
+        call["queryNamespace"] == {"red": red}
+        for call in calls["inference"]
+    )
+    assert all(call["tnorm"] == "P" for call in calls["inference"])
+    assert all(call["populate"] is False for call in calls["inference"])
+    assert calls["device"] == "cpu"
+    assert calls["model_eval"] is True
+    assert calls["constraint_model_eval"] is True
+
+
+@pytest.mark.gurobi
+def test_post_training_ad_hoc_query_supports_circuit_and_ilp_modes():
+    args = SimpleNamespace(
+        epochs=1,
+        train_items=1,
+        eval_items=1,
+        device="cpu",
+        lr=1e-2,
+        tnorm="P",
+        seed=0,
+        global_constraint_loss_weight=0.1,
+        executable_constraint_loss_weight=1.0,
+        disable_global_constraint_loss=True,
+        gumbel_temp_start=1.0,
+        gumbel_temp_end=0.3,
+        hard_gumbel=False,
+    )
+    all_items = clevr_main.load_items()
+    # Both examples are simple count questions, keeping this backend smoke
+    # focused on ad hoc dispatch instead of relation-grounding complexity.
+    built = clevr_main.build_program(
+        "backend-smoke",
+        clevr_main.InferenceProgram,
+        [all_items[38], all_items[20]],
+        args,
+        "cpu",
+    )
+
+    _sample, comparison = clevr_main.infer_ad_hoc_example(built, "cpu")
+    assert list(comparison.results) == ["tnorm", "circuit", "ilp"]
+    assert comparison.types_agree is True
+
+    tnorm = comparison.results["tnorm"]
+    assert tnorm["type"] == "count"
+    assert isinstance(tnorm["answer"], int)
+    assert tnorm["mode"] == "tnorm"
+    assert tnorm["exact"] is False
+    assert isinstance(tnorm["probability"], float)
+    assert tnorm["distribution"] is not None
+
+    circuit = comparison.results["circuit"]
+    assert circuit["type"] == "count"
+    assert isinstance(circuit["answer"], int)
+    assert circuit["mode"] == "circuit"
+    assert circuit["exact"] is True
+    assert isinstance(circuit["probability"], float)
+    assert circuit["distribution"] is not None
+
+    ilp = comparison.results["ilp"]
+    assert ilp["type"] == "count"
+    assert isinstance(ilp["answer"], int)
+    assert ilp["mode"] == "ilp"
+    assert ilp["exact"] is None
+    assert ilp["probability"] is None
+    assert ilp["distribution"] is None

@@ -1287,7 +1287,7 @@ class DataNode:
         return builder_matches[0]
 
     def _clearExecutableConstraintAnswers(self):
-        """Remove persisted answers for executable constraints in this graph.
+        """Remove persisted answers/confidences for executable constraints.
 
         Returns:
             bool: ``True`` when a constraint DataNode was found, otherwise
@@ -1299,6 +1299,7 @@ class DataNode:
 
         for lc_name in self.graph.executableLCs:
             constraint_dn.attributes.pop(f'{lc_name}/answer', None)
+            constraint_dn.attributes.pop(f'{lc_name}/probability', None)
 
         return True
 
@@ -1318,6 +1319,20 @@ class DataNode:
 
         for lc_name, answer in answers.items():
             constraint_dn.attributes[f'{lc_name}/answer'] = answer
+
+        return True
+
+    def _writeExecutableConstraintResults(self, results):
+        """Persist decoded non-ILP answers and their selected probabilities."""
+        constraint_dn = self._getExecutableConstraintDataNode()
+        if constraint_dn is None:
+            return False
+
+        for lc_name, result in results.items():
+            constraint_dn.attributes[f'{lc_name}/answer'] = result['answer']
+            constraint_dn.attributes[f'{lc_name}/probability'] = float(
+                result['probability']
+            )
 
         return True
     
@@ -2108,7 +2123,11 @@ class DataNode:
         - key: tuple, optional
             The key to specify the inference method, default is ("local", "softmax").
         - fun: function, optional
-            Additional function to be applied during ILP, default is None.
+            Function applied to objective probabilities. For hypothesis-aware
+            executable inference, ``None`` uses log probability so maximizing
+            the additive objective selects the MAP constrained world. For
+            legacy ILP without active executable constraints, ``None`` keeps
+            the established raw-probability objective.
         - epsilon: float, optional
             The small value used for any needed approximations, default is 0.00001.
         - minimizeObjective: bool, optional
@@ -2231,6 +2250,321 @@ class DataNode:
             self.myLoggerTime.info(f'Completed ILP Inference - total time: {elapsed*1000:.2f}ms')
 
         self.myLoggerTime.info('')
+
+    def inferExecutableResults(
+        self,
+        *_conceptsRelations,
+        mode='tnorm',
+        tnorm='P',
+        counting_tnorm=None,
+        threshold=0.5,
+        key=('local', 'softmax'),
+        constraints=None,
+        queries=None,
+        queryNamespace=None,
+        populate=True,
+        circuitBackend=None,
+        circuitMaxNodes=None,
+        circuitSizeLimitAction=None,
+        circuitAggregation='joint',
+        Acc=None,
+        fun=None,
+        epsilon=0.00001,
+        minimizeObjective=False,
+        ignorePinLCs=False,
+    ):
+        """Infer executable answers through the selected inference backend.
+
+        The executable DSL is evaluated over the DataNode's local
+        probabilities. ``mode='tnorm'`` uses differentiable fuzzy traversal;
+        ``mode='circuit'`` uses exact weighted model counting; and
+        ``mode='ilp'`` delegates to :meth:`inferILPResults`. Active constraints
+        are selected by ``ELC*/label`` attributes unless ``constraints``
+        explicitly supplies one or more executable names. ``queries`` instead
+        accepts one temporary DSL string, logical constraint/executable object,
+        or an ordered mapping of public names to expressions. Temporary queries
+        exclude registered executable constraints and are removed before this
+        method returns.
+
+        Returns an ordered mapping per sample. Each entry includes a native
+        ``answer``, the selected answer's native-float ``probability``, and a
+        CPU tensor ``distribution``. ILP mode returns ``None`` for the latter
+        two fields because its optimization objective is not a calibrated
+        probability. For a configured batch root, returns a list of mappings
+        in batch order.
+
+        For registered queries, ``populate=True`` writes ``ELC*/answer`` and
+        ``ELC*/probability`` beside the activation label. ``populate`` does not
+        apply to ad hoc queries: they are always ephemeral and return-only.
+        The label value never forces the inferred answer.
+        """
+        if self.myBuilder:
+            self.myBuilder.createFullDataNode(self)
+
+        if queries is not None and constraints is not None:
+            raise ValueError("queries and constraints are mutually exclusive")
+        if queries is None and queryNamespace is not None:
+            raise ValueError(
+                "queryNamespace can only be used together with queries"
+            )
+
+        if queries is not None:
+            concepts_relations = self.collectConceptsAndRelations(
+                _conceptsRelations
+            )
+            if not concepts_relations:
+                raise DataNode.DataNodeError(
+                    f'No concepts or relations found for inference in {self}.'
+                )
+            solver, concepts_relations = self.getILPSolver(
+                concepts_relations
+            )
+
+            is_batch = (
+                self.graph.batch is not None
+                and self.ontologyNode == self.graph.batch
+                and 'contains' in self.relationLinks
+            )
+            targets = (
+                list(self.relationLinks['contains'])
+                if is_batch
+                else [self]
+            )
+
+            from domiknows.solver.executableInference import (
+                AdHocExecutableQueries,
+            )
+
+            with AdHocExecutableQueries(
+                self.graph,
+                targets,
+                solver,
+                queries,
+                query_namespace=queryNamespace,
+            ) as ad_hoc:
+                if mode == 'ilp':
+                    ad_hoc.prepare_ilp()
+
+                def infer_ad_hoc_target(target_dn):
+                    return target_dn.inferExecutableResults(
+                        *_conceptsRelations,
+                        mode=mode,
+                        tnorm=tnorm,
+                        counting_tnorm=counting_tnorm,
+                        threshold=threshold,
+                        key=key,
+                        constraints=tuple(
+                            ad_hoc.public_to_internal.values()
+                        ),
+                        populate=(mode == 'ilp'),
+                        circuitBackend=circuitBackend,
+                        circuitMaxNodes=circuitMaxNodes,
+                        circuitSizeLimitAction=circuitSizeLimitAction,
+                        circuitAggregation=circuitAggregation,
+                        Acc=Acc,
+                        fun=fun,
+                        epsilon=epsilon,
+                        minimizeObjective=minimizeObjective,
+                        ignorePinLCs=ignorePinLCs,
+                    )
+
+                if is_batch:
+                    # DataNode traversal follows both relation and impact links.
+                    # Detach the batch membership while evaluating so one row
+                    # cannot discover sibling samples through their parent.
+                    saved_children = list(self.relationLinks['contains'])
+                    saved_impacts = {
+                        target: list(target.impactLinks.get('contains', []))
+                        for target in targets
+                    }
+                    self.relationLinks['contains'] = []
+                    for target in targets:
+                        target.impactLinks['contains'] = [
+                            parent
+                            for parent in target.impactLinks.get('contains', [])
+                            if parent is not self
+                        ]
+                    try:
+                        internal_results = [
+                            infer_ad_hoc_target(target) for target in targets
+                        ]
+                    finally:
+                        self.relationLinks['contains'] = saved_children
+                        for target, impacts in saved_impacts.items():
+                            target.impactLinks['contains'] = impacts
+                else:
+                    internal_results = infer_ad_hoc_target(self)
+                return ad_hoc.remap_results(internal_results)
+
+        if constraints is None:
+            requested_names = None
+        elif isinstance(constraints, str):
+            requested_names = {constraints}
+        else:
+            requested_names = set(constraints)
+
+        if mode == 'ilp':
+            if not populate:
+                raise ValueError(
+                    "mode='ilp' requires populate=True because "
+                    "inferILPResults operates in place"
+                )
+
+            is_batch = (
+                self.graph.batch is not None
+                and self.ontologyNode == self.graph.batch
+                and 'contains' in self.relationLinks
+            )
+            targets = (
+                list(self.relationLinks['contains'])
+                if is_batch
+                else [self]
+            )
+
+            if requested_names is not None:
+                for target_dn in targets:
+                    active_names = (
+                        target_dn.getActiveExecutableConstraintNames()
+                    )
+                    if requested_names != active_names:
+                        raise ValueError(
+                            "mode='ilp' evaluates all constraints activated by "
+                            "ELC*/label; constraints must exactly match the "
+                            f"active names {sorted(active_names)}"
+                        )
+
+            self.inferILPResults(
+                *_conceptsRelations,
+                key=key,
+                fun=fun,
+                epsilon=epsilon,
+                minimizeObjective=minimizeObjective,
+                ignorePinLCs=ignorePinLCs,
+                Acc=Acc,
+            )
+
+            def collect_ilp_results(target_dn):
+                from domiknows.graph.logicalConstrain import miotaL, queryL
+
+                active_names = (
+                    target_dn.getActiveExecutableConstraintNames()
+                )
+                constraint_dn = target_dn._getExecutableConstraintDataNode()
+                results = OrderedDict()
+                for name, executable in target_dn.graph.executableLCs.items():
+                    if name not in active_names:
+                        continue
+                    answer_key = f'{name}/answer'
+                    if (
+                        constraint_dn is None
+                        or answer_key not in constraint_dn.attributes
+                    ):
+                        raise RuntimeError(
+                            f"ILP inference did not persist an answer for {name}"
+                        )
+
+                    lc = executable.innerLC
+                    if isinstance(lc, sumL):
+                        result_type = 'count'
+                    else:
+                        if isinstance(lc, queryL):
+                            result_type = (
+                                'multi_query'
+                                if lc.is_multi_answer
+                                else 'query'
+                            )
+                        elif isinstance(lc, miotaL):
+                            result_type = 'selection'
+                        else:
+                            result_type = 'boolean'
+
+                    result = {
+                        'type': result_type,
+                        'answer': constraint_dn.attributes[answer_key],
+                        'probability': None,
+                        'distribution': None,
+                        'mode': 'ilp',
+                        'exact': None,
+                    }
+                    if isinstance(lc, queryL):
+                        result['classNames'] = list(lc._subclass_names)
+                    results[name] = result
+                return results
+
+            ilp_results = [
+                collect_ilp_results(target_dn) for target_dn in targets
+            ]
+            return ilp_results if is_batch else ilp_results[0]
+
+        concepts_relations = self.collectConceptsAndRelations(
+            _conceptsRelations
+        )
+        if not concepts_relations:
+            raise DataNode.DataNodeError(
+                f'No concepts or relations found for inference in {self}.'
+            )
+
+        solver, concepts_relations = self.getILPSolver(concepts_relations)
+
+        if isinstance(key, (tuple, list)) and 'local' in key:
+            local_key_index = key.index('local') + 1
+            if local_key_index < len(key):
+                self.inferLocal(keys=(key[local_key_index],), Acc=Acc)
+        elif isinstance(key, str) and 'local' in key:
+            self.inferLocal(Acc=Acc)
+
+        from domiknows.solver.executableInference import ExecutableInference
+
+        evaluator = ExecutableInference(
+            solver,
+            mode=mode,
+            tnorm=tnorm,
+            counting_tnorm=counting_tnorm,
+            threshold=threshold,
+            circuit_backend=circuitBackend,
+            circuit_max_nodes=circuitMaxNodes,
+            circuit_size_limit_action=circuitSizeLimitAction,
+            circuit_aggregation=circuitAggregation,
+        )
+
+        def infer_target(target_dn):
+            if populate:
+                target_dn._clearExecutableConstraintAnswers()
+
+            if requested_names is None:
+                names = target_dn.getActiveExecutableConstraintNames()
+                target_dn.setActiveExecutableLCs()
+            else:
+                unknown = requested_names.difference(
+                    target_dn.graph.executableLCs
+                )
+                if unknown:
+                    raise ValueError(
+                        'Unknown executable constraints: '
+                        + ', '.join(sorted(unknown))
+                    )
+                names = requested_names
+                for name, executable in target_dn.graph.executableLCs.items():
+                    executable.active = name in names
+
+            results = evaluator.infer(
+                target_dn,
+                names,
+                concepts_relations,
+                key=key,
+            )
+            if populate:
+                target_dn._writeExecutableConstraintResults(results)
+            return results
+
+        if (
+            self.graph.batch is not None
+            and self.ontologyNode == self.graph.batch
+            and 'contains' in self.relationLinks
+        ):
+            return [infer_target(dn) for dn in self.relationLinks['contains']]
+
+        return infer_target(self)
 
     def inferGBIResults(self, *_conceptsRelations, model, kwargs):
         """

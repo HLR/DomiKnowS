@@ -431,6 +431,62 @@ class _SequencedSolver:
         self.populated = values
 
 
+class _ProbabilityWorldSolver:
+    """Score two candidate worlds using the transform supplied by AnswerSolver."""
+
+    worlds = (
+        torch.tensor([0.99, 0.52]),
+        torch.tensor([0.75, 0.75]),
+    )
+
+    def __init__(self):
+        self.call_index = 0
+        self.populated = None
+
+    def _calculateILPSelection(self, *args, **kwargs):
+        world = self.worlds[self.call_index]
+        self.call_index += 1
+        transformed = kwargs['fun'](world)
+        return {
+            'objective': float(transformed.sum()),
+            'values': {'world': self.call_index - 1},
+        }
+
+    def populateILPSelection(self, dn, concepts_relations, values):
+        self.populated = values
+
+
+def test_hypothesis_objective_defaults_to_log_probability_map():
+    graph, root, _, _ = _binary_scene(
+        'log_probability_objective',
+        executable_factory=lambda concept: execute(existsL(concept('x'))),
+    )
+    _add_constraint_child(root, 'ELC0')
+
+    # Raw sums prefer the first world: 0.99 + 0.52 > 0.75 + 0.75.
+    # Joint probability prefers the second: 0.99*0.52 < 0.75*0.75.
+    map_solver = _ProbabilityWorldSolver()
+    map_result = AnswerSolver(graph, solver=map_solver).solve_active_constraints(
+        root,
+        {'ELC0'},
+        (),
+        populate=False,
+    )
+    assert map_result['hypotheses']['ELC0'] is False
+    assert map_result['objective_mode'] == 'log_probability'
+
+    raw_solver = _ProbabilityWorldSolver()
+    raw_result = AnswerSolver(graph, solver=raw_solver).solve_active_constraints(
+        root,
+        {'ELC0'},
+        (),
+        fun=lambda probabilities: probabilities,
+        populate=False,
+    )
+    assert raw_result['hypotheses']['ELC0'] is True
+    assert raw_result['objective_mode'] == 'custom'
+
+
 def test_objective_direction_ties_and_all_infeasible():
     graph, root, _, _ = _binary_scene(
         'objective',

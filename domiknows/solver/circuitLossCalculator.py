@@ -1,4 +1,10 @@
-"""Exact semantic-loss calculation by circuit compilation and torch WMC."""
+"""Exact semantic-loss calculation by circuit compilation and torch WMC.
+
+WMC (weighted model counting) sums the probability weights of every Boolean
+assignment that satisfies a compiled circuit.  Here, ``processor.wmc(node)``
+therefore gives the probability that a constraint holds; semantic loss is its
+negative log probability.
+"""
 
 from __future__ import annotations
 
