@@ -19,10 +19,12 @@ from dataset import ACTION_VOCAB, EOS_TOKEN, dummy_dataset, load_eai_dataset, sp
 from modules import (
     AutoregressiveActionObjectGenerator,
     CausalLMActionObjectGenerator,
+    EOSMaskedCrossEntropyLoss,
     SmallLLMPlanGenerator,
     TinyTransformerActionObjectGenerator,
     _prepare_transformers_imports,
 )
+from rl_sequence_program import AutoregressiveSequenceReinforcementProgram
 from reward import (
     TokenVocabulary,
     abstract_state_from_tokens,
@@ -33,10 +35,11 @@ from reward import (
 )
 
 RUN_DIR = Path(__file__).parent.resolve()
+RESULTS_DIR = RUN_DIR / "results"
 RESULTS_PATHS = {
-    "solver": RUN_DIR / "results_solver.txt",
-    "primal-dual": RUN_DIR / "results_pmd.txt",
-    "reinforcement": RUN_DIR / "results_reinforcement.txt",
+    "solver": RESULTS_DIR / "results_solver.txt",
+    "primal-dual": RESULTS_DIR / "results_pmd.txt",
+    "reinforcement": RESULTS_DIR / "results_reinforcement.txt",
 }
 
 _default_model_dir = SCRIPT_DIR / "models"
@@ -85,8 +88,7 @@ def build_program(
     rl_reward_mode="binary",
 ):
     from domiknows import setProductionLogMode
-    from domiknows.program import SolverPOIProgram, ReinforcementProgram
-    from domiknows.program.loss import NBCrossEntropyLoss
+    from domiknows.program import SolverPOIProgram
     from domiknows.program.lossprogram import PrimalDualProgram
     from domiknows.program.metric import MacroAverageTracker
     from domiknows.program.model.pytorch import SolverModel
@@ -111,7 +113,9 @@ def build_program(
     if program_type not in {"solver", "primal-dual", "reinforcement"}:
         raise ValueError(f"Unsupported program_type={program_type!r}")
     program_args = (graph,) if program_type in {"solver", "reinforcement"} else (graph, SolverModel)
-    supervised_loss = MacroAverageTracker(NBCrossEntropyLoss())
+    supervised_loss = MacroAverageTracker(
+        EOSMaskedCrossEntropyLoss(bundle.vocabulary.eos_label)
+    )
 
     # Match the generation examples: text owns prompt-level inputs, token owns
     # per-step features/labels, and token[generated_token] owns predictions.
@@ -224,9 +228,12 @@ def build_program(
             metric={},
         )
     elif program_type == "reinforcement":
-        program = ReinforcementProgram(
+        program = AutoregressiveSequenceReinforcementProgram(
             graph,
             targets=[generated_token],
+            autoregressive_head=autoregressive_head,
+            eos_label=bundle.vocabulary.eos_label,
+            max_steps=max_steps,
             reward_key="reward_function",
             decoder=eai_action_decoder,
             num_samples=rl_num_samples,
@@ -497,6 +504,17 @@ def greedy_sequence(program, bundle, sample, max_steps):
     return labels
 
 
+def labels_through_first_eos(labels, eos_label):
+    """Return meaningful sequence labels, including the first EOS marker."""
+    effective = []
+    for label in labels:
+        value = int(label.item() if torch.is_tensor(label) else label)
+        effective.append(value)
+        if value == eos_label:
+            break
+    return effective
+
+
 def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=False, limit=None, show=False):
     from domiknows.generation import constraints_to_dfa_from_graph
 
@@ -507,6 +525,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             "exact_sequence": 0.0,
             "token_accuracy": 0.0,
             "dfa_valid": 0.0,
+            "dfa_checked": bool(use_dfa),
             "gt_state_success": 0.0,
             "gt_state_recall": 0.0,
         }
@@ -527,8 +546,9 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         pred_padded = pred + [bundle.vocabulary.eos_label] * max(0, len(gold) - len(pred))
         pred_padded = pred_padded[:len(gold)]
         exact += int(pred_padded == gold)
-        token_correct += sum(int(p == g) for p, g in zip(pred_padded, gold))
-        token_total += len(gold)
+        effective_gold = labels_through_first_eos(gold, bundle.vocabulary.eos_label)
+        token_correct += sum(int(p == g) for p, g in zip(pred_padded, effective_gold))
+        token_total += len(effective_gold)
         if dfa is not None:
             dfa_valid += int(dfa.accepts(pred_padded))
         else:
@@ -553,21 +573,24 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         "exact_sequence": exact / len(eval_examples),
         "token_accuracy": token_correct / token_total if token_total else 0.0,
         "dfa_valid": dfa_valid / len(eval_examples),
+        "dfa_checked": dfa is not None,
         "gt_state_success": gt_state_success / len(eval_examples),
         "gt_state_recall": gt_state_recall_total / len(eval_examples),
     }
 
 
 def results_path_for_program(program_type):
-    return RESULTS_PATHS.get(program_type, RUN_DIR / "results.txt")
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    return RESULTS_PATHS.get(program_type, RESULTS_DIR / "results.txt")
 
 
 def print_score(title, score, program_type=None):
+    dfa_value = f"{score['dfa_valid']:.3f}" if score.get("dfa_checked", True) else "n/a"
     line = (
         f"{title}: examples={score['examples']} "
         f"exact_sequence={score['exact_sequence']:.3f} "
         f"token_accuracy={score['token_accuracy']:.3f} "
-        f"dfa_valid={score['dfa_valid']:.3f} "
+        f"dfa_valid={dfa_value} "
         f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
         f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f}"
     )

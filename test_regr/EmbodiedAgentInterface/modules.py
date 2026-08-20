@@ -1,6 +1,36 @@
 import torch
+from torch.nn import functional as F
 
 from dataset import ACTION_VOCAB, EOS_TOKEN
+
+
+class EOSMaskedCrossEntropyLoss(torch.nn.Module):
+    """Cross entropy through the first EOS, excluding EOS padding afterward."""
+
+    def __init__(self, eos_label):
+        super().__init__()
+        self.eos_label = int(eos_label)
+
+    def forward(self, input, target, *args, **kwargs):
+        del args, kwargs
+        logits = input.reshape(-1, input.shape[-1])
+        labels = torch.as_tensor(target, dtype=torch.long, device=input.device)
+        if labels.dim() == 0:
+            labels = labels.reshape(1)
+        if labels.dim() == 1:
+            labels = labels.unsqueeze(0)
+        label_shape = tuple(labels.shape)
+
+        # Keep all tokens up to and including the first EOS in each sequence.
+        eos_count = (labels == self.eos_label).cumsum(dim=-1)
+        keep = eos_count <= 1
+        keep = keep.reshape(-1)
+        labels = labels.reshape(-1)
+        if keep.numel() != logits.shape[0]:
+            raise ValueError(
+                f"Logit/label shape mismatch: {tuple(input.shape)} vs {label_shape}"
+            )
+        return F.cross_entropy(logits[keep], labels[keep])
 
 
 def _prepare_transformers_imports():
@@ -165,6 +195,8 @@ class ByteTextEncoder(torch.nn.Module):
 
 
 class TinyTransformerActionObjectGenerator(torch.nn.Module):
+    supports_batched_prefixes = True
+
     def __init__(
         self,
         label_count=2,
@@ -236,6 +268,8 @@ class TinyTransformerActionObjectGenerator(torch.nn.Module):
 
 
 class CausalLMActionObjectGenerator(torch.nn.Module):
+    supports_batched_prefixes = True
+
     def __init__(
         self,
         model_path="Qwen/Qwen2.5-0.5B-Instruct",

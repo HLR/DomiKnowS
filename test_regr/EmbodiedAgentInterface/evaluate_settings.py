@@ -26,10 +26,12 @@ from main import (
     generation_vocab_from_examples,
     greedy_sequence,
     labels_to_actions,
+    labels_through_first_eos,
     load_examples,
     load_trained_program,
     object_tokens_from_examples,
     openable_object_tokens_from_examples,
+    RESULTS_DIR,
 )
 from reward import evaluate_goal_satisfaction
 from train_qwen_hmm import (
@@ -60,7 +62,7 @@ def parse_args():
     parser.add_argument("--max-steps", type=int, default=135)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=13)
-    parser.add_argument("--output", default=str(SCRIPT_DIR / "results_eval_settings.txt"))
+    parser.add_argument("--output", default=str(RESULTS_DIR / "results_eval_settings.txt"))
     parser.add_argument("--show", type=int, default=0)
 
     parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-1.5B-Instruct")
@@ -168,6 +170,7 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
             "exact_sequence": 0.0,
             "token_accuracy": 0.0,
             "dfa_valid": 0.0,
+            "dfa_checked": dfa is not None,
             "gt_state_success": 0.0,
             "gt_state_recall": 0.0,
             "avg_pred_len": 0.0,
@@ -186,8 +189,9 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
         pred_trimmed = trim_at_eos(pred, eos_label)
         gold_trimmed = trim_at_eos(gold, eos_label)
         exact += int(padded == gold)
-        token_correct += sum(int(p == g) for p, g in zip(padded, gold))
-        token_total += len(gold)
+        effective_gold = labels_through_first_eos(gold, eos_label)
+        token_correct += sum(int(p == g) for p, g in zip(padded, effective_gold))
+        token_total += len(effective_gold)
         dfa_valid += int(True if dfa is None else (dfa.accepts(pred_trimmed) or dfa.accepts(padded)))
         goal_result = evaluate_goal_satisfaction(pred_trimmed, sample, vocabulary)
         predicted_state = goal_result["predicted_state"]
@@ -210,6 +214,7 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
         "exact_sequence": exact / len(examples),
         "token_accuracy": token_correct / token_total if token_total else 0.0,
         "dfa_valid": dfa_valid / len(examples),
+        "dfa_checked": dfa is not None,
         "gt_state_success": gt_state_success / len(examples),
         "gt_state_recall": gt_state_recall_total / len(examples),
         "avg_pred_len": pred_len_total / len(examples),
@@ -217,11 +222,12 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
 
 
 def format_score(score):
+    dfa_value = f"{score['dfa_valid']:.4f}" if score.get("dfa_checked", True) else "n/a"
     return (
         f"{score['name']}: examples={score['examples']} "
         f"exact_sequence={score['exact_sequence']:.4f} "
         f"token_accuracy={score['token_accuracy']:.4f} "
-        f"dfa_valid={score['dfa_valid']:.4f} "
+        f"dfa_valid={dfa_value} "
         f"gt_state_success={score['gt_state_success']:.4f} "
         f"gt_state_recall={score['gt_state_recall']:.4f} "
         f"avg_pred_len={score['avg_pred_len']:.2f}"

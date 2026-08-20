@@ -443,7 +443,7 @@ class LearningBasedProgram():
         
         try:
             lenI = len(dataset)
-            print(f"\nNumber of iterations in epoch: {lenI}")
+            self.logger.debug("Number of iterations in epoch: %d", lenI)
         except:
             pass
         

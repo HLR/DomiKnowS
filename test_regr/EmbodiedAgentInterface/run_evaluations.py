@@ -10,12 +10,12 @@ EVAL_CONFIGS = {
     "lr1e-4": {
         "model": "models/eai_all_normal_causal-lm_lr0p0001_ep5_ms135_hd128_bs1_Qwen2p5-1p5B-Instruct_lora-r8_a16_d0p05_q_proj-v_proj_gc.pth",
         "hmm": "models/eai_all_qwen25_ctrlg_hmm.npz",
-        "output": "results_eval_qwen15_lr1e-4.txt",
+        "output": "results/results_eval_qwen15_lr1e-4.txt",
     },
     "lr1e-5": {
         "model": "models/eai_all_normal_causal-lm_lr1e-05_ep5_ms135_hd128_bs1_Qwen2p5-1p5B-Instruct_lora-r8_a16_d0p05_q_proj-v_proj_gc.pth",
         "hmm": "models/eai_all_normal_causal-lm_lr1e-05_ep5_ms135_lora_ctrlg_hmm.npz",
-        "output": "results_eval_qwen15_lr1e-5.txt",
+        "output": "results/results_eval_qwen15_lr1e-5.txt",
     },
 }
 

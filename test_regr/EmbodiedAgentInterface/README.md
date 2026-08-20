@@ -19,8 +19,8 @@ The task requires an embodied agent to plan and generate multi-step action-objec
   - Action token sequence decoder (`eai_action_decoder`) for policy gradient estimators (`reinforce`, `reinforce_with_baseline`).
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
-  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`.
-  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram` guided by the binary $0/1$ goal satisfaction reward.
+  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram` guided by the binary $0/1$ goal satisfaction reward. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes.
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
@@ -107,7 +107,7 @@ uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 
 Run zero-shot / inference-only constrained decoding using a pretrained or distilled HMM together with compiled DFA constraints:
 
 ```powershell
-uv run python test_regr/EmbodiedAgentInterface/infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --hmm models/eai_all_qwen25_ctrlg_hmm.npz --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --hmm-dfa-base hmm --output results_qwen_hmm_dfa.txt
+uv run python test_regr/EmbodiedAgentInterface/infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --hmm models/eai_all_qwen25_ctrlg_hmm.npz --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --hmm-dfa-base hmm --output test_regr/EmbodiedAgentInterface/results/results_qwen_hmm_dfa.txt
 ```
 
 ---
@@ -117,8 +117,8 @@ uv run python test_regr/EmbodiedAgentInterface/infer_qwen_hmm_dfa.py --dataset a
 During evaluation, `sequence_score` reports:
 - `examples`: Total evaluated test instances.
 - `exact_sequence`: Fraction of trajectories with an exact action-object match to gold.
-- `token_accuracy`: Per-step token prediction accuracy.
-- `dfa_valid`: Fraction of generated trajectories satisfying the compiled DomiKnowS declarative grammar constraints.
+- `token_accuracy`: Per-step accuracy through the first gold EOS; trailing EOS padding is excluded.
+- `dfa_valid`: Fraction of generated trajectories satisfying the compiled DomiKnowS declarative grammar constraints. Reported as `n/a` when DFA checking is disabled.
 - `gt_state_success`: Binary $0/1$ final state satisfaction evaluated by the world state simulator.
 - `gt_state_recall`: Mean fraction of goal condition facts satisfied by the generated trajectory.
 

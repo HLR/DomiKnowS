@@ -280,6 +280,6 @@ domiknows/generation/README_notes.md
 
 # Local research notes (not tracked)
 domiknows/research/
-test_regr/EmbodiedAgentInterface/*.txt
+test_regr/EmbodiedAgentInterface/results/
 Rethinkin constraints.md
 test_regr/EmbodiedAgentInterface/models/

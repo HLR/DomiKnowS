@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 import evaluate_settings as ev
-from main import build_trainable_program
+from main import RESULTS_DIR, build_trainable_program
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument("--max-steps", type=int, default=135)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=13)
-    parser.add_argument("--output", default=str(SCRIPT_DIR / "results_qwen_hmm_dfa_inference.txt"))
+    parser.add_argument("--output", default=str(RESULTS_DIR / "results_qwen_hmm_dfa_inference.txt"))
     parser.add_argument("--show", type=int, default=0)
 
     # Match the graph/generator construction arguments expected by main.py.
@@ -113,8 +113,9 @@ def _add_batch_counts(counts, predictions, examples, vocabulary, dfa, show, offs
         gold_trimmed = ev.trim_at_eos(gold, eos_label)
         counts["examples"] += 1
         counts["exact"] += int(padded == gold)
-        counts["token_correct"] += sum(int(p == g) for p, g in zip(padded, gold))
-        counts["token_total"] += len(gold)
+        effective_gold = ev.labels_through_first_eos(gold, eos_label)
+        counts["token_correct"] += sum(int(p == g) for p, g in zip(padded, effective_gold))
+        counts["token_total"] += len(effective_gold)
         counts["dfa_valid"] += int(dfa.accepts(pred_trimmed) or dfa.accepts(padded))
         goal_result = ev.evaluate_goal_satisfaction(pred_trimmed, sample, vocabulary)
         predicted_state = goal_result["predicted_state"]
