@@ -1,42 +1,174 @@
-# EmbodiedAgentInterface DomiKnowS Baseline
+# Embodied Agent Interface (EAI) DomiKnowS Framework
 
-This folder is a first-pass DomiKnowS baseline for Inevitablevalor/EmbodiedAgentInterface.
+This directory implements the DomiKnowS baseline and reinforcement learning framework for the **Embodied Agent Interface (EAI)** benchmark ([`Inevitablevalor/EmbodiedAgentInterface`](https://huggingface.co/datasets/Inevitablevalor/EmbodiedAgentInterface)).
 
-The task is modeled as action-sequence generation from the instruction and temporal-logic goal. The graph is built with DomiKnowS GenerationEncoder, so it has text, token, and generated_token sequence concepts plus EOS/length constraints.
+The task requires an embodied agent to plan and generate multi-step action-object trajectories to achieve goal states specified by natural language instructions and temporal logic conditions across **BEHAVIOR** and **VirtualHome** environments.
 
-Compact action vocabulary:
+---
 
-<eos>, open, close, walk, grasp, place, put, switch, navigate, other
+## Key Features
 
-Run a local smoke test:
+- **Goal State Translation & Abstract World Simulator** (`reward.py`):
+  - Full relational and state tracking: `inside(x, y)`, `ontop(x, y)`, `nextto(x, y)`, `under(x, y)`, `open(x)`, `closed(x)`, `on(x)`, `off(x)`, `clean(x)`, `soaked(x)`, `cooked(x)`, `frozen(x)`, `unfrozen(x)`, `sliced(x)`, `dusty(x)`, `stained(x)`.
+  - Supports dual-hand BEHAVIOR interaction formats (`left_place_*`, `right_place_*`) and VirtualHome bracketed formats (`[ACTION] <obj> (id)`).
+  - Evaluates final condition satisfaction: binary **$0/1$ Goal Success** (`gt_state_success`) and **Dense Goal Fact Recall** (`gt_state_recall`).
+  - Achieves **100.0% goal satisfaction verification** across all 438 examples in the full benchmark dataset.
 
-    uv run test_regr/EmbodiedAgentInterface/main.py --dummy --max-steps 8 --num-generations 3 --device cpu --encoder-model-path bert-base-uncased
+- **DomiKnowS Reinforcement Learning Integration** (`domiknows.reinforcement`):
+  - Per-item reward closures (`make_eai_reward_function`) returning standard PyTorch reward tensors compatible with `ReinforcementProgram`.
+  - Action token sequence decoder (`eai_action_decoder`) for policy gradient estimators (`reinforce`, `reinforce_with_baseline`).
 
-Run against the Hugging Face dataset:
+- **Two-Stage Training Pipeline (`--two-stage`)**:
+  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram` guided by the binary $0/1$ goal satisfaction reward.
 
-    uv run test_regr/EmbodiedAgentInterface/main.py --dataset all --max-steps 8 --num-generations 5
+- **Model Backbones**:
+  - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
+  - **Small LLM (Qwen)**: Causal-LM backbone support (`Qwen/Qwen2.5-1.5B-Instruct` or `Qwen/Qwen2.5-0.5B-Instruct`) with optional PEFT / LoRA adaptation.
 
-If the datasets package is unavailable, pass a local parquet/csv/json/jsonl file with --data-path.
+- **DFA Relational Constraints & Hybrid Inference**:
+  - Declarative DomiKnowS action-object relational grammar constraints compiled into Deterministic Finite Automata (DFA).
+  - DFA-guided constrained autoregressive decoding and Qwen + HMM + DFA lookahead inference (`infer_qwen_hmm_dfa.py`).
 
-Generate action-token sequences with a small text LLM attached as a DomiKnowS ModuleSensor:
+---
 
-    uv run test_regr/EmbodiedAgentInterface/main.py --dummy --use-llm --llm-model-path Qwen/Qwen2.5-0.5B-Instruct --num-generations 3 --device cuda
+## Directory Structure
 
-For CPU-only smoke tests, use --device cpu; a locally cached tiny model is best if the machine has no network access. In --use-llm mode, main.py builds a DomiKnowS generation program and stores the model output on text[generated_action_sequence].
+```
+test_regr/EmbodiedAgentInterface/
+├── dataset.py                # Dataset loader for BEHAVIOR, VirtualHome, and dummy splits
+├── graph.py                  # DomiKnowS declarative graph and logical constraints
+├── modules.py                # Tiny Transformer & Qwen CausalLM autoregressive generators
+├── reward.py                 # Goal state translator, 0/1 reward function, and RL decoder
+├── train.py                  # CLI argument parser and training configurations
+├── main.py                   # Main training, two-stage pipeline, evaluation, and scoring
+├── test_reward.py            # Unit test suite verifying goal translation on all 438 examples
+├── infer_qwen_hmm_dfa.py     # Qwen + HMM + DFA inference-only evaluation
+├── eai_hmm_decoder_adapter.py# Adapter for HMM-DFA lookahead decoding
+└── evaluate_settings.py      # Benchmark evaluation configurations
+```
 
-## Inference-only Qwen + HMM + DFA
+---
 
-Use `infer_qwen_hmm_dfa.py` for the no-training setup. This path does not load or train a checkpoint; it calls `main.py`'s `build_trainable_program(...)` to build the same graph/bundle/default DomiKnowS generator interface, compiles that graph to DFA, loads the Qwen-distilled HMM artifact, and decodes through DomiKnowS `HMMDFADecoder`. The default objective is Ctrl-G-compatible: a selected base label score plus the HMM+DFA future-success lookahead factor.
+## Quickstart & Usage
 
-Small subset example:
+### 1. Test Goal State Translation & Reward Function
 
-    CUDA_VISIBLE_DEVICES=2 conda run -n CLEVER python infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --eval-split full --hmm models/eai_all_qwen25_ctrlg_hmm.npz --device cuda --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --hmm-dfa-base hmm --output results_qwen_hmm_dfa_100.txt
+Run the test suite verifying state extraction, goal satisfaction, and DomiKnowS reward compatibility on both dummy data and the full 438-example EAI dataset:
 
-Useful options:
+```powershell
+uv run python test_regr/EmbodiedAgentInterface/test_reward.py
+```
 
-- `--hmm-dfa-base auto` uses backend label logits when available and falls back to HMM next-label logits.
-- `--hmm-dfa-base hmm` uses HMM next-label logits as the base score and does not add backend generator logits.
-- `--hmm-weight` controls the HMM base contribution when the Ctrl-G base is HMM, and the standalone HMM term in `--hmm-dfa-objective log_linear_blend`.
-- `--hmm-hf-weight` controls backend generator label bias only in `--hmm-dfa-objective log_linear_blend`.
-- `--hmm-lookahead-weight` enables bounded HMM lookahead without pruning.
+### 2. Two-Stage Training (Exact Match $\rightarrow$ Reinforcement Learning)
+
+Train a two-stage model (Stage 1 Exact Match pretraining $\rightarrow$ Stage 2 Reinforcement Learning fine-tuning with 0/1 rewards):
+
+```powershell
+# Fast smoke test on dummy data
+uv run python test_regr/EmbodiedAgentInterface/main.py --dummy --two-stage --epochs 2 --rl-epochs 2 --max-steps 8 --evaluate
+
+# Training on a subset of the full EAI dataset
+uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 --two-stage --epochs 3 --rl-epochs 3 --max-steps 30 --evaluate
+
+# Full dataset training
+uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate
+```
+
+### 3. Small LLM Backbone Training (Qwen)
+
+Run two-stage training with `Qwen/Qwen2.5-1.5B-Instruct` as the causal language model backbone:
+
+```powershell
+# Dummy verification with Qwen
+uv run python test_regr/EmbodiedAgentInterface/main.py --dummy --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --two-stage --epochs 1 --rl-epochs 1 --max-steps 4 --evaluate
+
+# Qwen training on full EAI dataset with LoRA
+uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --use-lora --lora-r 16 --two-stage --epochs 3 --rl-epochs 3 --max-steps 20 --evaluate
+```
+
+### 4. Standalone Program Modes
+
+- **Supervised Exact Match (`SolverPOIProgram`)**:
+  ```powershell
+  uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --program solver --epochs 3 --train --evaluate
+  ```
+- **Primal-Dual Constraint Program (`PrimalDualProgram`)**:
+  ```powershell
+  uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --program primal-dual --epochs 3 --train --evaluate
+  ```
+- **Standalone Reinforcement Learning (`ReinforcementProgram`)**:
+  ```powershell
+  uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --program reinforcement --epochs 3 --train --evaluate
+  ```
+
+### 5. Inference-Only Qwen + HMM + DFA Decoding
+
+Run zero-shot / inference-only constrained decoding using a pretrained or distilled HMM together with compiled DFA constraints:
+
+```powershell
+uv run python test_regr/EmbodiedAgentInterface/infer_qwen_hmm_dfa.py --dataset all --limit 100 --eval-limit 100 --hmm models/eai_all_qwen25_ctrlg_hmm.npz --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --hmm-dfa-base hmm --output results_qwen_hmm_dfa.txt
+```
+
+---
+
+## Evaluation Metrics
+
+During evaluation, `sequence_score` reports:
+- `examples`: Total evaluated test instances.
+- `exact_sequence`: Fraction of trajectories with an exact action-object match to gold.
+- `token_accuracy`: Per-step token prediction accuracy.
+- `dfa_valid`: Fraction of generated trajectories satisfying the compiled DomiKnowS declarative grammar constraints.
+- `gt_state_success`: Binary $0/1$ final state satisfaction evaluated by the world state simulator.
+- `gt_state_recall`: Mean fraction of goal condition facts satisfied by the generated trajectory.
+
+---
+
+## Model Artifacts & Checkpoint Sizes
+
+When training or running inference, you may encounter different model artifacts in `test_regr/EmbodiedAgentInterface/models/`:
+
+### 1. PyTorch Neural Network Checkpoints (`*.pth`, e.g., `eai_action_sequence_baseline.pth`)
+- **Size**: ~**6.17 GB** (when using `Qwen/Qwen2.5-1.5B-Instruct`) or a few **MB** (when using `--baseline-model tiny-transformer`).
+- **Contents**: Full state dictionary of the deep neural network. For `Qwen2.5-1.5B-Instruct`, all **1.54 billion parameters** are saved in Float32 precision:
+  $$1,543,785,472 \text{ parameters} \times 4 \text{ bytes} \approx 6,175,141,888 \text{ bytes} \approx 6.175 \text{ GB}$$
+- **Usage**: Used to resume training or evaluate the learned neural policy with `load_trained_program(...)`.
+
+### 2. Distilled HMM Matrices (`*.npz`, e.g., `eai_all_qwen25_ctrlg_hmm.npz`)
+- **Size**: ~**44.6 KB**.
+- **Contents**: Discrete statistical transition matrix $A \in \mathbb{R}^{K \times K}$, emission matrix $B \in \mathbb{R}^{K \times |V|}$, and initial state distribution $\pi \in \mathbb{R}^K$. It contains **no** neural network weights.
+- **Usage**: Used exclusively by `infer_qwen_hmm_dfa.py` and `HMMDFADecoder` for lookahead future-constraint satisfaction scoring during constrained generation.
+
+### Summary Comparison
+
+| Artifact | File Type | Typical Size | Stored Content | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| `eai_action_sequence_baseline.pth` | PyTorch Tensor Checkpoint (`.pth`) | **~6.17 GB** (Qwen-1.5B) / **~15 MB** (Tiny) | Full neural network parameter weights | Model training, two-stage fine-tuning, & neural policy inference |
+| `eai_all_qwen25_ctrlg_hmm.npz` | Compressed NumPy Archive (`.npz`) | **~44.6 KB** | Discrete state transition & emission matrices ($A, B, \pi$) | HMM + DFA lookahead scoring during constrained decoding |
+
+> **Note on Storage Optimization**:
+> - If you train with `--baseline-model tiny-transformer` instead of `--baseline-model causal-lm`, the `.pth` file will be much smaller (a few megabytes for the tiny autoregressive head).
+> - When training Qwen with LoRA (`--use-lora`), you can save only the LoRA adapter parameter delta instead of the full 6.17 GB base model.
+
+---
+
+## Command-Line Options Reference
+
+| Argument | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--dataset` | `str` | `"dummy"` | Dataset name (`"dummy"`, `"behavior"`, `"virtualhome"`, or `"all"`). |
+| `--data-path` | `str` | `None` | Path to local parquet/csv/jsonl dataset file. |
+| `--limit` | `int` | `None` | Cap number of examples loaded from dataset. |
+| `--two-stage` | `flag` | `False` | Run Stage 1 Exact Match followed by Stage 2 Reinforcement Learning. |
+| `--program` | `str` | `"solver"` | Program type: `"solver"`, `"primal-dual"`, or `"reinforcement"`. |
+| `--epochs` | `int` | `10` | Number of epochs for Stage 1 / supervised training. |
+| `--rl-epochs` | `int` | `10` | Number of epochs for Stage 2 Reinforcement Learning. |
+| `--lr` | `float` | `1e-3` | Learning rate for Stage 1 training. |
+| `--rl-lr` | `float` | `1e-4` | Learning rate for Stage 2 policy gradient optimization. |
+| `--baseline-model` | `str` | `"tiny-transformer"` | Model backbone: `"tiny-transformer"` or `"causal-lm"`. |
+| `--llm-backbone-path`| `str` | `None` | Hugging Face model path or ID (e.g. `Qwen/Qwen2.5-1.5B-Instruct`). |
+| `--use-lora` | `flag` | `False` | Enable PEFT / LoRA adapters for Causal-LM backbone. |
+| `--max-steps` | `int` | `8` | Maximum decoding/generation horizon per episode. |
+| `--use-dfa` | `flag` | `False` | Enable DFA-constrained autoregressive greedy decoding. |
+| `--evaluate` | `flag` | `False` | Run evaluation after training. |
 

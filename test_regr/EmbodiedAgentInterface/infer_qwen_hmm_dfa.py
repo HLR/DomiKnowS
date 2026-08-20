@@ -116,10 +116,11 @@ def _add_batch_counts(counts, predictions, examples, vocabulary, dfa, show, offs
         counts["token_correct"] += sum(int(p == g) for p, g in zip(padded, gold))
         counts["token_total"] += len(gold)
         counts["dfa_valid"] += int(dfa.accepts(pred_trimmed) or dfa.accepts(padded))
-        predicted_state = ev.abstract_state_from_tokens(pred_trimmed, vocabulary)
-        gold_state = ev.abstract_state_from_tokens(gold_trimmed, vocabulary)
-        recall = ev.state_recall(predicted_state, gold_state)
-        counts["gt_state_success"] += int(recall >= 1.0)
+        goal_result = ev.evaluate_goal_satisfaction(pred_trimmed, sample, vocabulary)
+        predicted_state = goal_result["predicted_state"]
+        gold_state = goal_result["gold_state"]
+        recall = goal_result["recall"]
+        counts["gt_state_success"] += int(goal_result["is_success"] == 1.0)
         counts["gt_state_recall_total"] += recall
         counts["pred_len_total"] += len(pred)
         if global_idx < show:
@@ -128,8 +129,8 @@ def _add_batch_counts(counts, predictions, examples, vocabulary, dfa, show, offs
             print(f"Instruction: {sample.get('natural_language_description') or sample.get('text')}")
             print(f"Gold: {ev.labels_to_actions(gold_trimmed, vocabulary)}")
             print(f"Pred: {ev.labels_to_actions(pred_trimmed, vocabulary)}")
-            print(f"Gold state: {sorted(ev.abstract_state_from_tokens(gold_trimmed, vocabulary))}")
-            print(f"Pred state: {sorted(ev.abstract_state_from_tokens(pred_trimmed, vocabulary))}")
+            print(f"Gold state: {sorted(gold_state)}")
+            print(f"Pred state: {sorted(predicted_state)}")
 
 
 def _score_from_counts(name, counts):

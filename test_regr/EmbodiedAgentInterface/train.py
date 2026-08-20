@@ -13,7 +13,8 @@ MODEL_DIR = SCRIPT_DIR / "models"
 def parse_args():
     parser = argparse.ArgumentParser(description="Simple EAI train/eval driver for main.py.")
     parser.add_argument("--dataset", choices=["all", "behavior", "virtualhome"], default="all")
-    parser.add_argument("--program", choices=["all", "solver", "primal-dual"], default="all")
+    parser.add_argument("--program", choices=["all", "solver", "primal-dual", "reinforcement"], default="all")
+    parser.add_argument("--two-stage", action="store_true", help="Run two-stage training (Exact match then DomiKnowS RL).")
     parser.add_argument("--model-dir", default=str(MODEL_DIR))
     parser.add_argument("--cuda-visible-devices", default="4", help="CUDA_VISIBLE_DEVICES value used for main.py subprocesses.")
     parser.add_argument("--small-llm", action="store_true", help="Use the trainable causal-LM baseline.")
@@ -26,6 +27,8 @@ def parse_args():
     parser.add_argument("--llm-device-map", default=None, help="Optional Hugging Face device_map for causal LM loading, e.g. auto.")
     parser.add_argument("--gradient-checkpointing", action="store_true", help="Enable causal-LM gradient checkpointing.")
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL.")
+    parser.add_argument("--rl-lr", type=float, default=1e-4, help="Learning rate for Stage 2 RL.")
     parser.add_argument("--max-steps", type=int, default=60)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-dim", type=int, default=128)
@@ -53,7 +56,16 @@ def _float_name(value):
 
 
 def model_path(model_dir, dataset, program, args):
-    suffix = "normal" if program == "solver" else "pmd"
+    if getattr(args, "two_stage", False):
+        suffix = "twostage"
+    elif program == "solver":
+        suffix = "normal"
+    elif program == "primal-dual":
+        suffix = "pmd"
+    elif program == "reinforcement":
+        suffix = "rl"
+    else:
+        suffix = _safe_name(program)
     model_name = "causal-lm" if args.small_llm else "default"
     parts = [
         f"eai_{dataset}_{suffix}",
@@ -93,7 +105,12 @@ def call_main(cmd, dry_run=False, env=None):
 def main():
     args, extra = parse_args()
     datasets = [args.dataset]
-    programs = ["solver", "primal-dual"] if args.program == "all" else [args.program]
+    if args.two_stage:
+        programs = ["reinforcement"]
+    elif args.program == "all":
+        programs = ["solver", "primal-dual", "reinforcement"]
+    else:
+        programs = [args.program]
     env = os.environ.copy()
     if args.cuda_visible_devices:
         env["CUDA_VISIBLE_DEVICES"] = args.cuda_visible_devices
@@ -124,6 +141,14 @@ def main():
                 str(args.batch_size),
                 *extra,
             ]
+            if args.two_stage:
+                base.extend([
+                    "--two-stage",
+                    "--rl-epochs",
+                    str(args.rl_epochs),
+                    "--rl-lr",
+                    str(args.rl_lr),
+                ])
 
             if args.small_llm:
                 base.extend(

@@ -282,3 +282,4 @@ domiknows/generation/README_notes.md
 domiknows/research/
 test_regr/EmbodiedAgentInterface/*.txt
 Rethinkin constraints.md
+test_regr/EmbodiedAgentInterface/models/

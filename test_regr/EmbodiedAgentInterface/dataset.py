@@ -4,6 +4,11 @@ from pathlib import Path
 
 import torch
 
+try:
+    from datasets import load_dataset
+except ImportError:
+    load_dataset = None
+
 
 EOS_TOKEN = "<eos>"
 
@@ -93,20 +98,39 @@ def parse_action_trajectory(value):
 
 
 def action_object_tokens_from_step(step):
-    if not isinstance(step, dict):
-        action = _normalize_action_name(step)
-        return action, None
-    action = _normalize_action_name(step.get("action", ""))
-    obj = _normalize_object_name(step.get("object"))
-    return action, obj
+    if isinstance(step, dict):
+        action = _normalize_action_name(step.get("action", ""))
+        obj = _normalize_object_name(step.get("object"))
+        return [(action, obj)] if action else []
+    if isinstance(step, str):
+        # VirtualHome format: "[ACTION] <object> (id)" or "[ACTION] <obj1> (id1) <obj2> (id2)"
+        action_match = re.search(r"\[([a-zA-Z0-9_]+)\]", step)
+        if action_match:
+            raw_action = action_match.group(1)
+            action = _normalize_action_name(raw_action)
+            objs = re.findall(r"<([a-zA-Z0-9_]+)>\s*(?:\((\d+(?:\.\d+)*)\))?", step)
+            if objs:
+                obj_tokens = [
+                    f"{_normalize_surface_token(name)}_{id_.split('.')[-1]}" if id_ else _normalize_surface_token(name)
+                    for name, id_ in objs
+                ]
+                # If an action involves 2 objects (e.g. [PUTBACK] <soap> (1002) <washing_machine> (1001)),
+                # return the action paired with both or target object
+                if len(obj_tokens) > 1 and action in {"pour", "put", "putback", "putin", "puton", "putontop"}:
+                    return [(action, obj_tokens[-1])]
+                return [(action, obj_tokens[0])]
+            return [(action, None)]
+    action = _normalize_action_name(step)
+    return [(action, None)] if action else []
 
 
 def trajectory_action_object_tokens(row):
     pairs = []
     for step in parse_action_trajectory(row.get("action_trajectory")):
-        action, obj = action_object_tokens_from_step(step)
-        if action:
-            pairs.append((action, obj))
+        step_pairs = action_object_tokens_from_step(step)
+        for action, obj in step_pairs:
+            if action:
+                pairs.append((action, obj))
     return pairs
 
 
@@ -244,7 +268,7 @@ def dummy_dataset(device="cpu", max_steps=8):
             "task_name": "set_table",
             "natural_language_description": "Place the plate on the table.",
             "tl_goal": "ontop(plate, table)",
-            "action_trajectory": "[{'action': 'RIGHT_PLACE_ON_TOP', 'object': 'table_1'}]",
+            "action_trajectory": "[{'action': 'RIGHT_GRASP', 'object': 'plate_1'}, {'action': 'RIGHT_PLACE_ON_TOP', 'object': 'table_1'}]",
         },
         {
             "task_id": "dummy_walk_0",
@@ -273,12 +297,10 @@ def load_eai_dataset(dataset_name="all", split=None, limit=None, data_path=None,
     if data_path:
         rows = _load_local_rows(Path(data_path))
     else:
-        try:
-            from datasets import load_dataset
-        except ImportError as exc:
+        if load_dataset is None:
             raise RuntimeError(
                 "Install the `datasets` package or pass --data-path to local EAI parquet/csv/jsonl files."
-            ) from exc
+            )
 
         split_name = split or dataset_name
         if dataset_name == "all":

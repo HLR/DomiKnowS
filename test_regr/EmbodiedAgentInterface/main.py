@@ -1,11 +1,13 @@
-import os
-
-os.environ.setdefault("HF_HOME", "/egr/research-hlr2/premsrit/transformer_cache")
-os.environ.setdefault("HF_DATASETS_CACHE", "/egr/research-hlr2/premsrit/transformer_cache")
 import argparse
+import os
 import sys
 import tempfile
 from pathlib import Path
+
+_default_hf_home = "/egr/research-hlr2/premsrit/transformer_cache"
+if os.path.exists(_default_hf_home):
+    os.environ.setdefault("HF_HOME", _default_hf_home)
+    os.environ.setdefault("HF_DATASETS_CACHE", _default_hf_home)
 
 import torch
 
@@ -19,24 +21,31 @@ from modules import (
     CausalLMActionObjectGenerator,
     SmallLLMPlanGenerator,
     TinyTransformerActionObjectGenerator,
+    _prepare_transformers_imports,
 )
-
+from reward import (
+    TokenVocabulary,
+    abstract_state_from_tokens,
+    eai_action_decoder,
+    eai_goal_reward_function,
+    evaluate_goal_satisfaction,
+    make_eai_reward_function,
+)
 
 RUN_DIR = Path(__file__).parent.resolve()
 RESULTS_PATHS = {
     "solver": RUN_DIR / "results_solver.txt",
     "primal-dual": RUN_DIR / "results_pmd.txt",
+    "reinforcement": RUN_DIR / "results_reinforcement.txt",
 }
-# ``MODEL_DIR`` honours ``EAI_MODEL_DIR`` first, then falls back to the
-# original Linux path, then to a per-user temp dir so the script
-# can run on any machine without manual setup.
-_default_model_dir = "/egr/research-hlr2/premsrit/model_EAI"
-MODEL_DIR = Path(os.environ.get("EAI_MODEL_DIR", _default_model_dir))
+
+_default_model_dir = SCRIPT_DIR / "models"
+MODEL_DIR = Path(os.environ.get("EAI_MODEL_DIR", str(_default_model_dir)))
 try:
-    MODEL_DIR.mkdir(exist_ok=True)
-except (FileNotFoundError, OSError):
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
     MODEL_DIR = Path(tempfile.gettempdir()) / "model_EAI"
-    MODEL_DIR.mkdir(exist_ok=True)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def build_program(
@@ -71,9 +80,12 @@ def build_program(
     shared_llm_tokenizer=None,
     enforce_action_object=True,
     enforce_action_object_constraints=True,
+    rl_estimator="importance_weighted",
+    rl_num_samples=8,
+    rl_reward_mode="binary",
 ):
     from domiknows import setProductionLogMode
-    from domiknows.program import SolverPOIProgram
+    from domiknows.program import SolverPOIProgram, ReinforcementProgram
     from domiknows.program.loss import NBCrossEntropyLoss
     from domiknows.program.lossprogram import PrimalDualProgram
     from domiknows.program.metric import MacroAverageTracker
@@ -96,9 +108,9 @@ def build_program(
         enforce_action_object_constraints=enforce_action_object_constraints,
     )
     graph.detach()
-    if program_type not in {"solver", "primal-dual"}:
+    if program_type not in {"solver", "primal-dual", "reinforcement"}:
         raise ValueError(f"Unsupported program_type={program_type!r}")
-    program_args = (graph,) if program_type == "solver" else (graph, SolverModel)
+    program_args = (graph,) if program_type in {"solver", "reinforcement"} else (graph, SolverModel)
     supervised_loss = MacroAverageTracker(NBCrossEntropyLoss())
 
     # Match the generation examples: text owns prompt-level inputs, token owns
@@ -202,8 +214,8 @@ def build_program(
             device=device,
             metric={},
         )
-    else:
-         program = PrimalDualProgram(
+    elif program_type == "primal-dual":
+        program = PrimalDualProgram(
             *program_args,
             poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
             inferTypes=['local/argmax'],
@@ -211,21 +223,39 @@ def build_program(
             device=device,
             metric={},
         )
+    elif program_type == "reinforcement":
+        program = ReinforcementProgram(
+            graph,
+            targets=[generated_token],
+            reward_key="reward_function",
+            decoder=eai_action_decoder,
+            num_samples=rl_num_samples,
+            estimator=rl_estimator,
+            poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
+            device=device,
+        )
     program.autoregressive_head = autoregressive_head
     return program, bundle
 
 
 def load_examples(args, device):
     if args.dummy:
-        return dummy_dataset(device=device, max_steps=args.max_steps)
-    return load_eai_dataset(
-        dataset_name=args.dataset,
-        split=args.split,
-        limit=args.limit,
-        data_path=args.data_path,
-        device=device,
-        max_steps=args.max_steps,
-    )
+        examples = dummy_dataset(device=device, max_steps=args.max_steps)
+    else:
+        examples = load_eai_dataset(
+            dataset_name=args.dataset,
+            split=args.split,
+            limit=args.limit,
+            data_path=args.data_path,
+            device=device,
+            max_steps=args.max_steps,
+        )
+    if examples:
+        vocab = TokenVocabulary(examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
+        mode = getattr(args, "rl_reward_mode", "binary")
+        for ex in examples:
+            ex["reward_function"] = make_eai_reward_function(ex, vocabulary=vocab, mode=mode)
+    return examples
 
 
 def labels_to_actions(labels, vocabulary=None):
@@ -472,13 +502,23 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
 
     eval_examples = examples if limit is None else examples[:limit]
     if not eval_examples:
-        return {"examples": 0, "exact_sequence": 0.0, "token_accuracy": 0.0, "dfa_valid": 0.0}
+        return {
+            "examples": 0,
+            "exact_sequence": 0.0,
+            "token_accuracy": 0.0,
+            "dfa_valid": 0.0,
+            "gt_state_success": 0.0,
+            "gt_state_recall": 0.0,
+        }
 
-    dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+    dfa = constraints_to_dfa_from_graph(program.graph, bundle) if use_dfa else None
     exact = 0
     token_correct = 0
     token_total = 0
     dfa_valid = 0
+    gt_state_success = 0
+    gt_state_recall_total = 0.0
+
     for idx, sample in enumerate(eval_examples):
         program.populate_one(sample, device=device)
         labels = dfa_constrained_sequence(program, bundle, sample, max_steps) if use_dfa else greedy_sequence(program, bundle, sample, max_steps)
@@ -489,18 +529,32 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         exact += int(pred_padded == gold)
         token_correct += sum(int(p == g) for p, g in zip(pred_padded, gold))
         token_total += len(gold)
-        dfa_valid += int(dfa.accepts(pred_padded))
+        if dfa is not None:
+            dfa_valid += int(dfa.accepts(pred_padded))
+        else:
+            dfa_valid += 1
+
+        eval_res = evaluate_goal_satisfaction(pred_padded, sample, bundle.vocabulary)
+        gt_state_success += int(eval_res["is_success"] == 1.0)
+        gt_state_recall_total += eval_res["recall"]
+
         if show:
             print()
             print(f"## Example {idx}: {sample.get('task_id', 'task')}")
             print(f"Instruction: {sample.get('natural_language_description') or sample.get('text')}")
             print(f"Gold sequence:      {labels_to_actions(gold, bundle.vocabulary)}")
             print(f"Predicted sequence: {labels_to_actions(pred_padded, bundle.vocabulary)}")
+            print(f"Gold State:         {sorted(eval_res['gold_state'])}")
+            print(f"Predicted State:    {sorted(eval_res['predicted_state'])}")
+            print(f"Goal Success (0/1): {eval_res['is_success']} (recall={eval_res['recall']:.2f})")
+
     return {
         "examples": len(eval_examples),
         "exact_sequence": exact / len(eval_examples),
         "token_accuracy": token_correct / token_total if token_total else 0.0,
         "dfa_valid": dfa_valid / len(eval_examples),
+        "gt_state_success": gt_state_success / len(eval_examples),
+        "gt_state_recall": gt_state_recall_total / len(eval_examples),
     }
 
 
@@ -513,7 +567,9 @@ def print_score(title, score, program_type=None):
         f"{title}: examples={score['examples']} "
         f"exact_sequence={score['exact_sequence']:.3f} "
         f"token_accuracy={score['token_accuracy']:.3f} "
-        f"dfa_valid={score['dfa_valid']:.3f}"
+        f"dfa_valid={score['dfa_valid']:.3f} "
+        f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
+        f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f}"
     )
     print(line)
     with results_path_for_program(program_type).open("a") as results_file:
@@ -550,6 +606,9 @@ def build_trainable_program(args, examples, device):
         shared_llm_tokenizer=getattr(args, "_shared_llm_tokenizer", None),
         enforce_action_object=getattr(args, "_enforce_action_object", True),
         enforce_action_object_constraints=getattr(args, "_enforce_action_object_constraints", True),
+        rl_estimator=getattr(args, "rl_estimator", "importance_weighted"),
+        rl_num_samples=getattr(args, "rl_num_samples", 8),
+        rl_reward_mode=getattr(args, "rl_reward_mode", "binary"),
     )
 
 
@@ -602,7 +661,6 @@ def train_program(args, train, dev, examples, device):
             report_epoch_accuracy(args, program, bundle, train, dev, device, epoch)
     else:
         program.train(train, valid_set=dev, test_set=None, **_train_kwargs(args, train, device, args.epochs))
-        # report_epoch_accuracy(args, program, bundle, train, dev, device, epoch)
 
     if args.model:
         model_path = Path(args.model)
@@ -610,6 +668,49 @@ def train_program(args, train, dev, examples, device):
         program.save(model_path)
         print(f"Saved model: {model_path}")
     return program, bundle
+
+
+def train_two_stage(args, train, dev, examples, device):
+    """Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning."""
+    print("\n" + "=" * 65)
+    print("STAGE 1: Supervised Exact Match Pretraining (SolverPOI)")
+    print("=" * 65)
+    orig_program = args.program
+    args.program = "solver"
+    solver_program, bundle = build_trainable_program(args, examples, device)
+    solver_program.train(train, valid_set=dev, test_set=None, **_train_kwargs(args, train, device, args.epochs))
+    
+    score_stage1 = sequence_score(solver_program, bundle, dev or train, args.max_steps, device=device, use_dfa=args.use_dfa)
+    print_score("Stage 1 (Exact Match) Eval", score_stage1, "solver")
+
+    print("\n" + "=" * 65)
+    print("STAGE 2: Reinforcement Learning Fine-Tuning (0/1 Goal Reward)")
+    print("=" * 65)
+    args.program = "reinforcement"
+    rl_program, _ = build_trainable_program(args, examples, device)
+    rl_program.model = solver_program.model
+    rl_program.autoregressive_head = solver_program.autoregressive_head
+
+    rl_epochs = getattr(args, "rl_epochs", args.epochs)
+    rl_lr = getattr(args, "rl_lr", args.lr * 0.1)
+    rl_kwargs = {
+        "device": device,
+        "train_epoch_num": rl_epochs,
+        "Optim": lambda params: torch.optim.Adam(params, lr=rl_lr),
+        "test_every_epoch": False,
+    }
+    rl_program.train(train, valid_set=dev, test_set=None, **rl_kwargs)
+
+    score_stage2 = sequence_score(rl_program, bundle, dev or train, args.max_steps, device=device, use_dfa=args.use_dfa)
+    print_score("Stage 2 (Reinforcement Learning) Eval", score_stage2, "reinforcement")
+
+    if args.model:
+        model_path = Path(args.model)
+        model_path.parent.mkdir(exist_ok=True, parents=True)
+        rl_program.save(model_path)
+        print(f"Saved two-stage model: {model_path}")
+    args.program = orig_program
+    return rl_program, bundle
 
 
 def load_trained_program(args, examples, device):
@@ -628,7 +729,9 @@ def run_train_or_evaluate(args, examples, device):
     train, dev = split_train_dev(examples, args.dev_fraction)
     eval_examples = dev or train
     program = bundle = None
-    if args.train:
+    if args.two_stage:
+        program, bundle = train_two_stage(args, train, dev, examples, device)
+    elif args.train:
         program, bundle = train_program(args, train, dev, examples, device)
     if args.evaluate or args.eval_only:
         if program is None or bundle is None:
@@ -674,6 +777,9 @@ def generate_baseline_sequences(args, examples, device):
         lora_target_modules=args.lora_target_modules,
         llm_device_map=args.llm_device_map,
         gradient_checkpointing=args.gradient_checkpointing,
+        rl_estimator=args.rl_estimator,
+        rl_num_samples=args.rl_num_samples,
+        rl_reward_mode=args.rl_reward_mode,
     )
     correct = 0
     total = 0
@@ -729,9 +835,15 @@ def parse_args():
     parser.add_argument("--max-steps", type=int, default=60, help="Padded action-token sequence length including EOS.")
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--program", choices=["solver", "primal-dual"], default="solver", help="DomiKnowS training program to use for the autoregressive baseline.")
+    parser.add_argument("--program", choices=["solver", "primal-dual", "reinforcement"], default="solver", help="DomiKnowS training program to use for the autoregressive baseline.")
+    parser.add_argument("--two-stage", action="store_true", help="Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning.")
+    parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="importance_weighted", help="Estimator for ReinforcementProgram.")
+    parser.add_argument("--rl-num-samples", type=int, default=8, help="Number of decodings sampled per training step in ReinforcementProgram.")
+    parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="binary", help="Reward mode: binary (0/1 goal satisfaction) or dense (state recall).")
+    parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL fine-tuning.")
+    parser.add_argument("--rl-lr", type=float, default=1e-4, help="Learning rate for Stage 2 RL fine-tuning.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
-    parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-0.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
+    parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-1.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
     parser.add_argument("--use-lora", action="store_true", help="Train LoRA adapters on the causal LM backbone.")
     parser.add_argument("--lora-r", type=int, default=8, help="LoRA rank for --baseline-model causal-lm --use-lora.")
     parser.add_argument("--lora-alpha", type=int, default=16, help="LoRA alpha for --baseline-model causal-lm --use-lora.")
@@ -776,7 +888,7 @@ def main():
         generate_llm_sequences(args, examples, device)
         return 0
 
-    if args.train or args.evaluate or args.eval_only:
+    if args.train or args.two_stage or args.evaluate or args.eval_only:
         return run_train_or_evaluate(args, examples, device)
 
     train, dev = split_train_dev(examples, args.dev_fraction)

@@ -31,6 +31,7 @@ from main import (
     object_tokens_from_examples,
     openable_object_tokens_from_examples,
 )
+from reward import evaluate_goal_satisfaction
 from train_qwen_hmm import (
     build_prompt,
     generate_text,
@@ -159,108 +160,6 @@ def token_sequence(labels, vocabulary):
     return labels_to_actions(labels, vocabulary)
 
 
-def _side_for_action(action):
-    if action.startswith("left_"):
-        return "left"
-    if action.startswith("right_"):
-        return "right"
-    return None
-
-
-def _placement_relation(action):
-    if "inside" in action:
-        return "inside"
-    if "ontop" in action or "on_top" in action:
-        return "ontop"
-    if "nextto" in action:
-        return "nextto"
-    if "under" in action:
-        return "under"
-    return None
-
-
-def _consume_action_object(tokens, index):
-    action = tokens[index]
-    obj = tokens[index + 1] if index + 1 < len(tokens) else None
-    return action, obj, index + (2 if obj is not None else 1)
-
-
-def abstract_state_from_tokens(labels, vocabulary):
-    """Build a light symbolic final state from EAI action/object tokens.
-
-    This is not trajectory matching.  It extracts state-changing effects so a
-    different action order can still succeed if it reaches the same gold facts.
-    """
-    tokens = token_sequence(labels, vocabulary)
-    facts = set()
-    held = {"left": None, "right": None}
-    index = 0
-    while index < len(tokens):
-        action, obj, index = _consume_action_object(tokens, index)
-        if not action or action == EOS_TOKEN:
-            continue
-
-        side = _side_for_action(action)
-        if "grasp" in action and obj:
-            held[side or "right"] = obj
-            continue
-
-        relation = _placement_relation(action)
-        if relation and obj:
-            held_obj = held.get(side or "right") or held.get("right") or held.get("left")
-            if held_obj:
-                facts = {fact for fact in facts if not (len(fact) >= 2 and fact[1] == held_obj and fact[0] in {"inside", "ontop", "nextto", "under", "onfloor"})}
-                facts.add((relation, held_obj, obj))
-                if side:
-                    held[side] = None
-                elif held.get("right") == held_obj:
-                    held["right"] = None
-                elif held.get("left") == held_obj:
-                    held["left"] = None
-            continue
-
-        if action == "put" and obj:
-            held_obj = held.get("right") or held.get("left")
-            if held_obj:
-                facts.add(("inside", held_obj, obj))
-            continue
-
-        if action == "clean" and obj:
-            facts.add(("not_dusty", obj))
-        elif action == "open" and obj:
-            facts.add(("open", obj))
-            facts.discard(("closed", obj))
-        elif action == "close" and obj:
-            facts.add(("closed", obj))
-            facts.discard(("open", obj))
-        elif action in {"toggle_on", "switch_on", "turn_on"} and obj:
-            facts.add(("on", obj))
-            facts.discard(("off", obj))
-        elif action in {"toggle_off", "switch_off", "turn_off"} and obj:
-            facts.add(("off", obj))
-            facts.discard(("on", obj))
-        elif action == "slice" and obj:
-            facts.add(("sliced", obj))
-        elif action == "soak" and obj:
-            facts.add(("soaked", obj))
-        elif action == "freeze" and obj:
-            facts.add(("frozen", obj))
-            facts.discard(("not_frozen", obj))
-        elif action == "unfreeze" and obj:
-            facts.add(("not_frozen", obj))
-            facts.discard(("frozen", obj))
-        elif action == "cook" and obj:
-            facts.add(("cooked", obj))
-        elif action in {"walk", "navigate"} and obj:
-            facts.add(("near", obj))
-    return facts
-
-
-def state_recall(predicted_state, gold_state):
-    if not gold_state:
-        return 1.0 if not predicted_state else 0.0
-    return len(gold_state & predicted_state) / len(gold_state)
-
 def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0):
     if not examples:
         return {
@@ -290,10 +189,11 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
         token_correct += sum(int(p == g) for p, g in zip(padded, gold))
         token_total += len(gold)
         dfa_valid += int(True if dfa is None else (dfa.accepts(pred_trimmed) or dfa.accepts(padded)))
-        predicted_state = abstract_state_from_tokens(pred_trimmed, vocabulary)
-        gold_state = abstract_state_from_tokens(gold_trimmed, vocabulary)
-        recall = state_recall(predicted_state, gold_state)
-        gt_state_success += int(recall >= 1.0)
+        goal_result = evaluate_goal_satisfaction(pred_trimmed, sample, vocabulary)
+        predicted_state = goal_result["predicted_state"]
+        gold_state = goal_result["gold_state"]
+        recall = goal_result["recall"]
+        gt_state_success += int(goal_result["is_success"] == 1.0)
         gt_state_recall_total += recall
         pred_len_total += len(pred)
         if idx < show:
@@ -302,8 +202,8 @@ def score_predictions(name, predictions, examples, vocabulary, dfa=None, show=0)
             print(f"Instruction: {sample.get('natural_language_description') or sample.get('text')}")
             print(f"Gold: {labels_to_actions(gold_trimmed, vocabulary)}")
             print(f"Pred: {labels_to_actions(pred_trimmed, vocabulary)}")
-            print(f"Gold state: {sorted(abstract_state_from_tokens(gold_trimmed, vocabulary))}")
-            print(f"Pred state: {sorted(abstract_state_from_tokens(pred_trimmed, vocabulary))}")
+            print(f"Gold state: {sorted(gold_state)}")
+            print(f"Pred state: {sorted(predicted_state)}")
     return {
         "name": name,
         "examples": len(examples),
