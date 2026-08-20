@@ -17,6 +17,7 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 - **DomiKnowS Reinforcement Learning Integration** (`domiknows.reinforcement`):
   - Per-item reward closures (`make_eai_reward_function`) returning standard PyTorch reward tensors compatible with `ReinforcementProgram`.
   - Action token sequence decoder (`eai_action_decoder`) for policy gradient estimators (`reinforce`, `reinforce_with_baseline`).
+  - A separate deterministic world/trajectory graph (`world_graph.py`) exposes namespaced action and state concepts for future DomiKnowS constraints. With constraints, reward is `(1 - weight) * task_reward + weight * constraint_score`; without constraints, the original task reward is returned unchanged.
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
   - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss.
@@ -38,11 +39,13 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 test_regr/EmbodiedAgentInterface/
 ├── dataset.py                # Dataset loader for BEHAVIOR, VirtualHome, and dummy splits
 ├── graph.py                  # DomiKnowS declarative graph and logical constraints
+├── world_graph.py            # Independent world/trajectory schema and constraint verifier
 ├── modules.py                # Tiny Transformer & Qwen CausalLM autoregressive generators
 ├── reward.py                 # Goal state translator, 0/1 reward function, and RL decoder
 ├── train.py                  # CLI argument parser and training configurations
 ├── main.py                   # Main training, two-stage pipeline, evaluation, and scoring
 ├── test_reward.py            # Unit test suite verifying goal translation on all 438 examples
+├── test_world_graph.py       # World schema, materialization, blending, and scale regressions
 ├── infer_qwen_hmm_dfa.py     # Qwen + HMM + DFA inference-only evaluation
 ├── eai_hmm_decoder_adapter.py# Adapter for HMM-DFA lookahead decoding
 └── evaluate_settings.py      # Benchmark evaluation configurations
@@ -58,7 +61,32 @@ Run the test suite verifying state extraction, goal satisfaction, and DomiKnowS 
 
 ```powershell
 uv run python test_regr/EmbodiedAgentInterface/test_reward.py
+uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 ```
+
+### Declaring future world constraints
+
+No behavioral world constraints are enabled by default. A caller can supply a builder to `build_program(world_constraint_builders=(...))` or directly to `build_eai_world_graph`. Aliases such as `switchon` resolve to the canonical state concept and do not create duplicate concepts. Action and state names are independent (`action__open` and `state__open`).
+
+```python
+from world_graph import build_eai_world_graph, open_closed_exclusivity
+
+def inspect_world_handles(bundle):
+    # Handles available for relational/temporal constraints added later.
+    open_action = bundle.action["open"]
+    first_argument = bundle.action_roles["arg1"]
+    adjacent_steps = bundle.next_step
+    source_step = bundle.action_roles["source_step"]
+    result_step = bundle.action_roles["result_step"]
+    current_step = bundle.step_roles["current"]
+    following_step = bundle.step_roles["following"]
+
+world = build_eai_world_graph(
+    constraint_builders=(open_closed_exclusivity, inspect_world_handles),
+)
+```
+
+Each trajectory contains ordered state steps, entity nodes (including `character` and an absent-argument sentinel), explicit action source/result/actor/argument links, complete unary groundings, and only the binary pairs actually tracked by the task or simulation. Every compatible action and predicate has deterministic true/false logits, so negation, cardinality, and relational constraints can be verified with `/local/argmax`.
 
 ### 2. Two-Stage Training (Exact Match $\rightarrow$ Reinforcement Learning)
 
@@ -121,6 +149,8 @@ During evaluation, `sequence_score` reports:
 - `dfa_valid`: Fraction of generated trajectories satisfying the compiled DomiKnowS declarative grammar constraints. Reported as `n/a` when DFA checking is disabled.
 - `gt_state_success`: Binary $0/1$ final state satisfaction evaluated by the world state simulator.
 - `gt_state_recall`: Mean fraction of goal condition facts satisfied by the generated trajectory.
+- `world_constraint_score`: Aggregated world-constraint satisfaction, or `n/a` when no constraints are declared.
+- `rl_reward_score`: The task reward, or its configured blend with `world_constraint_score`.
 
 ---
 
@@ -165,6 +195,9 @@ When training or running inference, you may encounter different model artifacts 
 | `--rl-epochs` | `int` | `10` | Number of epochs for Stage 2 Reinforcement Learning. |
 | `--lr` | `float` | `1e-3` | Learning rate for Stage 1 training. |
 | `--rl-lr` | `float` | `1e-4` | Learning rate for Stage 2 policy gradient optimization. |
+| `--rl-reward-mode` | `str` | `"binary"` | Task score used by RL: `binary` goal success or `dense` goal-fact recall. |
+| `--rl-constraint-weight` | `float` | `0.25` | Constraint-score blend weight when world constraints exist. |
+| `--rl-constraint-aggregate` | `str` | `"mean"` | Constraint aggregation: `mean`, `min`, or `prod`. |
 | `--baseline-model` | `str` | `"tiny-transformer"` | Model backbone: `"tiny-transformer"` or `"causal-lm"`. |
 | `--llm-backbone-path`| `str` | `None` | Hugging Face model path or ID (e.g. `Qwen/Qwen2.5-1.5B-Instruct`). |
 | `--use-lora` | `flag` | `False` | Enable PEFT / LoRA adapters for Causal-LM backbone. |

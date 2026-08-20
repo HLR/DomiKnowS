@@ -10,7 +10,8 @@ REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from main import labels_through_first_eos
+from main import build_program, labels_through_first_eos
+from dataset import dummy_dataset
 from modules import EOSMaskedCrossEntropyLoss
 from rl_sequence_program import AutoregressiveSequenceReinforcementProgram
 
@@ -72,11 +73,39 @@ def test_rl_rollout_conditions_on_its_sampled_prefix():
     assert logprob.requires_grad
 
 
+def test_rl_program_is_constructed_with_shared_supervised_head():
+    examples = dummy_dataset(device="cpu", max_steps=8)
+    vocabulary = examples[0]["generation_vocab"]
+    solver, solver_bundle = build_program(
+        max_steps=8,
+        vocab=vocabulary,
+        object_tokens=examples[0]["object_tokens"],
+        action_tokens=("close",),
+        program_type="solver",
+    )
+    rl, rl_bundle = build_program(
+        max_steps=8,
+        vocab=vocabulary,
+        object_tokens=examples[0]["object_tokens"],
+        action_tokens=("close",),
+        program_type="reinforcement",
+        rl_num_samples=1,
+        shared_autoregressive_head=solver.autoregressive_head,
+    )
+    assert rl.autoregressive_head is solver.autoregressive_head
+    assert rl.model is not solver.model
+    assert rl_bundle is not solver_bundle
+    assert rl.graph.name == "eai_generation_graph"
+    assert rl.graph is not rl_bundle.world.graph
+    assert rl_bundle.world.graph is not solver_bundle.world.graph
+
+
 def run_tests():
     tests = [
         test_supervised_loss_ignores_eos_padding,
         test_effective_metric_keeps_one_eos_only,
         test_rl_rollout_conditions_on_its_sampled_prefix,
+        test_rl_program_is_constructed_with_shared_supervised_head,
     ]
     for test in tests:
         test()

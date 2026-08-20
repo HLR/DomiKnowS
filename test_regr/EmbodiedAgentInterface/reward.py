@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence, Set, Tuple
 
@@ -13,57 +15,39 @@ except ImportError:
 from domiknows.generation.dfa.vocabulary import TokenVocabulary
 from domiknows.reinforcement.rewards import flatten_generator_output
 
+try:
+    from world_graph import (
+        canonical_state_name,
+        is_goal_action,
+        is_known_action,
+        is_state_predicate,
+        materialize_world_trajectory,
+        positive_state_name,
+        verify_world_constraints,
+    )
+except ImportError:
+    from .world_graph import (
+        canonical_state_name,
+        is_goal_action,
+        is_known_action,
+        is_state_predicate,
+        materialize_world_trajectory,
+        positive_state_name,
+        verify_world_constraints,
+    )
+
 
 Fact = Tuple[str, ...]
+_ACTIVE_WORLD_BUNDLE: ContextVar[Any] = ContextVar("eai_active_world_bundle", default=None)
 
-_KNOWN_ACTIONS = {
-    "clean", "close", "cook", "drink", "drop", "find", "freeze", "grab",
-    "left_grasp", "left_place_inside", "left_place_nextto",
-    "left_place_nextto_ontop", "left_place_on_top", "left_place_ontop", "left_place_under",
-    "left_release", "lie", "lookat", "open", "plugin", "plugout", "pointat",
-    "pour", "pull", "push", "put", "putback", "putin", "putobjback", "putoff",
-    "puton", "read", "right_grasp", "right_place_inside",
-    "right_place_nextto", "right_place_nextto_ontop", "right_place_on_top", "right_place_ontop",
-    "right_place_under", "right_realease", "right_release",
-    "right_transfer_contents_inside", "rinse", "run", "scrub", "sit",
-    "sleep", "slice", "soak", "squeeze", "standup", "switch_off", "switch_on",
-    "switchoff", "switchon", "toggle_off", "toggle_on", "touch", "turn_off",
-    "turn_on", "turnto", "type", "unfreeze", "walk",
-    "wash", "watch", "wipe",
-}
 
-# These names are action events in EAI temporal goals. SWITCHON is deliberately
-# absent: the local dummy goal uses switchon(light) for the desired ON state.
-_ACTION_GOAL_NAMES = {
-    "drink", "grab", "lookat", "pour", "push", "read", "rinse", "scrub",
-    "sleep", "switchoff", "touch", "type", "wash", "watch", "wipe",
-}
-
-_STATE_PREDICATES = {
-    "clean", "closed", "cooked", "dusty", "facing", "frozen", "holds_lh",
-    "holds_rh", "inside", "lying", "near", "nextto", "not_closed",
-    "not_dusty", "not_frozen", "not_inside", "not_on", "not_open",
-    "not_ontop", "not_plugged_in", "not_stained", "off", "on", "open",
-    "ontop", "plugged_in", "released", "rinsed", "sitting", "sliced",
-    "onfloor", "soaked", "stained", "touch", "touching", "under", "washed",
-}
-
-_PREDICATE_ALIASES = {
-    "obj_inside": "inside", "obj_next_to": "nextto", "obj_ontop": "ontop",
-    "next_to": "nextto", "on_top": "ontop", "switch_on": "on",
-    "switchon": "on", "toggle_on": "on", "turn_on": "on", "turnon": "on",
-    "toggled_on": "on", "switch_off": "off", "toggle_off": "off",
-    "turn_off": "off", "turnoff": "off", "toggled_off": "off",
-    "toggledon": "on", "unfrozen": "not_frozen",
-}
-
-_NEGATIVE_TO_POSITIVE = {
-    "not_closed": "closed", "not_dusty": "dusty", "not_frozen": "frozen",
-    "not_inside": "inside", "not_on": "on", "not_open": "open",
-    "not_ontop": "ontop", "not_plugged_in": "plugged_in",
-    "not_stained": "stained",
-}
-
+@contextmanager
+def _using_world_bundle(world_bundle: Any):
+    token = _ACTIVE_WORLD_BUNDLE.set(world_bundle)
+    try:
+        yield
+    finally:
+        _ACTIVE_WORLD_BUNDLE.reset(token)
 
 def _normalize_name(value: Any) -> str:
     value = str(value or "").strip().lower().replace(".", "_").replace("-", "_")
@@ -72,7 +56,7 @@ def _normalize_name(value: Any) -> str:
 
 def _canonical_predicate(value: Any) -> str:
     name = _normalize_name(value)
-    return _PREDICATE_ALIASES.get(name, name)
+    return canonical_state_name(name, _ACTIVE_WORLD_BUNDLE.get())
 
 
 def _negative_predicate(predicate: str) -> str:
@@ -177,12 +161,12 @@ def _action_events_from_tokens(tokens: Sequence[str]) -> list[_ActionEvent]:
         index += 1
         if not action or action == _normalize_name(EOS_TOKEN):
             break
-        if action not in _KNOWN_ACTIONS:
+        if not is_known_action(action, _ACTIVE_WORLD_BUNDLE.get()):
             continue
         args: tuple[str, ...] = ()
         if index < len(tokens):
             following = _normalize_name(tokens[index])
-            if following and following != _normalize_name(EOS_TOKEN) and following not in _KNOWN_ACTIONS:
+            if following and following != _normalize_name(EOS_TOKEN) and not is_known_action(following, _ACTIVE_WORLD_BUNDLE.get()):
                 args = (following,)
                 index += 1
         events.append(_ActionEvent(action, args))
@@ -518,11 +502,13 @@ def _is_variable(value: str) -> bool:
 
 
 def _is_action_atom(atom: _Atom) -> bool:
-    return _normalize_name(atom.name) in _ACTION_GOAL_NAMES
+    return is_goal_action(_normalize_name(atom.name), _ACTIVE_WORLD_BUNDLE.get())
 
 
 def _is_type_atom(atom: _Atom) -> bool:
-    return not _is_action_atom(atom) and _canonical_predicate(atom.name) not in _STATE_PREDICATES
+    return not _is_action_atom(atom) and not is_state_predicate(
+        _canonical_predicate(atom.name), _ACTIVE_WORLD_BUNDLE.get()
+    )
 
 
 def _atom_fact(atom: _Atom, *, negated: bool = False) -> Fact:
@@ -605,10 +591,13 @@ def _goal_facts_and_reference(
     return ast, goal_facts, states, events
 
 
-def goal_facts_from_sample(sample: dict[str, Any], vocabulary: Any = None) -> Set[Fact]:
+def goal_facts_from_sample(
+    sample: dict[str, Any], vocabulary: Any = None, world_bundle: Any = None,
+) -> Set[Fact]:
     """Ground the benchmark ``tl_goal`` against the item's object instances."""
-    _ast, facts, _states, _events = _goal_facts_and_reference(sample, vocabulary)
-    return facts
+    with _using_world_bundle(world_bundle):
+        _ast, facts, _states, _events = _goal_facts_and_reference(sample, vocabulary)
+        return facts
 
 
 def _initial_goal_facts(goal_facts: Set[Fact], reference: Set[Fact]) -> Set[Fact]:
@@ -616,9 +605,10 @@ def _initial_goal_facts(goal_facts: Set[Fact], reference: Set[Fact]) -> Set[Fact
     for fact in goal_facts:
         if not fact or fact[0] == "action":
             continue
-        if fact[0] in _NEGATIVE_TO_POSITIVE:
+        positive = positive_state_name(fact[0], _ACTIVE_WORLD_BUNDLE.get())
+        if positive is not None:
             if _fact_present(fact, reference):
-                initial.add((_NEGATIVE_TO_POSITIVE[fact[0]], *fact[1:]))
+                initial.add((positive, *fact[1:]))
             else:
                 # Preserve initially true signed facts for dense recall.
                 initial.add(fact)
@@ -702,6 +692,65 @@ def _infer_types(ast: Any, reference: Set[Fact], universe: Sequence[str]) -> dic
 class _EvalContext:
     universe: tuple[str, ...]
     types: dict[str, Set[str]]
+
+
+@dataclass(frozen=True)
+class PreparedEAIGoal:
+    """Parsed and grounded task data reused by every sampled RL rollout."""
+    task_id: str
+    ast: Any
+    gold_state: frozenset[Fact]
+    reference_states: tuple[frozenset[Fact], ...]
+    reference_events: tuple[_ActionEvent, ...]
+    reference_facts: frozenset[Fact]
+    initial_state: frozenset[Fact]
+    entity_universe: tuple[str, ...]
+    types: dict[str, Set[str]]
+    tracked_binary_pairs: frozenset[tuple[str, str]]
+
+
+def prepare_eai_goal(
+    sample: dict[str, Any],
+    vocabulary: Any = None,
+    world_bundle: Any = None,
+) -> PreparedEAIGoal:
+    """Parse, ground, and cache all task data that is independent of a rollout."""
+    with _using_world_bundle(world_bundle):
+        return _prepare_eai_goal(sample, vocabulary)
+
+
+def _prepare_eai_goal(sample: dict[str, Any], vocabulary: Any = None) -> PreparedEAIGoal:
+    ast, gold_state, reference_states, reference_events = _goal_facts_and_reference(sample, vocabulary)
+    reference = _reference_facts(reference_states, reference_events)
+    initial_state = _initial_goal_facts(gold_state, reference)
+    universe = _entity_universe(sample, ast, reference_events)
+    pairs = {
+        (fact[1], fact[2])
+        for fact in (
+            *gold_state,
+            *reference,
+            *initial_state,
+            *(fact for state in reference_states for fact in state),
+        )
+        if len(fact) == 3 and fact[0] != "action"
+    }
+    pairs.update(
+        (event.args[0], event.args[1])
+        for event in reference_events
+        if len(event.args) >= 2
+    )
+    return PreparedEAIGoal(
+        task_id=str(sample.get("task_id", "")),
+        ast=ast,
+        gold_state=frozenset(gold_state),
+        reference_states=tuple(frozenset(state) for state in reference_states),
+        reference_events=tuple(reference_events),
+        reference_facts=frozenset(reference),
+        initial_state=frozenset(initial_state),
+        entity_universe=universe,
+        types=_infer_types(ast, reference, universe),
+        tracked_binary_pairs=frozenset(pairs),
+    )
 
 
 def _typed_quantifier_body(node: _Quantifier, context: _EvalContext) -> tuple[tuple[str, ...], Any]:
@@ -826,13 +875,44 @@ def evaluate_goal_satisfaction(
     pred_labels_or_tokens: Sequence[int | str | torch.Tensor],
     sample: dict[str, Any],
     vocabulary: Any = None,
+    world_bundle: Any = None,
+    prepared_goal: PreparedEAIGoal | None = None,
+    reward_mode: str = "binary",
+    constraint_weight: float = 0.25,
+    constraint_aggregate: str = "mean",
 ) -> dict[str, Any]:
     """Evaluate a generated trajectory against the sample's actual ``tl_goal``."""
-    # Recover the grounded target and its implicit initial facts from the
-    # demonstration before independently simulating the generated trajectory.
-    ast, gold_state, reference_states, reference_events = _goal_facts_and_reference(sample, vocabulary)
-    reference = _reference_facts(reference_states, reference_events)
-    initial_state = _initial_goal_facts(gold_state, reference)
+    with _using_world_bundle(world_bundle):
+        return _evaluate_goal_satisfaction(
+            pred_labels_or_tokens,
+            sample,
+            vocabulary=vocabulary,
+            world_bundle=world_bundle,
+            prepared_goal=prepared_goal,
+            reward_mode=reward_mode,
+            constraint_weight=constraint_weight,
+            constraint_aggregate=constraint_aggregate,
+        )
+
+
+def _evaluate_goal_satisfaction(
+    pred_labels_or_tokens: Sequence[int | str | torch.Tensor],
+    sample: dict[str, Any],
+    vocabulary: Any = None,
+    world_bundle: Any = None,
+    prepared_goal: PreparedEAIGoal | None = None,
+    reward_mode: str = "binary",
+    constraint_weight: float = 0.25,
+    constraint_aggregate: str = "mean",
+) -> dict[str, Any]:
+    if reward_mode not in {"binary", "dense"}:
+        raise ValueError(f"Unsupported EAI reward mode: {reward_mode!r}")
+    if not 0.0 <= float(constraint_weight) <= 1.0:
+        raise ValueError("constraint_weight must be between 0 and 1")
+    prepared = prepared_goal or _prepare_eai_goal(sample, vocabulary)
+    ast = prepared.ast
+    gold_state = set(prepared.gold_state)
+    initial_state = set(prepared.initial_state)
     events = _action_events_from_tokens(_tokens_for_sequence(pred_labels_or_tokens, vocabulary))
     states, events = _simulate_events(events, initial_state=initial_state, goal_facts=gold_state)
     predicted_state = set(states[-1])
@@ -842,8 +922,7 @@ def evaluate_goal_satisfaction(
     if ast is None:
         is_success = recall >= 1.0 and bool(gold_state)
     else:
-        universe = _entity_universe(sample, ast, reference_events)
-        context = _EvalContext(universe, _infer_types(ast, reference, universe))
+        context = _EvalContext(prepared.entity_universe, prepared.types)
         try:
             ast_success = _first_satisfaction(ast, states, events, context) is not None
             # Grounded fact recall is the authoritative final-condition check.
@@ -852,6 +931,22 @@ def evaluate_goal_satisfaction(
         except (ValueError, TypeError) as exc:
             parse_error = str(exc)
             is_success = recall >= 1.0 and bool(gold_state)
+    task_reward = recall if reward_mode == "dense" else (1.0 if is_success else 0.0)
+    constraint_evaluation = None
+    if world_bundle is not None and world_bundle.has_constraints:
+        root = materialize_world_trajectory(prepared, states, events, world_bundle)
+        constraint_evaluation = verify_world_constraints(
+            root, world_bundle, aggregate=constraint_aggregate,
+        )
+    world_constraint_score = (
+        constraint_evaluation.score if constraint_evaluation is not None else None
+    )
+    rl_reward_score = task_reward
+    if world_constraint_score is not None:
+        rl_reward_score = (
+            (1.0 - float(constraint_weight)) * task_reward
+            + float(constraint_weight) * world_constraint_score
+        )
     return {
         "is_success": 1.0 if is_success else 0.0,
         "recall": recall,
@@ -859,29 +954,76 @@ def evaluate_goal_satisfaction(
         "gold_state": gold_state,
         "initial_state": initial_state,
         "parse_error": parse_error,
+        "world_constraint_score": world_constraint_score,
+        "world_constraint_results": (
+            constraint_evaluation.results if constraint_evaluation is not None else None
+        ),
+        "rl_reward_score": rl_reward_score,
     }
 
 
-def eai_goal_reward_function(generator_output: Any, data_item: Any = None, vocabulary: Any = None, mode: str = "binary", **kwargs) -> torch.Tensor:
+def eai_goal_reward_function(
+    generator_output: Any,
+    data_item: Any = None,
+    vocabulary: Any = None,
+    mode: str = "binary",
+    world_bundle: Any = None,
+    prepared_goal: PreparedEAIGoal | None = None,
+    constraint_weight: float = 0.25,
+    constraint_aggregate: str = "mean",
+    **kwargs,
+) -> torch.Tensor:
     """DomiKnowS-compatible binary goal-success or dense-recall reward."""
     if data_item is None:
         return torch.tensor([0.0], dtype=torch.float32)
-    result = evaluate_goal_satisfaction(flatten_generator_output(generator_output), data_item, vocabulary=vocabulary)
-    score = result["recall"] if mode == "dense" else result["is_success"]
-    return torch.tensor([score], dtype=torch.float32)
+    result = evaluate_goal_satisfaction(
+        flatten_generator_output(generator_output),
+        data_item,
+        vocabulary=vocabulary,
+        world_bundle=world_bundle,
+        prepared_goal=prepared_goal,
+        reward_mode=mode,
+        constraint_weight=constraint_weight,
+        constraint_aggregate=constraint_aggregate,
+    )
+    return torch.tensor([result["rl_reward_score"]], dtype=torch.float32)
 
 
-def make_eai_reward_function(sample: dict[str, Any], vocabulary: Any = None, mode: str = "binary"):
+def make_eai_reward_function(
+    sample: dict[str, Any],
+    vocabulary: Any = None,
+    mode: str = "binary",
+    world_bundle: Any = None,
+    constraint_weight: float = 0.25,
+    constraint_aggregate: str = "mean",
+):
     """Create a per-item reward closure with inspection metadata."""
-    gold_state = goal_facts_from_sample(sample, vocabulary)
+    prepared = prepare_eai_goal(sample, vocabulary, world_bundle=world_bundle)
 
     def _reward(generator_output: Any, **context) -> torch.Tensor:
         item = context.get("data_item") or sample
-        return eai_goal_reward_function(generator_output, data_item=item, vocabulary=vocabulary, mode=mode)
+        active_prepared = (
+            prepared if item is sample
+            else prepare_eai_goal(item, vocabulary, world_bundle=world_bundle)
+        )
+        return eai_goal_reward_function(
+            generator_output,
+            data_item=item,
+            vocabulary=vocabulary,
+            mode=mode,
+            world_bundle=world_bundle,
+            prepared_goal=active_prepared,
+            constraint_weight=constraint_weight,
+            constraint_aggregate=constraint_aggregate,
+        )
 
     _reward.task_id = str(sample.get("task_id", ""))
-    _reward.gold_state = gold_state
+    _reward.gold_state = set(prepared.gold_state)
     _reward.mode = mode
+    _reward.prepared_goal = prepared
+    _reward.world_bundle = world_bundle
+    _reward.constraint_weight = float(constraint_weight)
+    _reward.constraint_aggregate = constraint_aggregate
     return _reward
 
 

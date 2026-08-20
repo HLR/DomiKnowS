@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 _default_hf_home = "/egr/research-hlr2/premsrit/transformer_cache"
@@ -33,6 +34,20 @@ from reward import (
     evaluate_goal_satisfaction,
     make_eai_reward_function,
 )
+from world_graph import EAIWorldGraphBundle, build_eai_world_graph
+
+
+@dataclass(frozen=True)
+class EAIProgramBundle:
+    """Generation and world schemas used by one EAI program lifecycle."""
+    generation: object
+    world: EAIWorldGraphBundle
+    reward_mode: str = "binary"
+    constraint_weight: float = 0.25
+    constraint_aggregate: str = "mean"
+
+    def __getattr__(self, name):
+        return getattr(self.generation, name)
 
 RUN_DIR = Path(__file__).parent.resolve()
 RESULTS_DIR = RUN_DIR / "results"
@@ -86,7 +101,16 @@ def build_program(
     rl_estimator="importance_weighted",
     rl_num_samples=8,
     rl_reward_mode="binary",
+    rl_constraint_weight=0.25,
+    rl_constraint_aggregate="mean",
+    world_constraint_builders=(),
+    shared_autoregressive_head=None,
 ):
+    if not 0.0 <= float(rl_constraint_weight) <= 1.0:
+        raise ValueError("rl_constraint_weight must be between 0 and 1")
+    if rl_constraint_aggregate not in {"mean", "min", "prod"}:
+        raise ValueError(f"Unsupported rl_constraint_aggregate={rl_constraint_aggregate!r}")
+
     from domiknows import setProductionLogMode
     from domiknows.program import SolverPOIProgram
     from domiknows.program.lossprogram import PrimalDualProgram
@@ -99,7 +123,7 @@ def build_program(
     from graph import create_generation_graph
 
     setProductionLogMode(True)
-    graph, bundle = create_generation_graph(
+    graph, generation_bundle = create_generation_graph(
         max_steps=max_steps,
         vocab=vocab,
         object_tokens=object_tokens,
@@ -110,6 +134,17 @@ def build_program(
         enforce_action_object_constraints=enforce_action_object_constraints,
     )
     graph.detach()
+    world_bundle = build_eai_world_graph(
+        graph_name="eai_world",
+        constraint_builders=world_constraint_builders,
+    )
+    bundle = EAIProgramBundle(
+        generation=generation_bundle,
+        world=world_bundle,
+        reward_mode=rl_reward_mode,
+        constraint_weight=float(rl_constraint_weight),
+        constraint_aggregate=rl_constraint_aggregate,
+    )
     if program_type not in {"solver", "primal-dual", "reinforcement"}:
         raise ValueError(f"Unsupported program_type={program_type!r}")
     program_args = (graph,) if program_type in {"solver", "reinforcement"} else (graph, SolverModel)
@@ -156,7 +191,13 @@ def build_program(
         )
         return program, bundle
 
-    if baseline_model == "bert-gru":
+    if shared_autoregressive_head is not None:
+        autoregressive_head = shared_autoregressive_head
+        if getattr(autoregressive_head, "label_count", bundle.vocabulary.label_count) != bundle.vocabulary.label_count:
+            raise ValueError("The shared autoregressive head uses a different vocabulary size")
+        if getattr(autoregressive_head, "eos_label", bundle.vocabulary.eos_label) != bundle.vocabulary.eos_label:
+            raise ValueError("The shared autoregressive head uses a different EOS label")
+    elif baseline_model == "bert-gru":
         autoregressive_head = AutoregressiveActionObjectGenerator(
             model_path=encoder_model_path,
             label_count=bundle.vocabulary.label_count,
@@ -528,6 +569,8 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             "dfa_checked": bool(use_dfa),
             "gt_state_success": 0.0,
             "gt_state_recall": 0.0,
+            "world_constraint_score": None,
+            "rl_reward_score": 0.0,
         }
 
     dfa = constraints_to_dfa_from_graph(program.graph, bundle) if use_dfa else None
@@ -537,6 +580,9 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
     dfa_valid = 0
     gt_state_success = 0
     gt_state_recall_total = 0.0
+    world_constraint_total = 0.0
+    world_constraint_count = 0
+    rl_reward_total = 0.0
 
     for idx, sample in enumerate(eval_examples):
         program.populate_one(sample, device=device)
@@ -554,9 +600,21 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         else:
             dfa_valid += 1
 
-        eval_res = evaluate_goal_satisfaction(pred_padded, sample, bundle.vocabulary)
+        eval_res = evaluate_goal_satisfaction(
+            pred_padded,
+            sample,
+            bundle.vocabulary,
+            world_bundle=getattr(bundle, "world", None),
+            reward_mode=getattr(bundle, "reward_mode", "binary"),
+            constraint_weight=getattr(bundle, "constraint_weight", 0.25),
+            constraint_aggregate=getattr(bundle, "constraint_aggregate", "mean"),
+        )
         gt_state_success += int(eval_res["is_success"] == 1.0)
         gt_state_recall_total += eval_res["recall"]
+        if eval_res["world_constraint_score"] is not None:
+            world_constraint_total += eval_res["world_constraint_score"]
+            world_constraint_count += 1
+        rl_reward_total += eval_res["rl_reward_score"]
 
         if show:
             print()
@@ -576,6 +634,11 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         "dfa_checked": dfa is not None,
         "gt_state_success": gt_state_success / len(eval_examples),
         "gt_state_recall": gt_state_recall_total / len(eval_examples),
+        "world_constraint_score": (
+            world_constraint_total / world_constraint_count
+            if world_constraint_count else None
+        ),
+        "rl_reward_score": rl_reward_total / len(eval_examples),
     }
 
 
@@ -586,21 +649,25 @@ def results_path_for_program(program_type):
 
 def print_score(title, score, program_type=None):
     dfa_value = f"{score['dfa_valid']:.3f}" if score.get("dfa_checked", True) else "n/a"
+    constraint_score = score.get("world_constraint_score")
+    constraint_value = f"{constraint_score:.3f}" if constraint_score is not None else "n/a"
     line = (
         f"{title}: examples={score['examples']} "
         f"exact_sequence={score['exact_sequence']:.3f} "
         f"token_accuracy={score['token_accuracy']:.3f} "
         f"dfa_valid={dfa_value} "
         f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
-        f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f}"
+        f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f} "
+        f"world_constraint_score={constraint_value} "
+        f"rl_reward_score={score.get('rl_reward_score', 0.0):.3f}"
     )
     print(line)
     with results_path_for_program(program_type).open("a") as results_file:
         results_file.write(line + "\n")
 
 
-def build_trainable_program(args, examples, device):
-    return build_program(
+def build_trainable_program(args, examples, device, shared_autoregressive_head=None):
+    program, bundle = build_program(
         device=device,
         feature_dim=args.feature_dim,
         hidden_dim=args.hidden_dim,
@@ -632,7 +699,24 @@ def build_trainable_program(args, examples, device):
         rl_estimator=getattr(args, "rl_estimator", "importance_weighted"),
         rl_num_samples=getattr(args, "rl_num_samples", 8),
         rl_reward_mode=getattr(args, "rl_reward_mode", "binary"),
+        rl_constraint_weight=getattr(args, "rl_constraint_weight", 0.25),
+        rl_constraint_aggregate=getattr(args, "rl_constraint_aggregate", "mean"),
+        world_constraint_builders=getattr(args, "world_constraint_builders", ()),
+        shared_autoregressive_head=shared_autoregressive_head,
     )
+    mode = getattr(args, "rl_reward_mode", "binary")
+    weight = getattr(args, "rl_constraint_weight", 0.25)
+    aggregate = getattr(args, "rl_constraint_aggregate", "mean")
+    for example in examples:
+        example["reward_function"] = make_eai_reward_function(
+            example,
+            vocabulary=bundle.vocabulary,
+            mode=mode,
+            world_bundle=bundle.world,
+            constraint_weight=weight,
+            constraint_aggregate=aggregate,
+        )
+    return program, bundle
 
 
 def _train_kwargs(args, train, device, epochs):
@@ -710,9 +794,12 @@ def train_two_stage(args, train, dev, examples, device):
     print("STAGE 2: Reinforcement Learning Fine-Tuning (0/1 Goal Reward)")
     print("=" * 65)
     args.program = "reinforcement"
-    rl_program, _ = build_trainable_program(args, examples, device)
-    rl_program.model = solver_program.model
-    rl_program.autoregressive_head = solver_program.autoregressive_head
+    rl_program, rl_bundle = build_trainable_program(
+        args,
+        examples,
+        device,
+        shared_autoregressive_head=solver_program.autoregressive_head,
+    )
 
     rl_epochs = getattr(args, "rl_epochs", args.epochs)
     rl_lr = getattr(args, "rl_lr", args.lr * 0.1)
@@ -724,7 +811,7 @@ def train_two_stage(args, train, dev, examples, device):
     }
     rl_program.train(train, valid_set=dev, test_set=None, **rl_kwargs)
 
-    score_stage2 = sequence_score(rl_program, bundle, dev or train, args.max_steps, device=device, use_dfa=args.use_dfa)
+    score_stage2 = sequence_score(rl_program, rl_bundle, dev or train, args.max_steps, device=device, use_dfa=args.use_dfa)
     print_score("Stage 2 (Reinforcement Learning) Eval", score_stage2, "reinforcement")
 
     if args.model:
@@ -733,7 +820,7 @@ def train_two_stage(args, train, dev, examples, device):
         rl_program.save(model_path)
         print(f"Saved two-stage model: {model_path}")
     args.program = orig_program
-    return rl_program, bundle
+    return rl_program, rl_bundle
 
 
 def load_trained_program(args, examples, device):
@@ -863,6 +950,8 @@ def parse_args():
     parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="importance_weighted", help="Estimator for ReinforcementProgram.")
     parser.add_argument("--rl-num-samples", type=int, default=8, help="Number of decodings sampled per training step in ReinforcementProgram.")
     parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="binary", help="Reward mode: binary (0/1 goal satisfaction) or dense (state recall).")
+    parser.add_argument("--rl-constraint-weight", type=float, default=0.25, help="Weight assigned to declared world-constraint satisfaction; no constraints bypass blending.")
+    parser.add_argument("--rl-constraint-aggregate", choices=["mean", "min", "prod"], default="mean", help="Aggregation across declared world constraints.")
     parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL fine-tuning.")
     parser.add_argument("--rl-lr", type=float, default=1e-4, help="Learning rate for Stage 2 RL fine-tuning.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
