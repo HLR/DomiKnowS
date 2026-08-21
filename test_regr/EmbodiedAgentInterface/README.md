@@ -66,14 +66,18 @@ uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 
 ### Declaring future world constraints
 
-No behavioral world constraints are enabled by default. A caller can supply a builder to `build_program(world_constraint_builders=(...))` or directly to `build_eai_world_graph`. Aliases such as `switchon` resolve to the canonical state concept and do not create duplicate concepts. Action and state names are independent (`action__open` and `state__open`).
+`build_program()` enables the built-in world and transition invariants by default. The default set requires exactly one action type per event, requires every action result to be the adjacent next step, limits each hand to one held object, verifies direct unary action effects (for example, `open(x)` implies `state__open(x)` at the result step), and rejects incompatible states on the same grounding. State exclusions include every explicit positive/negative predicate pair plus open/closed, on/off, clean/dusty, clean/stained, inside/on-floor, and on-top/under. The state exclusions and all 805 applicable direct effects were checked across all 438 reference trajectories. The hand-capacity constraint also identifies one reference snapshot whose right hand contains two objects.
+
+Pass `world_constraint_builders=()` programmatically, or `--no-world-constraints` on the CLI, to recover the unblended task reward. Additional builders can be supplied to `build_program(world_constraint_builders=(...))` or directly to `build_eai_world_graph`. Aliases such as `switchon` resolve to the canonical state concept and do not create duplicate concepts. Action and state names are independent (`action__open` and `state__open`).
 
 ```python
-from world_graph import build_eai_world_graph, open_closed_exclusivity
+from world_graph import build_eai_world_graph
 
 def inspect_world_handles(bundle):
     # Handles available for relational/temporal constraints added later.
-    open_action = bundle.action["open"]
+    open_state = bundle.states["open"]
+    closed_state = bundle.states["closed"]
+    open_action = bundle.actions["open"]
     first_argument = bundle.action_roles["arg1"]
     adjacent_steps = bundle.next_step
     source_step = bundle.action_roles["source_step"]
@@ -82,11 +86,14 @@ def inspect_world_handles(bundle):
     following_step = bundle.step_roles["following"]
 
 world = build_eai_world_graph(
-    constraint_builders=(open_closed_exclusivity, inspect_world_handles),
+    include_default_constraints=True,
+    constraint_builders=(inspect_world_handles,),
 )
 ```
 
-Each trajectory contains ordered state steps, entity nodes (including `character` and an absent-argument sentinel), explicit action source/result/actor/argument links, complete unary groundings, and only the binary pairs actually tracked by the task or simulation. Every compatible action and predicate has deterministic true/false logits, so negation, cardinality, and relational constraints can be verified with `/local/argmax`.
+Each trajectory contains ordered state steps, entity nodes (including `character` and an absent-argument sentinel), explicit action source/result/actor/argument links, a direct `result_state` link for declared action effects, complete unary groundings, and only the binary pairs actually tracked by the task or simulation. Every compatible action and predicate has deterministic true/false logits, so negation, cardinality, and relational constraints can be verified with `/local/argmax`.
+
+`bundle.state` and `bundle.action` are the actual `world_state` and `world_action` DomiKnowS concepts. Canonical sub-concepts are available through `bundle.states[name]` and `bundle.actions[name]`; for example, `state__open` is directly an `is_a` sub-concept of `world_state`, while `action__open` is directly an `is_a` sub-concept of `world_action`. Unary state instances use the absent-object sentinel in the common state `object` role, allowing unary and sparse binary groundings to share one valid concept hierarchy.
 
 ### 2. Two-Stage Training (Exact Match $\rightarrow$ Reinforcement Learning)
 
@@ -198,6 +205,7 @@ When training or running inference, you may encounter different model artifacts 
 | `--rl-reward-mode` | `str` | `"binary"` | Task score used by RL: `binary` goal success or `dense` goal-fact recall. |
 | `--rl-constraint-weight` | `float` | `0.25` | Constraint-score blend weight when world constraints exist. |
 | `--rl-constraint-aggregate` | `str` | `"mean"` | Constraint aggregation: `mean`, `min`, or `prod`. |
+| `--no-world-constraints` | `flag` | `False` | Disable the default world and transition constraints and bypass reward blending. |
 | `--baseline-model` | `str` | `"tiny-transformer"` | Model backbone: `"tiny-transformer"` or `"causal-lm"`. |
 | `--llm-backbone-path`| `str` | `None` | Hugging Face model path or ID (e.g. `Qwen/Qwen2.5-1.5B-Instruct`). |
 | `--use-lora` | `flag` | `False` | Enable PEFT / LoRA adapters for Causal-LM backbone. |

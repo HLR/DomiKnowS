@@ -34,7 +34,10 @@ from reward import (
     evaluate_goal_satisfaction,
     make_eai_reward_function,
 )
-from world_graph import EAIWorldGraphBundle, build_eai_world_graph
+from world_graph import (
+    EAIWorldGraphBundle,
+    build_eai_world_graph,
+)
 
 
 @dataclass(frozen=True)
@@ -103,7 +106,7 @@ def build_program(
     rl_reward_mode="binary",
     rl_constraint_weight=0.25,
     rl_constraint_aggregate="mean",
-    world_constraint_builders=(),
+    world_constraint_builders=None,
     shared_autoregressive_head=None,
 ):
     if not 0.0 <= float(rl_constraint_weight) <= 1.0:
@@ -134,9 +137,13 @@ def build_program(
         enforce_action_object_constraints=enforce_action_object_constraints,
     )
     graph.detach()
+    include_default_constraints = world_constraint_builders is None
+    if world_constraint_builders is None:
+        world_constraint_builders = ()
     world_bundle = build_eai_world_graph(
         graph_name="eai_world",
         constraint_builders=world_constraint_builders,
+        include_default_constraints=include_default_constraints,
     )
     bundle = EAIProgramBundle(
         generation=generation_bundle,
@@ -667,6 +674,9 @@ def print_score(title, score, program_type=None):
 
 
 def build_trainable_program(args, examples, device, shared_autoregressive_head=None):
+    world_constraint_builders = getattr(args, "world_constraint_builders", None)
+    if getattr(args, "no_world_constraints", False):
+        world_constraint_builders = ()
     program, bundle = build_program(
         device=device,
         feature_dim=args.feature_dim,
@@ -701,7 +711,7 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
         rl_reward_mode=getattr(args, "rl_reward_mode", "binary"),
         rl_constraint_weight=getattr(args, "rl_constraint_weight", 0.25),
         rl_constraint_aggregate=getattr(args, "rl_constraint_aggregate", "mean"),
-        world_constraint_builders=getattr(args, "world_constraint_builders", ()),
+        world_constraint_builders=world_constraint_builders,
         shared_autoregressive_head=shared_autoregressive_head,
     )
     mode = getattr(args, "rl_reward_mode", "binary")
@@ -791,7 +801,7 @@ def train_two_stage(args, train, dev, examples, device):
     print_score("Stage 1 (Exact Match) Eval", score_stage1, "solver")
 
     print("\n" + "=" * 65)
-    print("STAGE 2: Reinforcement Learning Fine-Tuning (0/1 Goal Reward)")
+    print("STAGE 2: Reinforcement Learning Fine-Tuning (Goal + World Constraint Reward)")
     print("=" * 65)
     args.program = "reinforcement"
     rl_program, rl_bundle = build_trainable_program(
@@ -846,7 +856,8 @@ def run_train_or_evaluate(args, examples, device):
     if args.evaluate or args.eval_only:
         if program is None or bundle is None:
             program, bundle = load_trained_program(args, examples, device)
-        title = f"{args.dataset} {args.program} {'with DFA' if args.use_dfa else 'without DFA'}"
+        evaluated_program_type = "reinforcement" if args.two_stage else args.program
+        title = f"{args.dataset} {evaluated_program_type} {'with DFA' if args.use_dfa else 'without DFA'}"
         score = sequence_score(
             program,
             bundle,
@@ -857,7 +868,7 @@ def run_train_or_evaluate(args, examples, device):
             limit=args.num_generations if args.num_generations > 0 else None,
             show=args.show_predictions,
         )
-        print_score(title, score, args.program)
+        print_score(title, score, evaluated_program_type)
     return 0
 
 
@@ -952,6 +963,7 @@ def parse_args():
     parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="binary", help="Reward mode: binary (0/1 goal satisfaction) or dense (state recall).")
     parser.add_argument("--rl-constraint-weight", type=float, default=0.25, help="Weight assigned to declared world-constraint satisfaction; no constraints bypass blending.")
     parser.add_argument("--rl-constraint-aggregate", choices=["mean", "min", "prod"], default="mean", help="Aggregation across declared world constraints.")
+    parser.add_argument("--no-world-constraints", action="store_true", help="Disable the default world and transition constraints.")
     parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL fine-tuning.")
     parser.add_argument("--rl-lr", type=float, default=1e-4, help="Learning rate for Stage 2 RL fine-tuning.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")

@@ -82,6 +82,7 @@ def test_rl_program_is_constructed_with_shared_supervised_head():
         object_tokens=examples[0]["object_tokens"],
         action_tokens=("close",),
         program_type="solver",
+        world_constraint_builders=(),
     )
     rl, rl_bundle = build_program(
         max_steps=8,
@@ -98,6 +99,8 @@ def test_rl_program_is_constructed_with_shared_supervised_head():
     assert rl.graph.name == "eai_generation_graph"
     assert rl.graph is not rl_bundle.world.graph
     assert rl_bundle.world.graph is not solver_bundle.world.graph
+    assert not solver_bundle.world.has_constraints
+    assert rl_bundle.world.has_constraints
 
 
 def run_tests():

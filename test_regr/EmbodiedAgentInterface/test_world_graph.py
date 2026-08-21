@@ -15,12 +15,14 @@ from world_graph import (
     ABSENT_ENTITY,
     ACTION_GOAL_NAMES,
     ACTION_SPECS,
+    DEFAULT_ACTION_EFFECTS,
+    DEFAULT_STATE_MUTEX_PAIRS,
+    DEFAULT_WORLD_CONSTRAINT_COUNT,
     NEGATIVE_TO_POSITIVE,
     PREDICATE_ALIASES,
     STATE_SPECS,
     build_eai_world_graph,
     materialize_world_trajectory,
-    open_closed_exclusivity,
     verify_world_constraints,
 )
 
@@ -45,21 +47,25 @@ def _all_descendants(node):
 
 def test_registry_and_namespaces():
     bundle = build_eai_world_graph("test_eai_world_registry")
-    assert set(bundle.action) == set(ACTION_SPECS)
-    assert set(bundle.state) == set(STATE_SPECS)
-    assert len({concept.name for concept in bundle.action.values()}) == len(ACTION_SPECS)
-    assert len({concept.name for concept in bundle.state.values()}) == len(STATE_SPECS)
-    assert all(concept.name == f"action__{name}" for name, concept in bundle.action.items())
-    assert all(concept.name == f"state__{name}" for name, concept in bundle.state.items())
-    assert bundle.action["open"] is not bundle.state["open"]
-    assert bundle.goal_actions == frozenset(bundle.action[name] for name in ACTION_GOAL_NAMES)
-    assert all(bundle.aliases[alias] is bundle.state[canonical] for alias, canonical in PREDICATE_ALIASES.items())
+    assert bundle.state.name == "world_state"
+    assert bundle.action.name == "world_action"
+    assert set(bundle.actions) == set(ACTION_SPECS)
+    assert set(bundle.states) == set(STATE_SPECS)
+    assert len({concept.name for concept in bundle.actions.values()}) == len(ACTION_SPECS)
+    assert len({concept.name for concept in bundle.states.values()}) == len(STATE_SPECS)
+    assert all(concept.name == f"action__{name}" for name, concept in bundle.actions.items())
+    assert all(concept.name == f"state__{name}" for name, concept in bundle.states.items())
+    assert all(concept.is_a()[0].dst is bundle.state for concept in bundle.states.values())
+    assert all(concept.is_a()[0].dst is bundle.action for concept in bundle.actions.values())
+    assert bundle.actions["open"] is not bundle.states["open"]
+    assert bundle.goal_actions == frozenset(bundle.actions[name] for name in ACTION_GOAL_NAMES)
+    assert all(bundle.aliases[alias] is bundle.states[canonical] for alias, canonical in PREDICATE_ALIASES.items())
     assert bundle.canonical_state_name("next_to") == "nextto"
     assert bundle.is_state_predicate("next_to")
     assert bundle.is_action("open") and bundle.is_goal_action("touch")
     assert bundle.positive_state_name("not_open") == "open"
     assert all(
-        bundle.negative_to_positive[bundle.state[negative]] is bundle.state[positive]
+        bundle.negative_to_positive[bundle.states[negative]] is bundle.states[positive]
         for negative, positive in NEGATIVE_TO_POSITIVE.items()
     )
     assert all(STATE_SPECS[name].arity == 1 for name in ("open", "closed"))
@@ -81,10 +87,16 @@ def test_materializes_actions_and_sparse_state_groundings():
     ]
     root = materialize_world_trajectory(_prepared(), states, events, bundle)
     descendants = _all_descendants(root)
-    event_nodes = [node for node in descendants if node.ontologyNode is bundle.action_event]
+    event_nodes = [node for node in descendants if node.ontologyNode is bundle.action]
     next_nodes = [node for node in descendants if node.ontologyNode is bundle.next_step]
-    unary_nodes = [node for node in descendants if node.ontologyNode is bundle.unary_grounding]
-    binary_nodes = [node for node in descendants if node.ontologyNode is bundle.binary_grounding]
+    unary_nodes = [
+        node for node in descendants
+        if node.ontologyNode is bundle.state and node.attributes.get("grounding_arity") == 1
+    ]
+    binary_nodes = [
+        node for node in descendants
+        if node.ontologyNode is bundle.state and node.attributes.get("grounding_arity") == 2
+    ]
     step_nodes = [node for node in descendants if node.ontologyNode is bundle.step]
     entity_count = len(("apple", "bowl", "character", ABSENT_ENTITY))
     assert len(event_nodes) == 3
@@ -100,26 +112,26 @@ def test_materializes_actions_and_sparse_state_groundings():
     assert by_index[1].relationLinks[bundle.action_roles["arg1"].name][0].instanceValue == "apple"
     assert by_index[1].relationLinks[bundle.action_roles["arg2"].name][0].instanceValue == absent
     assert by_index[2].relationLinks[bundle.action_roles["arg2"].name][0].instanceValue == "bowl"
-    assert by_index[2].relationLinks[bundle.action_roles["source_step"].name][0].instanceValue == 2
-    assert by_index[2].relationLinks[bundle.action_roles["result_step"].name][0].instanceValue == 3
+    assert by_index[2].relationLinks[bundle.action_roles["source_step"].name][0].instanceValue == "2"
+    assert by_index[2].relationLinks[bundle.action_roles["result_step"].name][0].instanceValue == "3"
     assert by_index[2].relationLinks[bundle.action_roles["actor"].name][0].instanceValue == "character"
     first_next = {node.instanceID: node for node in next_nodes}[0]
-    assert first_next.relationLinks[bundle.step_roles["current"].name][0].instanceValue == 0
-    assert first_next.relationLinks[bundle.step_roles["following"].name][0].instanceValue == 1
+    assert first_next.relationLinks[bundle.step_roles["current"].name][0].instanceValue == "0"
+    assert first_next.relationLinks[bundle.step_roles["following"].name][0].instanceValue == "1"
     assert torch.argmax(by_index[2].attributes["<action__pour>"]).item() == 1
     assert torch.argmax(by_index[2].attributes["<action__open>"]).item() == 0
     open_bowl = next(
         node for node in unary_nodes
-        if node.relationLinks[bundle.unary_roles["step"].name][0].instanceValue == 0
-        and node.relationLinks[bundle.unary_roles["subject"].name][0].instanceValue == "bowl"
+        if node.relationLinks[bundle.state_roles["step"].name][0].instanceValue == "0"
+        and node.relationLinks[bundle.state_roles["subject"].name][0].instanceValue == "bowl"
     )
     assert torch.argmax(open_bowl.attributes["<state__open>"]).item() == 1
     assert torch.argmax(open_bowl.attributes["<state__closed>"]).item() == 0
     inside_apple_bowl = next(
         node for node in binary_nodes
-        if node.relationLinks[bundle.binary_roles["step"].name][0].instanceValue == 3
-        and node.relationLinks[bundle.binary_roles["subject"].name][0].instanceValue == "apple"
-        and node.relationLinks[bundle.binary_roles["object"].name][0].instanceValue == "bowl"
+        if node.relationLinks[bundle.state_roles["step"].name][0].instanceValue == "3"
+        and node.relationLinks[bundle.state_roles["subject"].name][0].instanceValue == "apple"
+        and node.relationLinks[bundle.state_roles["object"].name][0].instanceValue == "bowl"
     )
     assert torch.argmax(inside_apple_bowl.attributes["<state__inside>"]).item() == 1
     assert torch.argmax(inside_apple_bowl.attributes["<state__ontop>"]).item() == 0
@@ -129,8 +141,8 @@ def test_constraint_verification_and_aggregation():
     from domiknows.graph.logicalConstrain import nandL
 
     def constraints(bundle):
-        nandL(bundle.state["open"], bundle.state["closed"])
-        nandL(bundle.state["on"], bundle.state["off"])
+        nandL(bundle.states["open"], bundle.states["closed"])
+        nandL(bundle.states["on"], bundle.states["off"])
 
     bundle = build_eai_world_graph("test_eai_world_constraints", (constraints,))
     prepared = _prepared(entities=("door",), pairs=())
@@ -151,11 +163,14 @@ def test_constraint_verification_and_aggregation():
 
 def test_example_open_closed_constraint():
     bundle = build_eai_world_graph(
-        "test_eai_world_example_constraint", (open_closed_exclusivity,)
+        "test_eai_world_example_constraint",
+        include_default_constraints=True,
     )
     prepared = _prepared(entities=("door",), pairs=())
     valid = materialize_world_trajectory(prepared, [{("open", "door")}], [], bundle)
-    assert verify_world_constraints(valid, bundle).score == 1.0
+    valid_evaluation = verify_world_constraints(valid, bundle)
+    assert valid_evaluation.constraint_count == DEFAULT_WORLD_CONSTRAINT_COUNT
+    assert valid_evaluation.score == 1.0
 
     all_entities = ("door", "character", ABSENT_ENTITY)
     invalid_facts = {
@@ -164,7 +179,88 @@ def test_example_open_closed_constraint():
         for fact in (("open", entity), ("closed", entity))
     }
     invalid = materialize_world_trajectory(prepared, [invalid_facts], [], bundle)
-    assert verify_world_constraints(invalid, bundle).score == 0.0
+    invalid_evaluation = verify_world_constraints(invalid, bundle)
+    assert invalid_evaluation.results["state_mutex__closed__open"]["satisfied"] == 0.0
+    assert invalid_evaluation.score == (
+        DEFAULT_WORLD_CONSTRAINT_COUNT - 1
+    ) / DEFAULT_WORLD_CONSTRAINT_COUNT
+
+
+def test_action_structure_effect_and_hand_capacity_constraints():
+    bundle = build_eai_world_graph(
+        "test_eai_world_action_constraints",
+        include_default_constraints=True,
+    )
+    prepared = _prepared(entities=("door",), pairs=())
+    open_event = [SimpleNamespace(name="open", args=("door",))]
+
+    valid = materialize_world_trajectory(
+        prepared,
+        [{("closed", "door")}, {("open", "door"), ("not_closed", "door")}],
+        open_event,
+        bundle,
+    )
+    valid_evaluation = verify_world_constraints(valid, bundle)
+    assert valid_evaluation.score == 1.0
+    assert valid_evaluation.results["action_exactly_one_type"]["satisfied"] == 100.0
+    assert valid_evaluation.results["action_result_is_next_step"]["satisfied"] == 100.0
+    assert valid_evaluation.results["action_effect__open__open"]["satisfied"] == 100.0
+
+    missing_effect = materialize_world_trajectory(
+        prepared,
+        [{("closed", "door")}, {("closed", "door")}],
+        open_event,
+        bundle,
+    )
+    missing_effect_evaluation = verify_world_constraints(missing_effect, bundle)
+    assert missing_effect_evaluation.results["action_effect__open__open"]["satisfied"] == 0.0
+
+    two_types = materialize_world_trajectory(
+        prepared,
+        [{("closed", "door")}, {("open", "door"), ("not_closed", "door")}],
+        open_event,
+        bundle,
+    )
+    action_node = next(
+        node for node in _all_descendants(two_types)
+        if node.ontologyNode is bundle.action
+    )
+    action_node.attributes["<action__close>"] = torch.tensor([-30.0, 30.0])
+    two_types_evaluation = verify_world_constraints(two_types, bundle)
+    assert two_types_evaluation.results["action_exactly_one_type"]["satisfied"] == 0.0
+
+    wrong_transition = materialize_world_trajectory(
+        prepared,
+        [{("closed", "door")}, {("open", "door"), ("not_closed", "door")}],
+        open_event,
+        bundle,
+    )
+    transition_action = next(
+        node for node in _all_descendants(wrong_transition)
+        if node.ontologyNode is bundle.action
+    )
+    transition_action.attributes[
+        f"<{bundle.adjacent_transition.name}>"
+    ] = torch.tensor([30.0, -30.0])
+    transition_evaluation = verify_world_constraints(wrong_transition, bundle)
+    assert transition_evaluation.results["action_result_is_next_step"]["satisfied"] == 0.0
+
+    hand_prepared = _prepared(
+        entities=("apple", "banana"),
+        pairs=(("character", "apple"), ("character", "banana")),
+    )
+    overloaded_hand = materialize_world_trajectory(
+        hand_prepared,
+        [{
+            ("holds_lh", "character", "apple"),
+            ("holds_lh", "character", "banana"),
+        }],
+        [],
+        bundle,
+    )
+    hand_evaluation = verify_world_constraints(overloaded_hand, bundle)
+    assert hand_evaluation.results["hand_capacity__holds_lh"]["satisfied"] == 0.0
+    assert hand_evaluation.results["hand_capacity__holds_rh"]["satisfied"] == 100.0
 
 
 def test_reward_bypass_and_blending():
@@ -187,7 +283,7 @@ def test_reward_bypass_and_blending():
 
     constrained = build_eai_world_graph(
         "test_eai_world_reward_blend",
-        (lambda bundle: nandL(bundle.state["open"], bundle.state["closed"]),),
+        (lambda bundle: nandL(bundle.states["open"], bundle.states["closed"]),),
     )
     result = evaluate_goal_satisfaction(
         sample["target_action_tokens"],
@@ -210,6 +306,19 @@ def test_complete_benchmark_bypass_and_scale():
     largest = None
     for sample in examples:
         prepared = prepare_eai_goal(sample, vocabulary)
+        for index, event in enumerate(prepared.reference_events):
+            effect = DEFAULT_ACTION_EFFECTS.get(event.name)
+            if effect is not None and event.args:
+                assert (effect, event.args[0]) in prepared.reference_states[index + 1], (
+                    sample["task_id"], index, event.name, event.args, effect
+                )
+        for state in prepared.reference_states:
+            for left, right in DEFAULT_STATE_MUTEX_PAIRS:
+                left_args = {fact[1:] for fact in state if fact and fact[0] == left}
+                right_args = {fact[1:] for fact in state if fact and fact[0] == right}
+                assert left_args.isdisjoint(right_args), (
+                    sample["task_id"], left, right, left_args & right_args
+                )
         if largest is None or len(prepared.entity_universe) > len(largest[0].entity_universe):
             largest = (prepared, sample)
         ordinary = evaluate_goal_satisfaction(sample["target_action_tokens"], sample, vocabulary)
@@ -234,7 +343,8 @@ def test_complete_benchmark_bypass_and_scale():
     )
     root = materialize_world_trajectory(prepared, states, events, world)
     binary_count = sum(
-        node.ontologyNode is world.binary_grounding for node in _all_descendants(root)
+        node.ontologyNode is world.state and node.attributes.get("grounding_arity") == 2
+        for node in _all_descendants(root)
     )
     dense_count = len(states) * len(prepared.entity_universe) ** 2
     assert binary_count <= len(states) * len(prepared.tracked_binary_pairs)
@@ -247,6 +357,7 @@ def run_tests():
         test_materializes_actions_and_sparse_state_groundings,
         test_constraint_verification_and_aggregation,
         test_example_open_closed_constraint,
+        test_action_structure_effect_and_hand_capacity_constraints,
         test_reward_bypass_and_blending,
         test_complete_benchmark_bypass_and_scale,
     ]

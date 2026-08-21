@@ -7,6 +7,7 @@ constraints declared by callers.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import count
 from types import MappingProxyType
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -15,6 +16,8 @@ import torch
 
 Fact = tuple[str, ...]
 ABSENT_ENTITY = "__absent_action_argument__"
+_VERIFIER_GRAPH: Any = None
+_WORLD_GRAPH_BUILD_IDS = count()
 
 
 @dataclass(frozen=True)
@@ -106,57 +109,59 @@ STATE_SPECS: Mapping[str, StatePredicateSpec] = MappingProxyType({
     for name in sorted(STATE_PREDICATES)
 })
 
+
 @dataclass(frozen=True)
 class EAIWorldGraphBundle:
     graph: Any
     trajectory: Any
     step: Any
     entity: Any
-    unary_grounding: Any
-    binary_grounding: Any
-    action_event: Any
+    state: Any
+    action: Any
+    adjacent_transition: Any
     next_step: Any
     contains_step: Any
     contains_entity: Any
     contains_next_step: Any
-    contains_unary: Any
-    contains_binary: Any
+    contains_state: Any
     contains_action: Any
     step_roles: Mapping[str, Any]
-    unary_roles: Mapping[str, Any]
-    binary_roles: Mapping[str, Any]
+    state_roles: Mapping[str, Any]
     action_roles: Mapping[str, Any]
-    action: Mapping[str, Any]
-    state: Mapping[str, Any]
+    actions: Mapping[str, Any]
+    states: Mapping[str, Any]
     aliases: Mapping[str, Any]
     negative_to_positive: Mapping[Any, Any]
     goal_actions: frozenset[Any]
 
     @property
     def has_constraints(self) -> bool:
-        return bool(getattr(self.graph, "logicalConstrains", {}))
+        return any(
+            getattr(constraint, "headLC", True)
+            for constraint in getattr(self.graph, "logicalConstrains", {}).values()
+        )
 
     def canonical_state_name(self, name: str) -> str:
         """Resolve an alias through the graph's canonical state concepts."""
         concept = self.aliases.get(name)
         if concept is None:
-            concept = self.state.get(name)
+            concept = self.states.get(name)
         if concept is None:
             return name
         return concept.name.removeprefix("state__")
 
     def is_action(self, name: str) -> bool:
-        return name in self.action
+        return name in self.actions
 
     def is_goal_action(self, name: str) -> bool:
-        concept = self.action.get(name)
+        concept = self.actions.get(name)
         return concept is not None and concept in self.goal_actions
 
     def is_state_predicate(self, name: str) -> bool:
-        return self.canonical_state_name(name) in self.state
+        return self.canonical_state_name(name) in self.states
 
     def positive_state_name(self, name: str) -> str | None:
-        concept = self.state.get(self.canonical_state_name(name))
+        concept = self.states.get(self.canonical_state_name(name))
         positive = self.negative_to_positive.get(concept)
         return positive.name.removeprefix("state__") if positive is not None else None
 
@@ -196,83 +201,188 @@ class WorldGraphConfigurationError(RuntimeError):
     """A declared world constraint could not be materialized or verified."""
 
 
-def open_closed_exclusivity(bundle: EAIWorldGraphBundle) -> None:
-    """Example invariant: an entity cannot be both open and closed."""
-    from domiknows.graph.logicalConstrain import nandL
-
-    nandL(bundle.state["open"], bundle.state["closed"])
-
-
 def build_eai_world_graph(
     graph_name: str = "eai_world",
     constraint_builders: Iterable[Callable[[EAIWorldGraphBundle], None]] = (),
+    include_default_constraints: bool = False,
 ) -> EAIWorldGraphBundle:
     """Build the independent EAI trajectory graph and apply caller constraints."""
     from domiknows.graph import Concept, Graph
 
+    # DomiKnowS relation names are process-global even though the relation
+    # objects belong to a particular graph. Give structural roles a private,
+    # per-build name so constructing a second world graph cannot turn `step`
+    # into `step-1` and corrupt path-based constraint candidate selection.
+    build_id = next(_WORLD_GRAPH_BUILD_IDS)
+    role_prefix = f"__eai_world_{build_id}__"
+
+    def role(name: str) -> str:
+        return f"{role_prefix}{name}"
+
     with Graph(graph_name) as graph:
+        # These base concepts describe the nodes that make up one materialized
+        # world trajectory. State, action, and next_step are relation-like
+        # nodes whose required links are declared below.
         trajectory = Concept(name="world_trajectory")
         step = Concept(name="world_step")
         entity = Concept(name="world_entity")
-        unary_grounding = Concept(name="unary_state_grounding")
-        binary_grounding = Concept(name="binary_state_grounding")
-        action_event = Concept(name="world_action_event")
+        state = Concept(name="world_state")
+        action = Concept(name="world_action")
         next_step = Concept(name="next_step")
 
+        # A trajectory owns its timeline, entity universe, and temporal-link
+        # nodes. Each step in turn owns the state groundings and actions that
+        # originate at that point in the timeline.
         contains_step = trajectory.contains(step)[0]
         contains_entity = trajectory.contains(entity)[0]
         contains_next_step = trajectory.contains(next_step)[0]
-        contains_unary = step.contains(unary_grounding)[0]
-        contains_binary = step.contains(binary_grounding)[0]
-        contains_action = step.contains(action_event)[0]
+        contains_state = step.contains(state)[0]
+        contains_action = step.contains(action)[0]
 
-        current_step, following_step = next_step.has_a(current=step, following=step)
-        unary_step, unary_subject = unary_grounding.has_a(step=step, subject=entity)
-        binary_step, binary_subject, binary_object = binary_grounding.has_a(
-            step=step, subject=entity, object=entity,
-        )
-        source_step, result_step, actor, arg1, arg2 = action_event.has_a(
-            source_step=step, result_step=step, actor=entity, arg1=entity, arg2=entity,
-        )
+        # A next_step node explicitly connects adjacent timeline nodes. This
+        # preserves transition direction instead of relying on node order.
+        current_step, following_step = next_step.has_a(**{
+            role("current"): step,
+            role("following"): step,
+        })
 
-        state = {
-            name: (unary_grounding if spec.arity == 1 else binary_grounding)(
-                name=f"state__{name}"
-            )
-            for name, spec in STATE_SPECS.items()
+        # Every state grounding is scoped to one step and a subject/object
+        # pair. Unary predicates use the reserved absent-entity object, so
+        # unary and binary state facts share a single relation schema.
+        state_step, state_subject, state_object = state.has_a(**{
+            role("state_step"): step,
+            role("state_subject"): entity,
+            role("state_object"): entity,
+        })
+
+        # Every action grounding records the state transition it represents,
+        # its actor, and up to two action arguments. Missing arguments are
+        # materialized later with the same reserved absent-entity node.
+        source_step, result_step, actor, arg1, arg2, action_result_state = action.has_a(**{
+            role("action_source_step"): step,
+            role("action_result_step"): step,
+            role("action_actor"): entity,
+            role("action_arg1"): entity,
+            role("action_arg2"): entity,
+            role("action_result_state"): state,
+        })
+
+        # Named predicate concepts specialize the shared state/action schemas.
+        # Materialized relation nodes receive truth logits for these concepts,
+        # allowing constraints to target semantic predicates such as `open`
+        # or `grab` while retaining their common structural roles.
+        states = {
+            name: state(name=f"state__{name}")
+            for name in STATE_SPECS
         }
-        action = {
-            name: action_event(name=f"action__{name}")
+        actions = {
+            name: action(name=f"action__{name}")
             for name in ACTION_SPECS
         }
+        adjacent_transition = action(name="action__valid_next_transition")
+
+        if include_default_constraints:
+            from domiknows.graph.logicalConstrain import atMostL, exactL, ifL, nandL
+
+
+            DEFAULT_STATE_MUTEX_PAIRS = tuple(dict.fromkeys((
+                *(tuple(sorted((negative, positive))) for negative, positive in NEGATIVE_TO_POSITIVE.items()),
+                ("closed", "open"),
+                ("off", "on"),
+                ("clean", "dusty"),
+                ("clean", "stained"),
+                ("inside", "onfloor"),
+                ("ontop", "under"),
+            )))
+            
+            # Mutually exclusive state descriptions on the same grounding.
+            # This includes every explicit positive/negative pair plus common
+            # physical contradictions represented by the EAI vocabulary.
+            for left, right in DEFAULT_STATE_MUTEX_PAIRS:
+                nandL(
+                    states[left],
+                    states[right],
+                    name=f"state_mutex__{left}__{right}",
+                )
+
+            # Every action event has exactly one semantic action type.
+            exactL(
+                *(concept("event") for concept in actions.values()),
+                limit=1,
+                name="action_exactly_one_type",
+            )
+
+            # An action's result must be the step immediately following its
+            # source according to the explicit next_step relation.
+            ifL(
+                action("event"),
+                adjacent_transition("event"),
+                name="action_result_is_next_step",
+            )
+
+            # At a state step, each hand can hold at most one object.
+            for predicate in ("holds_lh", "holds_rh"):
+                ifL(
+                    step("step"),
+                    atMostL(
+                        states[predicate](
+                            "holding", path=("step", state_step.reversed)
+                        ),
+                        limit=1,
+                    ),
+                    name=f"hand_capacity__{predicate}",
+                )
+                
+            # Every action event has at most one result state grounding.  This
+            # is a structural constraint that does not depend on the action type.
+            DEFAULT_ACTION_EFFECTS: Mapping[str, str] = MappingProxyType({
+                "clean": "clean", "wipe": "clean", "scrub": "clean",
+                "wash": "washed", "rinse": "rinsed",
+                "open": "open", "close": "closed",
+                "toggle_on": "on", "switchon": "on", "switch_on": "on", "turn_on": "on",
+                "toggle_off": "off", "switchoff": "off", "switch_off": "off", "turn_off": "off",
+                "slice": "sliced", "soak": "soaked", "freeze": "frozen",
+                "unfreeze": "not_frozen", "cook": "cooked",
+                "plugin": "plugged_in", "plugout": "not_plugged_in", "touch": "touch",
+            })
+
+            # Direct unary effects from the simulator must hold for the action
+            # argument at the event's result step.
+            for action_name, predicate in DEFAULT_ACTION_EFFECTS.items():
+                ifL(
+                    actions[action_name]("event"),
+                    states[predicate](
+                        "effect", path=("event", action_result_state)
+                    ),
+                    name=f"action_effect__{action_name}__{predicate}",
+                )
 
         bundle = EAIWorldGraphBundle(
             graph=graph,
             trajectory=trajectory,
             step=step,
             entity=entity,
-            unary_grounding=unary_grounding,
-            binary_grounding=binary_grounding,
-            action_event=action_event,
+            state=state,
+            action=action,
+            adjacent_transition=adjacent_transition,
             next_step=next_step,
             contains_step=contains_step,
             contains_entity=contains_entity,
             contains_next_step=contains_next_step,
-            contains_unary=contains_unary,
-            contains_binary=contains_binary,
+            contains_state=contains_state,
             contains_action=contains_action,
             step_roles=MappingProxyType({"current": current_step, "following": following_step}),
-            unary_roles=MappingProxyType({"step": unary_step, "subject": unary_subject}),
-            binary_roles=MappingProxyType({"step": binary_step, "subject": binary_subject, "object": binary_object}),
+            state_roles=MappingProxyType({"step": state_step, "subject": state_subject, "object": state_object}),
             action_roles=MappingProxyType({
                 "source_step": source_step, "result_step": result_step,
                 "actor": actor, "arg1": arg1, "arg2": arg2,
+                "result_state": action_result_state,
             }),
-            action=MappingProxyType(action),
-            state=MappingProxyType(state),
-            aliases=MappingProxyType({alias: state[canonical] for alias, canonical in PREDICATE_ALIASES.items()}),
-            negative_to_positive=MappingProxyType({state[negative]: state[positive] for negative, positive in NEGATIVE_TO_POSITIVE.items()}),
-            goal_actions=frozenset(action[name] for name in ACTION_GOAL_NAMES),
+            actions=MappingProxyType(actions),
+            states=MappingProxyType(states),
+            aliases=MappingProxyType({alias: states[canonical] for alias, canonical in PREDICATE_ALIASES.items()}),
+            negative_to_positive=MappingProxyType({states[negative]: states[positive] for negative, positive in NEGATIVE_TO_POSITIVE.items()}),
+            goal_actions=frozenset(actions[name] for name in ACTION_GOAL_NAMES),
         )
         for builder in tuple(constraint_builders):
             builder(bundle)
@@ -283,7 +393,9 @@ def _node(concept: Any, instance_id: Any, value: Any = None, attributes: dict | 
     from domiknows.graph import DataNode
     return DataNode(
         instanceID=instance_id,
-        instanceValue=value,
+        # DataNode.__str__ returns instanceValue directly, so non-string
+        # values fail whenever verification logging formats a node.
+        instanceValue=None if value is None else str(value),
         ontologyNode=concept,
         attributes=dict(attributes or {}),
     )
@@ -341,43 +453,62 @@ def materialize_world_trajectory(
             "task_id": task_id,
             "entity_count": len(entities),
             "tracked_binary_pair_count": len(tracked_pairs),
+            "action_event_count": len(events),
         })
+        _set_truth(root, world_bundle.trajectory, True)
         entity_nodes = {name: _node(world_bundle.entity, name, value=name) for name in entities}
         for entity_node in entity_nodes.values():
+            _set_truth(entity_node, world_bundle.entity, True)
             root.addChildDataNode(entity_node)
 
         step_nodes = [_node(world_bundle.step, index, value=index) for index in range(len(normalized_states))]
         for step_node in step_nodes:
+            _set_truth(step_node, world_bundle.step, True)
             root.addChildDataNode(step_node)
 
         for index in range(max(0, len(step_nodes) - 1)):
             edge = _node(world_bundle.next_step, index, value=index)
             _link(edge, world_bundle.step_roles["current"], step_nodes[index])
             _link(edge, world_bundle.step_roles["following"], step_nodes[index + 1])
+            _set_truth(edge, world_bundle.next_step, True)
             root.addChildDataNode(edge)
 
-        unary_specs = tuple((name, spec, world_bundle.state[name]) for name, spec in STATE_SPECS.items() if spec.arity == 1)
-        binary_specs = tuple((name, spec, world_bundle.state[name]) for name, spec in STATE_SPECS.items() if spec.arity == 2)
+        unary_specs = tuple((name, spec, world_bundle.states[name]) for name, spec in STATE_SPECS.items() if spec.arity == 1)
+        binary_specs = tuple((name, spec, world_bundle.states[name]) for name, spec in STATE_SPECS.items() if spec.arity == 2)
+        state_nodes: dict[tuple[int, int, str, str], Any] = {}
         for index, (step_node, state) in enumerate(zip(step_nodes, normalized_states)):
             unary_true = {(fact[0], fact[1]) for fact in state if len(fact) == 2}
             binary_true = {(fact[0], fact[1], fact[2]) for fact in state if len(fact) == 3}
             for subject in entities:
-                grounding = _node(world_bundle.unary_grounding, f"{index}:{subject}")
-                _link(grounding, world_bundle.unary_roles["step"], step_node)
-                _link(grounding, world_bundle.unary_roles["subject"], entity_nodes[subject])
+                grounding = _node(
+                    world_bundle.state,
+                    f"unary:{index}:{subject}",
+                    attributes={"grounding_arity": 1},
+                )
+                _link(grounding, world_bundle.state_roles["step"], step_node)
+                _link(grounding, world_bundle.state_roles["subject"], entity_nodes[subject])
+                _link(grounding, world_bundle.state_roles["object"], entity_nodes[ABSENT_ENTITY])
+                _set_truth(grounding, world_bundle.state, True)
                 for name, _spec, concept in unary_specs:
                     _set_truth(grounding, concept, (name, subject) in unary_true)
                 step_node.addChildDataNode(grounding)
+                state_nodes[(index, 1, subject, ABSENT_ENTITY)] = grounding
             for subject, obj in tracked_pairs:
                 if subject not in entity_nodes or obj not in entity_nodes:
                     continue
-                grounding = _node(world_bundle.binary_grounding, f"{index}:{subject}:{obj}")
-                _link(grounding, world_bundle.binary_roles["step"], step_node)
-                _link(grounding, world_bundle.binary_roles["subject"], entity_nodes[subject])
-                _link(grounding, world_bundle.binary_roles["object"], entity_nodes[obj])
+                grounding = _node(
+                    world_bundle.state,
+                    f"binary:{index}:{subject}:{obj}",
+                    attributes={"grounding_arity": 2},
+                )
+                _link(grounding, world_bundle.state_roles["step"], step_node)
+                _link(grounding, world_bundle.state_roles["subject"], entity_nodes[subject])
+                _link(grounding, world_bundle.state_roles["object"], entity_nodes[obj])
+                _set_truth(grounding, world_bundle.state, True)
                 for name, _spec, concept in binary_specs:
                     _set_truth(grounding, concept, (name, subject, obj) in binary_true)
                 step_node.addChildDataNode(grounding)
+                state_nodes[(index, 2, subject, obj)] = grounding
 
         for index, event in enumerate(events):
             if not step_nodes:
@@ -386,13 +517,37 @@ def materialize_world_trajectory(
             args = tuple(str(arg).strip().lower().replace("-", "_").replace(".", "_") for arg in getattr(event, "args", ()))
             source_index = min(index, len(step_nodes) - 1)
             result_index = min(index + 1, len(step_nodes) - 1)
-            event_node = _node(world_bundle.action_event, index, value=name)
+            event_node = _node(world_bundle.action, index, value=name)
             _link(event_node, world_bundle.action_roles["source_step"], step_nodes[source_index])
             _link(event_node, world_bundle.action_roles["result_step"], step_nodes[result_index])
             _link(event_node, world_bundle.action_roles["actor"], entity_nodes["character"])
             _link(event_node, world_bundle.action_roles["arg1"], entity_nodes[args[0] if args else ABSENT_ENTITY])
             _link(event_node, world_bundle.action_roles["arg2"], entity_nodes[args[1] if len(args) > 1 else ABSENT_ENTITY])
-            for action_name, concept in world_bundle.action.items():
+            effect_predicate = DEFAULT_ACTION_EFFECTS.get(name)
+            if effect_predicate is not None and args:
+                effect_spec = STATE_SPECS[effect_predicate]
+                effect_key = (
+                    result_index,
+                    effect_spec.arity,
+                    args[0],
+                    ABSENT_ENTITY if effect_spec.arity == 1 else (
+                        args[1] if len(args) > 1 else ABSENT_ENTITY
+                    ),
+                )
+                effect_node = state_nodes.get(effect_key)
+                if effect_node is not None:
+                    _link(
+                        event_node,
+                        world_bundle.action_roles["result_state"],
+                        effect_node,
+                    )
+            _set_truth(event_node, world_bundle.action, True)
+            _set_truth(
+                event_node,
+                world_bundle.adjacent_transition,
+                result_index == source_index + 1,
+            )
+            for action_name, concept in world_bundle.actions.items():
                 _set_truth(event_node, concept, action_name == name)
             step_nodes[source_index].addChildDataNode(event_node)
         return root
@@ -406,21 +561,54 @@ def verify_world_constraints(
     aggregate: str = "mean",
 ) -> WorldConstraintEvaluation | None:
     """Verify declared world constraints and aggregate their satisfaction."""
-    constraints = getattr(world_bundle.graph, "logicalConstrains", {})
+    constraints = {
+        key: constraint
+        for key, constraint in getattr(
+            world_bundle.graph, "logicalConstrains", {}
+        ).items()
+        if getattr(constraint, "headLC", True)
+    }
     if not constraints:
         return None
     if aggregate not in {"mean", "min", "prod"}:
         raise ValueError(f"Unsupported world-constraint aggregation: {aggregate!r}")
     task_id = str((root.getAttributes() or {}).get("task_id", "<unknown task>"))
     try:
-        results = root.verifyResultsLC(key="/local/argmax")
+        # The solver factory uses one shared cache entry for ontology-free
+        # graphs. Switch it only when verification moves to another world
+        # graph; repeated RL samples on the same bundle retain the cache.
+        global _VERIFIER_GRAPH
+        if _VERIFIER_GRAPH is not world_bundle.graph:
+            from domiknows.solver import ilpOntSolverFactory
+
+            ilpOntSolverFactory.clear()
+            _VERIFIER_GRAPH = world_bundle.graph
+        raw_results = root.verifyResultsLC(key="/local/argmax")
+        named_results = {}
         scores = []
-        for name in constraints:
-            value = results.get(name, {})
+        for key, constraint in constraints.items():
+            value = raw_results.get(key, {})
             percent = value.get("satisfied", value.get("ifSatisfied"))
             if percent is None:
-                raise KeyError(f"constraint {name!r} produced no satisfaction value")
-            scores.append(max(0.0, min(1.0, float(percent) / 100.0)))
+                raise KeyError(f"constraint {key!r} produced no satisfaction value")
+            name = getattr(constraint, "name", None) or key
+            if name in named_results:
+                name = key
+            named_results[name] = value
+            # These graph constraints are universally quantified over their
+            # anchor nodes. No matching action/state node is vacuously valid.
+            root_attributes = root.getAttributes() or {}
+            is_vacuous = value.get("verifyList") == []
+            is_vacuous = is_vacuous or (
+                name == "action_exactly_one_type"
+                and root_attributes.get("action_event_count", 0) == 0
+            )
+            is_vacuous = is_vacuous or (
+                name.startswith("hand_capacity__")
+                and root_attributes.get("tracked_binary_pair_count", 0) == 0
+            )
+            constraint_score = 1.0 if is_vacuous else float(percent) / 100.0
+            scores.append(max(0.0, min(1.0, constraint_score)))
         if not scores:
             raise ValueError("constraints were declared but none were verified")
         if aggregate == "mean":
@@ -431,6 +619,10 @@ def verify_world_constraints(
             score = 1.0
             for value in scores:
                 score *= value
-        return WorldConstraintEvaluation(score=score, constraint_count=len(scores), results=MappingProxyType(dict(results)))
+        return WorldConstraintEvaluation(
+            score=score,
+            constraint_count=len(scores),
+            results=MappingProxyType(named_results),
+        )
     except Exception as exc:
         raise WorldGraphConfigurationError(f"{task_id}: failed to verify EAI world constraints: {exc}") from exc
