@@ -152,6 +152,7 @@ def test_constraint_verification_and_aggregation():
     violating_facts = {
         fact for entity in entities for fact in (("open", entity), ("closed", entity))
     }
+    violating_facts.update(("on", entity) for entity in entities)
     partial = materialize_world_trajectory(prepared, [violating_facts], [], bundle)
     assert verify_world_constraints(partial, bundle, "mean").score == 0.5
     assert verify_world_constraints(partial, bundle, "min").score == 0.0
@@ -171,7 +172,8 @@ def test_example_open_closed_constraint():
         + len(bundle.default_action_effects)
         + 4
     )
-    assert valid_evaluation.constraint_count == default_constraint_count
+    assert valid_evaluation.declared_constraint_count == default_constraint_count
+    assert valid_evaluation.constraint_count == 2
     assert valid_evaluation.score == 1.0
 
     all_entities = ("door", "character", ABSENT_ENTITY)
@@ -183,9 +185,8 @@ def test_example_open_closed_constraint():
     invalid = materialize_world_trajectory(prepared, [invalid_facts], [], bundle)
     invalid_evaluation = verify_world_constraints(invalid, bundle)
     assert invalid_evaluation.results["state_mutex__closed__open"]["satisfied"] == 0.0
-    assert invalid_evaluation.score == (
-        default_constraint_count - 1
-    ) / default_constraint_count
+    assert invalid_evaluation.constraint_count == 3
+    assert invalid_evaluation.score == 2 / 3
 
 
 def test_action_structure_effect_and_hand_capacity_constraints():
@@ -209,6 +210,9 @@ def test_action_structure_effect_and_hand_capacity_constraints():
     assert valid_evaluation.results["action_exactly_one_type"]["satisfied"] == 100.0
     assert valid_evaluation.results["action_result_is_next_step"]["satisfied"] == 100.0
     assert valid_evaluation.results["action_effect__open__open"]["satisfied"] == 100.0
+    assert valid_evaluation.results["action_effect__open__open"]["applicable"]
+    assert not valid_evaluation.results["action_effect__close__closed"]["applicable"]
+    assert valid_evaluation.constraint_count < valid_evaluation.declared_constraint_count
 
     missing_effect = materialize_world_trajectory(
         prepared,
@@ -300,7 +304,8 @@ def test_reward_bypass_and_blending():
     dense = evaluate_goal_satisfaction(
         [EOS_TOKEN], sample, world_bundle=constrained, reward_mode="dense", constraint_weight=0.25,
     )
-    assert dense["rl_reward_score"] == 0.75 * dense["recall"] + 0.25 * dense["world_constraint_score"]
+    assert dense["world_constraint_score"] is None
+    assert dense["rl_reward_score"] == dense["recall"]
 
 
 def test_complete_benchmark_bypass_and_scale():

@@ -68,6 +68,8 @@ uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 
 `build_program()` enables the built-in world and transition invariants by default. The default set requires exactly one action type per event, requires every action result to be the adjacent next step, limits each hand to one held object, verifies direct unary action effects (for example, `open(x)` implies `state__open(x)` at the result step), and rejects incompatible states on the same grounding. State exclusions include every explicit positive/negative predicate pair plus open/closed, on/off, clean/dusty, clean/stained, inside/on-floor, and on-top/under. The state exclusions and all 805 applicable direct effects were checked across all 438 reference trajectories. The hand-capacity constraint also identifies one reference snapshot whose right hand contains two objects.
 
+The constraint reward averages only constraints applicable to the materialized trajectory. For example, `action_effect__open__open` contributes only when an `open` event occurs, a state exclusion contributes only when either state is present, and a hand-capacity constraint contributes only when that hand holds something. Inactive constraints remain logically vacuous but no longer inflate `world_constraint_score`.
+
 Pass `world_constraint_builders=()` programmatically, or `--no-world-constraints` on the CLI, to recover the unblended task reward. Additional builders can be supplied to `build_program(world_constraint_builders=(...))` or directly to `build_eai_world_graph`. Aliases such as `switchon` resolve to the canonical state concept and do not create duplicate concepts. Action and state names are independent (`action__open` and `state__open`).
 
 ```python

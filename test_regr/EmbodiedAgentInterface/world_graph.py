@@ -195,8 +195,11 @@ def positive_state_name(name: str, bundle: EAIWorldGraphBundle | None = None) ->
 @dataclass(frozen=True)
 class WorldConstraintEvaluation:
     score: float
+    # Number of constraints that contributed to this trajectory's aggregate.
     constraint_count: int
     results: Mapping[str, Any]
+    # Total number declared on the graph, including inactive constraints.
+    declared_constraint_count: int
 
 
 class WorldGraphConfigurationError(RuntimeError):
@@ -459,6 +462,13 @@ def materialize_world_trajectory(
             "entity_count": len(entities),
             "tracked_binary_pair_count": len(tracked_pairs),
             "action_event_count": len(events),
+            "action_names": tuple(sorted({
+                str(getattr(event, "name", "")).strip().lower().replace("-", "_").replace(".", "_")
+                for event in events
+            })),
+            "true_state_predicates": tuple(sorted({
+                fact[0] for state in normalized_states for fact in state if fact
+            })),
         })
         _set_truth(root, world_bundle.trajectory, True)
         entity_nodes = {name: _node(world_bundle.entity, name, value=name) for name in entities}
@@ -591,6 +601,9 @@ def verify_world_constraints(
         raw_results = root.verifyResultsLC(key="/local/argmax")
         named_results = {}
         scores = []
+        root_attributes = root.getAttributes() or {}
+        action_names = set(root_attributes.get("action_names", ()))
+        state_predicates = set(root_attributes.get("true_state_predicates", ()))
         for key, constraint in constraints.items():
             value = raw_results.get(key, {})
             percent = value.get("satisfied", value.get("ifSatisfied"))
@@ -599,23 +612,55 @@ def verify_world_constraints(
             name = getattr(constraint, "name", None) or key
             if name in named_results:
                 name = key
-            named_results[name] = value
-            # These graph constraints are universally quantified over their
-            # anchor nodes. No matching action/state node is vacuously valid.
-            root_attributes = root.getAttributes() or {}
-            is_vacuous = value.get("verifyList") == []
-            is_vacuous = is_vacuous or (
-                name == "action_exactly_one_type"
-                and root_attributes.get("action_event_count", 0) == 0
-            )
-            is_vacuous = is_vacuous or (
-                name.startswith("hand_capacity__")
-                and root_attributes.get("tracked_binary_pair_count", 0) == 0
-            )
-            constraint_score = 1.0 if is_vacuous else float(percent) / 100.0
+
+            # Logical verification correctly regards a false antecedent as
+            # vacuously true. For reward shaping, however, inactive constraints
+            # must not inflate the aggregate. A built-in constraint is relevant
+            # only when its state/action vocabulary occurs in this trajectory.
+            if name == "action_exactly_one_type" or name == "action_result_is_next_step":
+                applicable = bool(action_names)
+            elif name.startswith("action_effect__"):
+                action_name = name.split("__", 2)[1]
+                applicable = action_name in action_names
+            elif name.startswith("hand_capacity__"):
+                predicate = name.split("__", 1)[1]
+                applicable = predicate in state_predicates
+            elif name.startswith("state_mutex__"):
+                _prefix, left, right = name.split("__", 2)
+                applicable = left in state_predicates or right in state_predicates
+            else:
+                # Custom constraints use their referenced semantic concepts
+                # when possible. Fall back to the verifier's candidate list for
+                # purely structural constraints.
+                from domiknows.graph.lcUtils import getConceptsFromLogicalConstraint
+
+                concept_names = set(getConceptsFromLogicalConstraint(constraint))
+                referenced_actions = {
+                    concept.removeprefix("action__")
+                    for concept in concept_names if concept.startswith("action__")
+                }
+                referenced_states = {
+                    concept.removeprefix("state__")
+                    for concept in concept_names if concept.startswith("state__")
+                }
+                if referenced_actions or referenced_states:
+                    applicable = bool(
+                        referenced_actions & action_names
+                        or referenced_states & state_predicates
+                    )
+                else:
+                    applicable = value.get("verifyList") not in (None, [])
+
+            result_value = dict(value)
+            result_value["applicable"] = applicable
+            named_results[name] = result_value
+            if not applicable:
+                continue
+
+            constraint_score = float(percent) / 100.0
             scores.append(max(0.0, min(1.0, constraint_score)))
         if not scores:
-            raise ValueError("constraints were declared but none were verified")
+            return None
         if aggregate == "mean":
             score = sum(scores) / len(scores)
         elif aggregate == "min":
@@ -628,6 +673,7 @@ def verify_world_constraints(
             score=score,
             constraint_count=len(scores),
             results=MappingProxyType(named_results),
+            declared_constraint_count=len(constraints),
         )
     except Exception as exc:
         raise WorldGraphConfigurationError(f"{task_id}: failed to verify EAI world constraints: {exc}") from exc
