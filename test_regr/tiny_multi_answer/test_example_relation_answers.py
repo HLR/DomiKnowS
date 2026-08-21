@@ -18,6 +18,16 @@ def _datanode(example):
     return next(example.program.populate(example.dataset, device="cpu"))
 
 
+NESTED_RELATION_LOGIC = (
+    'miotaL(andL(object("x"), '
+    'left("r1", path=("x", pair_src.reversed)), '
+    'ball("y", path=("r1", pair_dst)), '
+    'left("r2", path=("y", pair_src.reversed)), '
+    'ball("z", path=("r2", pair_dst))), '
+    'threshold=0.5, hard=False)'
+)
+
+
 def test_relational_iota_and_miota_are_object_aligned():
     example = build_relation_answer_example()
     unique_id, answers, vector, unique_dist, multi_dist = relation_answers(example)
@@ -90,6 +100,68 @@ def test_interpreter_compiled_and_exact_circuit_distributions_match():
     assert reference.shape == (4,)
     assert torch.allclose(reference, compiled, atol=1e-6)
     assert torch.allclose(reference, circuit, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "builder_kwargs,expected",
+    [
+        ({}, [0, 0, 0, 0]),
+        (
+            {"second_ball": True, "left_pairs": {(1, 3), (2, 3), (3, 4)}},
+            [1, 1, 0, 0],
+        ),
+    ],
+)
+def test_nested_relation_miota_stays_on_the_primary_object_axis(
+    builder_kwargs, expected
+):
+    example = build_relation_answer_example(
+        executable=True,
+        logic=NESTED_RELATION_LOGIC,
+        logic_label=expected,
+        **builder_kwargs,
+    )
+    datanode = _datanode(example)
+    distribution = datanode.calculateSingleLcLoss(
+        example.multiple.lcName, tnorm="G"
+    )["selectionDistribution"]
+
+    assert distribution.shape == (4,)
+    assert (distribution >= 0.5).to(torch.int64).tolist() == expected
+
+    # The compiled and exact-circuit paths must preserve the same four-object
+    # axis even though exact WMC and fuzzy Product t-norm need not be numeric twins.
+    context = datanode._prepareLcLossContext("P")
+    reference = context["lossCalculator"].calculate_single_lc_loss(
+        example.multiple, datanode, "/local/softmax", tnorm="P"
+    )["selectionDistribution"]
+    compiled = CompiledLossCalculator(context["solver"]).calculate_single_lc_loss(
+        example.multiple, datanode, "/local/softmax", tnorm="P"
+    )["selectionDistribution"]
+    circuit = datanode.calculateLcLoss(tnorm="P", circuit=True)[
+        example.multiple.lcName
+    ]["selectionDistribution"]
+    assert reference.shape == compiled.shape == circuit.shape == (4,)
+    assert torch.allclose(reference, compiled, atol=1e-6)
+
+    sample_processor = context["solver"].myLcLossSampleBooleanMethods
+    sample_processor.sampleSize = 8
+    sample_processor.current_device = datanode.current_device
+    sample_processor.current_dtype = datanode.current_dtype
+    sampled, *_ = context["solver"].constraintConstructor.constructLogicalConstrains(
+        example.multiple, sample_processor, None, datanode, 8,
+        key="/local/softmax", headLC=False, loss=True, sample=True,
+    )
+    assert sampled[0][0].shape == (8, 4)
+
+    datanode.inferLocal()
+    datanode.inferILPResults(fun=None, minimizeObjective=False)
+    ilp_answer = datanode.getExecutableConstraintLabels()[
+        f"{example.multiple.lcName}/answer"
+    ]
+    assert len(ilp_answer) == 4
+    if expected == [0, 0, 0, 0]:
+        assert ilp_answer == expected
 
 
 def test_relation_miota_evaluation_and_vector_training():

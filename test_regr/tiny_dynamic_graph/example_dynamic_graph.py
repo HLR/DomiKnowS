@@ -59,8 +59,10 @@ def build_reusable_dynamic_graph(specs=EXAMPLES, device="cpu", learning_rate=1e-
     specs = tuple(specs)
     reset_domiknows_state()
     shared_model = SharedConceptClassifier().to(device)
+
     with Graph("tiny_dynamic_reusable") as graph:
         obj = Concept(name="obj")
+        # concept = ("red", "dog", "cat", "tree")
         concepts = {name: obj(name=name) for name in CONCEPT_VOCABULARY}
         candidate_count = max(len(spec.features) for spec in specs)
         candidates = tuple(obj(name=f"candidate_{index}") for index in range(candidate_count))
@@ -73,6 +75,7 @@ def build_reusable_dynamic_graph(specs=EXAMPLES, device="cpu", learning_rate=1e-
         keyword="indices",
         forward=lambda data: torch.as_tensor(data, dtype=torch.long, device=device),
     )
+
     for name, concept in concepts.items():
         obj[concept] = ModuleLearner(
             "features",

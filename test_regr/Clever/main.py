@@ -92,7 +92,7 @@ except ImportError:
     from dataset import g_relational_concepts, g_attribute_concepts
 
 RUN_DIR = Path(__file__).parent.resolve()
-MODEL_DIR = RUN_DIR / "models"
+MODEL_DIR = Path(os.environ.get("CLEVR_MODEL_DIR", "/egr/research-hlr2/premsrit/CLEVR/models"))
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 _models = {}
@@ -148,6 +148,66 @@ class OracleDummyLearner(torch.nn.Module):
         return torch.softmax(input, dim=-1)
 
 
+def _add_ground_truth_concept_labels(dataset, attribute_names_dict, spatial_relations):
+    """Attach per-concept labels used by ModuleLearner supervised loss.
+
+    The executable query label trains the final answer, but the CLEVR smoke
+    also needs local labels for object attributes and pairwise relations so
+    `mloss` connects to the concept classifiers.
+    """
+    spatial_relation_names = set(spatial_relations + [f"{name}_rev" for name in spatial_relations])
+    inverse_for_reverse = {
+        "left_rev": "right",
+        "right_rev": "left",
+        "front_rev": "behind",
+        "behind_rev": "front",
+    }
+
+    for sample in dataset:
+        all_objs = sample.get("all_objects", [])
+        objects_raw = sample.get("objects_raw", None)
+        n = len(objects_raw) if objects_raw is not None else len(all_objs)
+        gt_spatial = sample.get("relation_spatial_relation", None)
+
+        for attr_name in attribute_names_dict:
+            key = f"local_label_{attr_name}"
+            if attr_name in spatial_relation_names:
+                source_name = inverse_for_reverse.get(attr_name, attr_name)
+                if gt_spatial is None or source_name not in spatial_relations:
+                    sample[key] = [0] * (n * n)
+                    continue
+                rel_idx = spatial_relations.index(source_name)
+                labels = []
+                for pair_idx in range(n * n):
+                    labels.append(
+                        int(pair_idx < len(gt_spatial) and gt_spatial[pair_idx][rel_idx] > 0.5)
+                    )
+                sample[key] = labels
+            elif attr_name.startswith("same_"):
+                category = attr_name[len("same_"):]
+                labels = []
+                for obj_i in range(n):
+                    for obj_j in range(n):
+                        labels.append(
+                            int(
+                                obj_i < len(all_objs)
+                                and obj_j < len(all_objs)
+                                and all_objs[obj_i].get(category) == all_objs[obj_j].get(category)
+                            )
+                        )
+                sample[key] = labels
+            else:
+                category = None
+                for group_name, values in g_attribute_concepts.items():
+                    if attr_name in values:
+                        category = group_name
+                        break
+                sample[key] = [
+                    int(obj_i < len(all_objs) and all_objs[obj_i].get(category) == attr_name)
+                    for obj_i in range(n)
+                ]
+
+
 class MaskedCrossEntropyLoss(nn.Module):
     """CrossEntropyLoss wrapper that accepts (logit, labels, mask)."""
     def __init__(self):
@@ -174,6 +234,10 @@ class _LossFactory(dict):
         return val
     def __bool__(self):
         return True  # always truthy — losses will be created on demand
+
+    def __call__(self):
+        # InferenceModel expects `loss` to be callable for executable/global BCE.
+        return nn.BCELoss()
 
 
 class _CallbacksMixin:
@@ -506,6 +570,8 @@ Examples:
                         help="use InternVL for predictions")
     parser.add_argument("--peft", action="store_true",
                         help="Use PEFT (LoRA) fine-tuning with HuggingFace InternVL")
+    parser.add_argument("--vlm-backbone", choices=["internvl", "qwen3vl"], default="internvl",
+                        help="VLM backend for --use-vlm/--peft concept learners")
     parser.add_argument("--load-4bit", action="store_true",
                         help="Use QLoRA 4-bit quantization for VLM")
     parser.add_argument("--softmax-temp", type=float, default=2.0,
@@ -531,6 +597,8 @@ Examples:
                              "(and the pre-training baseline on train). Use test set as the "
                              "only signal each epoch. Massive speedup at scale where train-eval "
                              "dominates pickle-deserialize time.")
+    parser.add_argument("--eval-at-end-only", action="store_true",
+                        help="Skip pre-training and per-epoch test evaluation; keep only final evaluation.")
     parser.add_argument("--simple-only", action="store_true",
                         help="Pre-filter dataset to samples with scene_size <= 3 AND "
                              "program_size <= 3 before --train-size slicing. Use to "
@@ -645,7 +713,9 @@ def program_declaration(train, dev, args, device='cpu'):
     global _models
     
     if args.use_vlm and not args.oracle_mode:
-        if args.peft:
+        if args.vlm_backbone == "qwen3vl":
+            from qwen_vl_hf import QwenVLSharedHF as InternVL
+        elif args.peft:
             from peftvllm import InternVLSharedHF as InternVL
         else:
             from internVLvLLM import InternVLShared as InternVL
@@ -707,6 +777,9 @@ def program_declaration(train, dev, args, device='cpu'):
         else:
             dataset[i]["logic_label"] = torch.LongTensor([bool(dataset[i]['answer'])]).to(device)
             dataset[i]["query_type"] = None
+
+    # Pre-compute local ground truth labels for supervised concept warmup.
+    _add_ground_truth_concept_labels(dataset, attribute_names_dict, g_relational_concepts.get("spatial_relation", []))
 
     # Pre-compute oracle ground truth
     if args.oracle_mode:
@@ -854,14 +927,17 @@ def program_declaration(train, dev, args, device='cpu'):
                 classifier = torch.nn.Linear(1024, 2).to(device)
                 classifiers[attr_name] = classifier
                 relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
+                relation_target[attr_variable] = ReaderSensor(keyword=f"local_label_{attr_name}", label=True)
             elif attr_name.startswith("same_"):
                 classifier = torch.nn.Linear(1024, 2).to(device)
                 classifiers[attr_name] = classifier
                 relation_target[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
+                relation_target[attr_variable] = ReaderSensor(keyword=f"local_label_{attr_name}", label=True)
             else:
                 classifier = torch.nn.Linear(1024, 2).to(device)
                 classifiers[attr_name] = classifier
                 object[attr_variable] = ModuleLearner("emb", module=classifier, device=device)
+                object[attr_variable] = ReaderSensor(keyword=f"local_label_{attr_name}", label=True)
         else:
             MODEL_PATH = args.model_path or ("OpenGVLab/InternVL3_5-1B" if args.peft else "OpenGVLab/InternVL3_5-8B")
             vlm_extra = dict(
@@ -928,9 +1004,8 @@ def program_declaration(train, dev, args, device='cpu'):
     if relation_2_obj_rev is not None:
         poi.append(relation_2_obj_rev)
     
-    # Use BCELoss for constraint satisfaction
-    import torch.nn as nn
-    loss_func = nn.BCELoss
+    # Local concept labels use CE through the dict-style loss factory.
+    loss_func = _LossFactory()
     
     program_kwargs = {
         'loss': loss_func,
@@ -1221,6 +1296,13 @@ def main(args):
     plugin_manager.register(GradientFlowPlugin(), 'GradientFlow')
     plugin_manager.register(GumbelMonitoringPlugin(), 'GumbelMonitoring')
     
+    # Keep a stable pointer from raw curriculum samples to the executable
+    # datanodes compiled before Program construction. Recompiling executable
+    # logic after Program creation gives fresh ELC names that the cmodel does
+    # not know about, producing zero executable loss.
+    for _compiled_idx, _sample in enumerate(train_raw):
+        _sample["_compiled_train_index"] = _compiled_idx
+
     # Create program
     program, train_dataset, test_dataset, attribute_names_dict = program_declaration(
         train_raw,
@@ -1335,12 +1417,14 @@ def main(args):
             if getattr(args, 'skip_train_eval', False):
                 baseline_acc = float('nan')
                 print("Accuracy before training: <skipped>")
-                if test_dataset is not None:
+                if test_dataset is not None and not getattr(args, 'eval_at_end_only', False):
                     with torch.no_grad():
                         test_baseline_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Test accuracy before training: {test_baseline_acc :.2f}%")
                     if _tb_writer is not None:
                         _tb_writer.add_scalar("test/acc", test_baseline_acc, 0)
+                elif test_dataset is not None:
+                    print("Test accuracy before training: <skipped end-only>")
             else:
                 with torch.no_grad():
                     baseline_acc = program.evaluate_condition(train_dataset, device=device)
@@ -1405,12 +1489,10 @@ def main(args):
                                 "even after relaxation; using full training set"
                             )
                         else:
-                            cached_curriculum_dataset = program.graph.compile_executable(
-                                epoch_train_raw,
-                                logic_keyword='logic_str',
-                                logic_label_keyword='logic_label',
-                                extra_namespace_values=attribute_names_dict,
-                            )
+                            cached_curriculum_dataset = [
+                                train_dataset[s["_compiled_train_index"]]
+                                for s in epoch_train_raw
+                            ]
                             if curriculum_info["fallback_kind"] == "relaxed_or":
                                 print(
                                     f"[curriculum] Epoch {i + 1}: strict bucket empty; using relaxed "
@@ -1469,12 +1551,14 @@ def main(args):
                     with torch.no_grad():
                         epoch_train_acc = program.evaluate_condition(active_train_dataset, device=device)
                     print(f"Epoch {i + 1} {active_train_label} accuracy: {epoch_train_acc :.2f}%")
-                if test_dataset is not None:
+                if test_dataset is not None and not getattr(args, 'eval_at_end_only', False):
                     with torch.no_grad():
                         epoch_test_acc = program.evaluate_condition(test_dataset, device=device)
                     print(f"Epoch {i + 1} test accuracy: {epoch_test_acc :.2f}%")
                     if _tb_writer is not None:
                         _tb_writer.add_scalar("test/acc", epoch_test_acc, i + 1)
+                elif test_dataset is not None:
+                    print(f"Epoch {i + 1} test accuracy: <skipped end-only>")
 
             # Final evaluation
             _skip_train_eval = getattr(args, 'skip_train_eval', False)

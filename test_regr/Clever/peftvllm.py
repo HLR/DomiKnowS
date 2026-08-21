@@ -82,7 +82,7 @@ from tqdm import tqdm
 from torchvision import transforms as T
 from torchvision.transforms.functional import InterpolationMode
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig, get_scheduler
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 
 # --- Compatibility shim: newer transformers (>=4.50) bnb-4bit quantizer calls
 #     `model.all_tied_weights_keys`, but trust_remote_code models (like
@@ -339,9 +339,11 @@ class InternVLHF:
         lora_r: int = 4,
         lora_alpha: int = 8,
         lora_dropout: float = 0.05,
+        lora_adapter_path: str = None,
         max_num_patches: int = 1,
-        # QLoRA 4-bit quantization
+        # bitsandbytes quantization
         load_4bit: bool = False,
+        load_8bit: bool = False,
         # Temperature for softmax over target tokens (>1 = softer, prevents gradient vanishing)
         softmax_temperature: float = 1.0,
         # Additive bias on the Yes logit (col 1 after _score_batch swap) to escape
@@ -354,9 +356,13 @@ class InternVLHF:
         device = torch.device(device if torch.cuda.is_available() else "cpu")
         self.device = device
         self.max_num_patches = max_num_patches
+        if load_4bit and load_8bit:
+            raise ValueError("Only one of load_4bit/load_8bit can be enabled")
         self.load_4bit = load_4bit
+        self.load_8bit = load_8bit
         self.softmax_temperature = softmax_temperature
         self.yes_bias = yes_bias
+        self.lora_adapter_path = lora_adapter_path
 
         # Determine compute dtype based on GPU support
         if device.type == "cuda":
@@ -368,13 +374,14 @@ class InternVLHF:
             self.compute_dtype = dtype
         self.dtype = self.compute_dtype
 
-        logging.info(f"Initializing InternVL on {device} (dtype={self.compute_dtype}, 4bit={load_4bit}).")
+        logging.info(f"Initializing InternVL on {device} (dtype={self.compute_dtype}, 4bit={load_4bit}, 8bit={load_8bit}).")
 
         # Updated: model_max_length=8192 from max_seq_length 8192
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_path,
             model_max_length=8192,
             trust_remote_code=trust_remote_code,
+            fix_mistral_regex=True,
             use_fast=False,
         )
         if self.tokenizer.pad_token is None:
@@ -425,10 +432,15 @@ class InternVLHF:
             )
             load_kwargs["quantization_config"] = bnb_config
             load_kwargs["device_map"] = {"": device}
-            # 4-bit always uses a single device — bitsandbytes does its own
-            # placement and we don't pipeline-shard a quantized backbone here.
+            # Quantized loading always uses a single device here.
             self._auto_sharded = False
             logging.info("Loading model with QLoRA 4-bit quantization.")
+        elif load_8bit:
+            bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+            load_kwargs["quantization_config"] = bnb_config
+            load_kwargs["device_map"] = {"": device}
+            self._auto_sharded = False
+            logging.info("Loading model with bitsandbytes 8-bit quantization.")
         elif self._auto_sharded:
             # Build a *custom* device map that keeps known-problematic
             # Sequentials (notably InternVL's ``mlp1`` projection between
@@ -473,7 +485,7 @@ class InternVLHF:
 
         if _any_lora:
             # Training-related setup: only needed when LoRA is applied
-            if load_4bit:
+            if load_4bit or load_8bit:
                 # prepare_model_for_kbit_training handles freezing + gradient checkpointing
                 # use_reentrant=False is critical: with True (default), gradient checkpointing
                 # requires inputs to have requires_grad=True, but with QLoRA only internal LoRA
@@ -513,13 +525,13 @@ class InternVLHF:
 
         # Apply LoRA with updated target modules
         if use_llm_lora:
-            self._apply_llm_lora(base_model, lora_r, lora_alpha, lora_dropout)
+            self._apply_llm_lora(base_model, lora_r, lora_alpha, lora_dropout, self.lora_adapter_path)
 
         if use_vision_lora:
             self._apply_vision_lora(base_model, lora_r, lora_alpha, lora_dropout)
 
-        if load_4bit:
-            self.model = base_model  # Already on device from device_map
+        if load_4bit or load_8bit:
+            self.model = base_model  # Already on device from bitsandbytes device_map
         elif self._auto_sharded:
             # Model is pipeline-sharded across multiple GPUs by HF Accelerate.
             self.model = base_model.to(dtype=self.compute_dtype)
@@ -686,8 +698,27 @@ class InternVLHF:
         )
         return True
 
-    def _apply_llm_lora(self, base_model: torch.nn.Module, lora_r: int, lora_alpha: int, lora_dropout: float) -> None:
-        """Apply LoRA to language model with updated target modules."""
+    def _apply_llm_lora(
+        self, base_model: torch.nn.Module, lora_r: int, lora_alpha: int, lora_dropout: float,
+        lora_adapter_path: str = None,
+    ) -> None:
+        """Apply LoRA to language model with updated target modules.
+
+        ``lora_adapter_path``, when given, reloads a previously-trained
+        adapter (via ``PeftModel.from_pretrained``, mirroring
+        ``qwen_vl_hf.QwenVLHF``) instead of initializing a fresh one. Needed
+        to chain LoRA weights across separate process invocations sharded by
+        instance offset -- without it, every shard would silently restart
+        from a random adapter init and discard prior training.
+        """
+        if lora_adapter_path:
+            base_model.language_model = PeftModel.from_pretrained(
+                base_model.language_model, lora_adapter_path, is_trainable=True,
+            )
+            base_model.language_model.enable_input_require_grads()
+            base_model.language_model.print_trainable_parameters()
+            logging.info("LoRA adapter reloaded from %s.", lora_adapter_path)
+            return
         # Updated target modules from reference
         llm_targets = [
             "self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
@@ -1183,6 +1214,7 @@ class InternVLSharedHF(nn.Module):
     """
 
     model = None  # singleton InternVLHF
+    prediction_cache = {}
 
     def __init__(
         self,
@@ -1200,12 +1232,19 @@ class InternVLSharedHF(nn.Module):
         lora_r=4,
         lora_alpha=8,
         lora_dropout=0.05,
-        # QLoRA
+        lora_adapter_path=None,
+        # bitsandbytes quantization
         load_4bit=False,
+        load_8bit=False,
         # Temperature for softmax (>1 = softer outputs, prevents gradient vanishing)
         softmax_temperature=1.0,
         # Additive bias on the Yes logit to counter CLEVR cold-start Yes≈0 saturation.
         yes_bias=0.0,
+        # Optional grouped unary scoring.  When set for relation!=2, the VLM is
+        # asked one multiple-choice question per object and the probability of
+        # `attr` is converted back to binary [not-attr, attr] logits.
+        choice_group=None,
+        choice_prompt_kind=None,
         *args,
         **kwargs
     ):
@@ -1216,6 +1255,8 @@ class InternVLSharedHF(nn.Module):
         self.device = device
         self.softmax_temperature = softmax_temperature
         self.yes_bias = yes_bias
+        self.choice_group = [str(value) for value in choice_group] if choice_group else None
+        self.choice_prompt_kind = choice_prompt_kind or "visual concept"
 
         if dtype is None:
             dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
@@ -1234,15 +1275,120 @@ class InternVLSharedHF(nn.Module):
                 lora_r=lora_r,
                 lora_alpha=lora_alpha,
                 lora_dropout=lora_dropout,
+                lora_adapter_path=lora_adapter_path,
                 max_num_patches=max_num,
                 load_4bit=load_4bit,
+                load_8bit=load_8bit,
                 softmax_temperature=softmax_temperature,
                 yes_bias=yes_bias,
             )
-            # Register the actual nn.Module only in first instance
-            # so DomiKnowS can discover parameters for training
-            self._hf_model = InternVLSharedHF.model.model
+        # Fresh dynamic graphs need to expose the same shared model parameters.
+        self._hf_model = InternVLSharedHF.model.model
         self.model = InternVLSharedHF.model
+
+    def _choice_labels(self):
+        """Human-readable option labels for grouped prompts."""
+        labels = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        if not self.choice_group:
+            return []
+        if len(self.choice_group) > len(labels):
+            raise ValueError(
+                f"choice_group has {len(self.choice_group)} options; maximum is {len(labels)}"
+            )
+        return labels[: len(self.choice_group)]
+
+    def _single_token_text(self, text):
+        tokenizer = self._tokenizer_for_choices()
+        if tokenizer is None:
+            return None
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        if len(ids) != 1:
+            return None
+        return tokenizer.convert_ids_to_tokens(ids[0])
+
+    def _choice_label_tokens(self):
+        tokens = [self._single_token_text(" " + label) for label in self._choice_labels()]
+        if any(token is None for token in tokens):
+            return self._choice_labels()
+        return tokens
+
+    def _tokenizer_for_choices(self):
+        processor = getattr(self.model, "processor", None)
+        tokenizer = getattr(processor, "tokenizer", None) if processor is not None else None
+        return tokenizer or getattr(self.model, "tokenizer", None)
+
+    def _choice_word_tokens(self):
+        tokenizer = self._tokenizer_for_choices()
+        if tokenizer is None or not self.choice_group:
+            return None
+        tokens = []
+        for choice in self.choice_group:
+            if " " in choice or "_" in choice or "-" in choice:
+                return None
+            token = self._single_token_text(" " + choice)
+            if token is None:
+                return None
+            tokens.append(token)
+        return tokens
+
+    def _grouped_choice_questions(self, questions, use_word_targets=False):
+        labels = self._choice_labels()
+        if not labels:
+            return questions
+        import os as _os
+        if _os.environ.get("INTERNVL_CROP_TO_BOX", "0") == "1":
+            target_context = "The image is cropped around the target object.\n"
+        else:
+            target_context = "The target object is enclosed by a red bounding box.\n"
+        if use_word_targets:
+            options = ", ".join(self.choice_group)
+            return [
+                (
+                    target_context
+                    + f"Select the best {self.choice_prompt_kind} for the target object.\n"
+                    + f"Options: {options}.\n"
+                    + "Answer with one option word only.\n"
+                    + "Answer:"
+                )
+                for _ in questions
+            ]
+        options = "\n".join(
+            f"{label}. {choice}" for label, choice in zip(labels, self.choice_group)
+        )
+        return [
+            (
+                target_context
+                + f"Select the best {self.choice_prompt_kind} for the target object.\n"
+                + f"{options}\n"
+                + "Answer with one option letter only.\n"
+                + "Answer:"
+            )
+            for _ in questions
+        ]
+
+    def _score_grouped_unary(self, images, questions):
+        if int(self.relation) == 2 or not self.choice_group or str(self.attr) not in self.choice_group:
+            return None, questions, None
+        # Use explicit lettered multiple choice.  Qwen is much more stable when
+        # asked to emit one option label than one arbitrary attribute/name word.
+        # Score the leading-space label tokens (e.g. ĠA, ĠB) because the answer
+        # follows "Answer:" in the chat prompt.
+        target_tokens = self._choice_label_tokens()
+        grouped_questions = self._grouped_choice_questions(questions, use_word_targets=False)
+        choice_scores = self.model._score_batch(
+            image_paths=images,
+            questions=grouped_questions,
+            target_tokens=target_tokens,
+            input_size=self.input_size,
+            max_num=self.max_num,
+            call_metadata=None,
+        ).float()
+        # _score_batch returns normalized log-scores for the target tokens.
+        choice_probs = torch.softmax(choice_scores, dim=-1)
+        target_index = self.choice_group.index(str(self.attr))
+        p_yes = choice_probs[:, target_index].clamp(1e-6, 1.0 - 1e-6)
+        binary = torch.stack((torch.log1p(-p_yes), torch.log(p_yes)), dim=-1)
+        return binary, grouped_questions, choice_probs
 
     def _to_pil(self, image):
         """
@@ -1304,6 +1450,30 @@ class InternVLSharedHF(nn.Module):
             return base_pil.copy()
         return base_pil.crop((x1, y1, x2, y2))
 
+
+    def _natural_relation_phrase(self):
+        phrase = str(self.attr).replace("_", " ").replace("-", " ")
+        spaced = []
+        for idx, ch in enumerate(phrase):
+            if idx and ch.isupper() and (phrase[idx - 1].islower() or (idx + 1 < len(phrase) and phrase[idx + 1].islower())):
+                spaced.append(" ")
+            spaced.append(ch)
+        phrase = "".join(spaced).strip().lower()
+        aliases = {
+            "at top of": "above or on top of",
+            "to the left of": "to the left of",
+            "to the right of": "to the right of",
+            "in front of": "in front of",
+            "standing behind": "standing behind",
+            "sleeping in": "sleeping in",
+            "on the side of": "on the side of",
+            "drinking from": "drinking from",
+            "riding on": "riding on",
+            "hanging near": "hanging near",
+            "flying through": "flying through",
+        }
+        return aliases.get(phrase, phrase)
+
     def _build_call_metadata(self, n_boxes):
         """Per-question metadata matching the order produced by
         ``_prepare_images_questions``. Consumed by the step-notebook to
@@ -1349,7 +1519,13 @@ class InternVLSharedHF(nn.Module):
             for box1 in bounding_boxes:
                 for box2 in bounding_boxes:
                     img = self._draw_and_resize(base, [box1, box2], ["red", "green"])
-                    q = f"Is the object in the red bounding box {self.attr} of the object in the green bounding box? answer with only Yes or No."
+                    relation_phrase = self._natural_relation_phrase()
+                    q = (
+                        f"Look only at the two boxed objects. "
+                        f"Does the relation hold from the object inside the red bounding box to the object inside the green bounding box: "
+                        f"the object inside the red bounding box is {relation_phrase} the object inside the green bounding box? "
+                        f"Answer with only Yes or No."
+                    )
                     images.append(img)
                     questions.append(q)
         else:
@@ -1364,6 +1540,55 @@ class InternVLSharedHF(nn.Module):
                 questions.append(q)
         return images, questions
 
+
+    def _log_atomic_predictions(self, image_filename, bounding_boxes, questions, probs, cache_hit=False, raw_probs=None, choice_probs=None, choice_group=None):
+        log_path = os.environ.get("DOMIKNOWS_ATOMIC_LOG")
+        if not log_path:
+            return
+        filename = image_filename
+        if isinstance(filename, (list, tuple)) and len(filename) == 1:
+            filename = filename[0]
+        if isinstance(bounding_boxes, torch.Tensor):
+            boxes = bounding_boxes.detach().cpu().tolist()
+        else:
+            boxes = [list(box) for box in bounding_boxes]
+        metadata = self._build_call_metadata(len(boxes))
+        scores = probs.detach().float().cpu().tolist()
+        raw_scores = raw_probs.detach().float().cpu().tolist() if raw_probs is not None else None
+        choice_scores = choice_probs.detach().float().cpu().tolist() if choice_probs is not None else None
+        records = []
+        for idx, meta in enumerate(metadata):
+            obj_i = meta.get("obj_i")
+            obj_j = meta.get("obj_j")
+            item_boxes = []
+            if obj_i is not None and obj_i < len(boxes):
+                item_boxes.append({"role": "red", "index": obj_i, "box": boxes[obj_i]})
+            if obj_j is not None and obj_j < len(boxes):
+                item_boxes.append({"role": "green", "index": obj_j, "box": boxes[obj_j]})
+            no_score, yes_score = scores[idx]
+            records.append({
+                "image_filename": str(filename),
+                "concept": self.attr,
+                "arity": int(self.relation),
+                "obj_i": obj_i,
+                "obj_j": obj_j,
+                "boxes": item_boxes,
+                "question": questions[idx] if idx < len(questions) else None,
+                "scores_no_yes": [float(no_score), float(yes_score)],
+                "raw_scores_no_yes": ([float(raw_scores[idx][0]), float(raw_scores[idx][1])] if raw_scores is not None and len(raw_scores[idx]) == 2 else None),
+                "choice_group": list(choice_group) if choice_group is not None else None,
+                "choice_probs": ([float(value) for value in choice_scores[idx]] if choice_scores is not None else None),
+                "choice_prediction": (choice_group[int(max(range(len(choice_scores[idx])), key=lambda j: choice_scores[idx][j]))] if choice_scores is not None and choice_group is not None else None),
+                "predicted_label": "Yes" if float(yes_score) >= float(no_score) else "No",
+                "cache_hit": bool(cache_hit),
+            })
+        log_dir = os.path.dirname(log_path)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as stream:
+            for record in records:
+                stream.write(json.dumps(record, sort_keys=True) + "\n")
+
     def forward(self, image, image_filename, bounding_boxes, label=None):
         """
         Forward pass for DomiKnowS.
@@ -1372,8 +1597,43 @@ class InternVLSharedHF(nn.Module):
         and vice-versa), so its output is effectively [P(No), P(Yes)].
         DomiKnowS was calibrated with that order, so we match it here.
         """
+        cache_key = None
+        if os.environ.get("DOMIKNOWS_VLM_CACHE") == "1":
+            filename = image_filename
+            if isinstance(filename, (list, tuple)) and len(filename) == 1:
+                filename = filename[0]
+            boxes = bounding_boxes
+            if isinstance(boxes, torch.Tensor):
+                boxes = boxes.detach().cpu().reshape(-1).tolist()
+            else:
+                boxes = [value for box in boxes for value in box]
+            cache_key = (
+                str(filename), self.attr, self.relation,
+                tuple(round(float(value), 3) for value in boxes),
+            )
+            cached = type(self).prediction_cache.get(cache_key)
+            if cached is not None:
+                images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
+                self._log_atomic_predictions(image_filename, bounding_boxes, questions, cached, cache_hit=True)
+                return cached
+
         images, questions = self._prepare_images_questions(image, image_filename, bounding_boxes)
         call_metadata = self._build_call_metadata(len(bounding_boxes))
+
+        probs, grouped_questions, choice_probs = self._score_grouped_unary(images, questions)
+        if probs is not None:
+            questions = grouped_questions
+            raw_probs = probs
+            self._log_atomic_predictions(
+                image_filename, bounding_boxes, questions, probs, cache_hit=False,
+                raw_probs=raw_probs, choice_probs=choice_probs, choice_group=self.choice_group,
+            )
+            if cache_key is not None:
+                cache_limit = int(os.environ.get("DOMIKNOWS_VLM_CACHE_SIZE", "65536"))
+                if len(type(self).prediction_cache) >= cache_limit:
+                    type(self).prediction_cache.clear()
+                type(self).prediction_cache[cache_key] = probs.detach()
+            return probs
 
         probs = self.model._score_batch(
             image_paths=images,
@@ -1382,8 +1642,156 @@ class InternVLSharedHF(nn.Module):
             input_size=self.input_size,
             max_num=self.max_num,
             call_metadata=call_metadata,
-        )
-        return probs.float()
+        ).float()
+        raw_probs = probs
+        probs = self._apply_relation_margin_filter(probs)
+        probs = self._apply_relation_competition(probs, len(bounding_boxes))
+        probs = self._apply_unary_object_competition(probs, len(bounding_boxes))
+        self._log_atomic_predictions(image_filename, bounding_boxes, questions, probs, cache_hit=False, raw_probs=raw_probs)
+        if cache_key is not None:
+            cache_limit = int(os.environ.get("DOMIKNOWS_VLM_CACHE_SIZE", "65536"))
+            if len(type(self).prediction_cache) >= cache_limit:
+                type(self).prediction_cache.clear()
+            type(self).prediction_cache[cache_key] = probs.detach()
+        return probs
+
+    def _apply_relation_margin_filter(self, probs):
+        """Optionally suppress low-margin relation Yes predictions.
+
+        Multi-answer relation queries use an existential over many object pairs;
+        even modest pairwise false-positive rates can select almost every object.
+        This hook keeps the graph unchanged while allowing calibration from saved
+        VLM Yes/No margins. Enable with DOMIKNOWS_RELATION_MIN_MARGIN=<float>.
+        """
+
+        if int(self.relation) != 2 or probs.numel() == 0:
+            return probs
+        raw = os.environ.get("DOMIKNOWS_RELATION_MIN_MARGIN")
+        if raw in (None, ""):
+            return probs
+        min_margin = float(raw)
+        margin = probs[:, 1] - probs[:, 0]
+        keep = margin >= min_margin
+        adjusted = torch.empty_like(probs)
+        adjusted[:, 0] = 8.0
+        adjusted[:, 1] = -8.0
+        if keep.any():
+            adjusted[keep] = probs[keep]
+        return adjusted
+
+    def _apply_relation_competition(self, probs, num_boxes):
+        """Optionally group relation predictions across the object-pair matrix.
+
+        GraphQA relation questions compose pair predicates with an existential over
+        anchors. Independent Yes/No scoring can therefore make one weak false
+        positive enough to select an object. These modes keep only relation pairs
+        that are competitive within the current image/relation call. Enable with:
+
+        DOMIKNOWS_RELATION_COMPETITION={global-topk,row-topk,col-topk,rowcol-topk,row-softmax,col-softmax,rowcol-softmax}
+        DOMIKNOWS_RELATION_TOPK=<int>
+        DOMIKNOWS_RELATION_COMPETITION_MIN_MARGIN=<float>
+        DOMIKNOWS_RELATION_COMPETITION_TEMP=<float>
+        """
+
+        mode = os.environ.get("DOMIKNOWS_RELATION_COMPETITION", "").strip().lower()
+        if not mode or int(self.relation) != 2 or probs.numel() == 0:
+            return probs
+        pair_count = probs.shape[0]
+        object_count = int(num_boxes)
+        if object_count <= 0 or object_count * object_count != pair_count:
+            return probs
+
+        margin = (probs[:, 1] - probs[:, 0]).view(object_count, object_count)
+
+        if mode.endswith("softmax"):
+            temperature = max(float(os.environ.get("DOMIKNOWS_RELATION_COMPETITION_TEMP", "1.0")), 1e-6)
+            if mode == "row-softmax":
+                p_yes = torch.softmax(margin / temperature, dim=1)
+            elif mode == "col-softmax":
+                p_yes = torch.softmax(margin / temperature, dim=0)
+            elif mode == "rowcol-softmax":
+                row_p = torch.softmax(margin / temperature, dim=1)
+                col_p = torch.softmax(margin / temperature, dim=0)
+                p_yes = torch.maximum(row_p, col_p)
+            else:
+                return probs
+            p_yes = p_yes.reshape(-1).clamp(1e-6, 1.0 - 1e-6)
+            return torch.stack((torch.log1p(-p_yes), torch.log(p_yes)), dim=-1)
+
+        k = max(1, int(os.environ.get("DOMIKNOWS_RELATION_TOPK", "1")))
+        min_margin = float(os.environ.get("DOMIKNOWS_RELATION_COMPETITION_MIN_MARGIN", "-inf"))
+        mask = torch.zeros_like(margin, dtype=torch.bool)
+
+        def mark_topk(values, dim):
+            limit = min(k, values.shape[dim])
+            if dim == 1:
+                indices = torch.topk(values, k=limit, dim=1).indices
+                local = torch.zeros_like(values, dtype=torch.bool)
+                local.scatter_(1, indices, True)
+                return local
+            indices = torch.topk(values, k=limit, dim=0).indices
+            local = torch.zeros_like(values, dtype=torch.bool)
+            local.scatter_(0, indices, True)
+            return local
+
+        if mode == "global-topk":
+            flat = margin.reshape(-1)
+            selected = torch.topk(flat, k=min(k, flat.numel())).indices
+            mask.reshape(-1)[selected] = True
+        elif mode == "row-topk":
+            mask = mark_topk(margin, dim=1)
+        elif mode == "col-topk":
+            mask = mark_topk(margin, dim=0)
+        elif mode == "rowcol-topk":
+            mask = mark_topk(margin, dim=1) | mark_topk(margin, dim=0)
+        else:
+            return probs
+
+        mask = mask & (margin >= min_margin)
+        adjusted = torch.empty_like(probs)
+        adjusted[:, 0] = 8.0
+        adjusted[:, 1] = -8.0
+        selected = mask.reshape(-1)
+        if selected.any():
+            adjusted[selected] = probs[selected]
+        return adjusted
+
+    def _apply_unary_object_competition(self, probs, num_boxes):
+        """Optionally make unary VLM predicates compete across objects in one image.
+
+        GraphQA open-vocabulary predicates are otherwise independent Yes/No calls,
+        which over-selects many objects. This keeps relation predicates pairwise, but
+        lets unary predicates behave more like CLEVR's closed object-attribute choice.
+        Enable with DOMIKNOWS_UNARY_COMPETITION={topk,softmax}.
+        """
+        mode = os.environ.get("DOMIKNOWS_UNARY_COMPETITION", "").strip().lower()
+        if not mode or int(self.relation) == 2 or probs.numel() == 0:
+            return probs
+        if probs.shape[0] != int(num_boxes):
+            return probs
+
+        margin = probs[:, 1] - probs[:, 0]
+        if mode == "topk":
+            k = max(1, int(os.environ.get("DOMIKNOWS_UNARY_TOPK", "1")))
+            k = min(k, margin.numel())
+            min_margin = float(os.environ.get("DOMIKNOWS_UNARY_MIN_MARGIN", "-inf"))
+            selected = torch.topk(margin, k=k).indices
+            adjusted = torch.empty_like(probs)
+            adjusted[:, 0] = 8.0
+            adjusted[:, 1] = -8.0
+            keep = margin[selected] >= min_margin
+            selected = selected[keep]
+            if selected.numel() > 0:
+                adjusted[selected, 0] = -8.0
+                adjusted[selected, 1] = 8.0
+            return adjusted
+
+        if mode == "softmax":
+            temperature = max(float(os.environ.get("DOMIKNOWS_UNARY_COMPETITION_TEMP", "1.0")), 1e-6)
+            p_yes = torch.softmax(margin / temperature, dim=0).clamp(1e-6, 1.0 - 1e-6)
+            return torch.stack((torch.log1p(-p_yes), torch.log(p_yes)), dim=-1)
+
+        return probs
 
     def train_step(self, image, image_filename, bounding_boxes, gt_labels, optimizer, grad_accum_steps=1):
         """

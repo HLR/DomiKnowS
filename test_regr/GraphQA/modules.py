@@ -13,6 +13,8 @@ import torch
 
 from .graph import OBJECT_SYMBOL_RELATIONS, canonical_relation, collect_kb_relations, collect_object_relations
 
+NO_RELATION_LABEL = "NoRelation"
+
 
 @dataclass
 class GraphQAPredicateBatch:
@@ -124,19 +126,46 @@ class GraphQAPredicateClassifier(torch.nn.Module):
         features = self.encode(prompts)
         kind = examples[0]["kind"] if examples else "object_symbol"
         if kind == "object_symbol":
-            return self.object_symbol_head(features)
+            return _mask_logits_to_allowed_labels(self.object_symbol_head(features), prompts, self.object_symbol_labels)
         if kind == "symbol_pair":
-            return self.symbol_pair_head(features)
+            return _mask_logits_to_allowed_labels(self.symbol_pair_head(features), prompts, self.symbol_pair_labels)
         if kind == "object_pair":
-            return self.object_pair_head(features)
+            return _mask_logits_to_allowed_labels(self.object_pair_head(features), prompts, self.object_pair_labels)
         raise ValueError(f"Unknown GraphQA example kind: {kind!r}")
+
+
+def _allowed_labels_from_prompt(prompt):
+    marker = "Allowed labels:"
+    for line in str(prompt).splitlines():
+        if line.startswith(marker):
+            text = line[len(marker):].strip().rstrip(".")
+            return [item.strip() for item in text.split(",") if item.strip()]
+    return None
+
+
+def _mask_logits_to_allowed_labels(logits, prompts, labels):
+    if logits.numel() == 0:
+        return logits
+    label_to_index = {label: index for index, label in enumerate(labels)}
+    masked = logits.clone()
+    for row, prompt in enumerate(prompts):
+        allowed = _allowed_labels_from_prompt(prompt)
+        if not allowed:
+            continue
+        allowed_indices = [label_to_index[label] for label in allowed if label in label_to_index]
+        if not allowed_indices:
+            continue
+        row_mask = torch.full_like(masked[row], -1.0e4)
+        row_mask[allowed_indices] = 0.0
+        masked[row] = masked[row] + row_mask
+    return masked
 
 
 def label_spaces(instances):
     return {
-        "object_symbol": sorted(OBJECT_SYMBOL_RELATIONS),
-        "symbol_pair": collect_kb_relations(instances),
-        "object_pair": collect_object_relations(instances),
+        "object_symbol": sorted(OBJECT_SYMBOL_RELATIONS) + [NO_RELATION_LABEL],
+        "symbol_pair": collect_kb_relations(instances) + [NO_RELATION_LABEL],
+        "object_pair": collect_object_relations(instances) + [NO_RELATION_LABEL],
     }
 
 
@@ -167,30 +196,144 @@ def create_predicate_examples(instance):
     return examples
 
 
+def _all_evidence_facts(instance):
+    facts = []
+    seen = set()
+    for key in ("facts", "visual_facts", "kb_facts"):
+        for fact in instance.get(key, []) or []:
+            if not isinstance(fact, (list, tuple)) or len(fact) != 3:
+                continue
+            pred, left, right = fact
+            item = (canonical_relation(pred), str(left), str(right))
+            if item in seen:
+                continue
+            seen.add(item)
+            facts.append(item)
+    return facts
+
+
+def _format_relevant_facts(instance, *, left=None, right=None, max_facts=16, max_scan=4096):
+    left = None if left is None else str(left)
+    right = None if right is None else str(right)
+    exact = []
+    touching = []
+    seen = set()
+    scanned = 0
+    for key in ("visual_facts", "kb_facts", "facts"):
+        for fact in instance.get(key, []) or []:
+            if not isinstance(fact, (list, tuple)) or len(fact) != 3:
+                continue
+            pred, fact_left, fact_right = fact
+            item = (canonical_relation(pred), str(fact_left), str(fact_right))
+            if item in seen:
+                continue
+            seen.add(item)
+            scanned += 1
+            pred, fact_left, fact_right = item
+            matches_left = left is None or fact_left == left or fact_right == left
+            matches_right = right is None or fact_left == right or fact_right == right
+            if matches_left and matches_right:
+                exact.append(item)
+            elif matches_left or matches_right:
+                touching.append(item)
+            if len(exact) + len(touching) >= int(max_facts) or scanned >= int(max_scan):
+                break
+        if len(exact) + len(touching) >= int(max_facts) or scanned >= int(max_scan):
+            break
+    selected = (exact + touching)[: int(max_facts)]
+    if not selected:
+        return "None."
+    lines = [f"{pred}({left}, {right})" for pred, left, right in selected]
+    if scanned >= int(max_scan):
+        lines.append("... evidence scan capped")
+    return "\n".join(lines)
+
+
+def _format_object_metadata(instance, obj):
+    metadata = (instance.get("object_metadata") or {}).get(str(obj), {})
+    if not metadata:
+        return "None."
+    lines = []
+    if "image_id" in metadata:
+        lines.append(f"image_id={metadata['image_id']}")
+    if "image_url" in metadata:
+        lines.append(f"image_url={metadata['image_url']}")
+    if "bbox" in metadata:
+        lines.append(f"bbox={metadata['bbox']}")
+    feature = metadata.get("feature") or {}
+    if feature:
+        lines.append(
+            "region_feature_summary="
+            f"dim={feature.get('dim')} mean={feature.get('mean')} max={feature.get('max')} "
+            f"nonzero={feature.get('nonzero')} head={feature.get('head')}"
+        )
+    return "\n".join(lines) if lines else "None."
+
+
+def _object_symbol_feature_prompt(instance, obj, symbol, query=None, labels=None):
+    labels = labels or sorted(OBJECT_SYMBOL_RELATIONS) + [NO_RELATION_LABEL]
+    return "\n".join([
+        "Classify one GraphQA visual predicate from the object region only.",
+        "Do not use scene-graph labels, gold answers, or the executable query.",
+        "Visual input representation for the object region:",
+        _format_object_metadata(instance, obj),
+        f"Object id: {obj}",
+        f"Candidate concept: {symbol}",
+        "Predicate question: what relation, if any, holds between this object region and the candidate concept?",
+        f"Allowed labels: {', '.join(map(str, labels))}.",
+    ])
+
+
+def _object_pair_feature_prompt(instance, src, dst, query=None, labels=None):
+    labels = labels or collect_object_relations([instance]) + [NO_RELATION_LABEL]
+    return "\n".join([
+        "Classify one GraphQA visual relation predicate from two object regions only.",
+        "Do not use scene-graph labels, gold answers, or the executable query.",
+        "Visual input representation for the source object region:",
+        _format_object_metadata(instance, src),
+        "Visual input representation for the destination object region:",
+        _format_object_metadata(instance, dst),
+        f"Source object id: {src}",
+        f"Destination object id: {dst}",
+        "Predicate question: what visual relation, if any, holds from the source object to the destination object?",
+        f"Allowed labels: {', '.join(map(str, labels))}.",
+    ])
+
+
 def _object_symbol_prompt(instance, obj, symbol, query):
     return "\n".join([
         "Classify the GraphQA object-symbol predicate.",
-        f"Objects: {', '.join(map(str, instance.get('objects', [])))}",
+        "Use the provided bounded scene/KG facts as evidence; do not infer from object id alone.",
         f"Object: {obj}",
         f"Symbol: {symbol}",
+        "Relevant facts:",
+        _format_relevant_facts(instance, left=obj, right=symbol),
         f"Query: {query}",
-        "Labels: Name, ObjectType, ObjectCategory, Attribute.",
+        f"Labels: Name, ObjectType, ObjectCategory, Attribute, {NO_RELATION_LABEL}.",
     ])
 
 
 def _symbol_pair_prompt(instance, src, dst, query):
     return "\n".join([
         "Classify the GraphQA symbol-pair KG predicate.",
+        "Use the provided bounded scene/KG facts as evidence; do not infer from symbol names alone.",
         f"Source symbol: {src}",
         f"Destination symbol: {dst}",
         f"Query: {query}",
+        "Relevant facts:",
+        _format_relevant_facts(instance, left=src, right=dst),
+        f"Labels include: {NO_RELATION_LABEL}.",
     ])
 
 
 def _object_pair_prompt(instance, src, dst, query):
     return "\n".join([
         "Classify the GraphQA object-object relation predicate.",
+        "Use the provided bounded scene/KG facts as evidence; do not infer from object id alone.",
         f"Source object: {src}",
         f"Destination object: {dst}",
         f"Query: {query}",
+        "Relevant facts:",
+        _format_relevant_facts(instance, left=src, right=dst),
+        f"Labels include: {NO_RELATION_LABEL}.",
     ])

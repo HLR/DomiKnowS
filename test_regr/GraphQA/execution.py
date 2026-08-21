@@ -90,15 +90,17 @@ def create_query_logic(instance):
 
     body = create_object_query_body(instance)
     selector = create_object_selector_logic(instance, body=body)
-    return f"queryL(\n        obj,\n        {selector}\n    )"
+    return f"queryL(\n        answer_object,\n        {selector}\n    )"
 
 
 def create_object_query_body(instance):
     query = instance["query"]
     target_type = query.get("target_type")
-    base_predicates = ['obj("o")']
+    # As in CLEVR, iotaL first binds the entity that queryL classifies.
+    # Learned relation predicates are then reached from this object by paths.
+    base_predicates = ['object_domain("o")']
     if target_type != "__any_object__":
-        base_predicates.extend(_object_symbol_predicate("ObjectCategory", "o", target_type, "target_type"))
+        base_predicates.append(_bounded_type_predicate(instance, target_type, "target_type"))
 
     alternatives = query.get("alternatives")
     if alternatives:
@@ -118,9 +120,12 @@ def create_object_query_body(instance):
 
 def create_candidate_membership_logic(instance, candidate_object):
     body = create_object_query_body(instance)
-    candidate_predicate = f'{safe_name(candidate_object)}(path="o")'
-    membership_body = _and_body([body, candidate_predicate], indent="            ")
-    return f"existsL(\n        {membership_body}\n    )"
+    # Ground the query variable directly to the candidate object subtype. This
+    # avoids a second equality-style atom, which this DomiKnowS constructor can
+    # leave unbound inside nested executable expressions.
+    candidate_root = f'{safe_name(candidate_object)}("o")'
+    body = body.replace('obj("o")', candidate_root, 1)
+    return f"existsL(\n        {body}\n    )"
 
 
 def create_object_selector_logic(instance, body=None):
@@ -174,6 +179,8 @@ def _condition_predicates(instance, condition, index):
     pred = canonical_relation(pred)
     if left != "o":
         raise ValueError(f"Only target variable 'o' is supported, got {left!r}")
+    if pred == "Name":
+        return _name_predicate(instance, right, f"name{index}")
     if pred in OBJECT_SYMBOL_RELATIONS:
         return _aliased_object_symbol_predicate(instance, pred, right, f"{pred.lower()}{index}")
     if pred == "SemanticClass":
@@ -184,12 +191,23 @@ def _condition_predicates(instance, condition, index):
         return _candidate_relation_predicate(instance, pred, right, index)
     if pred == "OneOf":
         return _one_of_predicate(instance, right, index)
+    if _is_object_grounded_kb_relation(instance, pred):
+        return _aliased_object_symbol_predicate(instance, pred, right, f"{pred.lower()}{index}")
     if pred in collect_kb_relations(instance):
         raise ValueError(f"KB relation {pred!r} cannot be used directly as an object query condition")
     if pred in collect_object_relations(instance):
         _require_object(instance, right)
         return _object_relation_predicate(pred, "o", right, f"{safe_name(pred).lower()}{index}")
     raise ValueError(f"Unsupported GraphQA predicate: {pred!r}")
+
+
+def _is_object_grounded_kb_relation(instance, pred):
+    pred = canonical_relation(pred)
+    objects = {str(obj) for obj in instance.get("objects", [])}
+    return any(
+        canonical_relation(fact_pred) == pred and str(left) in objects
+        for fact_pred, left, _right in instance.get("kb_facts", [])
+    )
 
 
 def _require_symbol(instance, value):
@@ -202,6 +220,55 @@ def _require_object(instance, value):
         raise ValueError(f"Unknown object in condition: {value!r}")
 
 
+def _type_sources_for_targets(instance, targets, max_depth=2):
+    """Return bounded reverse TypeOf sources that can reach any target symbol."""
+    reverse_type = defaultdict(set)
+    for pred, src, dst in instance.get("kb_facts", []):
+        if canonical_relation(pred) == "TypeOf":
+            reverse_type[str(dst)].add(str(src))
+
+    out = set(str(target) for target in targets if target is not None)
+    frontier = set(out)
+    for _depth in range(max(0, int(max_depth))):
+        next_frontier = set()
+        for dst in frontier:
+            for src in reverse_type.get(dst, set()):
+                if src not in out:
+                    out.add(src)
+                    next_frontier.add(src)
+        frontier = next_frontier
+        if not frontier:
+            break
+    return list(dict.fromkeys(str(value) for value in out))
+
+
+def _semantic_class_symbols(instance, symbol):
+    aliases = alias_values("SemanticClass", symbol)
+    return _type_sources_for_targets(instance, aliases, max_depth=2)
+
+
+def _has_exact_scene_name(instance, symbol):
+    symbol = str(symbol)
+    return any(canonical_relation(pred) == "Name" and str(right) == symbol for pred, _left, right in instance.get("visual_facts", []))
+
+
+def _name_symbols(instance, symbol):
+    # VQAR Find_Name is exact when the queried surface name appears in the
+    # scene. If not, fall back to the bounded inherited-name closure used by
+    # Scallop's name/is_a rules. This prevents plural scene names such as
+    # "windows" from also selecting unrelated singular "window" objects.
+    if str(symbol).endswith("s") and _has_exact_scene_name(instance, symbol):
+        return [str(symbol)]
+    aliases = alias_values("SemanticClass", symbol)
+    return _type_sources_for_targets(instance, aliases, max_depth=2)
+
+
+def _kg_destination_symbols(instance, symbol):
+    aliases = alias_values("SemanticClass", symbol)
+    aliases.extend(alias_values("Attribute", symbol))
+    return list(dict.fromkeys(str(value) for value in aliases if value is not None))
+
+
 def _object_symbol_predicate(pred, obj_var, symbol, var_prefix):
     symbol_name = safe_name(symbol)
     pair_var = f"{var_prefix}_pair"
@@ -212,34 +279,43 @@ def _object_symbol_predicate(pred, obj_var, symbol, var_prefix):
 
 
 def _aliased_object_symbol_predicate(instance, pred, symbol, var_prefix):
-    bodies = []
+    predicate_sets = []
     for alias_index, alias in enumerate(alias_values(pred, symbol)):
         if alias not in instance.get("symbols", []):
             continue
-        bodies.append(_and_body(_object_symbol_predicate(pred, "o", alias, f"{var_prefix}_{alias_index}"), indent="        "))
-    if not bodies:
+        predicate_sets.append(_object_symbol_predicate(pred, "o", alias, f"{var_prefix}_{alias_index}"))
+    if not predicate_sets:
         _require_symbol(instance, symbol)
         return _object_symbol_predicate(pred, "o", symbol, var_prefix)
-    if len(bodies) == 1:
-        return [bodies[0]]
+    if len(predicate_sets) == 1:
+        return predicate_sets[0]
+    bodies = [_and_body(predicates, indent="        ") for predicates in predicate_sets]
     return ["orL(\n" + ",\n".join(bodies) + "\n    )"]
 
 
 def _semantic_class_predicate(instance, symbol, var_prefix):
+    return _bounded_type_predicate(instance, symbol, var_prefix)
+
+
+def _name_predicate(instance, symbol, var_prefix):
+    direct_predicates = []
     bodies = []
-    for alias_index, alias in enumerate(alias_values("SemanticClass", symbol)):
+    for alias_index, alias in enumerate(_name_symbols(instance, symbol)):
         if alias not in instance.get("symbols", []):
             continue
-        bodies.append(_and_body(_object_symbol_predicate("ObjectType", "o", alias, f"{var_prefix}_type_{alias_index}"), indent="        "))
-        bodies.append(_and_body(_object_symbol_predicate("ObjectCategory", "o", alias, f"{var_prefix}_category_{alias_index}"), indent="        "))
-        bodies.append(_and_body(_object_symbol_predicate("Name", "o", alias, f"{var_prefix}_name_{alias_index}"), indent="        "))
+        predicates = _object_symbol_predicate("Name", "o", alias, f"{var_prefix}_name_{alias_index}")
+        direct_predicates.append(predicates)
+        bodies.append(_and_body(predicates, indent="        "))
+    if not _has_exact_scene_name(instance, symbol):
+        bodies.extend(_bounded_type_bodies(instance, symbol, var_prefix, include_direct=False))
     if not bodies:
         _require_symbol(instance, symbol)
-        bodies.append(_and_body(_object_symbol_predicate("ObjectType", "o", symbol, f"{var_prefix}_class"), indent="        "))
-        bodies.append(_and_body(_object_symbol_predicate("ObjectCategory", "o", symbol, f"{var_prefix}_object_category"), indent="        "))
-    if len(bodies) == 1:
-        return bodies[0]
-    return "orL(\n" + ",\n".join(bodies) + "\n    )"
+        predicates = _object_symbol_predicate("Name", "o", symbol, f"{var_prefix}_exact")
+        direct_predicates.append(predicates)
+        bodies.append(_and_body(predicates, indent="        "))
+    if len(bodies) == 1 and len(direct_predicates) == 1:
+        return direct_predicates[0]
+    return ["orL(\n" + ",\n".join(bodies) + "\n    )"]
 
 
 def _object_relation_predicate(pred, obj_var, other_obj, var_prefix):
@@ -260,20 +336,77 @@ def _kg_condition_predicates(instance, value, index):
     rel = canonical_relation(rel)
     if rel not in collect_kb_relations(instance):
         raise ValueError(f"Unknown KG relation in condition: {rel!r}")
-    _require_symbol(instance, dst_symbol)
-    name_pair = f"kg_name{index}_pair"
-    kg_pair = f"kg{index}_pair"
+    dst_aliases = [alias for alias in _kg_destination_symbols(instance, dst_symbol) if alias in instance.get("symbols", [])]
+    if not dst_aliases:
+        _require_symbol(instance, dst_symbol)
+        dst_aliases = [dst_symbol]
+    source_bodies = []
+    for body_index, dst_alias in enumerate(dst_aliases):
+        source_bodies.extend(
+            _bounded_kb_relation_bodies(rel, dst_alias, f"kg{index}_{body_index}", max_type_depth=2)
+        )
+    return ["orL(\n" + ",\n".join(source_bodies) + "\n    )"]
+
+
+def _bounded_type_predicate(instance, symbol, var_prefix):
+    bodies = _bounded_type_bodies(instance, symbol, var_prefix, include_direct=True)
+    if not bodies:
+        _require_symbol(instance, symbol)
+        bodies = _bounded_kb_relation_bodies("TypeOf", symbol, var_prefix, max_type_depth=1)
+    if len(bodies) == 1:
+        return bodies[0]
+    return "orL(\n" + ",\n".join(bodies) + "\n    )"
+
+
+def _bounded_type_bodies(instance, symbol, var_prefix, include_direct=True):
+    """Ground an object name, then follow fixed TypeOf edges up to depth two."""
+    targets = [
+        alias for alias in alias_values("SemanticClass", symbol)
+        if alias in instance.get("symbols", [])
+    ]
+    if not targets and symbol in instance.get("symbols", []):
+        targets = [symbol]
+    bodies = []
+    for target_index, target in enumerate(targets):
+        if include_direct:
+            bodies.append(_and_body(
+                _object_symbol_predicate("Name", "o", target, f"{var_prefix}_{target_index}_direct"),
+                indent="        ",
+            ))
+        bodies.extend(
+            _bounded_kb_relation_bodies(
+                "TypeOf", target, f"{var_prefix}_{target_index}", max_type_depth=1,
+            )
+        )
+    return bodies
+
+
+def _bounded_kb_relation_bodies(rel, dst_symbol, var_prefix, max_type_depth=2):
+    """Join learned Name grounding with fixed KB edges, optionally through TypeOf."""
     rel_name = safe_name(rel)
     dst_name = safe_name(dst_symbol)
-    source_bodies = []
-    for source_index, source_pred in enumerate(("Name", "ObjectType", "ObjectCategory")):
-        source_pair = f"kg_source{index}_{source_index}_pair"
-        source_bodies.append(_and_body([
-            f'{source_pred}("{source_pair}", path=("o", object_symbol_object.reversed))',
-            f'{rel_name}("{kg_pair}_{source_index}", path=("{source_pair}", object_symbol_symbol, symbol_pair_src.reversed))',
-            f'{dst_name}(path=("{kg_pair}_{source_index}", symbol_pair_dst))',
-        ], indent="        "))
-    return ["orL(\n" + ",\n".join(source_bodies) + "\n    )"]
+    bodies = []
+    for type_depth in range(max(0, int(max_type_depth)) + 1):
+        name_pair = f"{var_prefix}_d{type_depth}_name_pair"
+        predicates = [
+            f'Name("{name_pair}", path=("o", object_symbol_object.reversed))',
+        ]
+        source_pair = name_pair
+        source_relation = "object_symbol_symbol"
+        for hop in range(type_depth):
+            type_pair = f"{var_prefix}_d{type_depth}_type{hop}_pair"
+            predicates.append(
+                f'TypeOf("{type_pair}", path=("{source_pair}", {source_relation}, symbol_pair_src.reversed))'
+            )
+            source_pair = type_pair
+            source_relation = "symbol_pair_dst"
+        relation_pair = f"{var_prefix}_d{type_depth}_rel_pair"
+        predicates.extend([
+            f'{rel_name}("{relation_pair}", path=("{source_pair}", {source_relation}, symbol_pair_src.reversed))',
+            f'{dst_name}(path=("{relation_pair}", symbol_pair_dst))',
+        ])
+        bodies.append(_and_body(predicates, indent="        "))
+    return bodies
 
 
 def _candidate_relation_predicate(instance, pred, value, index):

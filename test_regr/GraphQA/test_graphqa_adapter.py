@@ -19,6 +19,7 @@ from .execution import (
 )
 from .graph import collect_object_relations, create_graphqa_graph
 from .oracle import answer_object, check_oracle
+from .scallop_style_qwen_executor import OracleScorer, evaluate_instance_ilp, index_kb
 
 
 SAMPLE_INSTANCE = {
@@ -124,6 +125,68 @@ class TestGraphQAAdapter(unittest.TestCase):
         self.assertEqual(answer_object(SAMPLE_INSTANCE), "o1")
         self.assertTrue(check_oracle(SAMPLE_INSTANCE, "o1"))
         self.assertEqual(answer_object(MULTI_RELATION_DATASET[1]), "o2")
+
+    def test_kb_facts_are_fixed_graph_edges_in_executable_query(self):
+        capability_instance = {
+            "objects": ["o1", "o2"],
+            "symbols": ["microwave", "chair", "appliance", "heating"],
+            "visual_facts": [
+                ("Name", "o1", "microwave"),
+                ("Name", "o2", "chair"),
+            ],
+            "kb_facts": [
+                ("TypeOf", "microwave", "appliance"),
+                ("Capable", "appliance", "heating"),
+            ],
+            "query": {
+                "target_type": "__any_object__",
+                "conditions": [("KG", "o", ("Capable", "heating"))],
+                "answer_type": "object",
+            },
+            "expected_answer": "o1",
+        }
+        context = create_graphqa_graph(capability_instance)
+        logic = create_query_logic(capability_instance)
+
+        self.assertIn("Name", logic)
+        self.assertIn("TypeOf", logic)
+        self.assertIn("Capable", logic)
+        self.assertNotIn("ObjectType", logic)
+        self.assertNotIn("ObjectCategory", logic)
+        self.assertEqual(answer_object(capability_instance), "o1")
+        self.assertEqual(len(compile_graphqa_dataset([capability_instance], context)), 1)
+
+    def test_global_constraints_and_ilp_use_fixed_kb_evidence(self):
+        instance = {
+            "objects": ["o1", "o2"],
+            "symbols": ["microwave", "chair", "appliance", "heating"],
+            "visual_facts": [("Name", "o1", "microwave"), ("Name", "o2", "chair")],
+            "kb_facts": [("TypeOf", "microwave", "appliance"), ("Capable", "appliance", "heating")],
+            "query": {
+                "target_type": "__any_object__",
+                "conditions": [("KG", "o", ("Capable", "heating"))],
+                "answer_type": "object",
+            },
+            "expected_answer": "o1",
+            "expected_answers": ["o1"],
+        }
+        context = create_graphqa_graph(instance, include_global_constraints=True)
+        head_names = {
+            lc.name for lc in context.graph.logicalConstrains.values()
+            if getattr(lc, "headLC", False)
+        }
+        self.assertIn("graphqa_name_typeof_implies_object_type", head_names)
+        self.assertIn("graphqa_object_type_typeof_implies_category", head_names)
+
+        kb_by_src, kb_by_rel_dst = index_kb(instance["kb_facts"])
+        scores = evaluate_instance_ilp(
+            instance,
+            OracleScorer(instance),
+            kb_by_src,
+            kb_by_rel_dst,
+            global_consistency=True,
+        )
+        self.assertEqual(max(scores, key=scores.get), "o1")
 
     def test_set_answer_candidate_membership_logic_compiles(self):
         multi_answer = {

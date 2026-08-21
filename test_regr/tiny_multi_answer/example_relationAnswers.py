@@ -67,7 +67,7 @@ def reset_domiknows_state():
 
 def build_relation_answer_example(
     device="cpu", threshold=0.5, hard=False, *, left_pairs=None,
-    second_ball=False, executable=False,
+    second_ball=False, executable=False, logic=None, logic_label=None,
 ):
     # Rebuild global DomiKnowS state for each independent regression example.
     reset_domiknows_state()
@@ -156,16 +156,21 @@ def build_relation_answer_example(
     poi = [scene, object_node, pair, red, ball, left]
     if executable:
         # Compile the same relation-aware selector to exercise labels and training.
-        logic = (
-            "miotaL(andL("
-            'object("x"), '
-            'left("r", path=("x", pair_src.reversed)), '
-            'ball("y", path=("r", pair_dst))'
-            f"), threshold={float(threshold)!r}, hard={bool(hard)!r})"
-        )
+        if logic is None:
+            logic = (
+                "miotaL(andL("
+                'object("x"), '
+                'left("r", path=("x", pair_src.reversed)), '
+                'ball("y", path=("r", pair_dst))'
+                f"), threshold={float(threshold)!r}, hard={bool(hard)!r})"
+            )
+        if logic_label is None:
+            logic_label = EXPECTED_MULTI_HOT
         rows[0].update({
             "logic_str": logic,
-            "logic_label": EXPECTED_MULTI_HOT.to(device=device, dtype=torch.float32),
+            "logic_label": torch.as_tensor(
+                logic_label, device=device, dtype=torch.float32
+            ),
         })
         dataset = graph.compile_executable(
             rows,

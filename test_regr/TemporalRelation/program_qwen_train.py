@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import argparse
 import functools
+import json
+import math
+import random
 from pathlib import Path
 
 import torch
@@ -30,6 +33,24 @@ DEFAULT_MODEL = "/localscratch/premsrit/.cache/huggingface/hub/models--Qwen--Qwe
 DEFAULT_OUTPUT = Path("/egr/research-hlr2/premsrit/TemporalRelation/models/qwen3_8b_temporal_domiknows_program.pt")
 LOCAL_IGNORE_LABEL = -100
 
+# The named ifL rules from graph.py's include_global_constraints block, used
+# by --verify-lc to report per-rule satisfaction rates via program.verifyResultsLC.
+TEMPORAL_GLOBAL_CONSTRAINT_NAMES = [
+    "temporal_exactly_one_label",
+    "temporal_before_inverse_after",
+    "temporal_after_inverse_before",
+    "temporal_equal_symmetric",
+    "temporal_vague_symmetric",
+    "temporal_before_no_cycle_2",
+    "temporal_before_transitive",
+    "temporal_after_transitive",
+    "temporal_equal_transitive",
+    "temporal_equal_before_left_substitution",
+    "temporal_equal_after_left_substitution",
+    "temporal_equal_before_right_substitution",
+    "temporal_equal_after_right_substitution",
+]
+
 
 def _relation_class_metrics(correct_by_label, total_by_label):
     per_label = {}
@@ -42,6 +63,58 @@ def _relation_class_metrics(correct_by_label, total_by_label):
             recalls.append(recall)
     return per_label, sum(recalls) / len(recalls) if recalls else 0.0
 _TEMPORAL_CLASS_WEIGHTS = None
+
+
+class ScheduledOptimizer:
+    """Wraps a torch optimizer to add an LR schedule without touching
+    domiknows/program/lossprogram.py, which only ever calls the generic
+    ``.step()`` / ``.zero_grad()`` interface on ``program.opt`` — it never
+    inspects the optimizer's type. Substituting this wrapper for the plain
+    AdamW instance program_qwen_train.py assigns to ``program.opt`` is
+    therefore a test_regr/-only change; the shared training loop is
+    unmodified. Linear warmup over `warmup_steps`, then cosine decay to
+    `final_lr_ratio` * base_lr over the remaining `total_steps`.
+    """
+
+    def __init__(self, optimizer, base_lr, total_steps, warmup_steps=0, final_lr_ratio=0.1):
+        self.optimizer = optimizer
+        self.base_lr = base_lr
+        self.total_steps = max(1, total_steps)
+        self.warmup_steps = max(0, min(warmup_steps, self.total_steps))
+        self.final_lr_ratio = final_lr_ratio
+        self._step_count = 0
+        self._set_lr(self._lr_for_step(0))
+
+    def _lr_for_step(self, step):
+        if self.warmup_steps and step < self.warmup_steps:
+            return self.base_lr * (step + 1) / self.warmup_steps
+        remaining_total = max(1, self.total_steps - self.warmup_steps)
+        progress = min(1.0, (step - self.warmup_steps) / remaining_total)
+        cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+        floor = self.base_lr * self.final_lr_ratio
+        return floor + (self.base_lr - floor) * cosine
+
+    def _set_lr(self, lr):
+        for group in self.optimizer.param_groups:
+            group["lr"] = lr
+
+    def step(self, *args, **kwargs):
+        self.optimizer.step(*args, **kwargs)
+        self._step_count += 1
+        self._set_lr(self._lr_for_step(self._step_count))
+
+    def zero_grad(self, *args, **kwargs):
+        self.optimizer.zero_grad(*args, **kwargs)
+
+    @property
+    def param_groups(self):
+        return self.optimizer.param_groups
+
+    def state_dict(self):
+        return self.optimizer.state_dict()
+
+    def load_state_dict(self, state_dict):
+        self.optimizer.load_state_dict(state_dict)
 
 
 class WeightedTemporalCrossEntropyLoss(torch.nn.Module):
@@ -57,8 +130,19 @@ class WeightedTemporalCrossEntropyLoss(torch.nn.Module):
     def forward(self, input, target, *args, **kwargs):
         input = input.view(-1, input.shape[-1])
         target = target.view(-1).to(dtype=torch.long, device=input.device)
-        weight = self.weights.to(input.device) if self.weights is not None else None
-        return F.cross_entropy(input, target, weight=weight, ignore_index=LOCAL_IGNORE_LABEL)
+        valid = target != LOCAL_IGNORE_LABEL
+        if not torch.any(valid):
+            return input.sum() * 0.0
+
+        per_row = F.cross_entropy(input[valid], target[valid], reduction="none")
+        if self.weights is not None:
+            # Use valid-count normalization instead of PyTorch's weighted-mean
+            # normalization. Otherwise a single Equal/Vague row has its weight
+            # divided back out, which makes class weighting ineffective for the
+            # target-only curriculum stage.
+            weight = self.weights.to(input.device)[target[valid]]
+            per_row = per_row * weight
+        return per_row.sum() / valid.float().sum().clamp_min(1.0)
 
 
 def _make_temporal_ce_loss(weights=None):
@@ -111,11 +195,13 @@ class QwenTemporalRelationLearner(torch.nn.Module):
         lora_target_modules="q_proj,v_proj",
         max_length=128,
         encode_batch_size=1,
+        prompt_style="basic",
     ):
         super().__init__()
         self.device_name = device
         self.max_length = int(max_length)
         self.encode_batch_size = max(1, int(encode_batch_size or 1))
+        self.prompt_style = prompt_style
 
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -167,8 +253,35 @@ class QwenTemporalRelationLearner(torch.nn.Module):
             token_ids.append(encoded)
         return token_ids
 
-    @staticmethod
-    def _format_prompt(marked_text):
+    _LABEL_DEFINITIONS = (
+        "Before: event E1 occurs before event E2.\n"
+        "After: event E1 occurs after event E2.\n"
+        "Equal: event E1 and event E2 occur at the same time.\n"
+        "Vague: the temporal order between E1 and E2 cannot be determined from the text.\n"
+    )
+
+    _FEW_SHOT_EXAMPLES = (
+        "Text: The [E1]meeting[/E1] ended before the [E2]party[/E2] began.\nAnswer: Before\n"
+        "Text: The [E1]announcement[/E1] came after the [E2]vote[/E2] was cast.\nAnswer: After\n"
+        "Text: The [E1]explosion[/E1] and the [E2]collapse[/E2] happened simultaneously.\nAnswer: Equal\n"
+        "Text: Reports say the [E1]incident[/E1] and the [E2]announcement[/E2] were related, "
+        "though which happened first was unclear.\nAnswer: Vague\n"
+    )
+
+    # prompt_style: 'basic' (default) reproduces every prior run's exact prompt, a true
+    # no-op. 'enhanced' adds label definitions + 4 few-shot examples (one per label,
+    # covering Equal/Vague which have collapsed to ~0% recall in every training recipe
+    # tried so far) to test whether prompting alone helps, independent of training.
+    def _format_prompt(self, marked_text):
+        if self.prompt_style == "enhanced":
+            return (
+                "Classify the temporal relation from event E1 to event E2. "
+                "Choose exactly one label from: Before, After, Equal, Vague.\n"
+                f"{self._LABEL_DEFINITIONS}\n"
+                f"{self._FEW_SHOT_EXAMPLES}\n"
+                f"Text: {marked_text}\n"
+                "Answer:"
+            )
         return (
             "Classify the temporal relation from event E1 to event E2. "
             "Choose exactly one label from: Before, After, Equal, Vague.\n"
@@ -226,7 +339,11 @@ class QwenTemporalRelationLearner(torch.nn.Module):
         return label_scores.view(len(prompts), len(TEMPORAL_LABELS)).float()
 
 def build_temporal_program(instances, args):
-    ctx = create_temporal_graph(instances, include_global_constraints=not args.no_global_consistency)
+    ctx = create_temporal_graph(
+        instances,
+        include_global_constraints=not args.no_global_consistency,
+        include_transitive_constraints=not args.no_transitive_constraints,
+    )
     attach_program_train_sensors(ctx, args)
     dataset = compile_program_train_dataset(
         instances,
@@ -263,6 +380,12 @@ def build_temporal_program(instances, args):
         anneal_start_epoch=args.gumbel_anneal_start_epoch,
         anneal_epochs=args.gumbel_anneal_epochs,
         hard_gumbel=args.hard_gumbel,
+        query_loss=NBCrossEntropyLoss,
+        # Root-cause fix: InferenceModel.include_global_constraint_loss defaults to
+        # False and was never set here, so closs never actually included the graph's
+        # global ifL rules regardless of --no-global-consistency (which only controls
+        # whether those rules exist in the graph, not whether their loss is used).
+        include_global_constraint_loss=not args.no_global_consistency,
     )
     # This local DomiKnowS branch forwards InferenceProgram kwargs into the
     # main SolverModel. Set the constraint-model tnorm after construction.
@@ -342,6 +465,7 @@ def attach_program_train_sensors(ctx, args):
             lora_target_modules=args.lora_target_modules,
             max_length=args.max_length,
             encode_batch_size=args.encode_batch_size,
+            prompt_style=args.prompt_style,
         ),
         loss=_make_temporal_ce_loss(_TEMPORAL_CLASS_WEIGHTS),
         device=device,
@@ -524,6 +648,127 @@ def evaluate_temporal_relation_ilp_accuracy(dataset, ctx, program, device="cpu")
     return _evaluate_temporal_relation_from_datanodes(dataset, ctx, program, infer_key="ILP")
 
 
+def evaluate_query_answer_accuracy(dataset, ctx, program, infer_key="local/argmax"):
+    """Final-answer accuracy for the compiled queryL/iotaL program.
+
+    DomiKnowS' generic evaluate_condition reports boolean/counting constraint
+    satisfaction and is not a reliable multiclass queryL answer reader for this
+    graph. This evaluator mirrors the compiled query explicitly:
+
+        queryL(temporal_relation,
+               iotaL(EventPair(p) and query_event1(e1) and query_event2(e2)))
+
+    It first selects the unique EventPair whose endpoints are the query events,
+    then decodes temporal_relation from that pair.
+    """
+    from collections import Counter
+
+    correct = 0
+    total = 0
+    missing = 0
+    nonunique = 0
+    pred_counts = Counter()
+    gold_counts = Counter()
+    correct_by_label = Counter()
+
+    was_training = program.model.training
+    program.model.eval()
+    with torch.no_grad():
+        for row in dataset:
+            output = program.model(row)
+            datanode = output[2] if isinstance(output, tuple) and len(output) > 2 else output
+            pair_nodes = datanode.findDatanodes(select=ctx.event_pair) if datanode is not None else []
+            if not pair_nodes:
+                missing += 1
+                continue
+
+            try:
+                query_pair = _query_pair_indices_from_row(row)
+            except Exception:
+                missing += 1
+                continue
+            selected = []
+            for pair_node in pair_nodes:
+                try:
+                    if _pair_indices_from_datanode(pair_node) == query_pair:
+                        selected.append(pair_node)
+                except Exception:
+                    continue
+            if not selected:
+                missing += 1
+                continue
+            if len(selected) != 1:
+                nonunique += 1
+                continue
+
+            gold_value = _logic_label_from_row(row)
+            if gold_value is None or gold_value == LOCAL_IGNORE_LABEL:
+                missing += 1
+                continue
+            pred_value = _decode_pair_prediction(selected[0], ctx, infer_key)
+            if pred_value is None:
+                missing += 1
+                continue
+
+            gold_label = TEMPORAL_LABELS[gold_value]
+            pred_label = TEMPORAL_LABELS[pred_value]
+            correct += int(pred_value == gold_value)
+            total += 1
+            pred_counts.update([pred_label])
+            gold_counts.update([gold_label])
+            if pred_value == gold_value:
+                correct_by_label[gold_label] += 1
+
+    if was_training:
+        program.model.train()
+    per_label, macro_recall = _relation_class_metrics(correct_by_label, gold_counts)
+    return {
+        "query_answer_correct": correct,
+        "query_answer_total": total,
+        "query_answer_acc": correct / total if total else 0.0,
+        "query_answer_macro_recall": macro_recall,
+        "query_answer_per_label": per_label,
+        "pred_counts": dict(pred_counts),
+        "gold_counts": dict(gold_counts),
+        "missing": missing,
+        "nonunique": nonunique,
+        "infer_key": infer_key,
+    }
+
+
+def _query_pair_indices_from_row(row):
+    left = _single_positive_index(row["is_query_event1"])
+    right = _single_positive_index(row["is_query_event2"])
+    return left, right
+
+
+def _single_positive_index(values):
+    if hasattr(values, "detach"):
+        values = values.detach().cpu().view(-1)
+        positives = (values > 0).nonzero(as_tuple=False).view(-1)
+        if positives.numel() != 1:
+            raise ValueError(f"Expected exactly one positive query event, found {positives.numel()}")
+        return int(positives[0].item())
+    positives = [idx for idx, value in enumerate(values) if value]
+    if len(positives) != 1:
+        raise ValueError(f"Expected exactly one positive query event, found {len(positives)}")
+    return int(positives[0])
+
+
+def _logic_label_from_row(row):
+    label = row.get("logic_label") if isinstance(row, dict) else None
+    if label is None:
+        return None
+    if hasattr(label, "detach"):
+        label = label.detach().cpu().view(-1)
+        if label.numel() == 0:
+            return None
+        return int(label[0].item())
+    if isinstance(label, (list, tuple)):
+        return int(label[0]) if label else None
+    return int(label)
+
+
 def _evaluate_temporal_relation_from_datanodes(dataset, ctx, program, infer_key="local/argmax"):
     from collections import Counter
 
@@ -653,7 +898,7 @@ def _select_candidate_pairs(
 ):
     event_set = set(event_ids)
     mode = pair_selection or "all"
-    if mode not in {"all", "related", "target"}:
+    if mode not in {"all", "related", "target", "target_only"}:
         raise ValueError(f"Unsupported pair_selection={pair_selection!r}")
 
     def capped(pairs):
@@ -676,6 +921,8 @@ def _select_candidate_pairs(
     selected = []
     seen = set()
     add_unique(selected, seen, query_e1, query_e2)
+    if mode == "target_only":
+        return capped(selected)
     add_unique(selected, seen, query_e2, query_e1)
     if mode == "target":
         return capped(selected)
@@ -800,7 +1047,15 @@ def parse_args():
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--row-level", action="store_true", help="Use the old row-level setup with only the annotated event pair. Off by default; document-level query expansion is the full experiment.")
     parser.add_argument("--max-events-per-instance", type=int, default=None, help="Optional document event budget. Query endpoints are always retained.")
-    parser.add_argument("--pair-selection", choices=["all", "related", "target"], default="all", help="Which event pairs become DomiKnowS EventPair nodes: all ordered pairs, only query-related labeled pairs, or only the target pair plus inverse.")
+    parser.add_argument(
+        "--pair-selection",
+        choices=["all", "related", "target", "target_only"],
+        default="all",
+        help=(
+            "Which event pairs become DomiKnowS EventPair nodes: all ordered pairs, "
+            "query-related labeled pairs, the target pair plus inverse, or only the target pair."
+        ),
+    )
     parser.add_argument("--max-pairs-per-instance", type=int, default=None, help="Upper bound on selected EventPair nodes/prompts per query instance. Target pair is prioritized.")
     parser.add_argument("--dev-fraction", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=13)
@@ -867,10 +1122,20 @@ def parse_args():
     )
     parser.add_argument("--vague-weight", type=float, default=1.0, help="Multiplier for the Vague class CE weight.")
     parser.add_argument("--equal-weight", type=float, default=1.0, help="Multiplier for the Equal class CE weight.")
+    parser.add_argument("--balance-train-labels", action="store_true", help="Oversample train query instances so target temporal labels are balanced during warmup/execution training.")
+    parser.add_argument("--balance-train-labels-max-multiplier", type=int, default=0, help="Optional cap on per-class oversampling multiplier; <=0 balances to the majority class.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--loss-summary-output", type=Path, default=None, help="Optional JSON path for training settings, class weights, loss stats, and eval metrics.")
     parser.add_argument("--eval-only", action="store_true", help="Load --checkpoint/--output and only run dev evaluation.")
     parser.add_argument("--checkpoint", type=Path, default=None, help="Checkpoint to load for --eval-only; defaults to --output.")
     parser.add_argument("--skip-condition-eval", action="store_true", help="Skip slow executable queryL/iotaL condition evaluation.")
+    parser.add_argument(
+        "--verify-lc",
+        action="store_true",
+        help="At --eval-only time, additionally run program.verifyResultsLC on the 12 global-consistency ifL rules "
+             "(datanode.verifyResultsLC under the hood) to report per-rule satisfaction rates on discrete local/argmax "
+             "predictions, without needing ILP. Prints results; does not change the loss-summary JSON.",
+    )
     parser.add_argument(
         "--supervise-local-predicates",
         action=argparse.BooleanOptionalAction,
@@ -883,9 +1148,41 @@ def parse_args():
         help="Disable graph-level temporal consistency rules and train only from per-sample executable query constraints.",
     )
     parser.add_argument(
+        "--no-transitive-constraints",
+        action="store_true",
+        help="Interim workaround: exclude the 7 transitive/substitution global-consistency rules (they chain a "
+             "second EventPair variable via a .reversed path hop and currently crash calculateLcLoss with a "
+             "tensor shape mismatch), keeping the other 6 simpler global rules active. No effect if "
+             "--no-global-consistency is also set.",
+    )
+    parser.add_argument(
         "--boolean-executable-assertion",
         action="store_true",
         help="Use the older boolean assertion wrapper instead of CLEVR-style queryL multiclass final labels.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Gradient-accumulation batch size forwarded to program.train(). Default 1 matches every existing "
+             "run in this project (single-example updates) — this is a genuine no-op unless changed.",
+    )
+    parser.add_argument(
+        "--lr-schedule",
+        choices=["none", "cosine"],
+        default="none",
+        help="Optional LR schedule via a ScheduledOptimizer wrapper around program.opt (test_regr/-only, does "
+             "not touch domiknows/). 'none' (default) keeps the flat --lr used by every existing run.",
+    )
+    parser.add_argument("--lr-warmup-steps", type=int, default=0, help="Linear warmup steps for --lr-schedule=cosine.")
+    parser.add_argument("--lr-final-ratio", type=float, default=0.1, help="Final LR as a fraction of --lr for --lr-schedule=cosine.")
+    parser.add_argument(
+        "--prompt-style",
+        choices=["basic", "enhanced"],
+        default="basic",
+        help="'basic' (default) reproduces every existing run's exact prompt. 'enhanced' adds label "
+             "definitions and 4 few-shot examples (one per label) to test whether prompting alone "
+             "helps, independent of training.",
     )
     return parser.parse_args()
 
@@ -897,6 +1194,82 @@ def _parse_data_paths(value):
     if not paths:
         raise ValueError("--train-paths was provided but no dataset paths were parsed")
     return paths
+
+
+def _target_relation_label(instance):
+    converted = create_executable_instance(instance)
+    query_pair = converted.get("query_pair") or instance.get("query_pair") or instance.get("event_pairs", [None])[0]
+    _left, _right, label = unpack_pair(query_pair)
+    if label in TEMPORAL_LABELS:
+        return label
+    logic_label = converted.get("logic_label")
+    if logic_label is None:
+        return None
+    try:
+        return TEMPORAL_LABELS[int(logic_label)]
+    except Exception:
+        return None
+
+
+def _label_counts(instances):
+    counts = {label: 0 for label in TEMPORAL_LABELS}
+    missing = 0
+    for instance in instances:
+        label = _target_relation_label(instance)
+        if label in counts:
+            counts[label] += 1
+        else:
+            missing += 1
+    if missing:
+        counts["__missing__"] = missing
+    return counts
+
+
+def _balance_instances_by_target_label(instances, seed=13, max_multiplier=0):
+    by_label = {label: [] for label in TEMPORAL_LABELS}
+    remainder = []
+    for instance in instances:
+        label = _target_relation_label(instance)
+        if label in by_label:
+            by_label[label].append(instance)
+        else:
+            remainder.append(instance)
+    non_empty = [rows for rows in by_label.values() if rows]
+    if not non_empty:
+        return list(instances)
+    target_count = max(len(rows) for rows in non_empty)
+    if max_multiplier and max_multiplier > 0:
+        target_count = min(target_count, max(len(rows) * int(max_multiplier) for rows in non_empty))
+    rng = random.Random(seed)
+    balanced = []
+    for label in TEMPORAL_LABELS:
+        rows = by_label[label]
+        if not rows:
+            continue
+        balanced.extend(rows)
+        needed = max(0, target_count - len(rows))
+        if needed:
+            balanced.extend(rng.choice(rows) for _ in range(needed))
+    balanced.extend(remainder)
+    rng.shuffle(balanced)
+    return balanced
+
+
+def _resolve_loss_summary_output(path, eval_only=False):
+    if path is None:
+        return None
+    path = Path(path)
+    if not eval_only or not path.exists():
+        return path
+    try:
+        existing = json.loads(path.read_text())
+    except Exception:
+        existing = {}
+    # Training summaries carry loss_stats; eval-only reruns should not erase
+    # those traces, otherwise we lose the only compact record of mloss/closs.
+    if existing.get("loss_stats"):
+        return path.with_name(f"{path.stem}_eval{path.suffix}")
+    return path
 
 
 def main():
@@ -925,12 +1298,22 @@ def main():
         # MATRES/platinum.txt, rather than a random dev fraction.
         train = list(instances)
         dev = list(instances)
+    original_train_len = len(train)
+    train_label_counts = _label_counts(train)
+    if args.balance_train_labels and not args.eval_only:
+        train = _balance_instances_by_target_label(
+            train,
+            seed=args.seed,
+            max_multiplier=args.balance_train_labels_max_multiplier,
+        )
+    balanced_train_label_counts = _label_counts(train)
     print(f"dataset={args.path}", flush=True)
     if len(data_paths) > 1:
         print(f"train_paths={[str(path) for path in data_paths]}", flush=True)
     if documents is not None:
         print(f"documents={len(documents)} query_instances={len(instances)}", flush=True)
     print(f"loaded={len(instances)} train={len(train)} dev={len(dev)} device={args.device}", flush=True)
+    print(f"train_label_counts={train_label_counts} balanced_train_label_counts={balanced_train_label_counts} original_train={original_train_len}", flush=True)
     print(
         f"pair_stats={_pair_count_stats(instances, args.max_events_per_instance, args.pair_selection, args.max_pairs_per_instance)} "
         f"max_events_per_instance={args.max_events_per_instance} "
@@ -965,16 +1348,32 @@ def main():
         print(f"loaded_checkpoint={args.checkpoint}", flush=True)
     if args.eval_only:
         if not args.checkpoint:
-            program.load(args.output, map_location=args.device)
-            print(f"loaded_checkpoint={args.output}", flush=True)
+            if args.output.exists():
+                program.load(args.output, map_location=args.device)
+                print(f"loaded_checkpoint={args.output}", flush=True)
+            else:
+                print("loaded_checkpoint=None; evaluating current initialized model", flush=True)
     else:
         Optim = functools.partial(torch.optim.AdamW, lr=args.lr)
         # DomiKnowS phased training executes warmup/constraint epochs directly,
         # so initialize the main optimizer here like the examples do externally.
-        program.opt = Optim(program.model.parameters())
+        base_opt = Optim(program.model.parameters())
+        if args.lr_schedule == "cosine":
+            total_epochs = max(1, warmup_epochs + constraint_epochs)
+            steps_per_epoch = max(1, math.ceil(len(train_data) / max(1, args.batch_size)))
+            program.opt = ScheduledOptimizer(
+                base_opt,
+                base_lr=args.lr,
+                total_steps=steps_per_epoch * total_epochs,
+                warmup_steps=args.lr_warmup_steps,
+                final_lr_ratio=args.lr_final_ratio,
+            )
+        else:
+            program.opt = base_opt
         program.train(
             train_data,
             valid_set=dev_data,
+            batch_size=args.batch_size,
             warmup_epochs=warmup_epochs,
             constraint_epochs=constraint_epochs,
             device=args.device,
@@ -988,20 +1387,74 @@ def main():
             constraint_only=args.constraint_only,
             constraint_loss_scale=args.constraint_loss_scale,
             num_epochs=warmup_epochs + constraint_epochs,
+            persist_c_session=True,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         program.save(args.output)
         print(f"saved={args.output}", flush=True)
+    run_summary = {
+        "dataset": str(args.path),
+        "train_paths": [str(path) for path in data_paths],
+        "loaded": len(instances),
+        "train": len(train),
+        "original_train": original_train_len,
+        "dev": len(dev),
+        "balance_train_labels": args.balance_train_labels,
+        "train_label_counts": train_label_counts,
+        "balanced_train_label_counts": balanced_train_label_counts,
+        "warmup_epochs": warmup_epochs,
+        "constraint_epochs": constraint_epochs,
+        "lr": args.lr,
+        "batch_size": args.batch_size,
+        "lr_schedule": args.lr_schedule,
+        "lr_warmup_steps": args.lr_warmup_steps if args.lr_schedule == "cosine" else None,
+        "lr_final_ratio": args.lr_final_ratio if args.lr_schedule == "cosine" else None,
+        "beta": args.beta,
+        "class_weights": dict(zip(TEMPORAL_LABELS, _TEMPORAL_CLASS_WEIGHTS or [1.0] * len(TEMPORAL_LABELS))),
+        "pair_selection": args.pair_selection,
+        "max_events_per_instance": args.max_events_per_instance,
+        "max_pairs_per_instance": args.max_pairs_per_instance,
+        "training_style": args.training_style,
+        "constraint_only": args.constraint_only,
+        "constraint_loss_scale": args.constraint_loss_scale,
+        "global_consistency": not args.no_global_consistency,
+        "loss_stats": list(getattr(program, "_persistent_c_session", {}) .get("loss_stats", []))
+            if getattr(program, "_persistent_c_session", None) is not None else [],
+        "metrics": {},
+    }
     if dev_data:
+        query_metrics = evaluate_query_answer_accuracy(dev_data, _ctx, program, infer_key="local/argmax")
+        print(f"dev_query_answer={query_metrics}", flush=True)
+        run_summary["metrics"]["dev_query_answer"] = query_metrics
         relation_metrics = evaluate_temporal_relation_accuracy(dev_data, _ctx, program, device=args.device)
         print(f"dev_temporal_relation={relation_metrics}", flush=True)
+        run_summary["metrics"]["dev_temporal_relation"] = relation_metrics
         infer_types = [item.strip() for item in args.infer_types.split(",") if item.strip()]
         if "ILP" in infer_types:
+            query_ilp_metrics = evaluate_query_answer_accuracy(dev_data, _ctx, program, infer_key="ILP")
+            print(f"dev_query_answer_ilp={query_ilp_metrics}", flush=True)
+            run_summary["metrics"]["dev_query_answer_ilp"] = query_ilp_metrics
             ilp_metrics = evaluate_temporal_relation_ilp_accuracy(dev_data, _ctx, program, device=args.device)
             print(f"dev_temporal_relation_ilp={ilp_metrics}", flush=True)
+            run_summary["metrics"]["dev_temporal_relation_ilp"] = ilp_metrics
         if not args.skip_condition_eval:
             condition = program.evaluate_condition(dev_data, device=args.device, return_dict=True)
             print(f"dev_condition={condition}", flush=True)
+            run_summary["metrics"]["dev_condition"] = condition
+        if args.verify_lc:
+            # verifyResultsLC keys constraints by internal sequential id (LC1, LC3, ...),
+            # not the `name=` kwarg passed to ifL() in graph.py, so request everything;
+            # see TEMPORAL_GLOBAL_CONSTRAINT_NAMES for the declaration-order mapping to
+            # human-readable rule names (LC ids appeared in the same order as the ifL
+            # calls when this was checked, but that positional mapping isn't guaranteed
+            # by the library — verify against graph.py if it ever matters precisely).
+            print("=== verifyResultsLC (global-consistency ifL rule satisfaction, local/argmax) ===", flush=True)
+            program.verifyResultsLC(dev_data, constraint_names=None, device=args.device)
+    summary_output = _resolve_loss_summary_output(args.loss_summary_output, eval_only=args.eval_only)
+    if summary_output is not None:
+        summary_output.parent.mkdir(parents=True, exist_ok=True)
+        summary_output.write_text(json.dumps(run_summary, indent=2, sort_keys=True))
+        print(f"loss_summary={summary_output}", flush=True)
     return 0
 
 

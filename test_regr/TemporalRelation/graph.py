@@ -37,7 +37,12 @@ class TemporalRelationContext:
     namespace: dict
 
 
-def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relation", include_global_constraints=True):
+def create_temporal_graph(
+    instance_or_dataset=None,
+    graph_name="temporal_relation",
+    include_global_constraints=True,
+    include_transitive_constraints=True,
+):
     """
     Build a MATRES-style temporal relation graph.
 
@@ -109,6 +114,15 @@ def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relatio
             )
             ifL(
                 andL(
+                    vague("p"),
+                    event("p1", path=("p", pair_event1)),
+                    event("p2", path=("p", pair_event2)),
+                ),
+                vague("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed))),
+                name="temporal_vague_symmetric",
+            )
+            ifL(
+                andL(
                     before("p"),
                     event("p1", path=("p", pair_event1)),
                     event("p2", path=("p", pair_event2)),
@@ -116,17 +130,94 @@ def create_temporal_graph(instance_or_dataset=None, graph_name="temporal_relatio
                 notL(before("p_rev", path=(("p2", pair_event1.reversed), ("p1", pair_event2.reversed)))),
                 name="temporal_before_no_cycle_2",
             )
-            ifL(
-                andL(
-                    before("xy"),
-                    event("x", path=("xy", pair_event1)),
-                    event("y", path=("xy", pair_event2)),
-                    before("yz", path=("y", pair_event1.reversed)),
-                    event("z", path=("yz", pair_event2)),
-                ),
-                before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
-                name="temporal_before_transitive",
-            )
+            # The 7 transitive/substitution rules below all chain a *second*
+            # EventPair-typed variable (yz) off an event derived from the first
+            # (xy) via a `.reversed` path hop. This currently crashes
+            # domiknows' calculateLcLoss with a tensor shape mismatch (the
+            # chained variable resolves to the full candidate-pair count
+            # instead of being scoped to its binding) — see temporal_improve
+            # investigation notes. The 6 simpler rules above (single EventPair
+            # variable, direct event paths, no chaining) are unaffected.
+            # include_transitive_constraints lets callers exclude just these 7
+            # as an interim workaround while that's traced/fixed upstream.
+            if include_transitive_constraints:
+                ifL(
+                    andL(
+                        before("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        before("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_before_transitive",
+                )
+                ifL(
+                    andL(
+                        after("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        after("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    after("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_after_transitive",
+                )
+                ifL(
+                    andL(
+                        equal("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        equal("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    equal("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_equal_transitive",
+                )
+                ifL(
+                    andL(
+                        equal("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        before("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_equal_before_left_substitution",
+                )
+                ifL(
+                    andL(
+                        equal("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        after("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    after("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_equal_after_left_substitution",
+                )
+                ifL(
+                    andL(
+                        before("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        equal("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    before("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_equal_before_right_substitution",
+                )
+                ifL(
+                    andL(
+                        after("xy"),
+                        event("x", path=("xy", pair_event1)),
+                        event("y", path=("xy", pair_event2)),
+                        equal("yz", path=("y", pair_event1.reversed)),
+                        event("z", path=("yz", pair_event2)),
+                    ),
+                    after("xz", path=(("x", pair_event1.reversed), ("z", pair_event2.reversed))),
+                    name="temporal_equal_after_right_substitution",
+                )
 
     concepts = {
         "document": document,

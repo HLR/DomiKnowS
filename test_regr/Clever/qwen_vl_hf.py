@@ -13,12 +13,13 @@ from typing import List, Optional
 import torch
 from PIL import Image
 from torch import nn
-from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
 
 try:
-    from peft import LoraConfig, get_peft_model
+    from peft import LoraConfig, PeftModel, get_peft_model
 except Exception:  # pragma: no cover - PEFT is optional for eval-only smoke.
     LoraConfig = None
+    PeftModel = None
     get_peft_model = None
 
 from qwen_vl_utils import process_vision_info
@@ -39,44 +40,85 @@ class QwenVLHF:
         lora_dropout: float = 0.05,
         softmax_temperature: float = 1.0,
         yes_bias: float = 0.0,
+        load_4bit: bool = False,
+        load_8bit: bool = False,
+        lora_adapter_path: str | None = None,
         **_: object,
     ):
         if dtype is None:
             dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
         self.device = device
         self.dtype = dtype
+        if load_4bit and load_8bit:
+            raise ValueError("Only one of load_4bit/load_8bit can be enabled")
         self.softmax_temperature = softmax_temperature
         self.yes_bias = yes_bias
+        self.use_llm_lora = bool(use_llm_lora)
 
         self.processor = AutoProcessor.from_pretrained(model_path)
         model_kwargs = dict(torch_dtype=dtype, device_map=None)
+        lower_model_path = str(model_path).lower()
+        prequantized_bnb = "bnb" in lower_model_path and ("4bit" in lower_model_path or "8bit" in lower_model_path)
+        quantized = False
+        if prequantized_bnb:
+            # Pre-quantized bitsandbytes repos already carry quantization metadata;
+            # use device_map and avoid .to(device), which is invalid for quantized models.
+            model_kwargs["device_map"] = {"": device}
+            quantized = True
+        elif load_4bit:
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=dtype,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+            )
+            model_kwargs["device_map"] = {"": device}
+            quantized = True
+        elif load_8bit:
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+            model_kwargs["device_map"] = {"": device}
+            quantized = True
         attn_impl = os.environ.get("QWENVL_ATTN_IMPL")
         if attn_impl:
             model_kwargs["attn_implementation"] = attn_impl
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             model_path,
             **model_kwargs,
-        ).to(device)
+        )
+        if not quantized:
+            self.model = self.model.to(device)
         if hasattr(self.model.config, "use_cache"):
             self.model.config.use_cache = False
 
         if use_llm_lora:
             if hasattr(self.model, "gradient_checkpointing_enable"):
                 self.model.gradient_checkpointing_enable()
-            if get_peft_model is None or LoraConfig is None:
-                raise ImportError("PEFT is required for --peft Qwen-VL LoRA training")
-            config = LoraConfig(
-                r=lora_r,
-                lora_alpha=lora_alpha,
-                lora_dropout=lora_dropout,
-                bias="none",
-                task_type="CAUSAL_LM",
-                target_modules=["q_proj", "v_proj"],
-            )
-            self.model = get_peft_model(self.model, config)
+            if lora_adapter_path:
+                if PeftModel is None:
+                    raise ImportError("PEFT is required to load a Qwen-VL LoRA adapter")
+                self.model = PeftModel.from_pretrained(
+                    self.model,
+                    lora_adapter_path,
+                    is_trainable=True,
+                )
+            else:
+                if get_peft_model is None or LoraConfig is None:
+                    raise ImportError("PEFT is required for --peft Qwen-VL LoRA training")
+                config = LoraConfig(
+                    r=lora_r,
+                    lora_alpha=lora_alpha,
+                    lora_dropout=lora_dropout,
+                    bias="none",
+                    task_type="CAUSAL_LM",
+                    target_modules=["q_proj", "v_proj"],
+                )
+                self.model = get_peft_model(self.model, config)
             self.model.print_trainable_parameters()
 
-        self.model.train()
+        if self.use_llm_lora:
+            self.model.train()
+        else:
+            self.model.eval()
 
     def _messages(self, image: Image.Image, question: str):
         return [
@@ -109,7 +151,8 @@ class QwenVLHF:
             return_tensors="pt",
         ).to(self.device)
 
-        out = self.model(**inputs, return_dict=True)
+        with torch.set_grad_enabled(self.model.training):
+            out = self.model(**inputs, return_dict=True)
         logits = out.logits
         last_pos = inputs["attention_mask"].sum(dim=1) - 1
         batch_idx = torch.arange(logits.shape[0], device=self.device)
@@ -157,6 +200,7 @@ class QwenVLSharedHF(InternVLSharedHF):
     """Drop-in CLEVR ModuleLearner wrapper backed by Qwen3-VL."""
 
     model = None
+    prediction_cache = {}
 
     def __init__(
         self,
@@ -171,6 +215,11 @@ class QwenVLSharedHF(InternVLSharedHF):
         lora_dropout: float = 0.05,
         softmax_temperature: float = 1.0,
         yes_bias: float = 0.0,
+        load_4bit: bool = False,
+        load_8bit: bool = False,
+        lora_adapter_path: str | None = None,
+        choice_group=None,
+        choice_prompt_kind=None,
         *args,
         **kwargs,
     ):
@@ -180,6 +229,8 @@ class QwenVLSharedHF(InternVLSharedHF):
         self.device = device
         self.softmax_temperature = softmax_temperature
         self.yes_bias = yes_bias
+        self.choice_group = [str(value) for value in choice_group] if choice_group else None
+        self.choice_prompt_kind = choice_prompt_kind or "visual concept"
         self.input_size = 448
         self.max_num = 1
 
@@ -194,6 +245,11 @@ class QwenVLSharedHF(InternVLSharedHF):
                 lora_dropout=lora_dropout,
                 softmax_temperature=softmax_temperature,
                 yes_bias=yes_bias,
+                load_4bit=load_4bit,
+                load_8bit=load_8bit,
+                lora_adapter_path=lora_adapter_path,
             )
-            self._hf_model = QwenVLSharedHF.model.model
+        # A fresh dynamic graph creates fresh wrappers around the same model.
+        # Register it on every wrapper so every SolverModel exposes its parameters.
+        self._hf_model = QwenVLSharedHF.model.model
         self.model = QwenVLSharedHF.model
