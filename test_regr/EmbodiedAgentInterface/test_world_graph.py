@@ -15,9 +15,6 @@ from world_graph import (
     ABSENT_ENTITY,
     ACTION_GOAL_NAMES,
     ACTION_SPECS,
-    DEFAULT_ACTION_EFFECTS,
-    DEFAULT_STATE_MUTEX_PAIRS,
-    DEFAULT_WORLD_CONSTRAINT_COUNT,
     NEGATIVE_TO_POSITIVE,
     PREDICATE_ALIASES,
     STATE_SPECS,
@@ -169,7 +166,12 @@ def test_example_open_closed_constraint():
     prepared = _prepared(entities=("door",), pairs=())
     valid = materialize_world_trajectory(prepared, [{("open", "door")}], [], bundle)
     valid_evaluation = verify_world_constraints(valid, bundle)
-    assert valid_evaluation.constraint_count == DEFAULT_WORLD_CONSTRAINT_COUNT
+    default_constraint_count = (
+        len(bundle.default_state_mutex_pairs)
+        + len(bundle.default_action_effects)
+        + 4
+    )
+    assert valid_evaluation.constraint_count == default_constraint_count
     assert valid_evaluation.score == 1.0
 
     all_entities = ("door", "character", ABSENT_ENTITY)
@@ -182,8 +184,8 @@ def test_example_open_closed_constraint():
     invalid_evaluation = verify_world_constraints(invalid, bundle)
     assert invalid_evaluation.results["state_mutex__closed__open"]["satisfied"] == 0.0
     assert invalid_evaluation.score == (
-        DEFAULT_WORLD_CONSTRAINT_COUNT - 1
-    ) / DEFAULT_WORLD_CONSTRAINT_COUNT
+        default_constraint_count - 1
+    ) / default_constraint_count
 
 
 def test_action_structure_effect_and_hand_capacity_constraints():
@@ -191,6 +193,8 @@ def test_action_structure_effect_and_hand_capacity_constraints():
         "test_eai_world_action_constraints",
         include_default_constraints=True,
     )
+    assert bundle.default_action_effects["open"] == "open"
+    assert ("closed", "open") in bundle.default_state_mutex_pairs
     prepared = _prepared(entities=("door",), pairs=())
     open_event = [SimpleNamespace(name="open", args=("door",))]
 
@@ -303,17 +307,21 @@ def test_complete_benchmark_bypass_and_scale():
     examples = load_eai_dataset("all", limit=None, max_steps=135, device="cpu")
     vocabulary = TokenVocabulary(examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
     world = build_eai_world_graph("test_eai_world_benchmark_bypass")
+    default_world = build_eai_world_graph(
+        "test_eai_world_benchmark_defaults",
+        include_default_constraints=True,
+    )
     largest = None
     for sample in examples:
         prepared = prepare_eai_goal(sample, vocabulary)
         for index, event in enumerate(prepared.reference_events):
-            effect = DEFAULT_ACTION_EFFECTS.get(event.name)
+            effect = default_world.default_action_effects.get(event.name)
             if effect is not None and event.args:
                 assert (effect, event.args[0]) in prepared.reference_states[index + 1], (
                     sample["task_id"], index, event.name, event.args, effect
                 )
         for state in prepared.reference_states:
-            for left, right in DEFAULT_STATE_MUTEX_PAIRS:
+            for left, right in default_world.default_state_mutex_pairs:
                 left_args = {fact[1:] for fact in state if fact and fact[0] == left}
                 right_args = {fact[1:] for fact in state if fact and fact[0] == right}
                 assert left_args.isdisjoint(right_args), (

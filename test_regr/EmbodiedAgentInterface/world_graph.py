@@ -133,6 +133,8 @@ class EAIWorldGraphBundle:
     aliases: Mapping[str, Any]
     negative_to_positive: Mapping[Any, Any]
     goal_actions: frozenset[Any]
+    default_action_effects: Mapping[str, str]
+    default_state_mutex_pairs: tuple[tuple[str, str], ...]
 
     @property
     def has_constraints(self) -> bool:
@@ -280,10 +282,11 @@ def build_eai_world_graph(
             for name in ACTION_SPECS
         }
         adjacent_transition = action(name="action__valid_next_transition")
+        default_action_effects: Mapping[str, str] = MappingProxyType({})
+        default_state_mutex_pairs: tuple[tuple[str, str], ...] = ()
 
         if include_default_constraints:
             from domiknows.graph.logicalConstrain import atMostL, exactL, ifL, nandL
-
 
             DEFAULT_STATE_MUTEX_PAIRS = tuple(dict.fromkeys((
                 *(tuple(sorted((negative, positive))) for negative, positive in NEGATIVE_TO_POSITIVE.items()),
@@ -294,7 +297,8 @@ def build_eai_world_graph(
                 ("inside", "onfloor"),
                 ("ontop", "under"),
             )))
-            
+            default_state_mutex_pairs = DEFAULT_STATE_MUTEX_PAIRS
+
             # Mutually exclusive state descriptions on the same grounding.
             # This includes every explicit positive/negative pair plus common
             # physical contradictions represented by the EAI vocabulary.
@@ -332,9 +336,7 @@ def build_eai_world_graph(
                     ),
                     name=f"hand_capacity__{predicate}",
                 )
-                
-            # Every action event has at most one result state grounding.  This
-            # is a structural constraint that does not depend on the action type.
+
             DEFAULT_ACTION_EFFECTS: Mapping[str, str] = MappingProxyType({
                 "clean": "clean", "wipe": "clean", "scrub": "clean",
                 "wash": "washed", "rinse": "rinsed",
@@ -345,6 +347,7 @@ def build_eai_world_graph(
                 "unfreeze": "not_frozen", "cook": "cooked",
                 "plugin": "plugged_in", "plugout": "not_plugged_in", "touch": "touch",
             })
+            default_action_effects = DEFAULT_ACTION_EFFECTS
 
             # Direct unary effects from the simulator must hold for the action
             # argument at the event's result step.
@@ -383,6 +386,8 @@ def build_eai_world_graph(
             aliases=MappingProxyType({alias: states[canonical] for alias, canonical in PREDICATE_ALIASES.items()}),
             negative_to_positive=MappingProxyType({states[negative]: states[positive] for negative, positive in NEGATIVE_TO_POSITIVE.items()}),
             goal_actions=frozenset(actions[name] for name in ACTION_GOAL_NAMES),
+            default_action_effects=default_action_effects,
+            default_state_mutex_pairs=default_state_mutex_pairs,
         )
         for builder in tuple(constraint_builders):
             builder(bundle)
@@ -523,7 +528,7 @@ def materialize_world_trajectory(
             _link(event_node, world_bundle.action_roles["actor"], entity_nodes["character"])
             _link(event_node, world_bundle.action_roles["arg1"], entity_nodes[args[0] if args else ABSENT_ENTITY])
             _link(event_node, world_bundle.action_roles["arg2"], entity_nodes[args[1] if len(args) > 1 else ABSENT_ENTITY])
-            effect_predicate = DEFAULT_ACTION_EFFECTS.get(name)
+            effect_predicate = world_bundle.default_action_effects.get(name)
             if effect_predicate is not None and args:
                 effect_spec = STATE_SPECS[effect_predicate]
                 effect_key = (
