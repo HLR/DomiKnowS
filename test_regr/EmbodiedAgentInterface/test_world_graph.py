@@ -160,126 +160,82 @@ def test_constraint_verification_and_aggregation():
     assert verify_world_constraints(partial, bundle, "prod").score == 0.0
 
 
-def test_example_open_closed_constraint():
+def test_default_precondition_registry_and_verification():
     bundle = build_eai_world_graph(
-        "test_eai_world_example_constraint",
+        "test_eai_world_default_preconditions",
         include_default_constraints=True,
     )
-    prepared = _prepared(entities=("door",), pairs=())
-    valid = materialize_world_trajectory(prepared, [{("open", "door")}], [], bundle)
-    valid_evaluation = verify_world_constraints(valid, bundle)
-    default_constraint_count = (
-        len(bundle.default_state_mutex_pairs)
-        + len(bundle.default_action_effects)
-        + 4
-    )
-    assert valid_evaluation.declared_constraint_count == default_constraint_count
-    assert valid_evaluation.constraint_count == 2
-    assert valid_evaluation.score == 1.0
-
-    all_entities = ("door", "character", ABSENT_ENTITY)
-    invalid_facts = {
-        fact
-        for entity in all_entities
-        for fact in (("open", entity), ("closed", entity))
+    assert bundle.default_preconditions
+    assert len(bundle.default_constraint_names) == len(bundle.default_preconditions)
+    assert not any(name.startswith("action_effect__") for name in bundle.default_constraint_names)
+    assert not any(name.startswith("state_mutex__") for name in bundle.default_constraint_names)
+    assert {spec.kind for spec in bundle.default_preconditions} == {
+        "placement_source_ready",
+        "release_source_ready",
+        "pour_source_ready",
+        "destination_open_if_known",
     }
-    invalid = materialize_world_trajectory(prepared, [invalid_facts], [], bundle)
-    invalid_evaluation = verify_world_constraints(invalid, bundle)
-    assert invalid_evaluation.results["state_mutex__closed__open"]["satisfied"] == 0.0
-    assert invalid_evaluation.constraint_count == 3
-    assert invalid_evaluation.score == 2 / 3
+    assert set(bundle.precondition_concepts) == {
+        "placement_source_ready",
+        "release_source_ready",
+        "pour_source_ready",
+        "destination_open_if_known",
+    }
 
-
-def test_action_structure_effect_and_hand_capacity_constraints():
-    bundle = build_eai_world_graph(
-        "test_eai_world_action_constraints",
-        include_default_constraints=True,
+    prepared = _prepared(
+        entities=("apple", "bowl"),
+        pairs=(("character", "apple"), ("apple", "bowl")),
     )
-    assert bundle.default_action_effects["open"] == "open"
-    assert ("closed", "open") in bundle.default_state_mutex_pairs
-    prepared = _prepared(entities=("door",), pairs=())
-    open_event = [SimpleNamespace(name="open", args=("door",))]
+    event = [SimpleNamespace(name="right_place_inside", args=("bowl",))]
+    ready_states = [
+        {
+            ("holds_rh", "character", "apple"),
+            ("open", "bowl"),
+        },
+        {("inside", "apple", "bowl")},
+    ]
+    ready_root = materialize_world_trajectory(prepared, ready_states, event, bundle)
+    graph_evaluation = verify_world_constraints(ready_root, bundle)
+    fast_evaluation = evaluate_default_world_constraints(
+        ready_states, event, bundle
+    )
+    assert graph_evaluation.score == 1.0
+    assert fast_evaluation.score == 1.0
+    assert fast_evaluation.constraint_count == 2
 
-    valid = materialize_world_trajectory(
-        prepared,
-        [{("closed", "door")}, {("open", "door"), ("not_closed", "door")}],
-        open_event,
+    blocked_states = [
+        {("closed", "bowl")},
+        set(),
+    ]
+    blocked_root = materialize_world_trajectory(
+        prepared, blocked_states, event, bundle
+    )
+    blocked_graph = verify_world_constraints(blocked_root, bundle)
+    blocked_fast = evaluate_default_world_constraints(
+        blocked_states, event, bundle
+    )
+    holding_name = "action_precondition__right_place_inside__source_holding"
+    open_name = "action_precondition__right_place_inside__destination_open_if_known"
+    assert blocked_graph.results[holding_name]["satisfied"] == 0.0
+    assert blocked_graph.results[open_name]["satisfied"] == 0.0
+    assert blocked_fast.score == 0.0
+
+    unknown_open_states = [
+        {("holds_rh", "character", "apple")},
+        {("inside", "apple", "bowl")},
+    ]
+    unknown_evaluation = evaluate_default_world_constraints(
+        unknown_open_states, event, bundle
+    )
+    assert unknown_evaluation.score == 1.0
+    assert unknown_evaluation.constraint_count == 1
+
+    no_hold_pour = evaluate_default_world_constraints(
+        [set(), set()],
+        [SimpleNamespace(name="pour", args=("bowl",))],
         bundle,
     )
-    valid_evaluation = verify_world_constraints(valid, bundle)
-    fast_valid_evaluation = evaluate_default_world_constraints(
-        [
-            {("closed", "door")},
-            {("open", "door"), ("not_closed", "door")},
-        ],
-        open_event,
-        bundle,
-    )
-    assert valid_evaluation.score == 1.0
-    assert fast_valid_evaluation.score == valid_evaluation.score
-    assert fast_valid_evaluation.constraint_count == valid_evaluation.constraint_count
-    assert valid_evaluation.results["action_exactly_one_type"]["satisfied"] == 100.0
-    assert valid_evaluation.results["action_result_is_next_step"]["satisfied"] == 100.0
-    assert valid_evaluation.results["action_effect__open__open"]["satisfied"] == 100.0
-    assert valid_evaluation.results["action_effect__open__open"]["applicable"]
-    assert not valid_evaluation.results["action_effect__close__closed"]["applicable"]
-    assert valid_evaluation.constraint_count < valid_evaluation.declared_constraint_count
-
-    missing_effect = materialize_world_trajectory(
-        prepared,
-        [{("closed", "door")}, {("closed", "door")}],
-        open_event,
-        bundle,
-    )
-    missing_effect_evaluation = verify_world_constraints(missing_effect, bundle)
-    assert missing_effect_evaluation.results["action_effect__open__open"]["satisfied"] == 0.0
-
-    two_types = materialize_world_trajectory(
-        prepared,
-        [{("closed", "door")}, {("open", "door"), ("not_closed", "door")}],
-        open_event,
-        bundle,
-    )
-    action_node = next(
-        node for node in _all_descendants(two_types)
-        if node.ontologyNode is bundle.action
-    )
-    action_node.attributes["<action__close>"] = torch.tensor([-30.0, 30.0])
-    two_types_evaluation = verify_world_constraints(two_types, bundle)
-    assert two_types_evaluation.results["action_exactly_one_type"]["satisfied"] == 0.0
-
-    wrong_transition = materialize_world_trajectory(
-        prepared,
-        [{("closed", "door")}, {("open", "door"), ("not_closed", "door")}],
-        open_event,
-        bundle,
-    )
-    transition_action = next(
-        node for node in _all_descendants(wrong_transition)
-        if node.ontologyNode is bundle.action
-    )
-    transition_action.attributes[
-        f"<{bundle.adjacent_transition.name}>"
-    ] = torch.tensor([30.0, -30.0])
-    transition_evaluation = verify_world_constraints(wrong_transition, bundle)
-    assert transition_evaluation.results["action_result_is_next_step"]["satisfied"] == 0.0
-
-    hand_prepared = _prepared(
-        entities=("apple", "banana"),
-        pairs=(("character", "apple"), ("character", "banana")),
-    )
-    overloaded_hand = materialize_world_trajectory(
-        hand_prepared,
-        [{
-            ("holds_lh", "character", "apple"),
-            ("holds_lh", "character", "banana"),
-        }],
-        [],
-        bundle,
-    )
-    hand_evaluation = verify_world_constraints(overloaded_hand, bundle)
-    assert hand_evaluation.results["hand_capacity__holds_lh"]["satisfied"] == 0.0
-    assert hand_evaluation.results["hand_capacity__holds_rh"]["satisfied"] == 100.0
+    assert no_hold_pour.score == 0.0
 
 
 def test_reward_bypass_and_blending():
@@ -342,21 +298,24 @@ def test_complete_benchmark_bypass_and_scale():
         include_default_constraints=True,
     )
     largest = None
+    precondition_trajectories = 0
     for sample in examples:
         prepared = prepare_eai_goal(sample, vocabulary)
-        for index, event in enumerate(prepared.reference_events):
-            effect = default_world.default_action_effects.get(event.name)
-            if effect is not None and event.args:
-                assert (effect, event.args[0]) in prepared.reference_states[index + 1], (
-                    sample["task_id"], index, event.name, event.args, effect
-                )
-        for state in prepared.reference_states:
-            for left, right in default_world.default_state_mutex_pairs:
-                left_args = {fact[1:] for fact in state if fact and fact[0] == left}
-                right_args = {fact[1:] for fact in state if fact and fact[0] == right}
-                assert left_args.isdisjoint(right_args), (
-                    sample["task_id"], left, right, left_args & right_args
-                )
+        precondition_evaluation = evaluate_default_world_constraints(
+            prepared.reference_states,
+            prepared.reference_events,
+            default_world,
+        )
+        if precondition_evaluation is not None:
+            precondition_trajectories += 1
+            assert precondition_evaluation.score == 1.0, (
+                sample["task_id"],
+                {
+                    name: result
+                    for name, result in precondition_evaluation.results.items()
+                    if result["applicable"] and result["satisfied"] < 100.0
+                },
+            )
         if largest is None or len(prepared.entity_universe) > len(largest[0].entity_universe):
             largest = (prepared, sample)
         ordinary = evaluate_goal_satisfaction(sample["target_action_tokens"], sample, vocabulary)
@@ -371,6 +330,8 @@ def test_complete_benchmark_bypass_and_scale():
         )
         assert with_world_empty["world_constraint_score"] is None
         assert with_world_empty["rl_reward_score"] == ordinary_empty["is_success"]
+
+    assert precondition_trajectories > 0
 
     prepared, sample = largest
     from reward import _simulate_events
@@ -394,8 +355,7 @@ def run_tests():
         test_registry_and_namespaces,
         test_materializes_actions_and_sparse_state_groundings,
         test_constraint_verification_and_aggregation,
-        test_example_open_closed_constraint,
-        test_action_structure_effect_and_hand_capacity_constraints,
+        test_default_precondition_registry_and_verification,
         test_reward_bypass_and_blending,
         test_complete_benchmark_bypass_and_scale,
     ]

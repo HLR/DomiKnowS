@@ -36,6 +36,13 @@ class StatePredicateSpec:
     positive_counterpart: str | None = None
 
 
+@dataclass(frozen=True)
+class ActionPreconditionSpec:
+    name: str
+    action: str
+    kind: str
+
+
 _ACTION_NAMES = frozenset({
     "clean", "close", "cook", "drink", "drop", "find", "freeze", "grab",
     "left_grasp", "left_place_inside", "left_place_nextto",
@@ -118,7 +125,6 @@ class EAIWorldGraphBundle:
     entity: Any
     state: Any
     action: Any
-    adjacent_transition: Any
     next_step: Any
     contains_step: Any
     contains_entity: Any
@@ -133,8 +139,8 @@ class EAIWorldGraphBundle:
     aliases: Mapping[str, Any]
     negative_to_positive: Mapping[Any, Any]
     goal_actions: frozenset[Any]
-    default_action_effects: Mapping[str, str]
-    default_state_mutex_pairs: tuple[tuple[str, str], ...]
+    precondition_concepts: Mapping[str, Any]
+    default_preconditions: tuple[ActionPreconditionSpec, ...]
     default_constraint_names: frozenset[str]
 
     @property
@@ -216,6 +222,108 @@ class WorldGraphConfigurationError(RuntimeError):
     """A declared world constraint could not be materialized or verified."""
 
 
+def _action_side(action: str) -> str | None:
+    if action.startswith("left_"):
+        return "left"
+    if action.startswith("right_"):
+        return "right"
+    return None
+
+
+def _placement_relation_name(action: str) -> str | None:
+    if "inside" in action or action in {"put", "putin"}:
+        return "inside"
+    if "ontop" in action or "on_top" in action or action in {"putback", "puton"}:
+        return "ontop"
+    if "nextto" in action or "next_to" in action:
+        return "nextto"
+    if "under" in action:
+        return "under"
+    return None
+
+
+def _held_by_side(state: set[Fact]) -> dict[str, set[str]]:
+    return {
+        "left": {
+            fact[2] for fact in state
+            if len(fact) == 3 and fact[0] == "holds_lh" and fact[1] == "character"
+        },
+        "right": {
+            fact[2] for fact in state
+            if len(fact) == 3 and fact[0] == "holds_rh" and fact[1] == "character"
+        },
+    }
+
+
+def _precondition_status(
+    kind: str,
+    action: str,
+    args: tuple[str, ...],
+    source_state: set[Fact],
+) -> tuple[bool, bool]:
+    """Return ``(applicable, satisfied)`` for one source-state condition."""
+    held = _held_by_side(source_state)
+    side = _action_side(action)
+    held_for_action = held[side] if side is not None else held["left"] | held["right"]
+
+    if kind == "placement_source_ready":
+        if held_for_action:
+            return True, True
+        relation = _placement_relation_name(action)
+        destination = args[0] if args else None
+        # Flat EAI placement events name only the destination. Repeated
+        # placement demonstrations are valid when a matching object is already
+        # at that destination even though no hand remains occupied.
+        already_placed = bool(
+            relation and destination and any(
+                len(fact) == 3
+                and fact[0] == relation
+                and fact[2] == destination
+                for fact in source_state
+            )
+        )
+        return True, already_placed
+
+    if kind == "release_source_ready":
+        if held_for_action:
+            return True, True
+        obj = args[0] if args else None
+        already_placed = bool(
+            obj and any(
+                len(fact) == 3
+                and fact[0] in {"inside", "nextto", "ontop", "onfloor", "under"}
+                and fact[1] == obj
+                for fact in source_state
+            )
+        )
+        return True, already_placed
+
+    if kind == "pour_source_ready":
+        return True, bool(held["left"] or held["right"])
+
+    if kind == "destination_open_if_known":
+        destination = args[0] if args else None
+        if destination is None:
+            return False, True
+        facts = {(fact[0], fact[1]) for fact in source_state if len(fact) == 2}
+        known = any(
+            (predicate, destination) in facts
+            for predicate in ("open", "closed", "not_open", "not_closed")
+        )
+        if not known:
+            return False, True
+        satisfied = (
+            ("open", destination) in facts
+            or ("not_closed", destination) in facts
+        ) and (
+            ("closed", destination) not in facts
+            and ("not_open", destination) not in facts
+        )
+        return True, satisfied
+
+    raise ValueError(f"Unknown EAI action precondition kind: {kind!r}")
+
+
 def build_eai_world_graph(
     graph_name: str = "eai_world",
     constraint_builders: Iterable[Callable[[EAIWorldGraphBundle], None]] = (),
@@ -273,13 +381,12 @@ def build_eai_world_graph(
         # Every action grounding records the state transition it represents,
         # its actor, and up to two action arguments. Missing arguments are
         # materialized later with the same reserved absent-entity node.
-        source_step, result_step, actor, arg1, arg2, action_result_state = action.has_a(**{
+        source_step, result_step, actor, arg1, arg2 = action.has_a(**{
             role("action_source_step"): step,
             role("action_result_step"): step,
             role("action_actor"): entity,
             role("action_arg1"): entity,
             role("action_arg2"): entity,
-            role("action_result_state"): state,
         })
 
         # Named predicate concepts specialize the shared state/action schemas.
@@ -294,93 +401,69 @@ def build_eai_world_graph(
             name: action(name=f"action__{name}")
             for name in ACTION_SPECS
         }
-        adjacent_transition = action(name="action__valid_next_transition")
-        default_action_effects: Mapping[str, str] = MappingProxyType({})
-        default_state_mutex_pairs: tuple[tuple[str, str], ...] = ()
+        precondition_concepts = {
+            kind: action(name=f"precondition__{kind}")
+            for kind in (
+                "placement_source_ready",
+                "release_source_ready",
+                "pour_source_ready",
+                "destination_open_if_known",
+            )
+        }
+        default_preconditions: list[ActionPreconditionSpec] = []
         default_constraint_names: set[str] = set()
 
         if include_default_constraints:
-            from domiknows.graph.logicalConstrain import atMostL, exactL, ifL, nandL
+            from domiknows.graph.logicalConstrain import ifL
 
-            DEFAULT_STATE_MUTEX_PAIRS = tuple(dict.fromkeys((
-                *(tuple(sorted((negative, positive))) for negative, positive in NEGATIVE_TO_POSITIVE.items()),
-                ("closed", "open"),
-                ("off", "on"),
-                ("clean", "dusty"),
-                ("clean", "stained"),
-                ("inside", "onfloor"),
-                ("ontop", "under"),
-            )))
-            default_state_mutex_pairs = DEFAULT_STATE_MUTEX_PAIRS
-
-            # Mutually exclusive state descriptions on the same grounding.
-            # This includes every explicit positive/negative pair plus common
-            # physical contradictions represented by the EAI vocabulary.
-            for left, right in DEFAULT_STATE_MUTEX_PAIRS:
-                constraint_name = f"state_mutex__{left}__{right}"
-                nandL(
-                    states[left],
-                    states[right],
-                    name=constraint_name,
-                )
-                default_constraint_names.add(constraint_name)
-
-            # Every action event has exactly one semantic action type.
-            exactL(
-                *(concept("event") for concept in actions.values()),
-                limit=1,
-                name="action_exactly_one_type",
+            placement_actions = tuple(
+                name for name in actions if _placement_relation_name(name) is not None
             )
-            default_constraint_names.add("action_exactly_one_type")
-
-            # An action's result must be the step immediately following its
-            # source according to the explicit next_step relation.
-            ifL(
-                action("event"),
-                adjacent_transition("event"),
-                name="action_result_is_next_step",
+            release_actions = tuple(
+                name for name in actions
+                if name == "drop" or "release" in name or "realease" in name
+                or name == "putobjback"
             )
-            default_constraint_names.add("action_result_is_next_step")
-
-            # At a state step, each hand can hold at most one object.
-            for predicate in ("holds_lh", "holds_rh"):
-                constraint_name = f"hand_capacity__{predicate}"
+            specifications = [
+                *(
+                    ActionPreconditionSpec(
+                        name=f"action_precondition__{name}__source_holding",
+                        action=name,
+                        kind="placement_source_ready",
+                    )
+                    for name in placement_actions
+                ),
+                *(
+                    ActionPreconditionSpec(
+                        name=f"action_precondition__{name}__source_holding",
+                        action=name,
+                        kind="release_source_ready",
+                    )
+                    for name in release_actions
+                ),
+                ActionPreconditionSpec(
+                    name="action_precondition__pour__source_holding",
+                    action="pour",
+                    kind="pour_source_ready",
+                ),
+                *(
+                    ActionPreconditionSpec(
+                        name=f"action_precondition__{name}__destination_open_if_known",
+                        action=name,
+                        kind="destination_open_if_known",
+                    )
+                    for name in placement_actions
+                    if _placement_relation_name(name) == "inside"
+                ),
+            ]
+            for specification in specifications:
                 ifL(
-                    step("step"),
-                    atMostL(
-                        states[predicate](
-                            "holding", path=("step", state_step.reversed)
-                        ),
-                        limit=1,
-                    ),
-                    name=constraint_name,
+                    actions[specification.action]("event"),
+                    precondition_concepts[specification.kind]("event"),
+                    name=specification.name,
                 )
-                default_constraint_names.add(constraint_name)
-
-            DEFAULT_ACTION_EFFECTS: Mapping[str, str] = MappingProxyType({
-                "clean": "clean", "wipe": "clean", "scrub": "clean",
-                "wash": "washed", "rinse": "rinsed",
-                "open": "open", "close": "closed",
-                "toggle_on": "on", "switchon": "on", "switch_on": "on", "turn_on": "on",
-                "toggle_off": "off", "switchoff": "off", "switch_off": "off", "turn_off": "off",
-                "slice": "sliced", "soak": "soaked", "freeze": "frozen",
-                "unfreeze": "not_frozen", "cook": "cooked",
-                "plugin": "plugged_in", "plugout": "not_plugged_in", "touch": "touch",
-            })
-            default_action_effects = DEFAULT_ACTION_EFFECTS
-
-            # Direct unary effects from the simulator must hold for the action
-            # argument at the event's result step.
-            for action_name, predicate in DEFAULT_ACTION_EFFECTS.items():
-                constraint_name = f"action_effect__{action_name}__{predicate}"
-                ifL(
-                    actions[action_name]("event"),
-                    states[predicate](
-                        "effect", path=("event", action_result_state)
-                    ),
-                    name=constraint_name,
-                )
-                default_constraint_names.add(constraint_name)
+                default_preconditions.append(specification)
+                default_constraint_names.add(specification.name)
 
         bundle = EAIWorldGraphBundle(
             graph=graph,
@@ -389,7 +472,6 @@ def build_eai_world_graph(
             entity=entity,
             state=state,
             action=action,
-            adjacent_transition=adjacent_transition,
             next_step=next_step,
             contains_step=contains_step,
             contains_entity=contains_entity,
@@ -401,15 +483,14 @@ def build_eai_world_graph(
             action_roles=MappingProxyType({
                 "source_step": source_step, "result_step": result_step,
                 "actor": actor, "arg1": arg1, "arg2": arg2,
-                "result_state": action_result_state,
             }),
             actions=MappingProxyType(actions),
             states=MappingProxyType(states),
             aliases=MappingProxyType({alias: states[canonical] for alias, canonical in PREDICATE_ALIASES.items()}),
             negative_to_positive=MappingProxyType({states[negative]: states[positive] for negative, positive in NEGATIVE_TO_POSITIVE.items()}),
             goal_actions=frozenset(actions[name] for name in ACTION_GOAL_NAMES),
-            default_action_effects=default_action_effects,
-            default_state_mutex_pairs=default_state_mutex_pairs,
+            precondition_concepts=MappingProxyType(precondition_concepts),
+            default_preconditions=tuple(default_preconditions),
             default_constraint_names=frozenset(default_constraint_names),
         )
         for builder in tuple(constraint_builders):
@@ -510,7 +591,6 @@ def materialize_world_trajectory(
 
         unary_specs = tuple((name, spec, world_bundle.states[name]) for name, spec in STATE_SPECS.items() if spec.arity == 1)
         binary_specs = tuple((name, spec, world_bundle.states[name]) for name, spec in STATE_SPECS.items() if spec.arity == 2)
-        state_nodes: dict[tuple[int, int, str, str], Any] = {}
         for index, (step_node, state) in enumerate(zip(step_nodes, normalized_states)):
             unary_true = {(fact[0], fact[1]) for fact in state if len(fact) == 2}
             binary_true = {(fact[0], fact[1], fact[2]) for fact in state if len(fact) == 3}
@@ -527,7 +607,6 @@ def materialize_world_trajectory(
                 for name, _spec, concept in unary_specs:
                     _set_truth(grounding, concept, (name, subject) in unary_true)
                 step_node.addChildDataNode(grounding)
-                state_nodes[(index, 1, subject, ABSENT_ENTITY)] = grounding
             for subject, obj in tracked_pairs:
                 if subject not in entity_nodes or obj not in entity_nodes:
                     continue
@@ -543,7 +622,6 @@ def materialize_world_trajectory(
                 for name, _spec, concept in binary_specs:
                     _set_truth(grounding, concept, (name, subject, obj) in binary_true)
                 step_node.addChildDataNode(grounding)
-                state_nodes[(index, 2, subject, obj)] = grounding
 
         for index, event in enumerate(events):
             if not step_nodes:
@@ -558,32 +636,15 @@ def materialize_world_trajectory(
             _link(event_node, world_bundle.action_roles["actor"], entity_nodes["character"])
             _link(event_node, world_bundle.action_roles["arg1"], entity_nodes[args[0] if args else ABSENT_ENTITY])
             _link(event_node, world_bundle.action_roles["arg2"], entity_nodes[args[1] if len(args) > 1 else ABSENT_ENTITY])
-            effect_predicate = world_bundle.default_action_effects.get(name)
-            if effect_predicate is not None and args:
-                effect_spec = STATE_SPECS[effect_predicate]
-                effect_key = (
-                    result_index,
-                    effect_spec.arity,
-                    args[0],
-                    ABSENT_ENTITY if effect_spec.arity == 1 else (
-                        args[1] if len(args) > 1 else ABSENT_ENTITY
-                    ),
-                )
-                effect_node = state_nodes.get(effect_key)
-                if effect_node is not None:
-                    _link(
-                        event_node,
-                        world_bundle.action_roles["result_state"],
-                        effect_node,
-                    )
             _set_truth(event_node, world_bundle.action, True)
-            _set_truth(
-                event_node,
-                world_bundle.adjacent_transition,
-                result_index == source_index + 1,
-            )
             for action_name, concept in world_bundle.actions.items():
                 _set_truth(event_node, concept, action_name == name)
+            source_state = normalized_states[source_index]
+            for kind, concept in world_bundle.precondition_concepts.items():
+                _applicable, satisfied = _precondition_status(
+                    kind, name, args, source_state
+                )
+                _set_truth(event_node, concept, satisfied)
             step_nodes[source_index].addChildDataNode(event_node)
         return root
     except Exception as exc:
@@ -607,7 +668,7 @@ def evaluate_default_world_constraints(
     world_bundle: EAIWorldGraphBundle,
     aggregate: str = "mean",
 ) -> WorldConstraintEvaluation | None:
-    """Evaluate built-in invariants without invoking the general LC solver.
+    """Evaluate built-in source-state preconditions without the general solver.
 
     The trajectory is already deterministic simulator output, so the built-in
     constraints have direct equivalents. Custom constraint builders continue
@@ -636,12 +697,6 @@ def evaluate_default_world_constraints(
         )
         for event in events
     ]
-    # These sets determine whether each invariant is relevant to this
-    # trajectory. Inactive constraints are retained in ``results`` but do not
-    # contribute a vacuous perfect score to the aggregate.
-    state_predicates = {
-        fact[0] for state in normalized_states for fact in state if fact
-    }
     results: dict[str, dict[str, Any]] = {}
     scores: list[float] = []
 
@@ -657,67 +712,35 @@ def evaluate_default_world_constraints(
         if applicable:
             scores.append(bounded)
 
-    for left, right in world_bundle.default_state_mutex_pairs:
-        # A mutex is checked per state snapshot and per complete grounding.
-        # Comparing fact tails preserves the distinction between different
-        # objects while rejecting, for example, both ``open(cup)`` and
-        # ``closed(cup)`` at the same time step.
-        applicable = left in state_predicates or right in state_predicates
-        valid = all(
-            {fact[1:] for fact in state if fact and fact[0] == left}.isdisjoint(
-                {fact[1:] for fact in state if fact and fact[0] == right}
-            )
-            for state in normalized_states
-        )
-        record(f"state_mutex__{left}__{right}", applicable, float(valid))
-
-    # These two structural invariants apply only to nonempty event sequences:
-    # every event must resolve to a known semantic action and each event must
-    # have exactly one following simulator state.
-    has_events = bool(normalized_events)
-    exactly_one = all(name in world_bundle.actions for name, _args in normalized_events)
-    record("action_exactly_one_type", has_events, float(exactly_one))
-    record(
-        "action_result_is_next_step",
-        has_events,
-        float(len(normalized_states) == len(normalized_events) + 1),
-    )
-
-    for predicate in ("holds_lh", "holds_rh"):
-        # Each hand is scoped to its holder. A trajectory is invalid only when
-        # one subject holds multiple distinct objects at one state snapshot.
-        applicable = predicate in state_predicates
-        valid = True
-        for state in normalized_states:
-            held_by_subject: dict[str, set[str]] = {}
-            for fact in state:
-                if len(fact) == 3 and fact[0] == predicate:
-                    held_by_subject.setdefault(fact[1], set()).add(fact[2])
-            if any(len(objects) > 1 for objects in held_by_subject.values()):
-                valid = False
-                break
-        record(f"hand_capacity__{predicate}", applicable, float(valid))
-
-    for action_name, predicate in world_bundle.default_action_effects.items():
-        # Action effects are evaluated against the immediately following
-        # state, mirroring the event -> result_state edge materialized for the
-        # general LC verifier. Multiple occurrences receive a fractional
-        # score so one missed effect does not erase evidence from the others.
+    for specification in world_bundle.default_preconditions:
         matching = [
             (index, args)
             for index, (name, args) in enumerate(normalized_events)
-            if name == action_name
+            if name == specification.action
         ]
-        satisfied = 0
+        applicable_count = 0
+        satisfied_count = 0
         for index, args in matching:
-            result_state = normalized_states[index + 1] if index + 1 < len(normalized_states) else set()
-            if args and (predicate, args[0]) in result_state:
-                satisfied += 1
-        score = satisfied / len(matching) if matching else 1.0
-        record(f"action_effect__{action_name}__{predicate}", bool(matching), score)
+            source_state = (
+                normalized_states[index]
+                if index < len(normalized_states) else set()
+            )
+            applicable, satisfied = _precondition_status(
+                specification.kind,
+                specification.action,
+                args,
+                source_state,
+            )
+            if applicable:
+                applicable_count += 1
+                satisfied_count += int(satisfied)
+        score = (
+            satisfied_count / applicable_count if applicable_count else 1.0
+        )
+        record(specification.name, bool(applicable_count), score)
 
     if not scores:
-        # No applicable default invariant means callers should continue with
+        # No applicable default precondition means callers should continue with
         # custom constraints, rather than treating the trajectory as perfect.
         return None
     return WorldConstraintEvaluation(
@@ -773,41 +796,27 @@ def verify_world_constraints(
 
             # Logical verification correctly regards a false antecedent as
             # vacuously true. For reward shaping, however, inactive constraints
-            # must not inflate the aggregate. A built-in constraint is relevant
-            # only when its state/action vocabulary occurs in this trajectory.
-            if name == "action_exactly_one_type" or name == "action_result_is_next_step":
-                applicable = bool(action_names)
-            elif name.startswith("action_effect__"):
-                action_name = name.split("__", 2)[1]
-                applicable = action_name in action_names
-            elif name.startswith("hand_capacity__"):
-                predicate = name.split("__", 1)[1]
-                applicable = predicate in state_predicates
-            elif name.startswith("state_mutex__"):
-                _prefix, left, right = name.split("__", 2)
-                applicable = left in state_predicates or right in state_predicates
-            else:
-                # Custom constraints use their referenced semantic concepts
-                # when possible. Fall back to the verifier's candidate list for
-                # purely structural constraints.
-                from domiknows.graph.lcUtils import getConceptsFromLogicalConstraint
+            # must not inflate the aggregate. Use referenced semantic concepts
+            # when possible and fall back to the verifier's candidate list for
+            # purely structural custom constraints.
+            from domiknows.graph.lcUtils import getConceptsFromLogicalConstraint
 
-                concept_names = set(getConceptsFromLogicalConstraint(constraint))
-                referenced_actions = {
-                    concept.removeprefix("action__")
-                    for concept in concept_names if concept.startswith("action__")
-                }
-                referenced_states = {
-                    concept.removeprefix("state__")
-                    for concept in concept_names if concept.startswith("state__")
-                }
-                if referenced_actions or referenced_states:
-                    applicable = bool(
-                        referenced_actions & action_names
-                        or referenced_states & state_predicates
-                    )
-                else:
-                    applicable = value.get("verifyList") not in (None, [])
+            concept_names = set(getConceptsFromLogicalConstraint(constraint))
+            referenced_actions = {
+                concept.removeprefix("action__")
+                for concept in concept_names if concept.startswith("action__")
+            }
+            referenced_states = {
+                concept.removeprefix("state__")
+                for concept in concept_names if concept.startswith("state__")
+            }
+            if referenced_actions or referenced_states:
+                applicable = bool(
+                    referenced_actions & action_names
+                    or referenced_states & state_predicates
+                )
+            else:
+                applicable = value.get("verifyList") not in (None, [])
 
             result_value = dict(value)
             result_value["applicable"] = applicable

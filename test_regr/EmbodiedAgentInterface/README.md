@@ -66,9 +66,9 @@ uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 
 ### Declaring future world constraints
 
-`build_program()` enables the built-in world and transition invariants by default. The default set requires exactly one action type per event, requires every action result to be the adjacent next step, limits each hand to one held object, verifies direct unary action effects (for example, `open(x)` implies `state__open(x)` at the result step), and rejects incompatible states on the same grounding. State exclusions include every explicit positive/negative predicate pair plus open/closed, on/off, clean/dusty, clean/stained, inside/on-floor, and on-top/under. The state exclusions and all 805 applicable direct effects were checked across all 438 reference trajectories. The hand-capacity constraint also identifies one reference snapshot whose right hand contains two objects.
+`build_program()` enables source-state action preconditions by default. Placement actions require an object in the appropriate hand, release/drop requires a held object, and pour requires some held source object. Place-inside actions additionally require an open destination when the simulator knows its open/closed status. Because the flat EAI action format names only a placement destination, an idempotent placement/release is also accepted when the referenced object is already spatially placed. These preconditions were audited against all 438 reference demonstrations.
 
-The constraint reward averages only constraints applicable to the materialized trajectory. For example, `action_effect__open__open` contributes only when an `open` event occurs, a state exclusion contributes only when either state is present, and a hand-capacity constraint contributes only when that hand holds something. Inactive constraints remain logically vacuous but no longer inflate `world_constraint_score`.
+The constraint reward averages only preconditions applicable to the materialized trajectory. Container openness is skipped when its initial status is unknown rather than treating missing information as `closed`. Inactive preconditions remain logically vacuous but do not inflate `world_constraint_score`.
 
 Built-in constraints use a deterministic evaluator equivalent to their declared graph invariants during RL, avoiding per-sample solver construction. Constraints supplied by custom builders continue to materialize `DataNode`s and run `verifyResultsLC`. Per-example reward closures also cache repeated sampled trajectories.
 
@@ -95,7 +95,7 @@ world = build_eai_world_graph(
 )
 ```
 
-Each trajectory contains ordered state steps, entity nodes (including `character` and an absent-argument sentinel), explicit action source/result/actor/argument links, a direct `result_state` link for declared action effects, complete unary groundings, and only the binary pairs actually tracked by the task or simulation. Every compatible action and predicate has deterministic true/false logits, so negation, cardinality, and relational constraints can be verified with `/local/argmax`.
+Each trajectory contains ordered state steps, entity nodes (including `character` and an absent-argument sentinel), explicit action source/result/actor/argument links, complete unary groundings, and only the binary pairs actually tracked by the task or simulation. Action-event sub-concepts such as `precondition__placement_source_ready` carry deterministic truth values derived from the source snapshot, so declared precondition constraints and custom relational constraints can be verified with `/local/argmax`.
 
 `bundle.state` and `bundle.action` are the actual `world_state` and `world_action` DomiKnowS concepts. Canonical sub-concepts are available through `bundle.states[name]` and `bundle.actions[name]`; for example, `state__open` is directly an `is_a` sub-concept of `world_state`, while `action__open` is directly an `is_a` sub-concept of `world_action`. Unary state instances use the absent-object sentinel in the common state `object` role, allowing unary and sparse binary groundings to share one valid concept hierarchy.
 
