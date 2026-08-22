@@ -40,9 +40,11 @@ class _PrefixRecordingHead(torch.nn.Module):
         super().__init__()
         self.bias = torch.nn.Parameter(torch.zeros(3))
         self.calls = []
+        self.grad_enabled = []
 
     def sequence_logits(self, _text, prefixes):
         self.calls.append(prefixes.detach().clone())
+        self.grad_enabled.append(torch.is_grad_enabled())
         batch, length = prefixes.shape
         logits = self.bias.reshape(1, 1, 3).expand(batch, length, 3).clone()
         if length == 1:
@@ -65,9 +67,12 @@ def test_rl_rollout_conditions_on_its_sampled_prefix():
         AutoregressiveSequenceReinforcementProgram._sample_trajectories(program, "task")
     )
 
-    assert len(head.calls) == 2
+    assert len(head.calls) == 3
     sampled_first_tokens = [trajectory[0] for trajectory in trajectories]
     assert head.calls[1][:, 1].tolist() == sampled_first_tokens
+    assert head.calls[2][:, 0].tolist() == [2] * 8
+    assert head.calls[2][:, 1].tolist() == sampled_first_tokens
+    assert head.grad_enabled == [False, False, True]
     assert all(trajectory[-1] == 2 for trajectory in trajectories)
     assert logprob.shape == torch.Size([8])
     assert logprob.requires_grad

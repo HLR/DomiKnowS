@@ -72,49 +72,106 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
             device=device,
         )
         finished = torch.zeros(sample_count, dtype=torch.bool, device=device)
-        trajectory_logprob = torch.zeros(sample_count, device=device)
         trajectories = [[] for _ in range(sample_count)]
 
-        for _step in range(self.max_steps):
-            if getattr(self.autoregressive_head, "supports_batched_prefixes", False):
-                logits = self.autoregressive_head.sequence_logits(text, prefixes)[:, -1, :]
-                if logits.shape[0] != sample_count:
-                    raise ValueError("generator did not preserve the rollout batch")
-            else:
-                # The GRU head carries a single-example encoder hidden state and
-                # cannot broadcast it across rollout prefixes.
-                logits = torch.stack(
-                    [
-                        self.autoregressive_head.sequence_logits(
-                            text, prefixes[index : index + 1]
-                        )[0, -1, :]
-                        for index in range(sample_count)
-                    ],
-                    dim=0,
+        # REINFORCE does not differentiate through the categorical sample.  Do
+        # rollout generation without autograd, otherwise a causal LM retains one
+        # complete graph for every sampled prefix until the final optimizer step
+        # (num_samples * max_steps model graphs for one training example).
+        was_training = self.autoregressive_head.training
+        self.autoregressive_head.eval()
+        try:
+            with torch.no_grad():
+                for _step in range(self.max_steps):
+                    logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
+                        self, text, prefixes
+                    )[:, -1, :]
+                    distribution = torch.distributions.Categorical(logits=logits)
+                    sampled = distribution.sample()
+                    active = ~finished
+                    sampled = torch.where(
+                        active, sampled, torch.full_like(sampled, self.eos_label)
+                    )
+
+                    sampled_values = sampled.cpu().tolist()
+                    active_values = active.cpu().tolist()
+                    for index, (label, is_active) in enumerate(
+                        zip(sampled_values, active_values)
+                    ):
+                        if is_active:
+                            trajectories[index].append(int(label))
+
+                    prefixes = torch.cat([prefixes, sampled.unsqueeze(-1)], dim=-1)
+                    finished = finished | (sampled == self.eos_label)
+                    if bool(finished.all()):
+                        break
+
+            # Re-score each sampled trajectory in one teacher-forced model pass
+            # per rollout.  These are the only graphs needed by the policy loss.
+            trajectory_logprob = (
+                AutoregressiveSequenceReinforcementProgram._trajectory_logprob(
+                    self, text, trajectories, device
                 )
-            distribution = torch.distributions.Categorical(logits=logits)
-            sampled = distribution.sample()
-            active = ~finished
-            sampled = torch.where(active, sampled, torch.full_like(sampled, self.eos_label))
-            chosen_logprob = torch.log_softmax(logits, dim=-1).gather(
-                -1, sampled.unsqueeze(-1)
-            ).squeeze(-1)
-            trajectory_logprob = trajectory_logprob + torch.where(
-                active, chosen_logprob, torch.zeros_like(chosen_logprob)
             )
-
-            sampled_values = sampled.detach().cpu().tolist()
-            active_values = active.detach().cpu().tolist()
-            for index, (label, is_active) in enumerate(zip(sampled_values, active_values)):
-                if is_active:
-                    trajectories[index].append(int(label))
-
-            prefixes = torch.cat([prefixes, sampled.unsqueeze(-1)], dim=-1)
-            finished = finished | (sampled == self.eos_label)
-            if bool(finished.all()):
-                break
+        finally:
+            self.autoregressive_head.train(was_training)
 
         return trajectories, trajectory_logprob
+
+    def _prefix_logits(self, text, prefixes):
+        sample_count = prefixes.shape[0]
+        if getattr(self.autoregressive_head, "supports_batched_prefixes", False):
+            logits = self.autoregressive_head.sequence_logits(text, prefixes)
+            if logits.shape[0] != sample_count:
+                raise ValueError("generator did not preserve the rollout batch")
+            return logits
+        # The GRU head carries a single-example encoder hidden state and cannot
+        # broadcast it across rollout prefixes.
+        return torch.cat(
+            [
+                self.autoregressive_head.sequence_logits(
+                    text, prefixes[index : index + 1]
+                )
+                for index in range(sample_count)
+            ],
+            dim=0,
+        )
+
+    def _trajectory_logprob(self, text, trajectories, device):
+        lengths = torch.tensor(
+            [len(trajectory) for trajectory in trajectories],
+            dtype=torch.long,
+            device=device,
+        )
+        max_length = int(lengths.max().item()) if lengths.numel() else 0
+        if max_length == 0:
+            raise ValueError("RL rollout produced no action tokens")
+
+        targets = torch.full(
+            (len(trajectories), max_length),
+            self.eos_label,
+            dtype=torch.long,
+            device=device,
+        )
+        for index, trajectory in enumerate(trajectories):
+            targets[index, : len(trajectory)] = torch.tensor(
+                trajectory, dtype=torch.long, device=device
+            )
+        starts = torch.full(
+            (len(trajectories), 1),
+            self.eos_label,
+            dtype=torch.long,
+            device=device,
+        )
+        teacher_forced_prefixes = torch.cat([starts, targets[:, :-1]], dim=1)
+        logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
+            self, text, teacher_forced_prefixes
+        )
+        selected = torch.log_softmax(logits, dim=-1).gather(
+            -1, targets.unsqueeze(-1)
+        ).squeeze(-1)
+        mask = torch.arange(max_length, device=device).unsqueeze(0) < lengths.unsqueeze(1)
+        return (selected * mask).sum(dim=-1)
 
     def reinforcement_loss(self, datanode, reward_fn, data_item):
         if reward_fn is None:
