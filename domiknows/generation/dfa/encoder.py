@@ -23,7 +23,7 @@ Typical usage::
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Sequence
 
 from .vocabulary import TokenVocabulary
@@ -65,6 +65,9 @@ class GenerationBundle:
     second_token: object
     context: object
     vocabulary: TokenVocabulary
+    sequence_start: object | None = field(default=None, kw_only=True)
+    sequence_start_sequence: object | None = field(default=None, kw_only=True)
+    sequence_start_token: object | None = field(default=None, kw_only=True)
 
 
 class GenerationGraphContext:
@@ -92,6 +95,8 @@ class GenerationGraphContext:
         is_before_rel,
         first_token,
         second_token,
+        sequence_start=None,
+        sequence_start_token=None,
     ):
         """Store graph objects needed to build DomiKnowS predicates.
 
@@ -107,6 +112,27 @@ class GenerationGraphContext:
         self.is_before_rel = is_before_rel
         self.first_token = first_token
         self.second_token = second_token
+        self.sequence_start = sequence_start
+        self.sequence_start_token = sequence_start_token
+
+    def starts_with(self, allowed_tokens: Sequence[str], variable: str = "start"):
+        """Return ``sequence_start -> one-of(allowed_tokens)`` as a graph LC."""
+        if self.sequence_start is None or self.sequence_start_token is None:
+            raise ValueError("generation graph does not define sequence_start")
+        from domiknows.graph.logicalConstrain import ifL, orL
+
+        predicates = [
+            self.token_value(
+                token,
+                f"start_token_{index}",
+                path=(variable, self.sequence_start_token),
+            )
+            for index, token in enumerate(allowed_tokens)
+        ]
+        if not predicates:
+            raise ValueError("allowed_tokens must not be empty")
+        allowed = predicates[0] if len(predicates) == 1 else orL(*predicates)
+        return ifL(self.sequence_start(variable), allowed)
 
     def token_value(self, token: str, variable: str, path=None):
         """Return a DomiKnowS predicate asserting *variable* holds *token*.
@@ -378,6 +404,11 @@ class GenerationEncoder:
             # Pairwise ordering relation between two token positions.
             is_before_rel = Concept(name="is_before_rel")
             first_token, second_token = is_before_rel.has_a(arg1=token, arg2=token)
+            sequence_start = Concept(name="sequence_start")
+            sequence_start_sequence, sequence_start_token = sequence_start.has_a(
+                sequence=text,
+                token=token,
+            )
 
             # EnumConcept with one value per label index (stored as string names).
             generated_token = token(
@@ -393,6 +424,8 @@ class GenerationEncoder:
                 is_before_rel,
                 first_token,
                 second_token,
+                sequence_start,
+                sequence_start_token,
             )
 
         bundle = GenerationBundle(
@@ -403,6 +436,9 @@ class GenerationEncoder:
             is_before_rel=is_before_rel,
             first_token=first_token,
             second_token=second_token,
+            sequence_start=sequence_start,
+            sequence_start_sequence=sequence_start_sequence,
+            sequence_start_token=sequence_start_token,
             context=context,
             vocabulary=self.vocabulary,
         )

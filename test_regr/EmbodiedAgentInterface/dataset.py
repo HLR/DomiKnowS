@@ -171,10 +171,13 @@ def build_generation_vocab(rows):
 def action_sequence_labels(row, max_steps=8):
     labels = []
     for action, obj in trajectory_action_object_tokens(row):
-        labels.append(action)
-        if obj:
-            labels.append(obj)
-    labels = labels[: max(0, max_steps - 1)]
+        action_unit = [action, obj] if obj else [action]
+        # Preserve action/argument atomicity when a long reference plan is
+        # truncated. Ending on an object-taking action would create a gold
+        # sequence that correctly violates the graph policy.
+        if len(labels) + len(action_unit) > max(0, max_steps - 1):
+            break
+        labels.extend(action_unit)
     labels.append(EOS_TOKEN)
     while len(labels) < max_steps:
         labels.append(EOS_TOKEN)

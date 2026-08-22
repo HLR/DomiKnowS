@@ -233,114 +233,6 @@ def format_score(score):
         f"avg_pred_len={score['avg_pred_len']:.2f}"
     )
 
-def action_object_runtime_dfa(
-    base_dfa,
-    vocabulary,
-    action_tokens,
-    object_tokens,
-    action_object_constraint_tokens=None,
-    action_sequence_tokens=None,
-):
-    """Compose EAI action/object runtime constraints using shared DFA overlays."""
-    from domiknows.generation import (
-        compose_runtime_dfa,
-        pending_token_allowed_set_overlay,
-        token_class_sequence_overlay,
-        token_set_sequence_overlay,
-    )
-
-    known_tokens = {vocabulary.token_for_label(label) for label in range(int(vocabulary.label_count))}
-    action_tokens = [token for token in action_tokens if not isinstance(token, str) or token in known_tokens]
-    object_tokens = [token for token in object_tokens if not isinstance(token, str) or token in known_tokens]
-    action_sequence_tokens = [
-        token
-        for token in (action_sequence_tokens if action_sequence_tokens is not None else action_tokens)
-        if not isinstance(token, str) or token in known_tokens
-    ]
-    if action_object_constraint_tokens:
-        action_object_constraint_tokens = {
-            action: [obj for obj in objects if not isinstance(obj, str) or obj in known_tokens]
-            for action, objects in action_object_constraint_tokens.items()
-            if not isinstance(action, str) or action in known_tokens
-        }
-
-    overlays = []
-    if action_tokens and object_tokens:
-        overlays.append(
-            token_class_sequence_overlay(
-                action_tokens,
-                object_tokens,
-                int(vocabulary.eos_label),
-                vocabulary=vocabulary,
-                name="eai_action_object_grammar",
-            )
-        )
-    elif action_sequence_tokens:
-        overlays.append(
-            token_set_sequence_overlay(
-                action_sequence_tokens,
-                int(vocabulary.eos_label),
-                vocabulary=vocabulary,
-                name="eai_action_sequence_grammar",
-            )
-        )
-    if action_object_constraint_tokens:
-        overlays.append(
-            pending_token_allowed_set_overlay(
-                action_object_constraint_tokens,
-                vocabulary=vocabulary,
-                name="eai_action_object_compatibility",
-            )
-        )
-    if not overlays:
-        return base_dfa
-    return compose_runtime_dfa(base_dfa, overlays)
-
-
-def ActionObjectGrammarDFA(base_dfa, vocabulary, action_tokens, object_tokens):
-    """Backward-compatible factory for the generic action/object grammar overlay."""
-    return action_object_runtime_dfa(base_dfa, vocabulary, action_tokens, object_tokens)
-
-
-def ActionObjectCompatibilityDFA(base_dfa, vocabulary, action_object_constraint_tokens):
-    """Backward-compatible factory for the generic compatibility overlay."""
-    from domiknows.generation import compose_runtime_dfa, pending_token_allowed_set_overlay
-
-    return compose_runtime_dfa(
-        base_dfa,
-        [
-            pending_token_allowed_set_overlay(
-                action_object_constraint_tokens,
-                vocabulary=vocabulary,
-                name="eai_action_object_compatibility",
-            )
-        ],
-    )
-
-
-def NoImmediateEOSDFA(base_dfa, eos_label):
-    """Backward-compatible factory that prevents empty plans by blocking EOS at step 0."""
-    from domiknows.generation import RuntimeDFAOverlay, compose_runtime_dfa
-
-    eos_label = int(eos_label)
-
-    def step(emitted, label):
-        label = int(label)
-        if int(emitted) == 0 and label == eos_label:
-            return None
-        return 1
-
-    overlay = RuntimeDFAOverlay(
-        states=frozenset({0, 1}),
-        alphabet=frozenset(base_dfa.alphabet),
-        start_state=0,
-        step_fn=step,
-        accepting_states=frozenset({1}),
-        name="no_immediate_eos",
-    )
-    return compose_runtime_dfa(base_dfa, [overlay])
-
-
 def raw_qwen_predictions(args, examples, vocab):
     tokenizer, model = load_qwen(args.llm_backbone_path, args.device)
     predictions = []
@@ -480,19 +372,19 @@ def qwen_dfa_predictions(args, examples, dfa, vocabulary, desc="Qwen+DFA"):
 
 
 def build_no_training_graph(args, examples, constraint_mode="specific"):
-    # Compile only the broad action->object constraint through DomiKnowS.  The
-    # action-specific object compatibility is composed as a lightweight DFA
-    # wrapper in build_no_training_dfa; compiling each compatibility rule as a
-    # separate LC can make DFA construction stall on EAI.
     graph, bundle = create_generation_graph(
         max_steps=args.max_steps,
         vocab=generation_vocab_from_examples(examples),
         object_tokens=object_tokens_from_examples(examples),
         action_tokens=action_tokens_requiring_object_from_examples(examples),
+        action_sequence_tokens=action_tokens_from_examples(examples),
         openable_object_tokens=None,
-        action_object_constraint_tokens=None,
+        action_object_constraint_tokens=(
+            action_object_constraint_tokens_from_examples(examples)
+            if constraint_mode == "specific" else None
+        ),
         enforce_action_object=True,
-        enforce_action_object_constraints=False,
+        enforce_action_object_constraints=constraint_mode == "specific",
     )
     return graph, bundle
 
@@ -501,14 +393,8 @@ def build_no_training_dfa(args, examples, constraint_mode="specific"):
     from domiknows.generation import constraints_to_dfa_from_graph
 
     graph, bundle = build_no_training_graph(args, examples, constraint_mode=constraint_mode)
-    dfa = constraints_to_dfa_from_graph(graph, bundle)
-    dfa = action_object_runtime_dfa(
-        dfa,
-        bundle.vocabulary,
-        action_tokens_requiring_object_from_examples(examples),
-        object_tokens_from_examples(examples),
-        action_object_constraint_tokens_from_examples(examples) if constraint_mode == "specific" else None,
-        action_tokens_from_examples(examples),
+    dfa = constraints_to_dfa_from_graph(
+        graph, bundle, on_unsupported="raise", minimize=False
     )
     return dfa, bundle.vocabulary, graph, bundle
 
@@ -691,7 +577,9 @@ def _domiknows_hmm_dfa_predictions(args, dfa, bundle, generator, examples, desc=
                 "dataset": getattr(args, "dataset", None),
                 "dfa_build_mode": getattr(args, "dfa_build_mode", "graph"),
                 "dfa_states": len(getattr(dfa, "states", ())),
-                "constraint_count": len(getattr(dfa, "overlays", ()) or ()),
+                "constraint_count": None,
+                "runtime_overlay_count": 0,
+                "policy_source": "generation_graph",
                 "action_count": len(sample.get("action_tokens", ())),
                 "object_count": len(sample.get("object_tokens", ())),
                 "compatibility_pair_count": sum(
@@ -718,9 +606,7 @@ def _domiknows_hmm_dfa_predictions(args, dfa, bundle, generator, examples, desc=
 
 
 def hmm_dfa_predictions(args, program, bundle, examples):
-    from domiknows.generation import constraints_to_dfa_from_graph
-
-    dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+    dfa = bundle.policy_dfa
     return _domiknows_hmm_dfa_predictions(
         args,
         dfa,
@@ -774,9 +660,7 @@ def main():
     if settings & {"0", "nt_dfa", "nt_hmm_dfa"}:
         for constraint_mode in args.constraint_modes:
             if "nt_hmm_dfa" in settings:
-                from domiknows.generation import constraints_to_dfa_from_graph as _constraints_to_dfa_from_graph
-
-                dfa_i = _constraints_to_dfa_from_graph(nt_program.graph, nt_bundle)
+                dfa_i = nt_bundle.policy_dfa
                 vocab_i = nt_bundle.vocabulary
                 graph_i = nt_program.graph
                 bundle_i = nt_bundle
@@ -803,9 +687,7 @@ def main():
         program, bundle = load_trained_program(args, all_examples, args.device)
     elif raw_preds is None and not (settings & {"nt_hmm_dfa"}):
         raise ValueError("No evaluation settings selected.")
-    from domiknows.generation import constraints_to_dfa_from_graph
-
-    dfa = constraints_to_dfa_from_graph(program.graph, bundle) if program is not None else None
+    dfa = bundle.policy_dfa if bundle is not None else None
     score_vocab = bundle.vocabulary if bundle is not None else type("RawVocab", (), {
         "eos_label": vocab.index(EOS_TOKEN),
         "label_count": len(vocab),

@@ -267,6 +267,69 @@ class TinyTransformerActionObjectGenerator(torch.nn.Module):
         return self.sequence_logits(text, ids.unsqueeze(0))[0, -1, :]
 
 
+class PretrainedLabelAdapter(torch.nn.Module):
+    """Score EAI labels with Qwen's pretrained output geometry plus a low-rank residual."""
+
+    def __init__(self, model, tokenizer, vocabulary, eos_label, hidden_size, rank=64, device=None):
+        super().__init__()
+        if vocabulary is None:
+            raise ValueError("pretrained-adapter requires the EAI TokenVocabulary")
+        if int(rank) <= 0:
+            raise ValueError("label adapter rank must be positive")
+        output_embeddings = model.get_output_embeddings()
+        if output_embeddings is None or not hasattr(output_embeddings, "weight"):
+            raise ValueError("causal LM does not expose pretrained output embeddings")
+        native_weight = output_embeddings.weight.detach()
+        label_token_ids = []
+        for label in range(vocabulary.label_count):
+            if label == int(eos_label):
+                token_ids = [tokenizer.eos_token_id]
+            else:
+                surface = vocabulary.token_for_label(label)
+                token_ids = tokenizer(
+                    " " + surface, add_special_tokens=False
+                )["input_ids"]
+                if not token_ids:
+                    token_ids = tokenizer(surface, add_special_tokens=False)["input_ids"]
+            token_ids = [int(token_id) for token_id in token_ids if token_id is not None]
+            if not token_ids:
+                raise ValueError(f"label {label} has no native tokenizer representation")
+            label_token_ids.append(token_ids)
+
+        unique_ids = sorted({token_id for ids in label_token_ids for token_id in ids})
+        native_index = torch.tensor(
+            unique_ids, dtype=torch.long, device=native_weight.device
+        )
+        selected = native_weight.index_select(0, native_index).float().cpu()
+        selected_row = {token_id: index for index, token_id in enumerate(unique_ids)}
+        vectors = [
+            selected[
+                torch.tensor([selected_row[token_id] for token_id in token_ids])
+            ].mean(dim=0)
+            for token_ids in label_token_ids
+        ]
+
+        target_device = device or native_weight.device
+        self.register_buffer("base_label_vectors", torch.stack(vectors).to(target_device))
+        self.residual_down = torch.nn.Linear(hidden_size, int(rank), bias=False).to(target_device)
+        self.residual_up = torch.nn.Linear(int(rank), vocabulary.label_count, bias=False).to(target_device)
+        self.bias = torch.nn.Parameter(torch.zeros(vocabulary.label_count, device=target_device))
+        self.log_temperature = torch.nn.Parameter(torch.zeros((), device=target_device))
+        torch.nn.init.zeros_(self.residual_up.weight)
+
+    @property
+    def weight(self):
+        """Compatibility with code that uses a linear head's device and dtype."""
+        return self.base_label_vectors
+
+    def forward(self, hidden):
+        hidden = hidden.float()
+        base = F.linear(hidden, self.base_label_vectors)
+        residual = self.residual_up(F.gelu(self.residual_down(hidden)))
+        temperature = self.log_temperature.exp().clamp(max=100.0)
+        return temperature * base + residual + self.bias
+
+
 class CausalLMActionObjectGenerator(torch.nn.Module):
     supports_batched_prefixes = True
 
@@ -290,6 +353,8 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         low_cpu_mem_usage=True,
         shared_model=None,
         shared_tokenizer=None,
+        label_head="pretrained-adapter",
+        label_adapter_rank=64,
     ):
         super().__init__()
         _prepare_transformers_imports()
@@ -301,6 +366,10 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         self.max_length = max_length
         self.vocabulary = vocabulary
         self.use_lora = bool(use_lora)
+        if label_head not in {"pretrained-adapter", "linear"}:
+            raise ValueError(f"Unsupported causal label head {label_head!r}")
+        self.label_head_type = label_head
+        self.label_adapter_rank = int(label_adapter_rank)
         if self.use_lora and shared_model is not None:
             raise ValueError("shared_model cannot be used with --use-lora because LoRA mutates the backbone")
         self.tokenizer = shared_tokenizer or AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
@@ -356,7 +425,18 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
             self.model.eval() if freeze else self.model.train()
 
         model_hidden = getattr(self.model.config, "hidden_size", hidden_dim or 768)
-        self.output = torch.nn.Linear(model_hidden, label_count).to(self._model_input_device())
+        if label_head == "pretrained-adapter":
+            self.output = PretrainedLabelAdapter(
+                self.model,
+                self.tokenizer,
+                vocabulary,
+                self.eos_label,
+                model_hidden,
+                rank=self.label_adapter_rank,
+                device=self._model_input_device(),
+            )
+        else:
+            self.output = torch.nn.Linear(model_hidden, label_count).to(self._model_input_device())
 
     def _model_input_device(self):
         try:
@@ -571,6 +651,7 @@ class SmallLLMPlanGenerator(torch.nn.Module):
         max_new_tokens=128,
         max_steps=8,
         vocabulary=None,
+        policy_dfa=None,
     ):
         super().__init__()
         _prepare_transformers_imports()
@@ -585,6 +666,7 @@ class SmallLLMPlanGenerator(torch.nn.Module):
 
             vocabulary = TokenVocabulary(ACTION_VOCAB, eos_token=EOS_TOKEN)
         self.vocabulary = vocabulary
+        self.policy_dfa = policy_dfa
         self.allowed_actions = tuple(
             token for token in self.vocabulary.tokens if token != self.vocabulary.eos_token
         )
@@ -638,6 +720,34 @@ class SmallLLMPlanGenerator(torch.nn.Module):
             actions.append(action)
         if self.vocabulary.eos_token not in actions:
             actions.append(self.vocabulary.eos_token)
+        if self.policy_dfa is not None:
+            constrained = []
+            state = self.policy_dfa.start_state
+            for step in range(self.max_steps):
+                allowed = {
+                    int(label)
+                    for label in self.policy_dfa.allowed_tokens(
+                        state, remaining_steps=self.max_steps - step
+                    )
+                }
+                if not allowed:
+                    raise RuntimeError(
+                        f"graph policy DFA has no productive label at step {step}"
+                    )
+                candidate = actions[step] if step < len(actions) else self.vocabulary.eos_token
+                try:
+                    candidate_label = self.vocabulary.label_for_token(candidate)
+                except KeyError:
+                    candidate_label = self.vocabulary.other_label
+                label = candidate_label if candidate_label in allowed else min(allowed)
+                constrained.append(self.vocabulary.token_for_label(label))
+                next_state = self.policy_dfa.step(state, label)
+                if next_state is None:
+                    raise RuntimeError("graph policy DFA rejected an allowed label")
+                state = next_state
+                if label == self.vocabulary.eos_label:
+                    break
+            actions = constrained
         actions = actions[: self.max_steps]
         while len(actions) < self.max_steps:
             actions.append(self.vocabulary.eos_token)

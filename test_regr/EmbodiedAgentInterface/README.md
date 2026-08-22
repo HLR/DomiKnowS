@@ -20,16 +20,16 @@ The task requires an embodied agent to plan and generate multi-step action-objec
   - A separate deterministic world/trajectory graph (`world_graph.py`) exposes namespaced action and state concepts for DomiKnowS constraints. Applicable constraints modulate task progress with `task_reward * ((1 - weight) + weight * constraint_score)`; they cannot independently reward a failed plan.
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
-  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss.
-  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using dense goal-fact recall by default, world constraints as a discount for violations, and a small teacher-forced anchor loss to prevent catastrophic forgetting. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes.
+  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss. Every epoch reports exploration metrics and decoded examples, and `<model-stem>.stage1.pth` is retained.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using dense goal-fact recall by default, world constraints as a discount for violations, and a small teacher-forced anchor loss to prevent catastrophic forgetting. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. RL starts only when Stage 1 produces at least one positive-task-reward validation trajectory; otherwise the command retains Stage 1 and exits with status 2.
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
-  - **Small LLM (Qwen)**: Causal-LM backbone support (`Qwen/Qwen2.5-1.5B-Instruct` or `Qwen/Qwen2.5-0.5B-Instruct`) with optional PEFT / LoRA adaptation.
+  - **Small LLM (Qwen)**: Causal-LM backbone support, including `Qwen/Qwen3-8B`, with optional PEFT / LoRA adaptation. The default EAI label head uses fixed vectors from Qwen's native output embeddings plus a trainable low-rank residual, bias, and temperature; `--causal-label-head linear` preserves legacy checkpoints.
 
 - **DFA Relational Constraints & Hybrid Inference**:
-  - Declarative DomiKnowS action-object relational grammar constraints compiled into Deterministic Finite Automata (DFA).
-  - DFA-guided constrained autoregressive decoding and Qwen + HMM + DFA lookahead inference (`infer_qwen_hmm_dfa.py`).
+  - The DomiKnowS generation graph declares the first-token action rule, action/object successors, zero-argument actions, action/object compatibility, EOS closure, and maximum length. These marked logical constraints compile into the single `EAIProgramBundle.policy_dfa`; EAI adds no runtime policy overlays.
+  - The same compiled DFA masks supervised evaluation, RL sampling, differentiable RL rescoring, and Qwen + HMM + DFA lookahead inference (`infer_qwen_hmm_dfa.py`).
 
 ---
 
@@ -116,7 +116,7 @@ uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage
 
 ### 3. Small LLM Backbone Training (Qwen)
 
-Run two-stage training with `Qwen/Qwen2.5-1.5B-Instruct` as the causal language model backbone:
+Run two-stage training with a Qwen causal language model backbone:
 
 ```powershell
 # Dummy verification with Qwen
@@ -124,6 +124,10 @@ uv run python test_regr/EmbodiedAgentInterface/main.py --dummy --baseline-model 
 
 # Qwen training on full EAI dataset with LoRA
 uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 --baseline-model causal-lm --llm-backbone-path Qwen/Qwen2.5-1.5B-Instruct --use-lora --lora-r 16 --two-stage --epochs 3 --rl-epochs 3 --max-steps 20 --evaluate
+
+# Target one-H100 Qwen3-8B experiment
+$env:CUDA_VISIBLE_DEVICES=3
+uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-8B --llm-device-map auto --use-lora --lora-r 8 --lora-alpha 16 --rl-num-samples 2 --device cuda:0 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_8b_lora.pth
 ```
 
 ### 4. Standalone Program Modes
@@ -157,6 +161,9 @@ During evaluation, `sequence_score` reports:
 - `examples`: Total evaluated test instances.
 - `exact_sequence`: Fraction of trajectories with an exact action-object match to gold.
 - `token_accuracy`: Per-step accuracy through the first gold EOS; trailing EOS padding is excluded.
+- `nonempty_plan_rate`: Fraction of predictions containing at least one action token before EOS.
+- `average_predicted_length`: Mean number of non-EOS generated labels.
+- `positive_reward_rate`: Fraction of predictions with positive unmodulated task reward; this controls the Stage 1-to-Stage 2 gate.
 - `dfa_valid`: Fraction of generated trajectories satisfying the compiled DomiKnowS declarative grammar constraints. Reported as `n/a` when DFA checking is disabled.
 - `gt_state_success`: Binary $0/1$ final state satisfaction evaluated by the world state simulator.
 - `gt_state_recall`: Mean fraction of goal condition facts satisfied by the generated trajectory.
@@ -214,8 +221,13 @@ When training or running inference, you may encounter different model artifacts 
 | `--no-world-constraints` | `flag` | `False` | Disable the default world and transition constraints and bypass reward blending. |
 | `--baseline-model` | `str` | `"tiny-transformer"` | Model backbone: `"tiny-transformer"` or `"causal-lm"`. |
 | `--llm-backbone-path`| `str` | `None` | Hugging Face model path or ID (e.g. `Qwen/Qwen2.5-1.5B-Instruct`). |
+| `--causal-label-head` | `str` | `"pretrained-adapter"` | Native Qwen label-vector adapter, or legacy `linear`. |
+| `--label-adapter-rank` | `int` | `64` | Low-rank residual size for the pretrained label adapter. |
 | `--use-lora` | `flag` | `False` | Enable PEFT / LoRA adapters for Causal-LM backbone. |
 | `--max-steps` | `int` | `8` | Maximum decoding/generation horizon per episode. |
-| `--use-dfa` | `flag` | `False` | Enable DFA-constrained autoregressive greedy decoding. |
+| `--generation-constraints` | `str` | `"always"` | Apply the graph-compiled DFA during RL and evaluation (`always`), evaluation only (`eval`), or disable it as an explicit ablation (`off`). |
+| `--use-dfa` | `flag` | `False` | Deprecated alias for `--generation-constraints always`. |
+| `--stage1-checkpoint` | `path` | `<model-stem>.stage1.pth` | Explicit retained Stage 1 checkpoint path. |
+| `--epoch-predictions` | `int` | `3` | Number of validation predictions printed after each Stage 1 epoch. |
 | `--evaluate` | `flag` | `False` | Run evaluation after training. |
 

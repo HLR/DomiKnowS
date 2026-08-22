@@ -986,6 +986,7 @@ def _evaluate_goal_satisfaction(
                 if world_bundle is not None else 0
             )
         ),
+        "task_reward_score": task_reward,
         "rl_reward_score": rl_reward_score,
     }
 

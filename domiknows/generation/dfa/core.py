@@ -137,6 +137,10 @@ class DFA:
             emitting from *state* given the step budget.
         """
         allowed = set()
+        # Many vocabulary symbols lead to the same successor.  Cache the
+        # bounded reachability result per successor so large label spaces do
+        # not repeat an identical BFS hundreds of times.
+        reachable = {}
         for symbol in self.alphabet:
             nxt = self.step(state, symbol)
             if nxt is None:
@@ -146,10 +150,15 @@ class DFA:
                 # Unbounded: any non-dead successor is acceptable.
                 if nxt not in self.dead_states:
                     allowed.add(symbol)
-            elif self.can_reach_accepting(nxt, remaining_steps - 1):
-                # Bounded: only include the symbol if we can still reach
-                # an accepting state within the remaining budget.
-                allowed.add(symbol)
+            else:
+                if nxt not in reachable:
+                    reachable[nxt] = self.can_reach_accepting(
+                        nxt, remaining_steps - 1
+                    )
+                if reachable[nxt]:
+                    # Bounded: only include the symbol if we can still reach
+                    # an accepting state within the remaining budget.
+                    allowed.add(symbol)
         return allowed
 
 

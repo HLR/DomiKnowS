@@ -282,8 +282,11 @@ def after_token_allowed_dfa(
     trigger_tokens: Iterable[str],
     allowed_tokens: Iterable[str],
 ) -> DFA:
-    """Build a three-state DFA that, after any trigger token appears, only
-    permits tokens from *allowed_tokens*.
+    """Require the token immediately after a trigger to be allowed.
+
+    A trigger leaves the automaton in a non-accepting pending state.  Exactly
+    one allowed token discharges that obligation; when the allowed token is
+    itself a trigger, the next-token obligation remains pending.
     """
     triggers_tuple = tuple(trigger_tokens)
     allowed_tuple = tuple(allowed_tokens)
@@ -301,7 +304,9 @@ def after_token_allowed_dfa(
         if state == "dead":
             return "dead"
         if state == "after":
-            return "after" if symbol in allowed else "dead"
+            if symbol not in allowed:
+                return "dead"
+            return "after" if symbol in triggers else "open"
         return "after" if symbol in triggers else "open"
 
     return DFA(
@@ -309,8 +314,90 @@ def after_token_allowed_dfa(
         alphabet=alphabet,
         transitions=_complete_transitions(states, alphabet, step),
         start_state="open",
-        accepting_states=frozenset({"open", "after"}),
+        accepting_states=frozenset({"open"}),
         dead_states=frozenset({"dead"}),
+    )
+
+
+def first_token_allowed_dfa(
+    vocabulary: TokenVocabulary,
+    allowed_tokens: Iterable[str],
+) -> DFA:
+    """Require a non-empty sequence whose first token is in *allowed_tokens*."""
+    allowed_tuple = tuple(allowed_tokens)
+    if not allowed_tuple:
+        raise ValueError("allowed_tokens must not be empty")
+    allowed = frozenset(vocabulary.label_for_token(token) for token in allowed_tuple)
+    alphabet = frozenset(vocabulary.alphabet)
+    states = frozenset({"start", "open", "dead"})
+
+    def step(state, symbol):
+        if state == "dead":
+            return "dead"
+        if state == "start":
+            return "open" if symbol in allowed else "dead"
+        return "open"
+
+    return DFA(
+        states=states,
+        alphabet=alphabet,
+        transitions=_complete_transitions(states, alphabet, step),
+        start_state="start",
+        accepting_states=frozenset({"open"}),
+        dead_states=frozenset({"dead"}),
+    )
+
+
+def after_token_allowed_map_dfa(
+    vocabulary: TokenVocabulary,
+    trigger_to_allowed: dict[str, Iterable[str]],
+) -> DFA:
+    """Compile multiple immediate-successor rules into one compact DFA.
+
+    When multiple rules mention the same trigger, callers must provide their
+    already-intersected allowed set.
+    """
+    normalized = {
+        vocabulary.label_for_token(trigger): frozenset(
+            vocabulary.label_for_token(token) for token in allowed
+        )
+        for trigger, allowed in trigger_to_allowed.items()
+    }
+    if not normalized:
+        raise ValueError("trigger_to_allowed must not be empty")
+    if any(not allowed for allowed in normalized.values()):
+        raise ValueError("every trigger must have at least one allowed successor")
+    alphabet = frozenset(vocabulary.alphabet)
+    open_state = "open"
+    dead_state = "dead"
+    # Triggers with the same successor set are language-equivalent pending
+    # states. EAI has hundreds of object labels governed by one identical
+    # object->action/EOS rule, so sharing them prevents vocabulary-sized
+    # product automata.
+    pending_for_trigger = {
+        trigger: ("pending", tuple(sorted(allowed)))
+        for trigger, allowed in normalized.items()
+    }
+    allowed_by_pending = {
+        pending_for_trigger[trigger]: allowed
+        for trigger, allowed in normalized.items()
+    }
+    states = frozenset({open_state, dead_state, *allowed_by_pending})
+
+    def step(state, symbol):
+        if state == dead_state:
+            return dead_state
+        if state != open_state and symbol not in allowed_by_pending[state]:
+            return dead_state
+        return pending_for_trigger.get(symbol, open_state)
+
+    return DFA(
+        states=states,
+        alphabet=alphabet,
+        transitions=_complete_transitions(states, alphabet, step),
+        start_state=open_state,
+        accepting_states=frozenset({open_state}),
+        dead_states=frozenset({dead_state}),
     )
 
 

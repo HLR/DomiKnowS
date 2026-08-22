@@ -198,35 +198,7 @@ def _capture_shared_llm(args, program):
         args._shared_llm_tokenizer = program.autoregressive_head.tokenizer
 
 
-def _example_dfa(base_dfa, vocabulary, sample):
-    sample_examples = [sample]
-    action_tokens = ev.action_tokens_requiring_object_from_examples(sample_examples)
-    object_tokens = ev.object_tokens_from_examples(sample_examples)
-    compatibility = ev.action_object_constraint_tokens_from_examples(sample_examples)
-    action_sequence_tokens = ev.action_tokens_from_examples(sample_examples)
-    dfa = ev.action_object_runtime_dfa(
-        base_dfa,
-        vocabulary,
-        action_tokens,
-        object_tokens,
-        compatibility,
-        action_sequence_tokens,
-    )
-    overlay_count = len(getattr(dfa, "overlays", ()) or ())
-    stats = {
-        "constraint_count": overlay_count,
-        "runtime_overlay_count": overlay_count,
-        "action_requires_object_count": len(action_tokens),
-        "object_count": len(object_tokens),
-        "action_sequence_count": len(action_sequence_tokens),
-        "compatibility_action_count": len(compatibility),
-        "compatibility_pair_count": sum(len(objects) for objects in compatibility.values()),
-    }
-    return dfa, stats
-
-
 def _decode_one_dfa_per_example(args, all_examples, examples):
-    from domiknows.generation import constraints_to_dfa_from_graph
     from domiknows.generation.applications.hybrid import HybridController
 
     counts = _new_counts()
@@ -235,12 +207,12 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
     program, bundle = _build_program_with_constraints(
         args,
         all_examples,
-        enforce_action_object=False,
-        enforce_action_object_constraints=False,
+        enforce_action_object=True,
+        enforce_action_object_constraints=True,
     )
     _capture_shared_llm(args, program)
     print("per-example mode: compiling base DFA", flush=True)
-    base_dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+    base_dfa = bundle.policy_dfa
     base_dfa_states = len(base_dfa.states)
     print(f"per-example mode: base DFA states={base_dfa_states}", flush=True)
 
@@ -253,7 +225,12 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
     trace_log = None
     iterator = ev.progress_bar(enumerate(examples), total=len(examples), desc="4 product HMM+DFA per-example")
     for index, sample in iterator:
-        dfa, trace_stats = _example_dfa(base_dfa, bundle.vocabulary, sample)
+        dfa = base_dfa
+        trace_stats = {
+            "constraint_count": len(program.graph.logicalConstrains),
+            "runtime_overlay_count": 0,
+            "policy_source": "generation_graph",
+        }
         composed_dfa_states = len(getattr(dfa, "states", ()))
         composed_dfa_states_max = max(composed_dfa_states_max, composed_dfa_states)
         controller = HybridController(
@@ -332,8 +309,6 @@ def _decode_one_dfa_per_example(args, all_examples, examples):
 
 
 def _decode_batched(args, all_examples, examples):
-    from domiknows.generation import constraints_to_dfa_from_graph
-
     counts = _new_counts()
     started = time.perf_counter()
     batch_size = int(args.batch_size)
@@ -353,12 +328,12 @@ def _decode_batched(args, all_examples, examples):
         )
         program, bundle = _build_program_with_constraints(
             args,
-            build_examples,
+            all_examples,
             enforce_action_object=True,
             enforce_action_object_constraints=True,
         )
         print(f"batch {batch_index}/{len(build_batches)}: compiling DFA", flush=True)
-        dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+        dfa = bundle.policy_dfa
         dfa_state_counts.append(len(dfa.states))
         print(f"batch {batch_index}/{len(build_batches)}: DFA states={len(dfa.states)}", flush=True)
         desc = f"4 product HMM+DFA batch {batch_index}/{len(build_batches)}"

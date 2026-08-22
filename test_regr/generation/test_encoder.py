@@ -28,6 +28,8 @@ def test_generation_encoder_builds_domiknows_graph():
     assert graph is not None
     assert bundle.vocabulary.label_count == 3
     assert bundle.generated_token.name == "generated_token"
+    assert bundle.sequence_start.name == "sequence_start"
+    assert bundle.sequence_start_token.dst is bundle.token
     assert len(graph.logicalConstrains) >= 2
 
 
@@ -62,6 +64,8 @@ def test_generation_bundle_from_graph_wraps_traditional_shape():
     assert bundle.is_before_rel is is_before_rel
     assert bundle.first_token is first_token
     assert bundle.second_token is second_token
+    assert bundle.sequence_start is None
+    assert bundle.sequence_start_token is None
     assert bundle.vocabulary.label_count == 3
 
 

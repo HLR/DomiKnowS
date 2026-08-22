@@ -28,6 +28,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         eos_label,
         max_steps,
         supervised_weight=0.1,
+        policy_dfa=None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -35,6 +36,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         self.eos_label = int(eos_label)
         self.max_steps = int(max_steps)
         self.supervised_weight = float(supervised_weight)
+        self.policy_dfa = policy_dfa
         if self.supervised_weight < 0.0:
             raise ValueError("supervised_weight must be non-negative")
 
@@ -73,6 +75,12 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         )
         finished = torch.zeros(sample_count, dtype=torch.bool, device=device)
         trajectories = [[] for _ in range(sample_count)]
+        policy_dfa = getattr(self, "policy_dfa", None)
+        dfa_states = (
+            [policy_dfa.start_state for _ in range(sample_count)]
+            if policy_dfa is not None
+            else None
+        )
 
         # REINFORCE does not differentiate through the categorical sample.  Do
         # rollout generation without autograd, otherwise a causal LM retains one
@@ -82,10 +90,13 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         self.autoregressive_head.eval()
         try:
             with torch.no_grad():
-                for _step in range(self.max_steps):
+                for step in range(self.max_steps):
                     logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
                         self, text, prefixes
                     )[:, -1, :]
+                    logits = AutoregressiveSequenceReinforcementProgram._mask_policy_logits(
+                        self, logits, dfa_states, step, finished
+                    )
                     distribution = torch.distributions.Categorical(logits=logits)
                     sampled = distribution.sample()
                     active = ~finished
@@ -100,6 +111,13 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                     ):
                         if is_active:
                             trajectories[index].append(int(label))
+                            if dfa_states is not None:
+                                next_state = policy_dfa.step(dfa_states[index], int(label))
+                                if next_state is None:
+                                    raise RuntimeError(
+                                        f"sampled label {label} has no policy DFA transition"
+                                    )
+                                dfa_states[index] = next_state
 
                     prefixes = torch.cat([prefixes, sampled.unsqueeze(-1)], dim=-1)
                     finished = finished | (sampled == self.eos_label)
@@ -117,6 +135,30 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
             self.autoregressive_head.train(was_training)
 
         return trajectories, trajectory_logprob
+
+    def _mask_policy_logits(self, logits, dfa_states, step, finished=None):
+        """Apply the graph-compiled DFA to one logit row per trajectory."""
+        policy_dfa = getattr(self, "policy_dfa", None)
+        if policy_dfa is None:
+            return logits
+        masked = torch.full_like(logits, float("-inf"))
+        for index, state in enumerate(dfa_states):
+            if finished is not None and bool(finished[index]):
+                allowed = {self.eos_label}
+            else:
+                allowed = {
+                    int(label)
+                    for label in policy_dfa.allowed_tokens(
+                        state, remaining_steps=self.max_steps - int(step)
+                    )
+                }
+            if not allowed:
+                raise RuntimeError(
+                    f"policy DFA has no productive token at rollout step {step}, state={state!r}"
+                )
+            allowed_index = torch.tensor(sorted(allowed), dtype=torch.long, device=logits.device)
+            masked[index, allowed_index] = logits[index, allowed_index]
+        return masked
 
     def _prefix_logits(self, text, prefixes):
         sample_count = prefixes.shape[0]
@@ -167,6 +209,27 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
             self, text, teacher_forced_prefixes
         )
+        policy_dfa = getattr(self, "policy_dfa", None)
+        if policy_dfa is not None:
+            masked_steps = []
+            states = [policy_dfa.start_state for _ in trajectories]
+            for step in range(max_length):
+                active = step < lengths
+                step_logits = AutoregressiveSequenceReinforcementProgram._mask_policy_logits(
+                    self, logits[:, step, :], states, step, ~active
+                )
+                masked_steps.append(step_logits)
+                for index, trajectory in enumerate(trajectories):
+                    if step >= len(trajectory):
+                        continue
+                    label = int(trajectory[step])
+                    next_state = policy_dfa.step(states[index], label)
+                    if next_state is None:
+                        raise RuntimeError(
+                            f"trajectory label {label} violates policy DFA at step {step}"
+                        )
+                    states[index] = next_state
+            logits = torch.stack(masked_steps, dim=1)
         selected = torch.log_softmax(logits, dim=-1).gather(
             -1, targets.unsqueeze(-1)
         ).squeeze(-1)

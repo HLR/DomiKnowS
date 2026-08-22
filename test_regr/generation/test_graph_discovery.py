@@ -293,8 +293,20 @@ def test_discovers_generalized_before_path_implication():
     assert "ifL" in supported_lc_types(graph, bundle)
     dfa = constraints_to_dfa_from_graph(graph, bundle)
     assert dfa.accepts(labels(bundle, ["A", "B", "B"]))
-    assert dfa.accepts(labels(bundle, ["B", "A"]))
+    assert not dfa.accepts(labels(bundle, ["B", "A"]))
     assert not dfa.accepts(labels(bundle, ["A", "B", "A"]))
+
+
+def test_discovers_sequence_start_allowed_set():
+    graph, bundle = build_bundle()
+    with graph:
+        bundle.context.starts_with(("A", "B"))
+
+    dfa = constraints_to_dfa_from_graph(graph, bundle, on_unsupported="raise")
+    assert dfa.accepts(labels(bundle, ["A", "<eos>"]))
+    assert dfa.accepts(labels(bundle, ["B"]))
+    assert not dfa.accepts(labels(bundle, ["<eos>"]))
+    assert not dfa.accepts([])
 
 
 def test_discovers_multi_token_before_path_implication():
@@ -329,11 +341,12 @@ def test_discovers_multi_token_before_path_implication():
     # No trigger emitted yet: any single token is fine.
     assert dfa.accepts(labels(bundle, ["<eos>"]))
     # Triggered by A; allowed set is {<eos>, A}.
-    assert dfa.accepts(labels(bundle, ["A", "A"]))
+    assert not dfa.accepts(labels(bundle, ["A", "A"]))
+    assert dfa.accepts(labels(bundle, ["A", "A", "<eos>"]))
     assert dfa.accepts(labels(bundle, ["A", "<eos>"]))
     assert not dfa.accepts(labels(bundle, ["A", "B"]))
     # Triggered by B (second trigger token); same allowed set.
-    assert dfa.accepts(labels(bundle, ["B", "A"]))
+    assert not dfa.accepts(labels(bundle, ["B", "A"]))
     assert not dfa.accepts(labels(bundle, ["B", "B"]))
 
 

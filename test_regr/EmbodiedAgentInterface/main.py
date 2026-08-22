@@ -48,6 +48,9 @@ class EAIProgramBundle:
     reward_mode: str = "dense"
     constraint_weight: float = 0.25
     constraint_aggregate: str = "mean"
+    policy_dfa: object | None = None
+    generation_constraints: str = "always"
+    model_metadata: dict | None = None
 
     def __getattr__(self, name):
         return getattr(self.generation, name)
@@ -83,6 +86,7 @@ def build_program(
     vocab=None,
     object_tokens=None,
     action_tokens=None,
+    action_sequence_tokens=None,
     openable_object_tokens=None,
     action_object_constraint_tokens=None,
     program_type="solver",
@@ -109,11 +113,16 @@ def build_program(
     rl_constraint_aggregate="mean",
     world_constraint_builders=None,
     shared_autoregressive_head=None,
+    generation_constraints="always",
+    causal_label_head="pretrained-adapter",
+    label_adapter_rank=64,
 ):
     if not 0.0 <= float(rl_constraint_weight) <= 1.0:
         raise ValueError("rl_constraint_weight must be between 0 and 1")
     if rl_constraint_aggregate not in {"mean", "min", "prod"}:
         raise ValueError(f"Unsupported rl_constraint_aggregate={rl_constraint_aggregate!r}")
+    if generation_constraints not in {"always", "eval", "off"}:
+        raise ValueError(f"Unsupported generation_constraints={generation_constraints!r}")
 
     from domiknows import setProductionLogMode
     from domiknows.program import SolverPOIProgram
@@ -132,10 +141,15 @@ def build_program(
         vocab=vocab,
         object_tokens=object_tokens,
         action_tokens=action_tokens,
+        action_sequence_tokens=action_sequence_tokens,
         openable_object_tokens=openable_object_tokens,
         action_object_constraint_tokens=action_object_constraint_tokens,
         enforce_action_object=enforce_action_object,
         enforce_action_object_constraints=enforce_action_object_constraints,
+    )
+    from domiknows.generation import constraints_to_dfa_from_graph
+    policy_dfa = constraints_to_dfa_from_graph(
+        graph, generation_bundle, on_unsupported="raise", minimize=False
     )
     graph.detach()
     include_default_constraints = world_constraint_builders is None
@@ -152,6 +166,14 @@ def build_program(
         reward_mode=rl_reward_mode,
         constraint_weight=float(rl_constraint_weight),
         constraint_aggregate=rl_constraint_aggregate,
+        policy_dfa=policy_dfa,
+        generation_constraints=generation_constraints,
+        model_metadata={
+            "backbone": llm_backbone_path if baseline_model == "causal-lm" else baseline_model,
+            "vocabulary": list(generation_bundle.vocabulary.labels),
+            "label_head": causal_label_head if baseline_model == "causal-lm" else "native",
+            "label_adapter_rank": int(label_adapter_rank) if baseline_model == "causal-lm" else 0,
+        },
     )
     if program_type not in {"solver", "primal-dual", "reinforcement"}:
         raise ValueError(f"Unsupported program_type={program_type!r}")
@@ -183,6 +205,7 @@ def build_program(
             device=device,
             max_new_tokens=max_new_tokens,
             max_steps=max_steps,
+            policy_dfa=policy_dfa if generation_constraints == "always" else None,
             vocabulary=bundle.vocabulary,
         )
         token[generated_token] = ModuleLearner(
@@ -244,6 +267,8 @@ def build_program(
             gradient_checkpointing=gradient_checkpointing,
             shared_model=shared_llm_model,
             shared_tokenizer=shared_llm_tokenizer,
+            label_head=causal_label_head,
+            label_adapter_rank=label_adapter_rank,
         )
         if not (llm_device_map and str(llm_device_map).lower() != "none"):
             autoregressive_head = autoregressive_head.to(device)
@@ -288,6 +313,7 @@ def build_program(
             decoder=eai_action_decoder,
             num_samples=rl_num_samples,
             estimator=rl_estimator,
+            policy_dfa=policy_dfa if generation_constraints == "always" else None,
             poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
             device=device,
         )
@@ -524,9 +550,9 @@ def write_vocab_info_log(examples):
 
 
 def dfa_constrained_sequence(program, bundle, sample, max_steps):
-    from domiknows.generation import constrained_label_greedy_decode, constraints_to_dfa_from_graph
+    from domiknows.generation import constrained_label_greedy_decode
 
-    dfa = constraints_to_dfa_from_graph(program.graph, bundle)
+    dfa = bundle.policy_dfa
     result = constrained_label_greedy_decode(
         program.autoregressive_head,
         [bundle.vocabulary.eos_label],
@@ -539,6 +565,8 @@ def dfa_constrained_sequence(program, bundle, sample, max_steps):
 
 
 def greedy_sequence(program, bundle, sample, max_steps):
+    if bundle.generation_constraints in {"always", "eval"}:
+        return dfa_constrained_sequence(program, bundle, sample, max_steps)
     labels = []
     prefix = [bundle.vocabulary.eos_label]
     for _step in range(max_steps):
@@ -566,8 +594,6 @@ def labels_through_first_eos(labels, eos_label):
 
 
 def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=False, limit=None, show=False):
-    from domiknows.generation import constraints_to_dfa_from_graph
-
     eval_examples = examples if limit is None else examples[:limit]
     if not eval_examples:
         return {
@@ -582,9 +608,16 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             "world_constraint_applicable": 0.0,
             "world_constraint_declared": 0.0,
             "rl_reward_score": 0.0,
+            "nonempty_plan_rate": 0.0,
+            "average_predicted_length": 0.0,
+            "positive_reward_rate": 0.0,
         }
 
-    dfa = constraints_to_dfa_from_graph(program.graph, bundle) if use_dfa else None
+    dfa = (
+        bundle.policy_dfa
+        if use_dfa or bundle.generation_constraints in {"always", "eval"}
+        else None
+    )
     exact = 0
     token_correct = 0
     token_total = 0
@@ -596,12 +629,19 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
     world_constraint_applicable_total = 0
     world_constraint_declared_total = 0
     rl_reward_total = 0.0
+    nonempty_plan_total = 0
+    predicted_length_total = 0
+    positive_reward_total = 0
 
     for idx, sample in enumerate(eval_examples):
         program.populate_one(sample, device=device)
         labels = dfa_constrained_sequence(program, bundle, sample, max_steps) if use_dfa else greedy_sequence(program, bundle, sample, max_steps)
         gold = [int(x.item() if torch.is_tensor(x) else x) for x in sample["target_action_labels"][:max_steps]]
         pred = [int(x.item() if torch.is_tensor(x) else x) for x in labels[:max_steps]]
+        effective_pred = labels_through_first_eos(pred, bundle.vocabulary.eos_label)
+        predicted_actions = [label for label in effective_pred if label != bundle.vocabulary.eos_label]
+        nonempty_plan_total += int(bool(predicted_actions))
+        predicted_length_total += len(predicted_actions)
         pred_padded = pred + [bundle.vocabulary.eos_label] * max(0, len(gold) - len(pred))
         pred_padded = pred_padded[:len(gold)]
         exact += int(pred_padded == gold)
@@ -630,6 +670,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         world_constraint_applicable_total += eval_res["world_constraint_applicable_count"]
         world_constraint_declared_total += eval_res["world_constraint_declared_count"]
         rl_reward_total += eval_res["rl_reward_score"]
+        positive_reward_total += int(eval_res.get("task_reward_score", eval_res["rl_reward_score"]) > 0.0)
 
         if show:
             print()
@@ -660,12 +701,72 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             world_constraint_declared_total / len(eval_examples)
         ),
         "rl_reward_score": rl_reward_total / len(eval_examples),
+        "nonempty_plan_rate": nonempty_plan_total / len(eval_examples),
+        "average_predicted_length": predicted_length_total / len(eval_examples),
+        "positive_reward_rate": positive_reward_total / len(eval_examples),
     }
 
 
 def results_path_for_program(program_type):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     return RESULTS_PATHS.get(program_type, RESULTS_DIR / "results.txt")
+
+
+def _checkpoint_metadata(args, bundle, stage, epoch):
+    head = bundle.vocabulary
+    baseline_model = getattr(args, "baseline_model", "tiny-transformer")
+    label_head = getattr(args, "causal_label_head", "pretrained-adapter")
+    adapter_rank = int(getattr(args, "label_adapter_rank", 64))
+    return {
+        "backbone": getattr(args, "llm_backbone_path", None) if baseline_model == "causal-lm" else baseline_model,
+        "vocabulary": list(head.labels),
+        "label_head": label_head if baseline_model == "causal-lm" else "native",
+        "label_adapter_rank": adapter_rank if baseline_model == "causal-lm" else 0,
+        "stage": str(stage),
+        "epoch": int(epoch),
+    }
+
+
+def save_eai_checkpoint(program, bundle, args, path, stage, epoch):
+    metadata = _checkpoint_metadata(args, bundle, stage, epoch)
+    torch.save(
+        {
+            "eai_checkpoint_version": 1,
+            "metadata": metadata,
+            "model": program.model.state_dict(),
+        },
+        path,
+    )
+
+
+def load_eai_checkpoint(program, bundle, args, path, map_location=None):
+    checkpoint = torch.load(path, map_location=map_location, weights_only=True)
+    if not (isinstance(checkpoint, dict) and checkpoint.get("eai_checkpoint_version") == 1):
+        if (
+            getattr(args, "baseline_model", "tiny-transformer") == "causal-lm"
+            and getattr(args, "causal_label_head", "pretrained-adapter") != "linear"
+        ):
+            raise ValueError(
+                "Legacy causal-LM checkpoints use the random linear label head; "
+                "reload with --causal-label-head linear."
+            )
+        if isinstance(checkpoint, dict) and "model" in checkpoint and "cmodel" in checkpoint:
+            program.model.load_state_dict(checkpoint["model"])
+            if getattr(program, "cmodel", None) is not None:
+                program.cmodel.load_state_dict(checkpoint["cmodel"])
+        else:
+            program.model.load_state_dict(checkpoint)
+        return None
+    expected = _checkpoint_metadata(args, bundle, stage="load", epoch=0)
+    actual = checkpoint.get("metadata", {})
+    for key in ("backbone", "vocabulary", "label_head", "label_adapter_rank"):
+        if actual.get(key) != expected.get(key):
+            raise ValueError(
+                f"Incompatible EAI checkpoint {key}: saved={actual.get(key)!r}, "
+                f"requested={expected.get(key)!r}"
+            )
+    program.model.load_state_dict(checkpoint["model"])
+    return actual
 
 
 def print_score(title, score, program_type=None):
@@ -676,6 +777,9 @@ def print_score(title, score, program_type=None):
         f"{title}: examples={score['examples']} "
         f"exact_sequence={score['exact_sequence']:.3f} "
         f"token_accuracy={score['token_accuracy']:.3f} "
+        f"nonempty_plan_rate={score.get('nonempty_plan_rate', 0.0):.3f} "
+        f"average_predicted_length={score.get('average_predicted_length', 0.0):.2f} "
+        f"positive_reward_rate={score.get('positive_reward_rate', 0.0):.3f} "
         f"dfa_valid={dfa_value} "
         f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
         f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f} "
@@ -704,6 +808,7 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
         vocab=generation_vocab_from_examples(examples),
         object_tokens=object_tokens_from_examples(examples),
         action_tokens=action_tokens_requiring_object_from_examples(examples),
+        action_sequence_tokens=action_tokens_from_examples(examples),
         openable_object_tokens=openable_object_tokens_from_examples(examples),
         action_object_constraint_tokens=action_object_constraint_tokens_from_examples(examples),
         program_type=args.program,
@@ -730,6 +835,9 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
         rl_constraint_aggregate=getattr(args, "rl_constraint_aggregate", "mean"),
         world_constraint_builders=world_constraint_builders,
         shared_autoregressive_head=shared_autoregressive_head,
+        generation_constraints=getattr(args, "generation_constraints", "always"),
+        causal_label_head=getattr(args, "causal_label_head", "pretrained-adapter"),
+        label_adapter_rank=getattr(args, "label_adapter_rank", 64),
     )
     mode = getattr(args, "rl_reward_mode", "dense")
     weight = getattr(args, "rl_constraint_weight", 0.25)
@@ -742,6 +850,44 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
             world_bundle=bundle.world,
             constraint_weight=weight,
             constraint_aggregate=aggregate,
+        )
+    return program, bundle
+
+
+def build_stage2_program(args, solver_program, bundle, examples, device):
+    """Create the RL program on the exact Stage 1 graph, head, world, and DFA."""
+    program = AutoregressiveSequenceReinforcementProgram(
+        solver_program.graph,
+        targets=[bundle.generated_token],
+        autoregressive_head=solver_program.autoregressive_head,
+        eos_label=bundle.vocabulary.eos_label,
+        max_steps=args.max_steps,
+        supervised_weight=args.rl_supervised_weight,
+        reward_key="reward_function",
+        decoder=eai_action_decoder,
+        num_samples=args.rl_num_samples,
+        estimator=args.rl_estimator,
+        policy_dfa=(
+            bundle.policy_dfa if args.generation_constraints == "always" else None
+        ),
+        poi=[
+            bundle.text,
+            bundle.token,
+            bundle.generated_token,
+            bundle.token[bundle.contains],
+            bundle.token[bundle.generated_token],
+        ],
+        device=device,
+    )
+    program.autoregressive_head = solver_program.autoregressive_head
+    for example in examples:
+        example["reward_function"] = make_eai_reward_function(
+            example,
+            vocabulary=bundle.vocabulary,
+            mode=args.rl_reward_mode,
+            world_bundle=bundle.world,
+            constraint_weight=args.rl_constraint_weight,
+            constraint_aggregate=args.rl_constraint_aggregate,
         )
     return program, bundle
 
@@ -763,8 +909,25 @@ def _train_kwargs(args, train, device, epochs):
 
 
 def _epoch_accuracy_title(args, split_name, epoch):
-    dfa_text = "with DFA" if args.use_dfa else "without DFA"
+    dfa_text = (
+        "with graph DFA"
+        if getattr(args, "generation_constraints", "always") in {"always", "eval"}
+        else "without graph DFA"
+    )
     return f"epoch {epoch} {args.dataset} {args.program} {split_name} {dfa_text}"
+
+
+def _mean_loss_value(value):
+    if isinstance(value, dict):
+        values = [_mean_loss_value(item) for item in value.values()]
+        values = [item for item in values if item is not None]
+        return sum(values) / len(values) if values else None
+    if torch.is_tensor(value):
+        return float(value.detach().float().mean().cpu().item())
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def report_epoch_accuracy(args, program, bundle, train, dev, device, epoch):
@@ -799,7 +962,7 @@ def train_program(args, train, dev, examples, device):
     if args.model:
         model_path = Path(args.model)
         model_path.parent.mkdir(exist_ok=True, parents=True)
-        program.save(model_path)
+        save_eai_checkpoint(program, bundle, args, model_path, stage="supervised", epoch=args.epochs)
         print(f"Saved model: {model_path}")
     return program, bundle
 
@@ -812,20 +975,59 @@ def train_two_stage(args, train, dev, examples, device):
     orig_program = args.program
     args.program = "solver"
     solver_program, bundle = build_trainable_program(args, examples, device)
-    solver_program.train(train, valid_set=dev, test_set=None, **_train_kwargs(args, train, device, args.epochs))
-    
-    score_stage1 = sequence_score(solver_program, bundle, dev or train, args.max_steps, device=device, use_dfa=args.use_dfa)
+    stage1_optimizer = torch.optim.Adam(solver_program.model.parameters(), lr=args.lr)
+    score_stage1 = None
+    for epoch in range(1, args.epochs + 1):
+        stage_kwargs = _train_kwargs(args, train, device, 1)
+        stage_kwargs["Optim"] = lambda _params, optimizer=stage1_optimizer: optimizer
+        solver_program.train(train, valid_set=dev, test_set=None, **stage_kwargs)
+        validation_loss = solver_program.model.loss.value() if solver_program.model.loss else None
+        validation_loss = _mean_loss_value(validation_loss)
+        score_stage1 = sequence_score(
+            solver_program, bundle, dev or train, args.max_steps,
+            device=device, use_dfa=args.use_dfa,
+        )
+        print(f"Stage 1 epoch {epoch} supervised_loss={validation_loss if validation_loss is not None else 'n/a'}")
+        print_score(f"Stage 1 Epoch {epoch} Eval", score_stage1, "solver")
+        if args.epoch_predictions > 0:
+            sequence_score(
+                solver_program, bundle, dev or train, args.max_steps,
+                device=device, use_dfa=args.use_dfa,
+                limit=args.epoch_predictions, show=True,
+            )
+
+    if score_stage1 is None:
+        score_stage1 = sequence_score(
+            solver_program, bundle, dev or train, args.max_steps,
+            device=device, use_dfa=args.use_dfa,
+        )
     print_score("Stage 1 (Exact Match) Eval", score_stage1, "solver")
+
+    final_model_path = Path(args.model) if args.model else MODEL_DIR / "eai_action_sequence_baseline.pth"
+    stage1_path = (
+        Path(args.stage1_checkpoint)
+        if args.stage1_checkpoint
+        else final_model_path.with_suffix(".stage1.pth")
+    )
+    stage1_path.parent.mkdir(exist_ok=True, parents=True)
+    save_eai_checkpoint(
+        solver_program, bundle, args, stage1_path, stage="stage1", epoch=args.epochs
+    )
+    print(f"Saved Stage 1 checkpoint: {stage1_path}")
+    if not stage1_allows_rl(score_stage1):
+        print(
+            "Stage 2 skipped: Stage 1 produced no positive task-reward "
+            f"trajectory on {len(dev or train)} validation examples."
+        )
+        args.program = orig_program
+        return solver_program, bundle, False
 
     print("\n" + "=" * 65)
     print("STAGE 2: Reinforcement Learning Fine-Tuning (Dense Goal + Constraint-Modulated Reward)")
     print("=" * 65)
     args.program = "reinforcement"
-    rl_program, rl_bundle = build_trainable_program(
-        args,
-        examples,
-        device,
-        shared_autoregressive_head=solver_program.autoregressive_head,
+    rl_program, rl_bundle = build_stage2_program(
+        args, solver_program, bundle, examples, device
     )
 
     rl_epochs = getattr(args, "rl_epochs", args.epochs)
@@ -844,10 +1046,17 @@ def train_two_stage(args, train, dev, examples, device):
     if args.model:
         model_path = Path(args.model)
         model_path.parent.mkdir(exist_ok=True, parents=True)
-        rl_program.save(model_path)
+        save_eai_checkpoint(
+            rl_program, rl_bundle, args, model_path, stage="stage2", epoch=rl_epochs
+        )
         print(f"Saved two-stage model: {model_path}")
     args.program = orig_program
-    return rl_program, rl_bundle
+    return rl_program, rl_bundle, True
+
+
+def stage1_allows_rl(score):
+    """Return whether supervised exploration earned any positive task reward."""
+    return float(score.get("positive_reward_rate", 0.0)) > 0.0
 
 
 def load_trained_program(args, examples, device):
@@ -855,8 +1064,15 @@ def load_trained_program(args, examples, device):
     if args.model:
         model_path = Path(args.model)
         if model_path.exists():
-            program.load(model_path, map_location=device)
+            metadata = load_eai_checkpoint(
+                program, bundle, args, model_path, map_location=device
+            )
             print(f"Loaded model: {model_path}")
+            if metadata is not None:
+                print(
+                    f"Checkpoint metadata: stage={metadata['stage']} "
+                    f"epoch={metadata['epoch']} label_head={metadata['label_head']}"
+                )
         else:
             raise FileNotFoundError(f"Model file does not exist: {model_path}")
     return program, bundle
@@ -866,15 +1082,23 @@ def run_train_or_evaluate(args, examples, device):
     train, dev = split_train_dev(examples, args.dev_fraction)
     eval_examples = dev or train
     program = bundle = None
+    stage2_completed = True
     if args.two_stage:
-        program, bundle = train_two_stage(args, train, dev, examples, device)
+        program, bundle, stage2_completed = train_two_stage(args, train, dev, examples, device)
+        if not stage2_completed:
+            return 2
     elif args.train:
         program, bundle = train_program(args, train, dev, examples, device)
     if args.evaluate or args.eval_only:
         if program is None or bundle is None:
             program, bundle = load_trained_program(args, examples, device)
         evaluated_program_type = "reinforcement" if args.two_stage else args.program
-        title = f"{args.dataset} {evaluated_program_type} {'with DFA' if args.use_dfa else 'without DFA'}"
+        dfa_text = (
+            "with graph DFA"
+            if args.generation_constraints in {"always", "eval"}
+            else "without graph DFA"
+        )
+        title = f"{args.dataset} {evaluated_program_type} {dfa_text}"
         score = sequence_score(
             program,
             bundle,
@@ -901,6 +1125,7 @@ def generate_baseline_sequences(args, examples, device):
         vocab=generation_vocab_from_examples(examples),
         object_tokens=object_tokens_from_examples(examples),
         action_tokens=action_tokens_requiring_object_from_examples(examples),
+        action_sequence_tokens=action_tokens_from_examples(examples),
         openable_object_tokens=openable_object_tokens_from_examples(examples),
         action_object_constraint_tokens=action_object_constraint_tokens_from_examples(examples),
         program_type=args.program,
@@ -987,6 +1212,8 @@ def parse_args():
     parser.add_argument("--rl-lr", type=float, default=1e-4, help="Learning rate for Stage 2 RL fine-tuning.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
     parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-1.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
+    parser.add_argument("--causal-label-head", choices=["pretrained-adapter", "linear"], default="pretrained-adapter", help="Use Qwen's native output embeddings or the legacy random linear label classifier.")
+    parser.add_argument("--label-adapter-rank", type=int, default=64, help="Rank of the trainable residual in the pretrained causal label adapter.")
     parser.add_argument("--use-lora", action="store_true", help="Train LoRA adapters on the causal LM backbone.")
     parser.add_argument("--lora-r", type=int, default=8, help="LoRA rank for --baseline-model causal-lm --use-lora.")
     parser.add_argument("--lora-alpha", type=int, default=16, help="LoRA alpha for --baseline-model causal-lm --use-lora.")
@@ -1010,6 +1237,9 @@ def parse_args():
     parser.add_argument("--eval-every-epoch", action="store_true", help="Report train/dev sequence accuracy after each training epoch.")
     parser.add_argument("--epoch-eval-limit", type=int, default=0, help="Limit examples used for --eval-every-epoch scoring; 0 evaluates the full split.")
     parser.add_argument("--use-dfa", action="store_true", help="Use DFA-constrained decoding during evaluation/generation.")
+    parser.add_argument("--generation-constraints", choices=["always", "eval", "off"], default="always", help="Apply the DFA compiled from graph policies during RL and evaluation, evaluation only, or not at runtime.")
+    parser.add_argument("--stage1-checkpoint", default=None, help="Stage 1 checkpoint path; defaults to <model-stem>.stage1.pth.")
+    parser.add_argument("--epoch-predictions", type=int, default=3, help="Decoded validation examples printed after each Stage 1 epoch; 0 disables them.")
     parser.add_argument("--show-predictions", action="store_true", help="Print decoded examples during evaluation.")
     parser.add_argument("--eval-only", action="store_true")
     parser.add_argument("--model", default=str(MODEL_DIR / "eai_action_sequence_baseline.pth"))
@@ -1023,6 +1253,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.use_dfa:
+        print("Warning: --use-dfa is deprecated; using --generation-constraints always.")
+        args.generation_constraints = "always"
     device = args.device
     examples = load_examples(args, device)
     write_vocab_info_log(examples)

@@ -1,5 +1,6 @@
 from domiknows.generation.dfa._constraints import (
     after_token_allowed_dfa,
+    after_token_allowed_map_dfa,
     eos_closure_dfa,
     forbidden_token_dfa,
     max_non_eos_dfa,
@@ -130,7 +131,7 @@ def test_token_set_count_constraint_counts_token_sets():
     assert not dfa.accepts([a, c, eos])
 
 
-def test_after_token_allowed_constraint_blocks_later_tokens():
+def test_after_token_allowed_constraint_checks_immediate_successor():
     vocab = TokenVocabulary(["<eos>", "A", "B", "C"], eos_token="<eos>")
     dfa = after_token_allowed_dfa(vocab, ("A",), ("B",))
 
@@ -138,6 +139,22 @@ def test_after_token_allowed_constraint_blocks_later_tokens():
     b = vocab.label_for_token("B")
     c = vocab.label_for_token("C")
 
-    assert dfa.accepts([a, b, b])
-    assert dfa.accepts([b, a])
-    assert not dfa.accepts([a, b, c])
+    assert dfa.accepts([a, b, c])
+    assert not dfa.accepts([a])
+    assert not dfa.accepts([a, c])
+    assert not dfa.accepts([b, a])
+
+
+def test_after_token_allowed_map_shares_equivalent_pending_states():
+    vocab = TokenVocabulary(["<eos>", "A", "B", "C", "D"], eos_token="<eos>")
+    dfa = after_token_allowed_map_dfa(
+        vocab, {"A": ["C"], "B": ["C"], "C": ["D"]}
+    )
+    a = vocab.label_for_token("A")
+    b = vocab.label_for_token("B")
+    c = vocab.label_for_token("C")
+    d = vocab.label_for_token("D")
+    assert dfa.step(dfa.start_state, a) == dfa.step(dfa.start_state, b)
+    assert dfa.accepts([a, c, d])
+    assert dfa.accepts([b, c, d])
+    assert not dfa.accepts([a, d])

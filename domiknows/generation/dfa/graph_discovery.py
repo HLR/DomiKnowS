@@ -63,10 +63,12 @@ from .core import DFA, complement_dfa, minimize_dfa, product_dfa, union_dfa
 from ._constraints import (
     accept_all_dfa,
     after_token_allowed_dfa,
+    after_token_allowed_map_dfa,
     conditional_max_non_eos_dfa,
     empty_dfa,
     eos_closure_dfa,
     forbidden_token_dfa,
+    first_token_allowed_dfa,
     max_non_eos_dfa,
     ordered_tokens_dfa,
     required_token_dfa,
@@ -121,8 +123,10 @@ def analyze_generation_constraints(
     sequence fragments as DFA objects and gives a reason for generation-relevant
     constraints that are not faithfully compilable to DFA.
     """
+    if on_unsupported == "raise":
+        on_unsupported = "error"
     if on_unsupported not in {"ignore", "warn", "error"}:
-        raise ValueError("on_unsupported must be 'ignore', 'warn', or 'error'")
+        raise ValueError("on_unsupported must be 'ignore', 'warn', 'error', or 'raise'")
 
     analyses: list[GenerationConstraintAnalysis] = []
     for lc_name, lc in graph.logicalConstrains.items():
@@ -434,13 +438,29 @@ def _match_and_lc(lc, bundle) -> tuple[DFA, ...] | None:
     every LC analysis surfaces one coalesced DFA fragment regardless of arity.
     """
     dfas: list[DFA] = []
+    transition_rules: dict[str, set[str]] = {}
     for child in getattr(lc, "e", ()):
+        rule = None
+        if hasattr(child, "e") and not _is_eos_closure(child, bundle):
+            rule = _before_implication_sets(child, bundle)
+        if rule is not None:
+            triggers, allowed = rule
+            for trigger in triggers:
+                if trigger in transition_rules:
+                    transition_rules[trigger].intersection_update(allowed)
+                else:
+                    transition_rules[trigger] = set(allowed)
+            continue
         child_match = _match_lc_many(child, bundle) if hasattr(child, "e") else None
         if child_match is None:
             if _is_generation_relevant(child, bundle):
                 return None
             continue
         dfas.extend(child_match)
+    if transition_rules:
+        if any(not allowed for allowed in transition_rules.values()):
+            return None
+        dfas.append(after_token_allowed_map_dfa(bundle.vocabulary, transition_rules))
     if not dfas:
         return None
     if len(dfas) == 1:
@@ -528,6 +548,9 @@ def _match_if_lc(lc, bundle) -> DFA | None:
     """
     if _is_eos_closure(lc, bundle):
         return eos_closure_dfa(bundle.vocabulary)
+    starts_with = _match_sequence_start_implication(lc, bundle)
+    if starts_with is not None:
+        return starts_with
     after_allowed = _match_before_implication(lc, bundle)
     if after_allowed is not None:
         return after_allowed
@@ -744,6 +767,15 @@ def _match_before_implication(lc, bundle) -> DFA | None:
     The token sets are unioned per role and compiled into
     :func:`~.after_token_allowed_dfa`.
     """
+    rule = _before_implication_sets(lc, bundle)
+    if rule is None:
+        return None
+    trigger_tokens, allowed_tokens = rule
+    return after_token_allowed_dfa(bundle.vocabulary, trigger_tokens, allowed_tokens)
+
+
+def _before_implication_sets(lc, bundle) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """Return trigger and allowed sets for one graph before-implication."""
     before_var = _before_relation_variable(lc, bundle)
     if before_var is None:
         return None
@@ -759,7 +791,33 @@ def _match_before_implication(lc, bundle) -> DFA | None:
     allowed_tokens, allowed_negated = allowed
     if trigger_negated or allowed_negated:
         return None
-    return after_token_allowed_dfa(bundle.vocabulary, trigger_tokens, allowed_tokens)
+    return trigger_tokens, allowed_tokens
+
+
+def _match_sequence_start_implication(lc, bundle) -> DFA | None:
+    """Match ``ifL(sequence_start, <allowed first-token set>)``."""
+    relation = getattr(bundle, "sequence_start", None)
+    role = getattr(bundle, "sequence_start_token", None)
+    if relation is None or role is None:
+        return None
+    elements = list(getattr(lc, "e", ()))
+    start_var = None
+    for index, item in enumerate(elements):
+        concept_tuple = _concept_tuple(item)
+        if concept_tuple is None or concept_tuple[0] is not relation:
+            continue
+        if index + 1 < len(elements) and _is_v(elements[index + 1]):
+            start_var = elements[index + 1].name
+            break
+    if start_var is None:
+        return None
+    allowed = _path_token_predicate_from_flat(elements, bundle, start_var, role)
+    if allowed is None:
+        return None
+    allowed_tokens, negated = allowed
+    if negated:
+        return None
+    return first_token_allowed_dfa(bundle.vocabulary, allowed_tokens)
 
 
 def _match_ordered_pair_exists(lc, bundle) -> DFA | None:
@@ -916,6 +974,8 @@ def _is_generation_relevant(lc, bundle) -> bool:
         concept = concept_tuple[0]
         if concept is bundle.generated_token or concept is bundle.is_before_rel:
             return True
+        if concept is getattr(bundle, "sequence_start", None):
+            return True
     return False
 
 
@@ -947,7 +1007,11 @@ def _is_supported_generation_path(path, bundle) -> bool:
     if not isinstance(path, tuple) or len(path) != 2:
         return False
     _var_name, role = path
-    return role is bundle.first_token or role is bundle.second_token
+    return (
+        role is bundle.first_token
+        or role is bundle.second_token
+        or role is getattr(bundle, "sequence_start_token", None)
+    )
 
 
 def _handle_unsupported(lc_name: str, lc, on_unsupported: str, *, reason: str | None = None) -> None:

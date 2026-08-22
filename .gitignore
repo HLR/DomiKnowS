@@ -283,3 +283,7 @@ domiknows/research/
 test_regr/EmbodiedAgentInterface/results/
 Rethinkin constraints.md
 test_regr/EmbodiedAgentInterface/models/
+test_regr/VLABenchAgentInterface/data/
+test_regr/VLABenchAgentInterface/checkpoints/
+test_regr/VLABenchAgentInterface/models/
+test_regr/VLABenchAgentInterface/outputs/

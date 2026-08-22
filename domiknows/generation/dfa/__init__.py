@@ -24,6 +24,8 @@ _EXPORTS = {
     "TokenVocabulary": ".vocabulary",
     "accept_all_dfa": "._constraints",
     "after_token_allowed_dfa": "._constraints",
+    "after_token_allowed_map_dfa": "._constraints",
+    "first_token_allowed_dfa": "._constraints",
     "analyze_generation_constraints": ".graph_discovery",
     "apply_all_constraints": ".generation_constraints",
     "apply_conditional_max_non_eos_constraint": ".generation_constraints",
