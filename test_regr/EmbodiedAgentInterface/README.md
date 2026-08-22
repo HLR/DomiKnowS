@@ -17,11 +17,11 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 - **DomiKnowS Reinforcement Learning Integration** (`domiknows.reinforcement`):
   - Per-item reward closures (`make_eai_reward_function`) returning standard PyTorch reward tensors compatible with `ReinforcementProgram`.
   - Action token sequence decoder (`eai_action_decoder`) for policy gradient estimators (`reinforce`, `reinforce_with_baseline`).
-  - A separate deterministic world/trajectory graph (`world_graph.py`) exposes namespaced action and state concepts for future DomiKnowS constraints. With constraints, reward is `(1 - weight) * task_reward + weight * constraint_score`; without constraints, the original task reward is returned unchanged.
+  - A separate deterministic world/trajectory graph (`world_graph.py`) exposes namespaced action and state concepts for DomiKnowS constraints. Applicable constraints modulate task progress with `task_reward * ((1 - weight) + weight * constraint_score)`; they cannot independently reward a failed plan.
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
   - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss.
-  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram` guided by the binary $0/1$ goal satisfaction reward. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using dense goal-fact recall by default, world constraints as a discount for violations, and a small teacher-forced anchor loss to prevent catastrophic forgetting. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes.
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
@@ -70,6 +70,8 @@ uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 
 The constraint reward averages only constraints applicable to the materialized trajectory. For example, `action_effect__open__open` contributes only when an `open` event occurs, a state exclusion contributes only when either state is present, and a hand-capacity constraint contributes only when that hand holds something. Inactive constraints remain logically vacuous but no longer inflate `world_constraint_score`.
 
+Built-in constraints use a deterministic evaluator equivalent to their declared graph invariants during RL, avoiding per-sample solver construction. Constraints supplied by custom builders continue to materialize `DataNode`s and run `verifyResultsLC`. Per-example reward closures also cache repeated sampled trajectories.
+
 Pass `world_constraint_builders=()` programmatically, or `--no-world-constraints` on the CLI, to recover the unblended task reward. Additional builders can be supplied to `build_program(world_constraint_builders=(...))` or directly to `build_eai_world_graph`. Aliases such as `switchon` resolve to the canonical state concept and do not create duplicate concepts. Action and state names are independent (`action__open` and `state__open`).
 
 ```python
@@ -99,7 +101,7 @@ Each trajectory contains ordered state steps, entity nodes (including `character
 
 ### 2. Two-Stage Training (Exact Match $\rightarrow$ Reinforcement Learning)
 
-Train a two-stage model (Stage 1 Exact Match pretraining $\rightarrow$ Stage 2 Reinforcement Learning fine-tuning with 0/1 rewards):
+Train a two-stage model (Stage 1 Exact Match pretraining $\rightarrow$ Stage 2 dense-reward Reinforcement Learning fine-tuning):
 
 ```powershell
 # Fast smoke test on dummy data
@@ -159,7 +161,8 @@ During evaluation, `sequence_score` reports:
 - `gt_state_success`: Binary $0/1$ final state satisfaction evaluated by the world state simulator.
 - `gt_state_recall`: Mean fraction of goal condition facts satisfied by the generated trajectory.
 - `world_constraint_score`: Aggregated world-constraint satisfaction, or `n/a` when no constraints are declared.
-- `rl_reward_score`: The task reward, or its configured blend with `world_constraint_score`.
+- `world_constraints`: Mean applicable constraints versus mean declared constraints per trajectory.
+- `rl_reward_score`: Dense or binary task reward, discounted by applicable constraint violations.
 
 ---
 
@@ -200,12 +203,13 @@ When training or running inference, you may encounter different model artifacts 
 | `--limit` | `int` | `None` | Cap number of examples loaded from dataset. |
 | `--two-stage` | `flag` | `False` | Run Stage 1 Exact Match followed by Stage 2 Reinforcement Learning. |
 | `--program` | `str` | `"solver"` | Program type: `"solver"`, `"primal-dual"`, or `"reinforcement"`. |
-| `--epochs` | `int` | `10` | Number of epochs for Stage 1 / supervised training. |
-| `--rl-epochs` | `int` | `10` | Number of epochs for Stage 2 Reinforcement Learning. |
+| `--epochs` | `int` | `5` | Number of epochs for Stage 1 / supervised training. |
+| `--rl-epochs` | `int` | `3` | Number of epochs for Stage 2 Reinforcement Learning. |
 | `--lr` | `float` | `1e-3` | Learning rate for Stage 1 training. |
 | `--rl-lr` | `float` | `1e-4` | Learning rate for Stage 2 policy gradient optimization. |
-| `--rl-reward-mode` | `str` | `"binary"` | Task score used by RL: `binary` goal success or `dense` goal-fact recall. |
-| `--rl-constraint-weight` | `float` | `0.25` | Constraint-score blend weight when world constraints exist. |
+| `--rl-reward-mode` | `str` | `"dense"` | Task score used by RL: dense goal-fact recall by default, or binary goal success. |
+| `--rl-supervised-weight` | `float` | `0.1` | Weight of the teacher-forced Stage 1 anchor loss retained during RL. |
+| `--rl-constraint-weight` | `float` | `0.25` | Maximum task-reward discount for world-constraint violations. |
 | `--rl-constraint-aggregate` | `str` | `"mean"` | Constraint aggregation: `mean`, `min`, or `prod`. |
 | `--no-world-constraints` | `flag` | `False` | Disable the default world and transition constraints and bypass reward blending. |
 | `--baseline-model` | `str` | `"tiny-transformer"` | Model backbone: `"tiny-transformer"` or `"causal-lm"`. |

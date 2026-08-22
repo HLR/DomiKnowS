@@ -135,12 +135,22 @@ class EAIWorldGraphBundle:
     goal_actions: frozenset[Any]
     default_action_effects: Mapping[str, str]
     default_state_mutex_pairs: tuple[tuple[str, str], ...]
+    default_constraint_names: frozenset[str]
 
     @property
     def has_constraints(self) -> bool:
         return any(
             getattr(constraint, "headLC", True)
             for constraint in getattr(self.graph, "logicalConstrains", {}).values()
+        )
+
+    @property
+    def has_custom_constraints(self) -> bool:
+        return any(
+            (getattr(constraint, "name", None) or key)
+            not in self.default_constraint_names
+            for key, constraint in getattr(self.graph, "logicalConstrains", {}).items()
+            if getattr(constraint, "headLC", True)
         )
 
     def canonical_state_name(self, name: str) -> str:
@@ -287,6 +297,7 @@ def build_eai_world_graph(
         adjacent_transition = action(name="action__valid_next_transition")
         default_action_effects: Mapping[str, str] = MappingProxyType({})
         default_state_mutex_pairs: tuple[tuple[str, str], ...] = ()
+        default_constraint_names: set[str] = set()
 
         if include_default_constraints:
             from domiknows.graph.logicalConstrain import atMostL, exactL, ifL, nandL
@@ -306,11 +317,13 @@ def build_eai_world_graph(
             # This includes every explicit positive/negative pair plus common
             # physical contradictions represented by the EAI vocabulary.
             for left, right in DEFAULT_STATE_MUTEX_PAIRS:
+                constraint_name = f"state_mutex__{left}__{right}"
                 nandL(
                     states[left],
                     states[right],
-                    name=f"state_mutex__{left}__{right}",
+                    name=constraint_name,
                 )
+                default_constraint_names.add(constraint_name)
 
             # Every action event has exactly one semantic action type.
             exactL(
@@ -318,6 +331,7 @@ def build_eai_world_graph(
                 limit=1,
                 name="action_exactly_one_type",
             )
+            default_constraint_names.add("action_exactly_one_type")
 
             # An action's result must be the step immediately following its
             # source according to the explicit next_step relation.
@@ -326,9 +340,11 @@ def build_eai_world_graph(
                 adjacent_transition("event"),
                 name="action_result_is_next_step",
             )
+            default_constraint_names.add("action_result_is_next_step")
 
             # At a state step, each hand can hold at most one object.
             for predicate in ("holds_lh", "holds_rh"):
+                constraint_name = f"hand_capacity__{predicate}"
                 ifL(
                     step("step"),
                     atMostL(
@@ -337,8 +353,9 @@ def build_eai_world_graph(
                         ),
                         limit=1,
                     ),
-                    name=f"hand_capacity__{predicate}",
+                    name=constraint_name,
                 )
+                default_constraint_names.add(constraint_name)
 
             DEFAULT_ACTION_EFFECTS: Mapping[str, str] = MappingProxyType({
                 "clean": "clean", "wipe": "clean", "scrub": "clean",
@@ -355,13 +372,15 @@ def build_eai_world_graph(
             # Direct unary effects from the simulator must hold for the action
             # argument at the event's result step.
             for action_name, predicate in DEFAULT_ACTION_EFFECTS.items():
+                constraint_name = f"action_effect__{action_name}__{predicate}"
                 ifL(
                     actions[action_name]("event"),
                     states[predicate](
                         "effect", path=("event", action_result_state)
                     ),
-                    name=f"action_effect__{action_name}__{predicate}",
+                    name=constraint_name,
                 )
+                default_constraint_names.add(constraint_name)
 
         bundle = EAIWorldGraphBundle(
             graph=graph,
@@ -391,6 +410,7 @@ def build_eai_world_graph(
             goal_actions=frozenset(actions[name] for name in ACTION_GOAL_NAMES),
             default_action_effects=default_action_effects,
             default_state_mutex_pairs=default_state_mutex_pairs,
+            default_constraint_names=frozenset(default_constraint_names),
         )
         for builder in tuple(constraint_builders):
             builder(bundle)
@@ -570,6 +590,144 @@ def materialize_world_trajectory(
         raise WorldGraphConfigurationError(f"{task_id}: failed to materialize EAI world trajectory: {exc}") from exc
 
 
+def _aggregate_constraint_scores(scores: Sequence[float], aggregate: str) -> float:
+    if aggregate == "mean":
+        return sum(scores) / len(scores)
+    if aggregate == "min":
+        return min(scores)
+    score = 1.0
+    for value in scores:
+        score *= value
+    return score
+
+
+def evaluate_default_world_constraints(
+    states: Sequence[set[Fact]],
+    events: Sequence[Any],
+    world_bundle: EAIWorldGraphBundle,
+    aggregate: str = "mean",
+) -> WorldConstraintEvaluation | None:
+    """Evaluate built-in invariants without invoking the general LC solver.
+
+    The trajectory is already deterministic simulator output, so the built-in
+    constraints have direct equivalents. Custom constraint builders continue
+    through :func:`materialize_world_trajectory` and
+    :func:`verify_world_constraints`.
+    """
+    if aggregate not in {"mean", "min", "prod"}:
+        raise ValueError(f"Unsupported world-constraint aggregation: {aggregate!r}")
+    if not world_bundle.default_constraint_names:
+        return None
+
+    # Normalize simulator facts and events into the same canonical vocabulary
+    # used while constructing the graph. This keeps aliases such as
+    # ``switch_on`` and punctuation variants from changing the outcome.
+    normalized_states = [
+        set(filter(None, (_canonical_fact(fact) for fact in state)))
+        for state in states
+    ]
+    normalized_events = [
+        (
+            str(getattr(event, "name", "")).strip().lower().replace("-", "_").replace(".", "_"),
+            tuple(
+                str(arg).strip().lower().replace("-", "_").replace(".", "_")
+                for arg in getattr(event, "args", ())
+            ),
+        )
+        for event in events
+    ]
+    # These sets determine whether each invariant is relevant to this
+    # trajectory. Inactive constraints are retained in ``results`` but do not
+    # contribute a vacuous perfect score to the aggregate.
+    state_predicates = {
+        fact[0] for state in normalized_states for fact in state if fact
+    }
+    results: dict[str, dict[str, Any]] = {}
+    scores: list[float] = []
+
+    def record(name: str, applicable: bool, score: float = 1.0) -> None:
+        # Store percentages to match the LC verifier's public result shape,
+        # while aggregating normalized values in the [0, 1] range below.
+        bounded = max(0.0, min(1.0, float(score)))
+        results[name] = {
+            "satisfied": bounded * 100.0,
+            "applicable": applicable,
+            "evaluation": "deterministic",
+        }
+        if applicable:
+            scores.append(bounded)
+
+    for left, right in world_bundle.default_state_mutex_pairs:
+        # A mutex is checked per state snapshot and per complete grounding.
+        # Comparing fact tails preserves the distinction between different
+        # objects while rejecting, for example, both ``open(cup)`` and
+        # ``closed(cup)`` at the same time step.
+        applicable = left in state_predicates or right in state_predicates
+        valid = all(
+            {fact[1:] for fact in state if fact and fact[0] == left}.isdisjoint(
+                {fact[1:] for fact in state if fact and fact[0] == right}
+            )
+            for state in normalized_states
+        )
+        record(f"state_mutex__{left}__{right}", applicable, float(valid))
+
+    # These two structural invariants apply only to nonempty event sequences:
+    # every event must resolve to a known semantic action and each event must
+    # have exactly one following simulator state.
+    has_events = bool(normalized_events)
+    exactly_one = all(name in world_bundle.actions for name, _args in normalized_events)
+    record("action_exactly_one_type", has_events, float(exactly_one))
+    record(
+        "action_result_is_next_step",
+        has_events,
+        float(len(normalized_states) == len(normalized_events) + 1),
+    )
+
+    for predicate in ("holds_lh", "holds_rh"):
+        # Each hand is scoped to its holder. A trajectory is invalid only when
+        # one subject holds multiple distinct objects at one state snapshot.
+        applicable = predicate in state_predicates
+        valid = True
+        for state in normalized_states:
+            held_by_subject: dict[str, set[str]] = {}
+            for fact in state:
+                if len(fact) == 3 and fact[0] == predicate:
+                    held_by_subject.setdefault(fact[1], set()).add(fact[2])
+            if any(len(objects) > 1 for objects in held_by_subject.values()):
+                valid = False
+                break
+        record(f"hand_capacity__{predicate}", applicable, float(valid))
+
+    for action_name, predicate in world_bundle.default_action_effects.items():
+        # Action effects are evaluated against the immediately following
+        # state, mirroring the event -> result_state edge materialized for the
+        # general LC verifier. Multiple occurrences receive a fractional
+        # score so one missed effect does not erase evidence from the others.
+        matching = [
+            (index, args)
+            for index, (name, args) in enumerate(normalized_events)
+            if name == action_name
+        ]
+        satisfied = 0
+        for index, args in matching:
+            result_state = normalized_states[index + 1] if index + 1 < len(normalized_states) else set()
+            if args and (predicate, args[0]) in result_state:
+                satisfied += 1
+        score = satisfied / len(matching) if matching else 1.0
+        record(f"action_effect__{action_name}__{predicate}", bool(matching), score)
+
+    if not scores:
+        # No applicable default invariant means callers should continue with
+        # custom constraints, rather than treating the trajectory as perfect.
+        return None
+    return WorldConstraintEvaluation(
+        score=_aggregate_constraint_scores(scores, aggregate),
+        constraint_count=len(scores),
+        results=MappingProxyType(results),
+        declared_constraint_count=len(world_bundle.default_constraint_names),
+    )
+
+
 def verify_world_constraints(
     root: Any,
     world_bundle: EAIWorldGraphBundle,
@@ -661,14 +819,7 @@ def verify_world_constraints(
             scores.append(max(0.0, min(1.0, constraint_score)))
         if not scores:
             return None
-        if aggregate == "mean":
-            score = sum(scores) / len(scores)
-        elif aggregate == "min":
-            score = min(scores)
-        else:
-            score = 1.0
-            for value in scores:
-                score *= value
+        score = _aggregate_constraint_scores(scores, aggregate)
         return WorldConstraintEvaluation(
             score=score,
             constraint_count=len(scores),

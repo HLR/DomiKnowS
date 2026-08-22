@@ -19,6 +19,7 @@ from world_graph import (
     PREDICATE_ALIASES,
     STATE_SPECS,
     build_eai_world_graph,
+    evaluate_default_world_constraints,
     materialize_world_trajectory,
     verify_world_constraints,
 )
@@ -206,7 +207,17 @@ def test_action_structure_effect_and_hand_capacity_constraints():
         bundle,
     )
     valid_evaluation = verify_world_constraints(valid, bundle)
+    fast_valid_evaluation = evaluate_default_world_constraints(
+        [
+            {("closed", "door")},
+            {("open", "door"), ("not_closed", "door")},
+        ],
+        open_event,
+        bundle,
+    )
     assert valid_evaluation.score == 1.0
+    assert fast_valid_evaluation.score == valid_evaluation.score
+    assert fast_valid_evaluation.constraint_count == valid_evaluation.constraint_count
     assert valid_evaluation.results["action_exactly_one_type"]["satisfied"] == 100.0
     assert valid_evaluation.results["action_result_is_next_step"]["satisfied"] == 100.0
     assert valid_evaluation.results["action_effect__open__open"]["satisfied"] == 100.0
@@ -287,7 +298,10 @@ def test_reward_bypass_and_blending():
     )
     assert bypass["world_constraint_score"] is None
     assert bypass["rl_reward_score"] == baseline["is_success"]
-    assert make_eai_reward_function(sample, world_bundle=unconstrained)(sample["target_action_tokens"]).item() == 1.0
+    cached_reward = make_eai_reward_function(sample, world_bundle=unconstrained)
+    assert cached_reward(sample["target_action_tokens"]).item() == 1.0
+    assert cached_reward(sample["target_action_tokens"]).item() == 1.0
+    assert cached_reward.cache_hits == 1
 
     constrained = build_eai_world_graph(
         "test_eai_world_reward_blend",
@@ -299,8 +313,19 @@ def test_reward_bypass_and_blending():
         world_bundle=constrained,
         constraint_weight=0.25,
     )
-    expected = 0.75 * result["is_success"] + 0.25 * result["world_constraint_score"]
+    expected = result["is_success"] * (
+        0.75 + 0.25 * result["world_constraint_score"]
+    )
     assert result["rl_reward_score"] == expected
+    failed_but_compliant = evaluate_goal_satisfaction(
+        ["open", "fridge_1", EOS_TOKEN],
+        sample,
+        world_bundle=constrained,
+        constraint_weight=0.25,
+    )
+    assert failed_but_compliant["is_success"] == 0.0
+    assert failed_but_compliant["world_constraint_score"] == 1.0
+    assert failed_but_compliant["rl_reward_score"] == 0.0
     dense = evaluate_goal_satisfaction(
         [EOS_TOKEN], sample, world_bundle=constrained, reward_mode="dense", constraint_weight=0.25,
     )

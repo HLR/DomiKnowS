@@ -18,6 +18,7 @@ from domiknows.reinforcement.rewards import flatten_generator_output
 try:
     from world_graph import (
         canonical_state_name,
+        evaluate_default_world_constraints,
         is_goal_action,
         is_known_action,
         is_state_predicate,
@@ -28,6 +29,7 @@ try:
 except ImportError:
     from .world_graph import (
         canonical_state_name,
+        evaluate_default_world_constraints,
         is_goal_action,
         is_known_action,
         is_state_predicate,
@@ -934,17 +936,25 @@ def _evaluate_goal_satisfaction(
     task_reward = recall if reward_mode == "dense" else (1.0 if is_success else 0.0)
     constraint_evaluation = None
     if world_bundle is not None and world_bundle.has_constraints:
-        root = materialize_world_trajectory(prepared, states, events, world_bundle)
-        constraint_evaluation = verify_world_constraints(
-            root, world_bundle, aggregate=constraint_aggregate,
-        )
+        if world_bundle.has_custom_constraints:
+            root = materialize_world_trajectory(prepared, states, events, world_bundle)
+            constraint_evaluation = verify_world_constraints(
+                root, world_bundle, aggregate=constraint_aggregate,
+            )
+        else:
+            constraint_evaluation = evaluate_default_world_constraints(
+                states, events, world_bundle, aggregate=constraint_aggregate,
+            )
     world_constraint_score = (
         constraint_evaluation.score if constraint_evaluation is not None else None
     )
     rl_reward_score = task_reward
     if world_constraint_score is not None:
-        rl_reward_score = (
-            (1.0 - float(constraint_weight)) * task_reward
+        # Constraints modulate task progress; they cannot independently reward
+        # a failed plan. A fully compliant trajectory retains its task score,
+        # while violations discount it by at most constraint_weight.
+        rl_reward_score = task_reward * (
+            (1.0 - float(constraint_weight))
             + float(constraint_weight) * world_constraint_score
         )
     return {
@@ -957,6 +967,24 @@ def _evaluate_goal_satisfaction(
         "world_constraint_score": world_constraint_score,
         "world_constraint_results": (
             constraint_evaluation.results if constraint_evaluation is not None else None
+        ),
+        "world_constraint_applicable_count": (
+            constraint_evaluation.constraint_count
+            if constraint_evaluation is not None else 0
+        ),
+        "world_constraint_declared_count": (
+            constraint_evaluation.declared_constraint_count
+            if constraint_evaluation is not None else (
+                sum(
+                    bool(getattr(constraint, "headLC", True))
+                    for constraint in getattr(
+                        getattr(world_bundle, "graph", None),
+                        "logicalConstrains",
+                        {},
+                    ).values()
+                )
+                if world_bundle is not None else 0
+            )
         ),
         "rl_reward_score": rl_reward_score,
     }
@@ -999,15 +1027,27 @@ def make_eai_reward_function(
 ):
     """Create a per-item reward closure with inspection metadata."""
     prepared = prepare_eai_goal(sample, vocabulary, world_bundle=world_bundle)
+    reward_cache: dict[tuple[str, tuple[Any, ...]], float] = {}
+    cache_limit = 256
 
     def _reward(generator_output: Any, **context) -> torch.Tensor:
         item = context.get("data_item") or sample
+        flattened = flatten_generator_output(generator_output)
+        normalized_output = tuple(
+            value if isinstance(value, (str, int, float, bool, type(None))) else repr(value)
+            for value in flattened
+        )
+        cache_key = (str(item.get("task_id", "")), normalized_output)
+        cached = reward_cache.get(cache_key)
+        if cached is not None:
+            _reward.cache_hits += 1
+            return torch.tensor([cached], dtype=torch.float32)
         active_prepared = (
             prepared if item is sample
             else prepare_eai_goal(item, vocabulary, world_bundle=world_bundle)
         )
-        return eai_goal_reward_function(
-            generator_output,
+        reward = eai_goal_reward_function(
+            flattened,
             data_item=item,
             vocabulary=vocabulary,
             mode=mode,
@@ -1016,6 +1056,11 @@ def make_eai_reward_function(
             constraint_weight=constraint_weight,
             constraint_aggregate=constraint_aggregate,
         )
+        reward_value = float(reward.reshape(-1)[0].item())
+        if len(reward_cache) >= cache_limit:
+            reward_cache.pop(next(iter(reward_cache)))
+        reward_cache[cache_key] = reward_value
+        return reward
 
     _reward.task_id = str(sample.get("task_id", ""))
     _reward.gold_state = set(prepared.gold_state)
@@ -1024,6 +1069,8 @@ def make_eai_reward_function(
     _reward.world_bundle = world_bundle
     _reward.constraint_weight = float(constraint_weight)
     _reward.constraint_aggregate = constraint_aggregate
+    _reward.cache_hits = 0
+    _reward.reward_cache = reward_cache
     return _reward
 
 

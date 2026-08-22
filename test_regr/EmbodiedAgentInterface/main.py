@@ -45,7 +45,7 @@ class EAIProgramBundle:
     """Generation and world schemas used by one EAI program lifecycle."""
     generation: object
     world: EAIWorldGraphBundle
-    reward_mode: str = "binary"
+    reward_mode: str = "dense"
     constraint_weight: float = 0.25
     constraint_aggregate: str = "mean"
 
@@ -103,7 +103,8 @@ def build_program(
     enforce_action_object_constraints=True,
     rl_estimator="importance_weighted",
     rl_num_samples=8,
-    rl_reward_mode="binary",
+    rl_reward_mode="dense",
+    rl_supervised_weight=0.1,
     rl_constraint_weight=0.25,
     rl_constraint_aggregate="mean",
     world_constraint_builders=None,
@@ -282,6 +283,7 @@ def build_program(
             autoregressive_head=autoregressive_head,
             eos_label=bundle.vocabulary.eos_label,
             max_steps=max_steps,
+            supervised_weight=rl_supervised_weight,
             reward_key="reward_function",
             decoder=eai_action_decoder,
             num_samples=rl_num_samples,
@@ -307,7 +309,7 @@ def load_examples(args, device):
         )
     if examples:
         vocab = TokenVocabulary(examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
-        mode = getattr(args, "rl_reward_mode", "binary")
+        mode = getattr(args, "rl_reward_mode", "dense")
         for ex in examples:
             ex["reward_function"] = make_eai_reward_function(ex, vocabulary=vocab, mode=mode)
     return examples
@@ -577,6 +579,8 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             "gt_state_success": 0.0,
             "gt_state_recall": 0.0,
             "world_constraint_score": None,
+            "world_constraint_applicable": 0.0,
+            "world_constraint_declared": 0.0,
             "rl_reward_score": 0.0,
         }
 
@@ -589,6 +593,8 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
     gt_state_recall_total = 0.0
     world_constraint_total = 0.0
     world_constraint_count = 0
+    world_constraint_applicable_total = 0
+    world_constraint_declared_total = 0
     rl_reward_total = 0.0
 
     for idx, sample in enumerate(eval_examples):
@@ -621,6 +627,8 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         if eval_res["world_constraint_score"] is not None:
             world_constraint_total += eval_res["world_constraint_score"]
             world_constraint_count += 1
+        world_constraint_applicable_total += eval_res["world_constraint_applicable_count"]
+        world_constraint_declared_total += eval_res["world_constraint_declared_count"]
         rl_reward_total += eval_res["rl_reward_score"]
 
         if show:
@@ -645,6 +653,12 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             world_constraint_total / world_constraint_count
             if world_constraint_count else None
         ),
+        "world_constraint_applicable": (
+            world_constraint_applicable_total / len(eval_examples)
+        ),
+        "world_constraint_declared": (
+            world_constraint_declared_total / len(eval_examples)
+        ),
         "rl_reward_score": rl_reward_total / len(eval_examples),
     }
 
@@ -666,6 +680,8 @@ def print_score(title, score, program_type=None):
         f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
         f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f} "
         f"world_constraint_score={constraint_value} "
+        f"world_constraints={score.get('world_constraint_applicable', 0.0):.1f}/"
+        f"{score.get('world_constraint_declared', 0.0):.1f} "
         f"rl_reward_score={score.get('rl_reward_score', 0.0):.3f}"
     )
     print(line)
@@ -708,13 +724,14 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
         enforce_action_object_constraints=getattr(args, "_enforce_action_object_constraints", True),
         rl_estimator=getattr(args, "rl_estimator", "importance_weighted"),
         rl_num_samples=getattr(args, "rl_num_samples", 8),
-        rl_reward_mode=getattr(args, "rl_reward_mode", "binary"),
+        rl_reward_mode=getattr(args, "rl_reward_mode", "dense"),
+        rl_supervised_weight=getattr(args, "rl_supervised_weight", 0.1),
         rl_constraint_weight=getattr(args, "rl_constraint_weight", 0.25),
         rl_constraint_aggregate=getattr(args, "rl_constraint_aggregate", "mean"),
         world_constraint_builders=world_constraint_builders,
         shared_autoregressive_head=shared_autoregressive_head,
     )
-    mode = getattr(args, "rl_reward_mode", "binary")
+    mode = getattr(args, "rl_reward_mode", "dense")
     weight = getattr(args, "rl_constraint_weight", 0.25)
     aggregate = getattr(args, "rl_constraint_aggregate", "mean")
     for example in examples:
@@ -801,7 +818,7 @@ def train_two_stage(args, train, dev, examples, device):
     print_score("Stage 1 (Exact Match) Eval", score_stage1, "solver")
 
     print("\n" + "=" * 65)
-    print("STAGE 2: Reinforcement Learning Fine-Tuning (Goal + World Constraint Reward)")
+    print("STAGE 2: Reinforcement Learning Fine-Tuning (Dense Goal + Constraint-Modulated Reward)")
     print("=" * 65)
     args.program = "reinforcement"
     rl_program, rl_bundle = build_trainable_program(
@@ -901,6 +918,7 @@ def generate_baseline_sequences(args, examples, device):
         rl_estimator=args.rl_estimator,
         rl_num_samples=args.rl_num_samples,
         rl_reward_mode=args.rl_reward_mode,
+        rl_supervised_weight=args.rl_supervised_weight,
     )
     correct = 0
     total = 0
@@ -960,8 +978,9 @@ def parse_args():
     parser.add_argument("--two-stage", action="store_true", help="Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning.")
     parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="importance_weighted", help="Estimator for ReinforcementProgram.")
     parser.add_argument("--rl-num-samples", type=int, default=8, help="Number of decodings sampled per training step in ReinforcementProgram.")
-    parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="binary", help="Reward mode: binary (0/1 goal satisfaction) or dense (state recall).")
-    parser.add_argument("--rl-constraint-weight", type=float, default=0.25, help="Weight assigned to declared world-constraint satisfaction; no constraints bypass blending.")
+    parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="dense", help="Task reward used by RL; dense goal-fact recall provides the default learning signal.")
+    parser.add_argument("--rl-supervised-weight", type=float, default=0.1, help="Teacher-forced Stage 1 anchor loss retained during RL to prevent policy collapse; set 0 to disable.")
+    parser.add_argument("--rl-constraint-weight", type=float, default=0.25, help="Maximum task-reward discount for world-constraint violations; constraints cannot reward a zero-task plan.")
     parser.add_argument("--rl-constraint-aggregate", choices=["mean", "min", "prod"], default="mean", help="Aggregation across declared world constraints.")
     parser.add_argument("--no-world-constraints", action="store_true", help="Disable the default world and transition constraints.")
     parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL fine-tuning.")

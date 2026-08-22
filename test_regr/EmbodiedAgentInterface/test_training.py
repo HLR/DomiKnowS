@@ -73,6 +73,22 @@ def test_rl_rollout_conditions_on_its_sampled_prefix():
     assert logprob.requires_grad
 
 
+def test_rl_supervised_anchor_is_differentiable():
+    head = _PrefixRecordingHead()
+    program = SimpleNamespace(autoregressive_head=head, eos_label=2)
+    loss = AutoregressiveSequenceReinforcementProgram.supervised_anchor_loss(
+        program,
+        {
+            "text": "synthetic",
+            "target_action_labels": torch.tensor([0, 1, 2, 2]),
+        },
+    )
+    assert torch.isfinite(loss)
+    assert loss.requires_grad
+    loss.backward()
+    assert head.bias.grad is not None
+
+
 def test_rl_program_is_constructed_with_shared_supervised_head():
     examples = dummy_dataset(device="cpu", max_steps=8)
     vocabulary = examples[0]["generation_vocab"]
@@ -101,6 +117,8 @@ def test_rl_program_is_constructed_with_shared_supervised_head():
     assert rl_bundle.world.graph is not solver_bundle.world.graph
     assert not solver_bundle.world.has_constraints
     assert rl_bundle.world.has_constraints
+    assert rl_bundle.reward_mode == "dense"
+    assert rl.supervised_weight == 0.1
 
 
 def run_tests():
@@ -108,6 +126,7 @@ def run_tests():
         test_supervised_loss_ignores_eos_padding,
         test_effective_metric_keeps_one_eos_only,
         test_rl_rollout_conditions_on_its_sampled_prefix,
+        test_rl_supervised_anchor_is_differentiable,
         test_rl_program_is_constructed_with_shared_supervised_head,
     ]
     for test in tests:

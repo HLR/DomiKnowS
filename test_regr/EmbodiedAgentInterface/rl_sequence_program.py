@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+from torch.nn import functional as F
 
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 from domiknows.reinforcement.rewards import as_reward_tensor, call_reward_function
@@ -20,11 +21,46 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
     existing DomiKnowS reward estimators.
     """
 
-    def __init__(self, *args, autoregressive_head, eos_label, max_steps, **kwargs):
+    def __init__(
+        self,
+        *args,
+        autoregressive_head,
+        eos_label,
+        max_steps,
+        supervised_weight=0.1,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.autoregressive_head = autoregressive_head
         self.eos_label = int(eos_label)
         self.max_steps = int(max_steps)
+        self.supervised_weight = float(supervised_weight)
+        if self.supervised_weight < 0.0:
+            raise ValueError("supervised_weight must be non-negative")
+
+    def supervised_anchor_loss(self, data_item):
+        """Teacher-forced Stage 1 loss used to prevent RL policy collapse."""
+        labels = data_item.get("target_action_labels")
+        if labels is None:
+            return None
+        device = next(self.autoregressive_head.parameters()).device
+        labels = torch.as_tensor(labels, dtype=torch.long, device=device).reshape(1, -1)
+        start = torch.full(
+            (labels.shape[0], 1), self.eos_label, dtype=torch.long, device=device
+        )
+        prefixes = torch.cat([start, labels[:, :-1]], dim=1)
+        logits = self.autoregressive_head.sequence_logits(
+            data_item.get("text", ""), prefixes
+        )
+        positions = torch.arange(labels.shape[1], device=device).unsqueeze(0)
+        eos_positions = torch.where(
+            labels == self.eos_label,
+            positions,
+            torch.full_like(positions, labels.shape[1]),
+        )
+        first_eos = eos_positions.min(dim=1).values
+        mask = positions <= first_eos.unsqueeze(1)
+        return F.cross_entropy(logits[mask], labels[mask])
 
     def _sample_trajectories(self, text):
         device = next(self.autoregressive_head.parameters()).device
@@ -100,6 +136,10 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
             loss = importance_weighted_loss(logprob, rewards)
         else:
             loss = reinforce_loss(logprob, rewards, baseline=self.baseline)
+        if self.supervised_weight:
+            anchor_loss = self.supervised_anchor_loss(data_item)
+            if anchor_loss is not None:
+                loss = loss + self.supervised_weight * anchor_loss
         return loss, rewards.mean().item()
 
     def train_epoch(self, dataset, **kwargs):
