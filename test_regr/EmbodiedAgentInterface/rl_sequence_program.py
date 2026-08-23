@@ -28,6 +28,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         eos_label,
         max_steps,
         supervised_weight=0.5,
+        rescore_microbatch_size=1,
         policy_dfa=None,
         policy_dfa_factory=None,
         **kwargs,
@@ -37,10 +38,13 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         self.eos_label = int(eos_label)
         self.max_steps = int(max_steps)
         self.supervised_weight = float(supervised_weight)
+        self.rescore_microbatch_size = int(rescore_microbatch_size)
         self.policy_dfa = policy_dfa
         self.policy_dfa_factory = policy_dfa_factory
         if self.supervised_weight < 0.0:
             raise ValueError("supervised_weight must be non-negative")
+        if self.rescore_microbatch_size < 1:
+            raise ValueError("rescore_microbatch_size must be at least 1")
 
     def supervised_anchor_loss(self, data_item):
         """Teacher-forced Stage 1 loss used to prevent RL policy collapse."""
@@ -66,7 +70,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         mask = positions <= first_eos.unsqueeze(1)
         return F.cross_entropy(logits[mask], labels[mask])
 
-    def _sample_trajectories(self, text, policy_dfa=None):
+    def _sample_trajectories(self, text, policy_dfa=None, rescore=True):
         device = next(self.autoregressive_head.parameters()).device
         sample_count = int(self.num_samples)
         prefixes = torch.full(
@@ -133,17 +137,49 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                     if bool(finished.all()):
                         break
 
-            # Re-score each sampled trajectory in one teacher-forced model pass
-            # per rollout.  These are the only graphs needed by the policy loss.
-            trajectory_logprob = (
-                AutoregressiveSequenceReinforcementProgram._trajectory_logprob(
-                    self, text, trajectories, device, policy_dfa=policy_dfa
+            # Evaluation can re-score all trajectories here because no autograd
+            # graph is retained. Training requests rollout-only mode and
+            # backpropagates one small rescore microbatch at a time below.
+            trajectory_logprob = None
+            if rescore:
+                trajectory_logprob = (
+                    AutoregressiveSequenceReinforcementProgram._trajectory_logprob(
+                        self, text, trajectories, device, policy_dfa=policy_dfa
+                    )
                 )
-            )
         finally:
             self.autoregressive_head.train(was_training)
 
         return trajectories, trajectory_logprob, proposal_logprob.detach()
+
+    def _trajectory_rewards(self, trajectories, reward_fn, data_item, datanode=None):
+        values = []
+        for trajectory in trajectories:
+            reward = call_reward_function(
+                reward_fn,
+                trajectory,
+                data_item=data_item,
+                datanode=datanode,
+            )
+            values.append(as_reward_tensor(reward, dtype=torch.float32).mean().item())
+        return values
+
+    def _policy_gradient_coefficients(self, rewards):
+        """Detached coefficients for streaming one rollout graph at a time."""
+        rewards = rewards.detach()
+        if self.estimator == "importance_weighted":
+            # Rollouts are on-policy, so target/proposal weights are exactly one
+            # at the parameters used for this optimizer step. This is the
+            # derivative of the proposal-corrected log-ratio objective.
+            mass = rewards.clamp_min(0) + 1e-12
+            return -(mass / mass.sum() - torch.full_like(mass, 1.0 / mass.numel()))
+        if self.baseline == "mean":
+            baseline = rewards.mean()
+        elif self.baseline is None:
+            baseline = 0.0
+        else:
+            baseline = float(self.baseline)
+        return -(rewards - baseline) / rewards.numel()
 
     def _mask_policy_logits(
         self, logits, dfa_states, step, finished=None, policy_dfa=None
@@ -265,15 +301,9 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         trajectories, logprob, proposal_logprob = self._sample_trajectories(
             data_item.get("text", ""), policy_dfa=policy_dfa
         )
-        reward_values = []
-        for trajectory in trajectories:
-            reward = call_reward_function(
-                reward_fn,
-                trajectory,
-                data_item=data_item,
-                datanode=datanode,
-            )
-            reward_values.append(as_reward_tensor(reward, dtype=torch.float32).mean().item())
+        reward_values = self._trajectory_rewards(
+            trajectories, reward_fn, data_item, datanode=datanode
+        )
         rewards = torch.tensor(reward_values, dtype=logprob.dtype, device=logprob.device)
 
         if self.estimator == "importance_weighted":
@@ -289,16 +319,79 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         return loss, rewards.mean().item()
 
     def train_epoch(self, dataset, **kwargs):
-        """Train directly from rollouts without an unused gold-prefix forward."""
+        """Train with one policy estimate but bounded rescore activation memory."""
         del kwargs
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
             reward_fn = self._resolve_reward_fn(data_item)
-            with self._autocast_ctx():
-                loss, _reward = self.reinforcement_loss(None, reward_fn, data_item)
-            self._backward_and_step(loss)
-            yield (loss, None, None)
+            policy_dfa = getattr(self, "policy_dfa", None)
+            factory = getattr(self, "policy_dfa_factory", None)
+            if factory is not None:
+                policy_dfa = factory(data_item)
+
+            trajectories, _unused, proposal_logprob = self._sample_trajectories(
+                data_item.get("text", ""), policy_dfa=policy_dfa, rescore=False
+            )
+            reward_values = self._trajectory_rewards(
+                trajectories, reward_fn, data_item
+            )
+            device = next(self.autoregressive_head.parameters()).device
+            rewards = torch.tensor(
+                reward_values, dtype=proposal_logprob.dtype, device=device
+            )
+            coefficients = self._policy_gradient_coefficients(rewards)
+
+            # Qwen retains a full transformer graph for every re-scored row.
+            # Backpropagate each microbatch immediately, accumulating gradients
+            # and stepping only after the complete multi-rollout estimate and
+            # supervised anchor have been accounted for.
+            chunks = list(
+                range(0, len(trajectories), self.rescore_microbatch_size)
+            )
+            use_anchor = bool(
+                self.supervised_weight
+                and data_item.get("target_action_labels") is not None
+            )
+            total_loss_value = 0.0
+            was_training = self.autoregressive_head.training
+            self.autoregressive_head.eval()
+            try:
+                for chunk_index, start in enumerate(chunks):
+                    stop = min(
+                        start + self.rescore_microbatch_size, len(trajectories)
+                    )
+                    with self._autocast_ctx():
+                        logprob = self._trajectory_logprob(
+                            data_item.get("text", ""),
+                            trajectories[start:stop],
+                            device,
+                            policy_dfa=policy_dfa,
+                        )
+                        chunk_loss = (
+                            coefficients[start:stop].to(logprob.dtype) * logprob
+                        ).sum()
+                    total_loss_value += float(chunk_loss.detach().cpu())
+                    is_last = chunk_index == len(chunks) - 1 and not use_anchor
+                    self._backward_and_step(
+                        chunk_loss,
+                        zero_grad=(chunk_index == 0),
+                        step=is_last,
+                    )
+
+                if use_anchor:
+                    with self._autocast_ctx():
+                        anchor_loss = self.supervised_anchor_loss(data_item)
+                        weighted_anchor = self.supervised_weight * anchor_loss
+                    total_loss_value += float(weighted_anchor.detach().cpu())
+                    self._backward_and_step(
+                        weighted_anchor, zero_grad=not chunks, step=True
+                    )
+            finally:
+                self.autoregressive_head.train(was_training)
+
+            reported_loss = torch.tensor(total_loss_value, device=device)
+            yield (reported_loss, None, None)
 
     def test_epoch(self, dataset, **kwargs):
         del kwargs

@@ -1,4 +1,5 @@
 import argparse
+import gc
 import os
 import sys
 import tempfile
@@ -127,6 +128,7 @@ def build_program(
     enforce_action_object_constraints=True,
     rl_estimator="reinforce",
     rl_num_samples=8,
+    rl_rescore_microbatch=1,
     rl_reward_mode="dense",
     rl_supervised_weight=0.5,
     rl_constraint_weight=0.25,
@@ -330,6 +332,7 @@ def build_program(
             eos_label=bundle.vocabulary.eos_label,
             max_steps=max_steps,
             supervised_weight=rl_supervised_weight,
+            rescore_microbatch_size=rl_rescore_microbatch,
             reward_key="reward_function",
             decoder=eai_action_decoder,
             num_samples=rl_num_samples,
@@ -870,6 +873,7 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
         enforce_action_object_constraints=getattr(args, "_enforce_action_object_constraints", True),
         rl_estimator=getattr(args, "rl_estimator", "reinforce"),
         rl_num_samples=getattr(args, "rl_num_samples", 8),
+        rl_rescore_microbatch=getattr(args, "rl_rescore_microbatch", 1),
         rl_reward_mode=getattr(args, "rl_reward_mode", "dense"),
         rl_supervised_weight=getattr(args, "rl_supervised_weight", 0.5),
         rl_constraint_weight=getattr(args, "rl_constraint_weight", 0.25),
@@ -904,6 +908,7 @@ def build_stage2_program(args, solver_program, bundle, examples, device):
         eos_label=bundle.vocabulary.eos_label,
         max_steps=args.max_steps,
         supervised_weight=args.rl_supervised_weight,
+        rescore_microbatch_size=getattr(args, "rl_rescore_microbatch", 1),
         reward_key="reward_function",
         decoder=eai_action_decoder,
         num_samples=args.rl_num_samples,
@@ -1141,6 +1146,14 @@ def train_two_stage(args, train, dev, examples, device):
     print("\n" + "=" * 65)
     print("STAGE 2: Reinforcement Learning Fine-Tuning (Dense Goal + Constraint-Modulated Reward)")
     print("=" * 65)
+    # Stage 2 constructs its own optimizer over the shared trainable weights.
+    # Drop Stage 1's optimizer state before allocating any Qwen rollout graphs.
+    solver_program.opt = None
+    stage_kwargs = None
+    del stage1_optimizer
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     args.program = "reinforcement"
     rl_program, rl_bundle = build_stage2_program(
         args, solver_program, bundle, examples, device
@@ -1338,6 +1351,7 @@ def parse_args():
     parser.add_argument("--two-stage", action="store_true", help="Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning.")
     parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="reinforce", help="Stage 2 policy-gradient estimator. REINFORCE is the on-policy default; importance_weighted uses recorded detached proposal probabilities.")
     parser.add_argument("--rl-num-samples", type=int, default=8, help="Number of decodings sampled per Stage 2 step (minimum 4; default 8).")
+    parser.add_argument("--rl-rescore-microbatch", type=int, default=1, help="Differentiable rollout rescoring microbatch. Keep 1 for Qwen-8B memory safety; the optimizer still uses all rollouts in one estimate.")
     parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="dense", help="Task reward used by RL; dense final-state recall is multiplied by ordered temporal-prefix progress.")
     parser.add_argument("--rl-supervised-weight", type=float, default=0.5, help="Teacher-forced Stage 1 anchor retained during RL; the stronger default limits policy drift. Set 0 to disable.")
     parser.add_argument("--rl-constraint-weight", type=float, default=0.25, help="Maximum task-reward discount for world-constraint violations; constraints cannot reward a zero-task plan.")

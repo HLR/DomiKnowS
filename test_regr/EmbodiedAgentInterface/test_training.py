@@ -1,5 +1,6 @@
 import sys
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -96,6 +97,49 @@ def test_rl_rollout_conditions_on_its_sampled_prefix():
     assert proposal_logprob.shape == torch.Size([8])
     assert not proposal_logprob.requires_grad
     assert torch.isfinite(proposal_logprob).all()
+
+
+def test_rl_training_rescores_one_microbatch_before_each_backward():
+    torch.manual_seed(7)
+    head = _PrefixRecordingHead()
+    program = object.__new__(AutoregressiveSequenceReinforcementProgram)
+    program.autoregressive_head = head
+    program.eos_label = 2
+    program.max_steps = 3
+    program.num_samples = 8
+    program.rescore_microbatch_size = 1
+    program.supervised_weight = 0.0
+    program.estimator = "reinforce"
+    program.baseline = "mean"
+    program.policy_dfa = None
+    program.policy_dfa_factory = None
+    program.reward_key = "reward_function"
+    program.reward_function = None
+    program.model = SimpleNamespace(
+        mode=lambda _mode: None,
+        reset=lambda: None,
+        parameters=head.parameters,
+    )
+    program.opt = torch.optim.SGD(head.parameters(), lr=0.1)
+    program.scaler = None
+    program.grad_clip_norm = None
+    program._autocast_ctx = nullcontext
+
+    data_item = {
+        "text": "task",
+        "reward_function": lambda trajectory, **_kwargs: float(
+            trajectory[0] == 0
+        ),
+    }
+    list(program.train_epoch([data_item]))
+
+    differentiable_batches = [
+        call.shape[0]
+        for call, grad_enabled in zip(head.calls, head.grad_enabled)
+        if grad_enabled
+    ]
+    assert differentiable_batches
+    assert max(differentiable_batches) == 1
 
 
 def test_rl_supervised_anchor_is_differentiable():
@@ -336,6 +380,7 @@ def run_tests():
         test_supervised_loss_ignores_eos_padding,
         test_effective_metric_keeps_one_eos_only,
         test_rl_rollout_conditions_on_its_sampled_prefix,
+        test_rl_training_rescores_one_microbatch_before_each_backward,
         test_rl_supervised_anchor_is_differentiable,
         test_rl_program_is_constructed_with_shared_supervised_head,
         test_two_stage_handoff_reuses_exact_graph_bundle_head_and_dfa,
