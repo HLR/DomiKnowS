@@ -709,6 +709,7 @@ class PreparedEAIGoal:
     entity_universe: tuple[str, ...]
     types: dict[str, Set[str]]
     tracked_binary_pairs: frozenset[tuple[str, str]]
+    task_entity_types: tuple[str, ...]
 
 
 def prepare_eai_goal(
@@ -752,6 +753,9 @@ def _prepare_eai_goal(sample: dict[str, Any], vocabulary: Any = None) -> Prepare
         entity_universe=universe,
         types=_infer_types(ast, reference, universe),
         tracked_binary_pairs=frozenset(pairs),
+        task_entity_types=tuple(
+            sample.get("generation_entity_types") or ()
+        ),
     )
 
 
@@ -943,7 +947,11 @@ def _evaluate_goal_satisfaction(
             )
         else:
             constraint_evaluation = evaluate_default_world_constraints(
-                states, events, world_bundle, aggregate=constraint_aggregate,
+                states,
+                events,
+                world_bundle,
+                aggregate=constraint_aggregate,
+                task_entity_types=prepared.task_entity_types,
             )
     world_constraint_score = (
         constraint_evaluation.score if constraint_evaluation is not None else None

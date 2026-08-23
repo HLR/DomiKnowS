@@ -18,6 +18,9 @@ from main import (
     load_eai_checkpoint,
     save_eai_checkpoint,
     stage1_allows_rl,
+    stage1_selection_key,
+    _capture_trainable_parameters,
+    _restore_trainable_parameters,
 )
 from dataset import dummy_dataset
 from modules import EOSMaskedCrossEntropyLoss, PretrainedLabelAdapter
@@ -251,8 +254,50 @@ def test_rl_rollout_and_rescore_share_the_graph_compiled_policy():
 
 
 def test_stage1_gate_requires_positive_task_reward():
-    assert not stage1_allows_rl({"positive_reward_rate": 0.0})
-    assert stage1_allows_rl({"positive_reward_rate": 1.0 / 88.0})
+    collapsed = {
+        "positive_reward_rate": 0.114,
+        "gt_state_recall": 0.070,
+        "gt_state_success": 0.011,
+    }
+    healthy = {
+        "positive_reward_rate": 0.761,
+        "gt_state_recall": 0.610,
+        "gt_state_success": 0.489,
+    }
+    assert not stage1_allows_rl(collapsed)
+    assert stage1_allows_rl(healthy)
+
+
+def test_stage1_semantic_selection_prefers_healthy_epoch_over_lower_loss_collapse():
+    collapsed = {
+        "positive_reward_rate": 0.114,
+        "gt_state_recall": 0.070,
+        "gt_state_success": 0.011,
+        "exact_sequence": 0.0,
+        "token_accuracy": 0.067,
+    }
+    healthy = {
+        "positive_reward_rate": 0.761,
+        "gt_state_recall": 0.610,
+        "gt_state_success": 0.489,
+        "exact_sequence": 0.057,
+        "token_accuracy": 0.417,
+    }
+    assert stage1_selection_key(healthy, 1.55) > stage1_selection_key(collapsed, 0.01)
+
+
+def test_stage1_snapshot_only_copies_and_restores_trainable_parameters():
+    model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.Linear(2, 1))
+    model[0].weight.requires_grad = False
+    model[0].bias.requires_grad = False
+    program = SimpleNamespace(model=model)
+    snapshot = _capture_trainable_parameters(program)
+    assert set(snapshot) == {"1.weight", "1.bias"}
+    expected = snapshot["1.weight"].clone()
+    with torch.no_grad():
+        model[1].weight.add_(10.0)
+    _restore_trainable_parameters(program, snapshot)
+    assert torch.allclose(model[1].weight, expected)
 
 
 def test_eai_checkpoint_metadata_roundtrip_and_compatibility_rejection():
@@ -293,6 +338,8 @@ def run_tests():
         test_pretrained_label_adapter_uses_native_label_vectors_and_trains_residual,
         test_rl_rollout_and_rescore_share_the_graph_compiled_policy,
         test_stage1_gate_requires_positive_task_reward,
+        test_stage1_semantic_selection_prefers_healthy_epoch_over_lower_loss_collapse,
+        test_stage1_snapshot_only_copies_and_restores_trainable_parameters,
         test_eai_checkpoint_metadata_roundtrip_and_compatibility_rejection,
     ]
     for test in tests:

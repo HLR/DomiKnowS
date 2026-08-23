@@ -30,6 +30,7 @@ The detail learner-focused notes are:
 | DFA builders (`eos_closure_dfa`, `max_non_eos_dfa`, `required_token_dfa`, `forbidden_token_dfa`, `ordered_tokens_dfa`, `conditional_max_non_eos_dfa`, `token_set_count_dfa`, `after_token_allowed_dfa`) | Build the per-constraint DFA directly from a `TokenVocabulary`. |
 | `product_dfa(...)` / `union_dfa(...)` / `complement_dfa(...)` | Combine DFAs by intersection, union, and complement. |
 | `constraints_to_dfa_from_graph(...)` | Walks supported DomiKnowS graph constraints and returns one combined DFA. |
+| `declare_contextual_token_constraint(...)` / `bind_contextual_dfa(...)` | Declares token availability as a graph LC, then specializes the compiled DFA with per-example context facts. |
 | `analyze_generation_constraints(...)` | Inspects each head LC and reports which were compiled and why others were skipped. |
 | `discover_generation_enforcement(...)` | Routes graph constraints into the hard DFA and soft latent specs. |
 | `HuggingFaceGenerationAdapter` | Runs true hard constrained decoding by masking logits with a DFA. |
@@ -171,6 +172,46 @@ Boolean discovery supports nested `andL` / `orL` formulas over the supported
 generation leaves above.  `andL` is compiled as DFA intersection.  `orL` is
 compiled as DFA union, so every branch must be fully generation-supported;
 mixed non-generation or unsupported `orL` branches are not approximated.
+
+## Context-conditioned DFA constraints
+
+Use a contextual constraint when the policy shape is fixed but its facts vary
+per request—for example, an output object token is legal only if its type is
+available in the current world. The declaration remains in the DomiKnowS graph;
+the base DFA is compiled once and then cheaply bound to each example:
+
+```python
+from domiknows.generation import (
+    bind_contextual_dfa,
+    constraints_to_dfa_from_graph,
+    declare_contextual_token_constraint,
+)
+
+declare_contextual_token_constraint(
+    graph,
+    bundle,
+    tokens=["cup_1", "door_2"],
+    context_key="available_types",
+    token_to_value={"cup_1": "cup", "door_2": "door"},
+)
+base_dfa = constraints_to_dfa_from_graph(
+    graph, bundle, on_unsupported="raise"
+)
+request_dfa = bind_contextual_dfa(
+    base_dfa, graph, {"available_types": ("door",)}
+)
+```
+
+`request_dfa` implements the standard DFA surface (`step`, `accepts`,
+`allowed_tokens`, and bounded reachability). Consequently one bound artifact
+can be used consistently for greedy/beam decoding, rollout sampling, and
+differentiable trajectory rescoring. Missing context is allowed only when the
+declaration explicitly uses `allow_missing_context=True`.
+
+Pass `trigger_tokens=(...)` to make availability apply only to the token
+immediately following one of those triggers. This is useful when the same
+label is valid in an unrestricted navigation role but must be grounded after a
+world-changing action.
 
 ## Routing DFA vs Latent Enforcement
 

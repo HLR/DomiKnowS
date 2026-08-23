@@ -29,6 +29,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         max_steps,
         supervised_weight=0.1,
         policy_dfa=None,
+        policy_dfa_factory=None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -37,6 +38,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         self.max_steps = int(max_steps)
         self.supervised_weight = float(supervised_weight)
         self.policy_dfa = policy_dfa
+        self.policy_dfa_factory = policy_dfa_factory
         if self.supervised_weight < 0.0:
             raise ValueError("supervised_weight must be non-negative")
 
@@ -64,7 +66,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         mask = positions <= first_eos.unsqueeze(1)
         return F.cross_entropy(logits[mask], labels[mask])
 
-    def _sample_trajectories(self, text):
+    def _sample_trajectories(self, text, policy_dfa=None):
         device = next(self.autoregressive_head.parameters()).device
         sample_count = int(self.num_samples)
         prefixes = torch.full(
@@ -75,7 +77,8 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         )
         finished = torch.zeros(sample_count, dtype=torch.bool, device=device)
         trajectories = [[] for _ in range(sample_count)]
-        policy_dfa = getattr(self, "policy_dfa", None)
+        if policy_dfa is None:
+            policy_dfa = getattr(self, "policy_dfa", None)
         dfa_states = (
             [policy_dfa.start_state for _ in range(sample_count)]
             if policy_dfa is not None
@@ -95,7 +98,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                         self, text, prefixes
                     )[:, -1, :]
                     logits = AutoregressiveSequenceReinforcementProgram._mask_policy_logits(
-                        self, logits, dfa_states, step, finished
+                        self, logits, dfa_states, step, finished, policy_dfa=policy_dfa
                     )
                     distribution = torch.distributions.Categorical(logits=logits)
                     sampled = distribution.sample()
@@ -128,7 +131,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
             # per rollout.  These are the only graphs needed by the policy loss.
             trajectory_logprob = (
                 AutoregressiveSequenceReinforcementProgram._trajectory_logprob(
-                    self, text, trajectories, device
+                    self, text, trajectories, device, policy_dfa=policy_dfa
                 )
             )
         finally:
@@ -136,9 +139,12 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
 
         return trajectories, trajectory_logprob
 
-    def _mask_policy_logits(self, logits, dfa_states, step, finished=None):
+    def _mask_policy_logits(
+        self, logits, dfa_states, step, finished=None, policy_dfa=None
+    ):
         """Apply the graph-compiled DFA to one logit row per trajectory."""
-        policy_dfa = getattr(self, "policy_dfa", None)
+        if policy_dfa is None:
+            policy_dfa = getattr(self, "policy_dfa", None)
         if policy_dfa is None:
             return logits
         masked = torch.full_like(logits, float("-inf"))
@@ -179,7 +185,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
             dim=0,
         )
 
-    def _trajectory_logprob(self, text, trajectories, device):
+    def _trajectory_logprob(self, text, trajectories, device, policy_dfa=None):
         lengths = torch.tensor(
             [len(trajectory) for trajectory in trajectories],
             dtype=torch.long,
@@ -209,14 +215,20 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
             self, text, teacher_forced_prefixes
         )
-        policy_dfa = getattr(self, "policy_dfa", None)
+        if policy_dfa is None:
+            policy_dfa = getattr(self, "policy_dfa", None)
         if policy_dfa is not None:
             masked_steps = []
             states = [policy_dfa.start_state for _ in trajectories]
             for step in range(max_length):
                 active = step < lengths
                 step_logits = AutoregressiveSequenceReinforcementProgram._mask_policy_logits(
-                    self, logits[:, step, :], states, step, ~active
+                    self,
+                    logits[:, step, :],
+                    states,
+                    step,
+                    ~active,
+                    policy_dfa=policy_dfa,
                 )
                 masked_steps.append(step_logits)
                 for index, trajectory in enumerate(trajectories):
@@ -240,7 +252,13 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         if reward_fn is None:
             return super().reinforcement_loss(datanode, reward_fn, data_item)
 
-        trajectories, logprob = self._sample_trajectories(data_item.get("text", ""))
+        policy_dfa = getattr(self, "policy_dfa", None)
+        factory = getattr(self, "policy_dfa_factory", None)
+        if factory is not None:
+            policy_dfa = factory(data_item)
+        trajectories, logprob = self._sample_trajectories(
+            data_item.get("text", ""), policy_dfa=policy_dfa
+        )
         reward_values = []
         for trajectory in trajectories:
             reward = call_reward_function(

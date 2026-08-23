@@ -133,6 +133,19 @@ def analyze_generation_constraints(
         if not getattr(lc, "headLC", True):
             continue
         relevant = _is_generation_relevant(lc, bundle)
+        contextual_specs = getattr(lc, "_generation_contextual_dfa_specs", ())
+        if contextual_specs:
+            analyses.append(
+                GenerationConstraintAnalysis(
+                    lc_name=lc_name,
+                    lc_type=lc.__class__.__name__,
+                    relevant=True,
+                    supported=True,
+                    dfas=(),
+                    reason="constraint is compiled when request context is bound",
+                )
+            )
+            continue
         if _is_latent_marked(lc) and not hasattr(lc, "_generation_dfa_constraint"):
             analyses.append(
                 GenerationConstraintAnalysis(

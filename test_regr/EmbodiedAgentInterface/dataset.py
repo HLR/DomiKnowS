@@ -1,14 +1,14 @@
 import ast
+import os
 import re
 from pathlib import Path
 
 import torch
 
 try:
-    from datasets import load_dataset
+    from world_graph import TASK_ENTITY_ACTION_NAMES
 except ImportError:
-    load_dataset = None
-
+    from .world_graph import TASK_ENTITY_ACTION_NAMES
 
 EOS_TOKEN = "<eos>"
 
@@ -18,38 +18,6 @@ BASE_VOCAB = (EOS_TOKEN, *DEFAULT_ACTION_LABELS)
 ACTION_VOCAB = BASE_VOCAB
 
 HF_DATASET = "Inevitablevalor/EmbodiedAgentInterface"
-
-ACTION_OBJECT_CONSTRAINT_ACTIONS = frozenset({
-    "clean",
-    "close",
-    "cook",
-    "freeze",
-    "left_place_inside",
-    "left_place_nextto",
-    "left_place_nextto_ontop",
-    "left_place_nextto_on_top",
-    "left_place_on_top",
-    "left_place_ontop",
-    "left_place_under",
-    "open",
-    "right_place_inside",
-    "right_place_nextto",
-    "right_place_nextto_ontop",
-    "right_place_nextto_on_top",
-    "right_place_on_top",
-    "right_place_ontop",
-    "right_place_under",
-    "slice",
-    "soak",
-    "switch_off",
-    "switch_on",
-    "toggle_off",
-    "toggle_on",
-    "turn_off",
-    "turn_on",
-    "unfreeze",
-})
-
 
 def _normalize_surface_token(value):
     value = str(value or "").lower()
@@ -80,6 +48,76 @@ def _normalize_object_name(value):
         value = value.get("object", "") or value.get("name", "")
     value = _normalize_surface_token(value)
     return value or None
+
+
+def entity_type_for_token(value):
+    """Return the simulator/PDDL entity type represented by an object label."""
+    token = _normalize_surface_token(value)
+    previous = None
+    while token != previous:
+        previous = token
+        token = re.sub(r"_(?:part|n)_\d+$", "", token)
+        token = re.sub(r"_\d+$", "", token)
+    return token
+
+
+def transition_model_entity_types(value):
+    """Parse non-gold entity types from a task's PDDL ``:objects`` section."""
+    text = str(value or "")
+    match = re.search(r"\(:objects\b(.*?)(?=\n\s*\(:|\(:init\b)", text, re.I | re.S)
+    if match is None:
+        return ()
+    body = re.sub(r";[^\r\n]*", " ", match.group(1))
+    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*|-", body)
+    entities = []
+    pending = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "-":
+            entities.extend(pending)
+            pending = []
+            index += 2  # Skip the declaration type following '-'.
+            continue
+        pending.append(token)
+        index += 1
+    entities.extend(pending)
+    normalized = {
+        entity_type_for_token(entity)
+        for entity in entities
+        if entity_type_for_token(entity) not in {"", "character"}
+    }
+    return tuple(sorted(normalized))
+
+
+def task_semantic_action_permissions(row):
+    """Infer guarded semantic actions from non-demonstration task text/goals."""
+    task_text = " ".join(
+        str(row.get(key, ""))
+        for key in (
+            "task_name",
+            "natural_language_description",
+            "original_goal",
+            "tl_goal",
+            "transition_model",
+        )
+    ).lower()
+    clean_cues = (
+        "clean",
+        "dust",
+        "lint",
+        "mop",
+        "polish",
+        "rinse",
+        "scrub",
+        "stain",
+        "wash",
+        "wipe",
+    )
+    permitted = []
+    if any(cue in task_text for cue in clean_cues):
+        permitted.append("clean")
+    return tuple(permitted)
 
 
 def parse_action_trajectory(value):
@@ -154,7 +192,7 @@ def constrained_action_object_pairs_from_row(row):
     return tuple(
         (action, obj)
         for action, obj in trajectory_action_object_tokens(row)
-        if action in ACTION_OBJECT_CONSTRAINT_ACTIONS and obj
+        if action in TASK_ENTITY_ACTION_NAMES and obj
     )
 
 
@@ -203,11 +241,25 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
     sequence_labels = action_sequence_labels(row, max_steps=max_steps)
     sequence_ids = action_sequence_ids(sequence_labels, vocab=vocab)
     label = next((item for item in sequence_labels if item != EOS_TOKEN), "other")
+    task_entity_types = transition_model_entity_types(row.get("transition_model"))
+    transition_model = str(row.get("transition_model", ""))
+    # VirtualHome action labels and PDDL objects share the same lexical roots.
+    # BEHAVIOR/iGibson uses a separate WordNet taxonomy (hardback -> book,
+    # fridge -> electric_refrigerator), so exact hard filtering is unsafe until
+    # that ontology hierarchy is supplied explicitly.
+    generation_entity_types = (
+        task_entity_types
+        if re.search(r"\(:domain\s+virtualhome\b", transition_model, re.I)
+        else None
+    )
+    semantic_action_permissions = task_semantic_action_permissions(row)
     text_parts = [
         row.get("task_name", ""),
         row.get("natural_language_description", ""),
         row.get("tl_goal", ""),
     ]
+    if task_entity_types:
+        text_parts.append("Available entity types: " + ", ".join(task_entity_types))
     text = " ".join(str(part) for part in text_parts if part)
     task_id = row.get("task_id") or row.get("scene_id") or row.get("task_name") or "task"
     action_tokens = set(action_tokens_from_row(row))
@@ -220,7 +272,10 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
         "task_name": str(row.get("task_name", "")),
         "natural_language_description": str(row.get("natural_language_description", "")),
         "tl_goal": str(row.get("tl_goal", "")),
-        "transition_model": str(row.get("transition_model", "")),
+        "transition_model": transition_model,
+        "task_entity_types": task_entity_types,
+        "generation_entity_types": generation_entity_types,
+        "semantic_action_permissions": semantic_action_permissions,
         "text": text,
         "first_action": label,
         "target_action_tokens": sequence_labels,
@@ -300,18 +355,22 @@ def load_eai_dataset(dataset_name="all", split=None, limit=None, data_path=None,
     if data_path:
         rows = _load_local_rows(Path(data_path))
     else:
-        if load_dataset is None:
-            raise RuntimeError(
-                "Install the `datasets` package or pass --data-path to local EAI parquet/csv/jsonl files."
-            )
+        rows = _load_cached_hf_rows(dataset_name, split)
+        if rows is None:
+            try:
+                from datasets import load_dataset
+            except ImportError:
+                raise RuntimeError(
+                    "Install the `datasets` package or pass --data-path to local EAI parquet/csv/jsonl files."
+                ) from None
 
-        split_name = split or dataset_name
-        if dataset_name == "all":
-            rows = []
-            for split_name in ("behavior", "virtualhome"):
-                rows.extend(load_dataset(HF_DATASET, split=split_name))
-        else:
-            rows = list(load_dataset(HF_DATASET, split=split_name))
+            split_name = split or dataset_name
+            if dataset_name == "all":
+                rows = []
+                for split_name in ("behavior", "virtualhome"):
+                    rows.extend(load_dataset(HF_DATASET, split=split_name))
+            else:
+                rows = list(load_dataset(HF_DATASET, split=split_name))
 
     if limit is not None and limit >= 0:
         rows = rows[:limit]
@@ -320,6 +379,34 @@ def load_eai_dataset(dataset_name="all", split=None, limit=None, data_path=None,
     vocab = build_generation_vocab(rows)
     examples = [row_to_example(row, device=device, max_steps=max_steps, vocab=vocab) for row in rows]
     return add_action_concept_labels(examples, device=device)
+
+
+def _load_cached_hf_rows(dataset_name, split):
+    """Read an existing HF parquet snapshot without importing ``datasets``.
+
+    Besides being faster, this avoids a Windows ``pyarrow.dataset`` loader
+    crash observed in the test environment. A cache miss returns ``None`` so
+    the normal Hugging Face loader remains authoritative for downloads.
+    """
+    hf_root = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    snapshot_root = hf_root / "hub" / "datasets--Inevitablevalor--EmbodiedAgentInterface" / "snapshots"
+    splits = ("behavior", "virtualhome") if dataset_name == "all" else (split or dataset_name,)
+    files = []
+    for split_name in splits:
+        matches = sorted(snapshot_root.glob(f"*/data/{split_name}-*.parquet"))
+        if not matches:
+            return None
+        files.extend(matches)
+    try:
+        import pyarrow.parquet as parquet
+    except ImportError:
+        return None
+    rows = []
+    for path in files:
+        # ``read_table`` imports ``pyarrow.dataset`` even for one file; that
+        # extension crashes in the supported Windows test environment.
+        rows.extend(parquet.ParquetFile(path).read().to_pylist())
+    return rows
 
 
 def _load_local_rows(path):

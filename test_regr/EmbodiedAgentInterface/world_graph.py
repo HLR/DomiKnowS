@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import count
+import re
 from types import MappingProxyType
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -26,6 +27,7 @@ class ActionSpec:
     min_args: int
     max_args: int
     is_goal_action: bool = False
+    requires_task_entity: bool = False
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,18 @@ _ACTION_NAMES = frozenset({
     "standup", "switch_off", "switch_on", "switchoff", "switchon",
     "toggle_off", "toggle_on", "touch", "turn_off", "turn_on", "turnto",
     "type", "unfreeze", "walk", "wash", "watch", "wipe",
+})
+
+_TASK_ENTITY_ACTION_NAMES = frozenset({
+    "clean", "close", "cook", "freeze", "left_place_inside",
+    "left_place_nextto", "left_place_nextto_ontop",
+    "left_place_nextto_on_top", "left_place_on_top", "left_place_ontop",
+    "left_place_under", "open", "right_place_inside",
+    "right_place_nextto", "right_place_nextto_ontop",
+    "right_place_nextto_on_top", "right_place_on_top",
+    "right_place_ontop", "right_place_under", "slice", "soak",
+    "switch_off", "switch_on", "toggle_off", "toggle_on", "turn_off",
+    "turn_on", "unfreeze",
 })
 
 ACTION_GOAL_NAMES = frozenset({
@@ -103,9 +117,13 @@ ACTION_SPECS: Mapping[str, ActionSpec] = MappingProxyType({
         min_args=0 if name in {"sleep", "standup"} else 1,
         max_args=0 if name in {"sleep", "standup"} else 2,
         is_goal_action=name in ACTION_GOAL_NAMES,
+        requires_task_entity=name in _TASK_ENTITY_ACTION_NAMES,
     )
     for name in sorted(_ACTION_NAMES)
 })
+TASK_ENTITY_ACTION_NAMES = frozenset(
+    name for name, spec in ACTION_SPECS.items() if spec.requires_task_entity
+)
 STATE_SPECS: Mapping[str, StatePredicateSpec] = MappingProxyType({
     name: StatePredicateSpec(
         name=name,
@@ -260,11 +278,29 @@ def _precondition_status(
     action: str,
     args: tuple[str, ...],
     source_state: set[Fact],
+    task_entity_types: Iterable[str] = (),
 ) -> tuple[bool, bool]:
     """Return ``(applicable, satisfied)`` for one source-state condition."""
     held = _held_by_side(source_state)
     side = _action_side(action)
     held_for_action = held[side] if side is not None else held["left"] | held["right"]
+
+    if kind == "argument_available_in_task":
+        available = frozenset(str(value) for value in task_entity_types)
+        if not available:
+            return False, True
+        if not args:
+            return True, False
+        argument_types = set()
+        for argument in args:
+            entity_type = argument
+            previous = None
+            while entity_type != previous:
+                previous = entity_type
+                entity_type = re.sub(r"_(?:part|n)_\d+$", "", entity_type)
+                entity_type = re.sub(r"_\d+$", "", entity_type)
+            argument_types.add(entity_type)
+        return True, argument_types <= available
 
     if kind == "placement_source_ready":
         if held_for_action:
@@ -408,6 +444,7 @@ def build_eai_world_graph(
                 "release_source_ready",
                 "pour_source_ready",
                 "destination_open_if_known",
+                "argument_available_in_task",
             )
         }
         default_preconditions: list[ActionPreconditionSpec] = []
@@ -425,6 +462,15 @@ def build_eai_world_graph(
                 or name == "putobjback"
             )
             specifications = [
+                *(
+                    ActionPreconditionSpec(
+                        name=f"action_precondition__{name}__argument_available",
+                        action=name,
+                        kind="argument_available_in_task",
+                    )
+                    for name, spec in ACTION_SPECS.items()
+                    if spec.min_args > 0 and spec.requires_task_entity
+                ),
                 *(
                     ActionPreconditionSpec(
                         name=f"action_precondition__{name}__source_holding",
@@ -642,7 +688,11 @@ def materialize_world_trajectory(
             source_state = normalized_states[source_index]
             for kind, concept in world_bundle.precondition_concepts.items():
                 _applicable, satisfied = _precondition_status(
-                    kind, name, args, source_state
+                    kind,
+                    name,
+                    args,
+                    source_state,
+                    getattr(prepared_goal, "task_entity_types", ()),
                 )
                 _set_truth(event_node, concept, satisfied)
             step_nodes[source_index].addChildDataNode(event_node)
@@ -667,6 +717,7 @@ def evaluate_default_world_constraints(
     events: Sequence[Any],
     world_bundle: EAIWorldGraphBundle,
     aggregate: str = "mean",
+    task_entity_types: Iterable[str] = (),
 ) -> WorldConstraintEvaluation | None:
     """Evaluate built-in source-state preconditions without the general solver.
 
@@ -730,6 +781,7 @@ def evaluate_default_world_constraints(
                 specification.action,
                 args,
                 source_state,
+                task_entity_types,
             )
             if applicable:
                 applicable_count += 1

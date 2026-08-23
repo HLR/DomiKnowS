@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _default_hf_home = "/egr/research-hlr2/premsrit/transformer_cache"
@@ -49,11 +49,31 @@ class EAIProgramBundle:
     constraint_weight: float = 0.25
     constraint_aggregate: str = "mean"
     policy_dfa: object | None = None
+    generation_graph: object | None = None
     generation_constraints: str = "always"
     model_metadata: dict | None = None
+    _policy_cache: dict = field(
+        default_factory=dict, compare=False, repr=False
+    )
 
     def __getattr__(self, name):
         return getattr(self.generation, name)
+
+    def policy_for(self, context):
+        """Bind graph-declared contextual policies to one task example."""
+        if self.policy_dfa is None or self.generation_graph is None:
+            return self.policy_dfa
+        from domiknows.generation import bind_contextual_dfa
+
+        cache_key = id(context)
+        cached = self._policy_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        bound = bind_contextual_dfa(
+            self.policy_dfa, self.generation_graph, context or {}
+        )
+        self._policy_cache[cache_key] = bound
+        return bound
 
 RUN_DIR = Path(__file__).parent.resolve()
 RESULTS_DIR = RUN_DIR / "results"
@@ -167,6 +187,7 @@ def build_program(
         constraint_weight=float(rl_constraint_weight),
         constraint_aggregate=rl_constraint_aggregate,
         policy_dfa=policy_dfa,
+        generation_graph=graph,
         generation_constraints=generation_constraints,
         model_metadata={
             "backbone": llm_backbone_path if baseline_model == "causal-lm" else baseline_model,
@@ -314,6 +335,9 @@ def build_program(
             num_samples=rl_num_samples,
             estimator=rl_estimator,
             policy_dfa=policy_dfa if generation_constraints == "always" else None,
+            policy_dfa_factory=(
+                bundle.policy_for if generation_constraints == "always" else None
+            ),
             poi=[text, token, generated_token, token[bundle.contains], token[generated_token]],
             device=device,
         )
@@ -552,7 +576,7 @@ def write_vocab_info_log(examples):
 def dfa_constrained_sequence(program, bundle, sample, max_steps):
     from domiknows.generation import constrained_label_greedy_decode
 
-    dfa = bundle.policy_dfa
+    dfa = bundle.policy_for(sample)
     result = constrained_label_greedy_decode(
         program.autoregressive_head,
         [bundle.vocabulary.eos_label],
@@ -632,6 +656,12 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
     nonempty_plan_total = 0
     predicted_length_total = 0
     positive_reward_total = 0
+    autoregressive_head = getattr(program, "autoregressive_head", None)
+    head_was_training = (
+        autoregressive_head.training if autoregressive_head is not None else None
+    )
+    if autoregressive_head is not None:
+        autoregressive_head.eval()
 
     for idx, sample in enumerate(eval_examples):
         program.populate_one(sample, device=device)
@@ -649,7 +679,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         token_correct += sum(int(p == g) for p, g in zip(pred_padded, effective_gold))
         token_total += len(effective_gold)
         if dfa is not None:
-            dfa_valid += int(dfa.accepts(pred_padded))
+            dfa_valid += int(bundle.policy_for(sample).accepts(pred_padded))
         else:
             dfa_valid += 1
 
@@ -682,6 +712,8 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             print(f"Predicted State:    {sorted(eval_res['predicted_state'])}")
             print(f"Goal Success (0/1): {eval_res['is_success']} (recall={eval_res['recall']:.2f})")
 
+    if autoregressive_head is not None:
+        autoregressive_head.train(head_was_training)
     return {
         "examples": len(eval_examples),
         "exact_sequence": exact / len(eval_examples),
@@ -870,6 +902,9 @@ def build_stage2_program(args, solver_program, bundle, examples, device):
         policy_dfa=(
             bundle.policy_dfa if args.generation_constraints == "always" else None
         ),
+        policy_dfa_factory=(
+            bundle.policy_for if args.generation_constraints == "always" else None
+        ),
         poi=[
             bundle.text,
             bundle.token,
@@ -930,6 +965,38 @@ def _mean_loss_value(value):
         return None
 
 
+def stage1_selection_key(score, supervised_loss=None):
+    """Rank checkpoints by task semantics, using loss only as a final tie-breaker."""
+    loss = float(supervised_loss) if supervised_loss is not None else float("inf")
+    return (
+        float(score.get("gt_state_recall", 0.0)),
+        float(score.get("gt_state_success", 0.0)),
+        float(score.get("positive_reward_rate", 0.0)),
+        float(score.get("exact_sequence", 0.0)),
+        float(score.get("token_accuracy", 0.0)),
+        -loss,
+    )
+
+
+def _capture_trainable_parameters(program):
+    """Keep only LoRA/adapter/trainable tensors, never a second frozen Qwen copy."""
+    return {
+        name: parameter.detach().cpu().clone()
+        for name, parameter in program.model.named_parameters()
+        if parameter.requires_grad
+    }
+
+
+def _restore_trainable_parameters(program, snapshot):
+    parameters = dict(program.model.named_parameters())
+    missing = sorted(set(snapshot) - set(parameters))
+    if missing:
+        raise ValueError(f"Stage 1 snapshot parameters are missing from the model: {missing[:3]}")
+    with torch.no_grad():
+        for name, saved in snapshot.items():
+            parameters[name].copy_(saved.to(parameters[name].device, dtype=parameters[name].dtype))
+
+
 def report_epoch_accuracy(args, program, bundle, train, dev, device, epoch):
     limit = args.epoch_eval_limit if args.epoch_eval_limit > 0 else None
     for split_name, split_examples in (("train", train), ("dev", dev)):
@@ -977,7 +1044,12 @@ def train_two_stage(args, train, dev, examples, device):
     solver_program, bundle = build_trainable_program(args, examples, device)
     stage1_optimizer = torch.optim.Adam(solver_program.model.parameters(), lr=args.lr)
     score_stage1 = None
+    best_score = None
+    best_key = None
+    best_epoch = 0
+    best_trainable_parameters = None
     for epoch in range(1, args.epochs + 1):
+        solver_program.global_epoch = epoch
         stage_kwargs = _train_kwargs(args, train, device, 1)
         stage_kwargs["Optim"] = lambda _params, optimizer=stage1_optimizer: optimizer
         solver_program.train(train, valid_set=dev, test_set=None, **stage_kwargs)
@@ -989,19 +1061,43 @@ def train_two_stage(args, train, dev, examples, device):
         )
         print(f"Stage 1 epoch {epoch} supervised_loss={validation_loss if validation_loss is not None else 'n/a'}")
         print_score(f"Stage 1 Epoch {epoch} Eval", score_stage1, "solver")
+        selection_key = stage1_selection_key(score_stage1, validation_loss)
+        if best_key is None or selection_key > best_key:
+            best_key = selection_key
+            best_epoch = epoch
+            best_score = dict(score_stage1)
+            best_trainable_parameters = _capture_trainable_parameters(solver_program)
+            print(
+                f"Stage 1 epoch {epoch} is the new best semantic checkpoint "
+                f"(recall={score_stage1['gt_state_recall']:.3f}, "
+                f"success={score_stage1['gt_state_success']:.3f}, "
+                f"positive_reward_rate={score_stage1['positive_reward_rate']:.3f})."
+            )
         if args.epoch_predictions > 0:
             sequence_score(
                 solver_program, bundle, dev or train, args.max_steps,
                 device=device, use_dfa=args.use_dfa,
                 limit=args.epoch_predictions, show=True,
             )
+    solver_program.global_epoch = None
 
     if score_stage1 is None:
         score_stage1 = sequence_score(
             solver_program, bundle, dev or train, args.max_steps,
             device=device, use_dfa=args.use_dfa,
         )
-    print_score("Stage 1 (Exact Match) Eval", score_stage1, "solver")
+        best_score = dict(score_stage1)
+        best_epoch = 0
+        best_trainable_parameters = _capture_trainable_parameters(solver_program)
+    if best_trainable_parameters is None or best_score is None:
+        raise RuntimeError("Stage 1 did not produce a restorable checkpoint")
+    _restore_trainable_parameters(solver_program, best_trainable_parameters)
+    score_stage1 = sequence_score(
+        solver_program, bundle, dev or train, args.max_steps,
+        device=device, use_dfa=args.use_dfa,
+    )
+    print(f"Restored best Stage 1 epoch {best_epoch} before checkpointing and RL.")
+    print_score("Stage 1 Best Checkpoint Eval", score_stage1, "solver")
 
     final_model_path = Path(args.model) if args.model else MODEL_DIR / "eai_action_sequence_baseline.pth"
     stage1_path = (
@@ -1011,13 +1107,24 @@ def train_two_stage(args, train, dev, examples, device):
     )
     stage1_path.parent.mkdir(exist_ok=True, parents=True)
     save_eai_checkpoint(
-        solver_program, bundle, args, stage1_path, stage="stage1", epoch=args.epochs
+        solver_program, bundle, args, stage1_path, stage="stage1", epoch=best_epoch
     )
     print(f"Saved Stage 1 checkpoint: {stage1_path}")
-    if not stage1_allows_rl(score_stage1):
+    if not stage1_allows_rl(
+        score_stage1,
+        min_positive_reward_rate=args.stage1_min_positive_reward_rate,
+        min_goal_recall=args.stage1_min_goal_recall,
+        min_goal_success_rate=args.stage1_min_goal_success_rate,
+    ):
         print(
-            "Stage 2 skipped: Stage 1 produced no positive task-reward "
-            f"trajectory on {len(dev or train)} validation examples."
+            "Stage 2 skipped: best Stage 1 validation metrics did not meet the "
+            "exploration gate: "
+            f"positive_reward_rate={score_stage1['positive_reward_rate']:.3f} "
+            f"(required {args.stage1_min_positive_reward_rate:.3f}), "
+            f"gt_state_recall={score_stage1['gt_state_recall']:.3f} "
+            f"(required {args.stage1_min_goal_recall:.3f}), "
+            f"gt_state_success={score_stage1['gt_state_success']:.3f} "
+            f"(required {args.stage1_min_goal_success_rate:.3f})."
         )
         args.program = orig_program
         return solver_program, bundle, False
@@ -1054,9 +1161,26 @@ def train_two_stage(args, train, dev, examples, device):
     return rl_program, rl_bundle, True
 
 
-def stage1_allows_rl(score):
-    """Return whether supervised exploration earned any positive task reward."""
-    return float(score.get("positive_reward_rate", 0.0)) > 0.0
+def stage1_allows_rl(
+    score,
+    min_positive_reward_rate=0.25,
+    min_goal_recall=0.10,
+    min_goal_success_rate=0.05,
+):
+    """Require broad task progress, not one coincidentally rewarded trajectory."""
+    thresholds = {
+        "min_positive_reward_rate": min_positive_reward_rate,
+        "min_goal_recall": min_goal_recall,
+        "min_goal_success_rate": min_goal_success_rate,
+    }
+    for name, value in thresholds.items():
+        if not 0.0 <= float(value) <= 1.0:
+            raise ValueError(f"{name} must be between 0 and 1")
+    return (
+        float(score.get("positive_reward_rate", 0.0)) >= float(min_positive_reward_rate)
+        and float(score.get("gt_state_recall", 0.0)) >= float(min_goal_recall)
+        and float(score.get("gt_state_success", 0.0)) >= float(min_goal_success_rate)
+    )
 
 
 def load_trained_program(args, examples, device):
@@ -1198,7 +1322,7 @@ def parse_args():
     parser.add_argument("--limit", type=int, default=None, help="Limit loaded rows.")
     parser.add_argument("--max-steps", type=int, default=60, help="Padded action-token sequence length including EOS.")
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=None, help="Stage 1 learning rate. Defaults to 1e-4 for causal-lm and 1e-3 for smaller baselines.")
     parser.add_argument("--program", choices=["solver", "primal-dual", "reinforcement"], default="solver", help="DomiKnowS training program to use for the autoregressive baseline.")
     parser.add_argument("--two-stage", action="store_true", help="Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning.")
     parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="importance_weighted", help="Estimator for ReinforcementProgram.")
@@ -1240,6 +1364,9 @@ def parse_args():
     parser.add_argument("--generation-constraints", choices=["always", "eval", "off"], default="always", help="Apply the DFA compiled from graph policies during RL and evaluation, evaluation only, or not at runtime.")
     parser.add_argument("--stage1-checkpoint", default=None, help="Stage 1 checkpoint path; defaults to <model-stem>.stage1.pth.")
     parser.add_argument("--epoch-predictions", type=int, default=3, help="Decoded validation examples printed after each Stage 1 epoch; 0 disables them.")
+    parser.add_argument("--stage1-min-positive-reward-rate", type=float, default=0.25, help="Minimum fraction of validation trajectories with positive task reward required before RL.")
+    parser.add_argument("--stage1-min-goal-recall", type=float, default=0.10, help="Minimum validation goal-fact recall required before RL.")
+    parser.add_argument("--stage1-min-goal-success-rate", type=float, default=0.05, help="Minimum validation goal-success rate required before RL.")
     parser.add_argument("--show-predictions", action="store_true", help="Print decoded examples during evaluation.")
     parser.add_argument("--eval-only", action="store_true")
     parser.add_argument("--model", default=str(MODEL_DIR / "eai_action_sequence_baseline.pth"))
@@ -1253,6 +1380,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.lr is None:
+        args.lr = 1e-4 if args.baseline_model == "causal-lm" else 1e-3
+        print(f"Using architecture-aware Stage 1 learning rate: {args.lr:g}")
     if args.use_dfa:
         print("Warning: --use-dfa is deprecated; using --generation-constraints always.")
         args.generation_constraints = "always"

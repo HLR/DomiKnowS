@@ -174,12 +174,14 @@ def test_default_precondition_registry_and_verification():
         "release_source_ready",
         "pour_source_ready",
         "destination_open_if_known",
+        "argument_available_in_task",
     }
     assert set(bundle.precondition_concepts) == {
         "placement_source_ready",
         "release_source_ready",
         "pour_source_ready",
         "destination_open_if_known",
+        "argument_available_in_task",
     }
 
     prepared = _prepared(
@@ -236,6 +238,21 @@ def test_default_precondition_registry_and_verification():
         bundle,
     )
     assert no_hold_pour.score == 0.0
+
+    unavailable_argument = evaluate_default_world_constraints(
+        [set(), set()],
+        [SimpleNamespace(name="clean", args=("bathtub_35",))],
+        bundle,
+        task_entity_types=("novel", "filing_cabinet"),
+    )
+    assert unavailable_argument.score == 0.0
+    available_argument = evaluate_default_world_constraints(
+        [set(), set()],
+        [SimpleNamespace(name="clean", args=("bathtub_35",))],
+        bundle,
+        task_entity_types=("bathtub",),
+    )
+    assert available_argument.score == 1.0
 
 
 def test_reward_bypass_and_blending():

@@ -20,8 +20,8 @@ The task requires an embodied agent to plan and generate multi-step action-objec
   - A separate deterministic world/trajectory graph (`world_graph.py`) exposes namespaced action and state concepts for DomiKnowS constraints. Applicable constraints modulate task progress with `task_reward * ((1 - weight) + weight * constraint_score)`; they cannot independently reward a failed plan.
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
-  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss. Every epoch reports exploration metrics and decoded examples, and `<model-stem>.stage1.pth` is retained.
-  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using dense goal-fact recall by default, world constraints as a discount for violations, and a small teacher-forced anchor loss to prevent catastrophic forgetting. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. RL starts only when Stage 1 produces at least one positive-task-reward validation trajectory; otherwise the command retains Stage 1 and exits with status 2.
+  - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss. Every epoch reports semantic exploration metrics and decoded examples. The best semantic epoch is retained as a compact trainable-parameter snapshot, restored after training, and saved to `<model-stem>.stage1.pth`; a later collapsed epoch cannot replace it.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using dense goal-fact recall by default, world constraints as a discount for violations, and a small teacher-forced anchor loss to prevent catastrophic forgetting. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. RL starts only when the restored Stage 1 checkpoint meets the configured positive-reward, recall, and goal-success thresholds; otherwise the command retains Stage 1 and exits with status 2.
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
@@ -29,6 +29,7 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 
 - **DFA Relational Constraints & Hybrid Inference**:
   - The DomiKnowS generation graph declares the first-token action rule, action/object successors, zero-argument actions, action/object compatibility, EOS closure, and maximum length. These marked logical constraints compile into the single `EAIProgramBundle.policy_dfa`; EAI adds no runtime policy overlays.
+  - Object arguments are additionally guarded by the generic `domiknows.generation` contextual-DFA facility. Each VirtualHome task's PDDL `:objects` section supplies non-gold entity-type facts, the same facts are included in the model prompt, and semantic action→object transitions reject labels whose entity type is absent. Scene-navigation objects remain legal. A separate graph declaration permits `clean` only for tasks whose instruction, goal, or transition model contains a cleaning cue. Thus a book task cannot decode `clean bathtub_35`; neither rule reads that task's reference action trajectory. BEHAVIOR/iGibson filtering remains inactive because its action labels and PDDL use different taxonomies (for example, `hardback` versus `book`); enabling it requires an explicit ontology mapping rather than a gold-derived mask.
   - The same compiled DFA masks supervised evaluation, RL sampling, differentiable RL rescoring, and Qwen + HMM + DFA lookahead inference (`infer_qwen_hmm_dfa.py`).
 
 ---
@@ -68,7 +69,7 @@ uv run python test_regr/EmbodiedAgentInterface/test_world_graph.py
 
 `build_program()` enables source-state action preconditions by default. Placement actions require an object in the appropriate hand, release/drop requires a held object, and pour requires some held source object. Place-inside actions additionally require an open destination when the simulator knows its open/closed status. Because the flat EAI action format names only a placement destination, an idempotent placement/release is also accepted when the referenced object is already spatially placed. These preconditions were audited against all 438 reference demonstrations.
 
-The constraint reward averages only preconditions applicable to the materialized trajectory. Container openness is skipped when its initial status is unknown rather than treating missing information as `closed`. Inactive preconditions remain logically vacuous but do not inflate `world_constraint_score`.
+The constraint reward averages only preconditions applicable to the materialized trajectory. These include action-argument existence in the task's PDDL world. Container openness is skipped when its initial status is unknown rather than treating missing information as `closed`. Inactive preconditions remain logically vacuous but do not inflate `world_constraint_score`.
 
 Built-in constraints use a deterministic evaluator equivalent to their declared graph invariants during RL, avoiding per-sample solver construction. Constraints supplied by custom builders continue to materialize `DataNode`s and run `verifyResultsLC`. Per-example reward closures also cache repeated sampled trajectories.
 
@@ -212,7 +213,7 @@ When training or running inference, you may encounter different model artifacts 
 | `--program` | `str` | `"solver"` | Program type: `"solver"`, `"primal-dual"`, or `"reinforcement"`. |
 | `--epochs` | `int` | `5` | Number of epochs for Stage 1 / supervised training. |
 | `--rl-epochs` | `int` | `3` | Number of epochs for Stage 2 Reinforcement Learning. |
-| `--lr` | `float` | `1e-3` | Learning rate for Stage 1 training. |
+| `--lr` | `float` | architecture-aware | Stage 1 learning rate: `1e-4` for causal LM/LoRA and `1e-3` for smaller baselines unless explicitly set. |
 | `--rl-lr` | `float` | `1e-4` | Learning rate for Stage 2 policy gradient optimization. |
 | `--rl-reward-mode` | `str` | `"dense"` | Task score used by RL: dense goal-fact recall by default, or binary goal success. |
 | `--rl-supervised-weight` | `float` | `0.1` | Weight of the teacher-forced Stage 1 anchor loss retained during RL. |
@@ -229,5 +230,8 @@ When training or running inference, you may encounter different model artifacts 
 | `--use-dfa` | `flag` | `False` | Deprecated alias for `--generation-constraints always`. |
 | `--stage1-checkpoint` | `path` | `<model-stem>.stage1.pth` | Explicit retained Stage 1 checkpoint path. |
 | `--epoch-predictions` | `int` | `3` | Number of validation predictions printed after each Stage 1 epoch. |
+| `--stage1-min-positive-reward-rate` | `float` | `0.25` | Minimum validation exploration rate required before RL. |
+| `--stage1-min-goal-recall` | `float` | `0.10` | Minimum validation goal-fact recall required before RL. |
+| `--stage1-min-goal-success-rate` | `float` | `0.05` | Minimum validation goal-success rate required before RL. |
 | `--evaluate` | `flag` | `False` | Run evaluation after training. |
 
