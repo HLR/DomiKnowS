@@ -84,9 +84,34 @@ def test_then_requires_action_order():
         "(exists x0. (GRAB(x0))) then exists x0. (READ(x0))",
         ["grab", "novel_1000", "read", "novel_1000", EOS_TOKEN],
     )
-    assert evaluate_goal_satisfaction(example["target_action_tokens"], example)["is_success"] == 1.0
+    ordered = evaluate_goal_satisfaction(
+        example["target_action_tokens"], example, reward_mode="dense"
+    )
+    assert ordered["is_success"] == 1.0
+    assert ordered["temporal_progress"] == 1.0
+    assert ordered["task_reward_score"] == 1.0
     reversed_plan = ["read", "novel_1000", "grab", "novel_1000", EOS_TOKEN]
-    assert evaluate_goal_satisfaction(reversed_plan, example)["is_success"] == 0.0
+    reversed_result = evaluate_goal_satisfaction(
+        reversed_plan, example, reward_mode="dense"
+    )
+    assert reversed_result["is_success"] == 0.0
+    assert reversed_result["recall"] == 1.0
+    assert reversed_result["temporal_progress"] == 0.5
+    assert reversed_result["task_reward_score"] == 0.5
+
+
+def test_dense_temporal_reward_credits_ordered_prefix_progress():
+    example = _sample(
+        "(exists x0. (GRAB(x0))) then exists x0. (READ(x0))",
+        ["grab", "novel_1000", "read", "novel_1000", EOS_TOKEN],
+    )
+    prefix = evaluate_goal_satisfaction(
+        ["grab", "novel_1000", EOS_TOKEN], example, reward_mode="dense"
+    )
+    assert prefix["is_success"] == 0.0
+    assert prefix["recall"] == 0.5
+    assert prefix["temporal_progress"] == 0.5
+    assert prefix["task_reward_score"] == 0.25
 
 
 def test_reward_closure_tensor_contract():
@@ -118,6 +143,7 @@ def run_tests():
         test_objectless_actions_do_not_shift_following_actions,
         test_virtualhome_putback_means_ontop,
         test_then_requires_action_order,
+        test_dense_temporal_reward_credits_ordered_prefix_progress,
         test_reward_closure_tensor_contract,
         test_dummy_reference_plans_pass_and_empty_plans_fail,
     ]

@@ -80,7 +80,7 @@ def test_rl_rollout_conditions_on_its_sampled_prefix():
         max_steps=3,
         num_samples=8,
     )
-    trajectories, logprob = (
+    trajectories, logprob, proposal_logprob = (
         AutoregressiveSequenceReinforcementProgram._sample_trajectories(program, "task")
     )
 
@@ -93,6 +93,9 @@ def test_rl_rollout_conditions_on_its_sampled_prefix():
     assert all(trajectory[-1] == 2 for trajectory in trajectories)
     assert logprob.shape == torch.Size([8])
     assert logprob.requires_grad
+    assert proposal_logprob.shape == torch.Size([8])
+    assert not proposal_logprob.requires_grad
+    assert torch.isfinite(proposal_logprob).all()
 
 
 def test_rl_supervised_anchor_is_differentiable():
@@ -140,7 +143,7 @@ def test_rl_program_is_constructed_with_shared_supervised_head():
     assert not solver_bundle.world.has_constraints
     assert rl_bundle.world.has_constraints
     assert rl_bundle.reward_mode == "dense"
-    assert rl.supervised_weight == 0.1
+    assert rl.supervised_weight == 0.5
 
 
 def test_two_stage_handoff_reuses_exact_graph_bundle_head_and_dfa():
@@ -239,7 +242,7 @@ def test_rl_rollout_and_rescore_share_the_graph_compiled_policy():
         num_samples=4,
         policy_dfa=policy,
     )
-    trajectories, logprob = (
+    trajectories, logprob, proposal_logprob = (
         AutoregressiveSequenceReinforcementProgram._sample_trajectories(program, "task")
     )
     expected = [
@@ -251,6 +254,7 @@ def test_rl_rollout_and_rescore_share_the_graph_compiled_policy():
     assert all(policy.accepts(trajectory) for trajectory in trajectories)
     assert torch.isfinite(logprob).all()
     assert logprob.requires_grad
+    assert torch.allclose(logprob.detach(), proposal_logprob, atol=1e-6)
 
 
 def test_stage1_gate_requires_positive_task_reward():

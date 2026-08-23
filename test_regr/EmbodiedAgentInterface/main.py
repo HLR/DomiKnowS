@@ -125,10 +125,10 @@ def build_program(
     shared_llm_tokenizer=None,
     enforce_action_object=True,
     enforce_action_object_constraints=True,
-    rl_estimator="importance_weighted",
+    rl_estimator="reinforce",
     rl_num_samples=8,
     rl_reward_mode="dense",
-    rl_supervised_weight=0.1,
+    rl_supervised_weight=0.5,
     rl_constraint_weight=0.25,
     rl_constraint_aggregate="mean",
     world_constraint_builders=None,
@@ -628,6 +628,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             "dfa_checked": bool(use_dfa),
             "gt_state_success": 0.0,
             "gt_state_recall": 0.0,
+            "temporal_progress": 0.0,
             "world_constraint_score": None,
             "world_constraint_applicable": 0.0,
             "world_constraint_declared": 0.0,
@@ -648,6 +649,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
     dfa_valid = 0
     gt_state_success = 0
     gt_state_recall_total = 0.0
+    temporal_progress_total = 0.0
     world_constraint_total = 0.0
     world_constraint_count = 0
     world_constraint_applicable_total = 0
@@ -694,6 +696,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         )
         gt_state_success += int(eval_res["is_success"] == 1.0)
         gt_state_recall_total += eval_res["recall"]
+        temporal_progress_total += eval_res.get("temporal_progress", 1.0)
         if eval_res["world_constraint_score"] is not None:
             world_constraint_total += eval_res["world_constraint_score"]
             world_constraint_count += 1
@@ -710,7 +713,11 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
             print(f"Predicted sequence: {labels_to_actions(pred_padded, bundle.vocabulary)}")
             print(f"Gold State:         {sorted(eval_res['gold_state'])}")
             print(f"Predicted State:    {sorted(eval_res['predicted_state'])}")
-            print(f"Goal Success (0/1): {eval_res['is_success']} (recall={eval_res['recall']:.2f})")
+            print(
+                f"Goal Success (0/1): {eval_res['is_success']} "
+                f"(recall={eval_res['recall']:.2f}, "
+                f"temporal_progress={eval_res.get('temporal_progress', 1.0):.2f})"
+            )
 
     if autoregressive_head is not None:
         autoregressive_head.train(head_was_training)
@@ -722,6 +729,7 @@ def sequence_score(program, bundle, examples, max_steps, device="cpu", use_dfa=F
         "dfa_checked": dfa is not None,
         "gt_state_success": gt_state_success / len(eval_examples),
         "gt_state_recall": gt_state_recall_total / len(eval_examples),
+        "temporal_progress": temporal_progress_total / len(eval_examples),
         "world_constraint_score": (
             world_constraint_total / world_constraint_count
             if world_constraint_count else None
@@ -815,6 +823,7 @@ def print_score(title, score, program_type=None):
         f"dfa_valid={dfa_value} "
         f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
         f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f} "
+        f"temporal_progress={score.get('temporal_progress', 1.0):.3f} "
         f"world_constraint_score={constraint_value} "
         f"world_constraints={score.get('world_constraint_applicable', 0.0):.1f}/"
         f"{score.get('world_constraint_declared', 0.0):.1f} "
@@ -859,10 +868,10 @@ def build_trainable_program(args, examples, device, shared_autoregressive_head=N
         shared_llm_tokenizer=getattr(args, "_shared_llm_tokenizer", None),
         enforce_action_object=getattr(args, "_enforce_action_object", True),
         enforce_action_object_constraints=getattr(args, "_enforce_action_object_constraints", True),
-        rl_estimator=getattr(args, "rl_estimator", "importance_weighted"),
+        rl_estimator=getattr(args, "rl_estimator", "reinforce"),
         rl_num_samples=getattr(args, "rl_num_samples", 8),
         rl_reward_mode=getattr(args, "rl_reward_mode", "dense"),
-        rl_supervised_weight=getattr(args, "rl_supervised_weight", 0.1),
+        rl_supervised_weight=getattr(args, "rl_supervised_weight", 0.5),
         rl_constraint_weight=getattr(args, "rl_constraint_weight", 0.25),
         rl_constraint_aggregate=getattr(args, "rl_constraint_aggregate", "mean"),
         world_constraint_builders=world_constraint_builders,
@@ -1138,7 +1147,9 @@ def train_two_stage(args, train, dev, examples, device):
     )
 
     rl_epochs = getattr(args, "rl_epochs", args.epochs)
-    rl_lr = getattr(args, "rl_lr", args.lr * 0.1)
+    rl_lr = getattr(args, "rl_lr", None)
+    if rl_lr is None:
+        rl_lr = 1e-5 if args.baseline_model == "causal-lm" else 1e-4
     rl_kwargs = {
         "device": device,
         "train_epoch_num": rl_epochs,
@@ -1325,15 +1336,15 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=None, help="Stage 1 learning rate. Defaults to 1e-4 for causal-lm and 1e-3 for smaller baselines.")
     parser.add_argument("--program", choices=["solver", "primal-dual", "reinforcement"], default="solver", help="DomiKnowS training program to use for the autoregressive baseline.")
     parser.add_argument("--two-stage", action="store_true", help="Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning.")
-    parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="importance_weighted", help="Estimator for ReinforcementProgram.")
-    parser.add_argument("--rl-num-samples", type=int, default=8, help="Number of decodings sampled per training step in ReinforcementProgram.")
-    parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="dense", help="Task reward used by RL; dense goal-fact recall provides the default learning signal.")
-    parser.add_argument("--rl-supervised-weight", type=float, default=0.1, help="Teacher-forced Stage 1 anchor loss retained during RL to prevent policy collapse; set 0 to disable.")
+    parser.add_argument("--rl-estimator", choices=["importance_weighted", "reinforce"], default="reinforce", help="Stage 2 policy-gradient estimator. REINFORCE is the on-policy default; importance_weighted uses recorded detached proposal probabilities.")
+    parser.add_argument("--rl-num-samples", type=int, default=8, help="Number of decodings sampled per Stage 2 step (minimum 4; default 8).")
+    parser.add_argument("--rl-reward-mode", choices=["binary", "dense"], default="dense", help="Task reward used by RL; dense final-state recall is multiplied by ordered temporal-prefix progress.")
+    parser.add_argument("--rl-supervised-weight", type=float, default=0.5, help="Teacher-forced Stage 1 anchor retained during RL; the stronger default limits policy drift. Set 0 to disable.")
     parser.add_argument("--rl-constraint-weight", type=float, default=0.25, help="Maximum task-reward discount for world-constraint violations; constraints cannot reward a zero-task plan.")
     parser.add_argument("--rl-constraint-aggregate", choices=["mean", "min", "prod"], default="mean", help="Aggregation across declared world constraints.")
     parser.add_argument("--no-world-constraints", action="store_true", help="Disable the default world and transition constraints.")
     parser.add_argument("--rl-epochs", type=int, default=3, help="Epochs for Stage 2 RL fine-tuning.")
-    parser.add_argument("--rl-lr", type=float, default=1e-4, help="Learning rate for Stage 2 RL fine-tuning.")
+    parser.add_argument("--rl-lr", type=float, default=None, help="Stage 2 learning rate. Defaults to 1e-5 for causal-lm/LoRA and 1e-4 for smaller baselines.")
     parser.add_argument("--baseline-model", choices=["tiny-transformer", "bert-gru", "causal-lm"], default="tiny-transformer", help="Autoregressive baseline architecture. tiny-transformer is small and fully trainable; causal-lm uses a frozen small LLM backbone.")
     parser.add_argument("--llm-backbone-path", default="Qwen/Qwen2.5-1.5B-Instruct", help="Causal LM backbone for --baseline-model causal-lm.")
     parser.add_argument("--causal-label-head", choices=["pretrained-adapter", "linear"], default="pretrained-adapter", help="Use Qwen's native output embeddings or the legacy random linear label classifier.")
@@ -1375,7 +1386,13 @@ def parse_args():
     parser.add_argument("--max-new-tokens", type=int, default=128, help="Maximum generated plan tokens for --use-llm.")
     parser.add_argument("--num-generations", type=int, default=300, help="Number of examples to decode/show.")
     parser.add_argument("--single-run", action="store_true", help="Train only --program on --dataset instead of the BEHAVIOR/VirtualHome normal+PMD suite.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if (args.two_stage or args.program == "reinforcement") and args.rl_num_samples < 4:
+        parser.error(
+            "--rl-num-samples must be at least 4 for Stage 2; two samples do "
+            "not provide a stable within-task policy-gradient estimate"
+        )
+    return args
 
 
 def main():
@@ -1383,6 +1400,9 @@ def main():
     if args.lr is None:
         args.lr = 1e-4 if args.baseline_model == "causal-lm" else 1e-3
         print(f"Using architecture-aware Stage 1 learning rate: {args.lr:g}")
+    if args.rl_lr is None:
+        args.rl_lr = 1e-5 if args.baseline_model == "causal-lm" else 1e-4
+        print(f"Using architecture-aware Stage 2 learning rate: {args.rl_lr:g}")
     if args.use_dfa:
         print("Warning: --use-dfa is deprecated; using --generation-constraints always.")
         args.generation_constraints = "always"

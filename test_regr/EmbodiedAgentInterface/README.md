@@ -21,7 +21,7 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
   - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss. Every epoch reports semantic exploration metrics and decoded examples. The best semantic epoch is retained as a compact trainable-parameter snapshot, restored after training, and saved to `<model-stem>.stage1.pth`; a later collapsed epoch cannot replace it.
-  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using dense goal-fact recall by default, world constraints as a discount for violations, and a small teacher-forced anchor loss to prevent catastrophic forgetting. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. RL starts only when the restored Stage 1 checkpoint meets the configured positive-reward, recall, and goal-success thresholds; otherwise the command retains Stage 1 and exits with status 2.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using final-state recall multiplied by ordered SimpleTL prefix progress, world constraints as a discount for violations, and a teacher-forced Stage 1 anchor to prevent catastrophic forgetting. The default is on-policy REINFORCE with 8 rollouts; the optional importance-weighted estimator records and detaches the rollout policy probability before applying proposal correction. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. RL starts only when the restored Stage 1 checkpoint meets the configured positive-reward, recall, and goal-success thresholds; otherwise the command retains Stage 1 and exits with status 2.
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
@@ -214,9 +214,11 @@ When training or running inference, you may encounter different model artifacts 
 | `--epochs` | `int` | `5` | Number of epochs for Stage 1 / supervised training. |
 | `--rl-epochs` | `int` | `3` | Number of epochs for Stage 2 Reinforcement Learning. |
 | `--lr` | `float` | architecture-aware | Stage 1 learning rate: `1e-4` for causal LM/LoRA and `1e-3` for smaller baselines unless explicitly set. |
-| `--rl-lr` | `float` | `1e-4` | Learning rate for Stage 2 policy gradient optimization. |
-| `--rl-reward-mode` | `str` | `"dense"` | Task score used by RL: dense goal-fact recall by default, or binary goal success. |
-| `--rl-supervised-weight` | `float` | `0.1` | Weight of the teacher-forced Stage 1 anchor loss retained during RL. |
+| `--rl-lr` | `float` | architecture-aware | Stage 2 learning rate: `1e-5` for causal LM/LoRA and `1e-4` for smaller baselines unless explicitly set. |
+| `--rl-estimator` | `str` | `"reinforce"` | On-policy REINFORCE, or proposal-corrected `importance_weighted`. |
+| `--rl-num-samples` | `int` | `8` | Rollouts per Stage 2 item; Stage 2 requires at least 4. |
+| `--rl-reward-mode` | `str` | `"dense"` | Dense final-state recall times ordered temporal-prefix progress, or binary goal success. |
+| `--rl-supervised-weight` | `float` | `0.5` | Weight of the teacher-forced Stage 1 anchor loss retained during RL. |
 | `--rl-constraint-weight` | `float` | `0.25` | Maximum task-reward discount for world-constraint violations. |
 | `--rl-constraint-aggregate` | `str` | `"mean"` | Constraint aggregation: `mean`, `min`, or `prod`. |
 | `--no-world-constraints` | `flag` | `False` | Disable the default world and transition constraints and bypass reward blending. |

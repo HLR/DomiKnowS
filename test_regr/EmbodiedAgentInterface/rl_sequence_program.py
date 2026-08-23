@@ -27,7 +27,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         autoregressive_head,
         eos_label,
         max_steps,
-        supervised_weight=0.1,
+        supervised_weight=0.5,
         policy_dfa=None,
         policy_dfa_factory=None,
         **kwargs,
@@ -76,6 +76,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
             device=device,
         )
         finished = torch.zeros(sample_count, dtype=torch.bool, device=device)
+        proposal_logprob = torch.zeros(sample_count, dtype=torch.float32, device=device)
         trajectories = [[] for _ in range(sample_count)]
         if policy_dfa is None:
             policy_dfa = getattr(self, "policy_dfa", None)
@@ -103,6 +104,11 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                     distribution = torch.distributions.Categorical(logits=logits)
                     sampled = distribution.sample()
                     active = ~finished
+                    proposal_logprob = proposal_logprob + torch.where(
+                        active,
+                        distribution.log_prob(sampled),
+                        torch.zeros_like(proposal_logprob),
+                    )
                     sampled = torch.where(
                         active, sampled, torch.full_like(sampled, self.eos_label)
                     )
@@ -137,7 +143,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         finally:
             self.autoregressive_head.train(was_training)
 
-        return trajectories, trajectory_logprob
+        return trajectories, trajectory_logprob, proposal_logprob.detach()
 
     def _mask_policy_logits(
         self, logits, dfa_states, step, finished=None, policy_dfa=None
@@ -256,7 +262,7 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         factory = getattr(self, "policy_dfa_factory", None)
         if factory is not None:
             policy_dfa = factory(data_item)
-        trajectories, logprob = self._sample_trajectories(
+        trajectories, logprob, proposal_logprob = self._sample_trajectories(
             data_item.get("text", ""), policy_dfa=policy_dfa
         )
         reward_values = []
@@ -271,7 +277,9 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         rewards = torch.tensor(reward_values, dtype=logprob.dtype, device=logprob.device)
 
         if self.estimator == "importance_weighted":
-            loss = importance_weighted_loss(logprob, rewards)
+            loss = importance_weighted_loss(
+                logprob, rewards, proposal_logprob=proposal_logprob
+            )
         else:
             loss = reinforce_loss(logprob, rewards, baseline=self.baseline)
         if self.supervised_weight:

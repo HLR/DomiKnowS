@@ -116,13 +116,17 @@ Let `lp_s` be the log-probability of decoding `s` and `r_s ≥ 0` its reward
 ### `estimator="importance_weighted"` — `importance_weighted_loss`
 
 ```
-loss = -( logsumexp_s( lp_s + log r_s ) - logsumexp_s( lp_s ) )
+log_weight_s = target_lp_s - stop_gradient(proposal_lp_s)
+loss = -( logsumexp_s( log_weight_s + log r_s )
+          - logsumexp_s( log_weight_s ) )
 ```
 
-This is the negative log of the reward-weighted probability mass over the
-total sampled mass; minimizing it raises the probability of high-reward
-decodings. Verified by a parity unit test in
-`test_regr/Reinforcement/test_sampling.py`.
+Callers that sample from a proposal policy should pass the proposal
+log-probabilities. This removes proposal-frequency bias; for on-policy samples
+the forward weights are equal while the target-policy gradient remains. If no
+proposal probabilities are supplied, the helper retains the historical
+sampled-mass objective for compatibility with generic graph samplers.
+Both paths are verified in `test_regr/Reinforcement/test_sampling.py`.
 
 ### `estimator="reinforce"` — `reinforce_loss`
 

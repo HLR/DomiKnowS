@@ -870,6 +870,57 @@ def _contains_then(node: Any) -> bool:
     return False
 
 
+def _temporal_progress(
+    node: Any,
+    states: Sequence[Set[Fact]],
+    actions: Sequence[_ActionEvent],
+    context: _EvalContext,
+    start: int = 0,
+    variables: dict[str, str] | None = None,
+) -> float:
+    """Return ordered SimpleTL progress in ``[0, 1]``.
+
+    A ``then`` expression receives credit for its longest satisfied prefix,
+    never merely for producing the same final facts in the wrong order.  The
+    recursive cases make the metric well-defined for conjunctions and
+    disjunctions containing temporal subexpressions.
+    """
+    variables = variables or {}
+    if isinstance(node, _Then):
+        if not node.args:
+            return 1.0
+        cursor = start
+        completed = 0
+        for arg in node.args:
+            found = _first_satisfaction(
+                arg, states, actions, context, cursor, variables
+            )
+            if found is None:
+                break
+            completed += 1
+            cursor = found + 1
+        return completed / len(node.args)
+    if isinstance(node, _And):
+        if not node.args:
+            return 1.0
+        return sum(
+            _temporal_progress(arg, states, actions, context, start, variables)
+            for arg in node.args
+        ) / len(node.args)
+    if isinstance(node, _Or):
+        return max(
+            (
+                _temporal_progress(arg, states, actions, context, start, variables)
+                for arg in node.args
+            ),
+            default=0.0,
+        )
+    return float(
+        _first_satisfaction(node, states, actions, context, start, variables)
+        is not None
+    )
+
+
 def state_recall(predicted_state: Set[Fact], gold_state: Set[Fact]) -> float:
     """Fraction of required facts matched with strict entity correlation."""
     if not gold_state:
@@ -925,19 +976,33 @@ def _evaluate_goal_satisfaction(
     predicted_state.update(("action", event.name, *event.args) for event in events)
     recall = state_recall(predicted_state, gold_state)
     parse_error = None
+    temporal_progress = 1.0
     if ast is None:
         is_success = recall >= 1.0 and bool(gold_state)
     else:
         context = _EvalContext(prepared.entity_universe, prepared.types)
         try:
             ast_success = _first_satisfaction(ast, states, events, context) is not None
+            has_temporal_order = _contains_then(ast)
+            if has_temporal_order:
+                temporal_progress = _temporal_progress(
+                    ast, states, events, context
+                )
             # Grounded fact recall is the authoritative final-condition check.
             # Temporal goals additionally require the ordered SimpleTL result.
-            is_success = ast_success if _contains_then(ast) else recall >= 1.0 and bool(gold_state)
+            is_success = ast_success if has_temporal_order else recall >= 1.0 and bool(gold_state)
         except (ValueError, TypeError) as exc:
             parse_error = str(exc)
             is_success = recall >= 1.0 and bool(gold_state)
-    task_reward = recall if reward_mode == "dense" else (1.0 if is_success else 0.0)
+            temporal_progress = 0.0 if _contains_then(ast) else 1.0
+    if reward_mode == "dense":
+        # Final-state recall alone cannot distinguish a correct temporal plan
+        # from the same actions in reverse order.  Multiplication makes both
+        # goal grounding and ordered prefix progress necessary while retaining
+        # a dense signal for partially completed plans.
+        task_reward = recall * temporal_progress
+    else:
+        task_reward = 1.0 if is_success else 0.0
     constraint_evaluation = None
     if world_bundle is not None and world_bundle.has_constraints:
         if world_bundle.has_custom_constraints:
@@ -968,6 +1033,7 @@ def _evaluate_goal_satisfaction(
     return {
         "is_success": 1.0 if is_success else 0.0,
         "recall": recall,
+        "temporal_progress": temporal_progress,
         "predicted_state": predicted_state,
         "gold_state": gold_state,
         "initial_state": initial_state,
@@ -1010,7 +1076,7 @@ def eai_goal_reward_function(
     constraint_aggregate: str = "mean",
     **kwargs,
 ) -> torch.Tensor:
-    """DomiKnowS-compatible binary goal-success or dense-recall reward."""
+    """DomiKnowS-compatible binary or temporal-progress-aware dense reward."""
     if data_item is None:
         return torch.tensor([0.0], dtype=torch.float32)
     result = evaluate_goal_satisfaction(

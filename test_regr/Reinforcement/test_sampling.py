@@ -36,6 +36,29 @@ def test_importance_weighted_matches_reference_for_binary_reward():
     assert logits.grad is not None and torch.isfinite(logits.grad).all()
 
 
+def test_importance_weighted_corrects_for_on_policy_proposal():
+    """On-policy samples must not receive a second length/probability bias."""
+    logprob = torch.tensor([-8.0, -1.0], requires_grad=True)
+    proposal_logprob = logprob.detach().clone()
+    rewards = torch.tensor([1.0, 0.25])
+
+    loss = importance_weighted_loss(
+        logprob, rewards, proposal_logprob=proposal_logprob
+    )
+    log_weight = logprob - proposal_logprob
+    expected = -(
+        torch.logsumexp(log_weight + torch.log(rewards), dim=0)
+        - torch.logsumexp(log_weight, dim=0)
+    )
+    assert torch.allclose(loss, expected)
+
+    loss.backward()
+    # Gradient descent increases the high-reward sample and decreases the
+    # low-reward sample, regardless of their very different proposal masses.
+    assert logprob.grad[0] < 0
+    assert logprob.grad[1] > 0
+
+
 def test_reinforce_loss_is_finite_and_differentiable():
     torch.manual_seed(0)
     logits = torch.randn(3, 3, requires_grad=True)

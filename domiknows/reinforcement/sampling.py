@@ -82,20 +82,35 @@ def _as_reward_tensor(rewards, reference):
     return rewards.to(dtype=reference.dtype, device=reference.device).reshape(-1)
 
 
-def importance_weighted_loss(logprob, rewards, eps=1e-12):
+def importance_weighted_loss(logprob, rewards, proposal_logprob=None, eps=1e-12):
     """
-    Computes ``-(logsumexp(logprob + log reward) - logsumexp(logprob))``, i.e. the
-    negative log of the reward-weighted probability mass divided by the total
-    sampled probability mass.  Minimizing it raises the probability of
-    high-reward decodings.
+    Self-normalized importance-weighted reward loss.
+
+    When samples were drawn from a proposal distribution ``q``, pass their
+    detached proposal log-probabilities.  The loss then uses
+    ``log w = log p - stop_gradient(log q)`` and is a valid proposal-corrected
+    estimator.  In particular, on-policy samples have equal forward weights
+    while retaining the target-policy gradient.
+
+    Omitting ``proposal_logprob`` preserves the historical sampled-mass
+    objective for generic callers that do not record a proposal distribution.
 
     :param logprob: ``[num_samples]`` log-probabilities from :func:`decoding_logprob`.
     :param rewards: ``[num_samples]`` non-negative rewards (tensor or list).
+    :param proposal_logprob: optional ``[num_samples]`` log-probabilities under
+        the distribution that generated the samples.
     """
     rewards = _as_reward_tensor(rewards, logprob).clamp_min(0)
+    if proposal_logprob is None:
+        log_weight = logprob
+    else:
+        proposal_logprob = _as_reward_tensor(proposal_logprob, logprob).detach()
+        if proposal_logprob.shape != logprob.reshape(-1).shape:
+            raise ValueError("proposal_logprob must have the same shape as logprob")
+        log_weight = logprob.reshape(-1) - proposal_logprob
     log_reward = torch.log(rewards + eps)
-    numerator = torch.logsumexp(logprob + log_reward, dim=0)
-    denominator = torch.logsumexp(logprob, dim=0)
+    numerator = torch.logsumexp(log_weight + log_reward, dim=0)
+    denominator = torch.logsumexp(log_weight, dim=0)
     return -(numerator - denominator)
 
 
