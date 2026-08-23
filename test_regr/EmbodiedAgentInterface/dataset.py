@@ -120,6 +120,19 @@ def task_semantic_action_permissions(row):
     return tuple(permitted)
 
 
+def causal_prompt_context(row, task_entity_types=()):
+    """Format EAI fields as an explicit Qwen user-message payload."""
+    fields = (
+        ("Task", row.get("task_name", "")),
+        ("Instruction", row.get("natural_language_description", "")),
+        ("SimpleTL goal", row.get("tl_goal", "")),
+    )
+    lines = [f"{name}: {str(value).strip()}" for name, value in fields if str(value).strip()]
+    if task_entity_types:
+        lines.append("Available entity types: " + ", ".join(task_entity_types))
+    return "\n".join(lines)
+
+
 def parse_action_trajectory(value):
     """Parse the EAI action_trajectory field into a Python list."""
     if isinstance(value, list):
@@ -261,6 +274,7 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
     if task_entity_types:
         text_parts.append("Available entity types: " + ", ".join(task_entity_types))
     text = " ".join(str(part) for part in text_parts if part)
+    causal_text = causal_prompt_context(row, task_entity_types)
     task_id = row.get("task_id") or row.get("scene_id") or row.get("task_name") or "task"
     action_tokens = set(action_tokens_from_row(row))
     action_requires_object_tokens = set(action_tokens_requiring_object_from_row(row))
@@ -277,6 +291,7 @@ def row_to_example(row, device="cpu", max_steps=8, vocab=None):
         "generation_entity_types": generation_entity_types,
         "semantic_action_permissions": semantic_action_permissions,
         "text": text,
+        "causal_prompt_text": causal_text,
         "first_action": label,
         "target_action_tokens": sequence_labels,
         "target_action_labels": torch.LongTensor(sequence_ids).to(device),

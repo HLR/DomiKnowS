@@ -20,6 +20,7 @@ sys.path.append(str(SCRIPT_DIR.parents[1]))
 from dataset import ACTION_VOCAB, EOS_TOKEN, dummy_dataset, load_eai_dataset, split_train_dev
 from modules import (
     AutoregressiveActionObjectGenerator,
+    CAUSAL_PROMPT_FORMAT,
     CausalLMActionObjectGenerator,
     EOSMaskedCrossEntropyLoss,
     SmallLLMPlanGenerator,
@@ -196,6 +197,7 @@ def build_program(
             "vocabulary": list(generation_bundle.vocabulary.labels),
             "label_head": causal_label_head if baseline_model == "causal-lm" else "native",
             "label_adapter_rank": int(label_adapter_rank) if baseline_model == "causal-lm" else 0,
+            "prompt_format": CAUSAL_PROMPT_FORMAT if baseline_model == "causal-lm" else "native",
         },
     )
     if program_type not in {"solver", "primal-dual", "reinforcement"}:
@@ -212,6 +214,7 @@ def build_program(
     generated_token = bundle.generated_token
 
     text["instruction_text"] = ReaderSensor(keyword="text")
+    text["causal_prompt_text"] = ReaderSensor(keyword="causal_prompt_text")
     text["tl_goal"] = ReaderSensor(keyword="tl_goal")
     token["position"] = ReaderSensor(keyword="token_positions")
     token[bundle.contains] = EdgeSensor(
@@ -297,9 +300,14 @@ def build_program(
             autoregressive_head = autoregressive_head.to(device)
     else:
         raise ValueError(f"Unsupported baseline_model={baseline_model!r}")
+    prompt_sensor = (
+        text["causal_prompt_text"]
+        if baseline_model == "causal-lm"
+        else text["instruction_text"]
+    )
     token[generated_token] = ModuleLearner(
         bundle.contains,
-        text["instruction_text"],
+        prompt_sensor,
         "target_action_label",
         module=autoregressive_head,
         device=device,
@@ -586,7 +594,7 @@ def dfa_constrained_sequence(program, bundle, sample, max_steps):
         bundle.vocabulary,
         dfa,
         max_new_tokens=max_steps,
-        next_label_kwargs={"text": sample.get("text", "")},
+        next_label_kwargs={"text": prompt_text_for_head(program.autoregressive_head, sample)},
     )
     return result.labels
 
@@ -599,7 +607,7 @@ def greedy_sequence(program, bundle, sample, max_steps):
     for _step in range(max_steps):
         logits = program.autoregressive_head.next_label_logits(
             prefix,
-            text=sample.get("text", ""),
+            text=prompt_text_for_head(program.autoregressive_head, sample),
         )
         label = int(torch.argmax(logits.detach(), dim=-1).item())
         labels.append(label)
@@ -607,6 +615,12 @@ def greedy_sequence(program, bundle, sample, max_steps):
         if label == bundle.vocabulary.eos_label:
             break
     return labels
+
+
+def prompt_text_for_head(head, sample):
+    """Select the input field expected by an autoregressive generation head."""
+    key = getattr(head, "prompt_key", "text")
+    return sample.get(key, sample.get("text", ""))
 
 
 def labels_through_first_eos(labels, eos_label):
@@ -765,6 +779,7 @@ def _checkpoint_metadata(args, bundle, stage, epoch):
         "vocabulary": list(head.labels),
         "label_head": label_head if baseline_model == "causal-lm" else "native",
         "label_adapter_rank": adapter_rank if baseline_model == "causal-lm" else 0,
+        "prompt_format": CAUSAL_PROMPT_FORMAT if baseline_model == "causal-lm" else "native",
         "stage": str(stage),
         "epoch": int(epoch),
     }
@@ -802,7 +817,13 @@ def load_eai_checkpoint(program, bundle, args, path, map_location=None):
         return None
     expected = _checkpoint_metadata(args, bundle, stage="load", epoch=0)
     actual = checkpoint.get("metadata", {})
-    for key in ("backbone", "vocabulary", "label_head", "label_adapter_rank"):
+    for key in (
+        "backbone",
+        "vocabulary",
+        "label_head",
+        "label_adapter_rank",
+        "prompt_format",
+    ):
         if actual.get(key) != expected.get(key):
             raise ValueError(
                 f"Incompatible EAI checkpoint {key}: saved={actual.get(key)!r}, "

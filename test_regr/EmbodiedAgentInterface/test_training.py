@@ -23,8 +23,12 @@ from main import (
     _capture_trainable_parameters,
     _restore_trainable_parameters,
 )
-from dataset import dummy_dataset
-from modules import EOSMaskedCrossEntropyLoss, PretrainedLabelAdapter
+from dataset import causal_prompt_context, dummy_dataset
+from modules import (
+    CausalLMActionObjectGenerator,
+    EOSMaskedCrossEntropyLoss,
+    PretrainedLabelAdapter,
+)
 from domiknows.generation import (
     TokenVocabulary,
     after_token_allowed_map_dfa,
@@ -58,9 +62,11 @@ class _PrefixRecordingHead(torch.nn.Module):
         super().__init__()
         self.bias = torch.nn.Parameter(torch.zeros(3))
         self.calls = []
+        self.texts = []
         self.grad_enabled = []
 
-    def sequence_logits(self, _text, prefixes):
+    def sequence_logits(self, text, prefixes):
+        self.texts.append(text)
         self.calls.append(prefixes.detach().clone())
         self.grad_enabled.append(torch.is_grad_enabled())
         batch, length = prefixes.shape
@@ -158,6 +164,21 @@ def test_rl_supervised_anchor_is_differentiable():
     assert head.bias.grad is not None
 
 
+def test_rl_uses_the_autoregressive_heads_declared_prompt_field():
+    head = _PrefixRecordingHead()
+    head.prompt_key = "causal_prompt_text"
+    program = SimpleNamespace(autoregressive_head=head, eos_label=2)
+    AutoregressiveSequenceReinforcementProgram.supervised_anchor_loss(
+        program,
+        {
+            "text": "legacy flat prompt",
+            "causal_prompt_text": "Task: structured Qwen prompt",
+            "target_action_labels": torch.tensor([0, 1, 2]),
+        },
+    )
+    assert head.texts == ["Task: structured Qwen prompt"]
+
+
 def test_rl_program_is_constructed_with_shared_supervised_head():
     examples = dummy_dataset(device="cpu", max_steps=8)
     vocabulary = examples[0]["generation_vocab"]
@@ -253,6 +274,59 @@ def test_pretrained_label_adapter_uses_native_label_vectors_and_trains_residual(
     assert adapter.bias.grad is not None
     assert adapter.log_temperature.grad is not None
     assert adapter.residual_up.weight.grad is not None
+
+
+class _ChatPrefixTokenizer(_FakeTokenizer):
+    chat_template = "fake-qwen-template"
+
+    def apply_chat_template(self, messages, tokenize, add_generation_prompt, **kwargs):
+        assert add_generation_prompt
+        assert kwargs.get("enable_thinking") is False
+        if tokenize:
+            return [7, 8]
+        return f"<user>{messages[0]['content']}<assistant>"
+
+
+def test_causal_head_uses_identical_chat_prefix_ids_for_training_and_rollout():
+    vocabulary = TokenVocabulary(["<eos>", "alpha", "beta"], eos_token="<eos>")
+    head = object.__new__(CausalLMActionObjectGenerator)
+    torch.nn.Module.__init__(head)
+    head.tokenizer = _ChatPrefixTokenizer()
+    head.vocabulary = vocabulary
+    head.eos_label = vocabulary.eos_label
+    head.max_length = 64
+    head.device_name = "cpu"
+    head.model = torch.nn.Linear(1, 1)
+    head.output = torch.nn.Linear(1, vocabulary.label_count)
+
+    prefix = [vocabulary.eos_label, vocabulary.label_for_token("alpha")]
+    rollout_encoding = head._prompt_encoding("Task: synthetic", prefix)
+    row = torch.tensor(prefix)
+    training_ids, training_boundaries = head._teacher_forced_input(
+        "Task: synthetic", row, padding_start=2
+    )
+
+    assert rollout_encoding.used_chat_template
+    assert training_ids.squeeze(0).tolist() == list(rollout_encoding.input_ids)
+    assert training_boundaries.tolist() == list(rollout_encoding.boundary_positions)
+    assert "Predict an embodied-agent action plan" in rollout_encoding.rendered_text
+
+
+def test_causal_prompt_context_has_explicit_eai_field_delimiters():
+    prompt = causal_prompt_context(
+        {
+            "task_name": "Find and read a book",
+            "natural_language_description": "Find the book and read it.",
+            "tl_goal": "GRAB(x) then READ(x)",
+        },
+        ("novel",),
+    )
+    assert prompt.splitlines() == [
+        "Task: Find and read a book",
+        "Instruction: Find the book and read it.",
+        "SimpleTL goal: GRAB(x) then READ(x)",
+        "Available entity types: novel",
+    ]
 
 
 class _UniformPolicyHead(torch.nn.Module):
@@ -365,6 +439,7 @@ def test_eai_checkpoint_metadata_roundtrip_and_compatibility_rejection():
         metadata = load_eai_checkpoint(target, bundle, args, path, map_location="cpu")
         assert metadata["stage"] == "stage1"
         assert metadata["epoch"] == 5
+        assert metadata["prompt_format"] == "qwen-chat-label-prefix-v1"
         incompatible = SimpleNamespace(**vars(args))
         incompatible.label_adapter_rank = 32
         try:
@@ -373,6 +448,15 @@ def test_eai_checkpoint_metadata_roundtrip_and_compatibility_rejection():
             assert "label_adapter_rank" in str(exc)
         else:
             raise AssertionError("incompatible checkpoint was accepted")
+        old_prompt_checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+        old_prompt_checkpoint["metadata"].pop("prompt_format")
+        torch.save(old_prompt_checkpoint, path)
+        try:
+            load_eai_checkpoint(target, bundle, args, path, map_location="cpu")
+        except ValueError as exc:
+            assert "prompt_format" in str(exc)
+        else:
+            raise AssertionError("checkpoint with old prompt semantics was accepted")
 
 
 def run_tests():
@@ -382,9 +466,12 @@ def run_tests():
         test_rl_rollout_conditions_on_its_sampled_prefix,
         test_rl_training_rescores_one_microbatch_before_each_backward,
         test_rl_supervised_anchor_is_differentiable,
+        test_rl_uses_the_autoregressive_heads_declared_prompt_field,
         test_rl_program_is_constructed_with_shared_supervised_head,
         test_two_stage_handoff_reuses_exact_graph_bundle_head_and_dfa,
         test_pretrained_label_adapter_uses_native_label_vectors_and_trains_residual,
+        test_causal_head_uses_identical_chat_prefix_ids_for_training_and_rollout,
+        test_causal_prompt_context_has_explicit_eai_field_delimiters,
         test_rl_rollout_and_rescore_share_the_graph_compiled_policy,
         test_stage1_gate_requires_positive_task_reward,
         test_stage1_semantic_selection_prefers_healthy_epoch_over_lower_loss_collapse,

@@ -46,6 +46,10 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         if self.rescore_microbatch_size < 1:
             raise ValueError("rescore_microbatch_size must be at least 1")
 
+    def _prompt_text(self, data_item):
+        key = getattr(self.autoregressive_head, "prompt_key", "text")
+        return data_item.get(key, data_item.get("text", ""))
+
     def supervised_anchor_loss(self, data_item):
         """Teacher-forced Stage 1 loss used to prevent RL policy collapse."""
         labels = data_item.get("target_action_labels")
@@ -58,7 +62,8 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         )
         prefixes = torch.cat([start, labels[:, :-1]], dim=1)
         logits = self.autoregressive_head.sequence_logits(
-            data_item.get("text", ""), prefixes
+            AutoregressiveSequenceReinforcementProgram._prompt_text(self, data_item),
+            prefixes,
         )
         positions = torch.arange(labels.shape[1], device=device).unsqueeze(0)
         eos_positions = torch.where(
@@ -299,7 +304,8 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         if factory is not None:
             policy_dfa = factory(data_item)
         trajectories, logprob, proposal_logprob = self._sample_trajectories(
-            data_item.get("text", ""), policy_dfa=policy_dfa
+            AutoregressiveSequenceReinforcementProgram._prompt_text(self, data_item),
+            policy_dfa=policy_dfa,
         )
         reward_values = self._trajectory_rewards(
             trajectories, reward_fn, data_item, datanode=datanode
@@ -331,7 +337,9 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                 policy_dfa = factory(data_item)
 
             trajectories, _unused, proposal_logprob = self._sample_trajectories(
-                data_item.get("text", ""), policy_dfa=policy_dfa, rescore=False
+                AutoregressiveSequenceReinforcementProgram._prompt_text(self, data_item),
+                policy_dfa=policy_dfa,
+                rescore=False,
             )
             reward_values = self._trajectory_rewards(
                 trajectories, reward_fn, data_item
@@ -363,7 +371,9 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                     )
                     with self._autocast_ctx():
                         logprob = self._trajectory_logprob(
-                            data_item.get("text", ""),
+                            AutoregressiveSequenceReinforcementProgram._prompt_text(
+                                self, data_item
+                            ),
                             trajectories[start:stop],
                             device,
                             policy_dfa=policy_dfa,

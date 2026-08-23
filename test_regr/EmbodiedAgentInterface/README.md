@@ -25,12 +25,14 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
-  - **Small LLM (Qwen)**: Causal-LM backbone support, including `Qwen/Qwen3-8B`, with optional PEFT / LoRA adaptation. The default EAI label head uses fixed vectors from Qwen's native output embeddings plus a trainable low-rank residual, bias, and temperature; `--causal-label-head linear` preserves legacy checkpoints.
+  - **Small LLM (Qwen)**: Causal-LM backbone support, including `Qwen/Qwen3-8B`, with optional PEFT / LoRA adaptation. EAI task fields are rendered as a structured user message through the tokenizer's native chat template with one assistant generation marker and Qwen3 thinking disabled. The assistant-side action prefix uses the same token IDs and next-label boundaries in Stage 1 teacher forcing, RL rollout sampling, and differentiable rescoring. Checkpoint metadata records `prompt_format=qwen-chat-label-prefix-v1`; checkpoints trained with the older raw prompt are rejected and must be retrained. The default EAI label head uses fixed vectors from Qwen's native output embeddings plus a trainable low-rank residual, bias, and temperature; `--causal-label-head linear` preserves older linear-head architecture, but not old prompt semantics.
 
 - **DFA Relational Constraints & Hybrid Inference**:
   - The DomiKnowS generation graph declares the first-token action rule, action/object successors, zero-argument actions, action/object compatibility, EOS closure, and maximum length. These marked logical constraints compile into the single `EAIProgramBundle.policy_dfa`; EAI adds no runtime policy overlays.
   - Object arguments are additionally guarded by the generic `domiknows.generation` contextual-DFA facility. Each VirtualHome task's PDDL `:objects` section supplies non-gold entity-type facts, the same facts are included in the model prompt, and semantic action→object transitions reject labels whose entity type is absent. Scene-navigation objects remain legal. A separate graph declaration permits `clean` only for tasks whose instruction, goal, or transition model contains a cleaning cue. Thus a book task cannot decode `clean bathtub_35`; neither rule reads that task's reference action trajectory. BEHAVIOR/iGibson filtering remains inactive because its action labels and PDDL use different taxonomies (for example, `hardback` versus `book`); enabling it requires an explicit ontology mapping rather than a gold-derived mask.
   - The same compiled DFA masks supervised evaluation, RL sampling, differentiable RL rescoring, and Qwen + HMM + DFA lookahead inference (`infer_qwen_hmm_dfa.py`).
+
+Open [`eai-two-stage-flow.html`](eai-two-stage-flow.html) for an interactive view of both stages. Its concrete `book_demo` trajectory shows the exact Qwen prompt, SimpleTL goal, task-world inputs, gold labels, simulator snapshots, constraints, rewards, and outputs; each token step reveals only the inputs needed at that point and activates the components involved below.
 
 ---
 

@@ -2,6 +2,10 @@ import torch
 from torch.nn import functional as F
 
 from dataset import ACTION_VOCAB, EOS_TOKEN
+from domiknows.generation.prompting import encode_label_prefix_prompt
+
+
+CAUSAL_PROMPT_FORMAT = "qwen-chat-label-prefix-v1"
 
 
 class EOSMaskedCrossEntropyLoss(torch.nn.Module):
@@ -366,6 +370,8 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         self.max_length = max_length
         self.vocabulary = vocabulary
         self.use_lora = bool(use_lora)
+        self.prompt_key = "causal_prompt_text"
+        self.prompt_format = CAUSAL_PROMPT_FORMAT
         if label_head not in {"pretrained-adapter", "linear"}:
             raise ValueError(f"Unsupported causal label head {label_head!r}")
         self.label_head_type = label_head
@@ -458,14 +464,34 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         except Exception:
             return str(int(label))
 
+    def _prompt_user_content(self, text):
+        return (
+            "Predict an embodied-agent action plan one label at a time.\n"
+            f"{str(text).strip()}\n"
+            "Return only action or entity labels; do not explain."
+        )
+
+    def _prefix_tokens(self, prefix_labels):
+        return tuple(
+            self._label_to_token(label)
+            for label in prefix_labels
+            if int(label) != self.eos_label
+        )
+
+    def _prompt_encoding(self, text, prefix_labels=()):
+        return encode_label_prefix_prompt(
+            self.tokenizer,
+            self._prompt_user_content(text),
+            self._prefix_tokens(prefix_labels),
+            max_length=self.max_length,
+            enable_thinking=False,
+        )
+
     def _prompt_base(self, text):
-        return f"Instruction: {text}\nGenerated action tokens:"
+        return self._prompt_encoding(text).rendered_text
 
     def _prompt(self, text, prefix_labels):
-        prefix = " ".join(self._label_to_token(label) for label in prefix_labels if int(label) != self.eos_label)
-        if prefix:
-            return f"{self._prompt_base(text)} {prefix}"
-        return self._prompt_base(text)
+        return self._prompt_encoding(text, prefix_labels).rendered_text
 
     def _model_hidden_states(self, input_ids, attention_mask=None):
         kwargs = {"input_ids": input_ids}
@@ -476,17 +502,13 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         return outputs.hidden_states[-1].float().to(self.output.weight.device)
 
     def _next_logits_for_prefix(self, text, prefix_labels):
-        prompt = self._prompt(text, prefix_labels)
-        inputs = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-        ).to(self._model_input_device())
-        hidden = self._model_hidden_states(
-            inputs["input_ids"],
-            inputs.get("attention_mask"),
-        )[:, -1, :]
+        encoding = self._prompt_encoding(text, prefix_labels)
+        input_ids = torch.tensor(
+            encoding.input_ids,
+            dtype=torch.long,
+            device=self._model_input_device(),
+        ).unsqueeze(0)
+        hidden = self._model_hidden_states(input_ids)[:, -1, :]
         return self.output(hidden)[0]
 
     def _shift_right(self, target_labels):
@@ -516,31 +538,22 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         return int(eos_positions[0].item()) + 1
 
     def _teacher_forced_input(self, text, row, padding_start):
-        ids = self.tokenizer(
-            self._prompt_base(text),
-            add_special_tokens=True,
-        )["input_ids"]
-        if not ids:
-            ids = [self.tokenizer.eos_token_id or 0]
-        boundary_positions = [len(ids) - 1]
-        for label in row[1:padding_start].detach().cpu().tolist():
-            label_ids = self.tokenizer(
-                " " + self._label_to_token(label),
-                add_special_tokens=False,
-            )["input_ids"]
-            if not label_ids:
-                continue
-            ids.extend(label_ids)
-            boundary_positions.append(len(ids) - 1)
-
-        if len(ids) > self.max_length:
-            offset = len(ids) - self.max_length
-            ids = ids[offset:]
-            boundary_positions = [max(0, pos - offset) for pos in boundary_positions]
+        encoding = self._prompt_encoding(
+            text,
+            row[1:padding_start].detach().cpu().tolist(),
+        )
 
         return (
-            torch.tensor(ids, dtype=torch.long, device=self._model_input_device()).unsqueeze(0),
-            torch.tensor(boundary_positions, dtype=torch.long, device=self.output.weight.device),
+            torch.tensor(
+                encoding.input_ids,
+                dtype=torch.long,
+                device=self._model_input_device(),
+            ).unsqueeze(0),
+            torch.tensor(
+                encoding.boundary_positions,
+                dtype=torch.long,
+                device=self.output.weight.device,
+            ),
         )
 
     def sequence_logits(self, text, prefix_labels):
