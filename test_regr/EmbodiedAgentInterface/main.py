@@ -848,8 +848,10 @@ def print_score(title, score, program_type=None):
         f"gt_state_success={score.get('gt_state_success', 0.0):.3f} "
         f"gt_state_recall={score.get('gt_state_recall', 0.0):.3f} "
         f"temporal_progress={score.get('temporal_progress', 1.0):.3f} "
-        f"world_constraint_score={constraint_value} "
-        f"world_constraints={score.get('world_constraint_applicable', 0.0):.1f}/"
+        f"world_constraint_score_applicable={constraint_value} "
+        f"world_constraints_applicable_per_example="
+        f"{score.get('world_constraint_applicable', 0.0):.1f} "
+        f"world_constraints_declared="
         f"{score.get('world_constraint_declared', 0.0):.1f} "
         f"rl_reward_score={score.get('rl_reward_score', 0.0):.3f}"
     )
@@ -1010,6 +1012,20 @@ def stage1_selection_key(score, supervised_loss=None):
         float(score.get("exact_sequence", 0.0)),
         float(score.get("token_accuracy", 0.0)),
         -loss,
+    )
+
+
+def stage2_selection_key(score):
+    """Rank RL checkpoints by task completion, then plan quality."""
+    return (
+        float(score.get("gt_state_success", 0.0)),
+        float(score.get("gt_state_recall", 0.0)),
+        float(score.get("temporal_progress", 0.0)),
+        float(score.get("positive_reward_rate", 0.0)),
+        -float(score.get("average_predicted_length", float("inf"))),
+        float(score.get("exact_sequence", 0.0)),
+        float(score.get("token_accuracy", 0.0)),
+        float(score.get("rl_reward_score", 0.0)),
     )
 
 
@@ -1184,22 +1200,70 @@ def train_two_stage(args, train, dev, examples, device):
     rl_lr = getattr(args, "rl_lr", None)
     if rl_lr is None:
         rl_lr = 1e-5 if args.baseline_model == "causal-lm" else 1e-4
-    rl_kwargs = {
-        "device": device,
-        "train_epoch_num": rl_epochs,
-        "Optim": lambda params: torch.optim.Adam(params, lr=rl_lr),
-        "test_every_epoch": False,
-    }
-    rl_program.train(train, valid_set=dev, test_set=None, **rl_kwargs)
+    stage2_optimizer = torch.optim.Adam(rl_program.model.parameters(), lr=rl_lr)
+    best_stage2_key = None
+    best_stage2_epoch = 0
+    best_stage2_parameters = None
+    for epoch in range(1, rl_epochs + 1):
+        rl_program.global_epoch = epoch
+        rl_kwargs = {
+            "device": device,
+            "train_epoch_num": 1,
+            "Optim": lambda _params, optimizer=stage2_optimizer: optimizer,
+            "test_every_epoch": False,
+        }
+        rl_program.train(train, valid_set=dev, test_set=None, **rl_kwargs)
+        epoch_score = sequence_score(
+            rl_program,
+            rl_bundle,
+            dev or train,
+            args.max_steps,
+            device=device,
+            use_dfa=args.use_dfa,
+        )
+        print_score(
+            f"Stage 2 Epoch {epoch} Eval", epoch_score, "reinforcement"
+        )
+        selection_key = stage2_selection_key(epoch_score)
+        if best_stage2_key is None or selection_key > best_stage2_key:
+            best_stage2_key = selection_key
+            best_stage2_epoch = epoch
+            best_stage2_parameters = _capture_trainable_parameters(rl_program)
+            print(
+                f"Stage 2 epoch {epoch} is the new best semantic checkpoint "
+                f"(success={epoch_score['gt_state_success']:.3f}, "
+                f"recall={epoch_score['gt_state_recall']:.3f}, "
+                f"temporal_progress={epoch_score['temporal_progress']:.3f}, "
+                f"positive_reward_rate={epoch_score['positive_reward_rate']:.3f})."
+            )
+    rl_program.global_epoch = None
 
-    score_stage2 = sequence_score(rl_program, rl_bundle, dev or train, args.max_steps, device=device, use_dfa=args.use_dfa)
+    if best_stage2_parameters is None:
+        # Preserve a well-defined checkpoint for an explicitly requested
+        # zero-epoch ablation, even though normal CLI runs use positive epochs.
+        best_stage2_parameters = _capture_trainable_parameters(rl_program)
+    _restore_trainable_parameters(rl_program, best_stage2_parameters)
+    score_stage2 = sequence_score(
+        rl_program,
+        rl_bundle,
+        dev or train,
+        args.max_steps,
+        device=device,
+        use_dfa=args.use_dfa,
+    )
+    print(f"Restored best Stage 2 epoch {best_stage2_epoch} before checkpointing.")
     print_score("Stage 2 (Reinforcement Learning) Eval", score_stage2, "reinforcement")
 
     if args.model:
         model_path = Path(args.model)
         model_path.parent.mkdir(exist_ok=True, parents=True)
         save_eai_checkpoint(
-            rl_program, rl_bundle, args, model_path, stage="stage2", epoch=rl_epochs
+            rl_program,
+            rl_bundle,
+            args,
+            model_path,
+            stage="stage2",
+            epoch=best_stage2_epoch,
         )
         print(f"Saved two-stage model: {model_path}")
     args.program = orig_program

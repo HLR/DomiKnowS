@@ -12,6 +12,7 @@ REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
+import main as eai_main
 from main import (
     build_program,
     build_stage2_program,
@@ -20,6 +21,7 @@ from main import (
     save_eai_checkpoint,
     stage1_allows_rl,
     stage1_selection_key,
+    stage2_selection_key,
     _capture_trainable_parameters,
     _restore_trainable_parameters,
 )
@@ -53,6 +55,35 @@ def test_supervised_loss_ignores_eos_padding():
 def test_effective_metric_keeps_one_eos_only():
     assert labels_through_first_eos([4, 7, 0, 0, 0], eos_label=0) == [4, 7, 0]
     assert labels_through_first_eos([4, 7], eos_label=0) == [4, 7]
+
+
+def test_score_output_names_constraint_aggregation_unambiguously(
+    tmp_path, monkeypatch, capsys
+):
+    output_path = tmp_path / "results.txt"
+    monkeypatch.setattr(
+        eai_main, "results_path_for_program", lambda _program_type: output_path
+    )
+    score = {
+        "examples": 2,
+        "exact_sequence": 0.5,
+        "token_accuracy": 0.75,
+        "dfa_valid": 1.0,
+        "dfa_checked": True,
+        "world_constraint_score": 0.94,
+        "world_constraint_applicable": 0.4,
+        "world_constraint_declared": 54.0,
+    }
+
+    eai_main.print_score("evaluation", score, "reinforcement")
+
+    line = capsys.readouterr().out
+    assert "world_constraint_score_applicable=0.940" in line
+    assert "world_constraints_applicable_per_example=0.4" in line
+    assert "world_constraints_declared=54.0" in line
+    assert "world_constraint_score=" not in line
+    assert "world_constraints=" not in line
+    assert output_path.read_text().strip() == line.strip()
 
 
 class _PrefixRecordingHead(torch.nn.Module):
@@ -548,6 +579,32 @@ def test_stage1_semantic_selection_prefers_healthy_epoch_over_lower_loss_collaps
         "token_accuracy": 0.417,
     }
     assert stage1_selection_key(healthy, 1.55) > stage1_selection_key(collapsed, 0.01)
+
+
+def test_stage2_semantic_selection_prioritizes_success_then_plan_quality():
+    shorter_but_less_successful = {
+        "gt_state_success": 0.75,
+        "gt_state_recall": 0.90,
+        "temporal_progress": 0.91,
+        "positive_reward_rate": 0.95,
+        "average_predicted_length": 10.0,
+        "exact_sequence": 0.30,
+        "token_accuracy": 0.60,
+        "rl_reward_score": 0.88,
+    }
+    more_successful = {
+        **shorter_but_less_successful,
+        "gt_state_success": 0.84,
+        "average_predicted_length": 15.0,
+    }
+    assert stage2_selection_key(more_successful) > stage2_selection_key(
+        shorter_but_less_successful
+    )
+
+    shorter_tie = {**more_successful, "average_predicted_length": 12.0}
+    assert stage2_selection_key(shorter_tie) > stage2_selection_key(
+        more_successful
+    )
 
 
 def test_stage1_snapshot_only_copies_and_restores_trainable_parameters():

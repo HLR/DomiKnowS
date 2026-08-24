@@ -21,7 +21,7 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 
 - **Two-Stage Training Pipeline (`--two-stage`)**:
   - **Stage 1**: Supervised Exact Match cross-entropy pretraining via `SolverPOIProgram`; EOS padding after the first sequence-ending EOS is excluded from the loss. Every epoch reports semantic exploration metrics and decoded examples. The best semantic epoch is retained as a compact trainable-parameter snapshot, restored after training, and saved to `<model-stem>.stage1.pth`; a later collapsed epoch cannot replace it.
-  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using final-state recall multiplied by ordered SimpleTL prefix progress, world constraints as a discount for violations, and a teacher-forced Stage 1 anchor to prevent catastrophic forgetting. The default is on-policy REINFORCE with 8 rollouts; the optional importance-weighted estimator records and detaches the rollout policy probability before applying proposal correction. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. During `no_grad` sampling, Qwen evaluates all rollouts as one batch and reuses their KV cache whenever the selected labels have equal native-token widths; unequal widths trigger one safe batched prefix/cache rebuild, never one forward per rollout. Differentiable rescoring remains teacher-forced and backpropagates one rollout microbatch at a time while accumulating the complete 8-rollout gradient before one optimizer step. The Stage 1 optimizer is released before Stage 2. RL starts only when the restored Stage 1 checkpoint meets the configured positive-reward, recall, and goal-success thresholds; otherwise the command retains Stage 1 and exits with status 2.
+  - **Stage 2**: Reinforcement learning fine-tuning via `ReinforcementProgram`, using final-state recall multiplied by ordered SimpleTL prefix progress, world constraints as a discount for violations, and a teacher-forced Stage 1 anchor to prevent catastrophic forgetting. The default is on-policy REINFORCE with 8 rollouts; the optional importance-weighted estimator records and detaches the rollout policy probability before applying proposal correction. Samples are true autoregressive rollouts conditioned on their own generated prefixes, not gold teacher-forced prefixes. During `no_grad` sampling, Qwen evaluates all rollouts as one batch and reuses their KV cache whenever the selected labels have equal native-token widths; unequal widths trigger one safe batched prefix/cache rebuild, never one forward per rollout. Differentiable rescoring remains teacher-forced and backpropagates one rollout microbatch at a time while accumulating the complete 8-rollout gradient before one optimizer step. The Stage 1 optimizer is released before Stage 2. RL starts only when the restored Stage 1 checkpoint meets the configured positive-reward, recall, and goal-success thresholds; otherwise the command retains Stage 1 and exits with status 2. Every RL epoch is evaluated semantically; the best epoch is retained, restored, and recorded in the final Stage 2 checkpoint instead of automatically saving the last epoch.
 
 - **Model Backbones**:
   - **Tiny Transformer**: Lightweight autoregressive generator with BERT instruction encoder.
@@ -33,6 +33,8 @@ The task requires an embodied agent to plan and generate multi-step action-objec
   - The same compiled DFA masks supervised evaluation, RL sampling, differentiable RL rescoring, and Qwen + HMM + DFA lookahead inference (`infer_qwen_hmm_dfa.py`).
 
 Open [`eai-two-stage-flow.html`](eai-two-stage-flow.html) for an interactive view of both stages. Its concrete `book_demo` trajectory shows the exact Qwen prompt, SimpleTL goal, task-world inputs, gold labels, simulator snapshots, constraints, rewards, and outputs; each token step reveals only the inputs needed at that point and activates the components involved below.
+
+See [`EAI_Operation.md`](EAI_Operation.md) for a detailed operational description of Stage 1 supervised learning, the Stage 1-to-Stage 2 handoff, and Stage 2 reinforcement learning.
 
 ---
 
@@ -170,8 +172,9 @@ During evaluation, `sequence_score` reports:
 - `dfa_valid`: Fraction of generated trajectories satisfying the compiled DomiKnowS declarative grammar constraints. Reported as `n/a` when DFA checking is disabled.
 - `gt_state_success`: Binary $0/1$ final state satisfaction evaluated by the world state simulator.
 - `gt_state_recall`: Mean fraction of goal condition facts satisfied by the generated trajectory.
-- `world_constraint_score`: Aggregated world-constraint satisfaction, or `n/a` when no constraints are declared.
-- `world_constraints`: Mean applicable constraints versus mean declared constraints per trajectory.
+- `world_constraint_score_applicable`: Mean satisfaction over examples with at least one applicable world constraint, or `n/a` when none apply.
+- `world_constraints_applicable_per_example`: Mean number of distinct constraint definitions applicable to each generated trajectory.
+- `world_constraints_declared`: Number of world-constraint definitions declared in the graph; most are intentionally non-applicable to any one trajectory.
 - `rl_reward_score`: Dense or binary task reward, discounted by applicable constraint violations.
 
 ---
