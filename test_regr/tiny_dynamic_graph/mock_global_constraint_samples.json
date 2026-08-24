@@ -1,0 +1,29 @@
+[
+  {
+    "example_id": "color_rule",
+    "active_concepts": ["red", "colored"],
+    "rule": "red_implies_colored",
+    "objects": [
+      {"object_id": "color_positive", "features": [1, 0, 0, 0, 0, 0], "labels": {"red": 1, "colored": 1}},
+      {"object_id": "color_negative", "features": [0, 1, 0, 0, 0, 0], "labels": {"red": 0, "colored": 0}}
+    ]
+  },
+  {
+    "example_id": "animal_rule",
+    "active_concepts": ["dog", "animal"],
+    "rule": "dog_implies_animal",
+    "objects": [
+      {"object_id": "animal_positive", "features": [0, 0, 1, 0, 0, 0], "labels": {"dog": 1, "animal": 1}},
+      {"object_id": "animal_negative", "features": [0, 0, 0, 1, 0, 0], "labels": {"dog": 0, "animal": 0}}
+    ]
+  },
+  {
+    "example_id": "plant_rule",
+    "active_concepts": ["tree", "plant"],
+    "rule": "tree_implies_plant",
+    "objects": [
+      {"object_id": "plant_positive", "features": [0, 0, 0, 0, 1, 0], "labels": {"tree": 1, "plant": 1}},
+      {"object_id": "plant_negative", "features": [0, 0, 0, 0, 0, 1], "labels": {"tree": 0, "plant": 0}}
+    ]
+  }
+]
