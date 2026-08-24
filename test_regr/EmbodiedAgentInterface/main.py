@@ -17,7 +17,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.append(str(SCRIPT_DIR))
 sys.path.append(str(SCRIPT_DIR.parents[1]))
 
-from dataset import ACTION_VOCAB, EOS_TOKEN, dummy_dataset, load_eai_dataset, split_train_dev
+from dataset import (
+    ACTION_VOCAB,
+    EOS_TOKEN,
+    VLABENCH_AUX_DATA_DIR,
+    dummy_dataset,
+    ensure_vlabench_auxiliary_planning_data,
+    load_eai_dataset,
+    load_vlabench_auxiliary_planning_examples,
+    split_train_dev,
+    split_vlabench_auxiliary_examples,
+)
 from modules import (
     AutoregressiveActionObjectGenerator,
     CAUSAL_PROMPT_FORMAT,
@@ -774,7 +784,7 @@ def _checkpoint_metadata(args, bundle, stage, epoch):
     baseline_model = getattr(args, "baseline_model", "tiny-transformer")
     label_head = getattr(args, "causal_label_head", "pretrained-adapter")
     adapter_rank = int(getattr(args, "label_adapter_rank", 64))
-    return {
+    metadata = {
         "backbone": getattr(args, "llm_backbone_path", None) if baseline_model == "causal-lm" else baseline_model,
         "vocabulary": list(head.labels),
         "label_head": label_head if baseline_model == "causal-lm" else "native",
@@ -783,6 +793,14 @@ def _checkpoint_metadata(args, bundle, stage, epoch):
         "stage": str(stage),
         "epoch": int(epoch),
     }
+    auxiliary = (getattr(bundle, "model_metadata", None) or {}).get(
+        "vlabench_auxiliary"
+    )
+    if auxiliary is not None:
+        # Optional provenance keeps version-1 checkpoints backward compatible:
+        # existing loaders validate their original required keys only.
+        metadata["vlabench_auxiliary"] = dict(auxiliary)
+    return metadata
 
 
 def save_eai_checkpoint(program, bundle, args, path, stage, epoch):
@@ -1068,6 +1086,7 @@ def report_epoch_accuracy(args, program, bundle, train, dev, device, epoch):
 
 def train_program(args, train, dev, examples, device):
     program, bundle = build_trainable_program(args, examples, device)
+    _maybe_train_vlabench_auxiliary(args, program, bundle, device)
     print(f"Starting training and will save at {args.model}")
     if args.eval_every_epoch:
         for epoch in range(1, args.epochs + 1):
@@ -1085,14 +1104,97 @@ def train_program(args, train, dev, examples, device):
     return program, bundle
 
 
+def _maybe_train_vlabench_auxiliary(args, program, bundle, device):
+    """Run the optional domain-separated text warm-up on the shared LoRA."""
+    enabled = bool(
+        getattr(args, "vlabench_aux_planning_dir", None)
+        and int(getattr(args, "vlabench_aux_epochs", 0)) > 0
+    )
+    if not enabled:
+        return None
+
+    from test_regr.VLABenchAgentInterface.training import build_constraint_runtime
+    from vlabench_auxiliary import train_vlabench_text_auxiliary
+
+    planning_dir = ensure_vlabench_auxiliary_planning_data(
+        args.vlabench_aux_planning_dir
+    )
+    auxiliary_examples = load_vlabench_auxiliary_planning_examples(
+        planning_dir,
+        limit=args.vlabench_aux_limit,
+    )
+    auxiliary_split = split_vlabench_auxiliary_examples(auxiliary_examples)
+    max_entities = max(64, max(len(item.entities) for item in auxiliary_examples))
+    max_operations = max(
+        8, max(len(item.operation_sequence) for item in auxiliary_examples)
+    )
+    auxiliary_runtime = build_constraint_runtime(
+        max_entities=max_entities,
+        max_operations=max_operations,
+        name_prefix="eai_vlabench_aux",
+    )
+    final_model_path = (
+        Path(args.model)
+        if args.model
+        else MODEL_DIR / "eai_action_sequence_baseline.pth"
+    )
+    auxiliary_checkpoint_path = final_model_path.with_suffix(
+        ".vlabench_aux.pth"
+    )
+    auxiliary_lr = args.lr if args.vlabench_aux_lr is None else args.vlabench_aux_lr
+    auxiliary_result = train_vlabench_text_auxiliary(
+        program.autoregressive_head,
+        auxiliary_split,
+        auxiliary_runtime,
+        epochs=args.vlabench_aux_epochs,
+        lr=auxiliary_lr,
+        device=device,
+        max_length=args.encoder_max_length,
+        label_head=args.causal_label_head,
+        label_adapter_rank=args.label_adapter_rank,
+        checkpoint_path=auxiliary_checkpoint_path,
+        resume_path=args.vlabench_aux_resume,
+    )
+    bundle.model_metadata["vlabench_auxiliary"] = {
+        "planning_dir": str(planning_dir),
+        "selected_epoch": auxiliary_result.selected_epoch,
+        "vocabulary_checksum": auxiliary_result.vocabulary_checksum,
+        "domain_checksum": auxiliary_result.domain_checksum,
+        "checkpoint": str(auxiliary_checkpoint_path),
+    }
+    metadata = dict(bundle.model_metadata["vlabench_auxiliary"])
+    # The result contains a CPU snapshot for programmatic callers. EAI has
+    # already restored that state, so release the duplicate before Stage 1.
+    del auxiliary_result, auxiliary_runtime, auxiliary_split, auxiliary_examples
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return metadata
+
+
 def train_two_stage(args, train, dev, examples, device):
     """Two-stage training: Exact Match pretraining -> DomiKnowS Reinforcement Learning fine-tuning."""
-    print("\n" + "=" * 65)
-    print("STAGE 1: Supervised Exact Match Pretraining (SolverPOI)")
-    print("=" * 65)
     orig_program = args.program
     args.program = "solver"
+
+    auxiliary_enabled = bool(
+        getattr(args, "vlabench_aux_planning_dir", None)
+        and int(getattr(args, "vlabench_aux_epochs", 0)) > 0
+    )
+    if auxiliary_enabled:
+        print("\n" + "=" * 65)
+        print("AUXILIARY: Text-Only VLABench Planning Warm-Up")
+        print("=" * 65)
+    else:
+        print("\n" + "=" * 65)
+        print("STAGE 1: Supervised Exact Match Pretraining (SolverPOI)")
+        print("=" * 65)
     solver_program, bundle = build_trainable_program(args, examples, device)
+    if auxiliary_enabled:
+        _maybe_train_vlabench_auxiliary(args, solver_program, bundle, device)
+        print("\n" + "=" * 65)
+        print("STAGE 1: Supervised Exact Match Pretraining (SolverPOI)")
+        print("=" * 65)
     stage1_optimizer = torch.optim.Adam(solver_program.model.parameters(), lr=args.lr)
     score_stage1 = None
     best_score = None
@@ -1455,6 +1557,11 @@ def parse_args():
     parser.add_argument("--lora-target-modules", nargs="+", default=None, help="Optional LoRA target module names. Defaults to Qwen attention/MLP projections.")
     parser.add_argument("--llm-device-map", default=None, help="Optional Hugging Face device_map for causal LM loading, e.g. auto for multi-GPU sharding.")
     parser.add_argument("--gradient-checkpointing", action="store_true", help="Enable gradient checkpointing for causal LM LoRA training to reduce activation memory.")
+    parser.add_argument("--vlabench-aux-planning-dir", default=str(VLABENCH_AUX_DATA_DIR), help="Local VLABench planning snapshot for text-only LoRA warm-up; defaults inside the EAI data directory.")
+    parser.add_argument("--vlabench-aux-epochs", type=int, default=0, help="Text-only VLABench auxiliary epochs before EAI Stage 1; 0 disables the phase.")
+    parser.add_argument("--vlabench-aux-limit", type=int, default=None, help="Optional planning-episode limit for the VLABench auxiliary phase.")
+    parser.add_argument("--vlabench-aux-lr", type=float, default=None, help="VLABench auxiliary learning rate; defaults to the EAI Stage 1 learning rate.")
+    parser.add_argument("--vlabench-aux-resume", default=None, help="Optional compatible .vlabench_aux.pth checkpoint used to initialize the warm-up.")
     parser.add_argument("--transformer-layers", type=int, default=2, help="Layers for --baseline-model tiny-transformer.")
     parser.add_argument("--transformer-heads", type=int, default=4, help="Attention heads for --baseline-model tiny-transformer.")
     parser.add_argument("--constraint-warmup-iters", type=int, default=5, help="Model-only warmup iterations before primal-dual constraint updates.")
@@ -1490,6 +1597,29 @@ def parse_args():
         parser.error(
             "--rl-num-samples must be at least 4 for Stage 2; two samples do "
             "not provide a stable within-task policy-gradient estimate"
+        )
+    auxiliary_enabled = bool(
+        args.vlabench_aux_planning_dir and args.vlabench_aux_epochs > 0
+    )
+    if args.vlabench_aux_epochs < 0:
+        parser.error("--vlabench-aux-epochs cannot be negative")
+    if args.vlabench_aux_limit is not None and args.vlabench_aux_limit <= 0:
+        parser.error("--vlabench-aux-limit must be positive")
+    if args.vlabench_aux_lr is not None and args.vlabench_aux_lr <= 0:
+        parser.error("--vlabench-aux-lr must be positive")
+    if auxiliary_enabled and (
+        args.baseline_model != "causal-lm" or not args.use_lora
+    ):
+        parser.error(
+            "VLABench auxiliary warm-up requires --baseline-model causal-lm --use-lora"
+        )
+    if auxiliary_enabled and not args.two_stage and args.program != "solver":
+        parser.error(
+            "VLABench auxiliary warm-up must precede supervised EAI solver training"
+        )
+    if args.vlabench_aux_resume and not auxiliary_enabled:
+        parser.error(
+            "--vlabench-aux-resume requires an enabled VLABench auxiliary phase"
         )
     return args
 

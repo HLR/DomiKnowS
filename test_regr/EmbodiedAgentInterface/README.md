@@ -132,8 +132,36 @@ uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --limit 50 
 
 # Target one-H100 Qwen3-8B experiment
 $env:CUDA_VISIBLE_DEVICES=3
-uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-8B --llm-device-map auto --use-lora --lora-r 8 --lora-alpha 16 --rl-num-samples 2 --device cuda:0 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_8b_lora.pth
+uv run python test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-8B --llm-device-map auto --use-lora --lora-r 8 --lora-alpha 16 --rl-num-samples 8 --device cuda:0 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_8b_lora.pth
 ```
+
+#### Optional text-only VLABench warm-up
+
+VLABench planning episodes can warm the same Qwen LoRA parameters before EAI
+Stage 1. This is transfer learning, not dataset concatenation: VLABench retains
+its graph-owned `skill:`, `arg:`, and `obj:` vocabulary, temporary label
+adapter, generation graph, and compiled DFA. Prompts contain only the task
+instruction and numbered entity table. Images, controller demonstrations,
+VLABench simulator rewards, and VLABench Stage 2 are never loaded. The
+temporary adapter and optimizer are released after the best auxiliary epoch is
+restored; EAI then trains with its original vocabulary, adapter, graph, DFA,
+simulator, SimpleTL reward, and official split.
+
+```powershell
+$env:CUDA_VISIBLE_DEVICES=3
+uv run python -u test_regr/EmbodiedAgentInterface/main.py --dataset all --two-stage --epochs 5 --rl-epochs 5 --max-steps 30 --evaluate --baseline-model causal-lm --llm-backbone-path Qwen/Qwen3-8B --use-lora --lora-r 8 --lora-alpha 16 --device cuda:0 --vlabench-aux-epochs 2 --model test_regr/EmbodiedAgentInterface/models/eai_qwen3_8b_lora.pth
+```
+
+`--vlabench-aux-limit` limits locally loaded planning episodes and
+`--vlabench-aux-lr` overrides the default EAI Stage 1 learning rate. The
+EAI data layer downloads/resumes `VLABench/vlm_evaluation_v1.0` under
+`test_regr/EmbodiedAgentInterface/data/vlabench_planning` the first time the
+auxiliary phase is enabled. `--vlabench-aux-planning-dir` overrides that local
+location; controller data is never downloaded. The
+selected warm-up is saved as `<model-stem>.vlabench_aux.pth`; its epoch and
+domain/vocabulary checksums are also recorded as optional provenance in later
+EAI checkpoints. Setting auxiliary epochs to zero leaves the existing EAI
+pipeline unchanged and performs no VLABench download.
 
 ### 4. Standalone Program Modes
 

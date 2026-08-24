@@ -3,7 +3,10 @@ from dataclasses import dataclass
 import torch
 from torch.nn import functional as F
 
-from dataset import ACTION_VOCAB, EOS_TOKEN
+try:
+    from .dataset import ACTION_VOCAB, EOS_TOKEN
+except ImportError:  # Direct execution through EmbodiedAgentInterface/main.py.
+    from dataset import ACTION_VOCAB, EOS_TOKEN
 from domiknows.generation.prompting import (
     encode_label_prefix_prompt,
     label_prefix_token_ids,
@@ -378,6 +381,8 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         shared_tokenizer=None,
         label_head="pretrained-adapter",
         label_adapter_rank=64,
+        prompt_builder=None,
+        prompt_key="causal_prompt_text",
     ):
         super().__init__()
         _prepare_transformers_imports()
@@ -389,7 +394,8 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         self.max_length = max_length
         self.vocabulary = vocabulary
         self.use_lora = bool(use_lora)
-        self.prompt_key = "causal_prompt_text"
+        self.prompt_builder = prompt_builder
+        self.prompt_key = str(prompt_key)
         self.prompt_format = CAUSAL_PROMPT_FORMAT
         if label_head not in {"pretrained-adapter", "linear"}:
             raise ValueError(f"Unsupported causal label head {label_head!r}")
@@ -410,7 +416,9 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
             self.model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
         else:
             self.model = shared_model
-        if not (device_map and str(device_map).lower() != "none"):
+        if shared_model is None and not (
+            device_map and str(device_map).lower() != "none"
+        ):
             self.model = self.model.to(device)
         if hasattr(self.model.config, "use_cache"):
             self.model.config.use_cache = False
@@ -484,6 +492,9 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
             return str(int(label))
 
     def _prompt_user_content(self, text):
+        prompt_builder = getattr(self, "prompt_builder", None)
+        if prompt_builder is not None:
+            return str(prompt_builder(text)).strip()
         return (
             "Predict an embodied-agent action plan one label at a time.\n"
             f"{str(text).strip()}\n"
@@ -662,7 +673,10 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
         kwargs = {"input_ids": input_ids}
         if attention_mask is not None:
             kwargs["attention_mask"] = attention_mask
-        with torch.set_grad_enabled(any(param.requires_grad for param in self.model.parameters())):
+        grad_enabled = torch.is_grad_enabled() and any(
+            param.requires_grad for param in self.model.parameters()
+        )
+        with torch.set_grad_enabled(grad_enabled):
             outputs = self.model(**kwargs, output_hidden_states=True, use_cache=False)
         return outputs.hidden_states[-1].float().to(self.output.weight.device)
 

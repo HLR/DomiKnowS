@@ -1,0 +1,584 @@
+import json
+from dataclasses import dataclass
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+import torch
+from PIL import Image
+from torch.utils.data import DataLoader
+
+from test_regr.VLABenchAgentInterface.dataset import (
+    CONTROL_DATASET_ID,
+    PLANNING_DATASET_ID,
+    LeRobotWindowDataset,
+    build_numbered_segmentation_view,
+    deterministic_split,
+    download_processed_datasets,
+    load_planning_examples,
+)
+from test_regr.VLABenchAgentInterface.environment import ee_action_to_env_action
+from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
+from test_regr.VLABenchAgentInterface.models import MultiViewController, QwenVLPlanner, TinyImageEncoder, controller_loss
+from test_regr.VLABenchAgentInterface.program import (
+    JointEpisode,
+    VLABenchHierarchicalReinforcementProgram,
+    generalized_advantage_estimate,
+    ppo_clipped_loss,
+)
+from test_regr.VLABenchAgentInterface.training import (
+    build_constraint_runtime,
+    create_stage1_program,
+    create_stage2_program,
+    load_joint_checkpoint,
+    load_checkpoint,
+    prepare_planner_program_examples,
+    save_joint_checkpoint,
+    save_checkpoint,
+    train_controller_epoch,
+    train_planner_reinforcement_epoch,
+)
+from test_regr.VLABenchAgentInterface.world_graph import (
+    build_vlabench_world_graph,
+    condition_index_for_task,
+)
+
+
+class RateLimitError(Exception):
+    def __init__(self):
+        super().__init__("too many requests")
+        self.response = SimpleNamespace(status_code=429, headers={"Retry-After": "0"})
+
+
+def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
+    calls = []
+    delays = []
+
+    def fake_snapshot_download(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RateLimitError()
+        return str(kwargs["local_dir"])
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", fake_snapshot_download)
+    monkeypatch.setattr("test_regr.VLABenchAgentInterface.dataset.time.sleep", delays.append)
+    planning, control = download_processed_datasets(
+        tmp_path / "planning",
+        tmp_path / "control",
+        max_workers=1,
+        retries=2,
+        retry_delay=0,
+    )
+
+    assert planning == (tmp_path / "planning").resolve()
+    assert control == (tmp_path / "control").resolve()
+    assert [call["repo_id"] for call in calls] == [
+        PLANNING_DATASET_ID,
+        PLANNING_DATASET_ID,
+        CONTROL_DATASET_ID,
+    ]
+    assert all(call["max_workers"] == 1 for call in calls)
+    assert delays == [0.0]
+
+
+def test_planning_folder_loader_and_deterministic_split(tmp_path):
+    example = tmp_path / "Spatial" / "task" / "example0"
+    (example / "input").mkdir(parents=True)
+    (example / "output").mkdir()
+    (example / "env_config").mkdir()
+    (example / "input" / "instruction.txt").write_text("Put the apple in the bowl.", encoding="utf-8")
+    Image.new("RGB", (16, 16), "white").save(example / "input" / "rgb.png")
+    Image.new("RGB", (16, 16), "black").save(example / "input" / "segmented_prompt.png")
+    plan = [
+        {"name": "pick", "params": {"target_entity_name": "apple"}},
+        {"name": "place", "params": {"target_container_name": "bowl"}},
+    ]
+    (example / "output" / "operation_sequence.json").write_text(
+        json.dumps({"skill_sequence": plan}), encoding="utf-8",
+    )
+    (example / "env_config" / "episode.json").write_text(json.dumps({"entities": ["apple", "bowl"]}), encoding="utf-8")
+    loaded = load_planning_examples(tmp_path)
+    assert len(loaded) == 1
+    assert loaded[0].instruction == "Put the apple in the bowl."
+    assert loaded[0].entities == ("apple", "bowl")
+    assert len(loaded[0].image_paths) == len(loaded[0].segmented_image_paths) == 1
+    assert deterministic_split(list(range(20)), seed=42) == deterministic_split(list(range(20)), seed=42)
+    world = build_vlabench_world_graph("test_dataset_vocabulary_world")
+    vocabulary = PlanVocabulary.from_plans(({"skill_sequence": plan},), world, max_entities=12)
+    vocabulary_path = tmp_path / "vocab.json"
+    vocabulary.save(vocabulary_path)
+    restored = PlanVocabulary.load(vocabulary_path)
+    assert restored.checksum == vocabulary.checksum
+    assert restored.skill_argument_map["pick"] == ("target_entity_name",)
+    assert restored.skill_argument_map["lift"] == ()
+
+
+def test_numbered_segmentation_overlay():
+    rgb = np.zeros((20, 30, 3), dtype=np.uint8)
+    segmentation = np.zeros((20, 30), dtype=np.int32)
+    segmentation[2:8, 2:8] = 5
+    segmentation[10:18, 20:28] = 9
+    image, centers = build_numbered_segmentation_view(rgb, segmentation)
+    assert image.size == (30, 20)
+    assert set(centers) == {0, 1}
+    assert centers[0] == (4, 4)
+
+
+def _records():
+    result = []
+    for episode in range(2):
+        for frame in range(4):
+            result.append({
+                "episode_index": episode,
+                "frame_index": frame,
+                "state": np.full(7, frame, dtype=np.float32),
+                "actions": np.array([frame] * 6 + [frame % 2], dtype=np.float32),
+                "images": torch.rand(3, 3, 24, 24),
+                "task_index": episode,
+            })
+    return result
+
+
+def test_control_windows_controller_loss_and_training(tmp_path):
+    condition_index = condition_index_for_task("select_poker")
+    dataset = LeRobotWindowDataset(
+        _records(), observation_horizon=2, action_horizon=3,
+        condition_index=condition_index,
+    )
+    item = dataset[0]
+    assert item["state"].shape == (2, 7)
+    assert item["images"].shape == (2, 3, 3, 24, 24)
+    assert item["actions"].shape == (3, 7)
+    assert item["task_index"].item() == condition_index
+    model = MultiViewController(TinyImageEncoder(16), hidden_dim=24, action_horizon=3, max_views=3)
+    batch = next(iter(DataLoader(dataset, batch_size=2)))
+    output = model(batch["images"], batch["state"], batch["task_index"])
+    assert output.shape == (2, 3, 7)
+    loss, metrics = controller_loss(output, batch["actions"])
+    assert torch.isfinite(loss) and metrics["pose_loss"] >= 0
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    trained = train_controller_epoch(model, [batch], optimizer, device="cpu", mixed_precision=False)
+    assert trained["loss"] >= 0
+    checkpoint = tmp_path / "controller.pt"
+    save_checkpoint(checkpoint, model=model, optimizer=optimizer, epoch=0, metrics=trained)
+    restored = MultiViewController(TinyImageEncoder(16), hidden_dim=24, action_horizon=3, max_views=3)
+    restored_optimizer = torch.optim.Adam(restored.parameters(), lr=1e-3)
+    payload = load_checkpoint(checkpoint, model=restored, optimizer=restored_optimizer)
+    assert payload["epoch"] == 0
+
+
+@dataclass
+class FakeExample:
+    operation_sequence: tuple
+    entities: tuple = ("apple", "bowl")
+    instruction: str = "Put the apple in the bowl."
+    image_paths: tuple = ()
+    segmented_image_paths: tuple = ()
+    dependency: str = "Sequential"
+
+    def as_reward_item(self):
+        return {
+            "operation_sequence": list(self.operation_sequence),
+            "entities": self.entities,
+            "instruction": self.instruction,
+        }
+
+
+class FakePlanner(torch.nn.Module):
+    def __init__(self, good, bad):
+        super().__init__()
+        self.preference = torch.nn.Parameter(torch.tensor(0.0))
+        self.good = json.dumps(good)
+        self.bad = json.dumps(bad)
+        self.calls = 0
+
+    def sample_with_logprob(self, **_kwargs):
+        good = self.calls % 2 == 0
+        self.calls += 1
+        logprob = torch.nn.functional.logsigmoid(self.preference if good else -self.preference)
+        return (self.good if good else self.bad), logprob
+
+
+def test_reward_driven_planner_epoch_uses_domiknows_runtime():
+    good = (
+        {"name": "pick", "params": {"target_entity_name": "apple"}},
+        {"name": "place", "params": {"target_container_name": "bowl"}},
+    )
+    bad = ({"name": "pick", "params": {}},)
+    world = build_vlabench_world_graph("test_rl_pipeline_world")
+    runtime = build_constraint_runtime(world, max_entities=4, max_operations=3, name_prefix="test_rl_pipeline")
+    planner = FakePlanner(good, bad)
+    optimizer = torch.optim.SGD(planner.parameters(), lr=0.1)
+    before = planner.preference.item()
+    metrics = train_planner_reinforcement_epoch(
+        planner, [FakeExample(good)], optimizer, runtime,
+        num_samples=4, estimator="reinforce",
+    )
+    assert metrics["reward"] == 0.5
+    assert planner.preference.item() > before
+
+
+class FakeProcessor:
+    tokenizer = SimpleNamespace(pad_token_id=0)
+
+    def apply_chat_template(self, *_args, **_kwargs):
+        return "prompt"
+
+    def __call__(self, **_kwargs):
+        return {"input_ids": torch.tensor([[1, 2]]), "attention_mask": torch.ones(1, 2, dtype=torch.long)}
+
+class FakeGenerationModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.preference = torch.nn.Parameter(torch.tensor(0.0))
+        self.config = SimpleNamespace(hidden_size=4)
+
+    def forward(self, input_ids, **_kwargs):
+        hidden = torch.zeros(input_ids.shape[0], input_ids.shape[1], 4, device=input_ids.device)
+        hidden[..., 0] = self.preference
+        return SimpleNamespace(hidden_states=(hidden,))
+
+
+def test_qwen_sample_is_rescored_with_differentiable_log_probability():
+    world = build_vlabench_world_graph("test_compact_qwen_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_compact_qwen")
+    planner = QwenVLPlanner(FakeGenerationModel(), FakeProcessor(), runtime.vocabulary)
+    _plan, logprob = planner.sample_with_logprob(
+        instruction="test",
+        images=[],
+        entity_table=["apple", "bowl"],
+        dfa=runtime.dfa,
+        world=world,
+        max_steps=runtime.max_tokens,
+    )
+    assert logprob.requires_grad
+    (-logprob).backward()
+    assert planner.output.weight.grad is not None
+
+
+class TinyCompactPlanner(torch.nn.Module):
+    def __init__(self, vocabulary):
+        super().__init__()
+        self.vocabulary = vocabulary
+        self.preference = torch.nn.Parameter(torch.tensor(0.0))
+        self.calls = 0
+
+    def forward(self, _contains, _context, target_labels):
+        return self.preference.expand(len(target_labels), self.vocabulary.label_count)
+
+    def sample_with_logprob(self, **_kwargs):
+        positive = self.calls % 2 == 0
+        self.calls += 1
+        logprob = torch.nn.functional.logsigmoid(self.preference if positive else -self.preference)
+        return [
+            {"name": "pick", "params": {"target_entity_name": 0}},
+            {"name": "place", "params": {"target_container_name": 1}},
+        ], logprob
+
+    def supervised_loss(self, **_kwargs):
+        return (self.preference - 1.0).square()
+
+
+class TinySolverPlanner(torch.nn.Module):
+    def __init__(self, max_tokens, label_count):
+        super().__init__()
+        self.logits = torch.nn.Parameter(torch.zeros(max_tokens, label_count))
+
+    def forward(self, _contains, _context, target_labels):
+        return self.logits[: len(target_labels)]
+
+
+def test_stage1_solver_program_performs_supervised_update():
+    world = build_vlabench_world_graph("test_stage1_train_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_stage1_train")
+    reference = (
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    )
+    planner = TinySolverPlanner(runtime.max_tokens, runtime.vocabulary.label_count)
+    program = create_stage1_program(runtime, planner)
+    before = planner.logits.detach().clone()
+    program.train(
+        prepare_planner_program_examples([FakeExample(reference)], runtime),
+        valid_set=None,
+        test_set=None,
+        train_epoch_num=1,
+        Optim=lambda params: torch.optim.SGD(params, lr=0.1),
+        test_every_epoch=False,
+    )
+    assert not torch.equal(planner.logits, before)
+
+
+def test_program_types_share_exact_planner_head():
+    from domiknows.program import SolverPOIProgram
+    from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
+
+    world = build_vlabench_world_graph("test_program_types_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_program_types")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    stage1 = create_stage1_program(runtime, planner)
+    stage2 = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
+        env_factory=lambda **_kwargs: None,
+    )
+    assert isinstance(stage1, SolverPOIProgram)
+    assert isinstance(stage2, ReinforcementProgram)
+    assert isinstance(stage2, VLABenchHierarchicalReinforcementProgram)
+    assert stage1.planner_head is stage2.planner_head is planner
+
+
+def test_stage2_supervised_anchor_contributes_when_returns_have_no_advantage():
+    world = build_vlabench_world_graph("test_anchor_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_anchor")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    optimizer = torch.optim.SGD(planner.parameters(), lr=0.1)
+    reference = (
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    )
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=optimizer,
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
+        env_factory=lambda **_kwargs: None,
+        supervised_examples=[FakeExample(reference, entities=("apple", "bowl"))],
+        supervised_weight=0.1,
+    )
+    logprob = torch.nn.functional.logsigmoid(planner.preference)
+    episodes = [JointEpisode([logprob], [], 1.0, True, True, 1)]
+    before = planner.preference.item()
+    program._update_planner(episodes)
+    assert planner.preference.item() > before
+
+
+def test_controller_actor_critic_gae_and_ppo_contracts():
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=2, max_views=1)
+    inputs = (torch.rand(1, 2, 1, 3, 16, 16), torch.rand(1, 2, 7), torch.zeros(1, dtype=torch.long))
+    actions, logprob, entropy, value = controller.sample_action_chunk(*inputs)
+    assert actions.shape == (1, 2, 7)
+    assert logprob.shape == entropy.shape == (1, 2)
+    assert value.shape == (1,)
+    evaluated, _, evaluated_value = controller.evaluate_action_chunk(*inputs, actions.detach())
+    loss = ppo_clipped_loss(evaluated.sum(1), logprob.detach().sum(1), torch.ones(1)) + evaluated_value.mean()
+    loss.backward()
+    assert controller.value_head.weight.grad is not None
+    advantages, returns = generalized_advantage_estimate([0.1, 1.0], [0.2, 0.3], [False, True])
+    assert len(advantages) == len(returns) == 2
+    assert returns[-1] == pytest.approx(1.0)
+
+
+class FakeRobot:
+    def get_qpos_from_ee_pos(self, *, physics, pos, quat):
+        assert physics is not None and len(pos) == 3 and len(quat) == 4
+        return True, np.arange(7, dtype=np.float64)
+
+
+class FailedRobot(FakeRobot):
+    def get_qpos_from_ee_pos(self, *, physics, pos, quat):
+        return False, np.arange(7, dtype=np.float64)
+
+
+def test_ee_action_conversion_uses_two_finger_gripper():
+    env = SimpleNamespace(
+        robot=FakeRobot(),
+        physics=object(),
+        action_spec=SimpleNamespace(minimum=np.full(9, -0.5), maximum=np.full(9, 0.5)),
+    )
+    opened = ee_action_to_env_action(env, [0, 0, 0, 0, 0, 0, 1])
+    closed = ee_action_to_env_action(env, [0, 0, 0, 0, 0, 0, 0])
+    assert opened.shape == (9,)
+    assert np.all(opened <= 0.5) and np.all(opened >= -0.5)
+    assert np.allclose(opened[-2:], 0.04)
+    assert np.allclose(closed[-2:], 0.0)
+    with pytest.raises(ValueError, match="inverse-kinematics"):
+        ee_action_to_env_action(SimpleNamespace(robot=FailedRobot(), physics=object()), np.zeros(7))
+
+
+class FakeTimeStep:
+    def __init__(self, terminal=False):
+        self.terminal = terminal
+
+    def last(self):
+        return self.terminal
+
+
+class FakeSimulator:
+    def __init__(self, success=True):
+        self.success = success
+        self.count = 0
+        self.robot = FakeRobot()
+        self.physics = object()
+        self.task = SimpleNamespace(
+            entities={"apple": SimpleNamespace(), "bowl": SimpleNamespace()},
+            get_instruction=lambda: "Put the apple in the bowl.",
+        )
+
+    def reset(self):
+        self.count = 0
+        return FakeTimeStep(False)
+
+    def get_observation(self, require_pcd=False):
+        assert not require_pcd
+        return {"rgb": np.zeros((1, 16, 16, 3), dtype=np.uint8), "ee_state": np.zeros(7, dtype=np.float32)}
+
+    def step(self, action):
+        assert np.asarray(action).shape == (9,)
+        self.count += 1
+        return FakeTimeStep(self.success)
+
+    def get_task_progress(self):
+        return float(self.success and self.count > 0)
+
+    def get_intention_score(self, **_kwargs):
+        return float(self.success and self.count > 0)
+
+    def close(self):
+        pass
+
+
+class InvalidCompactPlanner(TinyCompactPlanner):
+    def sample_with_logprob(self, **_kwargs):
+        self.calls += 1
+        return [{"name": "pick", "params": {}}], torch.nn.functional.logsigmoid(self.preference)
+
+
+def _joint_program(runtime, planner, controller, factory, *, num_samples=4):
+    return create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=factory,
+        execute_horizon=1,
+        max_steps=1,
+        num_samples=num_samples,
+        ppo_epochs=1,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+
+
+def test_joint_rewards_telescope_and_planner_uses_return_to_go():
+    world = build_vlabench_world_graph("test_joint_reward_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_reward")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    program = _joint_program(runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True))
+    episode = program.collect_episode({"task": "select_book"})
+    assert episode.total_return == pytest.approx(0.95)
+    assert sum(item.reward for item in episode.controller) == pytest.approx(episode.total_return)
+    assert episode.planner_returns == pytest.approx([episode.total_return])
+
+
+def test_invalid_plan_never_executes_controller_or_environment():
+    world = build_vlabench_world_graph("test_joint_invalid_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_invalid")
+    planner = InvalidCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    simulator = FakeSimulator(success=True)
+    program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
+    episode = program.collect_episode({"task": "select_book"})
+    assert not episode.valid
+    assert episode.total_return == 0.0
+    assert episode.controller == []
+    assert simulator.count == 0
+    assert planner.calls == program.num_samples == 4
+    assert episode.planner_returns == [0.0] * 4
+
+
+def test_failed_ik_action_receives_zero_and_is_not_executed():
+    world = build_vlabench_world_graph("test_joint_failed_ik_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_failed_ik")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    simulator = FakeSimulator(success=True)
+    simulator.robot = FailedRobot()
+    program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
+    episode = program.collect_episode({"task": "select_book"})
+    assert not episode.valid
+    assert episode.total_return == 0.0
+    assert simulator.count == 0
+
+
+def test_joint_simulator_training_updates_planner_and_controller():
+    world = build_vlabench_world_graph("test_joint_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    planner_optimizer = torch.optim.SGD(planner.parameters(), lr=0.1)
+    controller_optimizer = torch.optim.SGD(controller.parameters(), lr=0.01)
+    counter = {"value": 0}
+
+    def factory(**_kwargs):
+        counter["value"] += 1
+        return FakeSimulator(success=counter["value"] % 2 == 1)
+
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=planner_optimizer,
+        controller_optimizer=controller_optimizer,
+        env_factory=factory,
+        execute_horizon=1,
+        max_steps=1,
+        num_samples=1,
+        ppo_epochs=1,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+    planner_before = planner.preference.detach().clone()
+    controller_before = controller.value_head.weight.detach().clone()
+    metrics = program.train_joint_epoch([{"task": "select_book"}], rollouts_per_update=2)
+    assert metrics["success_rate"] == 0.5
+    assert planner.preference.item() != planner_before.item()
+    assert not torch.equal(controller.value_head.weight, controller_before)
+
+
+def test_joint_checkpoint_restores_rng_and_rejects_domain_mismatch(tmp_path):
+    world = build_vlabench_world_graph("test_joint_checkpoint_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_joint_checkpoint")
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    planner_optimizer = torch.optim.SGD(planner.parameters(), lr=0.1)
+    controller_optimizer = torch.optim.SGD(controller.parameters(), lr=0.1)
+    torch.manual_seed(1234)
+    saved_preference = planner.preference.detach().clone()
+    path = save_joint_checkpoint(
+        tmp_path / "agent.pt",
+        planner=planner,
+        controller=controller,
+        planner_optimizer=planner_optimizer,
+        controller_optimizer=controller_optimizer,
+        runtime=runtime,
+        stage="reinforcement",
+        epoch=3,
+    )
+    expected_random = torch.rand(4)
+    planner.preference.data.add_(5.0)
+    torch.rand(7)
+    payload = load_joint_checkpoint(
+        path,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=planner_optimizer,
+        controller_optimizer=controller_optimizer,
+        runtime=runtime,
+    )
+    assert payload["stage"] == "reinforcement" and payload["epoch"] == 3
+    assert torch.equal(planner.preference, saved_preference)
+    assert torch.equal(torch.rand(4), expected_random)
+    payload["domain_checksum"] = "bad"
+    bad = tmp_path / "bad.pt"
+    torch.save(payload, bad)
+    with pytest.raises(ValueError, match="domain checksum"):
+        load_joint_checkpoint(bad, planner=planner, controller=controller, runtime=runtime)

@@ -281,6 +281,7 @@ domiknows/generation/README_notes.md
 # Local research notes (not tracked)
 domiknows/research/
 test_regr/EmbodiedAgentInterface/results/
+test_regr/EmbodiedAgentInterface/data/
 Rethinkin constraints.md
 test_regr/EmbodiedAgentInterface/models/
 test_regr/VLABenchAgentInterface/data/

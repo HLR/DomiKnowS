@@ -1,7 +1,11 @@
 import ast
+import json
 import os
+import random
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 import torch
 
@@ -18,6 +22,190 @@ BASE_VOCAB = (EOS_TOKEN, *DEFAULT_ACTION_LABELS)
 ACTION_VOCAB = BASE_VOCAB
 
 HF_DATASET = "Inevitablevalor/EmbodiedAgentInterface"
+VLABENCH_AUX_DATASET = "VLABench/vlm_evaluation_v1.0"
+VLABENCH_AUX_DATA_DIR = Path(__file__).resolve().parent / "data" / "vlabench_planning"
+
+
+@dataclass(frozen=True)
+class VLABenchAuxiliaryPlanningExample:
+    """Text fields required by the EAI VLABench warm-up; images are excluded."""
+
+    episode_id: str
+    instruction: str
+    operation_sequence: tuple[dict[str, Any], ...]
+    dependency: Any = "Sequential"
+    entities: tuple[str, ...] = ()
+
+
+def ensure_vlabench_auxiliary_planning_data(
+    root: str | Path = VLABENCH_AUX_DATA_DIR,
+    *,
+    token: str | None = None,
+) -> Path:
+    """Download/resume only the planning snapshot used by EAI auxiliary SFT."""
+    root = Path(root).resolve()
+    completion_marker = root / ".eai_vlabench_aux_complete"
+    if completion_marker.exists():
+        return root
+    from huggingface_hub import snapshot_download
+
+    root.mkdir(parents=True, exist_ok=True)
+    snapshot_download(
+        repo_id=VLABENCH_AUX_DATASET,
+        repo_type="dataset",
+        local_dir=root,
+        token=token,
+        max_workers=1,
+    )
+    completion_marker.write_text(VLABENCH_AUX_DATASET + "\n", encoding="utf-8")
+    return root
+
+
+def _vlabench_read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _vlabench_find_plan(example_dir: Path):
+    from test_regr.VLABenchAgentInterface.world_graph import canonicalize_plan
+
+    candidates = (
+        sorted((example_dir / "output").glob("*.json"))
+        if (example_dir / "output").is_dir()
+        else []
+    )
+    candidates.extend(
+        path
+        for path in sorted(example_dir.glob("*.json"))
+        if "operation" in path.name.lower()
+    )
+    for path in candidates:
+        try:
+            payload = _vlabench_read_json(path)
+            plan = (
+                payload.get("operation_sequence", payload.get("skill_sequence", payload))
+                if isinstance(payload, Mapping)
+                else payload
+            )
+            canonicalize_plan(plan)
+            return payload
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+    return None
+
+
+def _vlabench_read_instruction(input_dir: Path) -> str:
+    for path in sorted(input_dir.glob("*")) if input_dir.is_dir() else ():
+        if "instruction" not in path.name.lower() or not path.is_file():
+            continue
+        if path.suffix.lower() == ".json":
+            payload = _vlabench_read_json(path)
+            if isinstance(payload, Mapping):
+                return str(payload.get("instruction", payload.get("text", ""))).strip()
+            return str(payload).strip()
+        return path.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def _vlabench_extract_entities(config: Any) -> tuple[str, ...]:
+    found: list[str] = []
+
+    def visit(value: Any, key: str = "") -> None:
+        if isinstance(value, Mapping):
+            for child_key, child in value.items():
+                visit(child, str(child_key))
+        elif isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            for child in value:
+                visit(child, key)
+        elif "entit" in key.lower() or key.lower() in {
+            "name", "target_entity", "target_container"
+        }:
+            text = str(value).strip()
+            if text and text not in found:
+                found.append(text)
+
+    visit(config)
+    return tuple(found)
+
+
+def load_vlabench_auxiliary_planning_examples(
+    root: str | Path = VLABENCH_AUX_DATA_DIR,
+    *,
+    limit: int | None = None,
+) -> list[VLABenchAuxiliaryPlanningExample]:
+    """Load only text/JSON planning fields; never enumerate or open images."""
+    from test_regr.VLABenchAgentInterface.world_graph import canonicalize_plan
+
+    root = Path(root).resolve()
+    if not root.exists():
+        raise FileNotFoundError(f"VLABench auxiliary data does not exist: {root}")
+    examples: list[VLABenchAuxiliaryPlanningExample] = []
+    for output_dir in sorted(path for path in root.rglob("output") if path.is_dir()):
+        example_dir = output_dir.parent
+        payload = _vlabench_find_plan(example_dir)
+        if payload is None:
+            continue
+        plan_payload = (
+            payload.get("operation_sequence", payload.get("skill_sequence", payload))
+            if isinstance(payload, Mapping)
+            else payload
+        )
+        config_candidates = (
+            sorted((example_dir / "env_config").rglob("*.json"))
+            if (example_dir / "env_config").exists()
+            else []
+        )
+        config = _vlabench_read_json(config_candidates[0]) if config_candidates else {}
+        dependency = (
+            payload.get("dependency", config.get("dependency", "Sequential"))
+            if isinstance(payload, Mapping)
+            else config.get("dependency", "Sequential")
+        )
+        operations = tuple(canonicalize_plan(plan_payload))
+        entities = list(_vlabench_extract_entities(config))
+        for operation in operations:
+            for key in ("target_entity_name", "target_container_name"):
+                value = operation["params"].get(key)
+                if value is not None and str(value) not in entities:
+                    entities.append(str(value))
+        examples.append(
+            VLABenchAuxiliaryPlanningExample(
+                episode_id=str(example_dir.relative_to(root)).replace("\\", "/"),
+                instruction=_vlabench_read_instruction(example_dir / "input"),
+                operation_sequence=operations,
+                dependency=dependency,
+                entities=tuple(entities),
+            )
+        )
+        if limit is not None and len(examples) >= limit:
+            break
+    if not examples:
+        raise ValueError(f"no VLABench planning episodes were found under {root}")
+    return examples
+
+
+def split_vlabench_auxiliary_examples(
+    items: Sequence[Any],
+    *,
+    seed: int = 42,
+    train_fraction: float = 0.8,
+    validation_fraction: float = 0.1,
+) -> dict[str, list[Any]]:
+    """Reproduce VLABench's deterministic episode-level split in EAI."""
+    if not 0 < train_fraction < 1 or not 0 <= validation_fraction < 1:
+        raise ValueError("split fractions are invalid")
+    if train_fraction + validation_fraction >= 1:
+        raise ValueError("split fractions must leave a test split")
+    shuffled = list(items)
+    random.Random(seed).shuffle(shuffled)
+    train_end = int(len(shuffled) * train_fraction)
+    validation_end = train_end + int(len(shuffled) * validation_fraction)
+    return {
+        "train": shuffled[:train_end],
+        "validation": shuffled[train_end:validation_end],
+        "test": shuffled[validation_end:],
+    }
 
 def _normalize_surface_token(value):
     value = str(value or "").lower()
