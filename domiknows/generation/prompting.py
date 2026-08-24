@@ -51,6 +51,16 @@ def _apply_chat_template(tokenizer, messages, *, tokenize: bool, enable_thinking
         return tokenizer.apply_chat_template(messages, **kwargs)
 
 
+def label_prefix_token_ids(tokenizer, token: str) -> tuple[int, ...]:
+    """Tokenize one assistant-side label with a stable leading separator."""
+    chunk_ids = _token_ids(tokenizer(" " + str(token), add_special_tokens=False))
+    if not chunk_ids:
+        chunk_ids = _token_ids(tokenizer(str(token), add_special_tokens=False))
+    if not chunk_ids:
+        raise ValueError(f"label prefix token {token!r} has no tokenizer representation")
+    return tuple(chunk_ids)
+
+
 def encode_label_prefix_prompt(
     tokenizer,
     user_content: str,
@@ -102,11 +112,7 @@ def encode_label_prefix_prompt(
     boundaries = [len(input_ids) - 1]
     for token in prefix_tokens:
         chunk = " " + str(token)
-        chunk_ids = _token_ids(tokenizer(chunk, add_special_tokens=False))
-        if not chunk_ids:
-            chunk_ids = _token_ids(tokenizer(str(token), add_special_tokens=False))
-        if not chunk_ids:
-            raise ValueError(f"label prefix token {token!r} has no tokenizer representation")
+        chunk_ids = label_prefix_token_ids(tokenizer, token)
         input_ids.extend(chunk_ids)
         rendered += chunk
         boundaries.append(len(input_ids) - 1)
@@ -124,4 +130,8 @@ def encode_label_prefix_prompt(
     )
 
 
-__all__ = ["LabelPrefixPromptEncoding", "encode_label_prefix_prompt"]
+__all__ = [
+    "LabelPrefixPromptEncoding",
+    "encode_label_prefix_prompt",
+    "label_prefix_token_ids",
+]

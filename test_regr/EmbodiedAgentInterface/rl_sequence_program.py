@@ -103,10 +103,39 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
         self.autoregressive_head.eval()
         try:
             with torch.no_grad():
+                incremental_state = None
+                incremental_start = getattr(
+                    self.autoregressive_head, "start_incremental_rollout", None
+                )
+                incremental_advance = getattr(
+                    self.autoregressive_head, "advance_incremental_rollout", None
+                )
+                if (
+                    getattr(
+                        self.autoregressive_head,
+                        "supports_incremental_rollout",
+                        False,
+                    )
+                    and callable(incremental_start)
+                    and callable(incremental_advance)
+                ):
+                    # Causal LMs encode the instruction once for every sampled
+                    # trajectory.  Keep those rollouts in one batch and carry
+                    # their KV cache between EAI label decisions.  Other heads
+                    # continue through the generic prefix-replay path below.
+                    incremental_state = incremental_start(text, sample_count)
+
                 for step in range(self.max_steps):
-                    logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
-                        self, text, prefixes
-                    )[:, -1, :]
+                    if incremental_state is not None:
+                        logits = incremental_state.next_logits
+                        if logits is None:
+                            raise RuntimeError(
+                                "incremental rollout did not provide next-label logits"
+                            )
+                    else:
+                        logits = AutoregressiveSequenceReinforcementProgram._prefix_logits(
+                            self, text, prefixes
+                        )[:, -1, :]
                     logits = AutoregressiveSequenceReinforcementProgram._mask_policy_logits(
                         self, logits, dfa_states, step, finished, policy_dfa=policy_dfa
                     )
@@ -141,6 +170,18 @@ class AutoregressiveSequenceReinforcementProgram(ReinforcementProgram):
                     finished = finished | (sampled == self.eos_label)
                     if bool(finished.all()):
                         break
+                    if incremental_state is not None:
+                        incremental_state = incremental_advance(
+                            incremental_state,
+                            sampled,
+                            active & (sampled != self.eos_label),
+                        )
+
+                if incremental_state is not None:
+                    self._last_rollout_cache_stats = {
+                        "advances": int(incremental_state.cache_advances),
+                        "rebuilds": int(incremental_state.cache_rebuilds),
+                    }
 
             # Evaluation can re-score all trajectories here because no autograd
             # graph is retained. Training requests rollout-only mode and

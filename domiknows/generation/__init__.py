@@ -238,11 +238,16 @@ from .applications import (
 )
 from .dfa.vocabulary import TokenVocabulary
 from .dfa.visualization import create_generation_debug_app, run_generation_debug_server
-from .prompting import LabelPrefixPromptEncoding, encode_label_prefix_prompt
+from .prompting import (
+    LabelPrefixPromptEncoding,
+    encode_label_prefix_prompt,
+    label_prefix_token_ids,
+)
 
 __all__ = [
     "LabelPrefixPromptEncoding",
     "encode_label_prefix_prompt",
+    "label_prefix_token_ids",
     "CandidateScore",
     "CompactConstraintSelector",
     "CompactLabelGenerationHead",

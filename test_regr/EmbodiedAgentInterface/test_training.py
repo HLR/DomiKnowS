@@ -312,6 +312,148 @@ def test_causal_head_uses_identical_chat_prefix_ids_for_training_and_rollout():
     assert "Predict an embodied-agent action plan" in rollout_encoding.rendered_text
 
 
+class _CachedRolloutModel(torch.nn.Module):
+    def __init__(self, hidden_size=2):
+        super().__init__()
+        self.anchor = torch.nn.Parameter(torch.zeros(()))
+        self.hidden_size = hidden_size
+        self.calls = []
+
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        output_hidden_states,
+        use_cache,
+        return_dict,
+        past_key_values=None,
+        position_ids=None,
+    ):
+        assert output_hidden_states and use_cache and return_dict
+        self.calls.append(
+            {
+                "input_shape": tuple(input_ids.shape),
+                "attention_mask": attention_mask.detach().clone(),
+                "has_cache": past_key_values is not None,
+                "position_ids": position_ids.detach().clone(),
+            }
+        )
+        hidden = torch.zeros(
+            (*input_ids.shape, self.hidden_size),
+            dtype=torch.float32,
+            device=input_ids.device,
+        )
+        hidden[..., 0] = input_ids.float()
+        cache = SimpleNamespace(sequence_length=int(attention_mask.shape[1]))
+        return SimpleNamespace(hidden_states=(hidden,), past_key_values=cache)
+
+
+def _cached_rollout_head():
+    vocabulary = TokenVocabulary(["<eos>", "alpha", "beta"], eos_token="<eos>")
+    head = object.__new__(CausalLMActionObjectGenerator)
+    torch.nn.Module.__init__(head)
+    head.tokenizer = _ChatPrefixTokenizer()
+    head.vocabulary = vocabulary
+    head.eos_label = vocabulary.eos_label
+    head.max_length = 64
+    head.device_name = "cpu"
+    head.model = _CachedRolloutModel()
+    head.output = torch.nn.Linear(2, vocabulary.label_count)
+    return head, vocabulary
+
+
+def test_causal_rollout_batches_samples_and_reuses_cache_when_chunks_align():
+    head, vocabulary = _cached_rollout_head()
+    alpha = vocabulary.label_for_token("alpha")
+    beta = vocabulary.label_for_token("beta")
+
+    state = head.start_incremental_rollout("Task: synthetic", batch_size=3)
+    assert head.model.calls[-1]["input_shape"] == (3, 2)
+    assert not head.model.calls[-1]["has_cache"]
+
+    state = head.advance_incremental_rollout(
+        state, torch.tensor([alpha, alpha, alpha]), torch.tensor([True] * 3)
+    )
+    assert head.model.calls[-1]["input_shape"] == (3, 1)
+    assert head.model.calls[-1]["has_cache"]
+
+    # Native Qwen labels need not have the same number of subword tokens.
+    # Keep one batched call, rebuilding the cache from the unequal full rows.
+    state = head.advance_incremental_rollout(
+        state, torch.tensor([alpha, beta, alpha]), torch.tensor([True] * 3)
+    )
+    assert head.model.calls[-1]["input_shape"][0] == 3
+    assert not head.model.calls[-1]["has_cache"]
+
+    state = head.advance_incremental_rollout(
+        state, torch.tensor([alpha, alpha, alpha]), torch.tensor([False, True, True])
+    )
+    assert head.model.calls[-1]["input_shape"] == (3, 1)
+    assert head.model.calls[-1]["has_cache"]
+    assert head.model.calls[-1]["attention_mask"][0, -1].item() == 0
+    assert head.model.calls[-1]["attention_mask"][1:, -1].tolist() == [1, 1]
+    assert state.cache_rebuilds == 2
+    assert state.cache_advances == 2
+    assert len(head.model.calls) == 4
+
+
+class _IncrementalPolicyHead(torch.nn.Module):
+    supports_batched_prefixes = True
+    supports_incremental_rollout = True
+
+    def __init__(self):
+        super().__init__()
+        self.bias = torch.nn.Parameter(torch.zeros(3))
+        self.replay_calls = 0
+        self.start_calls = 0
+        self.advance_calls = 0
+
+    def sequence_logits(self, _text, prefixes):
+        self.replay_calls += 1
+        return self.bias.reshape(1, 1, -1).expand(
+            prefixes.shape[0], prefixes.shape[1], -1
+        )
+
+    def start_incremental_rollout(self, _text, batch_size):
+        self.start_calls += 1
+        logits = torch.tensor([[100.0, -100.0, -100.0]]).expand(batch_size, -1)
+        return SimpleNamespace(
+            next_logits=logits, cache_advances=0, cache_rebuilds=1
+        )
+
+    def advance_incremental_rollout(self, state, labels, continuing):
+        self.advance_calls += 1
+        assert labels.shape == continuing.shape
+        state.next_logits = torch.tensor(
+            [[-100.0, -100.0, 100.0]], device=labels.device
+        ).expand(labels.shape[0], -1)
+        state.cache_advances += 1
+        return state
+
+
+def test_rl_sampler_uses_incremental_head_without_prefix_replay():
+    head = _IncrementalPolicyHead()
+    program = SimpleNamespace(
+        autoregressive_head=head,
+        eos_label=2,
+        max_steps=3,
+        num_samples=8,
+    )
+    trajectories, logprob, proposal_logprob = (
+        AutoregressiveSequenceReinforcementProgram._sample_trajectories(
+            program, "task", rescore=False
+        )
+    )
+
+    assert trajectories == [[0, 2]] * 8
+    assert logprob is None
+    assert torch.isfinite(proposal_logprob).all()
+    assert head.start_calls == 1
+    assert head.advance_calls == 1
+    assert head.replay_calls == 0
+    assert program._last_rollout_cache_stats == {"advances": 1, "rebuilds": 1}
+
+
 def test_causal_prompt_context_has_explicit_eai_field_delimiters():
     prompt = causal_prompt_context(
         {

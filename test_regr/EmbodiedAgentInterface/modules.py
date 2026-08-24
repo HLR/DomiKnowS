@@ -1,11 +1,29 @@
+from dataclasses import dataclass
+
 import torch
 from torch.nn import functional as F
 
 from dataset import ACTION_VOCAB, EOS_TOKEN
-from domiknows.generation.prompting import encode_label_prefix_prompt
+from domiknows.generation.prompting import (
+    encode_label_prefix_prompt,
+    label_prefix_token_ids,
+)
 
 
 CAUSAL_PROMPT_FORMAT = "qwen-chat-label-prefix-v1"
+
+
+@dataclass
+class CausalLMRolloutState:
+    """Batched no-gradient Qwen state shared by parallel RL rollouts."""
+
+    base_input_ids: tuple[int, ...]
+    assistant_token_rows: list[list[int]]
+    attention_mask: torch.Tensor | None = None
+    past_key_values: object | None = None
+    next_logits: torch.Tensor | None = None
+    cache_advances: int = 0
+    cache_rebuilds: int = 0
 
 
 class EOSMaskedCrossEntropyLoss(torch.nn.Module):
@@ -336,6 +354,7 @@ class PretrainedLabelAdapter(torch.nn.Module):
 
 class CausalLMActionObjectGenerator(torch.nn.Module):
     supports_batched_prefixes = True
+    supports_incremental_rollout = True
 
     def __init__(
         self,
@@ -492,6 +511,152 @@ class CausalLMActionObjectGenerator(torch.nn.Module):
 
     def _prompt(self, text, prefix_labels):
         return self._prompt_encoding(text, prefix_labels).rendered_text
+
+    def _rollout_pad_token_id(self):
+        for name in ("pad_token_id", "eos_token_id"):
+            token_id = getattr(self.tokenizer, name, None)
+            if token_id is not None:
+                return int(token_id)
+        return 0
+
+    def _rollout_forward(
+        self,
+        input_ids,
+        attention_mask,
+        *,
+        past_key_values=None,
+        position_ids=None,
+    ):
+        kwargs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "output_hidden_states": True,
+            "use_cache": True,
+            "return_dict": True,
+        }
+        if past_key_values is not None:
+            kwargs["past_key_values"] = past_key_values
+        if position_ids is not None:
+            kwargs["position_ids"] = position_ids
+        with torch.no_grad():
+            outputs = self.model(**kwargs)
+        hidden = outputs.hidden_states[-1][:, -1, :].float().to(
+            self.output.weight.device
+        )
+        return self.output(hidden), getattr(outputs, "past_key_values", None)
+
+    def _rebuild_rollout_state(self, state):
+        rows = [
+            list(state.base_input_ids) + list(assistant_ids)
+            for assistant_ids in state.assistant_token_rows
+        ]
+        rows = [row[-self.max_length :] for row in rows]
+        width = max(len(row) for row in rows)
+        device = self._model_input_device()
+        input_ids = torch.full(
+            (len(rows), width),
+            self._rollout_pad_token_id(),
+            dtype=torch.long,
+            device=device,
+        )
+        attention_mask = torch.zeros(
+            (len(rows), width), dtype=torch.long, device=device
+        )
+        for index, row in enumerate(rows):
+            offset = width - len(row)
+            input_ids[index, offset:] = torch.tensor(
+                row, dtype=torch.long, device=device
+            )
+            attention_mask[index, offset:] = 1
+        position_ids = attention_mask.cumsum(dim=-1).sub(1).clamp_min(0)
+        logits, cache = self._rollout_forward(
+            input_ids,
+            attention_mask,
+            position_ids=position_ids,
+        )
+        state.attention_mask = attention_mask
+        state.past_key_values = cache
+        state.next_logits = logits
+        state.cache_rebuilds += 1
+        return state
+
+    def start_incremental_rollout(self, text, batch_size):
+        """Encode one prompt batch and return its first-label logits and cache."""
+        if int(batch_size) < 1:
+            raise ValueError("incremental rollout batch_size must be positive")
+        base = self._prompt_encoding(text)
+        state = CausalLMRolloutState(
+            base_input_ids=base.input_ids,
+            assistant_token_rows=[[] for _ in range(int(batch_size))],
+        )
+        return self._rebuild_rollout_state(state)
+
+    def advance_incremental_rollout(self, state, labels, continuing):
+        """Advance parallel rollouts, reusing KV cache when chunk widths agree."""
+        label_values = torch.as_tensor(labels).detach().cpu().reshape(-1).tolist()
+        continuing_values = (
+            torch.as_tensor(continuing).detach().cpu().bool().reshape(-1).tolist()
+        )
+        if len(label_values) != len(state.assistant_token_rows):
+            raise ValueError("incremental rollout label batch changed size")
+        if len(continuing_values) != len(label_values):
+            raise ValueError("incremental rollout continuation mask changed size")
+
+        chunks: list[tuple[int, ...]] = []
+        for index, (label, is_continuing) in enumerate(
+            zip(label_values, continuing_values)
+        ):
+            if is_continuing:
+                chunk = label_prefix_token_ids(
+                    self.tokenizer, self._label_to_token(label)
+                )
+                state.assistant_token_rows[index].extend(chunk)
+            else:
+                chunk = ()
+            chunks.append(chunk)
+
+        active_lengths = {len(chunk) for chunk in chunks if chunk}
+        if not active_lengths:
+            return state
+        chunk_width = next(iter(active_lengths))
+        can_advance_cache = (
+            state.past_key_values is not None
+            and len(active_lengths) == 1
+            and state.attention_mask is not None
+            and state.attention_mask.shape[1] + chunk_width <= self.max_length
+        )
+        if not can_advance_cache:
+            return self._rebuild_rollout_state(state)
+
+        device = self._model_input_device()
+        batch_size = len(chunks)
+        input_ids = torch.full(
+            (batch_size, chunk_width),
+            self._rollout_pad_token_id(),
+            dtype=torch.long,
+            device=device,
+        )
+        chunk_mask = torch.zeros(
+            (batch_size, chunk_width), dtype=torch.long, device=device
+        )
+        for index, chunk in enumerate(chunks):
+            if not chunk:
+                continue
+            input_ids[index] = torch.tensor(chunk, dtype=torch.long, device=device)
+            chunk_mask[index] = 1
+        attention_mask = torch.cat([state.attention_mask, chunk_mask], dim=-1)
+        position_ids = attention_mask.cumsum(dim=-1).sub(1).clamp_min(0)
+        logits, cache = self._rollout_forward(
+            input_ids,
+            attention_mask,
+            past_key_values=state.past_key_values,
+            position_ids=position_ids[:, -chunk_width:],
+        )
+        state.attention_mask = attention_mask
+        state.past_key_values = cache
+        state.next_logits = logits
+        state.cache_advances += 1
+        return state
 
     def _model_hidden_states(self, input_ids, attention_mask=None):
         kwargs = {"input_ids": input_ids}
