@@ -1,0 +1,18 @@
+{
+  "seed": 17,
+  "feature_dim": 64,
+  "hidden_dim": 128,
+  "name_concepts": 512,
+  "attribute_concepts": 128,
+  "semantic_concepts": 256,
+  "capability_concepts": 128,
+  "kb_rules": 10000,
+  "examples": 2000,
+  "objects_per_example": 12,
+  "active_distractors_per_example": 24,
+  "epochs": 5,
+  "learning_rate": 0.001,
+  "beta": 1.0,
+  "executable_weight": 1.0,
+  "global_weight": 1.0
+}
