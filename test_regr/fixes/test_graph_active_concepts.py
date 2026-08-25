@@ -90,6 +90,23 @@ def test_root_activation_applies_to_subgraphs_and_keeps_their_constraints():
     assert not graph.is_concept_active(unrelated)
 
 
+def test_root_activation_preserves_same_named_sibling_concepts_by_identity():
+    with Graph("duplicate_activation_root") as graph:
+        with Graph("left_generation") as left:
+            left_text = Concept(name="text")
+        with Graph("right_generation") as right:
+            right_text = Concept(name="text")
+
+    graph.set_active_concepts([left_text])
+
+    assert left.is_concept_active(left_text)
+    assert not right.is_concept_active(right_text)
+    assert graph.is_concept_active(left_text.fullname)
+    assert not graph.is_concept_active(right_text.fullname)
+    with pytest.raises(ValueError, match="Unknown concept"):
+        graph.is_concept_active("text")
+
+
 def test_constraint_effective_activation_preserves_explicit_flag():
     graph, _, red, dog, _, _ = _build_concept_graph()
     with graph:

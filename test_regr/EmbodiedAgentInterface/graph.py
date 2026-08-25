@@ -17,7 +17,10 @@ Rebuilt against the current  ``domiknows.generation`` API:
 """
 from __future__ import annotations
 
-from dataset import ACTION_VOCAB, EOS_TOKEN, entity_type_for_token
+try:
+    from .dataset import ACTION_VOCAB, EOS_TOKEN, entity_type_for_token
+except ImportError:
+    from dataset import ACTION_VOCAB, EOS_TOKEN, entity_type_for_token
 
 
 def _disjunction(calls, orL):

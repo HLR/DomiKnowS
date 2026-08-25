@@ -60,6 +60,7 @@ class TestInferenceProgramSignature:
         for name in ('training_style', 'use_gumbel',
                      'initial_temp', 'final_temp',
                      'anneal_start_epoch', 'anneal_epochs', 'hard_gumbel',
+                     'compile_lc',
                      'include_global_constraint_loss',
                      'global_constraint_loss_weight',
                      'executable_constraint_loss_weight',
@@ -70,6 +71,7 @@ class TestInferenceProgramSignature:
         sig = inspect.signature(InferenceProgram.__init__)
         assert sig.parameters['training_style'].default == 'default'
         assert sig.parameters['use_gumbel'].default is False
+        assert sig.parameters['compile_lc'].default is True
         assert sig.parameters['include_global_constraint_loss'].default is False
         assert sig.parameters['query_loss'].default is None
         # If these defaults change, existing users will see different behaviour.
@@ -94,7 +96,19 @@ class TestInferenceProgramSignature:
         monkeypatch.setattr(LossProgram, '__init__', fake_init)
         InferenceProgram(graph=None, Model=None, training_style='default')
 
+        assert captured['cmodel_kwargs']['compile_lc'] is True
         assert captured['cmodel_kwargs']['include_global_constraint_loss'] is False
+
+    def test_compiled_global_loss_can_be_disabled(self, monkeypatch):
+        captured = {}
+
+        def fake_init(self, graph, Model, CModel=None, beta=1, **kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr(LossProgram, '__init__', fake_init)
+        InferenceProgram(graph=None, Model=None, compile_lc=False)
+
+        assert captured['cmodel_kwargs']['compile_lc'] is False
 
     def test_simple_style_alias_maps_to_default(self, monkeypatch):
         def fake_init(self, graph, Model, CModel=None, beta=1, **kwargs):
@@ -135,11 +149,13 @@ class TestInferenceProgramSignature:
             def __init__(
                 self,
                 graph,
+                compile_lc=True,
                 include_global_constraint_loss=False,
                 global_constraint_loss_weight=1.0,
                 executable_constraint_loss_weight=1.0,
             ):
                 super().__init__()
+                self.compile_lc = compile_lc
                 self.include_global_constraint_loss = include_global_constraint_loss
                 self.global_constraint_loss_weight = global_constraint_loss_weight
                 self.executable_constraint_loss_weight = executable_constraint_loss_weight
@@ -154,6 +170,7 @@ class TestInferenceProgramSignature:
             executable_constraint_loss_weight=3.0,
         )
 
+        assert program.cmodel.compile_lc is True
         assert program.cmodel.include_global_constraint_loss is True
         assert program.cmodel.global_constraint_loss_weight == 2.0
         assert program.cmodel.executable_constraint_loss_weight == 3.0

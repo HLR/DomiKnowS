@@ -275,6 +275,7 @@ def build_vlabench_world_graph(
     constraint_builders: Iterable[Callable[[VLABenchWorldGraphBundle], None]] = (),
     *,
     include_default_constraints: bool = True,
+    semantic_parents: Mapping[str, Any] | None = None,
 ) -> VLABenchWorldGraphBundle:
     """Define the DomiKnowS plan ontology and its hard logical constraints."""
     from domiknows.graph import Concept, Graph
@@ -285,10 +286,23 @@ def build_vlabench_world_graph(
     def role(name: str) -> str:
         return f"{role_prefix}{name}"
 
+    semantic_parents = dict(semantic_parents or {})
     with Graph(graph_name) as graph:
-        plan = Concept(name="vlabench_plan")
-        operation = Concept(name="vlabench_operation")
-        entity = Concept(name="vlabench_entity")
+        episode_parent = semantic_parents.get("episode")
+        entity_parent = semantic_parents.get("entity")
+        operation_parent = semantic_parents.get("operation")
+        plan = (
+            episode_parent(name="vlabench_plan")
+            if episode_parent is not None else Concept(name="vlabench_plan")
+        )
+        operation = (
+            operation_parent(name="vlabench_operation")
+            if operation_parent is not None else Concept(name="vlabench_operation")
+        )
+        entity = (
+            entity_parent(name="vlabench_entity")
+            if entity_parent is not None else Concept(name="vlabench_entity")
+        )
         transition = Concept(name="vlabench_operation_transition")
 
         contains_operation = plan.contains(operation)[0]

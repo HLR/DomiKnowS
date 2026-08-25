@@ -1,5 +1,9 @@
 # Embodied Agent Interface (EAI) DomiKnowS Framework
 
+For canonical joint EAI/VLABench training with one dynamically activated root
+graph and shared Qwen2.5-VL/LoRA backbone, see
+[`../JointEmbodiedAgentInterface/README.md`](../JointEmbodiedAgentInterface/README.md).
+
 This directory implements the DomiKnowS baseline and reinforcement learning framework for the **Embodied Agent Interface (EAI)** benchmark ([`Inevitablevalor/EmbodiedAgentInterface`](https://huggingface.co/datasets/Inevitablevalor/EmbodiedAgentInterface)).
 
 The task requires an embodied agent to plan and generate multi-step action-object trajectories to achieve goal states specified by natural language instructions and temporal logic conditions across **BEHAVIOR** and **VirtualHome** environments.
@@ -35,6 +39,18 @@ The task requires an embodied agent to plan and generate multi-step action-objec
 Open [`eai-two-stage-flow.html`](eai-two-stage-flow.html) for an interactive view of both stages. Its concrete `book_demo` trajectory shows the exact Qwen prompt, SimpleTL goal, task-world inputs, gold labels, simulator snapshots, constraints, rewards, and outputs; each token step reveals only the inputs needed at that point and activates the components involved below.
 
 See [`EAI_Operation.md`](EAI_Operation.md) for a detailed operational description of Stage 1 supervised learning, the Stage 1-to-Stage 2 handoff, and Stage 2 reinforcement learning.
+
+---
+
+## SimpleTL goals
+
+A **SimpleTL goal** is the task's temporal-logic success specification. It states which facts or actions must hold and, when relevant, the order in which they must occur. For example:
+
+```text
+(exists x0. (GRAB(x0))) then exists x0. (READ(x0))
+```
+
+requires the agent to grab an object and later read it. Reading first and grabbing afterward does not fully satisfy the goal, even if the final state contains similar facts. The `tl_goal` field, rather than the reference action sequence, is the authority for reward and task-success evaluation. SimpleTL supports `and`, `or`, `not`, quantifiers, and temporal `then` expressions.
 
 ---
 

@@ -1,5 +1,9 @@
 # VLABench graph-first hierarchical agent
 
+For canonical joint EAI/VLABench training with one dynamically activated root
+graph and shared Qwen2.5-VL/LoRA backbone, see
+[`../JointEmbodiedAgentInterface/README.md`](../JointEmbodiedAgentInterface/README.md).
+
 This package implements the same two-stage program structure used by
 `test_regr/EmbodiedAgentInterface`: supervised learning through a DomiKnowS
 `SolverPOIProgram`, followed by a shared-head `ReinforcementProgram`. The

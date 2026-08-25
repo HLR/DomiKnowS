@@ -364,6 +364,7 @@ def build_eai_world_graph(
     graph_name: str = "eai_world",
     constraint_builders: Iterable[Callable[[EAIWorldGraphBundle], None]] = (),
     include_default_constraints: bool = False,
+    semantic_parents: Mapping[str, Any] | None = None,
 ) -> EAIWorldGraphBundle:
     """Build the independent EAI trajectory graph and apply caller constraints."""
     from domiknows.graph import Concept, Graph
@@ -378,15 +379,28 @@ def build_eai_world_graph(
     def role(name: str) -> str:
         return f"{role_prefix}{name}"
 
+    semantic_parents = dict(semantic_parents or {})
     with Graph(graph_name) as graph:
         # These base concepts describe the nodes that make up one materialized
         # world trajectory. State, action, and next_step are relation-like
         # nodes whose required links are declared below.
-        trajectory = Concept(name="world_trajectory")
+        trajectory_parent = semantic_parents.get("episode")
+        entity_parent = semantic_parents.get("entity")
+        operation_parent = semantic_parents.get("operation")
+        trajectory = (
+            trajectory_parent(name="world_trajectory")
+            if trajectory_parent is not None else Concept(name="world_trajectory")
+        )
         step = Concept(name="world_step")
-        entity = Concept(name="world_entity")
+        entity = (
+            entity_parent(name="world_entity")
+            if entity_parent is not None else Concept(name="world_entity")
+        )
         state = Concept(name="world_state")
-        action = Concept(name="world_action")
+        action = (
+            operation_parent(name="world_action")
+            if operation_parent is not None else Concept(name="world_action")
+        )
         next_step = Concept(name="next_step")
 
         # A trajectory owns its timeline, entity universe, and temporal-link

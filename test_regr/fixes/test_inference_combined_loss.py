@@ -72,6 +72,7 @@ class _DataNode:
 def _model(
     *,
     include_global=False,
+    compile_lc=True,
     global_weight=1.0,
     executable_weight=1.0,
 ):
@@ -87,6 +88,7 @@ def _model(
     model.sample = False
     model.sampleSize = 0
     model.sampleGlobalLoss = False
+    model.compile_lc = compile_lc
     model.include_global_constraint_loss = include_global
     model.global_constraint_loss_weight = global_weight
     model.executable_constraint_loss_weight = executable_weight
@@ -130,6 +132,33 @@ def test_combines_executable_bce_and_raw_global_loss():
     assert datanode.single_calls[0][0] == "ELC0"
     assert len(datanode.global_calls) == 1
     assert datanode.global_calls[0]["sampleGlobalLoss"] is False
+    assert datanode.global_calls[0]["compiled"] is True
+
+
+def test_global_loss_can_disable_compiled_evaluation():
+    model = _model(include_global=True, compile_lc=False)
+    datanode = _DataNode(
+        global_loss={"GLC0": {"lossTensor": torch.tensor([2.0])}},
+    )
+
+    loss, *_ = model.forward(_Builder(datanode))
+
+    assert loss.item() == pytest.approx(2.0)
+    assert datanode.global_calls[0]["compiled"] is False
+
+
+def test_sampled_global_loss_does_not_request_compiled_evaluation():
+    model = _model(include_global=True, compile_lc=True)
+    model.sample = True
+    model.sampleSize = 4
+    datanode = _DataNode(
+        global_loss={"GLC0": {"lossTensor": torch.tensor([2.0])}},
+    )
+
+    loss, *_ = model.forward(_Builder(datanode))
+
+    assert loss.item() == pytest.approx(2.0)
+    assert datanode.global_calls[0]["compiled"] is False
 
 
 def test_global_loss_does_not_use_lambda():
