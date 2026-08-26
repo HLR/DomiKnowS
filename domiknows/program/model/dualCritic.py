@@ -21,10 +21,12 @@ Feature vector per grounding (fixed width, so one MLP serves every constraint):
 
     [ violation_g,  lit_mean, lit_min, lit_max,  <constraint embedding> ]
 
-The three literal-summary slots come from the participating classifier
-probabilities exported by the compiled LC path (``groundingFeatures``); when
-those are unavailable (interpreter path) they are zero-filled, which reduces the
-critic to violation + constraint identity.
+The three literal-summary slots come from every participating formula-input
+probability exported by the compiled LC path (``groundingFeatures``): atomic
+classifier values for flat formulas and aligned nested truth values for nested
+formulas. Ragged feature rows use NaN only as padding; summaries ignore that
+padding. Explicit interpreter mode has no probability-gather plan and retains
+the historical violation-plus-constraint-identity fallback.
 """
 
 import torch
@@ -58,15 +60,25 @@ class DualCritic(torch.nn.Module):
     def literal_summary(self, features, device, dtype):
         """Fixed-width [G, 3] summary of per-grounding literal probabilities.
 
-        ``features`` is a detached ``[G, L]`` tensor (participating classifier
-        probabilities) or None → zero summary.
+        ``features`` is a detached ``[G, L]`` tensor of participating classifier
+        probabilities. NaN padding in ragged rows is ignored.
         """
         if features is None or not torch.is_tensor(features) or features.numel() == 0:
             return None
         f = features.detach().to(device=device, dtype=dtype)
         if f.dim() == 1:
             f = f.unsqueeze(-1)
-        return torch.stack([f.mean(dim=-1), f.amin(dim=-1), f.amax(dim=-1)], dim=-1)
+        valid = torch.isfinite(f)
+        counts = valid.sum(dim=-1)
+        if bool((counts == 0).any()):
+            raise ValueError("literal feature row contains no finite probabilities")
+        safe = torch.where(valid, f, torch.zeros_like(f))
+        mean = safe.sum(dim=-1) / counts.to(dtype=dtype)
+        minimum = torch.where(
+            valid, f, torch.full_like(f, float('inf'))).amin(dim=-1)
+        maximum = torch.where(
+            valid, f, torch.full_like(f, float('-inf'))).amax(dim=-1)
+        return torch.stack([mean, minimum, maximum], dim=-1)
 
     def forward(self, constraint_index: int, violation: torch.Tensor,
                 literal_features=None):
@@ -84,8 +96,11 @@ class DualCritic(torch.nn.Module):
         G = v.shape[0]
 
         lit = self.literal_summary(literal_features, device, dtype)
-        if lit is None or lit.shape[0] != G:
+        if lit is None:
             lit = torch.zeros(G, self.n_literal_features, device=device, dtype=dtype)
+        elif lit.shape[0] != G:
+            raise ValueError(
+                f"literal features have {lit.shape[0]} rows for {G} violations")
         lit = torch.nan_to_num(lit, nan=0.0)
 
         idx = torch.full((G,), int(constraint_index) % self.nconstr,

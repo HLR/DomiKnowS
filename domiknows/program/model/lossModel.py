@@ -60,9 +60,10 @@ class LossModel(torch.nn.Module):
         :param temperature: Gumbel-Softmax temperature (lower = more discrete)
         :param hard_gumbel: If True, use straight-through estimator
         :param compile_lc: If True, evaluate the constraint loss with the compiled
-            (batched-gather) evaluator instead of the per-datanode interpreter;
-            unsupported constraint types fall back to the interpreter per
-            constraint. Ignored when sample is True.
+            evaluator instead of the per-datanode interpreter. Built-in and
+            custom ``LogicalConstrain`` subclasses use the common compiled
+            formula protocol. Fuzzy loss additionally batches probability
+            gathers; sampled loss keeps its native sampled-vector semantics.
         :param dual_algorithm: 'ascent' (default) keeps the plain gradient-ascent
             Lagrangian dual updated by the program's constraint optimizer.
             'augmented' switches to an Augmented Lagrangian whose per-constraint
@@ -278,6 +279,13 @@ class LossModel(torch.nn.Module):
         finite = loss_value[finite_mask]
 
         index = self.lmbd_index[key]
+        # Some compiled boolean/counting operators materialize their final
+        # violation vector on CPU even when the classifier and dual model live
+        # on CUDA. Device transfer remains differentiable, so align the vector
+        # with the registered dual buffers before applying any multiplier.
+        dual_device = self.lmbd_p.device
+        if finite.device != dual_device:
+            finite = finite.to(dual_device)
 
         if self.dual_granularity == 'amortized':
             if finite.numel() == 0:
@@ -287,8 +295,19 @@ class LossModel(torch.nn.Module):
                 gf = groundingFeatures
                 if gf.dim() == 1:
                     gf = gf.unsqueeze(-1)
-                if gf.shape[0] == loss_value.shape[0]:
-                    feats = gf[finite_mask]
+                if gf.shape[0] != loss_value.shape[0]:
+                    raise ValueError(
+                        f"groundingFeatures has {gf.shape[0]} rows for "
+                        f"{loss_value.shape[0]} violations in {key}")
+                feature_mask = finite_mask
+                if feature_mask.device != gf.device:
+                    feature_mask = feature_mask.to(gf.device)
+                feats = gf[feature_mask]
+                if feats.device != dual_device:
+                    feats = feats.to(dual_device)
+            elif self.compile_lc:
+                raise RuntimeError(
+                    f"compiled amortized dual requires groundingFeatures for {key}")
             lam = self.dual_critic(index, finite.detach(), feats)  # [G'] in (0,1)
             lam = lam * self.lmbd_p[index]                          # scale to [0, lmbd_p]
 
@@ -420,7 +439,7 @@ class LossModel(torch.nn.Module):
             counting_tnorm=self.counting_tnorm,
             sample=self.sample,
             sampleSize=self.sampleSize,
-            compiled=self.compile_lc and not self.sample
+            compiled=self.compile_lc
         )
 
         lmbd_loss = []
@@ -440,9 +459,9 @@ class LossModel(torch.nn.Module):
                     continue
 
                 if loss['lossTensor'] is not None:
-                    # groundingFeatures (per-grounding literal probabilities) are
-                    # present only on the compiled path; the DualCritic zero-fills
-                    # when they are absent (interpreter path).
+                    # Compiled execution guarantees one groundingFeatures row
+                    # per loss entry. Explicit interpreter mode has no gather
+                    # plan and retains the identity/violation-only critic input.
                     features = loss.get('groundingFeatures') if isinstance(loss, dict) else None
                     loss_ = self._weighted_constraint_loss(key, loss['lossTensor'], features)
                     self.loss[key](loss_)
@@ -481,7 +500,8 @@ class PrimalDualModel(LossModel):
         :param device: The `device` parameter specifies the device on which the computations will be
         performed. It can take the following values:, defaults to auto (optional)
         :param compile_lc: If True, evaluate the constraint loss with the compiled
-        (batched-gather) evaluator; unsupported constraints fall back to the interpreter
+            (batched-gather) formula protocol; unexpected runtime incompatibilities
+            fall back to the interpreter
         :param dual_algorithm: 'ascent' (default) or 'augmented' (Augmented Lagrangian);
             see :class:`LossModel`.
         :param dual_granularity: 'constraint' (default) or 'amortized' (R5 Phase B,
@@ -547,6 +567,7 @@ class SemanticLossModel(LossModel):
         al_rho_init=1.0, al_rho_growth=2.0, al_rho_max=100.0,
         al_stagnation_tau=0.9,
         critic_embed_dim=8, critic_hidden=32,
+        compile_lc=True,
     ):
         """
         :param lambda_weighted: weight each constraint's exact loss with the
@@ -565,6 +586,7 @@ class SemanticLossModel(LossModel):
 
         super().__init__(
             graph=graph, device=device,
+            compile_lc=compile_lc,
             dual_algorithm=dual_algorithm, dual_granularity=dual_granularity,
             al_rho_init=al_rho_init, al_rho_growth=al_rho_growth,
             al_rho_max=al_rho_max, al_stagnation_tau=al_stagnation_tau,
@@ -596,6 +618,7 @@ class SemanticLossModel(LossModel):
             circuitMaxNodes=self.circuit_max_nodes,
             circuitSizeLimitAction=self.circuit_size_limit_action,
             circuitAggregation=self.circuit_aggregation,
+            compiled=self.compile_lc,
         )
         # Fraction of constraints that had to abandon the exact circuit and fall
         # back to the Product t-norm (circuit budget exceeded). Surfaced so a
@@ -615,7 +638,11 @@ class SemanticLossModel(LossModel):
             if loss_info.get("exact") is False:
                 inexact_lc += 1
             if self.lambda_weighted:
-                loss_value = self._weighted_constraint_loss(constraint_key, loss_tensor)
+                loss_value = self._weighted_constraint_loss(
+                    constraint_key,
+                    loss_tensor,
+                    loss_info.get('groundingFeatures'),
+                )
             else:
                 loss_value = loss_tensor.mean()
             self.loss[constraint_key](loss_value)
@@ -663,6 +690,7 @@ class InferenceModel(LossModel):
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
+                 compile_lc=True,
                  pos_weight=1.0,
                  include_global_constraint_loss=False,
                  global_constraint_loss_weight=1.0,
@@ -691,6 +719,10 @@ class InferenceModel(LossModel):
         global loss will be sampled. Otherwise, it will not be sampled, defaults to False (optional)
         :param device: The `device` parameter specifies the device (CPU or GPU) on which the model will
         be trained and evaluated. It can take the following values:, defaults to auto (optional)
+        :param compile_lc: Use the compiled batched-gather evaluator for the
+            labeled executable constraints and the optional graph-global
+            constraint loss. Defaults to True; custom formula subclasses use
+            the same protocol without registration in an operator allowlist.
         :param include_global_constraint_loss: Include graph.logicalConstrains loss in addition to
             executable constraint BCE loss.
         :param global_constraint_loss_weight: Weight for graph-global constraint loss.
@@ -702,7 +734,7 @@ class InferenceModel(LossModel):
                          sample=sample, sampleSize=sampleSize, 
                          sampleGlobalLoss=sampleGlobalLoss, device=device,
                          use_gumbel=use_gumbel, temperature=temperature, 
-                         hard_gumbel=hard_gumbel)
+                         hard_gumbel=hard_gumbel, compile_lc=compile_lc)
 
         self.loss_func = loss()
         self.query_loss_func = query_loss() if query_loss is not None else self.loss_func
@@ -755,21 +787,64 @@ class InferenceModel(LossModel):
             requires_grad=requires_grad,
         )
 
-    def _calculate_global_constraint_loss(self, datanode):
+    def _template_loss_sum(
+            self, loss_function, predicted, target, instance_count,
+            positive_weight=False):
+        """Apply the legacy loss once per executable row, then sum.
+
+        Tensorizing several bindings under one template must not turn the old
+        sum of per-row mean losses into one mean over every row.
+        """
+        if instance_count <= 1:
+            losses = (loss_function(predicted, target),)
+            targets = (target,)
+        else:
+            if predicted.dim() == 0 or predicted.shape[0] != instance_count:
+                raise ValueError(
+                    "Parameterized executable output has no instance axis "
+                    f"of length {instance_count}")
+            if target.dim() == 0 or target.shape[0] != instance_count:
+                raise ValueError(
+                    "Parameterized executable label has no instance axis "
+                    f"of length {instance_count}")
+            losses = tuple(
+                loss_function(predicted[index], target[index])
+                for index in range(instance_count)
+            )
+            targets = tuple(target[index] for index in range(instance_count))
+
+        weighted = []
+        for loss_value, target_value in zip(losses, targets):
+            if positive_weight and self.pos_weight != 1.0:
+                label_mean = target_value.float().mean()
+                sample_weight = (
+                    (self.pos_weight - 1.0) * label_mean + 1.0)
+                loss_value = loss_value * sample_weight
+            weighted.append(loss_value)
+        return sum(weighted)
+
+    def _calculate_global_constraint_loss(self, datanode, constraint_losses=None):
         """Return graph-level constraint loss from graph.logicalConstrains only."""
-        constr_loss = datanode.calculateLcLoss(
-            tnorm=self.tnorm,
-            counting_tnorm=self.counting_tnorm,
-            sample=self.sample,
-            sampleSize=self.sampleSize,
-            # Keep this path per-constraint so executable constraints are not
-            # folded into the graph-global component.
-            sampleGlobalLoss=False,
-        )
+        constr_loss = constraint_losses
+        if constr_loss is None:
+            constr_loss = datanode.calculateLcLoss(
+                tnorm=self.tnorm,
+                counting_tnorm=self.counting_tnorm,
+                sample=self.sample,
+                sampleSize=self.sampleSize,
+                compiled=self.compile_lc,
+                # Keep this path per-constraint so executable constraints are not
+                # folded into the graph-global component.
+                sampleGlobalLoss=False,
+            )
 
         losses = []
         for key, loss in constr_loss.items():
             if key not in self.constr or not isinstance(loss, dict):
+                continue
+            if loss.get('executableName') is not None:
+                # A shared compiled pass may contain both populations. The
+                # executable entries are consumed by the supervised objective.
                 continue
             loss_tensor = loss.get('lossTensor')
             if loss_tensor is None:
@@ -813,8 +888,40 @@ class InferenceModel(LossModel):
             raise ValueError('No active executable constraint labels found in datanode.')
 
         lc_context = None
-        if read_labels:
-            # Prepare shared context for executable loss calculation.
+        compiled_constraint_losses = None
+        compile_executable = (
+            bool(read_labels)
+            and bool(getattr(self, 'compile_lc', False))
+            and not self.sample
+        )
+
+        if (
+            bool(read_labels)
+            and callable(getattr(
+                datanode, 'hasParameterizedExecutableBindings', None))
+            and datanode.hasParameterizedExecutableBindings()
+            and not compile_executable
+        ):
+            raise ValueError(
+                "Parameterized executable formulas require compile_lc=True "
+                "and sample=False so runtime concept slots use the compiled "
+                "formula plan."
+            )
+        if compile_executable:
+            # Evaluate all labeled executable constraints in one persistent
+            # compiled binding. When global loss is enabled, include it in this
+            # same pass so formula traversal and probability indexing happen
+            # only once for the data item.
+            compiled_constraint_losses = datanode.calculateLcLoss(
+                tnorm=self.tnorm,
+                counting_tnorm=self.counting_tnorm,
+                compiled=True,
+                includeExecutable=True,
+                includeGlobal=self.include_global_constraint_loss,
+                sampleGlobalLoss=False,
+            )
+        elif read_labels:
+            # Prepare shared interpreter context for executable loss calculation.
             lc_context = datanode._prepareLcLossContext(
                 tnorm=self.tnorm,
                 counting_tnorm=self.counting_tnorm,
@@ -822,8 +929,18 @@ class InferenceModel(LossModel):
 
         executable_losses = []
         if read_labels:
-            for lcName, lc in self.constr.items():
-                if f'{lcName}/label' not in read_labels:
+            # Iterate the labels present on this item, not every executable LC
+            # ever compiled into the union graph. Scene-grouped workloads may
+            # hold tens of thousands of templates but activate only a few
+            # dozen, so scanning ``self.constr`` here defeats dynamic dispatch.
+            active_executable_names = (
+                key[:-len('/label')]
+                for key in read_labels
+                if isinstance(key, str) and key.endswith('/label')
+            )
+            for lcName in active_executable_names:
+                lc = self.constr.get(lcName)
+                if lc is None:
                     continue
 
                 if not lc.active:
@@ -832,17 +949,33 @@ class InferenceModel(LossModel):
                 # Use datanode method to get the label.
                 raw_lbl = datanode.getExecutableConstraintLabel(lcName)
                 
-                loss_dict = datanode.calculateSingleLcLoss(
-                    lcName,
-                    tnorm=self.tnorm,
-                    counting_tnorm=self.counting_tnorm,
-                    _context=lc_context
+                loss_dict = (
+                    compiled_constraint_losses.get(lcName)
+                    if compiled_constraint_losses is not None else None
                 )
+                if loss_dict is None:
+                    # Normally the compiled calculator already falls back per
+                    # unsupported constraint. Retain this defensive path for a
+                    # custom DataNode/calculator that omits an executable entry.
+                    if lc_context is None:
+                        lc_context = datanode._prepareLcLossContext(
+                            tnorm=self.tnorm,
+                            counting_tnorm=self.counting_tnorm,
+                        )
+                    loss_dict = datanode.calculateSingleLcLoss(
+                        lcName,
+                        tnorm=self.tnorm,
+                        counting_tnorm=self.counting_tnorm,
+                        _context=lc_context
+                    )
+
+                template_instances = int(
+                    loss_dict.get('templateInstanceCount', 1))
 
                 selection_distribution = loss_dict.get('selectionDistribution')
                 if selection_distribution is not None:
-                    predicted = selection_distribution.float().reshape(-1)
-                    target = raw_lbl.float().to(predicted.device).reshape(-1)
+                    predicted = selection_distribution.float()
+                    target = raw_lbl.float().to(predicted.device)
                     if target.numel() != predicted.numel():
                         raise ValueError(
                             f"miotaL label for {lcName} has {target.numel()} values, "
@@ -858,7 +991,9 @@ class InferenceModel(LossModel):
                     eps = 1e-6
                     clamped = predicted.clamp(eps, 1.0 - eps)
                     predicted = predicted + (clamped - predicted).detach()
-                    constraint_loss = self.loss_func(predicted, target)
+                    constraint_loss = self._template_loss_sum(
+                        self.loss_func, predicted, target,
+                        template_instances)
                     executable_losses.append(constraint_loss)
                     continue
 
@@ -876,17 +1011,34 @@ class InferenceModel(LossModel):
                     inner_lc = getattr(lc, "innerLC", lc)
                     if isinstance(inner_lc, queryL) and inner_lc.is_multi_answer:
                         distribution = query_distribution.float()
-                        _target, _chosen, _losses, constraint_loss = multi_query_joint_nll(
-                            distribution,
-                            raw_lbl,
-                            inner_lc.num_subclasses,
-                            label_name=f"multi-answer queryL {lcName}",
-                        )
+                        if template_instances > 1:
+                            constraint_loss = sum(
+                                multi_query_joint_nll(
+                                    distribution[index],
+                                    raw_lbl[index],
+                                    inner_lc.num_subclasses,
+                                    label_name=(
+                                        f"multi-answer queryL {lcName} "
+                                        f"instance {index}"),
+                                )[3]
+                                for index in range(template_instances)
+                            )
+                        else:
+                            _target, _chosen, _losses, constraint_loss = (
+                                multi_query_joint_nll(
+                                    distribution,
+                                    raw_lbl,
+                                    inner_lc.num_subclasses,
+                                    label_name=f"multi-answer queryL {lcName}",
+                                )
+                            )
                         executable_losses.append(constraint_loss)
                         continue
                     try:
-                        constraint_loss = self.query_loss_func(
-                            query_distribution.float(), raw_lbl.long()
+                        constraint_loss = self._template_loss_sum(
+                            self.query_loss_func,
+                            query_distribution.float(), raw_lbl.long(),
+                            template_instances,
                         )
                     except Exception as exc:
                         raise TypeError(
@@ -949,7 +1101,11 @@ class InferenceModel(LossModel):
                     _co_clamped = constr_out.clamp(_eps, 1.0 - _eps)
                     # Straight-through: forward = clamped, backward = identity.
                     constr_out = constr_out + (_co_clamped - constr_out).detach()
-                constraint_loss = self.loss_func(constr_out.float(), lbl.float())
+                constraint_loss = self._template_loss_sum(
+                    self.loss_func, constr_out.float(), lbl.float(),
+                    template_instances,
+                    positive_weight=not is_sumL,
+                )
 
                 if self._diag_step < self._diag_budget:
                     try:
@@ -987,19 +1143,12 @@ class InferenceModel(LossModel):
                     except Exception as e:
                         print(f"[INFER_DIAG error] {e}", flush=True)
 
-                # Up-weight the positive (label=1) class if pos_weight != 1.
-                # BCELoss has no pos_weight param (unlike BCEWithLogitsLoss), so we
-                # scale the already-computed loss by the per-sample weight.
-                if self.pos_weight != 1.0:
-                    lbl_scalar = lbl.float().mean()  # lbl is 0-d or 1-d singleton here
-                    sample_weight = (self.pos_weight - 1.0) * lbl_scalar + 1.0
-                    constraint_loss = constraint_loss * sample_weight
-
                 executable_losses.append(constraint_loss)
 
         executable_loss = sum(executable_losses) if executable_losses else self._zero_loss(datanode)
         if self.include_global_constraint_loss:
-            global_loss = self._calculate_global_constraint_loss(datanode)
+            global_loss = self._calculate_global_constraint_loss(
+                datanode, constraint_losses=compiled_constraint_losses)
         else:
             global_loss = self._zero_loss(datanode)
         loss = (
@@ -1068,7 +1217,8 @@ class SampleLossModel(LossModel):
                  counting_tnorm=None,
                  sample=False, sampleSize=0, sampleGlobalLoss=False, device='auto',
                  use_gumbel=False, temperature=1.0, hard_gumbel=False,
-                 temperature_schedule='constant', min_temperature=0.5, anneal_rate=0.0003):
+                 temperature_schedule='constant', min_temperature=0.5,
+                 anneal_rate=0.0003, compile_lc=True):
         
         super().__init__(
             graph=graph,
@@ -1080,7 +1230,8 @@ class SampleLossModel(LossModel):
             device=device,
             use_gumbel=use_gumbel,
             temperature=temperature,
-            hard_gumbel=hard_gumbel
+            hard_gumbel=hard_gumbel,
+            compile_lc=compile_lc,
         )
         
         # SampleLossModel-specific: temperature annealing
@@ -1190,7 +1341,8 @@ class SampleLossModel(LossModel):
             tnorm=self.tnorm, 
             sample=self.sample, 
             sampleSize=self.sampleSize, 
-            sampleGlobalLoss=self.sampleGlobalLoss
+            sampleGlobalLoss=self.sampleGlobalLoss,
+            compiled=getattr(self, 'compile_lc', True),
         )
         
         lmbd_loss = []

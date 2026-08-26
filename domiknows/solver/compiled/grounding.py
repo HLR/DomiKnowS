@@ -9,10 +9,9 @@ tensor gathers, while reproducing the interpreter's value semantics exactly
 (constant-1 for concept-root matches, ``None`` for missing predictions, the
 stack-then-fallback variable layout).
 
-Candidate/path resolution itself (``getCandidates`` in
-``domiknows.graph.candidates``) is structural — it never touches learner
-outputs — and is reused as-is; replacing it with pure index-tensor joins is the
-planned Phase-2 optimization.
+Static candidate paths are compiled by ``compiled.plan`` and their common
+identity/relation joins execute with padded index tensors.  Complex and
+irregular path forms retain the established ``getCandidates`` fallback.
 """
 
 import torch
@@ -35,11 +34,31 @@ class ProbabilityStore:
         self.dtype = dtype
         self._concepts = {}     # concept name -> entry dict
         self._root_cache = {}   # concept name -> root concept
+        self._domain_cache = {} # root concept id -> shared datanode index
         # Graphs are needed to honour ``fixedL``: a fixed constraint replaces the
         # model prediction with a hard 0/1 derived from the label, for every read
         # of the pinned concept.
         self.graphs = graphs if graphs is not None else []
+        self._graph_key = tuple(id(graph) for graph in self.graphs)
         self._fixed_spec_cache = {}
+
+    def rebind(self, rootDn, key=None, device=None, dtype=None, graphs=None):
+        """Reuse this store for a new item without retaining stale tensors."""
+        self.rootDn = rootDn
+        if key is not None:
+            self.key = key
+        self.device = device
+        self.dtype = dtype
+        if graphs is not None:
+            self.graphs = graphs
+            graph_key = tuple(id(graph) for graph in graphs)
+            if graph_key != self._graph_key:
+                self._root_cache.clear()
+                self._graph_key = graph_key
+        self._concepts.clear()
+        self._domain_cache.clear()
+        self._fixed_spec_cache.clear()
+        return self
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -124,11 +143,22 @@ class ProbabilityStore:
 
         xPkey = '<' + conceptName + '>' + self.key
         rootConcept = self._root_for(conceptName)
-        dns = []
+        domain = None
         if rootConcept is not None:
-            dns = findDatanodesForRootConcept(self.rootDn, rootConcept) or []
-
-        row_by_id = {id(dn): i for i, dn in enumerate(dns)}
+            domain = self._domain_cache.get(id(rootConcept))
+        if domain is None:
+            dns = (
+                findDatanodesForRootConcept(self.rootDn, rootConcept) or []
+                if rootConcept is not None else []
+            )
+            domain = {
+                'dns': dns,
+                'row_by_id': {id(dn): i for i, dn in enumerate(dns)},
+            }
+            if rootConcept is not None:
+                self._domain_cache[id(rootConcept)] = domain
+        dns = domain['dns']
+        row_by_id = domain['row_by_id']
 
         rows = []
         complete = bool(dns)
@@ -245,6 +275,14 @@ class ProbabilityStore:
     # Public API
     # ------------------------------------------------------------------ #
 
+    def concept_datanodes(self, conceptName):
+        """Return the indexed DataNode domain for ``conceptName``.
+
+        Candidate plans share this lookup with probability gathering, avoiding
+        a second root-concept traversal during loss evaluation.
+        """
+        return self._entry(conceptName)['dns']
+
     def concept_matrix(self, conceptName):
         """Public view of a concept's batched belief matrix.
 
@@ -257,6 +295,48 @@ class ProbabilityStore:
         entry = self._entry(conceptName)
         return {'matrix': entry['matrix'], 'dns': entry['dns'],
                 'row_by_id': entry['row_by_id']}
+
+    def gather_identity_vector(self, dns, e):
+        """Gather one literal over an already-bound identity domain.
+
+        This is the graph-wide implication batch's hot path.  When ``dns`` is
+        exactly the concept's indexed root domain, the matrix column can be
+        returned directly without rebuilding candidate groups, row lists, or
+        an advanced-index tensor.  Irregular layouts return ``None`` so the
+        caller can use :meth:`gather_variable` or the interpreter.
+        """
+        concept = e[0]
+        conceptName = concept.name
+        entry = self._entry(conceptName)
+        matrix = entry['matrix']
+        if matrix is None or len(dns) != len(entry['dns']):
+            return None
+        if any(left is not right for left, right in zip(dns, entry['dns'])):
+            return None
+
+        is_enum = isinstance(concept, EnumConcept)
+        if is_enum and e[2] is None:
+            return None
+        class_index = e[2] if is_enum else 1
+        fixed_index = e[2] if is_enum else 0
+        if class_index is None or class_index >= matrix.shape[1]:
+            return None
+
+        rows = list(range(len(dns)))
+        vector = matrix[:, class_index]
+        vector = self._apply_fixed(vector, entry, rows, fixed_index)
+
+        const_pos = [
+            index for index, dn in enumerate(dns)
+            if dn.ontologyNode.name == conceptName
+        ]
+        if const_pos:
+            mask = torch.zeros(
+                len(dns), dtype=torch.bool, device=matrix.device)
+            mask[torch.tensor(
+                const_pos, dtype=torch.long, device=matrix.device)] = True
+            vector = torch.where(mask, torch.ones_like(vector), vector)
+        return vector
 
     @staticmethod
     def decode_relation_rows(n_rows, n_dest):

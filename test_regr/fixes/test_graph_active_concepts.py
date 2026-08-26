@@ -107,6 +107,36 @@ def test_root_activation_preserves_same_named_sibling_concepts_by_identity():
         graph.is_concept_active("text")
 
 
+def test_activation_concept_index_is_cached_and_invalidated_on_concept_addition():
+    graph, obj, *_ = _build_concept_graph()
+
+    first = graph._activation_concepts()
+    assert graph._activation_concepts() is first
+
+    with graph:
+        late = obj(name="late")
+
+    second = graph._activation_concepts()
+    assert second is not first
+    assert second["late"] is late
+    assert graph._activation_concepts() is second
+
+
+def test_subgraph_mutation_invalidates_parent_activation_index():
+    with Graph("activation_cache_root") as graph:
+        with Graph("child") as child_graph:
+            original = Concept(name="original")
+
+    first = graph._activation_concepts()
+    with child_graph:
+        late = Concept(name="late_child")
+
+    second = graph._activation_concepts()
+    assert second is not first
+    assert original in second.values()
+    assert late in second.values()
+
+
 def test_constraint_effective_activation_preserves_explicit_flag():
     graph, _, red, dog, _, _ = _build_concept_graph()
     with graph:

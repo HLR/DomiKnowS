@@ -22,6 +22,7 @@ from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMetho
 from domiknows.solver.booleanMethodsCalculator import booleanMethodsCalculator
 from domiknows.solver.circuitBooleanMethods import circuitBooleanMethods
 from domiknows.solver.circuitLossCalculator import CircuitLossCalculator
+from domiknows.solver.compiled import CompiledModeExecutor
 
 from domiknows.graph import LcElement, LogicalConstrain, V, fixedL, ifL, forAllL
 from domiknows.graph import CandidateSelection
@@ -43,6 +44,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myCircuitBooleanMethods = circuitBooleanMethods()
         self.constraintConstructor = LogicalConstraintConstructor(self.myLogger)
         self.circuitLossCalculator = CircuitLossCalculator(self)
+        self.compiledModeExecutor = CompiledModeExecutor(self)
 
         self.logical_constraints = {}
         for g in graph:
@@ -86,6 +88,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         max_nodes=None,
         size_limit_action=None,
         aggregation=None,
+        compiled=True,
     ):
         """Calculate exact ``-log(WMC)`` losses for active head constraints."""
         self.configureCircuitBackend(
@@ -94,7 +97,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             size_limit_action=size_limit_action,
         )
         return self.circuitLossCalculator.calculateCircuitLoss(
-            dn, aggregation=aggregation)
+            dn, aggregation=aggregation, compiled=compiled)
         
     def set_logical_constraints(self, new_logical_constraints):
         self.logical_constraints = new_logical_constraints
@@ -726,7 +729,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         m.update()
         
-    def addLogicalConstrains(self, m, dn, lcs, p, key = None):        
+    def addLogicalConstrains(self, m, dn, lcs, p, key=None, compiled=True):
         if key == None:
             key = "/ILP/xP"
         
@@ -746,8 +749,14 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Use the constraint constructor
             self.constraintConstructor.current_device = self.current_device
             self.constraintConstructor.myGraph = self.myGraph
-            result, _ = self.constraintConstructor.constructLogicalConstrains(
-                lc, self.myIlpBooleanProcessor, m, dn, p, key=key, headLC=True)
+            if compiled:
+                result, _ = self.compiledModeExecutor.construct(
+                    lc, self.myIlpBooleanProcessor, dn, key=key,
+                    headLC=True, model=m, p=p)
+            else:
+                result, _ = self.constraintConstructor.constructLogicalConstrains(
+                    lc, self.myIlpBooleanProcessor, m, dn, p,
+                    key=key, headLC=True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -770,7 +779,10 @@ class gurobiILPOntSolver(ilpOntSolver):
     # ---------------
                 
     # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification
-    def calculateILPSelection(self, dn, *conceptsRelations, key = ("local" , "softmax"), fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
+    def calculateILPSelection(self, dn, *conceptsRelations,
+                              key=("local", "softmax"), fun=None,
+                              epsilon=0.00001, minimizeObjective=False,
+                              ignorePinLCs=False, compiled=True):
         """Run ordinary ILP inference and populate the DataNode in place.
 
         The signature and in-place return contract of this public entry point
@@ -786,6 +798,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             epsilon=epsilon,
             minimizeObjective=minimizeObjective,
             ignorePinLCs=ignorePinLCs,
+            compiled=compiled,
         )
 
     def _calculateILPSelection(
@@ -801,6 +814,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         populate=True,
         forceFreshModel=False,
         raiseOnInfeasible=True,
+        compiled=True,
     ):
         """Internal ILP run used by executable-constraint hypotheses.
 
@@ -935,6 +949,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     minimizeObjective,
                     lcRun,
                     cacheModel=not forceFreshModel,
+                    compiled=compiled,
                 )
 
             endOptimize = perf_counter()
@@ -1164,6 +1179,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         minimizeObjective,
         lcRun,
         cacheModel=True,
+        compiled=True,
     ):
         ps = []
         ps.append(p)
@@ -1225,7 +1241,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLoggerTime.info('ILP Logical Constraints Preprocessing - time: %ims' % (elapsedLogicalConstraintsPrepInMs))
         
         if pUsed or not reusingModel:
-            self.addLogicalConstrains(mP, dn, lcs, p, key=lckey)  # <--- LC constraints
+            self.addLogicalConstrains(
+                mP, dn, lcs, p, key=lckey, compiled=compiled)
             
             # Save model
             if self.reuse_model and cacheModel:

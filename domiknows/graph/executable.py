@@ -84,6 +84,94 @@ def get_full_funcs(expr_str: str) -> str:
 
     return ast.unparse(tree)
 
+
+def canonical_executable_key(expr_str: str) -> str:
+    """Return a formatting-independent key for one executable expression.
+
+    The input is expected to have already been normalized by
+    :func:`get_full_funcs`.  ``ast.dump`` deliberately excludes source
+    locations, so whitespace and equivalent parenthesization do not create
+    duplicate executable formula objects.
+    """
+    tree = ast.parse(expr_str, mode='eval')
+    return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+
+def parameterized_executable_key(expr_str: str, namespace):
+    """Return a structural key and the row's ordered concept bindings.
+
+    Concept identifiers become typed slots.  Variable names used by concept
+    calls (including ``path=`` values) are alpha-normalized, so ``p("x")`` and
+    ``q("y")`` can share a plan without confusing genuinely different
+    variable-equality patterns.  Numeric, Boolean, and operator keyword values
+    remain in the key because they can change formula semantics.
+    """
+    from .concept import Concept, EnumConcept
+
+    tree = ast.parse(expr_str, mode='eval')
+
+    class TemplateNormalizer(ast.NodeTransformer):
+        def __init__(self):
+            self.concept_slots = {}
+            self.concepts = []
+            self.variable_slots = {}
+
+        def _variable_literal(self, node):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                slot = self.variable_slots.setdefault(
+                    node.value, len(self.variable_slots))
+                return ast.copy_location(
+                    ast.Constant(value=f"__variable_slot_{slot}"), node)
+            if isinstance(node, (ast.Tuple, ast.List)):
+                node.elts = [self._variable_literal(item) for item in node.elts]
+                return node
+            return self.visit(node)
+
+        def visit_Call(self, node):
+            concept = (
+                namespace.get(node.func.id)
+                if isinstance(node.func, ast.Name) else None
+            )
+            if not isinstance(concept, Concept):
+                return self.generic_visit(node)
+
+            identity = id(concept)
+            slot = self.concept_slots.get(identity)
+            if slot is None:
+                slot = len(self.concepts)
+                self.concept_slots[identity] = slot
+                self.concepts.append(concept)
+
+            concept_type = type(concept).__qualname__.replace('.', '_')
+            enum_width = len(concept.enum) if isinstance(concept, EnumConcept) else 0
+            node.func = ast.copy_location(
+                ast.Name(
+                    id=f"__concept_slot_{slot}_{concept_type}_{enum_width}",
+                    ctx=ast.Load(),
+                ),
+                node.func,
+            )
+            node.args = [self._variable_literal(arg) for arg in node.args]
+            node.keywords = [
+                ast.keyword(
+                    arg=keyword.arg,
+                    value=(
+                        self._variable_literal(keyword.value)
+                        if keyword.arg == 'path'
+                        else self.visit(keyword.value)
+                    ),
+                )
+                for keyword in node.keywords
+            ]
+            return node
+
+    normalizer = TemplateNormalizer()
+    normalized = normalizer.visit(tree)
+    ast.fix_missing_locations(normalized)
+    key = ast.dump(
+        normalized, annotate_fields=True, include_attributes=False)
+    return key, tuple(normalizer.concepts)
+
 data_type = TypeVar('data_type')
 
 class LogicDataset(Sequence[data_type]):
@@ -99,12 +187,25 @@ class LogicDataset(Sequence[data_type]):
         logic_keyword: str = 'constraint',
         logic_label_keyword: str = 'label',
         vector_label_names=None,
+        deduplicated=False,
+        concept_bindings=None,
+        parameterized=False,
     ):
         self.data = data # must attach each item to a sequence
         self.logic_keyword = logic_keyword
         self.logic_label_keyword = logic_label_keyword
         self.lc_name_list = lc_name_list
         self.vector_label_names = set(vector_label_names or ())
+        self.deduplicated = bool(deduplicated)
+        self.unique_constraint_count = len(set(lc_name_list))
+        self.reused_constraint_count = len(lc_name_list) - self.unique_constraint_count
+        self.concept_bindings = list(
+            concept_bindings or (None for _ in lc_name_list))
+        if len(self.concept_bindings) != len(self.lc_name_list):
+            raise ValueError("concept_bindings must align with lc_name_list")
+        self.parameterized = bool(parameterized)
+
+    BINDINGS_KEY: str = '_constraint_template_bindings'
 
     @staticmethod
     @property
@@ -132,6 +233,24 @@ class LogicDataset(Sequence[data_type]):
     def __len__(self):
         return len(self.data)
 
+    @staticmethod
+    def selected_lc_names(value) -> frozenset[str]:
+        """Normalize the executable switch value to a set of LC names.
+
+        Historically each data item selected one executable constraint with a
+        string.  Scene-grouped workloads select several constraints while
+        sharing the same model forward pass, so tuples/lists/sets are accepted
+        as well without changing the scalar representation.
+        """
+        if value is None:
+            return frozenset()
+        if isinstance(value, str):
+            return frozenset((value,))
+        try:
+            return frozenset(value)
+        except TypeError:
+            return frozenset((value,))
+
     def __getitem__(self, index: int) -> data_type:
         data_item = self.data[index]
         curr_lc_name = self.lc_name_list[index]
@@ -144,7 +263,7 @@ class LogicDataset(Sequence[data_type]):
             ):
                 label = [label]
 
-        return {
+        result = {
             # store the label in the datanode with key self.KEYWORD_FMT
             # this indicates which constraint to use
             self.KEYWORD_FMT.format(lc_name=curr_lc_name): label,
@@ -152,3 +271,7 @@ class LogicDataset(Sequence[data_type]):
             self.do_switch_key: None, # the value has no meaning
             **data_item
         }
+        binding = self.concept_bindings[index]
+        if binding is not None:
+            result[self.BINDINGS_KEY] = {curr_lc_name: (binding,)}
+        return result

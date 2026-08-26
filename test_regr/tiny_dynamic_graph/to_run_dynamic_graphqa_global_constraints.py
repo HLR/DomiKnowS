@@ -9,11 +9,13 @@ import argparse
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import time
 
 import torch
 
 from domiknows.graph import Concept, Graph, ifL
-from domiknows.program.lossprogram import InferenceProgram
+from domiknows.graph.executable import LogicDataset
+from domiknows.program.lossprogram import InferenceProgram, PrimalDualProgram
 from domiknows.program.model.pytorch import SolverModel
 from domiknows.sensor.pytorch import ModuleLearner
 from domiknows.sensor.pytorch.sensors import FunctionalReaderSensor
@@ -95,9 +97,13 @@ class GraphQAStressContext:
     rule_specs: tuple
     examples: tuple
     entries: tuple
-    program: InferenceProgram
+    program: object
+    program_profile: str
     shared_model: torch.nn.Module
     optimizer: torch.optim.Optimizer
+    compiled_executable_formulas: int
+    reused_executable_rows: int
+    parameterized_executable_templates: bool
 
 
 def family_names(prefix, count):
@@ -292,8 +298,85 @@ def rows_for_examples(examples, config, device):
     return rows, active_names_by_row
 
 
-def build_stress_workload(config, device="cpu"):
+def group_compiled_rows_by_example(compiled, config):
+    """Combine one scene's executable labels into one model input.
+
+    ``compile_executable`` intentionally creates one logical constraint per
+    label.  The old workload then treated every one of those labels as a new
+    optimizer item, repeating the shared MLP forward pass 25 times per scene.
+    A grouped item retains all label-reader keys and selects all of its
+    executable constraints together through LogicDataset's tuple-aware switch.
+    """
+    rows_per_example = 2 * config.objects_per_example + 1
+    if len(compiled) != config.examples * rows_per_example:
+        raise ValueError(
+            f"Expected {config.examples * rows_per_example} compiled rows, "
+            f"got {len(compiled)}"
+        )
+
+    grouped = []
+    for start in range(0, len(compiled), rows_per_example):
+        items = [compiled[index] for index in range(start, start + rows_per_example)]
+        first = items[0]
+        payload = {
+            key: value
+            for key, value in first.items()
+            if key not in (LogicDataset.curr_lc_key, LogicDataset.do_switch_key)
+            and not (isinstance(key, str) and key.startswith("_constraint_"))
+            and key not in ("logic_str", "logic_label")
+        }
+        selected = []
+        labels_by_name = {}
+        bindings_by_name = {}
+        for item in items:
+            lc_name = item[LogicDataset.curr_lc_key]
+            if lc_name not in selected:
+                selected.append(lc_name)
+            label_key = LogicDataset.KEYWORD_FMT.format(lc_name=lc_name)
+            labels_by_name.setdefault(lc_name, []).append(item[label_key])
+            item_bindings = item.get(LogicDataset.BINDINGS_KEY, {})
+            bindings_by_name.setdefault(lc_name, []).extend(
+                item_bindings.get(lc_name, ()))
+
+        for lc_name, labels in labels_by_name.items():
+            label_key = LogicDataset.KEYWORD_FMT.format(lc_name=lc_name)
+            if len(labels) == 1:
+                payload[label_key] = labels[0]
+            else:
+                normalized_labels = []
+                for label in labels:
+                    tensor = torch.as_tensor(label)
+                    if tensor.dim() > 0 and tensor.shape[0] == 1:
+                        tensor = tensor.squeeze(0)
+                    normalized_labels.append(tensor)
+                # The leading axis is DomiKnowS's data-item/batch axis. Keep
+                # all template instances inside one constraint DataNode.
+                payload[label_key] = torch.stack(
+                    normalized_labels, dim=0).unsqueeze(0)
+        if any(bindings_by_name.values()):
+            payload[LogicDataset.BINDINGS_KEY] = {
+                name: tuple(bindings)
+                for name, bindings in bindings_by_name.items()
+                if bindings
+            }
+        payload[LogicDataset.curr_lc_key] = tuple(selected)
+        payload[LogicDataset.do_switch_key] = None
+        grouped.append(payload)
+    return tuple(grouped)
+
+
+def build_stress_workload(
+    config,
+    device="cpu",
+    program_profile="inference",
+    parameterize_executable=True,
+):
     """Construct the large union graph. This is intentionally not called on import."""
+
+    if program_profile not in ("inference", "primal-dual-amortized"):
+        raise ValueError(
+            "program_profile must be 'inference' or 'primal-dual-amortized'"
+        )
 
     torch.manual_seed(config.seed)
     reset_domiknows_state()
@@ -344,26 +427,60 @@ def build_stress_workload(config, device="cpu"):
         logic_keyword="logic_str",
         logic_label_keyword="logic_label",
         extra_namespace_values=namespace,
+        deduplicate=True,
+        parameterize=parameterize_executable,
     )
+    grouped = group_compiled_rows_by_example(compiled, config)
+    rows_per_example = 2 * config.objects_per_example + 1
     entries = tuple(
         (
-            tuple(concepts[name] for name in active_names) + candidates,
-            compiled[index],
+            tuple(concepts[name] for name in active_names_by_row[index * rows_per_example])
+            + candidates,
+            grouped[index],
         )
-        for index, active_names in enumerate(active_names_by_row)
+        for index in range(config.examples)
     )
-    program = InferenceProgram(
-        graph,
-        SolverModel,
+    program_kwargs = dict(
         poi=[obj, *concepts.values(), *candidates, graph.constraint],
         device=device,
         inferTypes=["local/argmax"],
         beta=config.beta,
         tnorm="P",
-        include_global_constraint_loss=True,
-        executable_constraint_loss_weight=config.executable_weight,
-        global_constraint_loss_weight=config.global_weight,
+        compile_lc=True,
     )
+    if program_profile == "inference":
+        program = InferenceProgram(
+            graph,
+            SolverModel,
+            include_global_constraint_loss=True,
+            executable_constraint_loss_weight=config.executable_weight,
+            global_constraint_loss_weight=config.global_weight,
+            **program_kwargs,
+        )
+    else:
+        # This profile directly exercises compiled groundingFeatures through a
+        # per-grounding DualCritic. Executable constraints remain in each scene
+        # as labels/model inputs, but are excluded from the global dual system.
+        global_constraint_names = {rule.lcName for rule in rules.values()}
+        excluded_constraint_names = tuple(
+            name
+            for key, lc in graph.allLogicalConstrainsRecursive
+            if key not in global_constraint_names
+            and getattr(lc, "lcName", key) not in global_constraint_names
+            for name in (key, getattr(lc, "lcName", None))
+            if name is not None
+        )
+        program = PrimalDualProgram(
+            graph,
+            SolverModel,
+            dual_granularity="amortized",
+            exclude_constraints=excluded_constraint_names,
+            **program_kwargs,
+        )
+    # LearningBasedProgram places the prediction model from its constructor
+    # arguments; LossProgram.to additionally moves constraint-side parameters
+    # such as the amortized DualCritic and its multiplier bounds.
+    program.to(device)
     optimizer = torch.optim.Adam(shared_model.parameters(), lr=config.learning_rate)
     program.opt = optimizer
     return GraphQAStressContext(
@@ -376,8 +493,12 @@ def build_stress_workload(config, device="cpu"):
         examples=examples,
         entries=entries,
         program=program,
+        program_profile=program_profile,
         shared_model=shared_model,
         optimizer=optimizer,
+        compiled_executable_formulas=compiled.unique_constraint_count,
+        reused_executable_rows=compiled.reused_constraint_count,
+        parameterized_executable_templates=compiled.parameterized,
     )
 
 
@@ -385,12 +506,18 @@ def train_stress_workload(context, device="cpu", output=None):
     """Run regular DomiKnowS training after the caller passes the CLI safety gate."""
 
     context.program.opt = context.optimizer
+    train_kwargs = {}
+    if context.program_profile == "primal-dual-amortized":
+        # Ensure even a one-epoch smoke profile executes the critic rather than
+        # spending all of its few items in primal-only warmup.
+        train_kwargs.update(c_warmup_iters=0, c_freq=1)
     context.program.train(
         ActiveConceptDataset(context.graph, context.entries),
         warmup_epochs=0,
         constraint_epochs=context.config.epochs,
         batch_size=1,
         device=device,
+        **train_kwargs,
     )
     context.graph.set_active_concepts(None)
     if output:
@@ -412,6 +539,8 @@ def workload_summary(config):
         "mock_examples": config.examples,
         "objects_per_example": config.objects_per_example,
         "compiled_executable_rows": config.executable_rows,
+        "optimizer_items_per_epoch": config.examples,
+        "executable_rows_per_item": 2 * config.objects_per_example + 1,
         "active_concepts_per_example_upper_bound": (
             4 + config.active_distractors_per_example + config.objects_per_example
         ),
@@ -425,6 +554,16 @@ def parse_args(argv=None):
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--output")
     parser.add_argument(
+        "--program-profile",
+        choices=("inference", "primal-dual-amortized"),
+        default="inference",
+        help=(
+            "inference keeps the combined executable/global objective; "
+            "primal-dual-amortized directly exercises compiled groundingFeatures "
+            "with a per-grounding DualCritic"
+        ),
+    )
+    parser.add_argument(
         "--confirm-run",
         action="store_true",
         help="Required: construct the large graph and start program.train.",
@@ -435,13 +574,49 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     config = StressConfig.load(args.config)
-    print(json.dumps(workload_summary(config), indent=2, sort_keys=True))
+    summary = workload_summary(config)
+    summary["program_profile"] = args.program_profile
+    print(json.dumps(summary, indent=2, sort_keys=True))
     if not args.confirm_run:
         print("NOT RUN: pass --confirm-run only after reviewing TO_RUN_large_dynamic_graphqa.md")
         return 0
 
-    context = build_stress_workload(config, device=args.device)
+    construction_start = time.perf_counter()
+    context = build_stress_workload(
+        config, device=args.device, program_profile=args.program_profile
+    )
+    construction_seconds = time.perf_counter() - construction_start
+    training_start = time.perf_counter()
     train_stress_workload(context, device=args.device, output=args.output)
+    training_seconds = time.perf_counter() - training_start
+    cmodel = context.program.cmodel
+    critic = getattr(cmodel, "dual_critic", None)
+    diagnostics = {
+        "construction_seconds": construction_seconds,
+        "training_seconds": training_seconds,
+        "optimizer_items_per_epoch": len(context.entries),
+        "compiled_executable_formulas": context.compiled_executable_formulas,
+        "reused_executable_rows": context.reused_executable_rows,
+        "parameterized_executable_templates": (
+            context.parameterized_executable_templates
+        ),
+        "compile_lc": bool(getattr(cmodel, "compile_lc", False)),
+        "dual_granularity": getattr(cmodel, "dual_granularity", None),
+        "dual_critic_parameters": (
+            sum(parameter.numel() for parameter in critic.parameters())
+            if critic is not None else 0
+        ),
+        "last_executable_loss": (
+            float(cmodel.last_executable_loss)
+            if hasattr(cmodel, "last_executable_loss") else None
+        ),
+        "last_global_loss": (
+            float(cmodel.last_global_loss)
+            if hasattr(cmodel, "last_global_loss") else None
+        ),
+        "graph_reset": context.graph._active_concepts is None,
+    }
+    print(json.dumps(diagnostics, indent=2, sort_keys=True))
     return 0
 
 

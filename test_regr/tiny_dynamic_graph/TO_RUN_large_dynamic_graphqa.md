@@ -1,10 +1,17 @@
 # To Run: GraphQA-Scale Dynamic Global Constraints
 
-This workload is intentionally **not part of the regression suite** and has not
-been executed. It is a collaborator experiment for checking whether regular
-DomiKnowS training remains differentiable and stable when one union graph holds
-many KB rules but each GraphQA-like instance activates only a small proof
-neighborhood.
+The full workload is intentionally **not part of the regression suite**. It is
+a collaborator experiment for checking whether regular DomiKnowS training
+remains differentiable and stable when one union graph holds many KB rules but
+each GraphQA-like instance activates only a small proof neighborhood.
+
+The recommended 64-concept/250-rule/20-scene stage-1 profile has been validated
+on an NVIDIA T550 with CUDA 12.8. With scene grouping, the inference profile
+completed one epoch in 14.09 seconds with parameterized templates (previously
+713.37 seconds across 500 separate rows), and the amortized profile completed
+in 20.76 seconds before template parameterization with its critic on `cuda:0`
+and updated critic weights. The committed full
+1,024-concept/10,000-rule profile has not yet been completed end to end.
 
 ## What It Mimics
 
@@ -16,17 +23,31 @@ neighborhood.
 - One shared MLP attached to all atomic predicates through `ModuleLearner`.
 - One union graph reused across examples through `Graph.set_active_concepts`.
 - Combined executable and graph-global loss through `InferenceProgram.train`.
+- Optional compiled per-grounding duals through
+  `PrimalDualProgram(..., dual_granularity="amortized")`.
 
 The default manifest declares 1,024 learned concepts and 10,000 global rules,
 then creates 2,000 mock scenes with 12 objects each. Each scene activates its
 target proof chain, candidate concepts, and 24 distractor concepts. Inactive
 sensors and rules should be skipped by the dynamic graph.
 
+The 25 executable labels belonging to a scene are grouped into one optimizer
+item. The default profile therefore performs 2,000 optimizer items per epoch,
+not 50,000 repeated model forwards. Parameterized executable templates also
+reduce the full manifest's 50,000 source rows to two compiled constraint
+objects; 49,998 rows reuse one of those templates while keeping their own
+runtime concept bindings and labels. Full-manifest construction measured 13.482
+seconds on the NVIDIA T550.
+The graph also caches its activation concept index and invalidates it
+automatically when concepts or subgraphs are added or removed.
+
 ## Safety Gate
 
 Running the module without `--confirm-run` prints the resolved workload size and
-exits before graph construction. The command below is therefore a plan, not a
-command that has already been validated:
+exits before graph construction. The command shape and stage-1 profiles below
+are validated; the full manifest remains a guarded long run.
+
+### Conda
 
 ```bash
 conda run --no-capture-output -n CLEVER \
@@ -35,6 +56,36 @@ conda run --no-capture-output -n CLEVER \
   --device cuda \
   --confirm-run
 ```
+
+### uv Alternative
+
+Prepare the project environment with a CUDA extra first, for example
+`uv sync --extra cu128`, then run:
+
+```bash
+uv run python -m test_regr.tiny_dynamic_graph.to_run_dynamic_graphqa_global_constraints \
+  --config test_regr/tiny_dynamic_graph/mock_graphqa_stress_config.json \
+  --device cuda \
+  --confirm-run
+```
+
+To directly exercise compiled `groundingFeatures` with a per-grounding
+`DualCritic`, add the amortized profile:
+
+```bash
+uv run --extra cu128 --extra dev python \
+  -m test_regr.tiny_dynamic_graph.to_run_dynamic_graphqa_global_constraints \
+  --config test_regr/tiny_dynamic_graph/mock_graphqa_stress_config.json \
+  --device cuda \
+  --program-profile primal-dual-amortized \
+  --confirm-run
+```
+
+The default `--program-profile inference` retains the combined supervised
+executable/global objective. The amortized profile scopes its critic to the
+global KB rules; executable labels remain grouped scene inputs but are excluded
+from the dual system. Both profiles print construction/training times and their
+resolved compiler/dual diagnostics when they finish.
 
 ## Recommended Run Order
 
@@ -58,7 +109,13 @@ conda run --no-capture-output -n CLEVER \
   exceptions.
 - Training is sequential with `batch_size=1`; active concepts are mutable graph
   state and are not safe with concurrent data-loader workers.
-- Report graph construction time separately from epoch training time.
+- Confirm the summary reports `optimizer_items_per_epoch == examples` and
+  `executable_rows_per_item == 2 * objects_per_example + 1`.
+- Confirm completion diagnostics report `compiled_executable_formulas == 2`,
+  `reused_executable_rows == 49998`, and
+  `parameterized_executable_templates == true` for the unchanged full manifest.
+- Report graph construction time separately from epoch training time (the CLI
+  prints both automatically).
 - Do not interpret this synthetic workload as GraphQA accuracy. It only tests
   scalability and training wiring before using real GraphQA instances.
 

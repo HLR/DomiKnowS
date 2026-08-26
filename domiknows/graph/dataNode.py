@@ -1388,6 +1388,32 @@ class DataNode:
             for key in read_labels
             if isinstance(key, str) and key.endswith('/label')
         }
+
+    def getExecutableConstraintBindings(self, lcName):
+        """Return ordered concept-slot bindings for an executable template.
+
+        Bindings are control metadata carried by ``LogicDataset`` in the
+        original builder item; they are intentionally not tensorized into a
+        DataNode attribute. Non-parameterized datasets return an empty tuple.
+        """
+        from .executable import LogicDataset
+
+        builder = self.myBuilder
+        if builder is None:
+            return ()
+        data_item = builder.get('data_item', {})
+        binding_map = data_item.get(LogicDataset.BINDINGS_KEY, {})
+        return tuple(binding_map.get(lcName, ()))
+
+    def hasParameterizedExecutableBindings(self):
+        """Whether the current builder item contains template bindings."""
+        from .executable import LogicDataset
+
+        builder = self.myBuilder
+        if builder is None:
+            return False
+        return bool(
+            builder.get('data_item', {}).get(LogicDataset.BINDINGS_KEY))
     
     def setActiveExecutableLCs(self):
         read_labels = self.getExecutableConstraintLabels()
@@ -1399,17 +1425,28 @@ class DataNode:
         no_active_lcs = len(active_lc_names)
         _DataNode__Logger.info('Number of active executive LCs: %d' % (no_active_lcs))
 
-        # Set active/inactive executive LCs in the graph
-        lc_no = 0
-        for lc_name, lc in self.graph.executableLCs.items():
-            assert lc_name == str(lc)  # TODO: where does lc_name come from? is it == str(lc)?
-            lc_no += 1
-            if lc_name in active_lc_names:
-                lc.active = True
-                lc.innerLC.active = True
-            else:
-                lc.active = False
-                lc.innerLC.active = False
+        # Update only constraints whose state changed. The first call performs
+        # one full initialization; subsequent scene-grouped items touch at most
+        # the previous and current scene's small executable sets instead of
+        # rescanning every executable constraint in the union graph.
+        previous = getattr(self.graph, '_active_executable_lc_names', None)
+        if previous is None:
+            for lc_name, lc in self.graph.executableLCs.items():
+                is_active = lc_name in active_lc_names
+                lc.active = is_active
+                lc.innerLC.active = is_active
+        else:
+            for lc_name in previous - active_lc_names:
+                lc = self.graph.executableLCs.get(lc_name)
+                if lc is not None:
+                    lc.active = False
+                    lc.innerLC.active = False
+            for lc_name in active_lc_names - previous:
+                lc = self.graph.executableLCs.get(lc_name)
+                if lc is not None:
+                    lc.active = True
+                    lc.innerLC.active = True
+        self.graph._active_executable_lc_names = frozenset(active_lc_names)
 
         return read_labels
                 
@@ -2112,7 +2149,9 @@ class DataNode:
         elapsedInferLocalInMs = (endInferLocal - startInferLocal) * 1000
         self.myLoggerTime.info('Infer Local Probabilities - keys: %s, time: %dms', keys, elapsedInferLocalInMs)
 
-    def inferILPResults(self, *_conceptsRelations, key=("local", "softmax"), fun=None, epsilon=0.00001, minimizeObjective=False, ignorePinLCs=False, Acc=None):
+    def inferILPResults(self, *_conceptsRelations, key=("local", "softmax"),
+                        fun=None, epsilon=0.00001, minimizeObjective=False,
+                        ignorePinLCs=False, Acc=None, compiled=True):
         """
         Calculate ILP (Integer Linear Programming) prediction for a data graph using this instance as the root.
         Based on the provided list of concepts and relations, it initiates ILP solving procedures.
@@ -2187,6 +2226,7 @@ class DataNode:
                     epsilon=epsilon,
                     minimizeObjective=minimizeObjective,
                     ignorePinLCs=ignorePinLCs,
+                    compiled=compiled,
                 )
                 return
 
@@ -2205,6 +2245,7 @@ class DataNode:
             answer_solver = AnswerSolver(
                 target_dn.graph,
                 solver=myILPOntSolver,
+                compiled=compiled,
             )
             answer_solver.solve_active_constraints(
                 target_dn,
@@ -2267,6 +2308,7 @@ class DataNode:
         circuitMaxNodes=None,
         circuitSizeLimitAction=None,
         circuitAggregation='joint',
+        compiled=True,
         Acc=None,
         fun=None,
         epsilon=0.00001,
@@ -2361,6 +2403,7 @@ class DataNode:
                         circuitMaxNodes=circuitMaxNodes,
                         circuitSizeLimitAction=circuitSizeLimitAction,
                         circuitAggregation=circuitAggregation,
+                        compiled=compiled,
                         Acc=Acc,
                         fun=fun,
                         epsilon=epsilon,
@@ -2441,6 +2484,7 @@ class DataNode:
                 minimizeObjective=minimizeObjective,
                 ignorePinLCs=ignorePinLCs,
                 Acc=Acc,
+                compiled=compiled,
             )
 
             def collect_ilp_results(target_dn):
@@ -2525,6 +2569,7 @@ class DataNode:
             circuit_max_nodes=circuitMaxNodes,
             circuit_size_limit_action=circuitSizeLimitAction,
             circuit_aggregation=circuitAggregation,
+            compiled=compiled,
         )
 
         def infer_target(target_dn):
@@ -2607,7 +2652,7 @@ class DataNode:
         myGBIModel = GBIModel(self.graph, solver_model=model, **cmodelKwargs)
         myGBIModel.calculateGBISelection(self, _conceptsRelations)
 
-    def verifyResultsLC(self, key = "/local/argmax"):
+    def verifyResultsLC(self, key="/local/argmax", compiled=True):
         """
         Verify the results of ILP (Integer Linear Programming) by checking the percentage of
         results satisfying each logical constraint (LC).
@@ -2627,7 +2672,10 @@ class DataNode:
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
         myilpOntSolver.current_device = self.current_device
-        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        verifier = getattr(myilpOntSolver, '_logical_constraint_verifier', None)
+        if verifier is None:
+            verifier = LogicalConstraintVerifier(myilpOntSolver)
+            myilpOntSolver._logical_constraint_verifier = verifier
         
         # Check if full data node is created and create it if not
         if self.myBuilder != None:
@@ -2640,11 +2688,12 @@ class DataNode:
         else:
             _DataNode__Logger.error("Not supported key %s for verifyResultsLC"%(key))
 
-        verifyResult = verifier.verifyResults(self, key = key)
+        verifyResult = verifier.verifyResults(self, key=key, compiled=compiled)
 
         return verifyResult
 
-    def verifySingleConstraint(self, lcName, key="/local/argmax", label = None):
+    def verifySingleConstraint(self, lcName, key="/local/argmax", label=None,
+                               compiled=True):
         """
         Verify a single logical constraint against model predictions.
         
@@ -2672,7 +2721,10 @@ class DataNode:
         """
         myilpOntSolver, _ = self.getILPSolver(conceptsRelations=self.collectConceptsAndRelations())
         myilpOntSolver.current_device = self.current_device
-        verifier = LogicalConstraintVerifier(myilpOntSolver)
+        verifier = getattr(myilpOntSolver, '_logical_constraint_verifier', None)
+        if verifier is None:
+            verifier = LogicalConstraintVerifier(myilpOntSolver)
+            myilpOntSolver._logical_constraint_verifier = verifier
         
         # Check if full data node is created and create it if not
         if self.myBuilder is not None:
@@ -2706,7 +2758,9 @@ class DataNode:
         myBooleanMethods = myilpOntSolver.booleanMethodsCalculator
         myBooleanMethods.current_device = self.current_device
         
-        return verifier.verifySingleConstraint(lc, myBooleanMethods, self, key, label=label)
+        return verifier.verifySingleConstraint(
+            lc, myBooleanMethods, self, key, label=label,
+            compiled=compiled)
    
     def _prepareLcLossContext(self, tnorm='P', counting_tnorm=None):
         """
@@ -2805,7 +2859,7 @@ class DataNode:
                         sampleGlobalLoss=False, compiled=False, circuit=False,
                         circuitBackend=None, circuitMaxNodes=None,
                         circuitSizeLimitAction=None, circuitAggregation=None,
-                        includeExecutable=False):
+                        includeExecutable=False, includeGlobal=True):
         """
         Calculate the loss for logical constraints (LC) based on various t-norms.
 
@@ -2821,9 +2875,9 @@ class DataNode:
         - sampleGlobalLoss: bool, optional
             Specifies whether to calculate the global loss in case of sampling. Default is False.
         - compiled: bool, optional
-            Use the compiled (batched-gather) constraint evaluator instead of the
-            per-datanode interpreter. Falls back to the interpreter per constraint
-            for unsupported constraint types. Ignored when sample is True.
+            Reuse compiled formula and candidate/path plans. Fuzzy loss also
+            batches probability gathers; sampling and circuit modes preserve
+            their native leaves while avoiding repeated formula traversal.
         - circuit: bool, optional
             Compile each active head constraint to an exact logical circuit and
             return differentiable ``-log(weighted_model_count)`` losses.
@@ -2836,6 +2890,10 @@ class DataNode:
             ``InferenceProgram`` does not double-count them. Enable when one
             number must cover every constraint (e.g. comparing against the
             exact-circuit path, which always iterates both populations).
+        - includeGlobal: bool, optional
+            Include constraints stored in ``graph.logicalConstrains``. Disable
+            this with ``includeExecutable=True`` for an executable-only pass.
+            Defaults to True.
         - circuitAggregation: str, optional
             ``'joint'`` (default) returns one ``-log P(all groundings hold)`` per
             constraint, preserving dependence between groundings that share a
@@ -2868,19 +2926,41 @@ class DataNode:
                 max_nodes=circuitMaxNodes,
                 size_limit_action=circuitSizeLimitAction,
                 aggregation=circuitAggregation,
+                compiled=compiled,
             )
         elif sample:
-            sampleCalculator = SampleLossCalculator(myilpOntSolver)
-            lcLosses = sampleCalculator.calculateSampleLoss(self, sampleSize, sampleGlobalLoss, conceptsRelations)
+            sampleCalculator = None
+            if compiled:
+                sampleCalculator = getattr(
+                    myilpOntSolver, '_compiled_sample_loss_calculator', None)
+            if sampleCalculator is None:
+                sampleCalculator = SampleLossCalculator(myilpOntSolver)
+                if compiled:
+                    myilpOntSolver._compiled_sample_loss_calculator = (
+                        sampleCalculator)
+            lcLosses = sampleCalculator.calculateSampleLoss(
+                self, sampleSize, sampleGlobalLoss, conceptsRelations,
+                compiled=compiled)
         elif compiled:
             from domiknows.solver.compiled import CompiledLossCalculator
-            lossCalculator = CompiledLossCalculator(myilpOntSolver)
+            # Keep the graph-level formula plans on the solver across batches.
+            # The calculator rebinds those immutable plans to this DataNode's
+            # current prediction tensors for each call.
+            lossCalculator = getattr(
+                myilpOntSolver, '_compiled_loss_calculator', None)
+            if lossCalculator is None:
+                lossCalculator = CompiledLossCalculator(myilpOntSolver)
+                myilpOntSolver._compiled_loss_calculator = lossCalculator
             lcLosses = lossCalculator.calculateLoss(
-                self, tnorm, counting_tnorm, include_executable=includeExecutable)
+                self, tnorm, counting_tnorm,
+                include_executable=includeExecutable,
+                include_global=includeGlobal)
         else:
             lossCalculator = LossCalculator(myilpOntSolver)
             lcLosses = lossCalculator.calculateLoss(
-                self, tnorm, counting_tnorm, include_executable=includeExecutable)
+                self, tnorm, counting_tnorm,
+                include_executable=includeExecutable,
+                include_global=includeGlobal)
         
         end = perf_counter()
         elapsedInS = end - start

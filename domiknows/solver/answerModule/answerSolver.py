@@ -35,12 +35,19 @@ logger = setup_logger({
 
 
 class AnswerSolver:
-    def __init__(self, graph, solver=None):
+    def __init__(self, graph, solver=None, compiled=True):
         if solver is not None:
             self.solver = solver
         else:
             from domiknows.solver import ilpOntSolverFactory
             self.solver = ilpOntSolverFactory.getOntSolverInstance({graph})
+        self.compiled = bool(compiled)
+        from domiknows.solver.compiled import CompiledModeExecutor
+        self.compiled_executor = getattr(
+            self.solver, 'compiledModeExecutor', None)
+        if self.compiled_executor is None:
+            self.compiled_executor = CompiledModeExecutor(self.solver)
+            self.solver.compiledModeExecutor = self.compiled_executor
 
     # ── ILP cache management ────────────────────────────────────────────
 
@@ -351,10 +358,14 @@ class AnswerSolver:
         processor.current_device = dn.current_device
         self.solver.constraintConstructor.current_device = dn.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
-        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, processor, None, dn, 0, key=key_text,
-            headLC=False, loss=True, sample=False,
-        )
+        if self.compiled:
+            output, _ = self.compiled_executor.construct(
+                lc, processor, dn, key=key_text, headLC=False, loss=True)
+        else:
+            output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, processor, None, dn, 0, key=key_text,
+                headLC=False, loss=True, sample=False,
+            )
         tensors = []
 
         def collect(value):
@@ -377,10 +388,14 @@ class AnswerSolver:
         processor.current_device = dn.current_device
         self.solver.constraintConstructor.current_device = dn.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
-        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, processor, None, dn, 0, key=key_text,
-            headLC=False, loss=True, sample=False,
-        )
+        if self.compiled:
+            output, _ = self.compiled_executor.construct(
+                lc, processor, dn, key=key_text, headLC=False, loss=True)
+        else:
+            output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, processor, None, dn, 0, key=key_text,
+                headLC=False, loss=True, sample=False,
+            )
         matrices = []
 
         def collect(value):
@@ -410,10 +425,14 @@ class AnswerSolver:
         processor.current_device = dn.current_device
         self.solver.constraintConstructor.current_device = dn.current_device
         self.solver.constraintConstructor.myGraph = self.solver.myGraph
-        output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-            lc, processor, None, dn, 0, key="/ILP",
-            headLC=False, loss=False, sample=False, verify=True,
-        )
+        if self.compiled:
+            output, _ = self.compiled_executor.construct(
+                lc, processor, dn, key="/ILP", headLC=False, verify=True)
+        else:
+            output, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+                lc, processor, None, dn, 0, key="/ILP",
+                headLC=False, loss=False, sample=False, verify=True,
+            )
         rows = []
 
         def collect(value):
@@ -606,6 +625,7 @@ class AnswerSolver:
                         populate=False,
                         forceFreshModel=True,
                         raiseOnInfeasible=False,
+                        compiled=self.compiled,
                     )
                 except Exception as error:
                     if self._is_infeasible_error(error):

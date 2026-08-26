@@ -168,12 +168,68 @@ def test_compiled_path_actually_used(case, extra_constraints, monkeypatch):
 
     datanode = _build_datanode(case)
     result = datanode.calculateLcLoss(tnorm='P', compiled=True)
+    solver, _ = datanode.getILPSolver(
+        conceptsRelations=datanode.collectConceptsAndRelations())
+    batched = solver._compiled_loss_calculator.cache_info()[
+        'batched_formula_constraints']
 
     assert result
-    assert calls['compiled_head'] >= len(result), \
-        f"compiled evaluator ran for {calls['compiled_head']} constraints, expected >= {len(result)}"
+    assert calls['compiled_head'] + batched >= len(result), \
+        (f"compiled evaluator ran for {calls['compiled_head']} constraints and "
+         f"the formula batch handled {batched}, expected >= {len(result)}")
     assert calls['fallback'] == 0, \
         f"{calls['fallback']} constraints fell back to the interpreter"
+
+
+def test_every_compiled_loss_has_grounding_aligned_features(
+        case, extra_constraints):
+    """Relation expansion/reduction and nested layouts cannot silently make
+    amortized-dual literal features disappear."""
+    datanode = _build_datanode(case)
+    results = datanode.calculateLcLoss(tnorm='P', compiled=True)
+
+    checked = 0
+    for name, result in results.items():
+        loss = result.get('lossTensor')
+        if loss is None:
+            continue
+        features = result.get('groundingFeatures')
+        assert torch.is_tensor(features), f'{name}: missing groundingFeatures'
+        assert features.dim() == 2
+        assert features.shape[0] == loss.shape[0], (
+            f'{name}: {features.shape[0]} feature rows for {loss.shape[0]} losses')
+        assert torch.isfinite(features).any(dim=1).all(), (
+            f'{name}: a grounding has no literal probabilities')
+        checked += 1
+
+    assert checked
+
+
+def test_relation_paths_use_tensorized_candidate_plans(
+        case, extra_constraints, monkeypatch):
+    """Common forward/reversed paths avoid the Python candidate walker."""
+    from domiknows.solver.compiled import CompiledLossCalculator
+    from domiknows.solver.compiled import plan as plan_module
+
+    def unexpected_candidate_walk(*_args, **_kwargs):
+        raise AssertionError('getCandidates used for a tensorizable path')
+
+    monkeypatch.setattr(plan_module, 'getCandidates', unexpected_candidate_walk)
+
+    datanode = _build_datanode(case)
+    solver, _ = datanode.getILPSolver(
+        conceptsRelations=datanode.collectConceptsAndRelations())
+    solver.current_device = datanode.current_device
+    datanode.inferLocal()
+
+    calculator = CompiledLossCalculator(solver)
+    result = calculator.calculateLoss(datanode, 'P')
+    info = calculator.cache_info()
+
+    assert result
+    assert info['tensorized_candidate_calls'] > 0
+    assert info['candidate_fallback_calls'] == 0
+    assert info['misses'] > 0
 
 
 def test_compiled_calculator_reports_supported_types():
@@ -194,23 +250,13 @@ def test_compiled_calculator_reports_supported_types():
     assert issubclass(iffL, SUPPORTED_LC_TYPES)
 
 
-def test_compiled_calculator_excludes_unverified_types():
-    """The negative half of the contract.
-
-    A type only belongs in SUPPORTED_LC_TYPES once a parity case proves the
-    compiled result matches the interpreter. These are excluded on purpose:
-
-    * ``eqL`` as a direct LC element — its ``__call__`` takes no
-      ``headConstrain``/``integrate``, so the evaluator's call would TypeError.
-      (``eqL`` inside a ``path=`` is fine; it is resolved structurally.)
-
-    Without this assertion, widening the tuple by accident would be invisible.
-    """
+def test_compiled_formula_protocol_excludes_structural_eql():
+    """eqL filters candidates but is not itself a truth-valued formula."""
     from domiknows.graph.logicalConstrain import eqL
-    from domiknows.solver.compiled import SUPPORTED_LC_TYPES as SUPPORTED
+    from domiknows.solver.compiled import lc_tree_supported
 
-    assert not issubclass(eqL, SUPPORTED), \
-        'eqL is in SUPPORTED_LC_TYPES without a parity case'
+    filter_lc = object.__new__(eqL)
+    assert not lc_tree_supported(filter_lc)
 
 
 def test_iota_and_query_are_supported():

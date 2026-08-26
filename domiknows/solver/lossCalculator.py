@@ -293,7 +293,8 @@ class LossCalculator:
         result['elapsedInMsLC'] = (perf_counter_ns() - start) / 1_000_000
         return result
 
-    def calculateLoss(self, dn, tnorm='L', counting_tnorm=None, include_executable=False):
+    def calculateLoss(self, dn, tnorm='L', counting_tnorm=None,
+                      include_executable=False, include_global=True):
         """
         Calculate loss with per-constraint t-norm selection.
 
@@ -314,6 +315,9 @@ class LossCalculator:
                 — e.g. comparing this path against the exact-circuit path, which does
                 iterate both populations, so the two otherwise score different
                 constraint sets on the same graph.
+            include_global: Evaluate constraints in ``graph.logicalConstrains``.
+                Disable this for an executable-only pass such as
+                ``InferenceProgram``'s labeled constraint objective.
         """
         myBooleanMethods = self.solver.myLcLossBooleanMethods
         myBooleanMethods.current_device = dn.current_device
@@ -328,17 +332,21 @@ class LossCalculator:
         dn.setActiveExecutableLCs()
 
         for graph in self.solver.myGraph:
-            for _, lc in graph.logicalConstrains.items():
-                result = self.calculate_single_lc_loss(lc, dn, key, tnorm=tnorm, counting_tnorm=counting_tnorm, label=None)
-                if result is not None:
-                    lcLosses[lc.lcName] = result
+            if include_global:
+                for _, lc in graph.logicalConstrains.items():
+                    result = self.calculate_single_lc_loss(lc, dn, key, tnorm=tnorm, counting_tnorm=counting_tnorm, label=None)
+                    if result is not None:
+                        lcLosses[lc.lcName] = result
 
             if not include_executable:
                 continue
 
             # Executable wrappers hold their real expression in `innerLC`, which
             # is intentionally marked non-head; a runtime label makes it a root.
-            for executable_name, executable in graph.executableLCs.items():
+            for executable_name in dn.getActiveExecutableConstraintNames():
+                executable = graph.executableLCs.get(executable_name)
+                if executable is None:
+                    continue
                 label = dn.getExecutableConstraintLabel(executable_name)
                 inner = getattr(executable, 'innerLC', None)
                 if label is None or inner is None:

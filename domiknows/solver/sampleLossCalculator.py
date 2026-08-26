@@ -4,6 +4,7 @@ from collections import OrderedDict
 from itertools import product
 
 from domiknows.graph import fixedL
+from domiknows.solver.compiled import CompiledModeExecutor
 
 
 class SampleLossCalculator:
@@ -18,6 +19,7 @@ class SampleLossCalculator:
         """
         self.solver = solver
         self.current_dtype = None
+        self.compiled_executor = CompiledModeExecutor(solver)
     
     def _get_dtype(self, dn=None):
         """Get dtype from datanode or default to float32."""
@@ -27,7 +29,8 @@ class SampleLossCalculator:
             return self.current_dtype
         return torch.float32
         
-    def calculateSampleLoss(self, dn, sampleSize, sampleGlobalLoss, conceptsRelations):
+    def calculateSampleLoss(self, dn, sampleSize, sampleGlobalLoss,
+                            conceptsRelations, compiled=False):
         """
         Calculate sample-based loss for logical constraints.
         
@@ -85,8 +88,14 @@ class SampleLossCalculator:
                 
                 self.solver.constraintConstructor.current_device = dn.current_device
                 self.solver.constraintConstructor.myGraph = self.solver.myGraph
-                lossTensor, sampleInfo, inputLc, _ = self.solver.constraintConstructor.constructLogicalConstrains(
-                    lc, myBooleanMethods, None, dn, p, key=key, headLC=True, loss=True, sample=True)
+                if compiled:
+                    lossTensor, sampleInfo, inputLc, _ = self.compiled_executor.construct(
+                        lc, myBooleanMethods, dn, key=key, headLC=True,
+                        p=p, loss=True, sample=True)
+                else:
+                    lossTensor, sampleInfo, inputLc, _ = self.solver.constraintConstructor.constructLogicalConstrains(
+                        lc, myBooleanMethods, None, dn, p, key=key,
+                        headLC=True, loss=True, sample=True)
                 
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['sampleInfo'] = sampleInfo

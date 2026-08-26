@@ -5,12 +5,89 @@ from domiknows.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMetho
 import logging
 import warnings
 import torch
+import weakref
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
 V = namedtuple("V", ['name', 'v', 'relVarInfo'], defaults= [None, None, None])
 
+
+class _RevisionList(list):
+    """List that invalidates an owning logical element's compiled plan."""
+
+    def __init__(self, values, owner):
+        super().__init__(values)
+        self._owner_ref = weakref.ref(owner)
+
+    def _changed(self):
+        owner = self._owner_ref()
+        if owner is not None:
+            owner._compile_revision = getattr(owner, '_compile_revision', 0) + 1
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def append(self, value):
+        super().append(value)
+        self._changed()
+
+    def extend(self, values):
+        super().extend(values)
+        self._changed()
+
+    def insert(self, index, value):
+        super().insert(index, value)
+        self._changed()
+
+    def pop(self, index=-1):
+        value = super().pop(index)
+        self._changed()
+        return value
+
+    def remove(self, value):
+        super().remove(value)
+        self._changed()
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def reverse(self):
+        super().reverse()
+        self._changed()
+
+    def sort(self, *args, **kwargs):
+        super().sort(*args, **kwargs)
+        self._changed()
+
+    def __iadd__(self, values):
+        result = super().__iadd__(values)
+        self._changed()
+        return result
+
+    def __imul__(self, value):
+        result = super().__imul__(value)
+        self._changed()
+        return result
+
 class LcElement:
+    @property
+    def e(self):
+        return self._e
+
+    @e.setter
+    def e(self, values):
+        # execute() deliberately aliases its inner constraint's elements. Keep
+        # that alias; the inner constraint owns the revision that compiled
+        # plans track.
+        self._e = values if isinstance(values, _RevisionList) else _RevisionList(values, self)
+        self._compile_revision = getattr(self, '_compile_revision', 0) + 1
+
     def __init__(self, *e,  name = None):
         from .relation import Relation
 
@@ -219,6 +296,12 @@ class LogicalConstrain(LcElement):
         """Whether this constraint is active in the current graph step."""
         if not self._active:
             return False
+        # A parameterized executable formula stores representative concepts in
+        # its immutable template. Its actual concepts are supplied per dataset
+        # item, so applying the graph's active-concept filter to the
+        # representative would incorrectly suppress valid runtime bindings.
+        if getattr(self, '_parameterized_executable', False):
+            return True
         checker = getattr(self.graph, 'are_concepts_active', None)
         return checker(self.getLcConcepts()) if callable(checker) else True
 

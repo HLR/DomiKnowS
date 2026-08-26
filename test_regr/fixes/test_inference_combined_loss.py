@@ -116,7 +116,14 @@ def test_combines_executable_bce_and_raw_global_loss():
     model = _model(include_global=True, executable_weight=3.0, global_weight=5.0)
     datanode = _DataNode(
         labels={"ELC0/label": torch.tensor([1.0])},
-        global_loss={"GLC0": {"lossTensor": torch.tensor([2.0, float("nan"), -1.0])}},
+        global_loss={
+            "ELC0": {
+                "loss": torch.tensor(0.2),
+                "conversionSigmoid": torch.tensor([0.8], dtype=torch.float32),
+                "executableName": "ELC0",
+            },
+            "GLC0": {"lossTensor": torch.tensor([2.0, float("nan"), -1.0])},
+        },
     )
 
     loss, returned_datanode, returned_builder = model.forward(_Builder(datanode))
@@ -129,10 +136,49 @@ def test_combines_executable_bce_and_raw_global_loss():
     assert returned_datanode is datanode
     assert returned_builder.datanode is datanode
     assert model.get_lmbd_calls == []
-    assert datanode.single_calls[0][0] == "ELC0"
+    assert datanode.single_calls == []
     assert len(datanode.global_calls) == 1
     assert datanode.global_calls[0]["sampleGlobalLoss"] is False
     assert datanode.global_calls[0]["compiled"] is True
+    assert datanode.global_calls[0]["includeExecutable"] is True
+    assert datanode.global_calls[0]["includeGlobal"] is True
+
+
+def test_compiled_executable_loss_works_when_global_loss_is_disabled():
+    model = _model(include_global=False, compile_lc=True)
+    datanode = _DataNode(
+        labels={"ELC0/label": torch.tensor([1.0])},
+        global_loss={
+            "ELC0": {
+                "loss": torch.tensor(0.2),
+                "conversionSigmoid": torch.tensor([0.8], dtype=torch.float32),
+                "executableName": "ELC0",
+            },
+        },
+    )
+
+    loss, *_ = model.forward(_Builder(datanode))
+
+    expected = torch.nn.functional.binary_cross_entropy(
+        torch.tensor([0.8]), torch.tensor([1.0])
+    )
+    assert loss.item() == pytest.approx(expected.item())
+    assert datanode.single_calls == []
+    assert len(datanode.global_calls) == 1
+    assert datanode.global_calls[0]["compiled"] is True
+    assert datanode.global_calls[0]["includeExecutable"] is True
+    assert datanode.global_calls[0]["includeGlobal"] is False
+
+
+def test_disabling_compilation_keeps_single_executable_interpreter_path():
+    model = _model(include_global=False, compile_lc=False)
+    datanode = _DataNode(labels={"ELC0/label": torch.tensor([1.0])})
+
+    loss, *_ = model.forward(_Builder(datanode))
+
+    assert torch.isfinite(loss)
+    assert datanode.single_calls[0][0] == "ELC0"
+    assert datanode.global_calls == []
 
 
 def test_global_loss_can_disable_compiled_evaluation():
@@ -147,7 +193,7 @@ def test_global_loss_can_disable_compiled_evaluation():
     assert datanode.global_calls[0]["compiled"] is False
 
 
-def test_sampled_global_loss_does_not_request_compiled_evaluation():
+def test_sampled_global_loss_uses_compiled_formula_plans():
     model = _model(include_global=True, compile_lc=True)
     model.sample = True
     model.sampleSize = 4
@@ -158,7 +204,7 @@ def test_sampled_global_loss_does_not_request_compiled_evaluation():
     loss, *_ = model.forward(_Builder(datanode))
 
     assert loss.item() == pytest.approx(2.0)
-    assert datanode.global_calls[0]["compiled"] is False
+    assert datanode.global_calls[0]["compiled"] is True
 
 
 def test_global_loss_does_not_use_lambda():

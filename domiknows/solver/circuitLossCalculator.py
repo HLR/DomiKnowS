@@ -19,6 +19,7 @@ from domiknows.graph.logicalConstrain import miotaL, queryL, sumL
 from .bdd import BDDNode, CircuitSizeLimitExceeded
 from .circuitBooleanMethods import circuitBooleanMethods
 from .lossCalculator import LossCalculator, multi_query_joint_nll
+from .compiled import CompiledLossCalculator, CompiledModeExecutor
 
 
 def _collect_circuit_nodes(value):
@@ -59,6 +60,7 @@ class CircuitLossCalculator:
         self.epsilon = float(epsilon)
         self.aggregation = self._check_aggregation(aggregation)
         self._compile_cache = {}
+        self.compiled_executor = CompiledModeExecutor(solver)
 
     @staticmethod
     def _check_aggregation(aggregation):
@@ -92,6 +94,7 @@ class CircuitLossCalculator:
         force_root=False,
         label_name=None,
         aggregation=None,
+        compiled=True,
     ):
         if (not lc.headLC and not force_root) or not lc.active or type(lc) is fixedL:
             return None
@@ -110,12 +113,7 @@ class CircuitLossCalculator:
         if isinstance(lc, sumL) and label is None:
             return None
 
-        output, _ = constructor.constructLogicalConstrains(
-            lc,
-            processor,
-            None,
-            dn,
-            0,
+        construct_args = dict(
             key=key,
             headLC=not isinstance(lc, (queryL, miotaL)),
             loss=False,
@@ -123,6 +121,14 @@ class CircuitLossCalculator:
             label=self._label_index(label) if isinstance(lc, sumL) else None,
             circuit=True,
         )
+        if compiled:
+            self.compiled_executor.bind(dn, key)
+            self.compiled_executor.reset_grounding_features()
+            output, _ = self.compiled_executor.construct(
+                lc, processor, dn, **construct_args)
+        else:
+            output, _ = constructor.constructLogicalConstrains(
+                lc, processor, None, dn, 0, **construct_args)
 
         result = {
             "lc": lc,
@@ -197,6 +203,10 @@ class CircuitLossCalculator:
                     result["lossTensor"] = losses
                     result["loss"] = mean_loss
                 result["elapsedInMsLC"] = (perf_counter_ns() - start) / 1_000_000
+                if result.get("lossTensor") is not None and compiled:
+                    result["groundingFeatures"] = (
+                        self.compiled_executor.grounding_features(
+                            result["lossTensor"].numel()))
                 return result
 
             result["queryProbabilities"] = flat_distribution
@@ -269,10 +279,14 @@ class CircuitLossCalculator:
             result["conversionSigmoid"] = result.get("selectionDistribution")
         else:
             result["conversionSigmoid"] = result.get("probability")
+        if result.get("lossTensor") is not None and compiled:
+            result["groundingFeatures"] = (
+                self.compiled_executor.grounding_features(
+                    result["lossTensor"].numel()))
         result["elapsedInMsLC"] = (perf_counter_ns() - start) / 1_000_000
         return result
 
-    def calculateCircuitLoss(self, dn, aggregation=None):
+    def calculateCircuitLoss(self, dn, aggregation=None, compiled=True):
         processor = self.solver.myCircuitBooleanMethods
         processor.current_device = dn.current_device
         processor.current_dtype = getattr(dn, "current_dtype", None)
@@ -290,6 +304,7 @@ class CircuitLossCalculator:
                     force_root=force_root,
                     label_name=label_name,
                     aggregation=aggregation,
+                    compiled=compiled,
                 )
             except CircuitSizeLimitExceeded as error:
                 warnings.warn(
@@ -317,7 +332,13 @@ class CircuitLossCalculator:
                 if force_root:
                     lc.headLC = True
                 try:
-                    fallback = LossCalculator(self.solver).calculate_single_lc_loss(
+                    calculator = getattr(
+                        self.solver, '_compiled_loss_calculator', None)
+                    if calculator is None:
+                        calculator = CompiledLossCalculator(self.solver)
+                        self.solver._compiled_loss_calculator = calculator
+                    calculator.bind(dn)
+                    fallback = calculator.calculate_single_lc_loss(
                         lc,
                         dn,
                         "/local/softmax",

@@ -97,23 +97,44 @@ def test_ascent_step_increases_weighted_violation(one_constraint_graph):
 
 def test_literal_features_used_when_present(one_constraint_graph):
     """Providing aligned [G, L] literal features changes the multipliers
-    (the critic consumes them), and misaligned features are safely ignored."""
+    (the critic consumes them), and misalignment is never silently ignored."""
     graph, key = one_constraint_graph
     m = PrimalDualModel(graph, device='cpu', dual_granularity='amortized')
     v = torch.tensor([0.2, 0.7, 0.4])
 
     no_feat = float(m._weighted_constraint_loss(key, v).detach())
     aligned = float(m._weighted_constraint_loss(key, v, torch.rand(3, 2)).detach())
-    misaligned = float(m._weighted_constraint_loss(key, v, torch.rand(5, 2)).detach())
-
     assert no_feat != aligned            # features influenced the multiplier
-    assert misaligned == pytest.approx(no_feat, abs=1e-6)  # wrong shape → ignored
+    with pytest.raises(ValueError, match="5 rows for 3 violations"):
+        m._weighted_constraint_loss(key, v, torch.rand(5, 2))
 
 
 def test_critic_literal_summary_width():
     critic = DualCritic(nconstr=2)
     summ = critic.literal_summary(torch.rand(6, 4), torch.device('cpu'), torch.float32)
     assert summ.shape == (6, N_LITERAL_FEATURES)
+
+
+def test_critic_literal_summary_ignores_ragged_padding():
+    critic = DualCritic(nconstr=1)
+    features = torch.tensor([
+        [0.2, 0.8, float('nan')],
+        [0.4, float('nan'), float('nan')],
+    ])
+    summary = critic.literal_summary(
+        features, torch.device('cpu'), torch.float32)
+    assert torch.allclose(summary, torch.tensor([
+        [0.5, 0.2, 0.8],
+        [0.4, 0.4, 0.4],
+    ]))
+
+
+def test_compiled_amortized_mode_requires_features(one_constraint_graph):
+    graph, key = one_constraint_graph
+    model = PrimalDualModel(
+        graph, device='cpu', dual_granularity='amortized', compile_lc=True)
+    with pytest.raises(RuntimeError, match="requires groundingFeatures"):
+        model._weighted_constraint_loss(key, torch.tensor([0.3, 0.6]))
 
 
 # ---------------------------------------------------------------------------

@@ -942,9 +942,21 @@ logic_dataset = graph.compile_executable(
     logic_keyword='constraint',
     logic_label_keyword='label',
     extra_namespace_values={},  # additional variables for eval namespace
-    verbose=False
+    verbose=False,
+    parameterize=True,  # optional structural template compilation
 )
 ```
+
+With `parameterize=True`, structurally equivalent expressions share one
+executable constraint and compiled traversal plan even when concept identifiers
+or alpha-equivalent logical-variable/path strings differ. Each `LogicDataset`
+row supplies its actual concept-slot bindings and label at runtime. Numeric,
+Boolean, and operator settings remain part of the template key. This mode
+requires `compile_lc=True` and `sample=False`.
+
+Use `deduplicate=True` when only canonically identical expressions should be
+interned. Both options default to `False` for callers that rely on a distinct
+executable identity for every row.
 
 **Parameters:**
 

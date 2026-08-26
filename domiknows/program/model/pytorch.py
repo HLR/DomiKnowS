@@ -441,9 +441,10 @@ class SolverModel(PoiModel):
             curr_lc = builder[execute_lc_key]
 
         do_switch = LogicDataset.do_switch_key in builder
+        selected_lcs = LogicDataset.selected_lc_names(curr_lc)
         for i, prop in enumerate(self.iter_active_poi()):
             if do_switch and isinstance(prop.prop_name, LogicalConstrain):
-                if prop.prop_name.lcName != curr_lc:
+                if prop.prop_name.lcName not in selected_lcs:
                     continue
 
             for sensor in prop.find(TorchSensor):
@@ -595,9 +596,10 @@ class GumbelSolverModel(SolverModel):
             curr_lc = builder[execute_lc_key]
 
         do_switch = LogicDataset.do_switch_key in builder
+        selected_lcs = LogicDataset.selected_lc_names(curr_lc)
         for i, prop in enumerate(self.iter_active_poi()):
             if do_switch and isinstance(prop.prop_name, LogicalConstrain):
-                if prop.prop_name.lcName != curr_lc:
+                if prop.prop_name.lcName not in selected_lcs:
                     continue
 
             for sensor in prop.find(TorchSensor):

@@ -1520,6 +1520,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
                  training_style='default',
                  use_gumbel=False, initial_temp=1.0, final_temp=0.1,
                  anneal_start_epoch=0, anneal_epochs=None, hard_gumbel=False,
+                 compile_lc=True,
                  include_global_constraint_loss=False,
                  global_constraint_loss_weight=1.0,
                  executable_constraint_loss_weight=1.0,
@@ -1541,6 +1542,10 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             parameters control the annealing schedule (see ``GumbelTemperatureMixin``).
         :param include_global_constraint_loss: If ``True``, add graph-global
             constraint loss to executable-constraint loss.
+        :param compile_lc: If ``True`` (default), use the compiled batched-gather
+            evaluator for labeled executable constraints and the optional
+            graph-global loss. Custom ``LogicalConstrain`` subclasses use the
+            common compiled formula protocol without explicit registration.
         :param query_loss: Optional loss factory for multiclass ``queryL``
             outputs. It is forwarded only to the constraint model; scalar
             executable constraints continue to use that model's binary loss.
@@ -1551,6 +1556,7 @@ class InferenceProgram(GumbelTemperatureMixin, LossProgram):
             )
         self.training_style = 'default' if training_style == 'simple' else training_style
         cmodel_kwargs = {
+            'compile_lc': bool(compile_lc),
             'include_global_constraint_loss': bool(include_global_constraint_loss),
             'global_constraint_loss_weight': global_constraint_loss_weight,
             'executable_constraint_loss_weight': executable_constraint_loss_weight,

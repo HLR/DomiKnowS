@@ -409,6 +409,8 @@ def test_include_executable_defaults_off_and_is_threaded():
     dn_sig = inspect.signature(DataNode.calculateLcLoss)
     assert 'includeExecutable' in dn_sig.parameters
     assert dn_sig.parameters['includeExecutable'].default is False
+    assert 'includeGlobal' in dn_sig.parameters
+    assert dn_sig.parameters['includeGlobal'].default is True
 
 
 def test_graph_without_executables_is_unaffected_by_the_flag():
@@ -426,6 +428,348 @@ def test_graph_without_executables_is_unaffected_by_the_flag():
             assert a is None and b is None
             continue
         assert torch.allclose(a, b, atol=1e-6)
+
+
+def test_executable_only_compiled_scope_matches_interpreter():
+    """InferenceProgram can compile labels without enabling global loss."""
+    from test_regr.tiny_dynamic_graph.example_dynamic_graph import (
+        build_reusable_dynamic_graph,
+    )
+
+    context = build_reusable_dynamic_graph(device='cpu')
+    context.graph.set_active_concepts(None)
+    row = next(iter(context.datasets.values()))[0]
+    _loss, _metric, _datanode, builder = context.program.model(row)
+    builder.createBatchRootDN()
+    dn = builder.getDataNode(device='cpu')
+    dn.inferLocal(keys=('softmax',))
+
+    reference = dn.calculateLcLoss(
+        tnorm='P', compiled=False,
+        includeExecutable=True, includeGlobal=False)
+    compiled = dn.calculateLcLoss(
+        tnorm='P', compiled=True,
+        includeExecutable=True, includeGlobal=False)
+
+    assert reference
+    assert set(reference) == set(compiled)
+    for name in reference:
+        expected = reference[name]
+        actual = compiled[name]
+        assert actual.get('compiled') is True
+        assert actual.get('executableName') == name
+        for key in ('lossTensor', 'conversionSigmoid'):
+            expected_tensor = expected.get(key)
+            actual_tensor = actual.get(key)
+            if expected_tensor is None or actual_tensor is None:
+                assert expected_tensor is None and actual_tensor is None
+            else:
+                assert torch.allclose(expected_tensor, actual_tensor, atol=1e-6)
+
+    solver, _ = dn.getILPSolver(
+        conceptsRelations=dn.collectConceptsAndRelations())
+    calculator = solver._compiled_loss_calculator
+    bindings_before = calculator.cache_info()['data_bindings']
+    inference_loss, *_ = context.program.cmodel(builder)
+    bindings_after = calculator.cache_info()['data_bindings']
+    assert torch.isfinite(inference_loss)
+    assert context.program.cmodel.include_global_constraint_loss is False
+    assert bindings_after == bindings_before + 1
+
+
+@pytest.mark.parametrize('tnorm', TNORMS)
+def test_custom_formula_subclass_uses_compiled_protocol_without_registration(
+        tnorm, monkeypatch):
+    """Third-party formulas no longer fall back because of an allowlist."""
+    from domiknows.graph.logicalConstrain import LogicalConstrain
+    from domiknows.solver.compiled import formula as formula_module
+    from test_regr.tiny_dynamic_graph.example_dynamic_global_constraints import (
+        build_dynamic_constraint_example,
+    )
+
+    class customIfL(LogicalConstrain):
+        def __call__(self, model, processor, variables,
+                     headConstrain=False, integrate=False):
+            return self.createLogicalConstrains(
+                'If', processor.ifVar, model, variables, headConstrain)
+
+    context = build_dynamic_constraint_example(device='cpu')
+    with context.graph:
+        custom = customIfL(
+            context.concepts['red']('z'),
+            context.concepts['animal'](path='z'),
+            name='custom_red_implies_animal',
+        )
+    context.graph.set_active_concepts(None)
+    row = context.entries[0][1]
+    _loss, _metric, _datanode, builder = context.program.model(row)
+    builder.createBatchRootDN()
+    dn = builder.getDataNode(device='cpu')
+    dn.inferLocal(keys=('softmax',))
+
+    reference = dn.calculateLcLoss(tnorm=tnorm, compiled=False)
+    calls = {'fallback': 0}
+    interpreter_single = formula_module.LossCalculator.calculate_single_lc_loss
+
+    def record_fallback(self, *args, **kwargs):
+        calls['fallback'] += 1
+        return interpreter_single(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        formula_module.LossCalculator,
+        'calculate_single_lc_loss',
+        record_fallback,
+    )
+    compiled = dn.calculateLcLoss(tnorm=tnorm, compiled=True)
+
+    assert custom.lcName in reference
+    assert custom.lcName in compiled
+    assert compiled[custom.lcName].get('compiled') is True
+    assert calls['fallback'] == 0
+    assert torch.allclose(
+        reference[custom.lcName]['lossTensor'],
+        compiled[custom.lcName]['lossTensor'],
+        atol=1e-6,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — persistent formula plans and tensorized candidate binding
+# ---------------------------------------------------------------------------
+
+def test_compiled_plans_persist_across_data_items():
+    """A solver keeps one immutable formula plan while DataNodes change."""
+    program, data, _ = _build_fixed_program([True, False, True, False])
+
+    first_dn = _datanode(program, data)
+    first_dn.calculateLcLoss(tnorm='P', compiled=True)
+    solver, _ = first_dn.getILPSolver(
+        conceptsRelations=first_dn.collectConceptsAndRelations())
+    calculator = solver._compiled_loss_calculator
+    evaluator_id = id(calculator._evaluator)
+    probability_store_id = id(calculator._prob_store)
+    first_info = calculator.cache_info()
+
+    second_dn = _datanode(program, data)
+    assert second_dn is not first_dn
+    second_dn.calculateLcLoss(tnorm='P', compiled=True)
+    second_solver, _ = second_dn.getILPSolver(
+        conceptsRelations=second_dn.collectConceptsAndRelations())
+    second_info = calculator.cache_info()
+
+    assert second_solver is solver
+    assert second_solver._compiled_loss_calculator is calculator
+    assert id(calculator._evaluator) == evaluator_id
+    assert id(calculator._prob_store) == probability_store_id
+    assert second_info['misses'] == first_info['misses']
+    assert second_info['hits'] > first_info['hits']
+    assert second_info['data_bindings'] == first_info['data_bindings'] + 1
+    assert second_info['tensorized_candidate_calls'] > \
+        first_info['tensorized_candidate_calls']
+    assert second_info['candidate_fallback_calls'] == 0
+
+
+def test_compiled_plan_cache_invalidates_after_formula_mutation():
+    """Structural edits cannot leave an obsolete execution plan cached."""
+    program, data, _ = _build_fixed_program([True, False, True, False])
+    dn = _datanode(program, data)
+    dn.calculateLcLoss(tnorm='P', compiled=True)
+    solver, _ = dn.getILPSolver(
+        conceptsRelations=dn.collectConceptsAndRelations())
+    cache = solver._compiled_loss_calculator.plan_cache
+    lc = next(lc for lc in program.graph.logicalConstrains.values() if lc.headLC)
+
+    original_plan = cache.get(lc)
+    original_invalidations = cache.invalidations
+    lc.e.append(1)
+    try:
+        replacement_plan = cache.get(lc)
+    finally:
+        lc.e.pop()
+
+    assert replacement_plan is not original_plan
+    assert cache.invalidations == original_invalidations + 1
+
+
+def test_compiled_plan_cache_hit_does_not_rewalk_formula(monkeypatch):
+    """Revision checks, not recursive signatures, guard the hot cache path."""
+    program, data, _ = _build_fixed_program([True, False, True, False])
+    dn = _datanode(program, data)
+    dn.calculateLcLoss(tnorm='P', compiled=True)
+    solver, _ = dn.getILPSolver(
+        conceptsRelations=dn.collectConceptsAndRelations())
+    cache = solver._compiled_loss_calculator.plan_cache
+    lc = next(lc for lc in program.graph.logicalConstrains.values() if lc.headLC)
+    plan = cache.get(lc)
+
+    from domiknows.solver.compiled import plan as plan_module
+
+    def unexpected_formula_walk(_lc):
+        raise AssertionError('formula signature recomputed on a cache hit')
+
+    monkeypatch.setattr(plan_module, 'constraint_signature', unexpected_formula_walk)
+    assert cache.get(lc) is plan
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — graph-wide batching of identity-grounded unary implications
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('tnorm', TNORMS)
+def test_batched_unary_implications_match_interpreter_and_gradients(tnorm):
+    """Several KB rules share one [rules, objects] Torch invocation."""
+    from test_regr.tiny_dynamic_graph.example_dynamic_global_constraints import (
+        build_dynamic_constraint_example,
+    )
+
+    context = build_dynamic_constraint_example(device='cpu')
+    context.graph.set_active_concepts(None)
+    row = context.entries[0][1]
+    _loss, _metric, _datanode, builder = context.program.model(row)
+    builder.createBatchRootDN()
+    dn = builder.getDataNode(device='cpu')
+    dn.inferLocal(keys=('softmax',))
+
+    reference = dn.calculateLcLoss(tnorm=tnorm)
+    compiled = dn.calculateLcLoss(tnorm=tnorm, compiled=True)
+    assert set(reference) == set(compiled)
+
+    for name in reference:
+        assert torch.allclose(
+            reference[name]['lossTensor'], compiled[name]['lossTensor'], atol=1e-6)
+        assert compiled[name].get('batchedFormula') is True
+
+    parameters = tuple(context.shared_model.parameters())
+    reference_total = sum(
+        result['lossTensor'].sum() for result in reference.values())
+    compiled_total = sum(
+        result['lossTensor'].sum() for result in compiled.values())
+    reference_grads = torch.autograd.grad(
+        reference_total, parameters, retain_graph=True, allow_unused=True)
+    compiled_grads = torch.autograd.grad(
+        compiled_total, parameters, retain_graph=True, allow_unused=True)
+    for expected, actual in zip(reference_grads, compiled_grads):
+        if expected is None or actual is None:
+            assert expected is None and actual is None
+        else:
+            assert torch.allclose(expected, actual, atol=1e-6)
+
+    solver, _ = dn.getILPSolver(
+        conceptsRelations=dn.collectConceptsAndRelations())
+    info = solver._compiled_loss_calculator.cache_info()
+    assert info['batched_formula_groups'] == 1
+    assert info['batched_formula_constraints'] == len(reference)
+    assert info['batched_formula_fallbacks'] == 0
+
+
+@pytest.mark.parametrize('tnorm', TNORMS)
+def test_batched_implication_primitive_preserves_row_semantics(tnorm):
+    """Godel's row-level zero branch and Product zeros remain exact."""
+    from domiknows.solver.lcLossBooleanMethods import lcLossBooleanMethods
+
+    processor = lcLossBooleanMethods()
+    processor.current_device = 'cpu'
+    processor.current_dtype = torch.float32
+    processor.setTNorm(tnorm)
+    antecedent = torch.tensor([
+        [0.0, 0.3, 0.7, 0.5],
+        [0.2, 0.5, 0.8, 0.4],
+    ], requires_grad=True)
+    consequent = torch.tensor([
+        [0.0, 0.3, 0.2, 0.9],
+        [0.1, 0.5, 0.9, 0.4],
+    ], requires_grad=True)
+
+    expected = torch.stack([
+        processor.ifVar(
+            None, antecedent[row], consequent[row], onlyConstrains=True)
+        for row in range(antecedent.shape[0])
+    ])
+    actual = processor.ifVarBatched(
+        None, antecedent, consequent, onlyConstrains=True)
+    assert torch.allclose(expected, actual, atol=1e-7)
+
+    expected_grads = torch.autograd.grad(
+        expected.sum(), (antecedent, consequent), retain_graph=True,
+        allow_unused=True)
+    actual_grads = torch.autograd.grad(
+        actual.sum(), (antecedent, consequent), allow_unused=True)
+    for expected_grad, actual_grad in zip(expected_grads, actual_grads):
+        if expected_grad is None or actual_grad is None:
+            assert expected_grad is None and actual_grad is None
+        else:
+            assert torch.allclose(expected_grad, actual_grad, atol=1e-7)
+
+
+def test_batched_unary_implications_respect_dynamic_concept_activation():
+    """The adjacency index selects only rules whose two concepts are active."""
+    from test_regr.tiny_dynamic_graph.example_dynamic_global_constraints import (
+        active_rule_names,
+        build_dynamic_constraint_example,
+    )
+
+    context = build_dynamic_constraint_example(device='cpu')
+    active, row = context.entries[0]
+    expected_rule_names = {
+        context.rules[name].lcName
+        for name in active_rule_names(context, context.examples[0])
+    }
+    context.graph.set_active_concepts(active)
+    _loss, _metric, _datanode, builder = context.program.model(row)
+    builder.createBatchRootDN()
+    dn = builder.getDataNode(device='cpu')
+    dn.inferLocal(keys=('softmax',))
+
+    result = dn.calculateLcLoss(tnorm='P', compiled=True)
+    assert set(result) == expected_rule_names
+    assert all(item.get('batchedFormula') is True for item in result.values())
+
+    solver, _ = dn.getILPSolver(
+        conceptsRelations=dn.collectConceptsAndRelations())
+    info = solver._compiled_loss_calculator.cache_info()
+    assert info['batched_formula_constraints'] == len(expected_rule_names)
+    assert info['batched_formula_fallbacks'] == 0
+
+
+def test_batched_formula_index_rebuilds_after_rule_mutation():
+    """A persistent graph batch cannot retain a stale target literal."""
+    from test_regr.tiny_dynamic_graph.example_dynamic_global_constraints import (
+        build_dynamic_constraint_example,
+    )
+
+    context = build_dynamic_constraint_example(device='cpu')
+    context.graph.set_active_concepts(None)
+    row = context.entries[0][1]
+    _loss, _metric, _datanode, builder = context.program.model(row)
+    builder.createBatchRootDN()
+    dn = builder.getDataNode(device='cpu')
+    dn.inferLocal(keys=('softmax',))
+
+    dn.calculateLcLoss(tnorm='P', compiled=True)
+    solver, _ = dn.getILPSolver(
+        conceptsRelations=dn.collectConceptsAndRelations())
+    calculator = solver._compiled_loss_calculator
+    before = calculator.cache_info()
+
+    rule = context.rules['red_implies_colored']
+    original_target = rule.e[2]
+    rule.e[2] = context.rules['dog_implies_animal'].e[2]
+    try:
+        reference = dn.calculateLcLoss(tnorm='P', compiled=False)
+        compiled = dn.calculateLcLoss(tnorm='P', compiled=True)
+        after = calculator.cache_info()
+
+        assert torch.allclose(
+            reference[rule.lcName]['lossTensor'],
+            compiled[rule.lcName]['lossTensor'],
+            atol=1e-6,
+        )
+        assert compiled[rule.lcName].get('batchedFormula') is True
+        assert after['batch_index_rebuilds'] == \
+            before['batch_index_rebuilds'] + 1
+        assert after['invalidations'] == before['invalidations'] + 1
+    finally:
+        rule.e[2] = original_target
 
 
 if __name__ == '__main__':

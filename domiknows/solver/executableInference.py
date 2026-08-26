@@ -22,6 +22,7 @@ from domiknows.graph.logicalConstrain import (
 from domiknows.solver.bdd import CircuitSizeLimitExceeded
 from domiknows.solver.circuitBooleanMethods import circuitBooleanMethods
 from domiknows.solver.lossCalculator import LossCalculator
+from domiknows.solver.compiled import CompiledLossCalculator
 
 
 _MISSING = object()
@@ -406,6 +407,7 @@ class ExecutableInference:
         circuit_max_nodes=None,
         circuit_size_limit_action=None,
         circuit_aggregation="joint",
+        compiled=True,
     ):
         if mode not in self.MODES:
             raise ValueError(
@@ -420,7 +422,15 @@ class ExecutableInference:
         self.counting_tnorm = counting_tnorm
         self.threshold = float(threshold)
         self.circuit_aggregation = circuit_aggregation
-        self.loss_calculator = LossCalculator(solver)
+        self.compiled = bool(compiled)
+        if self.compiled:
+            self.loss_calculator = getattr(
+                solver, '_compiled_loss_calculator', None)
+            if self.loss_calculator is None:
+                self.loss_calculator = CompiledLossCalculator(solver)
+                solver._compiled_loss_calculator = self.loss_calculator
+        else:
+            self.loss_calculator = LossCalculator(solver)
 
         if mode == "circuit":
             solver.configureCircuitBackend(
@@ -451,6 +461,8 @@ class ExecutableInference:
         circuit_processor.current_dtype = getattr(
             dn, "current_dtype", torch.float32
         )
+        if self.compiled:
+            self.loss_calculator.bind(dn)
 
     def _evaluate(self, lc, dn, key, *, label=None):
         if self.mode == "circuit":
@@ -463,6 +475,7 @@ class ExecutableInference:
                 label=label,
                 force_root=True,
                 aggregation=self.circuit_aggregation,
+                compiled=self.compiled,
             )
 
         return self.loss_calculator.calculate_single_lc_loss(
@@ -660,6 +673,7 @@ class ExecutableInference:
                 tnorm="P",
                 counting_tnorm="P",
                 threshold=self.threshold,
+                compiled=self.compiled,
             )
             result = fallback.infer(
                 dn, [name], concepts_relations, key=key

@@ -267,9 +267,34 @@ PrimalDualProgram(graph, Model, compile_lc=True)
 ```
 
 `compile_lc=True` swaps the per-datanode Python interpreter for a compiled
-(batched-gather) evaluator. Results are identical — parity against the interpreter is
-asserted for every supported constraint type and t-norm — and unsupported types fall back
-per constraint. Ignored when `sample=True`.
+(batched-gather) evaluator. Static formula and candidate-path plans are built
+once and cached on the solver across batches; each data item only binds its
+current DataNode topology and prediction tensors. Common identity, forward,
+reversed, expansion, and intersection joins execute through tensor indices.
+Identity-grounded unary implications such as
+`ifL(source("x"), target(path="x"))` receive an additional graph-wide fast
+path: active rules with the same grounding domain and t-norm are stacked into
+`[rules, groundings]` tensors and evaluated in one Torch operation. Dynamic
+concept activation is resolved through a cached source-concept adjacency index,
+so inactive KB rules do not traverse their formulas.
+Results are identical — parity against the interpreter is asserted for every
+built-in constraint type and t-norm. Custom `LogicalConstrain` subclasses using
+the standard formula call contract are compiled without registration in an
+operator allowlist. Irregular candidate paths retain their structural resolver,
+and unexpected runtime incompatibilities fall back per constraint.
+
+The formula and candidate/path plans are shared by all constraint processors:
+fuzzy t-norm loss, sampled loss, exact circuit/WMC loss, discrete verification,
+ILP construction, and executable inference. Each processor still owns its
+semantics—the compiled executor gathers sampled vectors, circuit literals,
+argmax values, or Gurobi variables as appropriate. Batched probability gathers
+and graph-wide unary-rule batching apply only to fuzzy loss; the other modes
+benefit from cached traversal and tensorized candidate/path resolution.
+
+The active calculator exposes `cache_info()` for plan hits, misses,
+invalidations, data bindings, tensorized candidate calls, candidate fallback
+calls, batched formula groups/constraints/groundings/fallbacks, batch-plan hits,
+and batch-index rebuilds.
 
 #### Dual variables
 
@@ -284,6 +309,16 @@ Two orthogonal knobs on the constraint model:
 |---|---|
 | `'constraint'` (default) | One multiplier per constraint template |
 | `'amortized'` | A `DualCritic` predicts a multiplier **per grounding** from detached features, so hard and easy instances are not scaled identically |
+
+With `compile_lc=True`, every fuzzy or per-grounding circuit loss carries a
+`groundingFeatures` row containing its aligned formula-input probabilities
+(atomic classifier values, or nested truth values for nested formulas).
+Enum columns, ragged candidate groups, relation expansion, existential
+reduction, and counting layouts are aligned to the final loss axis. Ragged
+columns use masked padding that is excluded from mean/min/max summaries.
+Missing or misaligned compiled features raise an error instead of silently
+turning into zero critic inputs. Explicit `compile_lc=False` retains the legacy
+violation-plus-constraint-identity critic input because no gather plan exists.
 
 All four combinations are supported. Under `amortized` + `augmented` the critic is
 *regressed* onto the AL target `λ + ρ·v` rather than ascended, because an augmented
@@ -359,6 +394,15 @@ accuracy = program.evaluate_condition(eval_data, device='cuda')
 print(f"Constraint prediction accuracy: {accuracy*100:.2f}%")
 ```
 
+`InferenceProgram` uses the persistent compiled evaluator for labeled executable
+constraints by default, including when `include_global_constraint_loss=False`.
+When graph-global loss is enabled, both constraint populations share one compiled
+DataNode/probability binding and are separated again before their configured
+weights are applied. Scalar, `sumL`, `queryL`, multi-answer `queryL`, and `miotaL`
+outputs retain their dedicated supervised loss dispatch. Set `compile_lc=False`
+to use the interpreter. Custom formula subclasses use the same compiled protocol;
+unexpected runtime incompatibilities retain a per-constraint fallback.
+
 ### `SampleLossProgram`
 Constraint learning with optional sampling for large-scale problems.
 
@@ -368,7 +412,8 @@ program = SampleLossProgram(
     graph, Model,
     sample=True,
     sampleSize=100,              # Sample 100 groundings
-    sampleGlobalLoss=False       # Per-constraint loss
+    sampleGlobalLoss=False,      # Per-constraint loss
+    compile_lc=True,             # default: cache formula/path traversal
 )
 ```
 
@@ -408,6 +453,7 @@ program = SemanticLossProgram(
     circuit_backend='auto',        # 'auto' | 'pysdd' | 'bdd'
     circuit_max_nodes=100_000,
     circuit_aggregation='joint',   # or 'per_grounding'
+    compile_lc=True,               # default: cache formula/path traversal
 )
 ```
 
