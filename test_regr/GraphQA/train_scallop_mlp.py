@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import time
 from pathlib import Path
 
 import torch
@@ -19,7 +20,12 @@ from domiknows.utils import setProductionLogMode
 
 from .graph import canonical_relation
 from .evaluate_object_centered_c2 import miota_prediction_records
-from .object_centered_pipeline import build_program, load_instances, _object_feature_dim
+from .object_centered_pipeline import (
+    build_program,
+    load_instances,
+    _object_feature_dim,
+    DynamicActiveConceptsDataset,
+)
 
 
 def split_instances(instances, dev_fraction=0.1, seed=13):
@@ -58,6 +64,7 @@ def vocab_options_for_instances(instances, gqa_info_path):
 
 
 def evaluate_dev(instances, dataset, program, device, threshold, decode_policy):
+    eval_start = time.perf_counter()
     program.model.eval()
     records = miota_prediction_records(
         instances, dataset, program, device,
@@ -65,8 +72,16 @@ def evaluate_dev(instances, dataset, program, device, threshold, decode_policy):
         decode_policy=decode_policy,
         show_progress=True,
     )
+    wall_seconds = time.perf_counter() - eval_start
     correct = sum(int(record["correct"]) for record in records)
-    recall = {5: 0.0, 10: 0.0}
+    # Same fix as evaluate_scallop_mlp_c2c6.py: denominator is min(len(gold), k),
+    # not len(gold) -- some instances have many valid answers, and dividing by
+    # the full gold count caps recall near k/len(gold) even for a perfect
+    # top-k. Empty-gold rows are excluded from the recall average (tracked via
+    # recall_counts) rather than folded in via max(1, len(gold)), which
+    # silently scored them as 0 and deflated the mean.
+    recall_sums = {5: 0.0, 10: 0.0}
+    recall_counts = {5: 0, 10: 0}
     top1_hits = 0
     for record in records:
         ranked = [
@@ -78,19 +93,33 @@ def evaluate_dev(instances, dataset, program, device, threshold, decode_policy):
         gold = set(record["gold_answers"])
         if ranked and ranked[0] in gold:
             top1_hits += 1
-        for k in recall:
-            recall[k] += len(gold.intersection(ranked[:k])) / max(1, len(gold))
+        if gold:
+            for k in recall_sums:
+                recall_sums[k] += len(gold.intersection(ranked[:k])) / min(len(gold), k)
+                recall_counts[k] += 1
+    examples = len(records)
     return {
-        "examples": len(records),
-        "exact_answer_acc": correct / len(records) if records else None,
-        "top1_gold_hit": top1_hits / len(records) if records else None,
-        "recall_at_5": recall[5] / len(records) if records else None,
-        "recall_at_10": recall[10] / len(records) if records else None,
+        "examples": examples,
+        "exact_answer_acc": correct / examples if records else None,
+        "top1_gold_hit": top1_hits / examples if records else None,
+        "recall_at_5": recall_sums[5] / recall_counts[5] if recall_counts[5] else None,
+        "recall_at_10": recall_sums[10] / recall_counts[10] if recall_counts[10] else None,
+        "wall_seconds": wall_seconds,
+        "seconds_per_example": wall_seconds / examples if examples else None,
     }
 
 
-def train_epoch(program, dataset, optimizer, device, epoch, lr, batch_size):
+def train_epoch(program, dataset, optimizer, device, epoch, lr, batch_size,
+                 context=None, raw_instances=None, dynamic_active_concepts=False):
     program.opt = optimizer
+    examples = len(dataset)
+    if dynamic_active_concepts:
+        if context is None or raw_instances is None:
+            raise ValueError(
+                "--dynamic-active-concepts requires context and raw_instances"
+            )
+        dataset = DynamicActiveConceptsDataset(context, raw_instances, dataset)
+    train_start = time.perf_counter()
     program.train(
         dataset,
         warmup_epochs=0,
@@ -99,7 +128,13 @@ def train_epoch(program, dataset, optimizer, device, epoch, lr, batch_size):
         c_lr=lr,
         batch_size=batch_size,
     )
-    return {"examples": len(dataset), "domiknows_train_epoch": epoch}
+    wall_seconds = time.perf_counter() - train_start
+    return {
+        "examples": examples,
+        "domiknows_train_epoch": epoch,
+        "wall_seconds": wall_seconds,
+        "seconds_per_example": wall_seconds / examples if examples else None,
+    }
 
 
 
@@ -235,6 +270,66 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--average-global-constraint-loss",
+        action="store_true",
+        help=(
+            "Average (not sum) the global constraint loss, both within a "
+            "constraint's own groundings and across constraint keys. "
+            "Measured directly: the raw sum is ~430x larger than "
+            "executable_loss in aggregate (up to 75000x per-step) because it "
+            "sums unnormalized over every grounded constraint, most "
+            "irrelevant to any given instance. Averaging makes global_loss "
+            "scale-invariant to graph/instance size, addressing the "
+            "imbalance at its source instead of via a fixed --global-loss-"
+            "weight scalar that has to be re-tuned by hand and drifts as "
+            "training changes how many constraints have nonzero loss."
+        ),
+    )
+    parser.add_argument(
+        "--enable-kb-predictor",
+        action="store_true",
+        help=(
+            "Pilot: give a small set of high-coverage KB-hierarchy concepts "
+            "(e.g. 'animal') their own learnable predictor instead of the "
+            "default deterministic derivation from the Name prediction, so "
+            "the global-consistency ifL constraint becomes a real loss "
+            "between two independently-parameterized probabilities."
+        ),
+    )
+    parser.add_argument(
+        "--kb-predictor-top-k",
+        type=int,
+        default=6,
+        help="Number of highest-coverage KB-hierarchy concepts to give a learnable predictor when --enable-kb-predictor is set.",
+    )
+    parser.add_argument(
+        "--dynamic-active-concepts",
+        action="store_true",
+        help=(
+            "Narrow the graph's active concepts to just each training "
+            "instance's own referenced predicates (mirrors evaluate_object_"
+            "centered_c2.py's eval-only dynamic-active-concepts mode, applied "
+            "to training). Skips compiled/executable constraint evaluation "
+            "for concepts irrelevant to that instance, and -- since "
+            "_calculate_global_constraint_loss sums unnormalized over every "
+            "grounded constraint -- shrinks the raw global-loss magnitude at "
+            "its source rather than only scaling it down with a fixed "
+            "--global-loss-weight. Off by default; does not change behavior "
+            "for runs that don't pass this flag."
+        ),
+    )
+    parser.add_argument(
+        "--select-by",
+        choices=["exact_answer_acc", "recall_at_5"],
+        default="exact_answer_acc",
+        help=(
+            "Dev metric used to pick the 'best' checkpoint saved to --output. "
+            "Defaults to exact_answer_acc (original behavior, unchanged for "
+            "runs that don't pass this flag). Pass recall_at_5 to select/"
+            "early-stop on Recall@5 instead."
+        ),
+    )
+    parser.add_argument(
         "--max-objects-per-instance",
         type=int,
         default=None,
@@ -272,6 +367,9 @@ def main():
         train, dev = split_instances(instances, args.dev_fraction, args.seed)
     qwen_options = {
         "scallop_mlp_hidden_dim": args.hidden_dim,
+        "enable_kb_predictor": args.enable_kb_predictor,
+        "kb_dir": args.kb_dir,
+        "kb_predictor_top_k": args.kb_predictor_top_k,
         **vocab_options_for_instances(train + dev, args.gqa_info),
     }
     if args.init_checkpoint and args.init_predicate_dir:
@@ -291,6 +389,7 @@ def main():
         executable_constraint_loss_weight=args.execution_loss_weight,
         global_constraint_loss_weight=args.global_loss_weight,
         compile_lc=args.compile_lc,
+        average_global_constraint_loss=args.average_global_constraint_loss,
     )
     train_dataset = [compiled_dataset[index] for index in range(len(train))]
     dev_dataset = [
@@ -353,9 +452,14 @@ def main():
         print(f"eval={json.dumps(dev_score, sort_keys=True)}", flush=True)
         save_checkpoint(args.output, program, context=context, args=args, vocab_options=qwen_options)
         return 0
+    select_key = args.select_by
     best_dev = -1.0
     for epoch in range(1, args.epochs + 1):
-        train_score = train_epoch(program, train_dataset, optimizer, args.device, epoch, args.lr, args.batch_size)
+        train_score = train_epoch(
+            program, train_dataset, optimizer, args.device, epoch, args.lr, args.batch_size,
+            context=context, raw_instances=train,
+            dynamic_active_concepts=args.dynamic_active_concepts,
+        )
         scheduler.step()
         dev_score = (
             evaluate_dev(
@@ -369,8 +473,8 @@ def main():
             ckpt, program, context=context, args=args,
             vocab_options=qwen_options, optimizer=optimizer,
         )
-        if dev_score is None or dev_score["exact_answer_acc"] > best_dev:
-            best_dev = dev_score["exact_answer_acc"] if dev_score is not None else 0.0
+        if dev_score is None or dev_score[select_key] > best_dev:
+            best_dev = dev_score[select_key] if dev_score is not None else 0.0
             save_checkpoint(
                 args.output, program, context=context, args=args,
                 vocab_options=qwen_options, optimizer=optimizer,
@@ -380,7 +484,7 @@ def main():
             f"dev={json.dumps(dev_score, sort_keys=True)} saved_epoch={saved}",
             flush=True,
         )
-    print(f"saved_best={args.output} best_dev_exact_answer_acc={best_dev}", flush=True)
+    print(f"saved_best={args.output} best_dev_{select_key}={best_dev}", flush=True)
     return 0
 
 
