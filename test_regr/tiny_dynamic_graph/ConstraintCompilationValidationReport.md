@@ -1,8 +1,8 @@
 # Constraint-Compilation Validation Report
 
 **Run date:** 2026-08-27 through 2026-08-28  
-**Revision inspected:** `d6c64aead1b963a4c6357b845beb11bdcc5af225` plus the
-uncommitted constraint-compilation and benchmark changes documented here  
+**Revision inspected:** `cbf9089f3f7c0ae8cfb76ea8d6ea4c7647a0ec66` plus this
+report update
 **Device:** NVIDIA T550 Laptop GPU (4,096 MiB), CUDA 12.8  
 **Runtime:** Windows 11, Python 3.12.11, PyTorch 2.10.0+cu128
 
@@ -35,6 +35,12 @@ accuracy after two epochs:
 Both ablations used the identical data fingerprint:
 `4dddf15103f72b9c9fef1ea231d88679714a31af00d798172340d2436aab7655`.
 
+A subsequent fresh, single-process five-epoch weight-1 run used the same
+fingerprint. It improved exact-set accuracy from 0.0550 after two epochs to
+0.4355 after five epochs, while hard KB satisfaction increased from 0.999937
+to 0.999998. This is an optimization-wiring result on synthetic labels, not a
+GraphQA task-accuracy result.
+
 ## Method
 
 - Concept accuracy is binary accuracy for the supervised name and attribute
@@ -49,7 +55,8 @@ Both ablations used the identical data fingerprint:
   peak allocated and reserved allocator memory.
 - Full weight-0 and weight-1 runs executed concurrently after all smaller gates
   passed. Their individual timings therefore include resource contention and
-  should not be treated as single-process peak-throughput measurements.
+  should not be treated as single-process peak-throughput measurements. The
+  later five-epoch weight-1 run executed alone.
 
 Every run used `batch_size=1`, Product t-norm, seed 17, CUDA, compiled logical
 constraints, grouped executable labels, and the bundled 3,387-fact KB snapshot
@@ -64,6 +71,7 @@ covering 15 predicates.
 | Full-rule smoke | 1,024 / 10,000 / 20 / 1 | 11.79 s | 16.39 | 1.221 | 1,610.78 | 31.08 / 36.00 |
 | Full weight 0 | 1,024 / 10,000 / 2,000 / 2 | 22.31 s | 2,350.86; 2,922.91 | 0.758 | 2,427.97 | 246.69 / 252.00 |
 | Full weight 1 | 1,024 / 10,000 / 2,000 / 2 | 27.33 s | 2,393.58; 3,014.82 | 0.740 | 2,437.98 | 245.81 / 250.00 |
+| Full weight 1, fresh five-epoch | 1,024 / 10,000 / 2,000 / 5 | 19.14 s | 1,739.00; 1,641.09; 1,631.00; 4,696.07; 1,473.99 | 0.894 raw | 2,822.57 | 248.09 / 254.00 |
 
 The full weight-0 training time was 5,273.77 seconds; weight 1 was 5,408.40
 seconds. Each emitted and checkpointed one flushed `epoch_complete` record per
@@ -78,12 +86,52 @@ epoch.
 | Full-rule smoke | 18.2669 | 74.8996 | 0 | 47 / 66.25 / 93 | 0 |
 | Full weight 0 | 11.7045 | 21.6635 | 0 | 38 / 63.92 / 148 | 0 |
 | Full weight 1 | 11.4316 | 1.3870 | 2,529 | 38 / 63.92 / 148 | 0 |
+| Full weight 1, five epochs | 9.1111 | 0.5632 | 6,889 | 38 / 63.92 / 148 | 0 |
 
-All 8,240 recorded executable and global losses were finite. Zero global losses
+All 18,240 recorded executable and global losses were finite. Zero global losses
 in stage 2 and weight 1 are satisfied rule sets, not skipped evaluation: every
 zero-loss item retained a positive compiled active-rule count equal to its
 expected count. Product implication loss is exactly zero when all active
 implications are satisfied.
+
+## Full Five-Epoch Extension
+
+The committed 1,024-concept, 10,000-rule, 2,000-scene profile completed five
+fresh CUDA epochs with `global_weight=1`, seed 17, and no resume. The atomic
+checkpoint reports `completed_epoch=5`, contains five timing records, and has
+the same dataset fingerprint as the two-epoch ablation.
+
+| Epoch | Wall time | Last executable loss | Last global loss |
+|---:|---:|---:|---:|
+| 1 | 1,739.00 s (28:59) | 13.2478 | 0.0000 |
+| 2 | 1,641.09 s (27:21) | 13.0928 | 0.0000 |
+| 3 | 1,631.00 s (27:11) | 13.0071 | 0.0000 |
+| 4 | 4,696.07 s (1:18:16) | 13.0997 | 0.0000 |
+| 5 | 1,473.99 s (24:34) | 13.3730 | 0.0148 |
+
+Raw epoch-training time was 11,181.15 seconds (3:06:21), and total training
+plus evaluation/reporting time was 11,254.90 seconds (3:07:35). The terminal
+record showed an approximately 2,959-second interval with no item progress
+during epoch 4. The process subsequently continued and completed normally;
+there was no graph-reset, non-finite-loss, cache, or checkpoint failure. If
+that observed idle interval is excluded only as an explanatory estimate,
+active epoch time is approximately 8,222.15 seconds (2:17:02), or 1.216
+examples/second. The canonical recorded throughput remains the raw 0.894
+examples/second.
+
+| Metric | Pre-training | After 2 epochs | After 5 epochs | Five-epoch change from pre |
+|---|---:|---:|---:|---:|
+| `miotaL` exact-set accuracy | 0.0000 | 0.0550 | 0.4355 (871/2,000) | +0.4355 |
+| Hard active-KB-rule satisfaction | 0.728880 | 0.999937 | 0.999998 (1,534,137/1,534,140) | +0.271118 |
+| Concept accuracy | 0.481167 | 0.869896 | 0.940563 (45,147/48,000) | +0.459396 |
+
+The five-epoch run executed exactly 10,000 shared-model forwards and optimizer
+items, evaluated 38–148 active rules per item (mean 63.9225), and recorded zero
+inactive-rule evaluations. Its deliberately violated probe had global loss
+209.9975 and shared-MLP gradient norm 302.2021. All 10,000 executable and
+global item losses were finite. The 6,889 exact zero global losses were valid
+satisfied active rule sets: none lacked active rules and none had an
+expected-versus-compiled count mismatch. The corrected semantic gate passed.
 
 ## Required Check Matrix
 
@@ -92,9 +140,9 @@ implications are satisfied.
 | Finite, non-zero loss on a deliberately violated initial example | Full probe global loss 209.9975 | PASS |
 | Global loss backpropagates into the shared MLP | Full probe gradient norm 302.2021 | PASS |
 | Only active source/target rules execute | 0 expected-versus-compiled mismatches in all runs | PASS |
-| Graph activation resets after iteration | `graph_reset=true` in all five results | PASS |
+| Graph activation resets after iteration | `graph_reset=true` in all six results | PASS |
 | Sequential `batch_size=1` | 2,000 optimizer items/epoch; no concurrent loader workers | PASS |
-| One shared model computation per scene | 4,000 forwards for 2,000 scenes × 2 epochs | PASS |
+| One shared model computation per scene | 4,000 forwards in each two-epoch run; 10,000 in the five-epoch run | PASS |
 | Summary grouping is correct | 2,000 items/epoch and 25 executable rows/item | PASS |
 | Full executable formulas are interned | 2 formulas and 49,998 reused rows | PASS |
 | Parameterized templates are active | `parameterized_executable_templates=true` | PASS |
@@ -104,6 +152,7 @@ implications are satisfied.
 | Exact-set accuracy improves for weight 1 | 0.0000 to 0.0550 | PASS |
 | KB satisfaction improves for weight 1 | 0.728880 to 0.999937 | PASS |
 | Zero loss does not result from skipped constraints | 0 zero-loss items without active rules; 0 zero-loss rule-count mismatches; violated probe loss 209.9975 with gradient norm 302.2021 | PASS |
+| Five-epoch checkpoint is complete | `completed_epoch=5`, five timing records, matching checkpoint/JSON fingerprint | PASS |
 
 The original literal zero-loss gate was replaced because a correctly satisfied
 implication must have zero loss. The semantic gate fails on a non-finite loss,
@@ -125,6 +174,8 @@ informational count of satisfied active rule sets.
 - The full weight-1 run reached 0.999937 hard KB satisfaction, but this did not
   improve synthetic exact-set accuracy over weight 0. More constraint
   satisfaction therefore does not by itself demonstrate better answer quality.
+- Continuing the fresh weight-1 profile to five epochs raised exact-set
+  accuracy to 0.4355 and hard KB satisfaction to 0.999998.
 
 ## Commands
 
@@ -181,7 +232,10 @@ CUDA as reported above.
   GraphQA answer labels.
 - The two full ablations ran concurrently, so their throughput and peak process
   memory include contention.
+- The five-epoch run's raw throughput includes an observed approximately
+  49-minute no-progress interval in epoch 4; the report retains the raw value
+  and labels the adjusted value as an estimate.
 - Hard satisfaction and exact-set metrics use a fixed 0.5 threshold; they do
   not measure calibrated probability quality.
-- Two epochs are sufficient for this validation but do not establish
-  convergence or generalization.
+- Five epochs demonstrate continued optimization on this fixed synthetic
+  dataset but do not establish convergence or generalization.
