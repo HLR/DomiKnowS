@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from .dataset import (
     GraphQADatasetNotFound,
     discover_vqar_dataset,
+    load_kb_facts,
     require_vqar_dataset,
     vqar_task_to_graphqa_instance,
 )
@@ -80,6 +81,15 @@ MULTI_RELATION_DATASET = [
 
 
 class TestGraphQAAdapter(unittest.TestCase):
+    def test_bundled_two_column_isa_facts_are_loaded(self):
+        facts = set(load_kb_facts())
+
+        self.assertIn(("TypeOf", "boat", "watercraft"), facts)
+        self.assertEqual(
+            sum(predicate == "TypeOf" for predicate, _left, _right in facts),
+            1426,
+        )
+
     def test_bounded_type_of_propagation_materializes_object_category(self):
         facts = set(materialize_bounded_facts(SAMPLE_INSTANCE))
 

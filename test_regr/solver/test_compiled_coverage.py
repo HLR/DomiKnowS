@@ -46,6 +46,11 @@ def _features(seed=0):
 
 
 def _datanode(program, data):
+    # ``device='cpu'`` passed to Program construction configures the model but
+    # does not retroactively move Reader/Edge sensors created with their
+    # ``auto`` default.  Make this CPU parity suite deterministic on machines
+    # that also have CUDA available.
+    program.to('cpu')
     _l, _m, _d, builder = program.model(data)
     builder.createBatchRootDN()
     dn = builder.getDataNode(device='cpu')
@@ -564,6 +569,14 @@ def test_compiled_plans_persist_across_data_items():
     assert second_info['misses'] == first_info['misses']
     assert second_info['hits'] > first_info['hits']
     assert second_info['data_bindings'] == first_info['data_bindings'] + 1
+    assert second_info['graph_snapshot_rebuilds'] == \
+        first_info['graph_snapshot_rebuilds']
+    assert second_info['batch_index_rebuilds'] == \
+        first_info['batch_index_rebuilds']
+    assert second_info['fixed_index_rebuilds'] == \
+        first_info['fixed_index_rebuilds']
+    assert second_info['active_rule_cache_hits'] > \
+        first_info['active_rule_cache_hits']
     assert second_info['tensorized_candidate_calls'] > \
         first_info['tensorized_candidate_calls']
     assert second_info['candidate_fallback_calls'] == 0
@@ -729,6 +742,12 @@ def test_batched_unary_implications_respect_dynamic_concept_activation():
     info = solver._compiled_loss_calculator.cache_info()
     assert info['batched_formula_constraints'] == len(expected_rule_names)
     assert info['batched_formula_fallbacks'] == 0
+
+    repeated = dn.calculateLcLoss(tnorm='P', compiled=True)
+    repeated_info = solver._compiled_loss_calculator.cache_info()
+    assert set(repeated) == expected_rule_names
+    assert repeated_info['active_rule_cache_hits'] > \
+        info['active_rule_cache_hits']
 
 
 def test_batched_formula_index_rebuilds_after_rule_mutation():

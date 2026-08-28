@@ -46,3 +46,12 @@ Or run it with `uv`:
 ```bash
 uv run python -m unittest test_regr.tiny_dynamic_graph.test_example_dynamic_graph
 ```
+
+## GraphQA-scale constraint compilation
+
+`TO_RUN_large_dynamic_graphqa.md` documents the guarded staged workload using
+synthetic scenes and connected proof neighborhoods from real C2-C6 KB facts.
+`ConstraintCompilationValidationReport.md` records the completed CUDA stage
+runs and the full 2,000-scene `global_weight=0` versus `global_weight=1`
+ablation. These measurements validate constraint compilation and training
+wiring; they are not GraphQA task accuracy.

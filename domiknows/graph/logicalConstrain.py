@@ -22,7 +22,7 @@ class _RevisionList(list):
     def _changed(self):
         owner = self._owner_ref()
         if owner is not None:
-            owner._compile_revision = getattr(owner, '_compile_revision', 0) + 1
+            owner._touch_compile_revision()
 
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
@@ -76,6 +76,13 @@ class _RevisionList(list):
         return result
 
 class LcElement:
+    def _touch_compile_revision(self):
+        self._compile_revision = getattr(self, '_compile_revision', 0) + 1
+        graph = getattr(self, 'graph', None)
+        touch_graph = getattr(graph, '_touch_constraint_formula_revision', None)
+        if callable(touch_graph):
+            touch_graph()
+
     @property
     def e(self):
         return self._e
@@ -86,7 +93,7 @@ class LcElement:
         # that alias; the inner constraint owns the revision that compiled
         # plans track.
         self._e = values if isinstance(values, _RevisionList) else _RevisionList(values, self)
-        self._compile_revision = getattr(self, '_compile_revision', 0) + 1
+        self._touch_compile_revision()
 
     def __init__(self, *e,  name = None):
         from .relation import Relation

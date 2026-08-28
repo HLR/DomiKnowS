@@ -286,9 +286,9 @@ def _read_isa_path(path):
     with open(path, "r") as isa_file:
         for line in isa_file:
             parts = line.strip().split("\t")
-            if len(parts) < 3:
+            if len(parts) < 2:
                 continue
-            if parts[0] == "isa":
+            if parts[0] == "isa" and len(parts) >= 3:
                 src, dst = parts[1], parts[2]
             else:
                 src, dst = parts[0], parts[1]

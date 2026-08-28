@@ -10,6 +10,63 @@ else:
     from .property import Property
 
 
+class _RevisionOrderedDict(OrderedDict):
+    """Ordered mapping with an O(1) structural revision token."""
+
+    def __init__(self, *args, **kwargs):
+        self.revision = 0
+        super().__init__()
+        if args or kwargs:
+            self.update(*args, **kwargs)
+
+    def _changed(self):
+        self.revision += 1
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def clear(self):
+        if self:
+            super().clear()
+            self._changed()
+
+    def pop(self, key, *default):
+        existed = key in self
+        value = super().pop(key, *default)
+        if existed:
+            self._changed()
+        return value
+
+    def popitem(self, last=True):
+        value = super().popitem(last=last)
+        self._changed()
+        return value
+
+    def setdefault(self, key, default=None):
+        if key in self:
+            return self[key]
+        self[key] = default
+        return default
+
+    def update(self, *args, **kwargs):
+        values = OrderedDict(*args, **kwargs)
+        for key, value in values.items():
+            self[key] = value
+
+    def move_to_end(self, key, last=True):
+        super().move_to_end(key, last=last)
+        self._changed()
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
     """
@@ -58,12 +115,13 @@ class Graph(BaseGraphTree):
         self.auto_constraint = auto_constraint
         self.reuse_model = reuse_model
         self._concepts = OrderedDict()
-        self._logicalConstrains = OrderedDict()
+        self._logicalConstrains = _RevisionOrderedDict()
         self._relations = OrderedDict()
         self._batch = None
         self.cacheRootConcepts = {}
         self.executableLCsLabels = {}
-        self._executableLCs = OrderedDict()
+        self._executableLCs = _RevisionOrderedDict()
+        self._constraint_formula_revision = 0
         self.varContext = None # None before calling `with graph...`, dictionary after
         self.constraint = None  # Will hold the constraint concept
         self._processed_lcs = set()  # Track which LCs have been processed
@@ -77,6 +135,19 @@ class Graph(BaseGraphTree):
         # the graph structure changes.
         self._activation_concepts_cache = None
         self._activation_concept_members = frozenset()
+
+    @property
+    def constraint_revision(self):
+        """O(1) token for structural or formula changes to constraints."""
+
+        return (
+            self._logicalConstrains.revision,
+            self._executableLCs.revision,
+            self._constraint_formula_revision,
+        )
+
+    def _touch_constraint_formula_revision(self):
+        self._constraint_formula_revision += 1
 
 
     def __iter__(self):

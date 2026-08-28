@@ -743,9 +743,16 @@ class CompiledLossCalculator(LossCalculator):
         self.batched_formula_fallbacks = 0
         self.batched_formula_plan_hits = 0
         self.batch_index_rebuilds = 0
+        self.graph_snapshot_rebuilds = 0
+        self.active_rule_cache_hits = 0
+        self.active_rule_cache_misses = 0
+        self._active_rule_cache_limit = 4096
+        self._graph_snapshot_token = None
+        self._global_constraints_by_graph = OrderedDict()
         self._batch_index_token = None
         self._batch_plans_by_graph = OrderedDict()
         self._batch_plan_ids = set()
+        self._batch_plan_by_id = OrderedDict()
         # The persistent evaluator is rebound per data item. Protect that small
         # mutable execution context when callers share a solver across threads.
         self._execution_lock = RLock()
@@ -826,29 +833,16 @@ class CompiledLossCalculator(LossCalculator):
 
     def _calculate_bound_loss(self, dn, tnorm='L', counting_tnorm=None,
                               include_executable=False, include_global=True):
-        global_constraints = self._bind_data(dn)
+        self._bind_data(dn)
         if include_global:
-            self._refresh_batch_index(global_constraints)
+            self._refresh_batch_index()
         return self._calculate_loss_with_formula_batches(
             dn, tnorm, counting_tnorm,
             include_executable=include_executable,
             include_global=include_global)
 
     def _bind_data(self, dn):
-        live_constraints = []
-        global_constraints = []
-        for graph in self.solver.myGraph:
-            graph_constraints = list(graph.logicalConstrains.values())
-            global_constraints.extend(graph_constraints)
-            live_constraints.extend(graph_constraints)
-            active_executable_names = dn.getActiveExecutableConstraintNames()
-            live_constraints.extend(
-                graph.executableLCs[name].innerLC
-                for name in active_executable_names
-                if name in graph.executableLCs
-                and getattr(graph.executableLCs[name], 'innerLC', None) is not None
-            )
-        self.plan_cache.retain(live_constraints)
+        self._refresh_graph_snapshots()
 
         # The graphs are handed to the store so it can honour ``fixedL`` per
         # concept; previously any active fixedL disabled compilation for the
@@ -866,41 +860,102 @@ class CompiledLossCalculator(LossCalculator):
         else:
             self._evaluator.rebind(self._prob_store)
         self.data_bindings += 1
-        return global_constraints
 
-    def _refresh_batch_index(self, constraints):
+    @staticmethod
+    def _constraint_revision(graph):
+        revision = getattr(graph, 'constraint_revision', None)
+        if revision is not None:
+            return revision
+        return (
+            tuple(
+                (id(lc), getattr(lc, '_compile_revision', 0))
+                for lc in graph.logicalConstrains.values()),
+            tuple(
+                (id(executable),
+                 getattr(getattr(executable, 'innerLC', None),
+                         '_compile_revision', 0))
+                for executable in graph.executableLCs.values()),
+        )
+
+    def _refresh_graph_snapshots(self):
+        graphs = tuple(self.solver.myGraph)
+        token = tuple(
+            (id(graph), self._constraint_revision(graph))
+            for graph in graphs
+        )
+        if token == self._graph_snapshot_token:
+            return
+
+        snapshots = OrderedDict()
+        live_constraints = []
+        for graph in graphs:
+            constraints = tuple(graph.logicalConstrains.values())
+            snapshots[graph] = constraints
+            live_constraints.extend(constraints)
+            live_constraints.extend(
+                executable.innerLC
+                for executable in graph.executableLCs.values()
+                if getattr(executable, 'innerLC', None) is not None
+            )
+
+        self.plan_cache.retain(live_constraints)
+        self._global_constraints_by_graph = snapshots
+        self._graph_snapshot_token = token
+        self._batch_index_token = None
+        self.graph_snapshot_rebuilds += 1
+
+    def _refresh_batch_index(self):
         """Compile the graph's unary implication adjacency once.
 
         The token is cheap to check and includes each formula revision, so
         structural edits rebuild the index before the changed rule can run.
         """
-        token = tuple(
-            (id(lc), getattr(lc, '_compile_revision', 0))
-            for lc in constraints if type(lc) is ifL
-        )
+        token = self._graph_snapshot_token
         if token == self._batch_index_token:
             return
 
         plans_by_graph = OrderedDict()
         plan_ids = set()
-        for lc in constraints:
-            if type(lc) is not ifL:
-                continue
-            formula_plan = self.plan_cache.get(lc)
-            batch_plan = formula_plan.batched_unary_implication
-            if batch_plan is None:
-                continue
-            graph_index = plans_by_graph.setdefault(
-                lc.graph, {'all': [], 'by_source': {}})
-            graph_index['all'].append(batch_plan)
-            graph_index['by_source'].setdefault(
-                batch_plan.source_concept, []).append(batch_plan)
-            plan_ids.add(id(lc))
+        plans_by_id = OrderedDict()
+        for graph, constraints in self._global_constraints_by_graph.items():
+            graph_index = {
+                'all': [],
+                'by_source': {},
+                'fallback': [],
+                'active_batch_cache': OrderedDict(),
+                'active_fallback_cache': OrderedDict(),
+            }
+            plans_by_graph[graph] = graph_index
+            for lc in constraints:
+                formula_plan = self.plan_cache.get(lc)
+                batch_plan = formula_plan.batched_unary_implication
+                if batch_plan is None:
+                    graph_index['fallback'].append(lc)
+                    continue
+                graph_index['all'].append(batch_plan)
+                graph_index['by_source'].setdefault(
+                    batch_plan.source_concept, []).append(batch_plan)
+                plan_ids.add(id(lc))
+                plans_by_id[id(lc)] = batch_plan
 
         self._batch_index_token = token
         self._batch_plans_by_graph = plans_by_graph
         self._batch_plan_ids = plan_ids
+        self._batch_plan_by_id = plans_by_id
         self.batch_index_rebuilds += 1
+
+    def _cache_active_rules(self, cache, key, build):
+        cached = cache.get(key)
+        if cached is not None:
+            cache.move_to_end(key)
+            self.active_rule_cache_hits += 1
+            return cached
+        selected = tuple(build())
+        cache[key] = selected
+        if len(cache) > self._active_rule_cache_limit:
+            cache.popitem(last=False)
+        self.active_rule_cache_misses += 1
+        return selected
 
     @staticmethod
     def _compiled_vector(gathered):
@@ -920,26 +975,49 @@ class CompiledLossCalculator(LossCalculator):
         for graph, index in self._batch_plans_by_graph.items():
             controller = graph._activation_controller()
             if controller is None:
-                candidates = index['all']
+                key = None
             else:
+                key = controller._active_concepts
+
+            def build_candidates():
+                if controller is None:
+                    return index['all']
                 active = controller._active_concepts
-                candidates = []
-                for source in active:
-                    candidates.extend(index['by_source'].get(source, ()))
+                return (
+                    plan
+                    for source in active
+                    for plan in index['by_source'].get(source, ())
+                    if plan.target_concept in active
+                )
+
+            candidates = self._cache_active_rules(
+                index['active_batch_cache'], key, build_candidates)
 
             for plan in candidates:
                 lc = plan.lc
                 if not lc.headLC or not lc.declared_active:
                     continue
-                if controller is not None:
-                    active = controller._active_concepts
-                    if (
-                        plan.source_concept not in active
-                        or plan.target_concept not in active
-                    ):
-                        continue
                 selected.append(plan)
         return selected
+
+    def _active_fallback_constraints(self, graph, index):
+        controller = graph._activation_controller()
+        key = None if controller is None else controller._active_concepts
+
+        def build_candidates():
+            if controller is None:
+                return index['fallback']
+            return (
+                lc for lc in index['fallback']
+                if graph.are_concepts_active(lc.getLcConcepts())
+            )
+
+        candidates = self._cache_active_rules(
+            index['active_fallback_cache'], key, build_candidates)
+        return (
+            lc for lc in candidates
+            if lc.headLC and lc.declared_active
+        )
 
     def _evaluate_formula_batches(self, selector):
         """Evaluate active unary implication rules as ``[R, G]`` tensors."""
@@ -1061,23 +1139,30 @@ class CompiledLossCalculator(LossCalculator):
         if self.data_bindings > 1:
             self.batched_formula_plan_hits += len(batched)
 
-        for graph in self.solver.myGraph:
-            if include_global:
-                for _, lc in graph.logicalConstrains.items():
-                    batch_result = batched.get(id(lc))
-                    if batch_result is not None:
-                        lcLosses[lc.lcName] = batch_result
-                        continue
-                    if id(lc) in self._batch_plan_ids and id(lc) not in batch_fallbacks:
-                        # Eligible but absent means dynamically or explicitly
-                        # inactive. Avoid the recursive ``getLcConcepts`` hot path.
-                        continue
+        if include_global:
+            for result in batched.values():
+                lc = result['lc']
+                lcLosses[lc.lcName] = result
+
+            for graph, index in self._batch_plans_by_graph.items():
+                for lc in self._active_fallback_constraints(graph, index):
                     result = self.calculate_single_lc_loss(
                         lc, dn, key, tnorm=tnorm,
                         counting_tnorm=counting_tnorm, label=None)
                     if result is not None:
                         lcLosses[lc.lcName] = result
 
+            for lc_id, plan in self._batch_plan_by_id.items():
+                if lc_id not in batch_fallbacks:
+                    continue
+                lc = plan.lc
+                result = self.calculate_single_lc_loss(
+                    lc, dn, key, tnorm=tnorm,
+                    counting_tnorm=counting_tnorm, label=None)
+                if result is not None:
+                    lcLosses[lc.lcName] = result
+
+        for graph in self.solver.myGraph:
             if not include_executable:
                 continue
             for executable_name in dn.getActiveExecutableConstraintNames():
@@ -1133,6 +1218,15 @@ class CompiledLossCalculator(LossCalculator):
             'batched_formula_fallbacks': self.batched_formula_fallbacks,
             'batched_formula_plan_hits': self.batched_formula_plan_hits,
             'batch_index_rebuilds': self.batch_index_rebuilds,
+            'graph_snapshot_rebuilds': self.graph_snapshot_rebuilds,
+            'active_rule_cache_hits': self.active_rule_cache_hits,
+            'active_rule_cache_misses': self.active_rule_cache_misses,
+            'fixed_index_rebuilds': (
+                0 if self._prob_store is None
+                else self._prob_store.fixed_index_rebuilds),
+            'fixed_candidate_checks': (
+                0 if self._prob_store is None
+                else self._prob_store.fixed_candidate_checks),
         })
         return info
 

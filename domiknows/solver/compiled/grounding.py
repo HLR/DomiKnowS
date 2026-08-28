@@ -41,6 +41,10 @@ class ProbabilityStore:
         self.graphs = graphs if graphs is not None else []
         self._graph_key = tuple(id(graph) for graph in self.graphs)
         self._fixed_spec_cache = {}
+        self._fixed_index_token = None
+        self._fixed_candidates = {}
+        self.fixed_index_rebuilds = 0
+        self.fixed_candidate_checks = 0
 
     def rebind(self, rootDn, key=None, device=None, dtype=None, graphs=None):
         """Reuse this store for a new item without retaining stale tensors."""
@@ -54,6 +58,8 @@ class ProbabilityStore:
             graph_key = tuple(id(graph) for graph in graphs)
             if graph_key != self._graph_key:
                 self._root_cache.clear()
+                self._fixed_index_token = None
+                self._fixed_candidates.clear()
                 self._graph_key = graph_key
         self._concepts.clear()
         self._domain_cache.clear()
@@ -77,27 +83,57 @@ class ProbabilityStore:
         ``LogicalConstraintConstructor.isVariableFixed`` exactly, including its
         inner-only ``break`` (a later graph's fixedL overwrites an earlier one).
         """
+        from domiknows.graph import fixedL
+
+        token = tuple(
+            (id(graph), self._constraint_revision(graph))
+            for graph in self.graphs
+        )
+        if token != self._fixed_index_token:
+            candidates = {}
+            for graph in self.graphs:
+                by_concept = {}
+                for _, lc in graph.allLogicalConstrains:
+                    if type(lc) is not fixedL or not lc.e:
+                        continue
+                    by_concept.setdefault(lc.e[0][1], []).append(lc)
+                for name, graph_candidates in by_concept.items():
+                    candidates.setdefault(name, []).append(
+                        (graph, tuple(graph_candidates)))
+            self._fixed_candidates = {
+                name: tuple(graph_candidates)
+                for name, graph_candidates in candidates.items()
+            }
+            self._fixed_index_token = token
+            self._fixed_spec_cache.clear()
+            self.fixed_index_rebuilds += 1
+
         if conceptName in self._fixed_spec_cache:
             return self._fixed_spec_cache[conceptName]
 
-        from domiknows.graph import fixedL
-
         spec = None
-        for graph in self.graphs:
-            for _, lc in graph.allLogicalConstrains:
+        for _graph, candidates in self._fixed_candidates.get(conceptName, ()):
+            for lc in candidates:
+                self.fixed_candidate_checks += 1
                 if not lc.headLC or not lc.active:
-                    continue
-                if type(lc) is not fixedL:
-                    continue
-                if not lc.e:
-                    continue
-                if lc.e[0][1] != conceptName:
                     continue
                 spec = (lc.e[1].v[1].e[1], lc.e[1].v[1].e[2])
                 break
 
         self._fixed_spec_cache[conceptName] = spec
         return spec
+
+    @staticmethod
+    def _constraint_revision(graph):
+        revision = getattr(graph, 'constraint_revision', None)
+        if revision is not None:
+            return revision
+        # Compatibility for graph-like test doubles. Real Graph instances use
+        # the O(1) revision token above.
+        return tuple(
+            (id(lc), getattr(lc, '_compile_revision', 0))
+            for _, lc in graph.allLogicalConstrains
+        )
 
     def _fixed_vectors(self, dns, conceptName, spec):
         """Per-datanode ``[N]`` gate mask and label vector for a fixed concept.
