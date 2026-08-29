@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
+from tqdm.std import tqdm as _TerminalTqdm
 
 try:
     from .world_graph import canonicalize_plan
@@ -23,6 +24,20 @@ except ImportError:
 
 PLANNING_DATASET_ID = "VLABench/vlm_evaluation_v1.0"
 CONTROL_DATASET_ID = "VLABench/vlabench_primitive_ft_lerobot_video"
+
+
+class _TerminalDownloadProgress(_TerminalTqdm):
+    """Plain terminal bar compatible with old and new huggingface_hub.
+
+    ``huggingface_hub`` supplies a progress-group ``name`` keyword that stock
+    tqdm does not accept.  Removing it lets us bypass ``tqdm.auto`` (which can
+    incorrectly select the notebook/async renderer in redirected server
+    terminals) without hiding useful multi-hour download progress.
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("name", None)
+        super().__init__(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -149,6 +164,7 @@ def _snapshot_download_with_retry(
                 local_dir=local_dir,
                 token=token,
                 max_workers=max_workers,
+                tqdm_class=_TerminalDownloadProgress,
             )
             return
         except Exception as error:

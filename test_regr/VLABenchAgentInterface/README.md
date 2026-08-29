@@ -54,10 +54,21 @@ uv run python -m test_regr.VLABenchAgentInterface.main download `
   --control-dir test_regr\VLABenchAgentInterface\data\control
 ```
 
+On Linux:
+
+```bash
+unset HF_HUB_DISABLE_PROGRESS_BARS
+python -m test_regr.VLABenchAgentInterface.main download \
+  --planning-dir test_regr/VLABenchAgentInterface/data/planning \
+  --control-dir test_regr/VLABenchAgentInterface/data/control
+```
+
 The downloader defaults to one worker, honors `Retry-After`, and resumes the
-existing Hugging Face snapshot after HTTP 429 or transient failures. If
-necessary, run `uv run hf auth login` and repeat the same command; do not
-delete the partial data.
+existing Hugging Face snapshot after HTTP 429 or transient failures. It uses
+the plain terminal `tqdm` renderer so byte and reconstruction progress remain
+visible on redirected Linux servers without relying on the auto-selected
+notebook/async renderer. If necessary, run `uv run hf auth login` and repeat
+the same command; do not delete the partial data.
 
 The processed sources are
 [VLM planning episodes](https://huggingface.co/datasets/VLABench/vlm_evaluation_v1.0)

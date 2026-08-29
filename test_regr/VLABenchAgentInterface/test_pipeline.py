@@ -7,6 +7,7 @@ import pytest
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader
+from tqdm.std import tqdm as TerminalTqdm
 
 from test_regr.VLABenchAgentInterface.dataset import (
     CONTROL_DATASET_ID,
@@ -78,6 +79,9 @@ def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
         CONTROL_DATASET_ID,
     ]
     assert all(call["max_workers"] == 1 for call in calls)
+    assert all(issubclass(call["tqdm_class"], TerminalTqdm) for call in calls)
+    progress = calls[0]["tqdm_class"](total=0, disable=True, name="huggingface.test")
+    progress.close()
     assert delays == [0.0]
 
 
