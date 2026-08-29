@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint as activation_checkpoint
 
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
@@ -201,6 +202,42 @@ class JointQwenVLPlanner(nn.Module):
             for key, value in batch.items()
         }
 
+    def _model_logits(self, domain: str, inputs: Mapping[str, Any]) -> torch.Tensor:
+        output = self.model(**inputs, output_hidden_states=True, use_cache=False)
+        hidden_states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
+        if hidden_states is None:
+            raise RuntimeError("vision-language backbone did not return hidden states")
+        hidden = hidden_states[-1][:, -1, :].float().to(self.label_heads[domain].weight.device)
+        return self.label_heads[domain](hidden)[0]
+
+    def _checkpointed_model_logits(self, domain: str, inputs: Mapping[str, Any]) -> torch.Tensor:
+        """Discard each full VLM graph until backward recomputes it.
+
+        Graph-token supervision and REINFORCE evaluate one complete multimodal
+        prompt per prefix.  Retaining every prefix graph until a sequence-level
+        backward pass makes memory grow linearly with plan length.  A
+        non-reentrant checkpoint keeps only the small processed input tensors
+        and output logits while preserving gradients through the shared LoRA.
+        """
+        if not self.training or not torch.is_grad_enabled():
+            return self._model_logits(domain, inputs)
+        tensor_keys = tuple(key for key, value in inputs.items() if torch.is_tensor(value))
+        if not tensor_keys:
+            return self._model_logits(domain, inputs)
+        static_inputs = {key: value for key, value in inputs.items() if key not in tensor_keys}
+
+        def forward(*values):
+            rebuilt = dict(static_inputs)
+            rebuilt.update(zip(tensor_keys, values))
+            return self._model_logits(domain, rebuilt)
+
+        return activation_checkpoint(
+            forward,
+            *(inputs[key] for key in tensor_keys),
+            use_reentrant=False,
+            preserve_rng_state=True,
+        )
+
     def next_label_logits(
         self,
         domain: str,
@@ -208,12 +245,7 @@ class JointQwenVLPlanner(nn.Module):
         prefix_labels: Sequence[int],
     ) -> torch.Tensor:
         inputs = self._inputs(domain, context, prefix_labels)
-        output = self.model(**inputs, output_hidden_states=True, use_cache=False)
-        hidden_states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
-        if hidden_states is None:
-            raise RuntimeError("vision-language backbone did not return hidden states")
-        hidden = hidden_states[-1][:, -1, :].float().to(self.label_heads[domain].weight.device)
-        return self.label_heads[domain](hidden)[0]
+        return self._checkpointed_model_logits(domain, inputs)
 
     def shift_right(self, domain: str, labels: torch.Tensor) -> torch.Tensor:
         labels = torch.as_tensor(labels, dtype=torch.long, device=self.device)

@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint as activation_checkpoint
 
 try:
     from .graph import PlanVocabulary, labels_to_plan, plan_to_tokens
@@ -361,14 +362,37 @@ class QwenVLPlanner(nn.Module):
         model_device = next(self.model.parameters()).device
         return {key: value.to(model_device) if hasattr(value, "to") else value for key, value in batch.items()}
 
-    def _next_logits(self, context: Mapping[str, Any], prefix_labels: Sequence[int]) -> torch.Tensor:
-        inputs = self._inputs(context, prefix_labels)
+    def _model_logits(self, inputs: Mapping[str, Any]) -> torch.Tensor:
         output = self.model(**inputs, output_hidden_states=True, use_cache=False)
         hidden_states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
         if hidden_states is None:
             raise RuntimeError("vision-language backbone did not return hidden states")
         hidden = hidden_states[-1][:, -1, :].float().to(self.output.weight.device)
         return self.output(hidden)[0]
+
+    def _checkpointed_model_logits(self, inputs: Mapping[str, Any]) -> torch.Tensor:
+        if not self.training or not torch.is_grad_enabled():
+            return self._model_logits(inputs)
+        tensor_keys = tuple(key for key, value in inputs.items() if torch.is_tensor(value))
+        if not tensor_keys:
+            return self._model_logits(inputs)
+        static_inputs = {key: value for key, value in inputs.items() if key not in tensor_keys}
+
+        def forward(*values):
+            rebuilt = dict(static_inputs)
+            rebuilt.update(zip(tensor_keys, values))
+            return self._model_logits(rebuilt)
+
+        return activation_checkpoint(
+            forward,
+            *(inputs[key] for key in tensor_keys),
+            use_reentrant=False,
+            preserve_rng_state=True,
+        )
+
+    def _next_logits(self, context: Mapping[str, Any], prefix_labels: Sequence[int]) -> torch.Tensor:
+        inputs = self._inputs(context, prefix_labels)
+        return self._checkpointed_model_logits(inputs)
 
     def sequence_logits(self, context: Mapping[str, Any], prefix_labels: torch.Tensor) -> torch.Tensor:
         prefixes = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device)

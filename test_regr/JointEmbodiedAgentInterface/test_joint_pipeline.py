@@ -43,6 +43,7 @@ class FakeBackbone(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.embedding = torch.nn.Embedding(4, 8)
+        self.forward_calls = 0
         self.config = SimpleNamespace(
             hidden_size=8,
             model_type="fake-qwen-vl",
@@ -50,6 +51,7 @@ class FakeBackbone(torch.nn.Module):
         )
 
     def forward(self, input_ids, **_kwargs):
+        self.forward_calls += 1
         return SimpleNamespace(hidden_states=(self.embedding(input_ids),))
 
 
@@ -90,6 +92,26 @@ def make_planner(runtime):
         eai_vocabulary=runtime.eai_vocabulary,
         vlabench_vocabulary=runtime.vlabench_vocabulary,
     )
+
+
+def test_joint_sequence_loss_checkpoints_each_full_backbone_prefix(joint_fixture):
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    planner.train()
+    labels = examples[0]["target_action_labels"][:3]
+
+    loss = planner.supervised_loss(
+        "eai",
+        context={"instruction": "test", "goal": "test"},
+        target_labels=labels,
+    )
+    calls_before_backward = planner.model.forward_calls
+    loss.backward()
+
+    assert calls_before_backward == len(labels)
+    assert planner.model.forward_calls > calls_before_backward
+    assert planner.model.embedding.weight.grad is not None
+    assert planner.label_heads["eai"].weight.grad is not None
 
 
 def test_joint_pretrained_loader_uses_transformers_compatibility_resolver(joint_fixture, monkeypatch):
