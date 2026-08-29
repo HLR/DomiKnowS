@@ -505,8 +505,13 @@ def deterministic_split(
         raise ValueError("train and validation fractions must leave a test split")
     shuffled = list(items)
     random.Random(seed).shuffle(shuffled)
-    train_end = int(len(shuffled) * train_fraction)
-    validation_end = train_end + int(len(shuffled) * validation_fraction)
+    count = len(shuffled)
+    train_end = max(1, int(count * train_fraction)) if count else 0
+    remaining = count - train_end
+    validation_count = min(int(count * validation_fraction), max(0, remaining - 1))
+    if validation_fraction and remaining >= 2:
+        validation_count = max(1, validation_count)
+    validation_end = train_end + validation_count
     return {
         "train": shuffled[:train_end],
         "validation": shuffled[train_end:validation_end],

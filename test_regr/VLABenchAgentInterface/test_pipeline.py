@@ -183,6 +183,11 @@ def test_planning_folder_loader_and_deterministic_split(tmp_path):
     assert loaded[0].entities == ("apple", "bowl")
     assert len(loaded[0].image_paths) == len(loaded[0].segmented_image_paths) == 1
     assert deterministic_split(list(range(20)), seed=42) == deterministic_split(list(range(20)), seed=42)
+    one_episode = deterministic_split([7], seed=42)
+    assert one_episode == {"train": [7], "validation": [], "test": []}
+    three_episodes = deterministic_split([1, 2, 3], seed=42)
+    assert len(three_episodes["train"]) >= 1
+    assert set().union(*map(set, three_episodes.values())) == {1, 2, 3}
     world = build_vlabench_world_graph("test_dataset_vocabulary_world")
     vocabulary = PlanVocabulary.from_plans(({"skill_sequence": plan},), world, max_entities=12)
     vocabulary_path = tmp_path / "vocab.json"
@@ -191,6 +196,29 @@ def test_planning_folder_loader_and_deterministic_split(tmp_path):
     assert restored.checksum == vocabulary.checksum
     assert restored.skill_argument_map["pick"] == ("target_entity_name",)
     assert restored.skill_argument_map["lift"] == ()
+
+
+def test_control_loader_with_one_limited_episode_keeps_training_windows(monkeypatch):
+    from test_regr.VLABenchAgentInterface.main import _control_loaders
+
+    records = [{"episode_index": 0} for _ in range(10)]
+    monkeypatch.setattr(
+        "test_regr.VLABenchAgentInterface.main.load_hf_control_records",
+        lambda *_args, **_kwargs: records,
+    )
+    args = SimpleNamespace(
+        task="add_condiment",
+        control_source="not-a-local-path",
+        limit=10,
+        action_horizon=2,
+        batch_size=1,
+        workers=0,
+    )
+    loaders = _control_loaders(args)
+
+    assert len(loaders["train"].dataset) == 10
+    assert len(loaders["validation"].dataset) == 0
+    assert len(loaders["test"].dataset) == 0
 
 
 def test_numbered_segmentation_overlay():
