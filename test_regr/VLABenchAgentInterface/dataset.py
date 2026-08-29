@@ -657,6 +657,24 @@ class LeRobotWindowDataset(Dataset):
         self.image_keys = tuple(image_keys or ())
         self.video_root = Path(video_root).resolve() if video_root is not None else None
         self._video_cache: dict[str, Any] = {}
+        self.video_keys: tuple[str, ...] = ()
+        self.video_path_template = "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4"
+        self.video_chunk_size = 1000
+        if self.video_root is not None:
+            info_path = self.video_root / "meta" / "info.json"
+            if info_path.is_file():
+                info = _read_json(info_path)
+                self.video_path_template = str(info.get("video_path", self.video_path_template))
+                self.video_chunk_size = int(info.get("chunks_size", self.video_chunk_size))
+                features = info.get("features", {})
+                self.video_keys = tuple(
+                    key for key, feature in features.items()
+                    if isinstance(feature, Mapping) and feature.get("dtype") == "video"
+                )
+            if not self.video_keys:
+                videos = self.video_root / "videos"
+                if videos.is_dir():
+                    self.video_keys = tuple(sorted(path.name for path in videos.iterdir() if path.is_dir()))
         self.condition_index = None if condition_index is None else int(condition_index)
         episodes: dict[int, list[int]] = {}
         if hasattr(self.records, "column_names") and "episode_index" in self.records.column_names:
@@ -685,17 +703,48 @@ class LeRobotWindowDataset(Dataset):
             images = _tensor(row["images"])
             return images.unsqueeze(0) if images.ndim == 3 else images
         keys = self.image_keys or tuple(sorted(key for key in row if "image" in key.lower()))
-        if not keys:
-            raise KeyError("control record contains no image views")
         timestamp = float(np.asarray(row.get("timestamp", 0.0)).reshape(-1)[0])
+        if keys:
+            return torch.stack([
+                _video_tensor(
+                    row[key],
+                    timestamp=timestamp,
+                    video_root=self.video_root,
+                    cache=self._video_cache,
+                )
+                for key in keys
+            ])
+        if self.video_root is None or not self.video_keys:
+            available = ", ".join(sorted(map(str, row.keys())))
+            raise KeyError(
+                "control record contains no inline image views and no LeRobot video metadata; "
+                f"available columns: {available}"
+            )
+        episode = int(np.asarray(row.get("episode_index", 0)).reshape(-1)[0])
+        paths = [
+            self.video_root / self.video_path_template.format(
+                video_key=key,
+                chunk_index=episode // self.video_chunk_size,
+                file_index=episode % self.video_chunk_size,
+                episode_index=episode,
+            )
+            for key in self.video_keys
+        ]
+        missing = [path for path in paths if not path.is_file()]
+        if missing:
+            preview = ", ".join(str(path) for path in missing[:3])
+            raise FileNotFoundError(
+                "LeRobot control video files are missing from the downloaded snapshot: "
+                f"{preview}. Resume the VLABench control dataset download."
+            )
         return torch.stack([
             _video_tensor(
-                row[key],
+                {"path": str(path), "timestamp": timestamp},
                 timestamp=timestamp,
                 video_root=self.video_root,
                 cache=self._video_cache,
             )
-            for key in keys
+            for path in paths
         ])
 
     def __getitem__(self, item: int) -> dict[str, torch.Tensor]:

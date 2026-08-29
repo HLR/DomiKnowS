@@ -2,6 +2,7 @@ import importlib
 import json
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -245,6 +246,52 @@ def _records():
                 "task_index": episode,
             })
     return result
+
+
+def test_lerobot_v3_external_video_columns_are_reconstructed(tmp_path, monkeypatch):
+    info = {
+        "chunks_size": 1000,
+        "video_path": "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4",
+        "features": {
+            "image": {"dtype": "video"},
+            "second_image": {"dtype": "video"},
+            "wrist_image": {"dtype": "video"},
+            "state": {"dtype": "float32"},
+        },
+    }
+    (tmp_path / "meta").mkdir()
+    (tmp_path / "meta" / "info.json").write_text(json.dumps(info), encoding="utf-8")
+    expected = []
+    for key in ("image", "second_image", "wrist_image"):
+        path = tmp_path / "videos" / key / "chunk-001" / "file-001.mp4"
+        path.parent.mkdir(parents=True)
+        path.touch()
+        expected.append(path.resolve())
+
+    decoded = []
+
+    def fake_video_tensor(value, **_kwargs):
+        decoded.append(Path(value["path"]).resolve())
+        return torch.zeros(3, 12, 12)
+
+    monkeypatch.setattr("test_regr.VLABenchAgentInterface.dataset._video_tensor", fake_video_tensor)
+    records = [{
+        "episode_index": 1001,
+        "frame_index": 0,
+        "timestamp": 0.0,
+        "state": np.zeros(7, dtype=np.float32),
+        "actions": np.zeros(7, dtype=np.float32),
+    }]
+    dataset = LeRobotWindowDataset(
+        records,
+        observation_horizon=1,
+        action_horizon=1,
+        video_root=tmp_path,
+    )
+    item = dataset[0]
+
+    assert item["images"].shape == (1, 3, 3, 12, 12)
+    assert decoded == expected
 
 
 def test_control_windows_controller_loss_and_training(tmp_path):
