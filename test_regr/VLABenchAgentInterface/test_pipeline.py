@@ -8,7 +8,6 @@ import pytest
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader
-from tqdm.std import tqdm as TerminalTqdm
 
 from test_regr.VLABenchAgentInterface.dataset import (
     CONTROL_DATASET_ID,
@@ -58,6 +57,7 @@ def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
     progress_targets = (
         (importlib.import_module("huggingface_hub.utils.tqdm"), "tqdm"),
         (importlib.import_module("huggingface_hub.utils"), "tqdm"),
+        (importlib.import_module("huggingface_hub.utils._xet_progress_reporting"), "tqdm"),
         (importlib.import_module("huggingface_hub.file_download"), "tqdm"),
         (importlib.import_module("huggingface_hub._snapshot_download"), "hf_tqdm"),
     )
@@ -91,11 +91,27 @@ def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
         CONTROL_DATASET_ID,
     ]
     assert all(call["max_workers"] == 1 for call in calls)
-    assert all(issubclass(call["tqdm_class"], TerminalTqdm) for call in calls)
-    progress = calls[0]["tqdm_class"](total=0, disable=True, name="huggingface.test")
+    progress_class = calls[0]["tqdm_class"]
+    assert all(call["tqdm_class"] is progress_class for call in calls)
+    assert all(base.__module__ != "tqdm.std" for base in progress_class.__mro__)
+    progress = progress_class(total=0, disable=True, name="huggingface.test")
     progress.close()
     assert [getattr(module, attribute) for module, attribute in progress_targets] == original_progress
     assert delays == [0.0]
+
+
+def test_download_progress_is_newline_based_and_tqdm_independent(capsys):
+    from test_regr.VLABenchAgentInterface.dataset import _TerminalDownloadProgress
+
+    progress = _TerminalDownloadProgress(total=2, desc="Reconstructing", unit="B", unit_scale=True)
+    progress.update(1)
+    progress.update(1)
+    progress.close()
+
+    rendered = capsys.readouterr().err
+    assert "Reconstructing: 0B/2B" in rendered
+    assert "Reconstructing: 2B/2B (100.0%)" in rendered
+    assert "\r" not in rendered
 
 
 def test_planning_folder_loader_and_deterministic_split(tmp_path):

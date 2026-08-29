@@ -6,6 +6,7 @@ import importlib
 import json
 import random
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -16,7 +17,6 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
-from tqdm.std import tqdm as _TerminalTqdm
 
 try:
     from .world_graph import canonicalize_plan
@@ -28,18 +28,174 @@ PLANNING_DATASET_ID = "VLABench/vlm_evaluation_v1.0"
 CONTROL_DATASET_ID = "VLABench/vlabench_primitive_ft_lerobot_video"
 
 
-class _TerminalDownloadProgress(_TerminalTqdm):
-    """Plain terminal bar compatible with old and new huggingface_hub.
+class _TerminalDownloadProgress:
+    """Dependency-free progress reporter implementing the tqdm surface Hub uses.
 
-    ``huggingface_hub`` supplies a progress-group ``name`` keyword that stock
-    tqdm does not accept.  Removing it lets us bypass ``tqdm.auto`` (which can
-    incorrectly select the notebook/async renderer in redirected server
-    terminals) without hiding useful multi-hour download progress.
+    It deliberately prints periodic newline-delimited updates instead of using
+    cursor control. This remains visible in redirected server logs and avoids
+    terminal/notebook renderer failures in ``tqdm.auto``.
     """
 
-    def __init__(self, *args, **kwargs):
-        kwargs.pop("name", None)
-        super().__init__(*args, **kwargs)
+    _lock = threading.RLock()
+
+    def __init__(
+        self,
+        iterable=None,
+        *,
+        total=None,
+        initial=0,
+        desc=None,
+        unit="it",
+        unit_scale=False,
+        disable=False,
+        mininterval=2.0,
+        **_kwargs,
+    ):
+        self.iterable = iterable
+        if total is None and iterable is not None:
+            try:
+                total = len(iterable)
+            except (TypeError, AttributeError):
+                pass
+        self.total = total
+        self.n = initial or 0
+        self.desc = desc or "Progress"
+        self.unit = unit
+        self.unit_scale = unit_scale
+        self.disable = bool(disable)
+        self.mininterval = max(0.1, float(mininterval or 2.0))
+        self.start_t = time.monotonic()
+        self.last_print_t = self.start_t
+        self._last_print_state = None
+        self._postfix = ""
+        self._closed = False
+        self._render(force=True)
+
+    @classmethod
+    def get_lock(cls):
+        return cls._lock
+
+    @classmethod
+    def set_lock(cls, lock):
+        cls._lock = lock
+
+    @staticmethod
+    def format_sizeof(value, suffix="", divisor=1000):
+        if value is None:
+            return "???"
+        value = float(value)
+        for prefix in ("", "k", "M", "G", "T", "P"):
+            if abs(value) < divisor:
+                return f"{value:3.1f}{prefix}{suffix}" if prefix else f"{value:g}{suffix}"
+            value /= divisor
+        return f"{value:.1f}E{suffix}"
+
+    @property
+    def format_dict(self):
+        elapsed = max(time.monotonic() - self.start_t, 1e-9)
+        return {"rate": self.n / elapsed, "elapsed": elapsed, "n": self.n, "total": self.total}
+
+    def __iter__(self):
+        if self.iterable is None:
+            return
+        try:
+            for item in self.iterable:
+                yield item
+                self.update(1)
+        finally:
+            self.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        self.close()
+
+    def update(self, n=1):
+        self.n += n or 0
+        self._render()
+
+    def refresh(self, *_, **__):
+        self._render()
+        return True
+
+    def set_description(self, desc=None, refresh=True):
+        self.desc = desc or "Progress"
+        if refresh:
+            self._render()
+
+    set_description_str = set_description
+
+    def set_postfix_str(self, postfix="", refresh=True):
+        self._postfix = str(postfix).strip()
+        if refresh:
+            self._render()
+
+    def set_postfix(self, ordered_dict=None, refresh=True, **kwargs):
+        values = dict(ordered_dict or {})
+        values.update(kwargs)
+        self.set_postfix_str(", ".join(f"{key}={value}" for key, value in values.items()), refresh)
+
+    def reset(self, total=None):
+        self.n = 0
+        if total is not None:
+            self.total = total
+        self.start_t = time.monotonic()
+        self.last_print_t = self.start_t
+        self._last_print_state = None
+        self._closed = False
+        self._render(force=True)
+
+    def close(self):
+        if not self._closed:
+            self._render(force=True)
+            self._closed = True
+
+    @classmethod
+    def write(cls, message, file=None, end="\n", nolock=False):
+        output = file or sys.stderr
+        lock = None if nolock else cls.get_lock()
+        if lock is None:
+            output.write(f"{message}{end}")
+            output.flush()
+            return
+        with lock:
+            output.write(f"{message}{end}")
+            output.flush()
+
+    def _render(self, force=False):
+        if self.disable:
+            return
+        now = time.monotonic()
+        complete = self.total not in (None, 0) and self.n >= self.total
+        if not force and not complete and now - self.last_print_t < self.mininterval:
+            return
+        state = (self.desc, self.n, self.total, self._postfix)
+        if state == self._last_print_state:
+            return
+        elapsed = max(now - self.start_t, 1e-9)
+        rate = self.n / elapsed
+        current = self._format_amount(self.n)
+        if self.total not in (None, 0):
+            total = self._format_amount(self.total)
+            percent = 100.0 * self.n / self.total
+            amount = f"{current}/{total} ({percent:5.1f}%)"
+        else:
+            amount = current
+        rate_text = f"{self._format_amount(rate)}/s" if self.n else ""
+        extras = " ".join(value for value in (rate_text, self._postfix) if value)
+        line = f"{self.desc}: {amount}"
+        if extras:
+            line = f"{line} [{extras}]"
+        self.write(line)
+        self.last_print_t = now
+        self._last_print_state = state
+
+    def _format_amount(self, value):
+        if self.unit_scale:
+            suffix = "B" if self.unit == "B" else self.unit
+            return self.format_sizeof(value, suffix=suffix)
+        return f"{value:g} {self.unit}"
 
 
 @contextmanager
@@ -55,13 +211,22 @@ def _terminal_huggingface_progress():
     targets = (
         ("huggingface_hub.utils.tqdm", "tqdm"),
         ("huggingface_hub.utils", "tqdm"),
+        ("huggingface_hub.utils._xet_progress_reporting", "tqdm"),
         ("huggingface_hub.file_download", "tqdm"),
         ("huggingface_hub._snapshot_download", "hf_tqdm"),
     )
+    resolved_targets = []
+    for module_name, attribute in targets:
+        try:
+            module = importlib.import_module(module_name)
+        except ModuleNotFoundError as error:
+            if error.name == module_name:
+                continue
+            raise
+        resolved_targets.append((module, attribute))
     patched = []
     try:
-        for module_name, attribute in targets:
-            module = importlib.import_module(module_name)
+        for module, attribute in resolved_targets:
             if not hasattr(module, attribute):
                 continue
             original = getattr(module, attribute)
