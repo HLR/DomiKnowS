@@ -1,3 +1,4 @@
+import importlib
 import json
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -54,8 +55,19 @@ class RateLimitError(Exception):
 def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
     calls = []
     delays = []
+    progress_targets = (
+        (importlib.import_module("huggingface_hub.utils.tqdm"), "tqdm"),
+        (importlib.import_module("huggingface_hub.utils"), "tqdm"),
+        (importlib.import_module("huggingface_hub.file_download"), "tqdm"),
+        (importlib.import_module("huggingface_hub._snapshot_download"), "hf_tqdm"),
+    )
+    original_progress = [getattr(module, attribute) for module, attribute in progress_targets]
 
     def fake_snapshot_download(**kwargs):
+        assert all(
+            getattr(module, attribute) is kwargs["tqdm_class"]
+            for module, attribute in progress_targets
+        )
         calls.append(kwargs)
         if len(calls) == 1:
             raise RateLimitError()
@@ -82,6 +94,7 @@ def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
     assert all(issubclass(call["tqdm_class"], TerminalTqdm) for call in calls)
     progress = calls[0]["tqdm_class"](total=0, disable=True, name="huggingface.test")
     progress.close()
+    assert [getattr(module, attribute) for module, attribute in progress_targets] == original_progress
     assert delays == [0.0]
 
 

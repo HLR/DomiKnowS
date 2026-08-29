@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import random
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -38,6 +40,37 @@ class _TerminalDownloadProgress(_TerminalTqdm):
     def __init__(self, *args, **kwargs):
         kwargs.pop("name", None)
         super().__init__(*args, **kwargs)
+
+
+@contextmanager
+def _terminal_huggingface_progress():
+    """Route snapshot and per-file Hub bars away from ``tqdm.auto``.
+
+    ``snapshot_download(tqdm_class=...)`` only controls the outer file-count
+    bar in several huggingface_hub releases. Xet reconstruction and HTTP byte
+    bars continue to use module-level Hub tqdm aliases, so temporarily replace
+    those aliases as well and restore them even when a download fails.
+    """
+
+    targets = (
+        ("huggingface_hub.utils.tqdm", "tqdm"),
+        ("huggingface_hub.utils", "tqdm"),
+        ("huggingface_hub.file_download", "tqdm"),
+        ("huggingface_hub._snapshot_download", "hf_tqdm"),
+    )
+    patched = []
+    try:
+        for module_name, attribute in targets:
+            module = importlib.import_module(module_name)
+            if not hasattr(module, attribute):
+                continue
+            original = getattr(module, attribute)
+            patched.append((module, attribute, original))
+            setattr(module, attribute, _TerminalDownloadProgress)
+        yield
+    finally:
+        for module, attribute, original in reversed(patched):
+            setattr(module, attribute, original)
 
 
 @dataclass(frozen=True)
@@ -156,16 +189,18 @@ def _snapshot_download_with_retry(
     from huggingface_hub import snapshot_download
 
     local_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading {repo_id} to {local_dir}", flush=True)
     for attempt in range(retries + 1):
         try:
-            snapshot_download(
-                repo_id=repo_id,
-                repo_type="dataset",
-                local_dir=local_dir,
-                token=token,
-                max_workers=max_workers,
-                tqdm_class=_TerminalDownloadProgress,
-            )
+            with _terminal_huggingface_progress():
+                snapshot_download(
+                    repo_id=repo_id,
+                    repo_type="dataset",
+                    local_dir=local_dir,
+                    token=token,
+                    max_workers=max_workers,
+                    tqdm_class=_TerminalDownloadProgress,
+                )
             return
         except Exception as error:
             if attempt >= retries or not _is_retryable_download_error(error):
