@@ -20,6 +20,36 @@ PLANNER_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
 VISION_MODEL_ID = "google/siglip-base-patch16-224"
 
 
+def resolve_vision_language_loader():
+    """Return a Transformers VLM loader across its renamed auto-model APIs."""
+
+    import transformers
+
+    processor_class = getattr(transformers, "AutoProcessor", None)
+    if processor_class is None:
+        raise ImportError("the installed transformers package does not export AutoProcessor")
+    failures = []
+    for class_name in (
+        "AutoModelForImageTextToText",
+        "Qwen2_5_VLForConditionalGeneration",
+        "AutoModelForVision2Seq",
+    ):
+        try:
+            model_class = getattr(transformers, class_name)
+        except (AttributeError, ImportError, ModuleNotFoundError, RuntimeError) as error:
+            failures.append(f"{class_name}: {error}")
+            continue
+        return model_class, processor_class
+    version = getattr(transformers, "__version__", "unknown")
+    details = "; ".join(failures) or "no compatible class is exported"
+    raise ImportError(
+        "No compatible Qwen2.5-VL model loader is available in transformers "
+        f"{version}. Tried AutoModelForImageTextToText, "
+        "Qwen2_5_VLForConditionalGeneration, and AutoModelForVision2Seq. "
+        f"Details: {details}"
+    )
+
+
 def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: PlanVocabulary) -> str:
     entities = "\n".join(f"{index}: {name}" for index, name in enumerate(entity_table)) or "No objects."
     skills = ", ".join(vocabulary.skills)
@@ -220,7 +250,7 @@ class QwenVLPlanner(nn.Module):
         gradient_checkpointing: bool = True,
         local_files_only: bool = False,
     ) -> "QwenVLPlanner":
-        from transformers import AutoModelForVision2Seq, AutoProcessor
+        model_class, processor_class = resolve_vision_language_loader()
 
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         kwargs: dict[str, Any] = {"torch_dtype": dtype, "local_files_only": local_files_only}
@@ -231,8 +261,8 @@ class QwenVLPlanner(nn.Module):
             kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_compute_dtype=dtype, bnb_4bit_quant_type="nf4",
             )
-        model = AutoModelForVision2Seq.from_pretrained(model_id, **kwargs)
-        processor = AutoProcessor.from_pretrained(model_id, local_files_only=local_files_only)
+        model = model_class.from_pretrained(model_id, **kwargs)
+        processor = processor_class.from_pretrained(model_id, local_files_only=local_files_only)
         if gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable()
             if hasattr(model.config, "use_cache"):

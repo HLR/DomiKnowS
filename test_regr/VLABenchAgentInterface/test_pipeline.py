@@ -1,5 +1,6 @@
 import importlib
 import json
+import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -20,7 +21,13 @@ from test_regr.VLABenchAgentInterface.dataset import (
 )
 from test_regr.VLABenchAgentInterface.environment import ee_action_to_env_action
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
-from test_regr.VLABenchAgentInterface.models import MultiViewController, QwenVLPlanner, TinyImageEncoder, controller_loss
+from test_regr.VLABenchAgentInterface.models import (
+    MultiViewController,
+    QwenVLPlanner,
+    TinyImageEncoder,
+    controller_loss,
+    resolve_vision_language_loader,
+)
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
     VLABenchHierarchicalReinforcementProgram,
@@ -49,6 +56,28 @@ class RateLimitError(Exception):
     def __init__(self):
         super().__init__("too many requests")
         self.response = SimpleNamespace(status_code=429, headers={"Retry-After": "0"})
+
+
+def test_vision_language_loader_supports_current_and_legacy_transformers(monkeypatch):
+    current_model = type("CurrentImageTextModel", (), {})
+    legacy_model = type("LegacyVision2SeqModel", (), {})
+    processor = type("Processor", (), {})
+    current = SimpleNamespace(
+        __version__="5.0",
+        AutoModelForImageTextToText=current_model,
+        AutoModelForVision2Seq=legacy_model,
+        AutoProcessor=processor,
+    )
+    monkeypatch.setitem(sys.modules, "transformers", current)
+    assert resolve_vision_language_loader() == (current_model, processor)
+
+    legacy = SimpleNamespace(
+        __version__="4.56",
+        AutoModelForVision2Seq=legacy_model,
+        AutoProcessor=processor,
+    )
+    monkeypatch.setitem(sys.modules, "transformers", legacy)
+    assert resolve_vision_language_loader() == (legacy_model, processor)
 
 
 def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):

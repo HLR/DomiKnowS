@@ -10,7 +10,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
-from test_regr.VLABenchAgentInterface.models import planner_prompt
+from test_regr.VLABenchAgentInterface.models import planner_prompt, resolve_vision_language_loader
 
 
 DOMAINS = ("eai", "vlabench")
@@ -69,7 +69,7 @@ class JointQwenVLPlanner(nn.Module):
         gradient_checkpointing: bool = True,
         local_files_only: bool = False,
     ) -> "JointQwenVLPlanner":
-        from transformers import AutoModelForVision2Seq, AutoProcessor
+        model_class, processor_class = resolve_vision_language_loader()
 
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         kwargs: dict[str, Any] = {"torch_dtype": dtype, "local_files_only": local_files_only}
@@ -82,8 +82,8 @@ class JointQwenVLPlanner(nn.Module):
                 bnb_4bit_compute_dtype=dtype,
                 bnb_4bit_quant_type="nf4",
             )
-        model = AutoModelForVision2Seq.from_pretrained(model_id, **kwargs)
-        processor = AutoProcessor.from_pretrained(model_id, local_files_only=local_files_only)
+        model = model_class.from_pretrained(model_id, **kwargs)
+        processor = processor_class.from_pretrained(model_id, local_files_only=local_files_only)
         if gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable()
             if hasattr(model.config, "use_cache"):

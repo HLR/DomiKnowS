@@ -92,6 +92,39 @@ def make_planner(runtime):
     )
 
 
+def test_joint_pretrained_loader_uses_transformers_compatibility_resolver(joint_fixture, monkeypatch):
+    _examples, runtime = joint_fixture
+    calls = []
+
+    class ModelLoader:
+        @classmethod
+        def from_pretrained(cls, model_id, **kwargs):
+            calls.append(("model", model_id, kwargs))
+            return FakeBackbone()
+
+    class ProcessorLoader:
+        @classmethod
+        def from_pretrained(cls, model_id, **kwargs):
+            calls.append(("processor", model_id, kwargs))
+            return FakeProcessor()
+
+    monkeypatch.setattr(
+        "test_regr.JointEmbodiedAgentInterface.models.resolve_vision_language_loader",
+        lambda: (ModelLoader, ProcessorLoader),
+    )
+    planner = JointQwenVLPlanner.from_pretrained(
+        eai_vocabulary=runtime.eai_vocabulary,
+        vlabench_vocabulary=runtime.vlabench_vocabulary,
+        model_id="fake-qwen-vl",
+        use_lora=False,
+        load_in_4bit=False,
+        gradient_checkpointing=False,
+    )
+
+    assert isinstance(planner.model, FakeBackbone)
+    assert [entry[0] for entry in calls] == ["model", "processor"]
+
+
 def test_joint_root_hierarchy_activation_ancestors_and_exception_restore(joint_fixture):
     _examples, runtime = joint_fixture
     assert runtime.world.eai.graph.sup is runtime.root
