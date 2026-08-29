@@ -167,11 +167,15 @@ python -m test_regr.VLABenchAgentInterface.main train-agent --help
 
 ## Checkpoints and resume
 
-Every epoch writes a resumable joint checkpoint. It stores the shared
-backbone/LoRA once, both label heads, controller and value head, both optimizer
-states, stage, epoch, round-robin cursor, Python/NumPy/Torch/CUDA RNG states,
-both vocabularies and DFA configurations, activation-profile version, model
-configuration, and the individual and combined domain checksums.
+Every epoch writes a resumable joint checkpoint. It identifies the immutable
+shared backbone through its checked model configuration and stores its
+trainable LoRA parameters once, both label heads, controller and value head,
+both optimizer states, stage, epoch, round-robin cursor,
+Python/NumPy/Torch/CUDA RNG states, both vocabularies and DFA configurations,
+activation-profile version, model configuration, and the individual and
+combined domain checksums. Frozen bitsandbytes NF4 base weights and their
+loader-specific quantization buffers are reconstructed from the configured
+backbone instead of being duplicated in every epoch checkpoint.
 
 Resume with:
 

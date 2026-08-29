@@ -14,7 +14,50 @@ import torch
 from .world_graph import JointDomainRuntime
 
 
-JOINT_CHECKPOINT_VERSION = 1
+JOINT_CHECKPOINT_VERSION = 2
+SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, JOINT_CHECKPOINT_VERSION})
+
+
+def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
+    """Return LoRA/other trainable planner parameters without frozen NF4 state.
+
+    bitsandbytes adds serialization-only quantization tensors (``absmax``,
+    ``quant_map`` and ``quant_state``) to a module state dict.  They are not
+    registered load targets on a newly quantized model, and the immutable base
+    model is already reconstructed from the compatibility-checked model id.
+    """
+    trainable = {
+        name for name, parameter in planner.named_parameters()
+        if parameter.requires_grad
+    }
+    state = planner.state_dict()
+    return {name: value for name, value in state.items() if name in trainable}
+
+
+def _is_bitsandbytes_auxiliary_key(name: str) -> bool:
+    return any(
+        marker in name
+        for marker in (".weight.absmax", ".weight.quant_map", ".weight.quant_state.")
+    )
+
+
+def _load_planner_state(planner: torch.nn.Module, state: Mapping[str, Any]) -> None:
+    required = {
+        name for name, parameter in planner.named_parameters()
+        if parameter.requires_grad
+    }
+    absent = sorted(required.difference(state))
+    if absent:
+        preview = ", ".join(absent[:5])
+        raise RuntimeError(f"joint checkpoint is missing trainable planner state: {preview}")
+    result = planner.load_state_dict(state, strict=False)
+    unexpected = [
+        name for name in result.unexpected_keys
+        if not _is_bitsandbytes_auxiliary_key(name)
+    ]
+    if unexpected:
+        preview = ", ".join(unexpected[:5])
+        raise RuntimeError(f"joint checkpoint has unexpected planner state: {preview}")
 
 
 def _vocabulary_payload(value: Any) -> Mapping[str, Any]:
@@ -110,7 +153,7 @@ def save_joint_checkpoint(
         "stage": str(stage),
         "epoch": int(epoch),
         "round_robin_cursor": int(round_robin_cursor),
-        "planner": planner.state_dict(),
+        "planner": _planner_trainable_state(planner),
         "controller": controller.state_dict(),
         "planner_optimizer": planner_optimizer.state_dict() if planner_optimizer is not None else None,
         "controller_optimizer": controller_optimizer.state_dict() if controller_optimizer is not None else None,
@@ -137,7 +180,7 @@ def load_joint_checkpoint(
 ) -> Mapping[str, Any]:
     """Restore an exact joint run, rejecting any schema/model drift."""
     payload = torch.load(Path(path), map_location=map_location, weights_only=False)
-    if payload.get("joint_checkpoint_version") != JOINT_CHECKPOINT_VERSION:
+    if payload.get("joint_checkpoint_version") not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")
     expected = _compatibility(runtime, planner)
     actual = payload.get("compatibility", {})
@@ -158,7 +201,7 @@ def load_joint_checkpoint(
                 f"joint checkpoint {key} differs from the current runtime: "
                 f"saved={actual.get(key)!r}, current={expected.get(key)!r}"
             )
-    planner.load_state_dict(payload["planner"])
+    _load_planner_state(planner, payload["planner"])
     controller.load_state_dict(payload["controller"])
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])

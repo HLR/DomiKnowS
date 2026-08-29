@@ -456,6 +456,34 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
         load_joint_checkpoint(path, runtime=incompatible, planner=planner, controller=controller)
 
 
+def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_quantized.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        stage="stage1",
+        epoch=0,
+        round_robin_cursor=1,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["joint_checkpoint_version"] = 1
+    payload["planner"]["model.visual.blocks.0.attn.qkv.weight.absmax"] = torch.ones(1)
+    payload["planner"]["model.visual.blocks.0.attn.qkv.weight.quant_map"] = torch.ones(1)
+    payload["planner"][
+        "model.visual.blocks.0.attn.qkv.weight.quant_state.bitsandbytes__nf4"
+    ] = torch.ones(1)
+    torch.save(payload, path)
+
+    restored = load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
+    assert restored["round_robin_cursor"] == 1
+
+
 def test_balanced_checkpoint_keys_and_cli_defaults():
     weak_eai = {
         "eai": {"goal_success": 0.1, "goal_recall": 0.9},
