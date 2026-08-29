@@ -123,6 +123,8 @@ def test_joint_pretrained_loader_uses_transformers_compatibility_resolver(joint_
 
     assert isinstance(planner.model, FakeBackbone)
     assert [entry[0] for entry in calls] == ["model", "processor"]
+    assert "dtype" in calls[0][2]
+    assert "torch_dtype" not in calls[0][2]
 
 
 def test_joint_root_hierarchy_activation_ancestors_and_exception_restore(joint_fixture):

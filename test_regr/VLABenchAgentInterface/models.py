@@ -50,6 +50,40 @@ def resolve_vision_language_loader():
     )
 
 
+def vision_language_hidden_size(model: nn.Module) -> int | None:
+    """Find the language width through multimodal configs and PEFT wrappers."""
+
+    pending = [model]
+    seen = set()
+    while pending:
+        candidate = pending.pop(0)
+        if candidate is None or id(candidate) in seen:
+            continue
+        seen.add(id(candidate))
+        config = getattr(candidate, "config", None)
+        configs = [config]
+        if config is not None:
+            configs.extend(
+                getattr(config, name, None)
+                for name in ("text_config", "language_config", "decoder", "decoder_config")
+            )
+        for nested in configs:
+            size = getattr(nested, "hidden_size", None) or getattr(nested, "d_model", None)
+            if size is not None:
+                return int(size)
+        for name in ("base_model", "model"):
+            wrapped = getattr(candidate, name, None)
+            if isinstance(wrapped, nn.Module):
+                pending.append(wrapped)
+        get_base_model = getattr(candidate, "get_base_model", None)
+        if callable(get_base_model):
+            try:
+                pending.append(get_base_model())
+            except (AttributeError, TypeError):
+                pass
+    return None
+
+
 def planner_prompt(instruction: str, entity_table: Sequence[str], vocabulary: PlanVocabulary) -> str:
     entities = "\n".join(f"{index}: {name}" for index, name in enumerate(entity_table)) or "No objects."
     skills = ", ".join(vocabulary.skills)
@@ -226,8 +260,7 @@ class QwenVLPlanner(nn.Module):
         self.model = model
         self.processor = processor
         self.vocabulary = vocabulary
-        config = getattr(model, "config", None)
-        hidden_size = hidden_size or getattr(config, "hidden_size", None) or getattr(config, "d_model", None)
+        hidden_size = hidden_size or vision_language_hidden_size(model)
         if hidden_size is None:
             raise ValueError("planner hidden size is required when the model config does not declare it")
         try:
@@ -253,7 +286,7 @@ class QwenVLPlanner(nn.Module):
         model_class, processor_class = resolve_vision_language_loader()
 
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        kwargs: dict[str, Any] = {"torch_dtype": dtype, "local_files_only": local_files_only}
+        kwargs: dict[str, Any] = {"dtype": dtype, "local_files_only": local_files_only}
         if torch.cuda.is_available():
             kwargs["device_map"] = "auto"
         if load_in_4bit:
@@ -262,6 +295,7 @@ class QwenVLPlanner(nn.Module):
                 load_in_4bit=True, bnb_4bit_compute_dtype=dtype, bnb_4bit_quant_type="nf4",
             )
         model = model_class.from_pretrained(model_id, **kwargs)
+        hidden_size = vision_language_hidden_size(model)
         processor = processor_class.from_pretrained(model_id, local_files_only=local_files_only)
         if gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable()
@@ -281,7 +315,7 @@ class QwenVLPlanner(nn.Module):
                 target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
                 bias="none", task_type="CAUSAL_LM",
             ))
-        planner = cls(model, processor, vocabulary)
+        planner = cls(model, processor, vocabulary, hidden_size=hidden_size)
         head_path = Path(adapter_path) / "compact_head.pt" if adapter_path else None
         if head_path is not None and head_path.exists():
             planner.output.load_state_dict(torch.load(head_path, map_location="cpu", weights_only=True))

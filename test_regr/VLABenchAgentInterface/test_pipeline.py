@@ -27,6 +27,7 @@ from test_regr.VLABenchAgentInterface.models import (
     TinyImageEncoder,
     controller_loss,
     resolve_vision_language_loader,
+    vision_language_hidden_size,
 )
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
@@ -78,6 +79,23 @@ def test_vision_language_loader_supports_current_and_legacy_transformers(monkeyp
     )
     monkeypatch.setitem(sys.modules, "transformers", legacy)
     assert resolve_vision_language_loader() == (legacy_model, processor)
+
+
+def test_vision_language_hidden_size_supports_nested_config_and_adapter_wrapper():
+    class NestedBackbone(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.zeros(1))
+            self.config = SimpleNamespace(text_config=SimpleNamespace(hidden_size=2048))
+
+    class AdapterWrapper(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.config = SimpleNamespace(peft_type="LORA")
+            self.base_model = NestedBackbone()
+
+    assert vision_language_hidden_size(NestedBackbone()) == 2048
+    assert vision_language_hidden_size(AdapterWrapper()) == 2048
 
 
 def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):

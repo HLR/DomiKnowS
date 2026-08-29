@@ -10,7 +10,11 @@ from torch import nn
 from torch.nn import functional as F
 
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
-from test_regr.VLABenchAgentInterface.models import planner_prompt, resolve_vision_language_loader
+from test_regr.VLABenchAgentInterface.models import (
+    planner_prompt,
+    resolve_vision_language_loader,
+    vision_language_hidden_size,
+)
 
 
 DOMAINS = ("eai", "vlabench")
@@ -43,8 +47,7 @@ class JointQwenVLPlanner(nn.Module):
             "eai": eai_vocabulary,
             "vlabench": vlabench_vocabulary,
         }
-        config = getattr(model, "config", None)
-        hidden_size = hidden_size or getattr(config, "hidden_size", None) or getattr(config, "d_model", None)
+        hidden_size = hidden_size or vision_language_hidden_size(model)
         if hidden_size is None:
             raise ValueError("planner hidden size is required when the backbone config does not declare it")
         try:
@@ -72,7 +75,7 @@ class JointQwenVLPlanner(nn.Module):
         model_class, processor_class = resolve_vision_language_loader()
 
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        kwargs: dict[str, Any] = {"torch_dtype": dtype, "local_files_only": local_files_only}
+        kwargs: dict[str, Any] = {"dtype": dtype, "local_files_only": local_files_only}
         if torch.cuda.is_available():
             kwargs["device_map"] = "auto"
         if load_in_4bit:
@@ -83,6 +86,7 @@ class JointQwenVLPlanner(nn.Module):
                 bnb_4bit_quant_type="nf4",
             )
         model = model_class.from_pretrained(model_id, **kwargs)
+        hidden_size = vision_language_hidden_size(model)
         processor = processor_class.from_pretrained(model_id, local_files_only=local_files_only)
         if gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable()
@@ -113,6 +117,7 @@ class JointQwenVLPlanner(nn.Module):
             processor,
             eai_vocabulary=eai_vocabulary,
             vlabench_vocabulary=vlabench_vocabulary,
+            hidden_size=hidden_size,
         )
         if adapter_path:
             head_path = Path(adapter_path) / "joint_label_heads.pt"
