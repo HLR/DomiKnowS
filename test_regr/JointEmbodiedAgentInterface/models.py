@@ -90,7 +90,9 @@ class JointQwenVLPlanner(nn.Module):
         hidden_size = vision_language_hidden_size(model)
         processor = processor_class.from_pretrained(model_id, local_files_only=local_files_only)
         if gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
-            model.gradient_checkpointing_enable()
+            model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False},
+            )
             if hasattr(model.config, "use_cache"):
                 model.config.use_cache = False
         if adapter_path:
