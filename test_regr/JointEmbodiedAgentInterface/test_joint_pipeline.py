@@ -16,7 +16,7 @@ from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 from test_regr.EmbodiedAgentInterface.dataset import dummy_dataset
 from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
 
-from .checkpoint import load_joint_checkpoint, save_joint_checkpoint
+from .checkpoint import _cpu_rng_state, load_joint_checkpoint, save_joint_checkpoint
 from .main import build_parser, stage1_selection_key, stage2_selection_key
 from .models import JointQwenVLPlanner
 from .program import JointReinforcementProgram, JointSolverPOIProgram
@@ -482,6 +482,12 @@ def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joi
 
     restored = load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
     assert restored["round_robin_cursor"] == 1
+
+
+def test_checkpoint_rng_state_is_normalized_to_cpu_byte_tensor():
+    state = _cpu_rng_state(torch.tensor([1, 2, 3], dtype=torch.int64))
+    assert state.device.type == "cpu"
+    assert state.dtype == torch.uint8
 
 
 def test_balanced_checkpoint_keys_and_cli_defaults():

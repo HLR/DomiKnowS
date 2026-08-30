@@ -41,6 +41,13 @@ def _is_bitsandbytes_auxiliary_key(name: str) -> bool:
     )
 
 
+def _cpu_rng_state(value: Any) -> torch.Tensor:
+    """Normalize RNG tensors after a checkpoint-wide CUDA map_location."""
+    if not torch.is_tensor(value):
+        value = torch.as_tensor(value)
+    return value.detach().to(device="cpu", dtype=torch.uint8)
+
+
 def _load_planner_state(planner: torch.nn.Module, state: Mapping[str, Any]) -> None:
     required = {
         name for name, parameter in planner.named_parameters()
@@ -209,9 +216,11 @@ def load_joint_checkpoint(
         controller_optimizer.load_state_dict(payload["controller_optimizer"])
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
-    torch.set_rng_state(payload["torch_rng"])
+    torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))
     if torch.cuda.is_available() and payload.get("cuda_rng") is not None:
-        torch.cuda.set_rng_state_all(payload["cuda_rng"])
+        torch.cuda.set_rng_state_all([
+            _cpu_rng_state(state) for state in payload["cuda_rng"]
+        ])
     runtime.activate_domain(None)
     runtime._domain_stack.clear()
     return payload
