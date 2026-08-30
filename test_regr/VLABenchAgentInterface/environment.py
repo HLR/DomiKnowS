@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import math
 from typing import Any, Mapping
 
@@ -102,7 +103,12 @@ def create_environment(
 ):
     """Create an official VLABench environment without importing it at train time."""
     try:
-        from VLABench.envs import load_env
+        # VLABench uses decorator side effects to populate its process-global
+        # registry.  Importing envs alone leaves valid identifiers such as
+        # ``franka`` and the task names absent from that registry.
+        importlib.import_module("VLABench.robots")
+        importlib.import_module("VLABench.tasks")
+        load_env = importlib.import_module("VLABench.envs").load_env
     except ImportError as exc:
         raise RuntimeError(
             "VLABench is required only for online rollout; install the OpenMOSS/VLABench clone editable"

@@ -20,7 +20,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     download_processed_datasets,
     load_planning_examples,
 )
-from test_regr.VLABenchAgentInterface.environment import ee_action_to_env_action
+from test_regr.VLABenchAgentInterface.environment import create_environment, ee_action_to_env_action
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
 from test_regr.VLABenchAgentInterface.models import (
     MultiViewController,
@@ -58,6 +58,27 @@ class RateLimitError(Exception):
     def __init__(self):
         super().__init__("too many requests")
         self.response = SimpleNamespace(status_code=429, headers={"Retry-After": "0"})
+
+
+def test_environment_imports_registration_modules_before_load_env(monkeypatch):
+    calls = []
+
+    def import_module(name):
+        calls.append(name)
+        if name == "VLABench.envs":
+            return SimpleNamespace(
+                load_env=lambda task, **kwargs: {"task": task, **kwargs},
+            )
+        return SimpleNamespace()
+
+    monkeypatch.setattr(
+        "test_regr.VLABenchAgentInterface.environment.importlib.import_module",
+        import_module,
+    )
+    result = create_environment("select_fruit", robot="franka", time_limit=4)
+
+    assert calls == ["VLABench.robots", "VLABench.tasks", "VLABench.envs"]
+    assert result == {"task": "select_fruit", "robot": "franka", "time_limit": 4}
 
 
 def test_vision_language_loader_supports_current_and_legacy_transformers(monkeypatch):
