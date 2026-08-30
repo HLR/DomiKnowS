@@ -19,6 +19,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     deterministic_split,
     download_processed_datasets,
     load_planning_examples,
+    _video_tensor,
 )
 from test_regr.VLABenchAgentInterface.environment import (
     create_environment,
@@ -408,6 +409,51 @@ def test_lerobot_v3_external_video_columns_are_reconstructed(tmp_path, monkeypat
 
     assert item["images"].shape == (1, 3, 3, 12, 12)
     assert decoded == expected
+
+
+def test_torchcodec_decoder_cache_is_bounded_lru_and_released(tmp_path, monkeypatch):
+    created = []
+    closed = []
+
+    class FakeDecoder:
+        def __init__(self, path):
+            self.path = path
+            created.append(path)
+
+        def get_frame_played_at(self, _timestamp):
+            return SimpleNamespace(data=torch.zeros(3, 4, 4))
+
+        def close(self):
+            closed.append(self.path)
+
+    decoders = SimpleNamespace(VideoDecoder=FakeDecoder)
+    monkeypatch.setitem(sys.modules, "torchcodec", SimpleNamespace(decoders=decoders))
+    monkeypatch.setitem(sys.modules, "torchcodec.decoders", decoders)
+    paths = [tmp_path / f"video-{index}.mp4" for index in range(3)]
+    cache = {}
+
+    for index in (0, 1, 0, 2):
+        _video_tensor(
+            {"path": str(paths[index]), "timestamp": 0.0},
+            timestamp=0.0,
+            video_root=None,
+            cache=cache,
+            cache_size=2,
+        )
+
+    keys = [str(path.resolve()) for path in paths]
+    assert created == [keys[0], keys[1], keys[2]]
+    assert list(cache) == [keys[0], keys[2]]
+    assert closed == [keys[1]]
+
+    dataset = LeRobotWindowDataset([], video_decoder_cache_size=2)
+    dataset._video_cache = cache
+    dataset.close()
+    assert cache == {}
+    assert closed == [keys[1], keys[2], keys[0]]
+
+    with pytest.raises(ValueError, match="cache size"):
+        LeRobotWindowDataset([], video_decoder_cache_size=0)
 
 
 def test_control_windows_controller_loss_and_training(tmp_path):

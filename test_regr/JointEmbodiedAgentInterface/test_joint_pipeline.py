@@ -626,3 +626,4 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert (args.eai_samples, args.vlabench_planner_samples, args.vlabench_rollouts) == (8, 4, 8)
     assert args.stage2_rounds_per_epoch == 10
     assert args.planner_decoder_hidden_dim == 512
+    assert args.video_decoder_cache_size == 8

@@ -449,6 +449,7 @@ def build_parser():
     agent.add_argument("--limit", type=int)
     agent.add_argument("--batch-size", type=int, default=8)
     agent.add_argument("--workers", type=int, default=0)
+    agent.add_argument("--video-decoder-cache-size", type=int, default=8)
     agent.add_argument("--action-horizon", type=int, default=16)
     agent.add_argument("--max-views", type=int, default=4)
     agent.add_argument("--hidden-dim", type=int, default=256)

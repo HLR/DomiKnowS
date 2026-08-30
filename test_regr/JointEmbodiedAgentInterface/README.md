@@ -157,6 +157,9 @@ Dataset indexing, model initialization, Stage 1 rounds, Stage 2 domain turns,
 and simulator rollouts emit flushed, newline-based progress. The messages
 remain visible when both streams are redirected to a file and followed with
 `tail -f`; they do not depend on terminal cursor control.
+Control-video decoding uses a per-task LRU capped at eight TorchCodec decoders,
+preventing full shuffled runs from exhausting the process file-descriptor
+limit. The cap is configurable with `--video-decoder-cache-size`.
 
 Override the relative paths when necessary:
 

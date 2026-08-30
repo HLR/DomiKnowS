@@ -25,7 +25,7 @@ All non-test source files in this package are listed below.
 | [`__init__.py`](__init__.py) | Preserves package exports for `canonicalize_plan`, `validate_plan`, and the graph-owned `PlanVocabulary`, and exposes reward helpers. |
 | [`world_graph.py`](world_graph.py) | Authoritative VLABench domain. Defines skills, argument roles, primitive-task automata, canonical plans, semantic DomiKnowS concepts and relations, hard logical constraints, plan materialization/verification, controller condition IDs, and a stable domain checksum. |
 | [`graph.py`](graph.py) | Derives the compact planner token vocabulary, entity-pointer codecs, generation graph, and task-pattern DFA exclusively from a `VLABenchWorldGraphBundle`. Dataset examples may validate against this vocabulary but cannot add skills or roles. |
-| [`dataset.py`](dataset.py) | Owns dataset identifiers; performs resumable Hugging Face downloads; loads planning and LeRobot control examples; creates numbered views and fixed history/action windows; and makes episode-level splits. |
+| [`dataset.py`](dataset.py) | Owns dataset identifiers; performs resumable Hugging Face downloads; loads planning and LeRobot control examples; creates numbered views and fixed history/action windows; bounds and releases TorchCodec decoder handles; and makes episode-level splits. |
 | [`models.py`](models.py) | Implements the Qwen2.5-VL compact-label planner head with teacher-forced sequence logits and DFA-masked autoregressive logits, plus 4-bit/LoRA loading. Implements the controller's six Normal pose outputs, Bernoulli gripper, learned log standard deviation, and value head. |
 | [`program.py`](program.py) | Builds Stage 1 `SolverPOIProgram` sensors and EOS-masked loss. Defines `VLABenchHierarchicalReinforcementProgram`, simulator collection, planner return-to-go REINFORCE with a supervised anchor, PPO/GAE with a behavior-cloning anchor, and hard plan rejection. |
 | [`training.py`](training.py) | Builds the world-first constraint runtime, graph-label examples, component training/evaluation helpers, both program stages, and resumable joint checkpoints with RNG and graph-domain validation. |
@@ -175,6 +175,9 @@ uv run python -m test_regr.VLABenchAgentInterface.main train-agent --two-stage `
 Qwen defaults to 4-bit NF4 LoRA and the controller freezes SigLIP features.
 Simulator rollouts are sequential. Install the applicable CUDA, PEFT,
 quantization, and video-decoding extras before a full run.
+TorchCodec decoders use a per-task LRU capped at eight open videos by default;
+override it with `--video-decoder-cache-size` if the process has an unusually
+low file-descriptor limit.
 
 Joint checkpoints contain planner, controller, value head, both optimizer
 states, stage/epoch, Python/NumPy/PyTorch RNG states, graph vocabulary, and the

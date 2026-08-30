@@ -604,12 +604,24 @@ def _tensor(value: Any) -> torch.Tensor:
     return result
 
 
+def _release_video_decoder(decoder: Any) -> None:
+    """Release future closeable decoders; dropping the wrapper frees current TorchCodec handles."""
+
+    close = getattr(decoder, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception:
+            pass
+
+
 def _video_tensor(
     value: Any,
     *,
     timestamp: float,
     video_root: Path | None,
     cache: dict[str, Any],
+    cache_size: int = 8,
 ) -> torch.Tensor:
     """Decode a LeRobot v3 video reference or an already decoded frame."""
     if hasattr(value, "get_frame_played_at"):
@@ -622,7 +634,7 @@ def _video_tensor(
             path = video_root / path
         frame_time = float(value.get("timestamp", timestamp))
         key = str(path.resolve())
-        decoder = cache.get(key)
+        decoder = cache.pop(key, None)
         if decoder is None:
             try:
                 from torchcodec.decoders import VideoDecoder
@@ -630,7 +642,13 @@ def _video_tensor(
                 raise RuntimeError(
                     "LeRobot v3 video rows require torchcodec (or a datasets build that decodes Video features)"
                 ) from exc
-            decoder = cache[key] = VideoDecoder(key)
+            decoder = VideoDecoder(key)
+        cache[key] = decoder
+        while len(cache) > max(1, int(cache_size)):
+            oldest_key = next(iter(cache))
+            evicted = cache.pop(oldest_key)
+            _release_video_decoder(evicted)
+            del evicted
         frame = decoder.get_frame_played_at(frame_time)
         return _tensor(getattr(frame, "data", frame))
     return _tensor(value)
@@ -648,6 +666,7 @@ class LeRobotWindowDataset(Dataset):
         image_keys: Sequence[str] | None = None,
         video_root: str | Path | None = None,
         condition_index: int | None = None,
+        video_decoder_cache_size: int = 8,
     ):
         if observation_horizon <= 0 or action_horizon <= 0:
             raise ValueError("window horizons must be positive")
@@ -656,6 +675,9 @@ class LeRobotWindowDataset(Dataset):
         self.action_horizon = int(action_horizon)
         self.image_keys = tuple(image_keys or ())
         self.video_root = Path(video_root).resolve() if video_root is not None else None
+        if int(video_decoder_cache_size) <= 0:
+            raise ValueError("video decoder cache size must be positive")
+        self.video_decoder_cache_size = int(video_decoder_cache_size)
         self._video_cache: dict[str, Any] = {}
         self.video_keys: tuple[str, ...] = ()
         self.video_path_template = "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4"
@@ -688,6 +710,17 @@ class LeRobotWindowDataset(Dataset):
         self.episodes = {episode: tuple(indices) for episode, indices in episodes.items()}
         self.index = [(episode, offset) for episode, indices in self.episodes.items() for offset in range(len(indices))]
 
+    def close(self) -> None:
+        while self._video_cache:
+            _key, decoder = self._video_cache.popitem()
+            _release_video_decoder(decoder)
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def __len__(self) -> int:
         return len(self.index)
 
@@ -711,6 +744,7 @@ class LeRobotWindowDataset(Dataset):
                     timestamp=timestamp,
                     video_root=self.video_root,
                     cache=self._video_cache,
+                    cache_size=self.video_decoder_cache_size,
                 )
                 for key in keys
             ])
@@ -743,6 +777,7 @@ class LeRobotWindowDataset(Dataset):
                 timestamp=timestamp,
                 video_root=self.video_root,
                 cache=self._video_cache,
+                cache_size=self.video_decoder_cache_size,
             )
             for path in paths
         ])

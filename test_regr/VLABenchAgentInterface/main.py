@@ -121,6 +121,7 @@ def _control_loaders(args):
             action_horizon=args.action_horizon,
             video_root=video_root,
             condition_index=condition_index_for_task(task),
+            video_decoder_cache_size=getattr(args, "video_decoder_cache_size", 8),
         )
         _status(
             f"indexed control task {task_index}/{len(tasks)}: {task} "
@@ -434,6 +435,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--epochs", type=int, default=20)
         command.add_argument("--batch-size", type=int, default=8)
         command.add_argument("--workers", type=int, default=0)
+        command.add_argument("--video-decoder-cache-size", type=int, default=8)
         command.add_argument("--learning-rate", type=float, default=3e-4)
         command.add_argument("--grad-accumulation", type=int, default=4)
         command.add_argument("--action-horizon", type=int, default=16)
@@ -489,6 +491,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
     agent.add_argument("--batch-size", type=int, default=8)
     agent.add_argument("--workers", type=int, default=0)
+    agent.add_argument("--video-decoder-cache-size", type=int, default=8)
     agent.add_argument("--grad-accumulation", type=int, default=4)
     agent.add_argument("--action-horizon", type=int, default=16)
     agent.add_argument("--execute-horizon", type=int, default=4)
