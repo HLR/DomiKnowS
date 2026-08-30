@@ -151,8 +151,21 @@ class FrozenSigLIPEncoder(nn.Module):
             if hasattr(self.model, "get_image_features"):
                 value = self.model.get_image_features(pixel_values=images)
             else:
-                output = self.model.vision_model(pixel_values=images)
-                value = output.pooler_output if output.pooler_output is not None else output.last_hidden_state[:, 0]
+                value = self.model.vision_model(pixel_values=images)
+            if not torch.is_tensor(value):
+                image_embeds = getattr(value, "image_embeds", None)
+                pooler_output = getattr(value, "pooler_output", None)
+                last_hidden_state = getattr(value, "last_hidden_state", None)
+                if image_embeds is not None:
+                    value = image_embeds
+                elif pooler_output is not None:
+                    value = pooler_output
+                elif last_hidden_state is not None:
+                    value = last_hidden_state[:, 0]
+                else:
+                    raise TypeError(
+                        "SigLIP image encoder returned neither a tensor nor pooled/hidden-state features"
+                    )
         return value.float()
 
 

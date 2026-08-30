@@ -27,6 +27,7 @@ from test_regr.VLABenchAgentInterface.environment import (
 )
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
 from test_regr.VLABenchAgentInterface.models import (
+    FrozenSigLIPEncoder,
     MultiViewController,
     QwenVLPlanner,
     TinyImageEncoder,
@@ -174,6 +175,44 @@ def test_kbit_preparation_preserves_non_reentrant_checkpointing(monkeypatch):
 
     assert prepare_kbit_model(model, gradient_checkpointing=False) is model
     assert calls[-1] == (model, {"use_gradient_checkpointing": False})
+
+
+@pytest.mark.parametrize("output_kind", ["tensor", "pooled", "hidden"])
+def test_frozen_siglip_encoder_accepts_current_and_legacy_outputs(monkeypatch, output_kind):
+    class FakeSigLIP(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(1))
+            self.config = SimpleNamespace(
+                vision_config=SimpleNamespace(hidden_size=3),
+            )
+
+        def get_image_features(self, *, pixel_values):
+            batch = pixel_values.shape[0]
+            pooled = torch.ones(batch, 3)
+            if output_kind == "tensor":
+                return pooled
+            if output_kind == "pooled":
+                return SimpleNamespace(
+                    pooler_output=pooled,
+                    last_hidden_state=torch.zeros(batch, 4, 3),
+                )
+            return SimpleNamespace(
+                pooler_output=None,
+                last_hidden_state=torch.ones(batch, 4, 3),
+            )
+
+    auto_model = SimpleNamespace(
+        from_pretrained=lambda *_args, **_kwargs: FakeSigLIP(),
+    )
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoModel=auto_model))
+
+    encoder = FrozenSigLIPEncoder("fake-siglip")
+    features = encoder(torch.zeros(2, 3, 32, 32))
+
+    assert features.shape == (2, 3)
+    assert features.dtype == torch.float32
+    assert not any(parameter.requires_grad for parameter in encoder.parameters())
 
 
 def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):
