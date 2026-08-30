@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import random
+import sys
+import time
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Iterable, Mapping, Sequence
@@ -30,6 +32,38 @@ class DomainUpdate:
     planner_loss: float
     controller_loss: float = 0.0
     reward: float | None = None
+
+
+def _emit_progress(message: str) -> None:
+    """Write progress that remains visible when stdout/stderr are redirected."""
+
+    print(f"[joint-training] {message}", file=sys.stderr, flush=True)
+
+
+class _TrainingProgress:
+    def __init__(self, label: str, total: int, *, interval_seconds: float = 30.0):
+        self.label = label
+        self.total = max(0, int(total))
+        self.interval_seconds = max(0.0, float(interval_seconds))
+        self.started = self.last_report = time.monotonic()
+        _emit_progress(f"{self.label}: 0/{self.total} started")
+
+    def update(self, completed: int, **metrics: float) -> None:
+        now = time.monotonic()
+        completed = int(completed)
+        if completed < self.total and completed != 1 and now - self.last_report < self.interval_seconds:
+            return
+        elapsed = max(now - self.started, 1e-9)
+        rate = completed / elapsed
+        remaining = max(0, self.total - completed)
+        eta = remaining / rate if rate > 0 else float("inf")
+        values = " ".join(f"{key}={value:.4f}" for key, value in metrics.items())
+        suffix = f" {values}" if values else ""
+        _emit_progress(
+            f"{self.label}: {completed}/{self.total} "
+            f"elapsed={elapsed / 60.0:.1f}m eta={eta / 60.0:.1f}m{suffix}"
+        )
+        self.last_report = now
 
 
 def _context(item: Mapping[str, Any], domain: str) -> Mapping[str, Any]:
@@ -201,7 +235,8 @@ class JointSolverPOIProgram(SolverPOIProgram):
         eai_stream, vlabench_stream = _cycle(eai_examples), _cycle(vlabench_examples)
         controller_stream = iter(controller_loader) if controller_loader is not None else None
         totals = {"eai_loss": 0.0, "vlabench_loss": 0.0, "controller_bc_loss": 0.0}
-        for _ in range(rounds):
+        progress = _TrainingProgress("Stage 1 rounds", rounds)
+        for round_index in range(rounds):
             batch = None
             if controller_stream is not None:
                 try:
@@ -213,6 +248,13 @@ class JointSolverPOIProgram(SolverPOIProgram):
             totals["eai_loss"] += eai.planner_loss
             totals["vlabench_loss"] += vlabench.planner_loss
             totals["controller_bc_loss"] += vlabench.controller_loss
+            completed = round_index + 1
+            progress.update(
+                completed,
+                eai_loss=totals["eai_loss"] / completed,
+                vlabench_loss=totals["vlabench_loss"] / completed,
+                controller_bc_loss=totals["controller_bc_loss"] / completed,
+            )
         return {key: value / max(1, rounds) for key, value in totals.items()} | {"rounds": rounds}
 
 
@@ -249,6 +291,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         self.eai_num_samples = int(eai_num_samples)
         self.eai_supervised_weight = float(eai_supervised_weight)
         self.round_robin_cursor = 0
+        kwargs.setdefault("progress_callback", _emit_progress)
         super().__init__(
             _runtime_adapter(runtime, "vlabench"),
             self.vlabench_planner,
@@ -378,11 +421,18 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "steps": 0.0,
         }
         start_cursor = self.round_robin_cursor
+        progress = _TrainingProgress("Stage 2 rounds", int(rounds))
         for offset in range(int(rounds)):
+            _emit_progress(f"Stage 2 round {offset + 1}/{rounds}: EAI policy update")
             eai = self.train_eai_update(random.choice(eai_examples))
             descriptor = vlabench_descriptors[
                 (start_cursor + offset) % len(vlabench_descriptors)
             ]
+            _emit_progress(
+                f"Stage 2 round {offset + 1}/{rounds}: "
+                f"VLABench task={descriptor.get('task', 'unknown')} "
+                f"rollouts={vlabench_rollouts_per_update}"
+            )
             vla = self.train_vlabench_update(
                 [descriptor],
                 rollouts_per_update=vlabench_rollouts_per_update,
@@ -392,6 +442,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             for key in vla_totals:
                 vla_totals[key] += float(vla[key])
             self.round_robin_cursor += 1
+            progress.update(
+                offset + 1,
+                eai_reward=eai_totals["reward"] / (offset + 1),
+                vlabench_return=vla_totals["return"] / (offset + 1),
+            )
         count = max(1, int(rounds))
         return {
             "eai": {key: value / count for key, value in eai_totals.items()},

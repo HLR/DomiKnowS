@@ -19,7 +19,7 @@ from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
 from .checkpoint import _cpu_rng_state, load_joint_checkpoint, save_joint_checkpoint
 from .main import build_parser, stage1_selection_key, stage2_selection_key
 from .models import JointQwenVLPlanner
-from .program import JointReinforcementProgram, JointSolverPOIProgram
+from .program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
 from .world_graph import build_joint_runtime, build_joint_world_graph
 
 
@@ -64,6 +64,20 @@ class TinyController(torch.nn.Module):
 
     def forward(self, images, state, task_index):
         return self.action.expand(images.shape[0], self.horizon, 7)
+
+
+def test_training_progress_is_newline_based_and_flushed(capsys):
+    progress = _TrainingProgress("test rounds", 2, interval_seconds=0)
+    progress.update(1, loss=1.0)
+    progress.update(2, loss=0.5)
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "[joint-training] test rounds: 0/2 started\n" in captured.err
+    assert "test rounds: 1/2" in captured.err
+    assert "test rounds: 2/2" in captured.err
+    assert "loss=0.5000" in captured.err
+    assert "\r" not in captured.err
 
 
 @pytest.fixture(scope="module")

@@ -143,6 +143,11 @@ Stage 1 epochs, three Stage 2 epochs, and equal round-robin scheduling:
 python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage
 ```
 
+Dataset indexing, model initialization, Stage 1 rounds, Stage 2 domain turns,
+and simulator rollouts emit flushed, newline-based progress. The messages
+remain visible when both streams are redirected to a file and followed with
+`tail -f`; they do not depend on terminal cursor control.
+
 Override the relative paths when necessary:
 
 ```powershell

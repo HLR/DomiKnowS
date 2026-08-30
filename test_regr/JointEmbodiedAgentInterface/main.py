@@ -6,6 +6,7 @@ import argparse
 import importlib
 import json
 import random
+import sys
 from pathlib import Path
 
 import torch
@@ -61,7 +62,11 @@ def _action_object_constraints(examples):
 
 
 def _json(value):
-    print(json.dumps(value, indent=2, sort_keys=True, default=str))
+    print(json.dumps(value, indent=2, sort_keys=True, default=str), flush=True)
+
+
+def _status(message: str) -> None:
+    print(f"[joint-training] {message}", file=sys.stderr, flush=True)
 
 
 def _factory(value: str):
@@ -134,6 +139,7 @@ def _evaluate_eai(planner, runtime, examples, *, limit=32):
 
 
 def _prepare(args, device):
+    _status(f"loading EAI dataset name={args.eai_dataset} split={args.eai_split}")
     eai_examples = load_eai_dataset(
         dataset_name=args.eai_dataset,
         split=args.eai_split,
@@ -144,6 +150,7 @@ def _prepare(args, device):
     )
     if not eai_examples:
         raise ValueError("EAI dataset is empty")
+    _status(f"loaded EAI examples={len(eai_examples)}")
     vocabulary = TokenVocabulary(eai_examples[0]["generation_vocab"], eos_token=EOS_TOKEN)
     world = build_joint_world_graph("joint_embodied_training")
     for item in eai_examples:
@@ -154,9 +161,11 @@ def _prepare(args, device):
             world_bundle=world.eai,
         )
 
+    _status(f"loading VLABench planning data from {args.vlabench_planning_dir}")
     vlabench_examples = load_planning_examples(args.vlabench_planning_dir, limit=args.vlabench_limit)
     if not vlabench_examples:
         raise ValueError("VLABench planning dataset is empty")
+    _status(f"loaded VLABench planning examples={len(vlabench_examples)}")
     vlabench_splits = deterministic_split(vlabench_examples, seed=args.seed)
     runtime = build_joint_runtime(
         world,
@@ -185,7 +194,14 @@ def command_train_agent(args):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    _status(f"starting joint two-stage training device={device}")
     runtime, eai_train, eai_valid, vla_splits, prepared = _prepare(args, device)
+    _status(
+        f"prepared splits: EAI train={len(eai_train)} validation={len(eai_valid)}; "
+        + "VLABench "
+        + " ".join(f"{name}={len(values)}" for name, values in vla_splits.items())
+    )
+    _status(f"loading planner backbone {args.planner_model}")
     planner = JointQwenVLPlanner.from_pretrained(
         eai_vocabulary=runtime.eai_vocabulary,
         vlabench_vocabulary=runtime.vlabench_vocabulary,
@@ -193,7 +209,10 @@ def command_train_agent(args):
         adapter_path=args.resume_adapter,
         load_in_4bit=args.load_in_4bit,
     )
+    _status("planner backbone and joint label heads ready")
+    _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
+    _status("controller ready; building control-data indices")
     planner_optimizer = torch.optim.AdamW(
         (parameter for parameter in planner.parameters() if parameter.requires_grad),
         lr=args.planner_learning_rate,
@@ -203,6 +222,7 @@ def command_train_agent(args):
         lr=args.controller_learning_rate,
     )
     control_loaders = _control_loaders(args)
+    _status("all model and data components are ready")
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
 
@@ -244,13 +264,16 @@ def command_train_agent(args):
             if resume_stage == "stage1" and resume_payload is not None else None
         )
         for epoch in range(start_stage1, args.stage1_epochs):
+            _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} training")
             train_metrics = stage1.train_alternating_epoch(
                 eai_train,
                 prepared["train"],
                 controller_loader=control_loaders["train"],
                 rounds=args.stage1_rounds_per_epoch,
             )
+            _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} EAI validation")
             eai_metrics = _evaluate_eai(planner, runtime, eai_valid, limit=args.validation_limit)
+            _status(f"Stage 1 epoch {epoch + 1}/{args.stage1_epochs} VLABench validation")
             with runtime.domain_scope("vlabench"):
                 vla_metrics = evaluate_planner(
                     planner.for_domain("vlabench"),
@@ -333,6 +356,7 @@ def command_train_agent(args):
     )
     best_path = Path(args.resume).resolve() if resume_stage == "stage2" else None
     for epoch in range(start_stage2, args.stage2_epochs):
+        _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
         metrics = stage2.train_alternating_epoch(
             eai_train,
             descriptors,

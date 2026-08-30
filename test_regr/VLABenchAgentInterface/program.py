@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -211,6 +212,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ppo_epochs: int = 4,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
+        progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
         super().__init__(
@@ -240,6 +242,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.ppo_epochs = int(ppo_epochs)
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
+        self.progress_callback = progress_callback
+
+    def _report_progress(self, message: str) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(message)
 
     def _valid_plan(self, plan, entities) -> bool:
         validation = validate_plan(plan, entity_table=entities, skill_arguments=self.runtime.world_bundle.skill_arguments)
@@ -270,6 +277,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         transitions: list[ControllerTransition] = []
         valid, success, steps = True, False, 0
         previous_progress = previous_intention = 0.0
+        last_progress_report = time.monotonic()
         try:
             timestep = env.reset()
             reset_reward_tracking(env)
@@ -282,6 +290,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 instruction = env.task.get_instruction() if hasattr(getattr(env, "task", None), "get_instruction") else ""
 
             while steps < self.max_steps:
+                now = time.monotonic()
+                if now - last_progress_report >= 30.0:
+                    self._report_progress(
+                        f"VLABench episode task={descriptor.get('task', 'unknown')} "
+                        f"steps={steps}/{self.max_steps}"
+                    )
+                    last_progress_report = now
                 views, entities = numbered_views_from_observation(env, observation)
                 selected_plan = None
                 selected_logprob = None
@@ -486,7 +501,20 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
     def train_joint_epoch(self, descriptors: Sequence[Mapping[str, Any]], *, rollouts_per_update: int = 8):
         if not descriptors:
             raise ValueError("joint training requires at least one simulator descriptor")
-        episodes = [self.collect_episode(random.choice(descriptors)) for _ in range(rollouts_per_update)]
+        episodes = []
+        for rollout_index in range(rollouts_per_update):
+            descriptor = random.choice(descriptors)
+            self._report_progress(
+                f"VLABench rollout {rollout_index + 1}/{rollouts_per_update} "
+                f"task={descriptor.get('task', 'unknown')} started"
+            )
+            episode = self.collect_episode(descriptor)
+            episodes.append(episode)
+            self._report_progress(
+                f"VLABench rollout {rollout_index + 1}/{rollouts_per_update} "
+                f"finished valid={episode.valid} success={episode.success} "
+                f"steps={episode.steps} return={episode.total_return:.4f}"
+            )
         planner_loss = self._update_planner(episodes)
         controller_loss_value = self._update_controller(episodes)
         return {

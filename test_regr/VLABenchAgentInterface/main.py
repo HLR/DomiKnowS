@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import sys
 from pathlib import Path
 
 import torch
@@ -45,7 +46,11 @@ except ImportError:
 
 
 def _json(value) -> None:
-    print(json.dumps(value, indent=2, sort_keys=True, default=str))
+    print(json.dumps(value, indent=2, sort_keys=True, default=str), flush=True)
+
+
+def _status(message: str) -> None:
+    print(f"[vlabench-data] {message}", file=sys.stderr, flush=True)
 
 
 def _device(value: str | None) -> torch.device:
@@ -103,7 +108,8 @@ def command_build_vocab(args) -> None:
 def _control_loaders(args):
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     split_parts = {"train": [], "validation": [], "test": []}
-    for task in tasks:
+    for task_index, task in enumerate(tasks, start=1):
+        _status(f"loading control task {task_index}/{len(tasks)}: {task}")
         records = load_hf_control_records(args.control_source, task=task, streaming=False)
         if args.limit is not None:
             per_task_limit = max(1, args.limit // len(tasks))
@@ -116,12 +122,16 @@ def _control_loaders(args):
             video_root=video_root,
             condition_index=condition_index_for_task(task),
         )
+        _status(
+            f"indexed control task {task_index}/{len(tasks)}: {task} "
+            f"records={len(records)} windows={len(windows)} episodes={len(windows.episodes)}"
+        )
         episode_split = deterministic_split(sorted(windows.episodes), seed=42)
         for name, episode_ids in episode_split.items():
             selected = set(episode_ids)
             indices = [index for index, (episode, _offset) in enumerate(windows.index) if episode in selected]
             split_parts[name].append(Subset(windows, indices))
-    return {
+    loaders = {
         name: DataLoader(
             ConcatDataset(parts),
             batch_size=args.batch_size,
@@ -130,6 +140,11 @@ def _control_loaders(args):
         )
         for name, parts in split_parts.items()
     }
+    _status(
+        "control loaders ready: "
+        + " ".join(f"{name}={len(loader.dataset)}" for name, loader in loaders.items())
+    )
+    return loaders
 
 
 def _controller(args, device):
