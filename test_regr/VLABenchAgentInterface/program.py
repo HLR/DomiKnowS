@@ -13,7 +13,7 @@ from torch.nn import functional as F
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 try:
-    from .environment import ee_action_to_env_action, numbered_views_from_observation
+    from .environment import ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
     from .graph import dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
@@ -24,7 +24,7 @@ try:
         verify_plan_constraints,
     )
 except ImportError:
-    from environment import ee_action_to_env_action, numbered_views_from_observation
+    from environment import ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
     from graph import dfa_accepts_plan
     from models import controller_loss
     from world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
@@ -272,6 +272,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         previous_progress = previous_intention = 0.0
         try:
             timestep = env.reset()
+            reset_reward_tracking(env)
             observation = env.get_observation(require_pcd=False) if hasattr(env, "get_observation") else timestep.observation
             observations = [observation]
             previous_progress = initial_progress = _signal(env, "get_task_progress")

@@ -20,7 +20,11 @@ from test_regr.VLABenchAgentInterface.dataset import (
     download_processed_datasets,
     load_planning_examples,
 )
-from test_regr.VLABenchAgentInterface.environment import create_environment, ee_action_to_env_action
+from test_regr.VLABenchAgentInterface.environment import (
+    create_environment,
+    ee_action_to_env_action,
+    reset_reward_tracking,
+)
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
 from test_regr.VLABenchAgentInterface.models import (
     MultiViewController,
@@ -79,6 +83,30 @@ def test_environment_imports_registration_modules_before_load_env(monkeypatch):
 
     assert calls == ["VLABench.robots", "VLABench.tasks", "VLABench.envs"]
     assert result == {"task": "select_fruit", "robot": "franka", "time_limit": 4}
+
+
+def test_missing_upstream_reward_tracking_state_is_initialized_once():
+    calls = []
+    task = SimpleNamespace()
+
+    def reset_progress():
+        calls.append("progress")
+        task.target_is_grasped = {"flower": False}
+
+    def reset_intention():
+        calls.append("intention")
+        task.intention_distance = {"flower": np.inf}
+
+    task.reset_task_progress = reset_progress
+    task.reset_intention_distance = reset_intention
+    env = SimpleNamespace(task=task)
+
+    reset_reward_tracking(env)
+    reset_reward_tracking(env)
+
+    assert calls == ["progress", "intention"]
+    assert task.target_is_grasped == {"flower": False}
+    assert np.isinf(task.intention_distance["flower"])
 
 
 def test_vision_language_loader_supports_current_and_legacy_transformers(monkeypatch):

@@ -94,6 +94,28 @@ def ee_action_to_env_action(env, action) -> np.ndarray:
     return command
 
 
+def reset_reward_tracking(env: Any) -> None:
+    """Initialize optional VLABench shaping state omitted by some tasks.
+
+    Several upstream primitive tasks inherit progress/intention accessors but
+    do not call the corresponding reset hooks during ``env.reset()``.  Invoke
+    a hook only when its state attribute is absent, preserving state managed
+    correctly by other tasks.
+    """
+    task = getattr(env, "task", None)
+    if task is None:
+        return
+    for attribute, method_name in (
+        ("target_is_grasped", "reset_task_progress"),
+        ("intention_distance", "reset_intention_distance"),
+    ):
+        if hasattr(task, attribute):
+            continue
+        reset = getattr(task, method_name, None)
+        if callable(reset):
+            reset()
+
+
 def create_environment(
     task: str,
     *,
