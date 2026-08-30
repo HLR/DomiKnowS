@@ -6,6 +6,16 @@ Qwen2.5-VL-3B backbone with one 4-bit LoRA adapter, two compact label heads,
 and one sequential program lifecycle. The standalone EAI and VLABench CLIs
 remain supported for component debugging.
 
+The planner encodes each text or text-plus-vision observation with Qwen once.
+Separate EAI and VLABench graph-token embeddings and recurrent decoders reuse
+that differentiable context for the complete teacher-forced sequence or
+autoregressive trajectory. Multiple Stage 2 candidates for the same EAI item
+or VLABench observation also share that context. This avoids one full Qwen
+execution per prefix or sampled candidate. Qwen's non-reentrant layer
+checkpointing bounds activation memory during its
+single context pass. `--planner-decoder-hidden-dim` controls the compact
+decoder width and defaults to `512`.
+
 ## Combined graph and activation
 
 The root owns a small semantic spine and four sibling subgraphs:
@@ -190,7 +200,10 @@ python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
 ```
 
 Loading rejects a checkpoint when either domain definition, vocabulary, DFA,
-activation profile, or model configuration differs. Standalone EAI and
+activation profile, graph-decoder architecture, or model configuration
+differs. Checkpoints created before graph-decoder version 1 cannot be resumed
+because their prefix-reprompt label heads have incompatible parameters.
+Standalone EAI and
 VLABench checkpoints continue to work with their original CLIs but are not
 joint checkpoints and cannot be resumed directly here. Activation is reset to
 all concepts after restoration.
@@ -203,7 +216,7 @@ All non-test source files in this package are listed below.
 | --- | --- |
 | `__init__.py` | Exposes the joint runtime, graph builder, shared planner, and both program classes. |
 | `world_graph.py` | Builds the shared semantic spine, attaches sibling domain and generation graphs, compiles both DFAs, creates identity-based activation profiles, provides locked domain scopes, and computes joint checksums. |
-| `models.py` | Loads one Qwen2.5-VL/LoRA backbone, owns separate EAI/VLABench compact label heads and prompts, and provides teacher-forced and DFA-masked autoregressive domain APIs. |
+| `models.py` | Loads one Qwen2.5-VL/LoRA backbone, encodes each observation once, owns separate EAI/VLABench graph-token embeddings, recurrent decoders, label heads, and prompts, and provides teacher-forced and DFA-masked autoregressive domain APIs. |
 | `program.py` | Implements equal Stage 1 round-robin supervised/controller updates and equal Stage 2 EAI-REINFORCE/VLABench-REINFORCE-plus-PPO updates with domain-local activation and rewards. |
 | `checkpoint.py` | Atomically saves and restores the complete joint state, RNGs, scheduling cursor, and compatibility metadata. |
 | `main.py` | Defines the canonical `train-agent --two-stage` CLI, data/model construction, balanced checkpoint keys, exploration gate, and per-epoch resume files. |

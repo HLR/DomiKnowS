@@ -8,7 +8,6 @@ from typing import Any, Mapping, Sequence
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.checkpoint import checkpoint as activation_checkpoint
 
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
@@ -31,7 +30,8 @@ class JointQwenVLPlanner(nn.Module):
     copying or re-registering the shared parameters.
     """
 
-    supports_batched_prefixes = False
+    supports_batched_prefixes = True
+    graph_decoder_version = 1
 
     def __init__(
         self,
@@ -41,6 +41,7 @@ class JointQwenVLPlanner(nn.Module):
         eai_vocabulary: Any,
         vlabench_vocabulary: Any,
         hidden_size: int | None = None,
+        decoder_hidden_size: int = 512,
     ):
         super().__init__()
         self.model = model
@@ -52,12 +53,32 @@ class JointQwenVLPlanner(nn.Module):
         hidden_size = hidden_size or vision_language_hidden_size(model)
         if hidden_size is None:
             raise ValueError("planner hidden size is required when the backbone config does not declare it")
+        if int(decoder_hidden_size) <= 0:
+            raise ValueError("planner decoder hidden size must be positive")
+        self.backbone_hidden_size = int(hidden_size)
+        self.decoder_hidden_size = min(int(decoder_hidden_size), self.backbone_hidden_size)
         try:
             device = next(model.parameters()).device
         except StopIteration:
             device = torch.device("cpu")
+        self.context_projections = nn.ModuleDict({
+            domain: nn.Linear(self.backbone_hidden_size, self.decoder_hidden_size).to(device)
+            for domain in self.vocabularies
+        })
+        self.token_embeddings = nn.ModuleDict({
+            domain: nn.Embedding(int(vocabulary.label_count), self.decoder_hidden_size).to(device)
+            for domain, vocabulary in self.vocabularies.items()
+        })
+        self.graph_decoders = nn.ModuleDict({
+            domain: nn.GRU(
+                self.decoder_hidden_size,
+                self.decoder_hidden_size,
+                batch_first=True,
+            ).to(device)
+            for domain in self.vocabularies
+        })
         self.label_heads = nn.ModuleDict({
-            domain: nn.Linear(int(hidden_size), int(vocabulary.label_count)).to(device)
+            domain: nn.Linear(self.decoder_hidden_size, int(vocabulary.label_count)).to(device)
             for domain, vocabulary in self.vocabularies.items()
         })
 
@@ -73,6 +94,7 @@ class JointQwenVLPlanner(nn.Module):
         load_in_4bit: bool = True,
         gradient_checkpointing: bool = True,
         local_files_only: bool = False,
+        decoder_hidden_size: int = 512,
     ) -> "JointQwenVLPlanner":
         model_class, processor_class = resolve_vision_language_loader()
 
@@ -128,11 +150,20 @@ class JointQwenVLPlanner(nn.Module):
             eai_vocabulary=eai_vocabulary,
             vlabench_vocabulary=vlabench_vocabulary,
             hidden_size=hidden_size,
+            decoder_hidden_size=decoder_hidden_size,
         )
         if adapter_path:
-            head_path = Path(adapter_path) / "joint_label_heads.pt"
-            if head_path.exists():
-                planner.label_heads.load_state_dict(torch.load(head_path, map_location="cpu", weights_only=True))
+            decoder_path = Path(adapter_path) / "joint_graph_decoder.pt"
+            if decoder_path.exists():
+                decoder_state = torch.load(decoder_path, map_location="cpu", weights_only=True)
+                if int(decoder_state.get("graph_decoder_version", -1)) != planner.graph_decoder_version:
+                    raise ValueError("adapter graph decoder version is incompatible")
+                if int(decoder_state.get("decoder_hidden_size", -1)) != planner.decoder_hidden_size:
+                    raise ValueError("adapter graph decoder hidden size is incompatible")
+                planner.context_projections.load_state_dict(decoder_state["context_projections"])
+                planner.token_embeddings.load_state_dict(decoder_state["token_embeddings"])
+                planner.graph_decoders.load_state_dict(decoder_state["graph_decoders"])
+                planner.label_heads.load_state_dict(decoder_state["label_heads"])
         return planner
 
     @property
@@ -211,41 +242,43 @@ class JointQwenVLPlanner(nn.Module):
             for key, value in batch.items()
         }
 
-    def _model_logits(self, domain: str, inputs: Mapping[str, Any]) -> torch.Tensor:
+    def _model_context(self, inputs: Mapping[str, Any]) -> torch.Tensor:
         output = self.model(**inputs, output_hidden_states=True, use_cache=False)
         hidden_states = getattr(output, "hidden_states", None) or getattr(output, "decoder_hidden_states", None)
         if hidden_states is None:
             raise RuntimeError("vision-language backbone did not return hidden states")
-        hidden = hidden_states[-1][:, -1, :].float().to(self.label_heads[domain].weight.device)
-        return self.label_heads[domain](hidden)[0]
+        return hidden_states[-1][:, -1, :].float().to(self.device)
 
-    def _checkpointed_model_logits(self, domain: str, inputs: Mapping[str, Any]) -> torch.Tensor:
-        """Discard each full VLM graph until backward recomputes it.
+    def encode_context(self, domain: str, context: Mapping[str, Any]) -> torch.Tensor:
+        """Run Qwen once; its configured layer checkpointing bounds memory."""
 
-        Graph-token supervision and REINFORCE evaluate one complete multimodal
-        prompt per prefix.  Retaining every prefix graph until a sequence-level
-        backward pass makes memory grow linearly with plan length.  A
-        non-reentrant checkpoint keeps only the small processed input tensors
-        and output logits while preserving gradients through the shared LoRA.
-        """
-        if not self.training or not torch.is_grad_enabled():
-            return self._model_logits(domain, inputs)
-        tensor_keys = tuple(key for key, value in inputs.items() if torch.is_tensor(value))
-        if not tensor_keys:
-            return self._model_logits(domain, inputs)
-        static_inputs = {key: value for key, value in inputs.items() if key not in tensor_keys}
+        inputs = self._inputs(domain, context, ())
+        return self._model_context(inputs)
 
-        def forward(*values):
-            rebuilt = dict(static_inputs)
-            rebuilt.update(zip(tensor_keys, values))
-            return self._model_logits(domain, rebuilt)
+    def _initial_decoder_state(self, domain: str, context_vector: torch.Tensor, batch: int) -> torch.Tensor:
+        projected = torch.tanh(self.context_projections[domain](context_vector))
+        if projected.shape[0] == 1 and batch != 1:
+            projected = projected.expand(batch, -1)
+        if projected.shape[0] != batch:
+            raise ValueError("planner context batch does not match graph-token prefix batch")
+        return projected.unsqueeze(0).contiguous()
 
-        return activation_checkpoint(
-            forward,
-            *(inputs[key] for key in tensor_keys),
-            use_reentrant=False,
-            preserve_rng_state=True,
-        )
+    def _decode_prefixes(
+        self,
+        domain: str,
+        context_vector: torch.Tensor,
+        prefix_labels: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        prefixes = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device)
+        if prefixes.ndim == 1:
+            prefixes = prefixes.unsqueeze(0)
+        if prefixes.shape[1] == 0:
+            eos = int(self.vocabulary(domain).eos_label)
+            prefixes = torch.full((prefixes.shape[0], 1), eos, dtype=torch.long, device=self.device)
+        hidden = self._initial_decoder_state(domain, context_vector, prefixes.shape[0])
+        embedded = self.token_embeddings[domain](prefixes)
+        decoded, hidden = self.graph_decoders[domain](embedded, hidden)
+        return self.label_heads[domain](decoded), hidden
 
     def next_label_logits(
         self,
@@ -253,8 +286,13 @@ class JointQwenVLPlanner(nn.Module):
         context: Mapping[str, Any],
         prefix_labels: Sequence[int],
     ) -> torch.Tensor:
-        inputs = self._inputs(domain, context, prefix_labels)
-        return self._checkpointed_model_logits(domain, inputs)
+        context_vector = self.encode_context(domain, context)
+        logits, _hidden = self._decode_prefixes(
+            domain,
+            context_vector,
+            torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device),
+        )
+        return logits[0, -1]
 
     def shift_right(self, domain: str, labels: torch.Tensor) -> torch.Tensor:
         labels = torch.as_tensor(labels, dtype=torch.long, device=self.device)
@@ -270,17 +308,9 @@ class JointQwenVLPlanner(nn.Module):
         context: Mapping[str, Any],
         prefix_labels: torch.Tensor,
     ) -> torch.Tensor:
-        prefixes = torch.as_tensor(prefix_labels, dtype=torch.long, device=self.device)
-        if prefixes.ndim == 1:
-            prefixes = prefixes.unsqueeze(0)
-        rows = []
-        for row in prefixes:
-            values = row.detach().cpu().tolist()
-            rows.append(torch.stack([
-                self.next_label_logits(domain, context, values[: index + 1])
-                for index in range(len(values))
-            ]))
-        return torch.stack(rows)
+        context_vector = self.encode_context(domain, context)
+        logits, _hidden = self._decode_prefixes(domain, context_vector, prefix_labels)
+        return logits
 
     def forward(self, domain: str, context: Mapping[str, Any], target_labels: torch.Tensor) -> torch.Tensor:
         logits = self.sequence_logits(domain, context, self.shift_right(domain, target_labels))
@@ -310,12 +340,40 @@ class JointQwenVLPlanner(nn.Module):
         max_steps: int,
         deterministic: bool = False,
     ) -> tuple[list[int], torch.Tensor]:
+        context_vector = self.encode_context(domain, context)
+        return self.sample_labels_from_context(
+            domain,
+            context_vector,
+            dfa,
+            max_steps=max_steps,
+            deterministic=deterministic,
+        )
+
+    def sample_labels_from_context(
+        self,
+        domain: str,
+        context_vector: torch.Tensor,
+        dfa: Any,
+        *,
+        max_steps: int,
+        deterministic: bool = False,
+    ) -> tuple[list[int], torch.Tensor]:
+        """Sample a trajectory while reusing an already encoded observation."""
+
         vocabulary = self.vocabulary(domain)
         state = dfa.start_state
         labels: list[int] = []
         logprob = torch.zeros((), device=self.device)
+        hidden = self._initial_decoder_state(domain, context_vector, 1)
+        previous = torch.tensor(
+            [[int(vocabulary.eos_label)]],
+            dtype=torch.long,
+            device=self.device,
+        )
         for step in range(int(max_steps)):
-            logits = self.next_label_logits(domain, context, [vocabulary.eos_label, *labels])
+            embedded = self.token_embeddings[domain](previous)
+            decoded, hidden = self.graph_decoders[domain](embedded, hidden)
+            logits = self.label_heads[domain](decoded)[0, -1]
             allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
             if not allowed:
                 raise RuntimeError(f"{domain} planner DFA has no productive transition")
@@ -326,6 +384,7 @@ class JointQwenVLPlanner(nn.Module):
             label = torch.argmax(masked) if deterministic else distribution.sample()
             logprob = logprob + distribution.log_prob(label)
             labels.append(int(label))
+            previous = label.reshape(1, 1)
             state = dfa.step(state, int(label))
             if state is None:
                 raise RuntimeError(f"{domain} planner emitted a rejected DFA transition")
@@ -341,13 +400,23 @@ class JointQwenVLPlanner(nn.Module):
         self.model.save_pretrained(str(target))
         if hasattr(self.processor, "save_pretrained"):
             self.processor.save_pretrained(str(target))
-        torch.save(self.label_heads.state_dict(), target / "joint_label_heads.pt")
+        torch.save(
+            {
+                "graph_decoder_version": self.graph_decoder_version,
+                "decoder_hidden_size": self.decoder_hidden_size,
+                "context_projections": self.context_projections.state_dict(),
+                "token_embeddings": self.token_embeddings.state_dict(),
+                "graph_decoders": self.graph_decoders.state_dict(),
+                "label_heads": self.label_heads.state_dict(),
+            },
+            target / "joint_graph_decoder.pt",
+        )
 
 
 class JointPlannerDomainView(nn.Module):
     """Non-owning adapter exposing a standalone planner API for one domain."""
 
-    supports_batched_prefixes = False
+    supports_batched_prefixes = True
 
     def __init__(self, joint: JointQwenVLPlanner, domain: str):
         super().__init__()
@@ -385,7 +454,23 @@ class JointPlannerDomainView(nn.Module):
 
     def sample_labels(self, context, dfa, *, max_steps, deterministic=False):
         return self.joint.sample_labels(
-            self.domain, context, dfa, max_steps=max_steps, deterministic=deterministic,
+            self.domain,
+            context,
+            dfa,
+            max_steps=max_steps,
+            deterministic=deterministic,
+        )
+
+    def encode_context(self, context):
+        return self.joint.encode_context(self.domain, context)
+
+    def sample_labels_from_context(self, context_vector, dfa, *, max_steps, deterministic=False):
+        return self.joint.sample_labels_from_context(
+            self.domain,
+            context_vector,
+            dfa,
+            max_steps=max_steps,
+            deterministic=deterministic,
         )
 
     def supervised_loss(self, **kwargs):
@@ -421,11 +506,19 @@ class JointPlannerDomainView(nn.Module):
             "images": kwargs.get("images", ()),
             "entity_table": kwargs.get("entity_table", ()),
         }
-        labels, logprob = self.sample_labels(
-            context,
-            kwargs["dfa"],
-            max_steps=kwargs.get("max_steps", 60),
-        )
+        encoded_context = kwargs.get("encoded_context")
+        if encoded_context is None:
+            labels, logprob = self.sample_labels(
+                context,
+                kwargs["dfa"],
+                max_steps=kwargs.get("max_steps", 60),
+            )
+        else:
+            labels, logprob = self.sample_labels_from_context(
+                encoded_context,
+                kwargs["dfa"],
+                max_steps=kwargs.get("max_steps", 60),
+            )
         if self.domain == "vlabench":
             return labels_to_plan(labels, self.vocabulary, world=kwargs.get("world")), logprob
         return labels, logprob

@@ -14,8 +14,8 @@ import torch
 from .world_graph import JointDomainRuntime
 
 
-JOINT_CHECKPOINT_VERSION = 2
-SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, JOINT_CHECKPOINT_VERSION})
+JOINT_CHECKPOINT_VERSION = 3
+SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, JOINT_CHECKPOINT_VERSION})
 
 
 def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
@@ -100,6 +100,8 @@ def _model_configuration(planner) -> Mapping[str, Any]:
         "head_sizes": {
             name: int(head.out_features) for name, head in planner.label_heads.items()
         },
+        "graph_decoder_version": getattr(planner, "graph_decoder_version", None),
+        "graph_decoder_hidden_size": getattr(planner, "decoder_hidden_size", None),
     }
 
 

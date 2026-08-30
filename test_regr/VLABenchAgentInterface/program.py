@@ -301,6 +301,14 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 selected_plan = None
                 selected_logprob = None
                 try:
+                    encoded_context = None
+                    encode_context = getattr(self.planner_head, "encode_context", None)
+                    if callable(encode_context):
+                        encoded_context = encode_context({
+                            "instruction": instruction,
+                            "images": views,
+                            "entity_table": entities,
+                        })
                     for _ in range(self.num_samples):
                         try:
                             candidate, candidate_logprob = self.planner_head.sample_with_logprob(
@@ -310,6 +318,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 dfa=self.runtime.dfa,
                                 world=self.runtime.world_bundle,
                                 max_steps=self.runtime.max_tokens,
+                                encoded_context=encoded_context,
                             )
                         except (RuntimeError, TypeError, ValueError):
                             continue

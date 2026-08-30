@@ -345,11 +345,12 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         context = _context(item, "eai")
         pairs = []
         with self.joint_runtime.domain_scope("eai"):
+            encoded_context = self.eai_planner.encode_context(context)
             for _ in range(self.eai_num_samples):
                 policy_dfa = self.joint_runtime.dfa_for("eai", item)
-                labels, logprob = self.eai_planner.sample_with_logprob(
-                    context=context,
-                    dfa=policy_dfa,
+                labels, logprob = self.eai_planner.sample_labels_from_context(
+                    encoded_context,
+                    policy_dfa,
                     max_steps=self.joint_runtime.max_eai_steps,
                 )
                 reward = reward_fn(labels, data_item=item)

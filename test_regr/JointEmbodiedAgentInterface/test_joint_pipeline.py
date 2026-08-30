@@ -108,11 +108,18 @@ def make_planner(runtime):
     )
 
 
-def test_joint_sequence_loss_checkpoints_each_full_backbone_prefix(joint_fixture):
-    examples, runtime = joint_fixture
+def test_joint_sequence_loss_encodes_backbone_once(joint_fixture):
+    _examples, runtime = joint_fixture
     planner = make_planner(runtime)
     planner.train()
-    labels = examples[0]["target_action_labels"][:3]
+    non_eos = next(
+        label for label in range(runtime.eai_vocabulary.label_count)
+        if label != runtime.eai_vocabulary.eos_label
+    )
+    labels = torch.tensor(
+        [non_eos] * 31 + [runtime.eai_vocabulary.eos_label],
+        dtype=torch.long,
+    )
 
     loss = planner.supervised_loss(
         "eai",
@@ -122,10 +129,42 @@ def test_joint_sequence_loss_checkpoints_each_full_backbone_prefix(joint_fixture
     calls_before_backward = planner.model.forward_calls
     loss.backward()
 
-    assert calls_before_backward == len(labels)
-    assert planner.model.forward_calls > calls_before_backward
+    assert calls_before_backward == 1
+    assert planner.model.forward_calls == 1
     assert planner.model.embedding.weight.grad is not None
+    assert planner.context_projections["eai"].weight.grad is not None
+    assert planner.token_embeddings["eai"].weight.grad is not None
+    assert planner.graph_decoders["eai"].weight_hh_l0.grad is not None
     assert planner.label_heads["eai"].weight.grad is not None
+
+
+def test_autoregressive_sample_reuses_one_context_with_differentiable_logprob(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    planner.train()
+    calls_before = planner.model.forward_calls
+    encoded_context = planner.encode_context("eai", {"instruction": "find the object"})
+
+    labels, logprob = planner.sample_labels_from_context(
+        "eai",
+        encoded_context,
+        runtime.eai_dfa,
+        max_steps=runtime.max_eai_steps,
+    )
+    second_labels, second_logprob = planner.sample_labels_from_context(
+        "eai",
+        encoded_context,
+        runtime.eai_dfa,
+        max_steps=runtime.max_eai_steps,
+    )
+
+    assert labels and second_labels
+    assert logprob.requires_grad and second_logprob.requires_grad
+    assert planner.model.forward_calls - calls_before == 1
+    (-(logprob + second_logprob)).backward()
+    assert planner.model.forward_calls - calls_before == 1
+    assert planner.model.embedding.weight.grad is not None
+    assert planner.token_embeddings["eai"].weight.grad is not None
 
 
 def test_joint_pretrained_loader_uses_transformers_compatibility_resolver(joint_fixture, monkeypatch):
@@ -241,6 +280,16 @@ def test_shared_planner_routes_prefixes_and_only_active_head_gets_gradient(joint
     planner = make_planner(runtime)
     eai_before = planner.label_heads["eai"].weight.detach().clone()
     vla_before = planner.label_heads["vlabench"].weight.detach().clone()
+    vla_modules = {
+        "projection": planner.context_projections["vlabench"],
+        "embedding": planner.token_embeddings["vlabench"],
+        "decoder": planner.graph_decoders["vlabench"],
+    }
+    vla_decoder_before = {
+        f"{module_name}.{name}": parameter.detach().clone()
+        for module_name, module in vla_modules.items()
+        for name, parameter in module.named_parameters()
+    }
     optimizer = torch.optim.SGD(planner.parameters(), lr=0.1)
     controller = TinyController()
     program = JointSolverPOIProgram(
@@ -253,6 +302,15 @@ def test_shared_planner_routes_prefixes_and_only_active_head_gets_gradient(joint
     program._planner_step("eai", examples[0])
     assert not torch.equal(eai_before, planner.label_heads["eai"].weight)
     assert torch.equal(vla_before, planner.label_heads["vlabench"].weight)
+    vla_decoder_after = {
+        f"{module_name}.{name}": parameter
+        for module_name, module in vla_modules.items()
+        for name, parameter in module.named_parameters()
+    }
+    assert all(
+        torch.equal(value, vla_decoder_after[name])
+        for name, value in vla_decoder_before.items()
+    )
     assert runtime.active_domain is None
 
     labels, logprob = planner.for_domain("eai").sample_labels(
@@ -267,14 +325,23 @@ def test_shared_planner_routes_prefixes_and_only_active_head_gets_gradient(joint
         label for label in range(runtime.eai_vocabulary.label_count)
         if label != runtime.eai_vocabulary.eos_label
     )
-    planner.sequence_logits(
+    planner.eval()
+    prompts_before = len(planner.processor.prompts)
+    calls_before = planner.model.forward_calls
+    conditioned = planner.sequence_logits(
         "eai",
         {"instruction": "test prefix"},
         torch.tensor([[runtime.eai_vocabulary.eos_label, non_eos]]),
     )
-    token = runtime.eai_vocabulary.token_for_label(non_eos)
-    assert planner.processor.prompts[-2].endswith("Plan:")
-    assert planner.processor.prompts[-1].endswith(f"Plan: {token}")
+    alternative = planner.sequence_logits(
+        "eai",
+        {"instruction": "test prefix"},
+        torch.tensor([[runtime.eai_vocabulary.eos_label, runtime.eai_vocabulary.eos_label]]),
+    )
+    assert planner.model.forward_calls - calls_before == 2
+    assert len(planner.processor.prompts) - prompts_before == 2
+    assert planner.processor.prompts[-1].endswith("Plan:")
+    assert not torch.allclose(conditioned[:, -1], alternative[:, -1])
 
 
 def test_stage1_controller_updates_only_on_vlabench_turn(joint_fixture):
@@ -360,6 +427,7 @@ def test_stage2_eai_update_uses_domain_reward_and_shared_planner_only(joint_fixt
     )
     eai_before = planner.label_heads["eai"].weight.detach().clone()
     vla_before = planner.label_heads["vlabench"].weight.detach().clone()
+    calls_before = planner.model.forward_calls
     planner.eval()
     metrics = program.train_eai_update(item)
     assert planner.training
@@ -368,6 +436,7 @@ def test_stage2_eai_update_uses_domain_reward_and_shared_planner_only(joint_fixt
     assert 0.0 <= metrics["goal_recall"] <= 1.0
     assert not torch.equal(eai_before, planner.label_heads["eai"].weight)
     assert torch.equal(vla_before, planner.label_heads["vlabench"].weight)
+    assert planner.model.forward_calls - calls_before == 2
     assert runtime.active_domain is None
 
 
@@ -414,11 +483,13 @@ def test_joint_stage2_invalid_vlabench_plan_never_executes_controller(joint_fixt
         return [{"name": "pick", "params": {}}], score
 
     program.vlabench_planner.sample_with_logprob = invalid_sample
+    calls_before = planner.model.forward_calls
     episode = program.collect_episode({"task": "select_book"})
     assert not episode.valid
     assert episode.total_return == 0.0
     assert episode.controller == []
     assert simulator.steps == 0
+    assert planner.model.forward_calls - calls_before == 1
     assert runtime.active_domain is None
 
 
@@ -435,6 +506,7 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
     controller_optimizer.step()
     controller_optimizer.zero_grad(set_to_none=True)
     expected = planner.label_heads["eai"].weight.detach().clone()
+    expected_embedding = planner.token_embeddings["eai"].weight.detach().clone()
     path = save_joint_checkpoint(
         tmp_path / "joint.pt",
         runtime=runtime,
@@ -451,6 +523,7 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
     expected_torch = torch.rand(1)
     with torch.no_grad():
         planner.label_heads["eai"].weight.add_(10)
+        planner.token_embeddings["eai"].weight.add_(10)
     planner_optimizer.param_groups[0]["lr"] = 0.9
     payload = load_joint_checkpoint(
         path,
@@ -461,6 +534,7 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
         controller_optimizer=controller_optimizer,
     )
     assert torch.equal(expected, planner.label_heads["eai"].weight)
+    assert torch.equal(expected_embedding, planner.token_embeddings["eai"].weight)
     assert planner_optimizer.param_groups[0]["lr"] == 0.01
     assert payload["round_robin_cursor"] == 17
     assert runtime.active_domain is None
@@ -502,6 +576,30 @@ def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joi
     assert restored["round_robin_cursor"] == 1
 
 
+def test_joint_checkpoint_rejects_prefix_reprompt_architecture(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    path = save_joint_checkpoint(
+        tmp_path / "old_architecture.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        stage="stage1",
+        epoch=0,
+        round_robin_cursor=1,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["compatibility"]["model_configuration"].pop("graph_decoder_version")
+    payload["compatibility"]["model_configuration"].pop("graph_decoder_hidden_size")
+    torch.save(payload, path)
+
+    with pytest.raises(ValueError, match="model_configuration"):
+        load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
+
+
 def test_checkpoint_rng_state_is_normalized_to_cpu_byte_tensor():
     state = _cpu_rng_state(torch.tensor([1, 2, 3], dtype=torch.int64))
     assert state.device.type == "cpu"
@@ -527,3 +625,4 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert (args.stage1_epochs, args.stage2_epochs) == (5, 3)
     assert (args.eai_samples, args.vlabench_planner_samples, args.vlabench_rollouts) == (8, 4, 8)
     assert args.stage2_rounds_per_epoch == 10
+    assert args.planner_decoder_hidden_dim == 512

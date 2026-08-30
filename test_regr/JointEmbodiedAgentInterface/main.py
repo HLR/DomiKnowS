@@ -208,8 +208,9 @@ def command_train_agent(args):
         model_id=args.planner_model,
         adapter_path=args.resume_adapter,
         load_in_4bit=args.load_in_4bit,
+        decoder_hidden_size=args.planner_decoder_hidden_dim,
     )
-    _status("planner backbone and joint label heads ready")
+    _status("planner backbone and graph-token decoders ready")
     _status(f"loading controller vision encoder {args.vision_model if not args.tiny_vision else 'tiny'}")
     controller = _controller(args, device)
     _status("controller ready; building control-data indices")
@@ -422,6 +423,7 @@ def build_parser():
     agent.add_argument("--resume")
     agent.add_argument("--resume-adapter")
     agent.add_argument("--planner-model", default=DEFAULT_MODEL_ID)
+    agent.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
     agent.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
     agent.add_argument("--device")
     agent.add_argument("--seed", type=int, default=42)
