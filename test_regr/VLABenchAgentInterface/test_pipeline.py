@@ -31,6 +31,7 @@ from test_regr.VLABenchAgentInterface.models import (
     QwenVLPlanner,
     TinyImageEncoder,
     controller_loss,
+    prepare_kbit_model,
     resolve_vision_language_loader,
     vision_language_hidden_size,
 )
@@ -146,6 +147,33 @@ def test_vision_language_hidden_size_supports_nested_config_and_adapter_wrapper(
 
     assert vision_language_hidden_size(NestedBackbone()) == 2048
     assert vision_language_hidden_size(AdapterWrapper()) == 2048
+
+
+def test_kbit_preparation_preserves_non_reentrant_checkpointing(monkeypatch):
+    calls = []
+    model = torch.nn.Linear(2, 2)
+
+    def prepare(candidate, **kwargs):
+        calls.append((candidate, kwargs))
+        return candidate
+
+    monkeypatch.setitem(
+        sys.modules,
+        "peft",
+        SimpleNamespace(prepare_model_for_kbit_training=prepare),
+    )
+
+    assert prepare_kbit_model(model, gradient_checkpointing=True) is model
+    assert calls[-1] == (
+        model,
+        {
+            "use_gradient_checkpointing": True,
+            "gradient_checkpointing_kwargs": {"use_reentrant": False},
+        },
+    )
+
+    assert prepare_kbit_model(model, gradient_checkpointing=False) is model
+    assert calls[-1] == (model, {"use_gradient_checkpointing": False})
 
 
 def test_dataset_download_retries_429_and_resumes(tmp_path, monkeypatch):

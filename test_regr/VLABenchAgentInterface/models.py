@@ -51,6 +51,19 @@ def resolve_vision_language_loader():
     )
 
 
+def prepare_kbit_model(model: nn.Module, *, gradient_checkpointing: bool) -> nn.Module:
+    """Prepare a quantized PEFT backbone without changing checkpointing mode."""
+
+    from peft import prepare_model_for_kbit_training
+
+    kwargs: dict[str, Any] = {
+        "use_gradient_checkpointing": bool(gradient_checkpointing),
+    }
+    if gradient_checkpointing:
+        kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
+    return prepare_model_for_kbit_training(model, **kwargs)
+
+
 def vision_language_hidden_size(model: nn.Module) -> int | None:
     """Find the language width through multimodal configs and PEFT wrappers."""
 
@@ -305,14 +318,20 @@ class QwenVLPlanner(nn.Module):
             if hasattr(model.config, "use_cache"):
                 model.config.use_cache = False
         if adapter_path is not None:
-            from peft import PeftModel, prepare_model_for_kbit_training
+            from peft import PeftModel
             if load_in_4bit:
-                model = prepare_model_for_kbit_training(model)
+                model = prepare_kbit_model(
+                    model,
+                    gradient_checkpointing=gradient_checkpointing,
+                )
             model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
         elif use_lora:
-            from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+            from peft import LoraConfig, get_peft_model
             if load_in_4bit:
-                model = prepare_model_for_kbit_training(model)
+                model = prepare_kbit_model(
+                    model,
+                    gradient_checkpointing=gradient_checkpointing,
+                )
             model = get_peft_model(model, LoraConfig(
                 r=16, lora_alpha=32, lora_dropout=0.05,
                 target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],

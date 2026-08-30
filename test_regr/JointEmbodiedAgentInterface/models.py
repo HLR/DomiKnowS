@@ -13,6 +13,7 @@ from torch.utils.checkpoint import checkpoint as activation_checkpoint
 from test_regr.VLABenchAgentInterface.graph import labels_to_plan, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
     planner_prompt,
+    prepare_kbit_model,
     resolve_vision_language_loader,
     vision_language_hidden_size,
 )
@@ -96,14 +97,20 @@ class JointQwenVLPlanner(nn.Module):
             if hasattr(model.config, "use_cache"):
                 model.config.use_cache = False
         if adapter_path:
-            from peft import PeftModel, prepare_model_for_kbit_training
+            from peft import PeftModel
             if load_in_4bit:
-                model = prepare_model_for_kbit_training(model)
+                model = prepare_kbit_model(
+                    model,
+                    gradient_checkpointing=gradient_checkpointing,
+                )
             model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
         elif use_lora:
-            from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+            from peft import LoraConfig, get_peft_model
             if load_in_4bit:
-                model = prepare_model_for_kbit_training(model)
+                model = prepare_kbit_model(
+                    model,
+                    gradient_checkpointing=gradient_checkpointing,
+                )
             model = get_peft_model(model, LoraConfig(
                 r=16,
                 lora_alpha=32,
