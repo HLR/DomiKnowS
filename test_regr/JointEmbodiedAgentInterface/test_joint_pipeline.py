@@ -275,7 +275,9 @@ def test_stage1_controller_updates_only_on_vlabench_turn(joint_fixture):
         controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
     )
     before = controller.action.detach().clone()
+    planner.eval()
     program._planner_step("eai", examples[0])
+    assert planner.training
     assert torch.equal(before, controller.action)
     batch = {
         "images": torch.zeros(1, 2, 1, 3, 4, 4),
@@ -344,7 +346,9 @@ def test_stage2_eai_update_uses_domain_reward_and_shared_planner_only(joint_fixt
     )
     eai_before = planner.label_heads["eai"].weight.detach().clone()
     vla_before = planner.label_heads["vlabench"].weight.detach().clone()
+    planner.eval()
     metrics = program.train_eai_update(item)
+    assert planner.training
     assert metrics["samples"] == 2
     assert 0.0 <= metrics["reward"] <= 1.0
     assert 0.0 <= metrics["goal_recall"] <= 1.0

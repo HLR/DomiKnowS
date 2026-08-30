@@ -136,6 +136,11 @@ class JointSolverPOIProgram(SolverPOIProgram):
         self.round_robin_cursor = 0
 
     def _planner_step(self, domain: str, item: Mapping[str, Any]) -> float:
+        # Validation routes through the same shared object and may leave it in
+        # eval mode.  Prefix-level activation checkpointing is enabled only
+        # during training, so restore the lifecycle explicitly before every
+        # optimizer-bearing planner turn.
+        self.planner_head.train()
         with self.runtime.domain_scope(domain):
             loss = self.planner_head.supervised_loss(
                 domain,
@@ -290,6 +295,7 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         )
 
     def train_eai_update(self, item: Mapping[str, Any]) -> dict[str, float]:
+        self.joint_planner.train()
         reward_fn = item.get("reward_function")
         if not callable(reward_fn):
             raise ValueError("EAI reinforcement items require reward_function")
@@ -338,6 +344,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
         *,
         rollouts_per_update: int = 8,
     ) -> dict[str, float]:
+        self.joint_planner.train()
+        self.controller.train()
         with self.joint_runtime.domain_scope("vlabench"):
             planner = self.planner_head
             self.planner_head = self.vlabench_planner
@@ -359,6 +367,8 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
     ) -> dict[str, Any]:
         if not eai_examples or not vlabench_descriptors:
             raise ValueError("joint Stage 2 requires both domain sources")
+        self.joint_planner.train()
+        self.controller.train()
         eai_totals = {"loss": 0.0, "reward": 0.0, "goal_recall": 0.0, "success": 0.0}
         vla_totals = {
             "planner_loss": 0.0,
