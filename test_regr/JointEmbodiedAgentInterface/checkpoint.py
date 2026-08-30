@@ -42,10 +42,29 @@ def _is_bitsandbytes_auxiliary_key(name: str) -> bool:
 
 
 def _cpu_rng_state(value: Any) -> torch.Tensor:
-    """Normalize RNG tensors after a checkpoint-wide CUDA map_location."""
+    """Normalize RNG tensors before restoring process-global RNG state."""
     if not torch.is_tensor(value):
         value = torch.as_tensor(value)
     return value.detach().to(device="cpu", dtype=torch.uint8)
+
+
+def _checkpoint_staging_location(map_location: str | torch.device):
+    """Keep CUDA checkpoint tensors on CPU until their owners restore them.
+
+    ``Optimizer.load_state_dict`` moves parameter-shaped Adam moments to each
+    parameter's device and dtype.  Non-capturable Adam step counters are the
+    exception: PyTorch deliberately leaves them on their loaded device.  If a
+    checkpoint is loaded wholesale with ``map_location="cuda"``, those scalar
+    counters become CUDA float32 tensors and foreach Adam rejects them when a
+    corresponding parameter is BF16/FP16.  CPU staging preserves the required
+    counter placement while module and optimizer loading still move every
+    parameter-owned tensor to its actual device.
+    """
+    try:
+        requested = torch.device(map_location)
+    except (TypeError, RuntimeError):
+        return map_location
+    return torch.device("cpu") if requested.type == "cuda" else map_location
 
 
 def _load_planner_state(planner: torch.nn.Module, state: Mapping[str, Any]) -> None:
@@ -188,7 +207,11 @@ def load_joint_checkpoint(
     map_location: str | torch.device = "cpu",
 ) -> Mapping[str, Any]:
     """Restore an exact joint run, rejecting any schema/model drift."""
-    payload = torch.load(Path(path), map_location=map_location, weights_only=False)
+    payload = torch.load(
+        Path(path),
+        map_location=_checkpoint_staging_location(map_location),
+        weights_only=False,
+    )
     if payload.get("joint_checkpoint_version") not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")
     expected = _compatibility(runtime, planner)

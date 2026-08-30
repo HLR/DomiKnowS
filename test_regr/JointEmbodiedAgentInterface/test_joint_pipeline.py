@@ -16,7 +16,12 @@ from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 from test_regr.EmbodiedAgentInterface.dataset import dummy_dataset
 from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
 
-from .checkpoint import _cpu_rng_state, load_joint_checkpoint, save_joint_checkpoint
+from .checkpoint import (
+    _checkpoint_staging_location,
+    _cpu_rng_state,
+    load_joint_checkpoint,
+    save_joint_checkpoint,
+)
 from .main import build_parser, stage1_selection_key, stage2_selection_key
 from .models import JointQwenVLPlanner
 from .program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
@@ -532,10 +537,18 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
         controller=controller,
         planner_optimizer=planner_optimizer,
         controller_optimizer=controller_optimizer,
+        # Reproduce the full GPU command's Stage 1 -> Stage 2 restore path even
+        # on CPU-only CI.  CUDA requests must stage optimizer state on CPU.
+        map_location=torch.device("cuda"),
     )
     assert torch.equal(expected, planner.label_heads["eai"].weight)
     assert torch.equal(expected_embedding, planner.token_embeddings["eai"].weight)
     assert planner_optimizer.param_groups[0]["lr"] == 0.01
+    assert all(
+        state["step"].device.type == "cpu"
+        for state in planner_optimizer.state.values()
+        if "step" in state
+    )
     assert payload["round_robin_cursor"] == 17
     assert runtime.active_domain is None
     assert random.random() == expected_python
@@ -604,6 +617,12 @@ def test_checkpoint_rng_state_is_normalized_to_cpu_byte_tensor():
     state = _cpu_rng_state(torch.tensor([1, 2, 3], dtype=torch.int64))
     assert state.device.type == "cpu"
     assert state.dtype == torch.uint8
+
+
+def test_cuda_checkpoint_restore_uses_cpu_staging():
+    assert _checkpoint_staging_location("cuda").type == "cpu"
+    assert _checkpoint_staging_location(torch.device("cuda:1")).type == "cpu"
+    assert torch.device(_checkpoint_staging_location("cpu")).type == "cpu"
 
 
 def test_balanced_checkpoint_keys_and_cli_defaults():
