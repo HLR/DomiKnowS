@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import random
+from collections import deque
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -125,18 +126,93 @@ def _model_configuration(planner) -> Mapping[str, Any]:
 
 
 def _dfa_configuration(dfa: Any, **limits) -> Mapping[str, Any]:
+    """Serialize a DFA independently of its process-local state labels.
+
+    Constraint compilation may minimize a DFA.  The minimizer's integer block
+    labels are an implementation detail and can change with Python hash order,
+    even when two automata recognize exactly the same language.  Number states
+    deterministically by a breadth-first traversal from the start state so
+    checkpoint compatibility reflects transition structure instead.
+    """
     transitions = getattr(dfa, "transitions", {})
-    states = getattr(dfa, "states", ())
-    accepting = getattr(dfa, "accepting_states", ())
+    states = set(getattr(dfa, "states", ()))
+    start = dfa.start_state
+    outgoing_by_state: dict[Any, list[tuple[int, Any]]] = {}
+    for (source, symbol), target in transitions.items():
+        outgoing_by_state.setdefault(source, []).append((int(symbol), target))
+    state_ids = {start: 0}
+    queue = deque([start])
+    canonical_transitions = []
+    while queue:
+        state = queue.popleft()
+        outgoing = sorted(
+            outgoing_by_state.get(state, ()),
+            key=lambda item: (item[0], repr(item[1])),
+        )
+        for symbol, target in outgoing:
+            if target not in state_ids:
+                state_ids[target] = len(state_ids)
+                queue.append(target)
+            canonical_transitions.append((state_ids[state], symbol, state_ids[target]))
+    # DFAs produced by the runtime are reachable by construction.  Retain a
+    # stable representation if a future builder includes unreachable states.
+    for state in sorted(states.difference(state_ids), key=repr):
+        state_ids[state] = len(state_ids)
+    accepting = sorted(
+        state_ids[state]
+        for state in getattr(dfa, "accepting_states", ())
+        if state in state_ids
+    )
     return {
         **limits,
-        "start_state": repr(dfa.start_state),
-        "states": sorted(repr(value) for value in states),
-        "accepting_states": sorted(repr(value) for value in accepting),
-        "transitions": sorted(
-            (repr(state), int(symbol), repr(target))
-            for (state, symbol), target in transitions.items()
+        "format_version": 2,
+        "start_state": 0,
+        "state_count": len(state_ids),
+        "accepting_states": accepting,
+        "transitions": sorted(canonical_transitions),
+    }
+
+
+def _normalize_dfa_configuration(configuration: Mapping[str, Any] | None):
+    """Upgrade the repr-based DFA payload written by checkpoint versions 1-3."""
+    if not configuration or configuration.get("format_version") == 2:
+        return configuration
+    start = configuration.get("start_state")
+    states = set(configuration.get("states", ()))
+    transitions = [tuple(item) for item in configuration.get("transitions", ())]
+    outgoing: dict[Any, list[tuple[int, Any]]] = {}
+    for source, symbol, target in transitions:
+        outgoing.setdefault(source, []).append((int(symbol), target))
+    state_ids = {start: 0}
+    queue = deque([start])
+    canonical_transitions = []
+    while queue:
+        state = queue.popleft()
+        for symbol, target in sorted(
+            outgoing.get(state, ()), key=lambda item: (item[0], repr(item[1]))
+        ):
+            if target not in state_ids:
+                state_ids[target] = len(state_ids)
+                queue.append(target)
+            canonical_transitions.append((state_ids[state], symbol, state_ids[target]))
+    for state in sorted(states.difference(state_ids), key=repr):
+        state_ids[state] = len(state_ids)
+    limits = {
+        key: value
+        for key, value in configuration.items()
+        if key not in {"start_state", "states", "accepting_states", "transitions"}
+    }
+    return {
+        **limits,
+        "format_version": 2,
+        "start_state": 0,
+        "state_count": len(state_ids),
+        "accepting_states": sorted(
+            state_ids[state]
+            for state in configuration.get("accepting_states", ())
+            if state in state_ids
         ),
+        "transitions": sorted(canonical_transitions),
     }
 
 
@@ -228,10 +304,15 @@ def load_joint_checkpoint(
         "vlabench_dfa",
         "model_configuration",
     ):
-        if actual.get(key) != expected.get(key):
+        saved_value = actual.get(key)
+        current_value = expected.get(key)
+        if key in {"eai_dfa", "vlabench_dfa"}:
+            saved_value = _normalize_dfa_configuration(saved_value)
+            current_value = _normalize_dfa_configuration(current_value)
+        if saved_value != current_value:
             raise ValueError(
                 f"joint checkpoint {key} differs from the current runtime: "
-                f"saved={actual.get(key)!r}, current={expected.get(key)!r}"
+                f"saved={saved_value!r}, current={current_value!r}"
             )
     _load_planner_state(planner, payload["planner"])
     controller.load_state_dict(payload["controller"])

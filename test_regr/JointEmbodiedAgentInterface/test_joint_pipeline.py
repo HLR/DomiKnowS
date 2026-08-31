@@ -19,6 +19,8 @@ from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
 from .checkpoint import (
     _checkpoint_staging_location,
     _cpu_rng_state,
+    _dfa_configuration,
+    _normalize_dfa_configuration,
     load_joint_checkpoint,
     save_joint_checkpoint,
 )
@@ -587,6 +589,87 @@ def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joi
 
     restored = load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
     assert restored["round_robin_cursor"] == 1
+
+
+def test_joint_checkpoint_loads_legacy_process_local_dfa_numbering(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_dfa.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=None,
+        stage="stage1",
+        epoch=4,
+        round_robin_cursor=5,
+    )
+    payload = torch.load(path, weights_only=False)
+    # Recreate the old repr-based payload with deliberately different labels
+    # for an isomorphic two-state automaton.
+    legacy = {
+        "max_operations": 8,
+        "start_state": "4",
+        "states": ["4", "9"],
+        "accepting_states": ["9"],
+        "transitions": [("4", 1, "9"), ("9", 1, "9")],
+    }
+    renumbered = {
+        "max_operations": 8,
+        "start_state": "7",
+        "states": ["2", "7"],
+        "accepting_states": ["2"],
+        "transitions": [("2", 1, "2"), ("7", 1, "2")],
+    }
+    assert _normalize_dfa_configuration(legacy) == _normalize_dfa_configuration(renumbered)
+
+    # A real checkpoint's legacy fingerprint also upgrades to the new stable
+    # format; its graph/model payload remains otherwise untouched.
+    for key in ("eai_dfa", "vlabench_dfa"):
+        domain_dfa = runtime.eai_dfa if key == "eai_dfa" else runtime.vlabench_dfa
+        current = payload["compatibility"][key]
+        payload["compatibility"][key] = {
+            name: value
+            for name, value in current.items()
+            if name not in {"format_version", "state_count"}
+        } | {
+            "start_state": repr(domain_dfa.start_state),
+            "states": sorted(
+                repr(value)
+                for value in domain_dfa.states
+            ),
+            "accepting_states": sorted(
+                repr(value)
+                for value in domain_dfa.accepting_states
+            ),
+            "transitions": sorted(
+                (repr(source), int(symbol), repr(target))
+                for (source, symbol), target in domain_dfa.transitions.items()
+            ),
+        }
+    torch.save(payload, path)
+    restored = load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
+    assert restored["epoch"] == 4
+
+
+def test_dfa_checkpoint_configuration_ignores_state_labels():
+    from domiknows.generation.dfa.core import DFA
+
+    first = DFA(
+        states=frozenset({4, 9}), alphabet=frozenset({1}),
+        transitions={(4, 1): 9, (9, 1): 9}, start_state=4,
+        accepting_states=frozenset({9}),
+    )
+    second = DFA(
+        states=frozenset({2, 7}), alphabet=frozenset({1}),
+        transitions={(7, 1): 2, (2, 1): 2}, start_state=7,
+        accepting_states=frozenset({2}),
+    )
+    assert _dfa_configuration(first, max_operations=8) == _dfa_configuration(
+        second, max_operations=8
+    )
 
 
 def test_joint_checkpoint_rejects_prefix_reprompt_architecture(tmp_path, joint_fixture):
