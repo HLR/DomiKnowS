@@ -241,6 +241,11 @@ def command_train_agent(args):
             controller_optimizer=controller_optimizer,
             map_location=device,
         )
+        if payload.get("controller_migration_required"):
+            _status(
+                "migrated legacy absolute-pose controller; the local action head "
+                "will be rebuilt by controller warm-up"
+            )
         resume_stage = payload["stage"]
         resume_payload = payload
         cursor = int(payload["round_robin_cursor"])
