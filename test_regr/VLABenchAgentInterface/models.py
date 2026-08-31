@@ -185,7 +185,7 @@ class MultiViewController(nn.Module):
     # absolute [xyz, roll, pitch, yaw, gripper] target, matching the dataset and
     # simulator adapter, but the actor can no longer point every action in a
     # chunk at an arbitrary distant pose.
-    action_representation_version = 2
+    action_representation_version = 3
 
     def __init__(
         self,
@@ -227,6 +227,7 @@ class MultiViewController(nn.Module):
         """
 
         self.policy_head.reset_parameters()
+        self.task_embedding.reset_parameters()
         with torch.no_grad():
             self.log_std.copy_(
                 torch.tensor(

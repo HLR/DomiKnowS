@@ -19,6 +19,7 @@ from test_regr.EmbodiedAgentInterface.reward import (
 )
 from test_regr.VLABenchAgentInterface.dataset import (
     deterministic_split,
+    load_control_task_instructions,
     load_planning_examples,
 )
 from test_regr.VLABenchAgentInterface.main import _control_loaders, _controller
@@ -223,6 +224,10 @@ def command_train_agent(args):
         lr=args.controller_learning_rate,
     )
     control_loaders = _control_loaders(args)
+    control_task_instructions = load_control_task_instructions(args.control_source)
+    _status(
+        f"loaded VLABench language controller tasks={len(control_task_instructions)}"
+    )
     _status("all model and data components are ready")
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -372,6 +377,7 @@ def command_train_agent(args):
         planner_optimizer=planner_optimizer,
         controller_optimizer=controller_optimizer,
         env_factory=_factory(args.env_factory),
+        controller_task_instructions=control_task_instructions,
         eai_supervised_examples=eai_train,
         vlabench_supervised_examples=vla_splits["train"],
         controller_anchor_loader=control_loaders["train"],
@@ -480,7 +486,7 @@ def build_parser():
     agent.add_argument("--vlabench-rollouts", type=int, default=8)
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
-    agent.add_argument("--controller-warmup-steps", type=int, default=2000)
+    agent.add_argument("--controller-warmup-steps", type=int, default=20000)
     agent.add_argument("--stage1-min-positive-reward-rate", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-recall", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-success", type=float, default=0.0)

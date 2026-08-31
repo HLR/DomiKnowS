@@ -18,6 +18,8 @@ from test_regr.VLABenchAgentInterface.dataset import (
     build_numbered_segmentation_view,
     deterministic_split,
     download_processed_datasets,
+    control_task_index_for_instruction,
+    load_control_task_instructions,
     load_planning_examples,
     _video_tensor,
 )
@@ -513,6 +515,10 @@ def test_control_windows_controller_loss_and_training(tmp_path):
     assert item["images"].shape == (2, 3, 3, 24, 24)
     assert item["actions"].shape == (3, 7)
     assert item["task_index"].item() == condition_index
+    language_dataset = LeRobotWindowDataset(
+        _records(), observation_horizon=2, action_horizon=3, condition_index=None
+    )
+    assert language_dataset[language_dataset.index.index((1, 0))]["task_index"].item() == 1
     model = MultiViewController(TinyImageEncoder(16), hidden_dim=24, action_horizon=3, max_views=3)
     batch = next(iter(DataLoader(dataset, batch_size=2)))
     output = model(batch["images"], batch["state"], batch["task_index"])
@@ -528,6 +534,26 @@ def test_control_windows_controller_loss_and_training(tmp_path):
     restored_optimizer = torch.optim.Adam(restored.parameters(), lr=1e-3)
     payload = load_checkpoint(checkpoint, model=restored, optimizer=restored_optimizer)
     assert payload["epoch"] == 0
+
+
+def test_control_task_metadata_preserves_language_condition_ids(tmp_path):
+    metadata = tmp_path / "meta"
+    metadata.mkdir()
+    (metadata / "tasks.jsonl").write_text(
+        '{"task_index": 7, "task": "Insert the rose into the vase."}\n'
+        '{"task_index": 91, "task": "Pick up the mahjong of 1 pin"}\n',
+        encoding="utf-8",
+    )
+    instructions = load_control_task_instructions(tmp_path)
+    assert instructions == {
+        7: "Insert the rose into the vase.",
+        91: "Pick up the mahjong of 1 pin",
+    }
+    assert control_task_index_for_instruction(
+        "  insert THE rose into the vase! ", instructions
+    ) == 7
+    with pytest.raises(KeyError, match="not uniquely represented"):
+        control_task_index_for_instruction("Insert the tulip into the vase", instructions)
 
 
 @dataclass
@@ -960,9 +986,46 @@ def test_failed_ik_action_receives_zero_and_is_not_executed():
     simulator.robot = FailedRobot()
     program = _joint_program(runtime, planner, controller, lambda **_kwargs: simulator)
     episode = program.collect_episode({"task": "select_book"})
-    assert not episode.valid
+    assert episode.valid
     assert episode.total_return == 0.0
     assert simulator.count == 0
+
+
+def test_online_controller_uses_language_task_id_not_skill_pattern():
+    world = build_vlabench_world_graph("test_language_control_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_language_control"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class RecordingController(MultiViewController):
+        seen_task_index = None
+
+        def sample_action_chunk(self, images, state, task_index):
+            self.seen_task_index = int(task_index.item())
+            return super().sample_action_chunk(images, state, task_index)
+
+    controller = RecordingController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = create_stage2_program(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.1),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: FakeSimulator(success=True),
+        controller_task_instructions={73: "Put the apple in the bowl."},
+        execute_horizon=1,
+        max_steps=1,
+        num_samples=1,
+        ppo_epochs=1,
+        supervised_weight=0.0,
+        controller_bc_weight=0.0,
+    )
+    episode = program.collect_episode({"task": "select_book"})
+    assert episode.success
+    assert controller.seen_task_index == 73
 
 
 def test_joint_simulator_training_updates_planner_and_controller():

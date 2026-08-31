@@ -841,7 +841,7 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_rounds_per_epoch == 10
     assert args.planner_decoder_hidden_dim == 512
     assert args.video_decoder_cache_size == 8
-    assert args.controller_warmup_steps == 2000
+    assert args.controller_warmup_steps == 20000
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
     assert args.ik_tolerance == pytest.approx(1e-3)

@@ -28,6 +28,77 @@ PLANNING_DATASET_ID = "VLABench/vlm_evaluation_v1.0"
 CONTROL_DATASET_ID = "VLABench/vlabench_primitive_ft_lerobot_video"
 
 
+def _instruction_key(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else ""
+    return " ".join(str(value).strip().lower().rstrip(".!?").split())
+
+
+def load_control_task_instructions(
+    source: str | Path = CONTROL_DATASET_ID,
+) -> dict[int, str]:
+    """Load the canonical LeRobot ``task_index -> instruction`` metadata."""
+
+    root = Path(source)
+    if not root.exists():
+        try:
+            from huggingface_hub import hf_hub_download
+
+            metadata = Path(hf_hub_download(
+                repo_id=str(source),
+                filename="meta/tasks.parquet",
+                repo_type="dataset",
+            ))
+        except Exception as exc:
+            raise RuntimeError(
+                "control task metadata is required to preserve language-conditioned task_index values"
+            ) from exc
+        candidates = [metadata]
+    else:
+        candidates = [root / "meta" / "tasks.parquet"]
+        candidates.extend(sorted((root / "meta" / "tasks").glob("**/*.parquet")))
+
+    rows: list[Mapping[str, Any]] = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            import pyarrow.parquet as parquet
+        except ImportError as exc:
+            raise RuntimeError("pyarrow is required to read LeRobot task metadata") from exc
+        rows.extend(parquet.read_table(path).to_pylist())
+
+    legacy = root / "meta" / "tasks.jsonl"
+    if not rows and legacy.is_file():
+        rows = [json.loads(line) for line in legacy.read_text(encoding="utf-8").splitlines() if line.strip()]
+    result: dict[int, str] = {}
+    for row in rows:
+        index = row.get("task_index")
+        instruction = row.get("task", row.get("instruction", row.get("__index_level_0__")))
+        if index is not None and instruction is not None and _instruction_key(instruction):
+            result[int(index)] = str(instruction)
+    if not result:
+        raise RuntimeError(f"no task_index/instruction mappings found under {source}")
+    return result
+
+
+def control_task_index_for_instruction(
+    instruction: Any,
+    task_instructions: Mapping[int, str],
+) -> int:
+    """Resolve an environment instruction to its demonstration task ID."""
+
+    requested = _instruction_key(instruction)
+    matches = [
+        int(index)
+        for index, value in task_instructions.items()
+        if _instruction_key(value) == requested
+    ]
+    if len(matches) != 1:
+        raise KeyError(f"instruction is not uniquely represented in control metadata: {instruction!r}")
+    return matches[0]
+
+
 class _TerminalDownloadProgress:
     """Dependency-free progress reporter implementing the tqdm surface Hub uses.
 

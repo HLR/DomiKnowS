@@ -14,7 +14,8 @@ from torch.nn import functional as F
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 try:
-    from .environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
+    from .dataset import control_task_index_for_instruction
+    from .environment import InverseKinematicsError, bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
     from .graph import dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
@@ -25,7 +26,8 @@ try:
         verify_plan_constraints,
     )
 except ImportError:
-    from environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
+    from dataset import control_task_index_for_instruction
+    from environment import InverseKinematicsError, bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
     from graph import dfa_accepts_plan
     from models import controller_loss
     from world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
@@ -318,6 +320,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         planner_optimizer,
         controller_optimizer,
         env_factory: Callable[..., Any],
+        controller_task_instructions: Mapping[int, str] | None = None,
         supervised_examples: Sequence[Any] = (),
         controller_anchor_loader: Iterable[Mapping[str, torch.Tensor]] | None = None,
         device="cpu",
@@ -354,6 +357,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.planner_optimizer = planner_optimizer
         self.controller_optimizer = controller_optimizer
         self.env_factory = env_factory
+        self.controller_task_instructions = dict(controller_task_instructions or {})
         self.supervised_examples = tuple(supervised_examples)
         self.controller_anchor_loader = controller_anchor_loader
         self.device_name = torch.device(device)
@@ -449,8 +453,23 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             instruction = descriptor.get("instruction")
             if not instruction:
                 instruction = env.task.get_instruction() if hasattr(getattr(env, "task", None), "get_instruction") else ""
+            controller_task_index = None
+            if self.controller_task_instructions:
+                try:
+                    controller_task_index = control_task_index_for_instruction(
+                        instruction,
+                        self.controller_task_instructions,
+                    )
+                except KeyError as exc:
+                    self._report_progress(
+                        f"VLABench controller rejected unknown instruction for "
+                        f"task={descriptor.get('task', 'unknown')}: {exc}"
+                    )
+                    valid = False
 
             while steps < self.max_steps:
+                if not valid:
+                    break
                 now = time.monotonic()
                 if now - last_progress_report >= 30.0:
                     self._report_progress(
@@ -537,7 +556,11 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 planner_logprobs.append(selected_logprob)
                 planner_transition_indices.append(len(transitions))
                 subtasks = split_subtasks([operation["name"] for operation in plan])
-                task_index = condition_index_for_pattern(subtasks[0]) if subtasks else 0
+                task_index = (
+                    controller_task_index
+                    if controller_task_index is not None
+                    else condition_index_for_pattern(subtasks[0]) if subtasks else 0
+                )
                 inputs = _controller_inputs(observations, task_index, self.device_name)
                 try:
                     actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs)
@@ -551,6 +574,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 bounded_actions = actions.detach().clone()
                 executed = 0
                 chunk_reward = 0.0
+                ik_truncated = False
                 for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
                     try:
                         bounded = bound_ee_action(
@@ -570,6 +594,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             ik_tolerance=self.ik_tolerance,
                             ik_max_steps=self.ik_max_steps,
                         )
+                    except InverseKinematicsError as exc:
+                        # The finite target was never sent to the simulator.
+                        # End this rollout at the last valid state without
+                        # reclassifying valid plans/actions already executed as
+                        # semantically invalid or erasing their shaped reward.
+                        self._report_progress(
+                            f"VLABench rollout IK-truncated task={descriptor.get('task', 'unknown')} "
+                            f"step={steps}: {exc}"
+                        )
+                        ik_truncated = True
+                        break
                     except (ValueError, TypeError, AttributeError, KeyError) as exc:
                         self._report_progress(
                             f"VLABench controller action rejected task={descriptor.get('task', 'unknown')} "
@@ -604,10 +639,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         old_logprob=evaluated_logprobs[0, :executed].sum().cpu(),
                         old_value=evaluated_value[0].cpu(),
                         reward=chunk_reward,
-                        done=success or not valid or steps >= self.max_steps,
+                        done=success or not valid or ik_truncated or steps >= self.max_steps,
                         executed=executed,
                     ))
-                if success or not valid or steps >= self.max_steps:
+                if success or not valid or ik_truncated or steps >= self.max_steps:
                     break
 
             final_progress = previous_progress

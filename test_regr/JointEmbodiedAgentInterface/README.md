@@ -76,7 +76,7 @@ mean, EAI recall, VLABench validity, and validation loss. The EAI exploration
 gate is checked before Stage 2.
 
 After the selected Stage 1 checkpoint is restored, the controller receives a
-dedicated behavior-cloning warm-up (2,000 updates by default) without changing
+dedicated behavior-cloning warm-up (20,000 updates by default) without changing
 either planner head or the shared LoRA. This is intentionally separate from
 the balanced domain rounds so extra controller supervision does not increase
 VLABench planner weight. The completed warm-up is saved as
@@ -96,7 +96,11 @@ exact same `JointQwenVLPlanner`:
    REINFORCE plus a `0.1` supervised planner anchor. Controller actions use
    PPO/GAE with a `0.05` behavior-cloning anchor.
 
-The controller uses Normal distributions for six end-effector coordinates, a
+The controller uses the official LeRobot `task_index` for all 128 language
+instructions from `meta/tasks.parquet`; it does not collapse distinct target
+objects into a shared primitive-pattern ID. During rollout, the environment
+instruction must resolve to exactly one of those IDs before controller
+execution. The controller uses Normal distributions for six end-effector coordinates, a
 Bernoulli gripper, learned log standard deviation, and a value head. Its actor
 predicts bounded local xyz/Euler increments and cumulatively integrates them
 around the last observed end-effector pose. The public actions remain absolute
@@ -115,7 +119,9 @@ up to 200 iterations. These defaults are configurable through
 
 Constraint-invalid plans never reach the controller. Failed inverse
 kinematics and non-finite actions receive zero and are not sent to the
-environment.
+environment. A finite target that fails IK safely truncates the rollout at its
+last executable state; it does not retroactively invalidate earlier actions or
+erase their accumulated shaping reward.
 
 ## Reward separation
 
@@ -165,7 +171,7 @@ python -m test_regr.VLABenchAgentInterface.main download `
 ```
 
 Canonical joint training uses all EAI data, all ten VLABench tasks, five
-Stage 1 epochs, a 2,000-step controller BC warm-up, three Stage 2 epochs, and
+Stage 1 epochs, a 20,000-step controller BC warm-up, three Stage 2 epochs, and
 equal round-robin scheduling:
 
 ```powershell
@@ -238,10 +244,11 @@ activation profile, graph-decoder architecture, controller action
 representation, or model configuration
 differs. Checkpoints created before graph-decoder version 1 cannot be resumed
 because their prefix-reprompt label heads have incompatible parameters.
-Checkpoints created with the former unconstrained absolute-pose controller may
+Checkpoints created with the former unconstrained absolute-pose or collapsed
+skill-pattern-conditioned controller may
 be resumed only from Stage 1. Loading resets that obsolete policy head and its
 optimizer moments, then the configured controller warm-up retrains the local
-chunk head. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
+chunk head and language-task embedding. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
 rejected because it has already crossed the migration boundary.
 Standalone EAI and
 VLABench checkpoints continue to work with their original CLIs but are not

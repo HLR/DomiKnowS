@@ -332,13 +332,38 @@ def load_joint_checkpoint(
             )
     saved_controller = actual.get("controller_configuration")
     current_controller = expected["controller_configuration"]
-    migrate_legacy_controller = saved_controller is None and payload.get("stage") == "stage1"
+    saved_representation = (
+        int(saved_controller.get("action_representation_version", 1))
+        if saved_controller is not None else 1
+    )
+    current_representation = int(current_controller["action_representation_version"])
+    migrate_legacy_controller = (
+        payload.get("stage") == "stage1"
+        and saved_representation < current_representation
+        and (
+            saved_controller is None
+            or all(
+                saved_controller.get(key) == current_controller.get(key)
+                for key in (
+                    "class",
+                    "state_dim",
+                    "action_dim",
+                    "action_horizon",
+                    "pose_step_scale",
+                )
+            )
+        )
+    )
     if saved_controller is None and not migrate_legacy_controller:
         raise ValueError(
             "joint checkpoint predates the local controller action representation; "
             "resume a Stage 1 checkpoint so controller warm-up can migrate it"
         )
-    if saved_controller is not None and saved_controller != current_controller:
+    if (
+        saved_controller is not None
+        and saved_controller != current_controller
+        and not migrate_legacy_controller
+    ):
         raise ValueError(
             "joint checkpoint controller_configuration differs from the current runtime: "
             f"saved={saved_controller!r}, current={current_controller!r}"

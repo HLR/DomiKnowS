@@ -149,6 +149,11 @@ simulator return-to-go REINFORCE. A `0.1` supervised exact-plan anchor prevents
 catastrophic drift. Reference-plan similarity remains an evaluation metric
 and is not blended into the Stage 2 reward.
 
+The control loader preserves the official LeRobot `task_index` values for all
+128 language instructions in `meta/tasks.parquet`. Distinct requested objects
+therefore retain distinct controller conditions instead of being collapsed
+into one primitive skill-pattern ID. Online execution resolves the environment
+instruction through the same metadata and rejects unknown instructions.
 The controller samples six end-effector coordinates from Normal distributions
 and the gripper from a Bernoulli distribution. Its pose head predicts bounded
 local xyz/Euler increments, cumulatively integrates the chunk around the last
@@ -164,7 +169,9 @@ executes four actions before replanning. Each action
 translation and 0.10 radians of rotation per simulator action. IK uses a
 `1e-3` convergence tolerance and at most 200 iterations; the hierarchical
 program constructor exposes all four limits for experiments that need tighter
-or looser execution.
+or looser execution. A finite target that fails IK is not executed and safely
+truncates the rollout without erasing reward accumulated by earlier valid
+actions.
 
 The canonical 24 GB GPU command runs both stages, samples all ten tasks
 uniformly, configures four planner samples and eight simulator rollouts per

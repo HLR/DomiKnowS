@@ -17,6 +17,7 @@ try:
         LeRobotWindowDataset,
         deterministic_split,
         download_processed_datasets,
+        load_control_task_instructions,
         load_hf_control_records,
         load_planning_examples,
     )
@@ -35,14 +36,14 @@ try:
         save_joint_checkpoint,
         train_controller_epoch,
     )
-    from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph, condition_index_for_task
+    from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
 except ImportError:
     from agent import HierarchicalVLABenchAgent
-    from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_hf_control_records, load_planning_examples
+    from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples
     from graph import PlanVocabulary
     from models import FrozenSigLIPEncoder, MultiViewController, QwenVLPlanner, TinyImageEncoder
     from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch
-    from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph, condition_index_for_task
+    from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
 
 
 def _json(value) -> None:
@@ -120,7 +121,10 @@ def _control_loaders(args):
             observation_horizon=2,
             action_horizon=args.action_horizon,
             video_root=video_root,
-            condition_index=condition_index_for_task(task),
+            # Preserve the official 0..127 language-task identity. Replacing
+            # it with a primitive skill-pattern ID makes different requested
+            # objects indistinguishable to the controller.
+            condition_index=None,
             video_decoder_cache_size=getattr(args, "video_decoder_cache_size", 8),
         )
         _status(
@@ -314,6 +318,7 @@ def command_train_agent(args) -> None:
         planner_optimizer=planner_optimizer,
         controller_optimizer=controller_optimizer,
         env_factory=_factory(args.env_factory),
+        controller_task_instructions=load_control_task_instructions(args.control_source),
         supervised_examples=splits["train"],
         controller_anchor_loader=loaders["train"],
         device=device,

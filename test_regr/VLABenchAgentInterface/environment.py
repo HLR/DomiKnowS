@@ -10,6 +10,10 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 
+class InverseKinematicsError(ValueError):
+    """A finite Cartesian target lies outside the current IK basin."""
+
+
 def numbered_views_from_observation(
     env: Any,
     observation: Mapping[str, Any],
@@ -148,7 +152,7 @@ def ee_action_to_env_action(
     )
     joints = np.asarray(joints, dtype=np.float64).reshape(-1)
     if not bool(status) or not np.isfinite(joints).all():
-        raise ValueError("VLABench inverse-kinematics conversion failed")
+        raise InverseKinematicsError("VLABench inverse-kinematics conversion failed")
     gripper = np.full(2, 0.04 if value[6] >= 0.5 else 0.0, dtype=np.float64)
     command = np.concatenate((joints, gripper))
     spec = getattr(env, "action_spec", None)
