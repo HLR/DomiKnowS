@@ -414,6 +414,32 @@ def test_stage1_controller_updates_only_on_vlabench_turn(joint_fixture):
     assert not torch.equal(before, controller.action)
 
 
+def test_controller_bc_warmup_runs_requested_steps_and_only_updates_controller(joint_fixture):
+    examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    program = JointSolverPOIProgram(
+        runtime,
+        planner,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.05),
+        controller=controller,
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.1),
+    )
+    batch = {
+        "images": torch.zeros(1, 2, 1, 3, 4, 4),
+        "state": torch.zeros(1, 2, 7),
+        "task_index": torch.zeros(1, dtype=torch.long),
+        "actions": torch.ones(1, 2, 7),
+    }
+    planner_before = planner.label_heads["vlabench"].weight.detach().clone()
+    controller_before = controller.action.detach().clone()
+    metrics = program.train_controller_warmup([batch], steps=3)
+    assert metrics["steps"] == 3 and metrics["loss"] > 0
+    assert not torch.equal(controller_before, controller.action)
+    assert torch.equal(planner_before, planner.label_heads["vlabench"].weight)
+    assert runtime.active_domain is None
+
+
 def test_program_types_share_identical_planner_and_defaults(joint_fixture):
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
@@ -445,6 +471,10 @@ def test_program_types_share_identical_planner_and_defaults(joint_fixture):
     assert stage2.supervised_weight == 0.1
     assert stage2.controller_bc_weight == 0.05
     assert stage2.gamma == 0.99 and stage2.gae_lambda == 0.95
+    assert stage2.max_position_step == pytest.approx(0.02)
+    assert stage2.max_rotation_step == pytest.approx(0.10)
+    assert stage2.ik_tolerance == pytest.approx(1e-3)
+    assert stage2.ik_max_steps == 200
 
 
 def test_stage2_eai_update_uses_domain_reward_and_shared_planner_only(joint_fixture):
@@ -766,3 +796,8 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_rounds_per_epoch == 10
     assert args.planner_decoder_hidden_dim == 512
     assert args.video_decoder_cache_size == 8
+    assert args.controller_warmup_steps == 2000
+    assert args.max_position_step == pytest.approx(0.02)
+    assert args.max_rotation_step == pytest.approx(0.10)
+    assert args.ik_tolerance == pytest.approx(1e-3)
+    assert args.ik_max_steps == 200

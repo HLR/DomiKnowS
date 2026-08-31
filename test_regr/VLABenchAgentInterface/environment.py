@@ -92,8 +92,8 @@ def bound_ee_action(
     action,
     current_state,
     *,
-    max_position_step: float = 0.05,
-    max_rotation_step: float = 0.25,
+    max_position_step: float = 0.02,
+    max_rotation_step: float = 0.10,
 ) -> np.ndarray:
     """Rate-limit an absolute EE target around the current simulator pose.
 
@@ -123,16 +123,28 @@ def bound_ee_action(
     return bounded
 
 
-def ee_action_to_env_action(env, action) -> np.ndarray:
+def ee_action_to_env_action(
+    env,
+    action,
+    *,
+    ik_tolerance: float = 1e-3,
+    ik_max_steps: int = 200,
+) -> np.ndarray:
     """Convert dataset EE action [xyz, rpy, grip] to VLABench joint control."""
     value = np.asarray(action, dtype=np.float64).reshape(-1)
     if value.shape != (7,) or not np.isfinite(value).all():
         raise ValueError("controller action must be a finite 7D EE action")
+    if not np.isfinite(ik_tolerance) or ik_tolerance <= 0:
+        raise ValueError("IK tolerance must be finite and positive")
+    if int(ik_max_steps) <= 0:
+        raise ValueError("IK max steps must be positive")
     quaternion = euler_to_quaternion(*value[3:6])
     status, joints = env.robot.get_qpos_from_ee_pos(
         physics=env.physics,
         pos=value[:3],
         quat=quaternion,
+        tol=float(ik_tolerance),
+        max_steps=int(ik_max_steps),
     )
     joints = np.asarray(joints, dtype=np.float64).reshape(-1)
     if not bool(status) or not np.isfinite(joints).all():

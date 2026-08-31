@@ -332,6 +332,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ppo_epochs: int = 4,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
+        max_position_step: float = 0.02,
+        max_rotation_step: float = 0.10,
+        ik_tolerance: float = 1e-3,
+        ik_max_steps: int = 200,
         simulator_init_retries: int = 3,
         progress_callback: Callable[[str], None] | None = None,
     ):
@@ -363,6 +367,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.ppo_epochs = int(ppo_epochs)
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
+        self.max_position_step = float(max_position_step)
+        self.max_rotation_step = float(max_rotation_step)
+        self.ik_tolerance = float(ik_tolerance)
+        self.ik_max_steps = int(ik_max_steps)
+        if self.max_position_step <= 0 or self.max_rotation_step <= 0:
+            raise ValueError("controller execution step limits must be positive")
+        if not np.isfinite(self.ik_tolerance) or self.ik_tolerance <= 0:
+            raise ValueError("IK tolerance must be finite and positive")
+        if self.ik_max_steps <= 0:
+            raise ValueError("IK max steps must be positive")
         self.simulator_init_retries = max(1, int(simulator_init_retries))
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
@@ -542,13 +556,20 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         bounded = bound_ee_action(
                             candidate.detach().cpu().numpy(),
                             _observation_state(observation),
+                            max_position_step=self.max_position_step,
+                            max_rotation_step=self.max_rotation_step,
                         )
                         bounded_actions[0, action_index] = torch.as_tensor(
                             bounded,
                             dtype=bounded_actions.dtype,
                             device=bounded_actions.device,
                         )
-                        command = ee_action_to_env_action(env, bounded)
+                        command = ee_action_to_env_action(
+                            env,
+                            bounded,
+                            ik_tolerance=self.ik_tolerance,
+                            ik_max_steps=self.ik_max_steps,
+                        )
                     except (ValueError, TypeError, AttributeError, KeyError) as exc:
                         self._report_progress(
                             f"VLABench controller action rejected task={descriptor.get('task', 'unknown')} "

@@ -755,13 +755,15 @@ def test_ppo_log_ratio_is_finite_for_extreme_likelihood_change():
 
 
 class FakeRobot:
-    def get_qpos_from_ee_pos(self, *, physics, pos, quat):
+    def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
         assert physics is not None and len(pos) == 3 and len(quat) == 4
+        assert kwargs.get("tol") == pytest.approx(1e-3)
+        assert kwargs.get("max_steps") == 200
         return True, np.arange(7, dtype=np.float64)
 
 
 class FailedRobot(FakeRobot):
-    def get_qpos_from_ee_pos(self, *, physics, pos, quat):
+    def get_qpos_from_ee_pos(self, *, physics, pos, quat, **kwargs):
         return False, np.arange(7, dtype=np.float64)
 
 
@@ -798,9 +800,9 @@ def test_ee_action_safety_envelope_limits_cartesian_and_wrapped_rotation_steps()
     current = np.asarray([0.0, 0.4, 0.2, 3.10, 0.0, -3.10, 0.0])
     target = np.asarray([1.0, -1.0, 0.9, -3.10, 1.0, 3.10, 1.0])
     bounded = bound_ee_action(target, current)
-    assert np.max(np.abs(bounded[:3] - current[:3])) <= 0.05 + 1e-9
+    assert np.max(np.abs(bounded[:3] - current[:3])) <= 0.02 + 1e-9
     angular_delta = (bounded[3:6] - current[3:6] + np.pi) % (2 * np.pi) - np.pi
-    assert np.max(np.abs(angular_delta)) <= 0.25 + 1e-9
+    assert np.max(np.abs(angular_delta)) <= 0.10 + 1e-9
     assert bounded[6] == 1.0
 
 

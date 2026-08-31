@@ -191,6 +191,7 @@ class JointSolverPOIProgram(SolverPOIProgram):
         if batch is None or self.controller is None or self.controller_optimizer is None:
             return 0.0
         with self.runtime.domain_scope("vlabench"):
+            self.controller.train()
             device = next(self.controller.parameters()).device
             prediction = self.controller(
                 batch["images"].to(device),
@@ -199,10 +200,48 @@ class JointSolverPOIProgram(SolverPOIProgram):
             )
             loss = controller_loss(prediction, batch["actions"].to(device))[0]
             self.controller_optimizer.zero_grad(set_to_none=True)
+            if not bool(torch.isfinite(loss)):
+                raise ValueError("controller behavior-cloning loss is non-finite")
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.controller.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(
+                self.controller.parameters(),
+                1.0,
+                error_if_nonfinite=True,
+            )
             self.controller_optimizer.step()
+            if not all(
+                bool(torch.isfinite(parameter).all())
+                for parameter in self.controller.parameters()
+                if parameter.requires_grad
+            ):
+                raise RuntimeError("controller behavior-cloning update produced non-finite parameters")
             return float(loss.detach())
+
+    def train_controller_warmup(
+        self,
+        controller_loader: Iterable[Mapping[str, torch.Tensor]],
+        *,
+        steps: int,
+    ) -> dict[str, float]:
+        """Run controller-only BC before online reinforcement learning."""
+
+        steps = int(steps)
+        if steps < 0:
+            raise ValueError("controller warm-up steps cannot be negative")
+        if steps == 0:
+            return {"loss": 0.0, "steps": 0}
+        stream = iter(controller_loader)
+        total = 0.0
+        progress = _TrainingProgress("Controller BC warm-up", steps)
+        for index in range(steps):
+            try:
+                batch = next(stream)
+            except StopIteration:
+                stream = iter(controller_loader)
+                batch = next(stream)
+            total += self._controller_step(batch)
+            progress.update(index + 1, controller_bc_loss=total / (index + 1))
+        return {"loss": total / steps, "steps": steps}
 
     def train_round(
         self,

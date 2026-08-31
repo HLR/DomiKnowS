@@ -246,10 +246,18 @@ def command_train_agent(args):
         cursor = int(payload["round_robin_cursor"])
         if resume_stage == "stage1":
             start_stage1 = int(payload["epoch"]) + 1
-        else:
+        elif resume_stage == "controller_warmup":
+            start_stage1 = args.stage1_epochs
+        elif resume_stage == "stage2":
             start_stage2 = int(payload["epoch"]) + 1
+        else:
+            raise ValueError(f"unknown joint checkpoint stage {resume_stage!r}")
 
-    best_stage1 = Path(args.resume).resolve() if resume_stage == "stage1" else None
+    best_stage1 = (
+        Path(args.resume).resolve()
+        if resume_stage in {"stage1", "controller_warmup"}
+        else None
+    )
     if resume_stage != "stage2":
         stage1 = JointSolverPOIProgram(
             runtime,
@@ -322,6 +330,33 @@ def command_train_agent(args):
             ):
                 _json({"stage": "stage2-skipped", "reason": "EAI exploration gate", "eai": eai_metrics})
                 return
+            if args.controller_warmup_steps > 0 and resume_stage != "controller_warmup":
+                _status(
+                    f"controller behavior-cloning warm-up steps={args.controller_warmup_steps}"
+                )
+                warmup_metrics = stage1.train_controller_warmup(
+                    control_loaders["train"],
+                    steps=args.controller_warmup_steps,
+                )
+                metrics = dict(payload.get("metrics", {}))
+                metrics["controller_warmup"] = warmup_metrics
+                best_stage1 = save_joint_checkpoint(
+                    output / "joint_controller_warmup.pt",
+                    runtime=runtime,
+                    planner=planner,
+                    controller=controller,
+                    planner_optimizer=planner_optimizer,
+                    controller_optimizer=controller_optimizer,
+                    stage="controller_warmup",
+                    epoch=0,
+                    round_robin_cursor=cursor,
+                    metrics=metrics,
+                )
+                _json({
+                    "stage": "controller_warmup",
+                    "checkpoint": best_stage1,
+                    "metrics": warmup_metrics,
+                })
 
     tasks = list(PRIMITIVE_TASK_PATTERNS) if args.task == "all" else [args.task]
     descriptors = [{"task": task, "env_kwargs": {}} for task in tasks]
@@ -349,6 +384,10 @@ def command_train_agent(args):
         ppo_epochs=4,
         value_weight=0.5,
         entropy_weight=0.01,
+        max_position_step=args.max_position_step,
+        max_rotation_step=args.max_rotation_step,
+        ik_tolerance=args.ik_tolerance,
+        ik_max_steps=args.ik_max_steps,
     )
     stage2.round_robin_cursor = cursor
     best_key = (
@@ -436,6 +475,7 @@ def build_parser():
     agent.add_argument("--vlabench-rollouts", type=int, default=8)
     agent.add_argument("--planner-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
+    agent.add_argument("--controller-warmup-steps", type=int, default=2000)
     agent.add_argument("--stage1-min-positive-reward-rate", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-recall", type=float, default=0.05)
     agent.add_argument("--stage1-min-goal-success", type=float, default=0.0)
@@ -443,6 +483,10 @@ def build_parser():
     agent.add_argument("--task", choices=["all", *PRIMITIVE_TASK_PATTERNS], default="all")
     agent.add_argument("--env-factory", default="test_regr.VLABenchAgentInterface.environment:create_environment")
     agent.add_argument("--simulator-max-steps", type=int, default=400)
+    agent.add_argument("--max-position-step", type=float, default=0.02)
+    agent.add_argument("--max-rotation-step", type=float, default=0.10)
+    agent.add_argument("--ik-tolerance", type=float, default=1e-3)
+    agent.add_argument("--ik-max-steps", type=int, default=200)
     agent.add_argument("--max-entities", type=int, default=64)
     agent.add_argument("--max-operations", type=int, default=8)
     # Existing VLABench controller loader/model settings.

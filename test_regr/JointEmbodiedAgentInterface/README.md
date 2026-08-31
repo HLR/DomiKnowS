@@ -75,6 +75,15 @@ the minimum of EAI goal success and VLABench exact graph match, then their
 mean, EAI recall, VLABench validity, and validation loss. The EAI exploration
 gate is checked before Stage 2.
 
+After the selected Stage 1 checkpoint is restored, the controller receives a
+dedicated behavior-cloning warm-up (2,000 updates by default) without changing
+either planner head or the shared LoRA. This is intentionally separate from
+the balanced domain rounds so extra controller supervision does not increase
+VLABench planner weight. The completed warm-up is saved as
+`joint_controller_warmup.pt`; resume from that file skips both Stage 1 and the
+already-completed warm-up. Configure or disable it with
+`--controller-warmup-steps N` (use `0` to disable).
+
 Stage 2 constructs one
 `JointReinforcementProgram(ReinforcementProgram)` over the same root and the
 exact same `JointQwenVLPlanner`:
@@ -94,6 +103,11 @@ four-action receding-horizon chunks. Each
 `get_qpos_from_ee_pos`; the binary gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. PPO uses `gamma=0.99`, GAE `lambda=0.95`, clip
 `0.2`, four epochs, value weight `0.5`, and entropy weight `0.01`.
+Online actions are limited to 2 cm translation and 0.10 radians rotation per
+simulator step before IK. IK uses a practical `1e-3` convergence tolerance and
+up to 200 iterations. These defaults are configurable through
+`--max-position-step`, `--max-rotation-step`, `--ik-tolerance`, and
+`--ik-max-steps`.
 
 Constraint-invalid plans never reach the controller. Failed inverse
 kinematics and non-finite actions receive zero and are not sent to the
@@ -147,7 +161,8 @@ python -m test_regr.VLABenchAgentInterface.main download `
 ```
 
 Canonical joint training uses all EAI data, all ten VLABench tasks, five
-Stage 1 epochs, three Stage 2 epochs, and equal round-robin scheduling:
+Stage 1 epochs, a 2,000-step controller BC warm-up, three Stage 2 epochs, and
+equal round-robin scheduling:
 
 ```powershell
 python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage
@@ -195,11 +210,23 @@ combined domain checksums. Frozen bitsandbytes NF4 base weights and their
 loader-specific quantization buffers are reconstructed from the configured
 backbone instead of being duplicated in every epoch checkpoint.
 
+The controller-only warm-up additionally writes
+`joint_controller_warmup.pt`. When resuming an existing Stage 1 checkpoint,
+the warm-up runs before Stage 2. If the process stops later, resume the warm-up
+checkpoint to avoid repeating those controller updates.
+
 Resume with:
 
 ```powershell
 python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
   --resume test_regr\JointEmbodiedAgentInterface\checkpoints\joint_stage1_epoch_004.pt
+```
+
+After warm-up has completed, prefer:
+
+```powershell
+python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
+  --resume test_regr\JointEmbodiedAgentInterface\checkpoints\joint_controller_warmup.pt
 ```
 
 Loading rejects a checkpoint when either domain definition, vocabulary, DFA,
@@ -220,6 +247,6 @@ All non-test source files in this package are listed below.
 | `__init__.py` | Exposes the joint runtime, graph builder, shared planner, and both program classes. |
 | `world_graph.py` | Builds the shared semantic spine, attaches sibling domain and generation graphs, compiles both DFAs, creates identity-based activation profiles, provides locked domain scopes, and computes joint checksums. |
 | `models.py` | Loads one Qwen2.5-VL/LoRA backbone, encodes each observation once, owns separate EAI/VLABench graph-token embeddings, recurrent decoders, label heads, and prompts, and provides teacher-forced and DFA-masked autoregressive domain APIs. |
-| `program.py` | Implements equal Stage 1 round-robin supervised/controller updates and equal Stage 2 EAI-REINFORCE/VLABench-REINFORCE-plus-PPO updates with domain-local activation and rewards. |
+| `program.py` | Implements equal Stage 1 round-robin updates, the controller-only BC warm-up, and equal Stage 2 EAI-REINFORCE/VLABench-REINFORCE-plus-PPO updates with domain-local activation and rewards. |
 | `checkpoint.py` | Atomically saves and restores the complete joint state, RNGs, scheduling cursor, and compatibility metadata. |
 | `main.py` | Defines the canonical `train-agent --two-stage` CLI, data/model construction, balanced checkpoint keys, exploration gate, and per-epoch resume files. |

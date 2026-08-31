@@ -156,7 +156,11 @@ weight `0.01`; a `0.05` behavior-cloning anchor is retained. The controller
 executes four actions before replanning. Each action
 `[x,y,z,roll,pitch,yaw,gripper]` is converted with
 `get_qpos_from_ee_pos`; the gripper becomes two `0.04` (open) or `0.0`
-(closed) finger commands.
+(closed) finger commands. The default safety envelope permits at most 2 cm of
+translation and 0.10 radians of rotation per simulator action. IK uses a
+`1e-3` convergence tolerance and at most 200 iterations; the hierarchical
+program constructor exposes all four limits for experiments that need tighter
+or looser execution.
 
 The canonical 24 GB GPU command runs both stages, samples all ten tasks
 uniformly, configures four planner samples and eight simulator rollouts per
