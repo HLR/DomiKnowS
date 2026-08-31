@@ -97,8 +97,12 @@ exact same `JointQwenVLPlanner`:
    PPO/GAE with a `0.05` behavior-cloning anchor.
 
 The controller uses Normal distributions for six end-effector coordinates, a
-Bernoulli gripper, learned log standard deviation, and a value head. It runs
-four-action receding-horizon chunks. Each
+Bernoulli gripper, learned log standard deviation, and a value head. Its actor
+predicts bounded local xyz/Euler increments and cumulatively integrates them
+around the last observed end-effector pose. The public actions remain absolute
+coordinates, but a biased head therefore cannot make the robot repeatedly
+walk toward one remote, unreachable pose. Translation and rotation use
+separate exploration-noise scales. It runs four-action receding-horizon chunks. Each
 `[x,y,z,roll,pitch,yaw,gripper]` action is converted with
 `get_qpos_from_ee_pos`; the binary gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. PPO uses `gamma=0.99`, GAE `lambda=0.95`, clip
@@ -230,9 +234,15 @@ python -m test_regr.JointEmbodiedAgentInterface.main train-agent --two-stage `
 ```
 
 Loading rejects a checkpoint when either domain definition, vocabulary, DFA,
-activation profile, graph-decoder architecture, or model configuration
+activation profile, graph-decoder architecture, controller action
+representation, or model configuration
 differs. Checkpoints created before graph-decoder version 1 cannot be resumed
 because their prefix-reprompt label heads have incompatible parameters.
+Checkpoints created with the former unconstrained absolute-pose controller may
+be resumed only from Stage 1. Loading resets that obsolete policy head and its
+optimizer moments, then the configured controller warm-up retrains the local
+chunk head. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
+rejected because it has already crossed the migration boundary.
 Standalone EAI and
 VLABench checkpoints continue to work with their original CLIs but are not
 joint checkpoints and cannot be resumed directly here. Activation is reset to

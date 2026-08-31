@@ -180,6 +180,13 @@ class ControllerPolicyOutput:
 class MultiViewController(nn.Module):
     """Behavior-cloning controller and PPO actor-critic over EE chunks."""
 
+    # Version 2 predicts a sequence of bounded local increments and integrates
+    # them around the last observed EE pose.  The public action remains an
+    # absolute [xyz, roll, pitch, yaw, gripper] target, matching the dataset and
+    # simulator adapter, but the actor can no longer point every action in a
+    # chunk at an arbitrary distant pose.
+    action_representation_version = 2
+
     def __init__(
         self,
         image_encoder: nn.Module,
@@ -207,7 +214,47 @@ class MultiViewController(nn.Module):
         self.fusion = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.GELU())
         self.policy_head = nn.Linear(hidden_dim, action_horizon * action_dim)
         self.value_head = nn.Linear(hidden_dim, 1)
-        self.log_std = nn.Parameter(torch.full((6,), -1.5))
+        self.pose_step_scale = (0.02, 0.02, 0.02, 0.10, 0.10, 0.10)
+        self.exploration_std = (0.01, 0.01, 0.01, 0.05, 0.05, 0.05)
+        self.log_std = nn.Parameter(torch.tensor(self.exploration_std).log())
+
+    def reset_for_action_representation_migration(self) -> None:
+        """Reset only the legacy absolute-pose actor parameters.
+
+        Vision, state, temporal, task and value features remain available when
+        a Stage 1 checkpoint made by the old absolute actor is migrated.  The
+        controller-only warm-up then learns the local action head cleanly.
+        """
+
+        self.policy_head.reset_parameters()
+        with torch.no_grad():
+            self.log_std.copy_(
+                torch.tensor(
+                    self.exploration_std,
+                    dtype=self.log_std.dtype,
+                    device=self.log_std.device,
+                ).log()
+            )
+
+    def _local_pose_chunk(
+        self,
+        raw_pose: torch.Tensor,
+        state: torch.Tensor,
+    ) -> torch.Tensor:
+        if state.ndim != 3 or state.shape[0] != raw_pose.shape[0] or state.shape[-1] < 6:
+            raise ValueError("controller state must contain a history of 6D EE poses")
+        scale = raw_pose.new_tensor(self.pose_step_scale).view(1, 1, 6)
+        increments = torch.tanh(raw_pose) * scale
+        base = state[:, -1, :6].to(device=raw_pose.device, dtype=raw_pose.dtype).unsqueeze(1)
+        pose = base + increments.cumsum(dim=1)
+        # Keep Euler coordinates on their principal branch without severing
+        # gradients, including chunks that cross the -pi/pi boundary.
+        angles = torch.atan2(
+            torch.sin(pose[..., 3:6]),
+            torch.cos(pose[..., 3:6]),
+        )
+        pose = torch.cat((pose[..., :3], angles), -1)
+        return pose
 
     def _features(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor) -> torch.Tensor:
         if images.ndim != 6:
@@ -231,9 +278,10 @@ class MultiViewController(nn.Module):
     def policy(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor) -> ControllerPolicyOutput:
         features = self._features(images, state, task_index)
         raw = self.policy_head(features).reshape(-1, self.action_horizon, self.action_dim)
+        pose_mean = self._local_pose_chunk(raw[..., :6], state)
         std = self.log_std.clamp(-5.0, 2.0).exp().view(1, 1, 6).expand_as(raw[..., :6])
         output = ControllerPolicyOutput(
-            raw[..., :6],
+            pose_mean,
             std,
             raw[..., 6],
             self.value_head(features).squeeze(-1),

@@ -738,6 +738,30 @@ def test_controller_actor_critic_gae_and_ppo_contracts():
     assert returns[-1] == pytest.approx(1.0)
 
 
+def test_controller_pose_chunk_is_local_cumulative_and_uses_physical_noise_scales():
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=3, max_views=1)
+    controller.policy_head.weight.data.zero_()
+    controller.policy_head.bias.data.zero_()
+    state = torch.zeros(1, 2, 7)
+    state[0, -1, :6] = torch.tensor([0.2, -0.1, 0.4, 3.13, 0.2, -0.3])
+    inputs = (torch.rand(1, 2, 1, 3, 16, 16), state, torch.zeros(1, dtype=torch.long))
+    output = controller.policy(*inputs)
+    torch.testing.assert_close(output.pose_mean, state[:, -1:, :6].expand(-1, 3, -1))
+    torch.testing.assert_close(output.pose_std[0, 0], torch.tensor(controller.exploration_std))
+
+    # A saturated x/roll increment remains local per action and accumulates
+    # across the chunk; wrapped angles stay on the principal branch.
+    bias = controller.policy_head.bias.view(3, 7)
+    bias.data[:, 0] = 100.0
+    bias.data[:, 3] = 100.0
+    moved = controller.policy(*inputs).pose_mean[0]
+    torch.testing.assert_close(
+        torch.diff(torch.cat((state[0, -1, 0:1], moved[:, 0]))),
+        torch.full((3,), controller.pose_step_scale[0]),
+    )
+    assert bool((moved[:, 3].abs() <= torch.pi).all())
+
+
 def test_controller_rejects_nonfinite_policy_before_cuda_distribution_sampling():
     controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
     controller.policy_head.bias.data.fill_(float("nan"))

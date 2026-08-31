@@ -15,8 +15,8 @@ import torch
 from .world_graph import JointDomainRuntime
 
 
-JOINT_CHECKPOINT_VERSION = 3
-SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, JOINT_CHECKPOINT_VERSION})
+JOINT_CHECKPOINT_VERSION = 4
+SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, JOINT_CHECKPOINT_VERSION})
 
 
 def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
@@ -216,7 +216,22 @@ def _normalize_dfa_configuration(configuration: Mapping[str, Any] | None):
     }
 
 
-def _compatibility(runtime: JointDomainRuntime, planner) -> Mapping[str, Any]:
+def _controller_configuration(controller) -> Mapping[str, Any]:
+    """Fingerprint controller semantics that cannot be inferred from tensors."""
+
+    return {
+        "class": type(controller).__name__,
+        "action_representation_version": int(
+            getattr(controller, "action_representation_version", 1)
+        ),
+        "state_dim": getattr(controller, "state_dim", None),
+        "action_dim": getattr(controller, "action_dim", None),
+        "action_horizon": getattr(controller, "action_horizon", None),
+        "pose_step_scale": tuple(getattr(controller, "pose_step_scale", ())),
+    }
+
+
+def _compatibility(runtime: JointDomainRuntime, planner, controller) -> Mapping[str, Any]:
     return {
         "combined_domain_checksum": runtime.world.combined_checksum,
         "eai_domain_checksum": runtime.world.eai_domain_checksum,
@@ -231,6 +246,7 @@ def _compatibility(runtime: JointDomainRuntime, planner) -> Mapping[str, Any]:
             max_operations=runtime.max_vlabench_operations,
         ),
         "model_configuration": _model_configuration(planner),
+        "controller_configuration": _controller_configuration(controller),
     }
 
 
@@ -253,7 +269,7 @@ def save_joint_checkpoint(
     temporary = target.with_suffix(target.suffix + ".tmp")
     payload = {
         "joint_checkpoint_version": JOINT_CHECKPOINT_VERSION,
-        "compatibility": _compatibility(runtime, planner),
+        "compatibility": _compatibility(runtime, planner, controller),
         "stage": str(stage),
         "epoch": int(epoch),
         "round_robin_cursor": int(round_robin_cursor),
@@ -290,7 +306,7 @@ def load_joint_checkpoint(
     )
     if payload.get("joint_checkpoint_version") not in SUPPORTED_JOINT_CHECKPOINT_VERSIONS:
         raise ValueError("unsupported or standalone checkpoint; a joint checkpoint is required")
-    expected = _compatibility(runtime, planner)
+    expected = _compatibility(runtime, planner, controller)
     actual = payload.get("compatibility", {})
     for key in (
         "combined_domain_checksum",
@@ -314,12 +330,32 @@ def load_joint_checkpoint(
                 f"joint checkpoint {key} differs from the current runtime: "
                 f"saved={saved_value!r}, current={current_value!r}"
             )
+    saved_controller = actual.get("controller_configuration")
+    current_controller = expected["controller_configuration"]
+    migrate_legacy_controller = saved_controller is None and payload.get("stage") == "stage1"
+    if saved_controller is None and not migrate_legacy_controller:
+        raise ValueError(
+            "joint checkpoint predates the local controller action representation; "
+            "resume a Stage 1 checkpoint so controller warm-up can migrate it"
+        )
+    if saved_controller is not None and saved_controller != current_controller:
+        raise ValueError(
+            "joint checkpoint controller_configuration differs from the current runtime: "
+            f"saved={saved_controller!r}, current={current_controller!r}"
+        )
     _load_planner_state(planner, payload["planner"])
     controller.load_state_dict(payload["controller"])
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
     if controller_optimizer is not None and payload.get("controller_optimizer") is not None:
         controller_optimizer.load_state_dict(payload["controller_optimizer"])
+    if migrate_legacy_controller:
+        reset = getattr(controller, "reset_for_action_representation_migration", None)
+        if callable(reset):
+            reset()
+        if controller_optimizer is not None:
+            controller_optimizer.state.clear()
+        payload["controller_migration_required"] = True
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
     torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))

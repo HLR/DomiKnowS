@@ -15,6 +15,7 @@ from domiknows.program import SolverPOIProgram
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 from test_regr.EmbodiedAgentInterface.dataset import dummy_dataset
 from test_regr.EmbodiedAgentInterface.reward import make_eai_reward_function
+from test_regr.VLABenchAgentInterface.models import MultiViewController
 
 from .checkpoint import (
     _checkpoint_staging_location,
@@ -71,6 +72,13 @@ class TinyController(torch.nn.Module):
 
     def forward(self, images, state, task_index):
         return self.action.expand(images.shape[0], self.horizon, 7)
+
+
+class TinyImageEncoder(torch.nn.Module):
+    output_dim = 8
+
+    def forward(self, images):
+        return torch.zeros(images.shape[0], self.output_dim, device=images.device)
 
 
 def test_training_progress_is_newline_based_and_flushed(capsys):
@@ -628,6 +636,43 @@ def test_joint_checkpoint_roundtrip_and_compatibility_rejection(tmp_path, joint_
     incompatible.runtime_checksum = "different"
     with pytest.raises(ValueError, match="runtime_checksum"):
         load_joint_checkpoint(path, runtime=incompatible, planner=planner, controller=controller)
+
+
+def test_legacy_controller_checkpoint_requires_stage1_migration(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = MultiViewController(
+        TinyImageEncoder(), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    optimizer = torch.optim.Adam(controller.parameters(), lr=0.01)
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_controller.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=optimizer,
+        stage="stage1",
+        epoch=0,
+        round_robin_cursor=0,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["compatibility"].pop("controller_configuration")
+    torch.save(payload, path)
+    restored = load_joint_checkpoint(
+        path,
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        controller_optimizer=optimizer,
+    )
+    assert restored["controller_migration_required"] is True
+    assert optimizer.state == {}
+
+    payload["stage"] = "controller_warmup"
+    torch.save(payload, path)
+    with pytest.raises(ValueError, match="resume a Stage 1 checkpoint"):
+        load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
 
 
 def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joint_fixture):

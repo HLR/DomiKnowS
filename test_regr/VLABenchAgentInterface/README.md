@@ -150,7 +150,11 @@ catastrophic drift. Reference-plan similarity remains an evaluation metric
 and is not blended into the Stage 2 reward.
 
 The controller samples six end-effector coordinates from Normal distributions
-and the gripper from a Bernoulli distribution. PPO uses `gamma=0.99`, GAE
+and the gripper from a Bernoulli distribution. Its pose head predicts bounded
+local xyz/Euler increments, cumulatively integrates the chunk around the last
+observed pose, and exposes the resulting absolute end-effector targets to the
+existing dataset, PPO, and simulator interfaces. Position and rotation have
+separate physical exploration-noise scales. PPO uses `gamma=0.99`, GAE
 `lambda=0.95`, clip `0.2`, four PPO epochs, value weight `0.5`, and entropy
 weight `0.01`; a `0.05` behavior-cloning anchor is retained. The controller
 executes four actions before replanning. Each action
