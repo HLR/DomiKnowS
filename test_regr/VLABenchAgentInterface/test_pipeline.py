@@ -738,6 +738,22 @@ def test_controller_actor_critic_gae_and_ppo_contracts():
     assert returns[-1] == pytest.approx(1.0)
 
 
+def test_controller_rejects_nonfinite_policy_before_cuda_distribution_sampling():
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    controller.policy_head.bias.data.fill_(float("nan"))
+    inputs = (torch.rand(1, 2, 1, 3, 16, 16), torch.rand(1, 2, 7), torch.zeros(1, dtype=torch.long))
+    with pytest.raises(ValueError, match="non-finite"):
+        controller.sample_action_chunk(*inputs)
+
+
+def test_ppo_log_ratio_is_finite_for_extreme_likelihood_change():
+    new = torch.tensor([1.0e4], requires_grad=True)
+    loss = ppo_clipped_loss(new, torch.tensor([-1.0e4]), torch.tensor([-1.0]))
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert torch.isfinite(new.grad).all()
+
+
 class FakeRobot:
     def get_qpos_from_ee_pos(self, *, physics, pos, quat):
         assert physics is not None and len(pos) == 3 and len(quat) == 4

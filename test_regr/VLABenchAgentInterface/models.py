@@ -232,7 +232,21 @@ class MultiViewController(nn.Module):
         features = self._features(images, state, task_index)
         raw = self.policy_head(features).reshape(-1, self.action_horizon, self.action_dim)
         std = self.log_std.clamp(-5.0, 2.0).exp().view(1, 1, 6).expand_as(raw[..., :6])
-        return ControllerPolicyOutput(raw[..., :6], std, raw[..., 6], self.value_head(features).squeeze(-1))
+        output = ControllerPolicyOutput(
+            raw[..., :6],
+            std,
+            raw[..., 6],
+            self.value_head(features).squeeze(-1),
+        )
+        for name, value in (
+            ("pose mean", output.pose_mean),
+            ("pose standard deviation", output.pose_std),
+            ("gripper logits", output.gripper_logits),
+            ("value", output.value),
+        ):
+            if not bool(torch.isfinite(value).all()):
+                raise ValueError(f"controller produced non-finite {name}")
+        return output
 
     def forward(self, images: torch.Tensor, state: torch.Tensor, task_index: torch.Tensor) -> torch.Tensor:
         output = self.policy(images, state, task_index)

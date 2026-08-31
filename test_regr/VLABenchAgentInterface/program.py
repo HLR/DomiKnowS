@@ -167,7 +167,16 @@ def generalized_advantage_estimate(
 
 
 def ppo_clipped_loss(new_logprob, old_logprob, advantage, *, clip: float = 0.2):
-    ratio = torch.exp(new_logprob - old_logprob)
+    if not (
+        bool(torch.isfinite(new_logprob).all())
+        and bool(torch.isfinite(old_logprob).all())
+        and bool(torch.isfinite(advantage).all())
+    ):
+        raise ValueError("PPO inputs must be finite")
+    # Large transformed-action likelihood changes can overflow exp before the
+    # PPO clip is applied. Bounding the log ratio preserves the clipped regime
+    # while preventing an inf loss/gradient from poisoning the controller.
+    ratio = torch.exp((new_logprob - old_logprob).clamp(-20.0, 20.0))
     unclipped = ratio * advantage
     clipped = torch.clamp(ratio, 1.0 - clip, 1.0 + clip) * advantage
     return -torch.minimum(unclipped, clipped).mean()
@@ -516,7 +525,15 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 subtasks = split_subtasks([operation["name"] for operation in plan])
                 task_index = condition_index_for_pattern(subtasks[0]) if subtasks else 0
                 inputs = _controller_inputs(observations, task_index, self.device_name)
-                actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs)
+                try:
+                    actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs)
+                except ValueError as exc:
+                    self._report_progress(
+                        f"VLABench controller policy rejected task={descriptor.get('task', 'unknown')} "
+                        f"step={steps}: {exc}"
+                    )
+                    valid = False
+                    break
                 bounded_actions = actions.detach().clone()
                 executed = 0
                 chunk_reward = 0.0
@@ -731,11 +748,42 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 losses.append(policy_loss + self.value_weight * value_loss - self.entropy_weight * entropy[0, : item.executed].mean())
             loss = torch.stack(losses).mean() + self.controller_bc_weight * self._controller_anchor()
             self.controller_optimizer.zero_grad(set_to_none=True)
+            if not bool(torch.isfinite(loss)):
+                self._report_progress("VLABench controller PPO update skipped: non-finite loss")
+                break
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.controller.parameters(), 1.0)
+            trainable = [
+                parameter for parameter in self.controller.parameters()
+                if parameter.requires_grad
+            ]
+            try:
+                torch.nn.utils.clip_grad_norm_(
+                    trainable,
+                    1.0,
+                    error_if_nonfinite=True,
+                )
+            except RuntimeError:
+                self.controller_optimizer.zero_grad(set_to_none=True)
+                self._report_progress("VLABench controller PPO update skipped: non-finite gradient")
+                break
+            backup = [parameter.detach().clone() for parameter in trainable]
             self.controller_optimizer.step()
+            if not all(bool(torch.isfinite(parameter).all()) for parameter in trainable):
+                with torch.no_grad():
+                    for parameter, previous in zip(trainable, backup):
+                        parameter.copy_(previous)
+                # A non-finite Adam moment would immediately poison the next
+                # update even after restoring weights. Reset only controller
+                # optimizer state; model parameters remain at the last finite
+                # point and supervised/PPO training can continue safely.
+                self.controller_optimizer.state.clear()
+                self.controller_optimizer.zero_grad(set_to_none=True)
+                self._report_progress(
+                    "VLABench controller PPO update rolled back: optimizer produced non-finite parameters"
+                )
+                break
             total += float(loss.detach())
-        return total / self.ppo_epochs
+        return total / max(1, self.ppo_epochs)
 
     def train_joint_epoch(self, descriptors: Sequence[Mapping[str, Any]], *, rollouts_per_update: int = 8):
         if not descriptors:
