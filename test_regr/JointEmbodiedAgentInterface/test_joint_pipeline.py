@@ -20,6 +20,7 @@ from test_regr.VLABenchAgentInterface.models import MultiViewController
 from .checkpoint import (
     _checkpoint_staging_location,
     _cpu_rng_state,
+    _restore_cuda_rng_states,
     _dfa_configuration,
     _normalize_dfa_configuration,
     load_joint_checkpoint,
@@ -852,6 +853,26 @@ def test_cuda_checkpoint_restore_uses_cpu_staging():
     assert _checkpoint_staging_location("cuda").type == "cpu"
     assert _checkpoint_staging_location(torch.device("cuda:1")).type == "cpu"
     assert torch.device(_checkpoint_staging_location("cpu")).type == "cpu"
+
+
+def test_cuda_rng_restore_uses_only_currently_visible_devices(monkeypatch):
+    restored = []
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(
+        torch.cuda,
+        "set_rng_state",
+        lambda state, device=None: restored.append((state, device)),
+    )
+    count = _restore_cuda_rng_states([
+        torch.tensor([1, 2, 3], dtype=torch.int64),
+        torch.tensor([4, 5, 6], dtype=torch.int64),
+    ])
+    assert count == 1
+    assert len(restored) == 1
+    assert restored[0][0].dtype == torch.uint8
+    assert restored[0][0].device.type == "cpu"
+    assert restored[0][1] == 0
 
 
 def test_balanced_checkpoint_keys_and_cli_defaults():

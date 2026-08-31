@@ -49,6 +49,24 @@ def _cpu_rng_state(value: Any) -> torch.Tensor:
     return value.detach().to(device="cpu", dtype=torch.uint8)
 
 
+def _restore_cuda_rng_states(states: Any) -> int:
+    """Restore only states addressable by the currently visible CUDA devices.
+
+    A checkpoint can be written while several GPUs are visible and resumed
+    with ``CUDA_VISIBLE_DEVICES`` exposing only one. ``set_rng_state_all``
+    assumes equal generator counts and raises ``IndexError`` in that case.
+    """
+
+    if not torch.cuda.is_available() or states is None:
+        return 0
+    visible = int(torch.cuda.device_count())
+    restored = 0
+    for device, state in enumerate(list(states)[:visible]):
+        torch.cuda.set_rng_state(_cpu_rng_state(state), device=device)
+        restored += 1
+    return restored
+
+
 def _checkpoint_staging_location(map_location: str | torch.device):
     """Keep CUDA checkpoint tensors on CPU until their owners restore them.
 
@@ -409,10 +427,7 @@ def load_joint_checkpoint(
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
     torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))
-    if torch.cuda.is_available() and payload.get("cuda_rng") is not None:
-        torch.cuda.set_rng_state_all([
-            _cpu_rng_state(state) for state in payload["cuda_rng"]
-        ])
+    _restore_cuda_rng_states(payload.get("cuda_rng"))
     runtime.activate_domain(None)
     runtime._domain_stack.clear()
     return payload
