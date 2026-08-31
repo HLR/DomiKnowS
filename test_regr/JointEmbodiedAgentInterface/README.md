@@ -111,6 +111,10 @@ separate exploration-noise scales. It runs four-action receding-horizon chunks. 
 `get_qpos_from_ee_pos`; the binary gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. PPO uses `gamma=0.99`, GAE `lambda=0.95`, clip
 `0.2`, four epochs, value weight `0.5`, and entropy weight `0.01`.
+The critic is bounded to `[-1,1]`, uses clipped return targets and Smooth L1
+loss, and cannot backpropagate through the actor's shared features. Rollouts
+with zero total simulator return still train the critic and `0.05` BC anchor,
+but do not apply PPO or entropy gradients to failed sampled actions.
 Online actions are limited to 2 cm translation and 0.10 radians rotation per
 simulator step before IK. IK uses a practical `1e-3` convergence tolerance and
 up to 200 iterations. These defaults are configurable through
@@ -250,6 +254,9 @@ be resumed only from Stage 1. Loading resets that obsolete policy head and its
 optimizer moments, then the configured controller warm-up retrains the local
 chunk head and language-task embedding. An old `joint_controller_warmup.pt` or Stage 2 checkpoint is
 rejected because it has already crossed the migration boundary.
+Checkpoints with the correct language-conditioned actor but the former
+unbounded critic are migrated at any stage by resetting only the critic and
+controller optimizer moments; the learned action policy is preserved.
 Standalone EAI and
 VLABench checkpoints continue to work with their original CLIs but are not
 joint checkpoints and cannot be resumed directly here. Activation is reset to

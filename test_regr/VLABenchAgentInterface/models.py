@@ -186,6 +186,7 @@ class MultiViewController(nn.Module):
     # simulator adapter, but the actor can no longer point every action in a
     # chunk at an arbitrary distant pose.
     action_representation_version = 3
+    critic_version = 2
 
     def __init__(
         self,
@@ -228,6 +229,7 @@ class MultiViewController(nn.Module):
 
         self.policy_head.reset_parameters()
         self.task_embedding.reset_parameters()
+        self.value_head.reset_parameters()
         with torch.no_grad():
             self.log_std.copy_(
                 torch.tensor(
@@ -236,6 +238,11 @@ class MultiViewController(nn.Module):
                     device=self.log_std.device,
                 ).log()
             )
+
+    def reset_critic_for_migration(self) -> None:
+        """Reset the formerly unbounded critic while preserving the actor."""
+
+        self.value_head.reset_parameters()
 
     def _local_pose_chunk(
         self,
@@ -285,7 +292,11 @@ class MultiViewController(nn.Module):
             pose_mean,
             std,
             raw[..., 6],
-            self.value_head(features).squeeze(-1),
+            # Simulator returns are bounded. A bounded critic prevents one bad
+            # value estimate from recursively creating enormous GAE targets.
+            # Detaching its input also prevents zero-reward value fitting from
+            # silently changing the actor's shared visual/control features.
+            torch.tanh(self.value_head(features.detach())).squeeze(-1),
         )
         for name, value in (
             ("pose mean", output.pose_mean),

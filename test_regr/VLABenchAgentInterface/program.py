@@ -780,11 +780,25 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         return controller_loss(prediction, batch["actions"].to(self.device_name))[0]
 
     def _update_controller(self, episodes: Sequence[JointEpisode]) -> float:
-        transitions = [item for episode in episodes for item in episode.controller]
+        entries = [
+            (item, episode.total_return > 0.0)
+            for episode in episodes
+            for item in episode.controller
+        ]
+        transitions = [item for item, _informative in entries]
         if not transitions:
             return 0.0
-        advantages = torch.tensor([item.advantage for item in transitions], device=self.device_name)
-        advantages = (advantages - advantages.mean()) / advantages.std(unbiased=False).clamp_min(1e-6)
+        advantages = torch.zeros(len(entries), device=self.device_name)
+        informative_indices = [index for index, (_item, informative) in enumerate(entries) if informative]
+        if informative_indices:
+            informative_advantages = torch.tensor(
+                [entries[index][0].advantage for index in informative_indices],
+                device=self.device_name,
+            )
+            informative_advantages = (
+                informative_advantages - informative_advantages.mean()
+            ) / informative_advantages.std(unbiased=False).clamp_min(1e-6)
+            advantages[informative_indices] = informative_advantages
         total = 0.0
         for _ in range(self.ppo_epochs):
             losses = []
@@ -796,12 +810,28 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     item.actions.to(self.device_name),
                 )
                 new_logprob = logprob[0, : item.executed].sum()
-                policy_loss = ppo_clipped_loss(
-                    new_logprob.reshape(1), item.old_logprob.to(self.device_name).reshape(1), advantages[index].reshape(1),
-                    clip=self.ppo_clip,
+                policy_loss = (
+                    ppo_clipped_loss(
+                        new_logprob.reshape(1),
+                        item.old_logprob.to(self.device_name).reshape(1),
+                        advantages[index].reshape(1),
+                        clip=self.ppo_clip,
+                    )
+                    if entries[index][1]
+                    else torch.zeros((), device=self.device_name)
                 )
-                value_loss = F.mse_loss(value.reshape(()), torch.tensor(item.return_value, device=self.device_name))
-                losses.append(policy_loss + self.value_weight * value_loss - self.entropy_weight * entropy[0, : item.executed].mean())
+                target_value = torch.tensor(
+                    item.return_value,
+                    device=self.device_name,
+                ).clamp(-1.0, 1.0)
+                value_loss = F.smooth_l1_loss(value.reshape(()), target_value)
+                entropy_bonus = (
+                    self.entropy_weight * entropy[0, : item.executed].mean()
+                    if entries[index][1] else torch.zeros((), device=self.device_name)
+                )
+                losses.append(
+                    policy_loss + self.value_weight * value_loss - entropy_bonus
+                )
             loss = torch.stack(losses).mean() + self.controller_bc_weight * self._controller_anchor()
             self.controller_optimizer.zero_grad(set_to_none=True)
             if not bool(torch.isfinite(loss)):

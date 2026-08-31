@@ -161,7 +161,10 @@ observed pose, and exposes the resulting absolute end-effector targets to the
 existing dataset, PPO, and simulator interfaces. Position and rotation have
 separate physical exploration-noise scales. PPO uses `gamma=0.99`, GAE
 `lambda=0.95`, clip `0.2`, four PPO epochs, value weight `0.5`, and entropy
-weight `0.01`; a `0.05` behavior-cloning anchor is retained. The controller
+weight `0.01`; a `0.05` behavior-cloning anchor is retained. The bounded
+critic uses clipped targets and Smooth L1 loss without changing shared actor
+features. A zero-return rollout trains the critic and supervised anchor but
+does not reinforce or entropy-expand its failed sampled actions. The controller
 executes four actions before replanning. Each action
 `[x,y,z,roll,pitch,yaw,gripper]` is converted with
 `get_qpos_from_ee_pos`; the gripper becomes two `0.04` (open) or `0.0`

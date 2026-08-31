@@ -251,6 +251,11 @@ def command_train_agent(args):
                 "migrated legacy absolute-pose controller; the local action head "
                 "will be rebuilt by controller warm-up"
             )
+        if payload.get("controller_critic_migration_required"):
+            _status(
+                "migrated legacy unbounded controller critic; preserved the "
+                "language-conditioned action policy"
+            )
         resume_stage = payload["stage"]
         resume_payload = payload
         cursor = int(payload["round_robin_cursor"])

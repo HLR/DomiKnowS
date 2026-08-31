@@ -675,6 +675,40 @@ def test_legacy_controller_checkpoint_requires_stage1_migration(tmp_path, joint_
         load_joint_checkpoint(path, runtime=runtime, planner=planner, controller=controller)
 
 
+def test_legacy_unbounded_critic_migrates_without_resetting_actor(tmp_path, joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = MultiViewController(
+        TinyImageEncoder(), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    optimizer = torch.optim.Adam(controller.parameters(), lr=0.01)
+    path = save_joint_checkpoint(
+        tmp_path / "legacy_critic.pt",
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        planner_optimizer=None,
+        controller_optimizer=optimizer,
+        stage="controller_warmup",
+        epoch=0,
+        round_robin_cursor=0,
+    )
+    payload = torch.load(path, weights_only=False)
+    payload["compatibility"]["controller_configuration"].pop("critic_version")
+    torch.save(payload, path)
+    actor_before = controller.policy_head.weight.detach().clone()
+    restored = load_joint_checkpoint(
+        path,
+        runtime=runtime,
+        planner=planner,
+        controller=controller,
+        controller_optimizer=optimizer,
+    )
+    assert restored["controller_critic_migration_required"] is True
+    assert torch.equal(actor_before, controller.policy_head.weight)
+    assert optimizer.state == {}
+
+
 def test_joint_checkpoint_loads_legacy_bitsandbytes_auxiliary_keys(tmp_path, joint_fixture):
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)

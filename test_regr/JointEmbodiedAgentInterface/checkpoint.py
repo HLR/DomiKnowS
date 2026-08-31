@@ -15,8 +15,8 @@ import torch
 from .world_graph import JointDomainRuntime
 
 
-JOINT_CHECKPOINT_VERSION = 4
-SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, JOINT_CHECKPOINT_VERSION})
+JOINT_CHECKPOINT_VERSION = 5
+SUPPORTED_JOINT_CHECKPOINT_VERSIONS = frozenset({1, 2, 3, 4, JOINT_CHECKPOINT_VERSION})
 
 
 def _planner_trainable_state(planner: torch.nn.Module) -> Mapping[str, Any]:
@@ -224,6 +224,7 @@ def _controller_configuration(controller) -> Mapping[str, Any]:
         "action_representation_version": int(
             getattr(controller, "action_representation_version", 1)
         ),
+        "critic_version": int(getattr(controller, "critic_version", 1)),
         "state_dim": getattr(controller, "state_dim", None),
         "action_dim": getattr(controller, "action_dim", None),
         "action_horizon": getattr(controller, "action_horizon", None),
@@ -359,10 +360,27 @@ def load_joint_checkpoint(
             "joint checkpoint predates the local controller action representation; "
             "resume a Stage 1 checkpoint so controller warm-up can migrate it"
         )
+    migrate_legacy_critic = (
+        saved_controller is not None
+        and int(saved_controller.get("critic_version", 1))
+        < int(current_controller["critic_version"])
+        and all(
+            saved_controller.get(key) == current_controller.get(key)
+            for key in (
+                "class",
+                "action_representation_version",
+                "state_dim",
+                "action_dim",
+                "action_horizon",
+                "pose_step_scale",
+            )
+        )
+    )
     if (
         saved_controller is not None
         and saved_controller != current_controller
         and not migrate_legacy_controller
+        and not migrate_legacy_critic
     ):
         raise ValueError(
             "joint checkpoint controller_configuration differs from the current runtime: "
@@ -381,6 +399,13 @@ def load_joint_checkpoint(
         if controller_optimizer is not None:
             controller_optimizer.state.clear()
         payload["controller_migration_required"] = True
+    elif migrate_legacy_critic:
+        reset = getattr(controller, "reset_critic_for_migration", None)
+        if callable(reset):
+            reset()
+        if controller_optimizer is not None:
+            controller_optimizer.state.clear()
+        payload["controller_critic_migration_required"] = True
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
     torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))

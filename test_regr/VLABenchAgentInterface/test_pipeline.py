@@ -764,6 +764,21 @@ def test_controller_actor_critic_gae_and_ppo_contracts():
     assert returns[-1] == pytest.approx(1.0)
 
 
+def test_controller_critic_is_bounded():
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    controller.value_head.weight.data.fill_(1.0e6)
+    controller.value_head.bias.data.fill_(1.0e6)
+    output = controller.policy(
+        torch.rand(1, 2, 1, 3, 16, 16),
+        torch.rand(1, 2, 7),
+        torch.zeros(1, dtype=torch.long),
+    )
+    assert torch.isfinite(output.value).all()
+    assert bool((output.value.abs() <= 1.0).all())
+
+
 def test_controller_pose_chunk_is_local_cumulative_and_uses_physical_noise_scales():
     controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=3, max_views=1)
     controller.policy_head.weight.data.zero_()
@@ -1026,6 +1041,31 @@ def test_online_controller_uses_language_task_id_not_skill_pattern():
     episode = program.collect_episode({"task": "select_book"})
     assert episode.success
     assert controller.seen_task_index == 73
+
+
+def test_zero_return_rollout_does_not_apply_ppo_or_entropy_to_actor():
+    world = build_vlabench_world_graph("test_zero_return_actor_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_zero_return_actor"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = _joint_program(
+        runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=False),
+        num_samples=1,
+    )
+    episode = program.collect_episode({"task": "select_book"})
+    assert episode.total_return == 0.0 and episode.controller
+    actor_before = controller.policy_head.weight.detach().clone()
+    task_before = controller.task_embedding.weight.detach().clone()
+    value_before = controller.value_head.weight.detach().clone()
+    loss = program._update_controller([episode])
+    assert torch.isfinite(torch.tensor(loss))
+    assert torch.equal(actor_before, controller.policy_head.weight)
+    assert torch.equal(task_before, controller.task_embedding.weight)
+    assert not torch.equal(value_before, controller.value_head.weight)
 
 
 def test_joint_simulator_training_updates_planner_and_controller():
