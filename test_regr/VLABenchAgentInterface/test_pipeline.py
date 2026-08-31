@@ -22,6 +22,7 @@ from test_regr.VLABenchAgentInterface.dataset import (
     _video_tensor,
 )
 from test_regr.VLABenchAgentInterface.environment import (
+    bound_ee_action,
     create_environment,
     ee_action_to_env_action,
     reset_reward_tracking,
@@ -761,6 +762,16 @@ def test_ee_action_conversion_uses_two_finger_gripper():
         ee_action_to_env_action(SimpleNamespace(robot=FailedRobot(), physics=object()), np.zeros(7))
 
 
+def test_ee_action_safety_envelope_limits_cartesian_and_wrapped_rotation_steps():
+    current = np.asarray([0.0, 0.4, 0.2, 3.10, 0.0, -3.10, 0.0])
+    target = np.asarray([1.0, -1.0, 0.9, -3.10, 1.0, 3.10, 1.0])
+    bounded = bound_ee_action(target, current)
+    assert np.max(np.abs(bounded[:3] - current[:3])) <= 0.05 + 1e-9
+    angular_delta = (bounded[3:6] - current[3:6] + np.pi) % (2 * np.pi) - np.pi
+    assert np.max(np.abs(angular_delta)) <= 0.25 + 1e-9
+    assert bounded[6] == 1.0
+
+
 class FakeTimeStep:
     def __init__(self, terminal=False):
         self.terminal = terminal
@@ -836,6 +847,34 @@ def test_joint_rewards_telescope_and_planner_uses_return_to_go():
     assert episode.total_return == pytest.approx(0.95)
     assert sum(item.reward for item in episode.controller) == pytest.approx(episode.total_return)
     assert episode.planner_returns == pytest.approx([episode.total_return])
+    assert torch.max(torch.abs(episode.controller[0].actions[0, 0, :3])).item() <= 0.05 + 1e-6
+    assert torch.isfinite(episode.controller[0].old_logprob)
+
+
+def test_recoverable_simulator_initialization_failure_retries_one_rollout():
+    world = build_vlabench_world_graph("test_simulator_retry_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_simulator_retry"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+    controller = MultiViewController(TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1)
+    physics_error = type(
+        "PhysicsError",
+        (RuntimeError,),
+        {"__module__": "dm_control.mujoco.engine"},
+    )
+    calls = {"count": 0}
+
+    def factory(**_kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise physics_error("Physics state is invalid: mjWARN_BADQACC")
+        return FakeSimulator(success=True)
+
+    program = _joint_program(runtime, planner, controller, factory, num_samples=1)
+    episode = program.collect_episode({"task": "select_book"})
+    assert calls["count"] == 2
+    assert episode.valid and episode.success
 
 
 def test_invalid_plan_never_executes_controller_or_environment():

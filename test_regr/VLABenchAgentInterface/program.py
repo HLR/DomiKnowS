@@ -14,7 +14,7 @@ from torch.nn import functional as F
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 try:
-    from .environment import ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
+    from .environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
     from .graph import dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
@@ -25,7 +25,7 @@ try:
         verify_plan_constraints,
     )
 except ImportError:
-    from environment import ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
+    from environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
     from graph import dfa_accepts_plan
     from models import controller_loss
     from world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
@@ -157,6 +157,24 @@ def _last(timestep: Any) -> bool:
     return bool(value()) if callable(value) else bool(value)
 
 
+def _recoverable_simulator_error(exc: BaseException) -> bool:
+    """Identify randomized MuJoCo state failures that affect one rollout."""
+    name = type(exc).__name__
+    module = type(exc).__module__
+    message = str(exc)
+    return (
+        name == "PhysicsError"
+        and (module.startswith("dm_control") or "Physics state is invalid" in message)
+    ) or "mjWARN_BADQACC" in message
+
+
+def _observation_state(observation: Mapping[str, Any]) -> np.ndarray:
+    value = observation.get("state", observation.get("ee_state", observation.get("q_state")))
+    if value is None:
+        raise KeyError("simulator observation contains no EE state")
+    return np.asarray(value).reshape(-1)[:7]
+
+
 def _signal(env, name: str) -> float:
     function = getattr(env, name, None)
     if function is None:
@@ -241,7 +259,7 @@ def _controller_inputs(observations, task_index: int, device, camera_views: int 
     for observation in history:
         rgb = np.asarray(observation["rgb"])[:camera_views]
         image_history.append(torch.from_numpy(rgb).permute(0, 3, 1, 2).float() / 255.0)
-        state = np.asarray(observation.get("state", observation.get("ee_state", observation.get("q_state")))).reshape(-1)[:7]
+        state = _observation_state(observation)
         state_history.append(torch.as_tensor(state, dtype=torch.float32))
     return (
         torch.stack(image_history).unsqueeze(0).to(device),
@@ -276,6 +294,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         ppo_epochs: int = 4,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
+        simulator_init_retries: int = 3,
         progress_callback: Callable[[str], None] | None = None,
     ):
         poi = attach_planner_sensors(runtime, planner, device=device)
@@ -306,6 +325,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.ppo_epochs = int(ppo_epochs)
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
+        self.simulator_init_retries = max(1, int(simulator_init_retries))
         self.progress_callback = progress_callback
         self._entity_dfa_cache: dict[int, Any] = {}
 
@@ -347,7 +367,20 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         kwargs = dict(descriptor.get("env_kwargs", {}))
         if descriptor.get("task") is not None:
             kwargs.setdefault("task", descriptor["task"])
-        env = self.env_factory(**kwargs)
+        env = None
+        for attempt in range(self.simulator_init_retries):
+            try:
+                env = self.env_factory(**kwargs)
+                break
+            except Exception as exc:
+                if not _recoverable_simulator_error(exc):
+                    raise
+                self._report_progress(
+                    f"VLABench simulator initialization failed for task={descriptor.get('task', 'unknown')} "
+                    f"attempt={attempt + 1}/{self.simulator_init_retries}: {type(exc).__name__}"
+                )
+        if env is None:
+            return JointEpisode([], [], 0.0, False, False, 0, [])
         planner_logprobs: list[torch.Tensor] = []
         planner_transition_indices: list[int | None] = []
         transitions: list[ControllerTransition] = []
@@ -432,12 +465,26 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 task_index = condition_index_for_pattern(subtasks[0]) if subtasks else 0
                 inputs = _controller_inputs(observations, task_index, self.device_name)
                 actions, logprobs, _entropy, values = self.controller.sample_action_chunk(*inputs)
+                bounded_actions = actions.detach().clone()
                 executed = 0
                 chunk_reward = 0.0
-                for candidate in actions[0, : self.execute_horizon]:
+                for action_index, candidate in enumerate(actions[0, : self.execute_horizon]):
                     try:
-                        command = ee_action_to_env_action(env, candidate.detach().cpu().numpy())
-                    except (ValueError, TypeError, AttributeError):
+                        bounded = bound_ee_action(
+                            candidate.detach().cpu().numpy(),
+                            _observation_state(observation),
+                        )
+                        bounded_actions[0, action_index] = torch.as_tensor(
+                            bounded,
+                            dtype=bounded_actions.dtype,
+                            device=bounded_actions.device,
+                        )
+                        command = ee_action_to_env_action(env, bounded)
+                    except (ValueError, TypeError, AttributeError, KeyError) as exc:
+                        self._report_progress(
+                            f"VLABench controller action rejected task={descriptor.get('task', 'unknown')} "
+                            f"step={steps}: {type(exc).__name__}: {exc}"
+                        )
                         valid = False
                         break
                     timestep = env.step(command)
@@ -455,13 +502,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if steps >= self.max_steps:
                         break
                 if executed:
+                    with torch.no_grad():
+                        evaluated_logprobs, _evaluated_entropy, evaluated_value = (
+                            self.controller.evaluate_action_chunk(*inputs, bounded_actions)
+                        )
                     transitions.append(ControllerTransition(
                         images=inputs[0].detach().cpu(),
                         state=inputs[1].detach().cpu(),
                         task_index=inputs[2].detach().cpu(),
-                        actions=actions.detach().cpu(),
-                        old_logprob=logprobs[0, :executed].sum().detach().cpu(),
-                        old_value=values[0].detach().cpu(),
+                        actions=bounded_actions.cpu(),
+                        old_logprob=evaluated_logprobs[0, :executed].sum().cpu(),
+                        old_value=evaluated_value[0].cpu(),
                         reward=chunk_reward,
                         done=success or not valid or steps >= self.max_steps,
                         executed=executed,
@@ -505,6 +556,16 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 for start in planner_transition_indices
             ]
             return JointEpisode(planner_logprobs, transitions, total, success, valid, steps, planner_returns)
+        except Exception as exc:
+            if _recoverable_simulator_error(exc):
+                self._report_progress(
+                    f"VLABench simulator physics failure task={descriptor.get('task', 'unknown')} "
+                    f"steps={steps}: {type(exc).__name__}"
+                )
+                return JointEpisode(planner_logprobs, [], 0.0, False, False, steps, [
+                    0.0 for _ in planner_logprobs
+                ])
+            raise
         finally:
             close = getattr(env, "close", None)
             if callable(close):

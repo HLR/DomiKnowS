@@ -71,6 +71,41 @@ def euler_to_quaternion(roll: float, pitch: float, yaw: float) -> np.ndarray:
     ], dtype=np.float64)
 
 
+def bound_ee_action(
+    action,
+    current_state,
+    *,
+    max_position_step: float = 0.05,
+    max_rotation_step: float = 0.25,
+) -> np.ndarray:
+    """Rate-limit an absolute EE target around the current simulator pose.
+
+    The controller remains a Normal actor over absolute xyz/Euler coordinates,
+    but an unbounded exploratory draw can be far outside the local IK basin.
+    Bound the command actually sent to the simulator, using wrapped Euler
+    deltas so crossing ``-pi/pi`` does not become a full rotation.
+    """
+    value = np.asarray(action, dtype=np.float64).reshape(-1)
+    current = np.asarray(current_state, dtype=np.float64).reshape(-1)
+    if value.shape != (7,) or current.size < 6:
+        raise ValueError("EE action/state must contain 7 and at least 6 values")
+    if not np.isfinite(value).all() or not np.isfinite(current[:6]).all():
+        raise ValueError("EE action/state must be finite")
+    if max_position_step <= 0 or max_rotation_step <= 0:
+        raise ValueError("EE step limits must be positive")
+    bounded = value.copy()
+    bounded[:3] = current[:3] + np.clip(
+        value[:3] - current[:3], -float(max_position_step), float(max_position_step)
+    )
+    angular_delta = (value[3:6] - current[3:6] + np.pi) % (2.0 * np.pi) - np.pi
+    bounded[3:6] = current[3:6] + np.clip(
+        angular_delta, -float(max_rotation_step), float(max_rotation_step)
+    )
+    bounded[3:6] = (bounded[3:6] + np.pi) % (2.0 * np.pi) - np.pi
+    bounded[6] = float(value[6] >= 0.5)
+    return bounded
+
+
 def ee_action_to_env_action(env, action) -> np.ndarray:
     """Convert dataset EE action [xyz, rpy, grip] to VLABench joint control."""
     value = np.asarray(action, dtype=np.float64).reshape(-1)
