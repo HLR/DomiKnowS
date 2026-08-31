@@ -26,7 +26,7 @@ from test_regr.VLABenchAgentInterface.environment import (
     ee_action_to_env_action,
     reset_reward_tracking,
 )
-from test_regr.VLABenchAgentInterface.graph import PlanVocabulary
+from test_regr.VLABenchAgentInterface.graph import PlanVocabulary, plan_to_tokens
 from test_regr.VLABenchAgentInterface.models import (
     FrozenSigLIPEncoder,
     MultiViewController,
@@ -40,6 +40,8 @@ from test_regr.VLABenchAgentInterface.models import (
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
     VLABenchHierarchicalReinforcementProgram,
+    _entity_pointer_dfa,
+    _signal,
     generalized_advantage_estimate,
     ppo_clipped_loss,
 )
@@ -110,6 +112,46 @@ def test_missing_upstream_reward_tracking_state_is_initialized_once():
     assert calls == ["progress", "intention"]
     assert task.target_is_grasped == {"flower": False}
     assert np.isinf(task.intention_distance["flower"])
+
+
+def test_partial_upstream_reward_tracking_adds_missing_target_and_signal_falls_back():
+    task = SimpleNamespace(
+        target_entity="target_book",
+        target_is_grasped={"other_book": False},
+        intention_distance={"other_book": 0.5},
+    )
+    reset_reward_tracking(SimpleNamespace(task=task))
+    assert task.target_is_grasped["target_book"] is False
+    assert np.isinf(task.intention_distance["target_book"])
+
+    env = SimpleNamespace(get_intention_score=lambda **_kwargs: {}["missing_target"])
+    assert _signal(env, "get_intention_score") == 0.0
+
+
+def test_online_entity_pointer_dfa_masks_unknown_observation_pointers():
+    world = build_vlabench_world_graph("test_online_pointer_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=4, max_operations=2, name_prefix="test_online_pointer"
+    )
+    conditioned = _entity_pointer_dfa(runtime.dfa, runtime.vocabulary, entity_count=2)
+    valid = [
+        {"name": "pick", "params": {"target_entity_name": 0}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+    unknown = [
+        {"name": "pick", "params": {"target_entity_name": 3}},
+        {"name": "place", "params": {"target_container_name": 1}},
+    ]
+
+    def labels(plan):
+        return [
+            runtime.vocabulary.label_for_token(token)
+            for token in plan_to_tokens(plan, ("apple", "bowl"), world=world)
+        ]
+
+    assert conditioned.accepts(labels(valid))
+    assert runtime.dfa.accepts(labels(unknown))
+    assert not conditioned.accepts(labels(unknown))
 
 
 def test_vision_language_loader_supports_current_and_legacy_transformers(monkeypatch):

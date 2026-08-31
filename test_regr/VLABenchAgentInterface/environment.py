@@ -114,6 +114,27 @@ def reset_reward_tracking(env: Any) -> None:
         reset = getattr(task, method_name, None)
         if callable(reset):
             reset()
+    # Some upstream tasks create these dictionaries but omit the selected
+    # target (for example when a target book is also listed as randomly
+    # ignored).  The inherited reward accessors index the target directly and
+    # otherwise raise KeyError before the rollout starts.  Missing entries mean
+    # "no observed progress/intention yet", so initialize only those entries.
+    target = getattr(task, "target_entity", ())
+    if isinstance(target, str):
+        targets = (target,)
+    elif isinstance(target, (list, tuple, set, frozenset)):
+        targets = tuple(target)
+    elif target is None:
+        targets = ()
+    else:
+        targets = (target,)
+    progress = getattr(task, "target_is_grasped", None)
+    intention = getattr(task, "intention_distance", None)
+    for name in targets:
+        if isinstance(progress, dict):
+            progress.setdefault(name, False)
+        if isinstance(intention, dict):
+            intention.setdefault(name, np.inf)
 
 
 def create_environment(

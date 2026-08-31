@@ -162,11 +162,75 @@ def _signal(env, name: str) -> float:
     if function is None:
         return 0.0
     try:
-        value = function(threshold=0.1, discrete=False) if name == "get_intention_score" else function()
-    except TypeError:
-        value = function(threshold=0.1) if name == "get_intention_score" else function()
+        try:
+            value = function(threshold=0.1, discrete=False) if name == "get_intention_score" else function()
+        except TypeError:
+            value = function(threshold=0.1) if name == "get_intention_score" else function()
+    except (AttributeError, KeyError, LookupError, ZeroDivisionError):
+        # Progress and intention are optional shaping signals.  Known upstream
+        # primitive tasks expose the methods while leaving their backing state
+        # incomplete.  A missing signal contributes zero; simulator execution
+        # and the authoritative success reward remain active.
+        return 0.0
     value = float(value)
     return value if np.isfinite(value) else 0.0
+
+
+class _EntityPointerDFA:
+    """Lazy DFA view that removes unknown observation-local pointers."""
+
+    def __init__(self, base_dfa, *, valid_labels, all_labels):
+        self.base_dfa = base_dfa
+        self.valid_labels = frozenset(int(value) for value in valid_labels)
+        self.invalid_labels = frozenset(int(value) for value in all_labels) - self.valid_labels
+        self.start_state = base_dfa.start_state
+        self.alphabet = base_dfa.alphabet
+
+    def step(self, state, symbol):
+        if int(symbol) in self.invalid_labels:
+            return None
+        return self.base_dfa.step(state, symbol)
+
+    def is_accepting(self, state):
+        return self.base_dfa.is_accepting(state)
+
+    def accepts(self, sequence):
+        state = self.start_state
+        for symbol in sequence:
+            state = self.step(state, symbol)
+            if state is None:
+                return False
+        return self.is_accepting(state)
+
+    def allowed_tokens(self, state, remaining_steps=None):
+        try:
+            allowed = self.base_dfa.allowed_tokens(state, remaining_steps=remaining_steps)
+        except TypeError:
+            allowed = self.base_dfa.allowed_tokens(state)
+        return set(allowed).difference(self.invalid_labels)
+
+    def __getattr__(self, name):
+        return getattr(self.base_dfa, name)
+
+
+def _entity_pointer_dfa(base_dfa, vocabulary, entity_count: int):
+    """Mask object-pointer labels that are absent from this observation."""
+    count = min(max(0, int(entity_count)), int(vocabulary.max_entities))
+    if count >= int(vocabulary.max_entities):
+        return base_dfa
+    all_labels = [
+        vocabulary.label_for_token(f"obj:{index}")
+        for index in range(vocabulary.max_entities)
+    ]
+    valid_labels = [
+        vocabulary.label_for_token(f"obj:{index}")
+        for index in range(count)
+    ]
+    return _EntityPointerDFA(
+        base_dfa,
+        valid_labels=valid_labels,
+        all_labels=all_labels,
+    )
 
 
 def _controller_inputs(observations, task_index: int, device, camera_views: int = 3):
@@ -243,29 +307,41 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
         self.progress_callback = progress_callback
+        self._entity_dfa_cache: dict[int, Any] = {}
 
     def _report_progress(self, message: str) -> None:
         if self.progress_callback is not None:
             self.progress_callback(message)
 
-    def _valid_plan(self, plan, entities) -> bool:
+    def _dfa_for_entities(self, entities) -> Any:
+        count = len(entities)
+        cached = self._entity_dfa_cache.get(count)
+        if cached is None:
+            cached = _entity_pointer_dfa(self.runtime.dfa, self.runtime.vocabulary, count)
+            self._entity_dfa_cache[count] = cached
+        return cached
+
+    def _plan_rejection_reason(self, plan, entities, *, dfa=None) -> str | None:
         validation = validate_plan(plan, entity_table=entities, skill_arguments=self.runtime.world_bundle.skill_arguments)
         if not validation.valid:
-            return False
+            return "schema:" + (validation.errors[0] if validation.errors else "invalid")
         if not dfa_accepts_plan(
-            self.runtime.dfa,
+            dfa or self.runtime.dfa,
             self.runtime.generation_bundle,
             plan,
             entities,
             world=self.runtime.world_bundle,
         ):
-            return False
+            return "dfa"
         try:
             root = materialize_plan(plan, entities, self.runtime.world_bundle)
             result = verify_plan_constraints(root, self.runtime.world_bundle)
-            return result is None or result.score >= 1.0
-        except Exception:
-            return False
+            return None if result is None or result.score >= 1.0 else "semantic_constraint"
+        except Exception as exc:
+            return f"constraint_error:{type(exc).__name__}"
+
+    def _valid_plan(self, plan, entities, *, dfa=None) -> bool:
+        return self._plan_rejection_reason(plan, entities, dfa=dfa) is None
 
     def collect_episode(self, descriptor: Mapping[str, Any]) -> JointEpisode:
         kwargs = dict(descriptor.get("env_kwargs", {}))
@@ -298,8 +374,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     )
                     last_progress_report = now
                 views, entities = numbered_views_from_observation(env, observation)
+                sampling_dfa = self._dfa_for_entities(entities)
                 selected_plan = None
                 selected_logprob = None
+                rejection_counts: dict[str, int] = {}
                 try:
                     encoded_context = None
                     encode_context = getattr(self.planner_head, "encode_context", None)
@@ -315,18 +393,22 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 instruction=instruction,
                                 images=views,
                                 entity_table=entities,
-                                dfa=self.runtime.dfa,
+                                dfa=sampling_dfa,
                                 world=self.runtime.world_bundle,
                                 max_steps=self.runtime.max_tokens,
                                 encoded_context=encoded_context,
                             )
-                        except (RuntimeError, TypeError, ValueError):
+                        except (RuntimeError, TypeError, ValueError) as exc:
+                            reason = f"sample_error:{type(exc).__name__}"
+                            rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
                             continue
-                        if self._valid_plan(candidate, entities):
+                        reason = self._plan_rejection_reason(candidate, entities, dfa=sampling_dfa)
+                        if reason is None:
                             if selected_plan is None:
                                 selected_plan = candidate
                                 selected_logprob = candidate_logprob
                         else:
+                            rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
                             # Constraint-invalid samples are useful negative
                             # planner evidence but can never reach the controller.
                             planner_logprobs.append(candidate_logprob)
@@ -335,6 +417,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     for image in views:
                         image.close()
                 if selected_plan is None:
+                    details = ", ".join(
+                        f"{name}={count}" for name, count in sorted(rejection_counts.items())
+                    ) or "no candidates"
+                    self._report_progress(
+                        f"VLABench planner rejected all {self.num_samples} candidates: {details}"
+                    )
                     valid = False
                     break
                 plan = selected_plan
