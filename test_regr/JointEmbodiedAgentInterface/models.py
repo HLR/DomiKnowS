@@ -212,7 +212,7 @@ class JointQwenVLPlanner(nn.Module):
             add_generation_prompt=True,
         )
 
-    def _inputs(self, domain: str, context: Mapping[str, Any], prefix_labels: Sequence[int]):
+    def _prepare_inputs(self, domain: str, context: Mapping[str, Any], prefix_labels: Sequence[int]):
         prompt = self._prompt(domain, context, prefix_labels)
         images = list(context.get("images", ())) if domain == "vlabench" else []
         opened = []
@@ -233,14 +233,27 @@ class JointQwenVLPlanner(nn.Module):
         finally:
             for image in opened:
                 image.close()
+        # Keep replayable processor outputs on CPU. Stage-2 simulator
+        # collection may retain many planner decisions before one optimizer
+        # update; retaining CUDA inputs (or complete Qwen autograd graphs)
+        # makes memory grow with episode length.
+        return {
+            key: value.detach().cpu() if torch.is_tensor(value) else value
+            for key, value in batch.items()
+        }
+
+    def _inputs_to_model_device(self, inputs: Mapping[str, Any]) -> dict[str, Any]:
         try:
             model_device = next(self.model.parameters()).device
         except StopIteration:
             model_device = self.device
         return {
             key: value.to(model_device) if hasattr(value, "to") else value
-            for key, value in batch.items()
+            for key, value in inputs.items()
         }
+
+    def _inputs(self, domain: str, context: Mapping[str, Any], prefix_labels: Sequence[int]):
+        return self._inputs_to_model_device(self._prepare_inputs(domain, context, prefix_labels))
 
     def _model_context(self, inputs: Mapping[str, Any]) -> torch.Tensor:
         output = self.model(**inputs, output_hidden_states=True, use_cache=False)
@@ -254,6 +267,20 @@ class JointQwenVLPlanner(nn.Module):
 
         inputs = self._inputs(domain, context, ())
         return self._model_context(inputs)
+
+    def prepare_replay_context(self, domain: str, context: Mapping[str, Any]) -> dict[str, Any]:
+        """Preprocess an observation into CPU tensors for bounded-memory RL replay."""
+
+        return self._prepare_inputs(domain, context, ())
+
+    def encode_replay_context(
+        self,
+        domain: str,
+        prepared_context: Mapping[str, Any],
+    ) -> torch.Tensor:
+        """Encode prepared inputs, moving only this decision to the model device."""
+
+        return self._model_context(self._inputs_to_model_device(prepared_context))
 
     def _initial_decoder_state(self, domain: str, context_vector: torch.Tensor, batch: int) -> torch.Tensor:
         projected = torch.tanh(self.context_projections[domain](context_vector))
@@ -394,6 +421,68 @@ class JointQwenVLPlanner(nn.Module):
             raise RuntimeError(f"{domain} planner did not terminate in an accepting DFA state")
         return labels, logprob
 
+    def labels_logprob_from_context(
+        self,
+        domain: str,
+        context_vector: torch.Tensor,
+        labels: Sequence[int],
+        dfa: Any,
+        *,
+        max_steps: int,
+    ) -> torch.Tensor:
+        """Re-evaluate a sampled DFA trajectory with differentiable masked logits."""
+
+        vocabulary = self.vocabulary(domain)
+        state = dfa.start_state
+        logprob = torch.zeros((), device=self.device)
+        hidden = self._initial_decoder_state(domain, context_vector, 1)
+        previous = torch.tensor(
+            [[int(vocabulary.eos_label)]],
+            dtype=torch.long,
+            device=self.device,
+        )
+        for step, raw_label in enumerate(labels):
+            if step >= int(max_steps):
+                raise RuntimeError(f"{domain} replay trajectory exceeds its maximum length")
+            embedded = self.token_embeddings[domain](previous)
+            decoded, hidden = self.graph_decoders[domain](embedded, hidden)
+            logits = self.label_heads[domain](decoded)[0, -1]
+            allowed = dfa.allowed_tokens(state, remaining_steps=max_steps - step - 1)
+            label_value = int(raw_label)
+            if label_value not in allowed:
+                raise RuntimeError(f"{domain} replay trajectory contains a rejected DFA transition")
+            masked = torch.full_like(logits, float("-inf"))
+            indices = torch.tensor(sorted(int(label) for label in allowed), device=logits.device)
+            masked[indices] = logits[indices]
+            distribution = torch.distributions.Categorical(logits=masked)
+            label = torch.tensor(label_value, dtype=torch.long, device=logits.device)
+            logprob = logprob + distribution.log_prob(label)
+            previous = label.reshape(1, 1)
+            state = dfa.step(state, label_value)
+            if state is None:
+                raise RuntimeError(f"{domain} replay trajectory contains a rejected DFA transition")
+        if not dfa.is_accepting(state):
+            raise RuntimeError(f"{domain} replay trajectory is not accepting")
+        return logprob
+
+    def replay_labels_logprob(
+        self,
+        domain: str,
+        prepared_context: Mapping[str, Any],
+        labels: Sequence[int],
+        dfa: Any,
+        *,
+        max_steps: int,
+    ) -> torch.Tensor:
+        context_vector = self.encode_replay_context(domain, prepared_context)
+        return self.labels_logprob_from_context(
+            domain,
+            context_vector,
+            labels,
+            dfa,
+            max_steps=max_steps,
+        )
+
     def save_pretrained(self, path: str | Path) -> None:
         target = Path(path)
         target.mkdir(parents=True, exist_ok=True)
@@ -464,6 +553,21 @@ class JointPlannerDomainView(nn.Module):
     def encode_context(self, context):
         return self.joint.encode_context(self.domain, context)
 
+    def prepare_replay_context(self, context):
+        return self.joint.prepare_replay_context(self.domain, context)
+
+    def encode_replay_context(self, prepared_context):
+        return self.joint.encode_replay_context(self.domain, prepared_context)
+
+    def replay_labels_logprob(self, prepared_context, labels, dfa, *, max_steps):
+        return self.joint.replay_labels_logprob(
+            self.domain,
+            prepared_context,
+            labels,
+            dfa,
+            max_steps=max_steps,
+        )
+
     def sample_labels_from_context(self, context_vector, dfa, *, max_steps, deterministic=False):
         return self.joint.sample_labels_from_context(
             self.domain,
@@ -519,9 +623,14 @@ class JointPlannerDomainView(nn.Module):
                 kwargs["dfa"],
                 max_steps=kwargs.get("max_steps", 60),
             )
-        if self.domain == "vlabench":
-            return labels_to_plan(labels, self.vocabulary, world=kwargs.get("world")), logprob
-        return labels, logprob
+        output = (
+            labels_to_plan(labels, self.vocabulary, world=kwargs.get("world"))
+            if self.domain == "vlabench"
+            else labels
+        )
+        if kwargs.get("return_labels", False):
+            return output, logprob, labels
+        return output, logprob
 
     @torch.no_grad()
     def generate_plan(self, **kwargs):

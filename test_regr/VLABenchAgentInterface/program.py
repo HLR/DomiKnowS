@@ -114,13 +114,34 @@ class ControllerTransition:
 
 @dataclass
 class JointEpisode:
-    planner_logprobs: list[torch.Tensor]
+    planner_logprobs: list[torch.Tensor | "PlannerReplayDecision"]
     controller: list[ControllerTransition]
     total_return: float
     success: bool
     valid: bool
     steps: int
     planner_returns: list[float] | None = None
+
+
+@dataclass
+class PlannerReplayDecision:
+    """CPU replay record for a planner decision sampled during simulation."""
+
+    prepared_context: Mapping[str, Any]
+    labels: tuple[int, ...]
+    dfa: Any
+    max_steps: int
+
+    def logprob(self, planner) -> torch.Tensor:
+        replay = getattr(planner, "replay_labels_logprob", None)
+        if not callable(replay):
+            raise TypeError("planner does not support bounded-memory trajectory replay")
+        return replay(
+            self.prepared_context,
+            self.labels,
+            self.dfa,
+            max_steps=self.max_steps,
+        )
 
 
 def generalized_advantage_estimate(
@@ -381,7 +402,7 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 )
         if env is None:
             return JointEpisode([], [], 0.0, False, False, 0, [])
-        planner_logprobs: list[torch.Tensor] = []
+        planner_logprobs: list[torch.Tensor | PlannerReplayDecision] = []
         planner_transition_indices: list[int | None] = []
         transitions: list[ControllerTransition] = []
         valid, success, steps = True, False, 0
@@ -413,16 +434,27 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 rejection_counts: dict[str, int] = {}
                 try:
                     encoded_context = None
+                    prepared_context = None
                     encode_context = getattr(self.planner_head, "encode_context", None)
-                    if callable(encode_context):
-                        encoded_context = encode_context({
-                            "instruction": instruction,
-                            "images": views,
-                            "entity_table": entities,
-                        })
+                    prepare_replay = getattr(self.planner_head, "prepare_replay_context", None)
+                    encode_replay = getattr(self.planner_head, "encode_replay_context", None)
+                    planner_context = {
+                        "instruction": instruction,
+                        "images": views,
+                        "entity_table": entities,
+                    }
+                    if callable(prepare_replay) and callable(encode_replay):
+                        prepared_context = prepare_replay(planner_context)
+                        # Collection needs sampled labels, not a retained Qwen
+                        # graph. The trajectories are replayed one at a time
+                        # during the policy update.
+                        with torch.no_grad():
+                            encoded_context = encode_replay(prepared_context)
+                    elif callable(encode_context):
+                        encoded_context = encode_context(planner_context)
                     for _ in range(self.num_samples):
                         try:
-                            candidate, candidate_logprob = self.planner_head.sample_with_logprob(
+                            sampled = self.planner_head.sample_with_logprob(
                                 instruction=instruction,
                                 images=views,
                                 entity_table=entities,
@@ -430,7 +462,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                                 world=self.runtime.world_bundle,
                                 max_steps=self.runtime.max_tokens,
                                 encoded_context=encoded_context,
+                                return_labels=prepared_context is not None,
                             )
+                            if len(sampled) == 3:
+                                candidate, candidate_logprob, candidate_labels = sampled
+                                candidate_evidence = PlannerReplayDecision(
+                                    prepared_context=prepared_context,
+                                    labels=tuple(int(label) for label in candidate_labels),
+                                    dfa=sampling_dfa,
+                                    max_steps=self.runtime.max_tokens,
+                                )
+                            else:
+                                candidate, candidate_logprob = sampled
+                                candidate_evidence = candidate_logprob
                         except (RuntimeError, TypeError, ValueError) as exc:
                             reason = f"sample_error:{type(exc).__name__}"
                             rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
@@ -439,12 +483,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         if reason is None:
                             if selected_plan is None:
                                 selected_plan = candidate
-                                selected_logprob = candidate_logprob
+                                selected_logprob = candidate_evidence
                         else:
                             rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
                             # Constraint-invalid samples are useful negative
                             # planner evidence but can never reach the controller.
-                            planner_logprobs.append(candidate_logprob)
+                            planner_logprobs.append(candidate_evidence)
                             planner_transition_indices.append(None)
                 finally:
                     for image in views:
@@ -601,15 +645,44 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             pairs.extend(zip(episode.planner_logprobs, returns))
         if not pairs:
             return 0.0
-        logprobs = torch.stack([item[0] for item in pairs])
-        rewards = torch.tensor([item[1] for item in pairs], dtype=logprobs.dtype, device=logprobs.device)
-        advantage = rewards - rewards.mean()
-        loss = -(logprobs * advantage.detach()).mean() + self.supervised_weight * self._planner_anchor()
         self.planner_optimizer.zero_grad(set_to_none=True)
-        loss.backward()
+        reward_values = torch.tensor([float(item[1]) for item in pairs], dtype=torch.float32)
+        advantages = reward_values - reward_values.mean()
+        count = len(pairs)
+        policy_value = 0.0
+
+        # Legacy and small test planners can still return live log-probability
+        # tensors. Backward them together because candidates may share one
+        # encoded-context graph.
+        live_terms = []
+        for (evidence, _reward), advantage in zip(pairs, advantages):
+            if isinstance(evidence, PlannerReplayDecision) or float(advantage) == 0.0:
+                continue
+            live_terms.append(
+                -(evidence * advantage.to(device=evidence.device, dtype=evidence.dtype)) / count
+            )
+        if live_terms:
+            live_loss = torch.stack(live_terms).sum()
+            live_loss.backward()
+            policy_value += float(live_loss.detach())
+
+        # Replay Qwen decisions sequentially. At most one vision-language
+        # autograd graph is resident, so memory does not grow with rollout
+        # count or episode length while return-to-go still updates LoRA.
+        for (evidence, _reward), advantage in zip(pairs, advantages):
+            if not isinstance(evidence, PlannerReplayDecision) or float(advantage) == 0.0:
+                continue
+            logprob = evidence.logprob(self.planner_head)
+            term = -(logprob * advantage.to(device=logprob.device, dtype=logprob.dtype)) / count
+            term.backward()
+            policy_value += float(term.detach())
+
+        anchor = self.supervised_weight * self._planner_anchor()
+        if anchor.requires_grad:
+            anchor.backward()
         torch.nn.utils.clip_grad_norm_(self.planner_head.parameters(), 1.0)
         self.planner_optimizer.step()
-        return float(loss.detach())
+        return policy_value + float(anchor.detach())
 
     def _controller_anchor(self):
         if self.controller_anchor_loader is None or not self.controller_bc_weight:

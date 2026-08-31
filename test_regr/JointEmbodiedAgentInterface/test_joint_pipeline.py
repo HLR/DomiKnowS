@@ -174,6 +174,43 @@ def test_autoregressive_sample_reuses_one_context_with_differentiable_logprob(jo
     assert planner.token_embeddings["eai"].weight.grad is not None
 
 
+def test_vlabench_replay_keeps_collection_graph_free_and_restores_lora_gradient(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    context = {
+        "instruction": "Pick the apple.",
+        "images": (),
+        "entity_table": ("apple", "bowl"),
+    }
+    max_steps = runtime.max_vlabench_operations * 5 + 1
+    prepared = planner.prepare_replay_context("vlabench", context)
+    assert all(not torch.is_tensor(value) or value.device.type == "cpu" for value in prepared.values())
+
+    with torch.no_grad():
+        encoded = planner.encode_replay_context("vlabench", prepared)
+        labels, collected_logprob = planner.sample_labels_from_context(
+            "vlabench",
+            encoded,
+            runtime.vlabench_dfa,
+            max_steps=max_steps,
+        )
+    assert not collected_logprob.requires_grad
+
+    calls_before = planner.model.forward_calls
+    replayed_logprob = planner.replay_labels_logprob(
+        "vlabench",
+        prepared,
+        labels,
+        runtime.vlabench_dfa,
+        max_steps=max_steps,
+    )
+    assert replayed_logprob.requires_grad
+    assert planner.model.forward_calls - calls_before == 1
+    (-replayed_logprob).backward()
+    assert planner.model.embedding.weight.grad is not None
+    assert planner.label_heads["vlabench"].weight.grad is not None
+
+
 def test_joint_pretrained_loader_uses_transformers_compatibility_resolver(joint_fixture, monkeypatch):
     _examples, runtime = joint_fixture
     calls = []
