@@ -25,6 +25,8 @@ from test_regr.VLABenchAgentInterface.environment import (
     bound_ee_action,
     create_environment,
     ee_action_to_env_action,
+    euler_to_quaternion,
+    quaternion_to_euler,
     reset_reward_tracking,
 )
 from test_regr.VLABenchAgentInterface.graph import PlanVocabulary, plan_to_tokens
@@ -42,6 +44,7 @@ from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
     VLABenchHierarchicalReinforcementProgram,
     _entity_pointer_dfa,
+    _observation_state,
     _signal,
     generalized_advantage_estimate,
     ppo_clipped_loss,
@@ -760,6 +763,19 @@ def test_ee_action_conversion_uses_two_finger_gripper():
     assert np.allclose(closed[-2:], 0.0)
     with pytest.raises(ValueError, match="inverse-kinematics"):
         ee_action_to_env_action(SimpleNamespace(robot=FailedRobot(), physics=object()), np.zeros(7))
+
+
+def test_vlabench_quaternion_convention_and_observed_pose_conversion():
+    half = np.sqrt(0.5)
+    quaternion = euler_to_quaternion(np.pi / 2.0, 0.0, 0.0)
+    assert quaternion == pytest.approx([half, half, 0.0, 0.0])
+    assert quaternion_to_euler(quaternion) == pytest.approx([np.pi / 2.0, 0.0, 0.0])
+
+    observed = _observation_state({
+        "ee_state": np.asarray([0.1, 0.2, 0.3, *quaternion, 1.0]),
+        "q_state": np.full(7, 99.0),
+    })
+    assert observed == pytest.approx([0.1, 0.2, 0.3, np.pi / 2.0, 0.0, 0.0, 1.0])
 
 
 def test_ee_action_safety_envelope_limits_cartesian_and_wrapped_rotation_steps():

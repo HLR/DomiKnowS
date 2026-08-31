@@ -59,16 +59,33 @@ def numbered_views_from_observation(
 
 
 def euler_to_quaternion(roll: float, pitch: float, yaw: float) -> np.ndarray:
-    """Return an xyzw quaternion without importing VLABench at test time."""
+    """Return the wxyz quaternion expected by VLABench/MuJoCo IK."""
     cr, sr = math.cos(roll / 2), math.sin(roll / 2)
     cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
     cy, sy = math.cos(yaw / 2), math.sin(yaw / 2)
     return np.asarray([
+        cr * cp * cy + sr * sp * sy,
         sr * cp * cy - cr * sp * sy,
         cr * sp * cy + sr * cp * sy,
         cr * cp * sy - sr * sp * cy,
-        cr * cp * cy + sr * sp * sy,
     ], dtype=np.float64)
+
+
+def quaternion_to_euler(quaternion) -> np.ndarray:
+    """Convert a VLABench wxyz quaternion to xyz Euler radians."""
+
+    value = np.asarray(quaternion, dtype=np.float64).reshape(-1)
+    if value.shape != (4,) or not np.isfinite(value).all():
+        raise ValueError("quaternion must be a finite wxyz vector")
+    norm = float(np.linalg.norm(value))
+    if norm <= np.finfo(np.float64).eps:
+        raise ValueError("quaternion must have nonzero norm")
+    w, x, y, z = value / norm
+    roll = math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+    pitch_term = 2.0 * (w * y - z * x)
+    pitch = math.asin(float(np.clip(pitch_term, -1.0, 1.0)))
+    yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+    return np.asarray([roll, pitch, yaw], dtype=np.float64)
 
 
 def bound_ee_action(

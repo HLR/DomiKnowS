@@ -14,7 +14,7 @@ from torch.nn import functional as F
 from domiknows.reinforcement.reinforcement_program import ReinforcementProgram
 
 try:
-    from .environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
+    from .environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
     from .graph import dfa_accepts_plan
     from .models import controller_loss
     from .world_graph import (
@@ -25,7 +25,7 @@ try:
         verify_plan_constraints,
     )
 except ImportError:
-    from environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, reset_reward_tracking
+    from environment import bound_ee_action, ee_action_to_env_action, numbered_views_from_observation, quaternion_to_euler, reset_reward_tracking
     from graph import dfa_accepts_plan
     from models import controller_loss
     from world_graph import condition_index_for_pattern, materialize_plan, split_subtasks, validate_plan, verify_plan_constraints
@@ -190,10 +190,18 @@ def _recoverable_simulator_error(exc: BaseException) -> bool:
 
 
 def _observation_state(observation: Mapping[str, Any]) -> np.ndarray:
-    value = observation.get("state", observation.get("ee_state", observation.get("q_state")))
+    # Official VLABench publishes ee_state=[xyz, wxyz, gripper].  q_state is
+    # joint space and must never be used as a Cartesian pose.  Keep support for
+    # seven-component synthetic/legacy xyz-Euler observations used by tests.
+    value = observation.get("ee_state", observation.get("state"))
     if value is None:
         raise KeyError("simulator observation contains no EE state")
-    return np.asarray(value).reshape(-1)[:7]
+    value = np.asarray(value, dtype=np.float64).reshape(-1)
+    if value.size == 8:
+        return np.concatenate((value[:3], quaternion_to_euler(value[3:7]), value[7:8]))
+    if value.size >= 7:
+        return value[:7]
+    raise ValueError("simulator EE state must contain xyz plus orientation and gripper")
 
 
 def _signal(env, name: str) -> float:
