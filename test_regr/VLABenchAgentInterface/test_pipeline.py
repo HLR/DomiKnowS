@@ -815,6 +815,7 @@ def test_ppo_log_ratio_is_finite_for_extreme_likelihood_change():
     new = torch.tensor([1.0e4], requires_grad=True)
     loss = ppo_clipped_loss(new, torch.tensor([-1.0e4]), torch.tensor([-1.0]))
     assert torch.isfinite(loss)
+    assert loss.item() == pytest.approx(float(torch.exp(torch.tensor(2.0))))
     loss.backward()
     assert torch.isfinite(new.grad).all()
 
@@ -948,6 +949,47 @@ def test_joint_rewards_telescope_and_planner_uses_return_to_go():
     assert episode.planner_returns == pytest.approx([episode.total_return])
     assert torch.max(torch.abs(episode.controller[0].actions[0, 0, :3])).item() <= 0.05 + 1e-6
     assert torch.isfinite(episode.controller[0].old_logprob)
+
+
+def test_rollout_stores_sampled_policy_action_before_execution_safety_transform():
+    world = build_vlabench_world_graph("test_policy_action_world")
+    runtime = build_constraint_runtime(
+        world, max_entities=2, max_operations=2, name_prefix="test_policy_action"
+    )
+    planner = TinyCompactPlanner(runtime.vocabulary)
+
+    class LatentActionController(MultiViewController):
+        def sample_action_chunk(self, images, state, task_index):
+            batch = images.shape[0]
+            action = torch.tensor(
+                [0.8, -0.8, 0.8, 1.0, -1.0, 1.0, 1.0],
+                device=images.device,
+            ).view(1, 1, 7).expand(batch, 1, 7)
+            return (
+                action,
+                torch.full((batch, 1), -3.25, device=images.device),
+                torch.zeros((batch, 1), device=images.device),
+                torch.full((batch,), 0.125, device=images.device),
+            )
+
+        def evaluate_action_chunk(self, *_args, **_kwargs):
+            raise AssertionError("rollout collection must not relabel transformed actions")
+
+    controller = LatentActionController(
+        TinyImageEncoder(8), hidden_dim=8, action_horizon=1, max_views=1
+    )
+    program = _joint_program(
+        runtime, planner, controller, lambda **_kwargs: FakeSimulator(success=True),
+        num_samples=1,
+    )
+    episode = program.collect_episode({"task": "select_book"})
+    transition = episode.controller[0]
+    torch.testing.assert_close(
+        transition.actions[0, 0],
+        torch.tensor([0.8, -0.8, 0.8, 1.0, -1.0, 1.0, 1.0]),
+    )
+    assert transition.old_logprob.item() == pytest.approx(-3.25)
+    assert transition.old_value.item() == pytest.approx(0.125)
 
 
 def test_recoverable_simulator_initialization_failure_retries_one_rollout():

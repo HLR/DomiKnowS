@@ -165,7 +165,13 @@ weight `0.01`; a `0.05` behavior-cloning anchor is retained. The bounded
 critic uses clipped targets and Smooth L1 loss without changing shared actor
 features. A zero-return rollout trains the critic and supervised anchor but
 does not reinforce or entropy-expand its failed sampled actions. The controller
-executes four actions before replanning. Each action
+stores the original policy sample and its behavior-policy log probability for
+PPO; the deterministic Cartesian safety envelope is applied only when forming
+the simulator command. This avoids treating a clipped execution target as if it
+had been sampled from the Normal policy. Likelihood ratios are bounded before
+exponentiation, and later PPO epochs stop when the mean per-action log-ratio
+leaves the configured trust region, so one stale chunk cannot dominate an
+update. The controller executes four actions before replanning. Each action
 `[x,y,z,roll,pitch,yaw,gripper]` is converted with
 `get_qpos_from_ee_pos`; the gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. The default safety envelope permits at most 2 cm of

@@ -168,17 +168,29 @@ def generalized_advantage_estimate(
     return advantages, returns
 
 
-def ppo_clipped_loss(new_logprob, old_logprob, advantage, *, clip: float = 0.2):
+def ppo_clipped_loss(
+    new_logprob,
+    old_logprob,
+    advantage,
+    *,
+    clip: float = 0.2,
+    max_log_ratio: float = 2.0,
+):
     if not (
         bool(torch.isfinite(new_logprob).all())
         and bool(torch.isfinite(old_logprob).all())
         and bool(torch.isfinite(advantage).all())
     ):
         raise ValueError("PPO inputs must be finite")
-    # Large transformed-action likelihood changes can overflow exp before the
-    # PPO clip is applied. Bounding the log ratio preserves the clipped regime
-    # while preventing an inf loss/gradient from poisoning the controller.
-    ratio = torch.exp((new_logprob - old_logprob).clamp(-20.0, 20.0))
+    if not np.isfinite(max_log_ratio) or max_log_ratio <= 0:
+        raise ValueError("PPO max log ratio must be finite and positive")
+    # The ordinary PPO objective remains unbounded for negative advantages when
+    # the new policy assigns far more probability than the behavior policy.
+    # Cap that trust-region excursion before exp so one stale trajectory cannot
+    # dominate the controller update numerically.
+    ratio = torch.exp(
+        (new_logprob - old_logprob).clamp(-max_log_ratio, max_log_ratio)
+    )
     unclipped = ratio * advantage
     clipped = torch.clamp(ratio, 1.0 - clip, 1.0 + clip) * advantage
     return -torch.minimum(unclipped, clipped).mean()
@@ -333,6 +345,9 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         gae_lambda: float = 0.95,
         ppo_clip: float = 0.2,
         ppo_epochs: int = 4,
+        ppo_max_log_ratio: float = 2.0,
+        ppo_target_action_log_ratio: float = 0.2,
+        max_controller_loss: float = 50.0,
         value_weight: float = 0.5,
         entropy_weight: float = 0.01,
         max_position_step: float = 0.02,
@@ -369,12 +384,24 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         self.gae_lambda = float(gae_lambda)
         self.ppo_clip = float(ppo_clip)
         self.ppo_epochs = int(ppo_epochs)
+        self.ppo_max_log_ratio = float(ppo_max_log_ratio)
+        self.ppo_target_action_log_ratio = float(ppo_target_action_log_ratio)
+        self.max_controller_loss = float(max_controller_loss)
         self.value_weight = float(value_weight)
         self.entropy_weight = float(entropy_weight)
         self.max_position_step = float(max_position_step)
         self.max_rotation_step = float(max_rotation_step)
         self.ik_tolerance = float(ik_tolerance)
         self.ik_max_steps = int(ik_max_steps)
+        if not np.isfinite(self.ppo_max_log_ratio) or self.ppo_max_log_ratio <= 0:
+            raise ValueError("PPO max log ratio must be finite and positive")
+        if (
+            not np.isfinite(self.ppo_target_action_log_ratio)
+            or self.ppo_target_action_log_ratio <= 0
+        ):
+            raise ValueError("PPO target action log-ratio must be finite and positive")
+        if not np.isfinite(self.max_controller_loss) or self.max_controller_loss <= 0:
+            raise ValueError("maximum controller loss must be finite and positive")
         if self.max_position_step <= 0 or self.max_rotation_step <= 0:
             raise ValueError("controller execution step limits must be positive")
         if not np.isfinite(self.ik_tolerance) or self.ik_tolerance <= 0:
@@ -571,7 +598,12 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     )
                     valid = False
                     break
-                bounded_actions = actions.detach().clone()
+                # PPO must retain the latent actions sampled by the behavior
+                # policy. The safety envelope below is part of the environment
+                # transition, not a second policy sample; evaluating its clipped
+                # outputs under the Normal/Bernoulli policy produces an invalid
+                # importance ratio.
+                policy_actions = actions.detach().clone()
                 executed = 0
                 chunk_reward = 0.0
                 ik_truncated = False
@@ -582,11 +614,6 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                             _observation_state(observation),
                             max_position_step=self.max_position_step,
                             max_rotation_step=self.max_rotation_step,
-                        )
-                        bounded_actions[0, action_index] = torch.as_tensor(
-                            bounded,
-                            dtype=bounded_actions.dtype,
-                            device=bounded_actions.device,
                         )
                         command = ee_action_to_env_action(
                             env,
@@ -627,17 +654,13 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     if steps >= self.max_steps:
                         break
                 if executed:
-                    with torch.no_grad():
-                        evaluated_logprobs, _evaluated_entropy, evaluated_value = (
-                            self.controller.evaluate_action_chunk(*inputs, bounded_actions)
-                        )
                     transitions.append(ControllerTransition(
                         images=inputs[0].detach().cpu(),
                         state=inputs[1].detach().cpu(),
                         task_index=inputs[2].detach().cpu(),
-                        actions=bounded_actions.cpu(),
-                        old_logprob=evaluated_logprobs[0, :executed].sum().cpu(),
-                        old_value=evaluated_value[0].cpu(),
+                        actions=policy_actions.cpu(),
+                        old_logprob=logprobs[0, :executed].sum().detach().cpu(),
+                        old_value=values[0].detach().cpu(),
                         reward=chunk_reward,
                         done=success or not valid or ik_truncated or steps >= self.max_steps,
                         executed=executed,
@@ -800,8 +823,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             ) / informative_advantages.std(unbiased=False).clamp_min(1e-6)
             advantages[informative_indices] = informative_advantages
         total = 0.0
-        for _ in range(self.ppo_epochs):
+        completed_epochs = 0
+        for ppo_epoch in range(self.ppo_epochs):
             losses = []
+            action_log_ratios = []
             for index, item in enumerate(transitions):
                 logprob, entropy, value = self.controller.evaluate_action_chunk(
                     item.images.to(self.device_name),
@@ -810,12 +835,19 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                     item.actions.to(self.device_name),
                 )
                 new_logprob = logprob[0, : item.executed].sum()
+                old_logprob = item.old_logprob.to(self.device_name).reshape(())
+                if entries[index][1]:
+                    action_log_ratios.append(
+                        (new_logprob.detach() - old_logprob).abs()
+                        / max(1, item.executed)
+                    )
                 policy_loss = (
                     ppo_clipped_loss(
                         new_logprob.reshape(1),
-                        item.old_logprob.to(self.device_name).reshape(1),
+                        old_logprob.reshape(1),
                         advantages[index].reshape(1),
                         clip=self.ppo_clip,
+                        max_log_ratio=self.ppo_max_log_ratio,
                     )
                     if entries[index][1]
                     else torch.zeros((), device=self.device_name)
@@ -832,10 +864,30 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 losses.append(
                     policy_loss + self.value_weight * value_loss - entropy_bonus
                 )
+            mean_action_log_ratio = (
+                float(torch.stack(action_log_ratios).mean())
+                if action_log_ratios else 0.0
+            )
+            if (
+                ppo_epoch
+                and mean_action_log_ratio > self.ppo_target_action_log_ratio
+            ):
+                self._report_progress(
+                    "VLABench controller PPO early stop: "
+                    f"mean action log-ratio={mean_action_log_ratio:.4f} "
+                    f"exceeds {self.ppo_target_action_log_ratio:.4f}"
+                )
+                break
             loss = torch.stack(losses).mean() + self.controller_bc_weight * self._controller_anchor()
             self.controller_optimizer.zero_grad(set_to_none=True)
             if not bool(torch.isfinite(loss)):
                 self._report_progress("VLABench controller PPO update skipped: non-finite loss")
+                break
+            if abs(float(loss.detach())) > self.max_controller_loss:
+                self._report_progress(
+                    "VLABench controller PPO update skipped: "
+                    f"loss={float(loss.detach()):.4f} exceeds {self.max_controller_loss:.4f}"
+                )
                 break
             loss.backward()
             trainable = [
@@ -869,7 +921,8 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                 )
                 break
             total += float(loss.detach())
-        return total / max(1, self.ppo_epochs)
+            completed_epochs += 1
+        return total / max(1, completed_epochs)
 
     def train_joint_epoch(self, descriptors: Sequence[Mapping[str, Any]], *, rollouts_per_update: int = 8):
         if not descriptors:

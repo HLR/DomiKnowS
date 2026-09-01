@@ -115,6 +115,12 @@ The critic is bounded to `[-1,1]`, uses clipped return targets and Smooth L1
 loss, and cannot backpropagate through the actor's shared features. Rollouts
 with zero total simulator return still train the critic and `0.05` BC anchor,
 but do not apply PPO or entropy gradients to failed sampled actions.
+PPO stores the controller action and log probability before the deterministic
+Cartesian safety transform; only the transformed command is sent to IK and the
+simulator. Likelihood ratios are bounded before exponentiation, and repeated
+PPO epochs stop after the mean per-action log-ratio leaves the trust region.
+This keeps the importance ratio tied to the behavior policy and prevents one
+stale trajectory from producing a catastrophic controller update.
 Online actions are limited to 2 cm translation and 0.10 radians rotation per
 simulator step before IK. IK uses a practical `1e-3` convergence tolerance and
 up to 200 iterations. These defaults are configurable through
