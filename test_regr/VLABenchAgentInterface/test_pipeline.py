@@ -1141,6 +1141,16 @@ def test_joint_simulator_training_updates_planner_and_controller():
     controller_before = controller.value_head.weight.detach().clone()
     metrics = program.train_joint_epoch([{"task": "select_book"}], rollouts_per_update=2)
     assert metrics["success_rate"] == 0.5
+    assert metrics["per_task"] == {
+        "select_book": {
+            "episodes": 2,
+            "successes": 1,
+            "success_rate": 0.5,
+            "valid_rate": 1.0,
+            "return": pytest.approx(0.475),
+            "steps": 1.0,
+        }
+    }
     assert planner.preference.item() != planner_before.item()
     assert not torch.equal(controller.value_head.weight, controller_before)
 

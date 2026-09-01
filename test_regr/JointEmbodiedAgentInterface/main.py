@@ -98,6 +98,19 @@ def stage2_selection_key(metrics):
     return (minimum, mean, float(eai.get("goal_recall", eai["reward"])), float(vla["return"]), efficiency)
 
 
+def stage2_checkpoint_eligible(metrics, *, min_vlabench_success_rate: float) -> bool:
+    return float(metrics["vlabench"]["success_rate"]) >= float(
+        min_vlabench_success_rate
+    )
+
+
+def _unit_interval(value: str) -> float:
+    parsed = float(value)
+    if not 0.0 <= parsed <= 1.0:
+        raise argparse.ArgumentTypeError("value must be between 0 and 1")
+    return parsed
+
+
 @torch.no_grad()
 def _evaluate_eai(planner, runtime, examples, *, limit=32):
     view = planner.for_domain("eai")
@@ -406,11 +419,21 @@ def command_train_agent(args):
         ik_max_steps=args.ik_max_steps,
     )
     stage2.round_robin_cursor = cursor
-    best_key = (
-        stage2_selection_key(resume_payload["metrics"])
-        if resume_stage == "stage2" and resume_payload is not None else None
-    )
-    best_path = Path(args.resume).resolve() if resume_stage == "stage2" else None
+    best_key = None
+    best_path = None
+    if resume_stage == "stage2" and resume_payload is not None:
+        if stage2_checkpoint_eligible(
+            resume_payload["metrics"],
+            min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
+        ):
+            best_key = stage2_selection_key(resume_payload["metrics"])
+            best_path = Path(args.resume).resolve()
+        else:
+            _status(
+                "resume checkpoint is not a Stage 2 best candidate: "
+                f"VLABench success={float(resume_payload['metrics']['vlabench']['success_rate']):.3f} "
+                f"requires {args.stage2_min_vlabench_success_rate:.3f}"
+            )
     for epoch in range(start_stage2, args.stage2_epochs):
         _status(f"Stage 2 epoch {epoch + 1}/{args.stage2_epochs} training")
         metrics = stage2.train_alternating_epoch(
@@ -432,9 +455,20 @@ def command_train_agent(args):
             metrics=metrics,
         )
         key = stage2_selection_key(metrics)
-        if best_key is None or key > best_key:
+        eligible = stage2_checkpoint_eligible(
+            metrics,
+            min_vlabench_success_rate=args.stage2_min_vlabench_success_rate,
+        )
+        if eligible and (best_key is None or key > best_key):
             best_key, best_path = key, path
-        _json({"stage": "stage2", "epoch": epoch, "checkpoint": path, "metrics": metrics})
+        _json({
+            "stage": "stage2",
+            "epoch": epoch,
+            "checkpoint": path,
+            "best_candidate_eligible": eligible,
+            "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
+            "metrics": metrics,
+        })
     if best_path is not None:
         payload = load_joint_checkpoint(
             best_path,
@@ -458,6 +492,12 @@ def command_train_agent(args):
             metrics=payload.get("metrics", {}),
         )
         _json({"stage": "stage2-best", "checkpoint": selected, "source": best_path})
+    else:
+        _json({
+            "stage": "stage2-best-skipped",
+            "reason": "no epoch met the minimum VLABench success rate",
+            "minimum_vlabench_success_rate": args.stage2_min_vlabench_success_rate,
+        })
 
 
 def build_parser():
@@ -486,6 +526,12 @@ def build_parser():
     agent.add_argument("--stage2-epochs", type=int, default=3)
     agent.add_argument("--stage1-rounds-per-epoch", type=int)
     agent.add_argument("--stage2-rounds-per-epoch", type=int, default=10)
+    agent.add_argument(
+        "--stage2-min-vlabench-success-rate",
+        type=_unit_interval,
+        default=0.10,
+        help="minimum rollout success required for an epoch to become joint_stage2_best.pt",
+    )
     agent.add_argument("--eai-samples", type=int, default=8)
     agent.add_argument("--vlabench-planner-samples", type=int, default=4)
     agent.add_argument("--vlabench-rollouts", type=int, default=8)

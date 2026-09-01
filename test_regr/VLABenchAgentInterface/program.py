@@ -928,14 +928,17 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
         if not descriptors:
             raise ValueError("joint training requires at least one simulator descriptor")
         episodes = []
+        episode_tasks = []
         for rollout_index in range(rollouts_per_update):
             descriptor = random.choice(descriptors)
+            task_name = str(descriptor.get("task", "unknown"))
             self._report_progress(
                 f"VLABench rollout {rollout_index + 1}/{rollouts_per_update} "
-                f"task={descriptor.get('task', 'unknown')} started"
+                f"task={task_name} started"
             )
             episode = self.collect_episode(descriptor)
             episodes.append(episode)
+            episode_tasks.append(task_name)
             self._report_progress(
                 f"VLABench rollout {rollout_index + 1}/{rollouts_per_update} "
                 f"finished valid={episode.valid} success={episode.success} "
@@ -943,6 +946,28 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             )
         planner_loss = self._update_planner(episodes)
         controller_loss_value = self._update_controller(episodes)
+        task_totals: dict[str, dict[str, float]] = {}
+        for task_name, episode in zip(episode_tasks, episodes):
+            totals = task_totals.setdefault(
+                task_name,
+                {"episodes": 0.0, "successes": 0.0, "valid": 0.0, "return": 0.0, "steps": 0.0},
+            )
+            totals["episodes"] += 1.0
+            totals["successes"] += float(episode.success)
+            totals["valid"] += float(episode.valid)
+            totals["return"] += float(episode.total_return)
+            totals["steps"] += float(episode.steps)
+        per_task = {
+            task_name: {
+                "episodes": int(totals["episodes"]),
+                "successes": int(totals["successes"]),
+                "success_rate": totals["successes"] / totals["episodes"],
+                "valid_rate": totals["valid"] / totals["episodes"],
+                "return": totals["return"] / totals["episodes"],
+                "steps": totals["steps"] / totals["episodes"],
+            }
+            for task_name, totals in sorted(task_totals.items())
+        }
         return {
             "planner_loss": planner_loss,
             "controller_loss": controller_loss_value,
@@ -951,4 +976,5 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
             "valid_rate": sum(item.valid for item in episodes) / len(episodes),
             "steps": sum(item.steps for item in episodes) / len(episodes),
             "episodes": len(episodes),
+            "per_task": per_task,
         }

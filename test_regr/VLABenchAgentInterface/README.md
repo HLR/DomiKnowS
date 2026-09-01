@@ -275,7 +275,9 @@ return.
 The controller receives these chunk rewards through PPO and GAE. Each selected
 planner decision receives the simulator return-to-go from that decision onward
 through REINFORCE. Constraint-invalid planner samples receive zero return and
-never execute the controller.
+never execute the controller. Joint-epoch metrics include per-task episode
+count, successes, success rate, validity, return, and execution length so the
+aggregate success rate cannot hide task concentration.
 
 ### Diagnostic reference-plan score
 

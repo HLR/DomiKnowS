@@ -192,6 +192,10 @@ Dataset indexing, model initialization, Stage 1 rounds, Stage 2 domain turns,
 and simulator rollouts emit flushed, newline-based progress. The messages
 remain visible when both streams are redirected to a file and followed with
 `tail -f`; they do not depend on terminal cursor control.
+Each Stage 2 epoch reports VLABench `episodes`, `successes`, `success_rate`,
+`valid_rate`, mean return, and mean steps separately for every task, in
+addition to the aggregate metrics. This makes a success rate concentrated in
+one task visible instead of presenting it as broad multi-task performance.
 Control-video decoding uses a per-task LRU capped at eight TorchCodec decoders,
 preventing full shuffled runs from exhausting the process file-descriptor
 limit. The cap is configurable with `--video-decoder-cache-size`.
@@ -229,6 +233,13 @@ activation-profile version, model configuration, and the individual and
 combined domain checksums. Frozen bitsandbytes NF4 base weights and their
 loader-specific quantization buffers are reconstructed from the configured
 backbone instead of being duplicated in every epoch checkpoint.
+
+An epoch is eligible to become `joint_stage2_best.pt` only when its aggregate
+VLABench rollout success is at least `0.10`. Configure this acceptance gate
+with `--stage2-min-vlabench-success-rate`; setting it to `0` restores the old
+relative-best behavior. Epoch checkpoints are always written even when they
+miss the gate. If every epoch misses it, training reports
+`stage2-best-skipped` and does not label a weak epoch as the best model.
 
 The controller-only warm-up additionally writes
 `joint_controller_warmup.pt`. When resuming an existing Stage 1 checkpoint,

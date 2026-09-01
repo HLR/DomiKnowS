@@ -26,7 +26,12 @@ from .checkpoint import (
     load_joint_checkpoint,
     save_joint_checkpoint,
 )
-from .main import build_parser, stage1_selection_key, stage2_selection_key
+from .main import (
+    build_parser,
+    stage1_selection_key,
+    stage2_checkpoint_eligible,
+    stage2_selection_key,
+)
 from .models import JointQwenVLPlanner
 from .program import JointReinforcementProgram, JointSolverPOIProgram, _TrainingProgress
 from .world_graph import build_joint_runtime, build_joint_world_graph
@@ -523,6 +528,62 @@ def test_stage2_eai_update_uses_domain_reward_and_shared_planner_only(joint_fixt
     assert runtime.active_domain is None
 
 
+def test_stage2_reports_balanced_per_task_rollout_metrics(joint_fixture):
+    _examples, runtime = joint_fixture
+    planner = make_planner(runtime)
+    controller = TinyController()
+    program = JointReinforcementProgram(
+        runtime,
+        planner,
+        controller,
+        planner_optimizer=torch.optim.SGD(planner.parameters(), lr=0.01),
+        controller_optimizer=torch.optim.SGD(controller.parameters(), lr=0.01),
+        env_factory=lambda **_kwargs: None,
+        ppo_epochs=1,
+    )
+    program.train_eai_update = lambda _item: {
+        "loss": 0.1,
+        "reward": 0.2,
+        "goal_recall": 0.3,
+        "success": 0.4,
+    }
+
+    def fake_vlabench(descriptors, *, rollouts_per_update):
+        task = descriptors[0]["task"]
+        successes = 1 if task == "task_a" else 0
+        return {
+            "planner_loss": 0.1,
+            "controller_loss": 0.2,
+            "return": 0.4 if successes else 0.0,
+            "success_rate": successes / rollouts_per_update,
+            "valid_rate": 1.0,
+            "steps": 12.0,
+            "episodes": rollouts_per_update,
+            "per_task": {
+                task: {
+                    "episodes": rollouts_per_update,
+                    "successes": successes,
+                    "success_rate": successes / rollouts_per_update,
+                    "valid_rate": 1.0,
+                    "return": 0.4 if successes else 0.0,
+                    "steps": 12.0,
+                }
+            },
+        }
+
+    program.train_vlabench_update = fake_vlabench
+    metrics = program.train_alternating_epoch(
+        [{}],
+        [{"task": "task_a"}, {"task": "task_b"}],
+        rounds=2,
+        vlabench_rollouts_per_update=2,
+    )
+    assert metrics["vlabench"]["episodes"] == 4
+    assert metrics["vlabench"]["success_rate"] == pytest.approx(0.25)
+    assert metrics["vlabench"]["per_task"]["task_a"]["success_rate"] == 0.5
+    assert metrics["vlabench"]["per_task"]["task_b"]["success_rate"] == 0.0
+
+
 def test_joint_stage2_invalid_vlabench_plan_never_executes_controller(joint_fixture):
     _examples, runtime = joint_fixture
     planner = make_planner(runtime)
@@ -890,6 +951,11 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     first = {"eai": {"success": 0.4, "reward": 0.4}, "vlabench": {"success_rate": 0.4, "return": 0.8}}
     second = {"eai": {"success": 0.1, "reward": 0.9}, "vlabench": {"success_rate": 0.9, "return": 0.9}}
     assert stage2_selection_key(first) > stage2_selection_key(second)
+    assert stage2_checkpoint_eligible(first, min_vlabench_success_rate=0.10)
+    assert not stage2_checkpoint_eligible(
+        {"vlabench": {"success_rate": 0.05}},
+        min_vlabench_success_rate=0.10,
+    )
     args = build_parser().parse_args(["train-agent", "--two-stage"])
     assert (args.stage1_epochs, args.stage2_epochs) == (5, 3)
     assert (args.eai_samples, args.vlabench_planner_samples, args.vlabench_rollouts) == (8, 4, 8)
@@ -897,6 +963,7 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.planner_decoder_hidden_dim == 512
     assert args.video_decoder_cache_size == 8
     assert args.controller_warmup_steps == 20000
+    assert args.stage2_min_vlabench_success_rate == pytest.approx(0.10)
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
     assert args.ik_tolerance == pytest.approx(1e-3)

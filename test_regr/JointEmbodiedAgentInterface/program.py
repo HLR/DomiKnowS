@@ -458,8 +458,11 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
             "controller_loss": 0.0,
             "return": 0.0,
             "success_rate": 0.0,
+            "valid_rate": 0.0,
             "steps": 0.0,
         }
+        vla_task_totals: dict[str, dict[str, float]] = {}
+        vla_episode_count = 0
         start_cursor = self.round_robin_cursor
         progress = _TrainingProgress("Stage 2 rounds", int(rounds))
         for offset in range(int(rounds)):
@@ -481,6 +484,24 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 eai_totals[key] += float(eai[key])
             for key in vla_totals:
                 vla_totals[key] += float(vla[key])
+            vla_episode_count += int(vla["episodes"])
+            for task_name, task_metrics in vla.get("per_task", {}).items():
+                episodes = int(task_metrics["episodes"])
+                totals = vla_task_totals.setdefault(
+                    task_name,
+                    {
+                        "episodes": 0.0,
+                        "successes": 0.0,
+                        "valid": 0.0,
+                        "return": 0.0,
+                        "steps": 0.0,
+                    },
+                )
+                totals["episodes"] += episodes
+                totals["successes"] += int(task_metrics["successes"])
+                totals["valid"] += float(task_metrics["valid_rate"]) * episodes
+                totals["return"] += float(task_metrics["return"]) * episodes
+                totals["steps"] += float(task_metrics["steps"]) * episodes
             self.round_robin_cursor += 1
             progress.update(
                 offset + 1,
@@ -488,9 +509,24 @@ class JointReinforcementProgram(VLABenchHierarchicalReinforcementProgram):
                 vlabench_return=vla_totals["return"] / (offset + 1),
             )
         count = max(1, int(rounds))
+        per_task = {
+            task_name: {
+                "episodes": int(totals["episodes"]),
+                "successes": int(totals["successes"]),
+                "success_rate": totals["successes"] / totals["episodes"],
+                "valid_rate": totals["valid"] / totals["episodes"],
+                "return": totals["return"] / totals["episodes"],
+                "steps": totals["steps"] / totals["episodes"],
+            }
+            for task_name, totals in sorted(vla_task_totals.items())
+        }
         return {
             "eai": {key: value / count for key, value in eai_totals.items()},
-            "vlabench": {key: value / count for key, value in vla_totals.items()},
+            "vlabench": {
+                **{key: value / count for key, value in vla_totals.items()},
+                "episodes": vla_episode_count,
+                "per_task": per_task,
+            },
             "rounds": int(rounds),
             "round_robin_cursor": self.round_robin_cursor,
         }
