@@ -95,6 +95,24 @@ def test_task_defaults_keep_global_constraints_downweighted(monkeypatch):
     assert args.eval_items is None
     assert args.global_constraint_loss_weight == 0.1
     assert args.executable_constraint_loss_weight == 1.0
+    assert args.ilp_benchmark_warmup == 1
+    assert args.ilp_benchmark_repeats == 3
+
+
+def test_ilp_benchmark_selects_first_relation_free_count_sample():
+    items = clevr_main.load_items()
+
+    selected = clevr_main._select_simple_count_sample(items, items)
+
+    assert selected["question"] == "What number of tiny cyan cylinders are there?"
+    assert selected["program"][-1]["function"] == "count"
+    assert all(
+        step["function"] == "scene"
+        or step["function"] == "count"
+        or step["function"] == "unique"
+        or step["function"].startswith("filter_")
+        for step in selected["program"]
+    )
 
 
 def test_post_training_example_uses_ephemeral_ad_hoc_query():
@@ -172,9 +190,178 @@ def test_post_training_example_uses_ephemeral_ad_hoc_query():
     )
     assert all(call["tnorm"] == "P" for call in calls["inference"])
     assert all(call["populate"] is False for call in calls["inference"])
+    assert all(call["compiled"] is False for call in calls["inference"])
     assert calls["device"] == "cpu"
     assert calls["model_eval"] is True
     assert calls["constraint_model_eval"] is True
+
+
+def _mock_ilp_benchmark(*, fail_dynamic=False):
+    events = []
+    datanodes = []
+
+    class FakeConcept:
+        def __init__(self, name):
+            self.name = name
+
+    all_concepts = tuple(
+        FakeConcept(name)
+        for name in ("constraint", "obj", "red", "rubber", "blue")
+    )
+
+    class FakeInnerConstraint:
+        @staticmethod
+        def getLcConcepts():
+            return {"red", "rubber"}
+
+    class FakeGraph:
+        def __init__(self):
+            self._active = all_concepts
+            self._active_concepts = None
+            self.executableLCs = {
+                "ELC7": SimpleNamespace(innerLC=FakeInnerConstraint())
+            }
+
+        def set_active_concepts(self, requested):
+            if requested is None:
+                self._active = all_concepts
+                self._active_concepts = None
+                events.append(("activate", "full"))
+            else:
+                names = ("constraint", "obj", *requested)
+                self._active = tuple(FakeConcept(name) for name in names)
+                self._active_concepts = frozenset(names)
+                events.append(("activate", tuple(requested)))
+            return self._active
+
+        def get_active_concepts(self):
+            return self._active
+
+    graph = FakeGraph()
+
+    class FakeConstraintDataNode:
+        def __init__(self):
+            self.attributes = {
+                "label/label": 1,
+                "ELC7/label": 1,
+            }
+
+    class FakeDataNode:
+        def __init__(self, active_names):
+            self.active_names = active_names
+            self.collectedConceptsAndRelations = None
+            self.current_device = "cpu"
+            self.constraint_dn = FakeConstraintDataNode()
+
+        def _getExecutableConstraintDataNode(self):
+            return self.constraint_dn
+
+        def inferILPResults(self, *concepts):
+            events.append((
+                "infer_ilp",
+                self.active_names,
+                tuple(concept.name for concept in concepts),
+                dict(self.constraint_dn.attributes),
+            ))
+            if fail_dynamic and len(self.active_names) < len(all_concepts):
+                raise RuntimeError("dynamic inference failed")
+            predicate_count = 5 if len(self.active_names) == len(all_concepts) else 2
+            self.collectedConceptsAndRelations = [object()] * predicate_count
+            self.constraint_dn.attributes["ELC7/answer"] = 2
+
+    class FakeBuilder:
+        def __init__(self, datanode):
+            self.datanode = datanode
+
+        def getDataNode(self, *, device):
+            assert device == "cpu"
+            return self.datanode
+
+    class FakeModel:
+        def eval(self):
+            events.append(("eval", "model"))
+
+        def __call__(self, sample):
+            active_names = tuple(concept.name for concept in graph.get_active_concepts())
+            datanode = FakeDataNode(active_names)
+            datanodes.append(datanode)
+            events.append(("forward", active_names))
+            return None, None, None, FakeBuilder(datanode)
+
+    class FakeConstraintModel:
+        tnorm = "P"
+
+        def eval(self):
+            events.append(("eval", "constraint"))
+
+    sample = {
+        "question": "How many red rubber objects are there?",
+        "answer": 2,
+        "logic_str": 'sumL(andL(red("x"), rubber(path="x")))',
+        "_constraint_ELC7": 1,
+    }
+    built = clevr_main.BuiltProgram(
+        name="learned",
+        program=SimpleNamespace(
+            graph=graph,
+            model=FakeModel(),
+            cmodel=FakeConstraintModel(),
+        ),
+        train_dataset=[],
+        eval_dataset=[],
+        query_namespace={"red": object(), "rubber": object()},
+        ilp_benchmark_sample=sample,
+    )
+    return built, graph, events, datanodes
+
+
+def test_ilp_benchmark_uses_fresh_full_then_dynamic_datanodes(monkeypatch):
+    built, graph, events, datanodes = _mock_ilp_benchmark()
+    clock = iter((0.0, 0.5, 1.0, 1.1, 2.0, 2.4, 3.0, 3.2))
+    monkeypatch.setattr(clevr_main, "perf_counter", lambda: next(clock))
+
+    comparison = clevr_main.benchmark_ilp_graph_activation(
+        built, "cpu", warmup=0, repeats=2
+    )
+
+    assert len(datanodes) == 4
+    assert len({id(datanode) for datanode in datanodes}) == 4
+    assert [event[:2] for event in events if event[0] == "activate"] == [
+        ("activate", "full"),
+        ("activate", ("red", "rubber")),
+        ("activate", "full"),
+        ("activate", ("red", "rubber")),
+        ("activate", "full"),
+    ]
+    inference_events = [event for event in events if event[0] == "infer_ilp"]
+    assert len(inference_events) == 4
+    assert all(event[2] == () for event in inference_events)
+    assert all(event[3] == {"ELC7/label": 1} for event in inference_events)
+    assert comparison.requested_concepts == ("red", "rubber")
+    assert comparison.full.durations_seconds == pytest.approx((0.5, 0.4))
+    assert comparison.dynamic.durations_seconds == pytest.approx((0.1, 0.2))
+    assert comparison.full.median_seconds == pytest.approx(0.45)
+    assert comparison.dynamic.median_seconds == pytest.approx(0.15)
+    assert comparison.milliseconds_saved == pytest.approx(300.0)
+    assert comparison.reduction_percent == pytest.approx(100.0 * 0.3 / 0.45)
+    assert comparison.speedup == pytest.approx(3.0)
+    assert comparison.answers_agree is True
+    assert comparison.full.predicate_count == 5
+    assert comparison.dynamic.predicate_count == 2
+    assert graph._active_concepts is None
+
+
+def test_ilp_benchmark_restores_full_graph_after_failure(monkeypatch):
+    built, graph, _events, _datanodes = _mock_ilp_benchmark(fail_dynamic=True)
+    clock = iter((0.0, 0.5, 1.0, 1.1))
+    monkeypatch.setattr(clevr_main, "perf_counter", lambda: next(clock))
+
+    with pytest.raises(RuntimeError, match="dynamic inference failed"):
+        clevr_main.benchmark_ilp_graph_activation(
+            built, "cpu", warmup=0, repeats=1
+        )
+
+    assert graph._active_concepts is None
 
 
 @pytest.mark.gurobi
@@ -195,8 +382,8 @@ def test_post_training_ad_hoc_query_supports_circuit_and_ilp_modes():
         hard_gumbel=False,
     )
     all_items = clevr_main.load_items()
-    # Both examples are simple count questions, keeping this backend smoke
-    # focused on ad hoc dispatch instead of relation-grounding complexity.
+    # Both examples are simple count questions, keeping backend inference
+    # focused on dispatch instead of relation grounding.
     built = clevr_main.build_program(
         "backend-smoke",
         clevr_main.InferenceProgram,
@@ -204,6 +391,8 @@ def test_post_training_ad_hoc_query_supports_circuit_and_ilp_modes():
         args,
         "cpu",
     )
+    # Use the smaller four-object count scene to keep the real ILP smoke fast.
+    built.ilp_benchmark_sample = built.eval_dataset[0]
 
     _sample, comparison = clevr_main.infer_ad_hoc_example(built, "cpu")
     assert list(comparison.results) == ["tnorm", "circuit", "ilp"]
@@ -232,3 +421,22 @@ def test_post_training_ad_hoc_query_supports_circuit_and_ilp_modes():
     assert ilp["exact"] is None
     assert ilp["probability"] is None
     assert ilp["distribution"] is None
+
+    performance = clevr_main.benchmark_ilp_graph_activation(
+        built,
+        "cpu",
+        warmup=0,
+        repeats=1,
+    )
+    assert performance.full.result_type == "count"
+    assert performance.dynamic.result_type == "count"
+    assert isinstance(performance.full.answer, int)
+    assert performance.full.answer == performance.dynamic.answer
+    assert performance.answers_agree is True
+    assert performance.full.median_seconds > 0
+    assert performance.dynamic.median_seconds > 0
+    assert len(performance.dynamic.active_concepts) < len(
+        performance.full.active_concepts
+    )
+    assert performance.dynamic.predicate_count < performance.full.predicate_count
+    assert built.program.graph._active_concepts is None

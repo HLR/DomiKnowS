@@ -37,6 +37,63 @@ class PlannerConstraintRuntime:
     max_tokens: int
 
 
+STANDALONE_CHECKPOINT_VERSION = 2
+
+
+def _planner_configuration(planner: torch.nn.Module) -> dict[str, Any]:
+    return {
+        "class": type(planner).__name__,
+        "graph_decoder_version": getattr(planner, "graph_decoder_version", None),
+        "decoder_hidden_size": getattr(planner, "decoder_hidden_size", None),
+    }
+
+
+def _planner_trainable_state(planner: torch.nn.Module) -> dict[str, Any]:
+    names = {
+        name for name, parameter in planner.named_parameters()
+        if parameter.requires_grad
+    }
+    state = planner.state_dict()
+    return {name: state[name] for name in names}
+
+
+def _load_planner_trainable_state(planner: torch.nn.Module, state: Mapping[str, Any]) -> None:
+    required = {
+        name for name, parameter in planner.named_parameters()
+        if parameter.requires_grad
+    }
+    missing = sorted(required.difference(state))
+    if missing:
+        raise RuntimeError(
+            "standalone checkpoint is missing trainable planner state: "
+            + ", ".join(missing[:5])
+        )
+    result = planner.load_state_dict(state, strict=False)
+    unexpected = [
+        name for name in result.unexpected_keys
+        if not any(marker in name for marker in (".weight.absmax", ".weight.quant_map", ".weight.quant_state."))
+    ]
+    if unexpected:
+        raise RuntimeError(
+            "standalone checkpoint has unexpected planner state: "
+            + ", ".join(unexpected[:5])
+        )
+
+
+def _cpu_rng_state(value: Any) -> torch.Tensor:
+    if not torch.is_tensor(value):
+        value = torch.as_tensor(value)
+    return value.detach().to(device="cpu", dtype=torch.uint8)
+
+
+def _checkpoint_map_location(value: str | torch.device):
+    try:
+        device = torch.device(value)
+    except (TypeError, RuntimeError):
+        return value
+    return torch.device("cpu") if device.type == "cuda" else value
+
+
 def build_constraint_runtime(
     world_bundle=None,
     *,
@@ -177,6 +234,71 @@ def train_controller_epoch(
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
     return {key: value / max(1, steps) for key, value in totals.items()}
+
+
+def train_controller_steps(
+    model: torch.nn.Module,
+    loader: Iterable[Mapping[str, torch.Tensor]],
+    optimizer: torch.optim.Optimizer,
+    *,
+    steps: int,
+    device: str | torch.device,
+    grad_accumulation: int = 1,
+    mixed_precision: bool = True,
+    max_grad_norm: float = 1.0,
+) -> dict[str, float]:
+    """Run bounded controller BC without traversing millions of windows."""
+
+    requested = int(steps)
+    if requested <= 0:
+        return {"loss": 0.0, "pose_loss": 0.0, "gripper_loss": 0.0, "steps": 0}
+    device = torch.device(device)
+    model.train()
+    optimizer.zero_grad(set_to_none=True)
+    totals = {"loss": 0.0, "pose_loss": 0.0, "gripper_loss": 0.0}
+    iterator = iter(loader)
+    try:
+        from tqdm.auto import tqdm
+        progress = tqdm(range(1, requested + 1), desc="Controller BC warm-up")
+    except ImportError:
+        progress = range(1, requested + 1)
+    for step in progress:
+        try:
+            batch = next(iterator)
+        except StopIteration:
+            iterator = iter(loader)
+            try:
+                batch = next(iterator)
+            except StopIteration as exc:
+                raise ValueError("controller warm-up loader is empty") from exc
+        images = batch["images"].to(device)
+        state = batch["state"].to(device)
+        task_index = batch["task_index"].to(device)
+        target = batch["actions"].to(device)
+        plan_context = batch.get("plan_context")
+        inputs = (images, state, task_index)
+        if plan_context is not None:
+            inputs += (plan_context.to(device),)
+        with _autocast(device, mixed_precision):
+            loss, metrics = controller_loss(model(*inputs), target)
+            scaled_loss = loss / max(1, grad_accumulation)
+        scaled_loss.backward()
+        if step % max(1, grad_accumulation) == 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+        for key in totals:
+            totals[key] += metrics[key]
+        if hasattr(progress, "set_postfix") and (step == 1 or step % 100 == 0):
+            progress.set_postfix(loss=f"{totals['loss'] / step:.4f}")
+    if requested % max(1, grad_accumulation):
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+    return {
+        **{key: value / requested for key, value in totals.items()},
+        "steps": requested,
+    }
 
 
 @torch.no_grad()
@@ -428,12 +550,14 @@ def save_joint_checkpoint(
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     payload = {
+        "standalone_checkpoint_version": STANDALONE_CHECKPOINT_VERSION,
         "stage": str(stage),
         "epoch": int(epoch),
         "domain_checksum": runtime.world_bundle.domain_checksum,
         "vocabulary": asdict(runtime.vocabulary),
         "vocabulary_checksum": runtime.vocabulary.checksum,
-        "planner": planner.state_dict(),
+        "planner_configuration": _planner_configuration(planner),
+        "planner": _planner_trainable_state(planner),
         "controller": controller.state_dict(),
         "planner_optimizer": planner_optimizer.state_dict() if planner_optimizer is not None else None,
         "controller_optimizer": controller_optimizer.state_dict() if controller_optimizer is not None else None,
@@ -458,12 +582,22 @@ def load_joint_checkpoint(
     controller_optimizer: torch.optim.Optimizer | None = None,
     map_location: str | torch.device = "cpu",
 ) -> dict[str, Any]:
-    payload = torch.load(Path(path), map_location=map_location, weights_only=False)
+    payload = torch.load(
+        Path(path),
+        map_location=_checkpoint_map_location(map_location),
+        weights_only=False,
+    )
+    if payload.get("standalone_checkpoint_version") != STANDALONE_CHECKPOINT_VERSION:
+        raise ValueError(
+            "checkpoint predates the efficient standalone graph decoder; restart Stage 1"
+        )
     if payload.get("domain_checksum") != runtime.world_bundle.domain_checksum:
         raise ValueError("checkpoint domain checksum differs from the current world graph")
     if payload.get("vocabulary_checksum") != runtime.vocabulary.checksum:
         raise ValueError("checkpoint vocabulary checksum differs from the current graph vocabulary")
-    planner.load_state_dict(payload["planner"])
+    if payload.get("planner_configuration") != _planner_configuration(planner):
+        raise ValueError("checkpoint planner configuration differs from the current graph decoder")
+    _load_planner_trainable_state(planner, payload["planner"])
     controller.load_state_dict(payload["controller"])
     if planner_optimizer is not None and payload.get("planner_optimizer") is not None:
         planner_optimizer.load_state_dict(payload["planner_optimizer"])
@@ -471,7 +605,10 @@ def load_joint_checkpoint(
         controller_optimizer.load_state_dict(payload["controller_optimizer"])
     random.setstate(payload["python_rng"])
     np.random.set_state(payload["numpy_rng"])
-    torch.set_rng_state(payload["torch_rng"])
+    torch.set_rng_state(_cpu_rng_state(payload["torch_rng"]))
     if torch.cuda.is_available() and payload.get("cuda_rng") is not None:
-        torch.cuda.set_rng_state_all(payload["cuda_rng"])
+        for device, state in enumerate(
+            list(payload["cuda_rng"])[: torch.cuda.device_count()]
+        ):
+            torch.cuda.set_rng_state(_cpu_rng_state(state), device=device)
     return payload

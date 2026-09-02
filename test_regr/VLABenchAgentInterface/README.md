@@ -26,7 +26,7 @@ All non-test source files in this package are listed below.
 | [`world_graph.py`](world_graph.py) | Authoritative VLABench domain. Defines skills, argument roles, primitive-task automata, canonical plans, semantic DomiKnowS concepts and relations, hard logical constraints, plan materialization/verification, controller condition IDs, and a stable domain checksum. |
 | [`graph.py`](graph.py) | Derives the compact planner token vocabulary, entity-pointer codecs, generation graph, and task-pattern DFA exclusively from a `VLABenchWorldGraphBundle`. Dataset examples may validate against this vocabulary but cannot add skills or roles. |
 | [`dataset.py`](dataset.py) | Owns dataset identifiers; performs resumable Hugging Face downloads; loads planning and LeRobot control examples; creates numbered views and fixed history/action windows; bounds and releases TorchCodec decoder handles; and makes episode-level splits. |
-| [`models.py`](models.py) | Implements the Qwen2.5-VL compact-label planner head with teacher-forced sequence logits and DFA-masked autoregressive logits, plus 4-bit/LoRA loading. Implements the controller's six Normal pose outputs, Bernoulli gripper, learned log standard deviation, and value head. |
+| [`models.py`](models.py) | Implements one-pass Qwen2.5-VL context encoding followed by a compact recurrent graph-token decoder with teacher-forced sequence logits and DFA-masked autoregressive logits, plus 4-bit/LoRA loading. Implements the plan-conditioned controller's bounded transformed-Normal pose outputs, Bernoulli gripper, learned log standard deviation, and value head. |
 | [`program.py`](program.py) | Builds Stage 1 `SolverPOIProgram` sensors and EOS-masked loss. Defines `VLABenchHierarchicalReinforcementProgram`, simulator collection, planner return-to-go REINFORCE with a supervised anchor, PPO/GAE with a behavior-cloning anchor, and hard plan rejection. |
 | [`training.py`](training.py) | Builds the world-first constraint runtime, graph-label examples, component training/evaluation helpers, both program stages, and resumable joint checkpoints with RNG and graph-domain validation. |
 | [`reward.py`](reward.py) | Implements diagnostic reference-plan scoring, semantic hard gating, DomiKnowS reward closures, and the authoritative final simulator rollout formula. Reference similarity is not used by Stage 2. |
@@ -141,6 +141,10 @@ Stage 1 uses one planner head inside `SolverPOIProgram`. DomiKnowS reader,
 edge, learner, and label sensors supply graph-derived target labels. Cross
 entropy includes the first EOS but masks EOS padding after it. In the same
 stage, the controller learns demonstrations by behavior cloning.
+Qwen encodes each text-plus-vision observation once; a compact GRU conditions
+on that vector and teacher-forces the entire graph-token target in one pass.
+The old prefix-reprompt implementation performed a complete Qwen pass for
+every target token and is intentionally checkpoint-incompatible.
 
 Stage 2 constructs `VLABenchHierarchicalReinforcementProgram`, a
 `ReinforcementProgram` subclass holding the identical planner-head object.
@@ -154,7 +158,11 @@ The control loader preserves the official LeRobot `task_index` values for all
 therefore retain distinct controller conditions instead of being collapsed
 into one primitive skill-pattern ID. Online execution resolves the environment
 instruction through the same metadata and rejects unknown instructions.
-The controller samples six end-effector coordinates from Normal distributions
+The controller additionally receives the active graph skill, grounded entity
+pointer, and operation position; demonstration phase supplies this context in
+Stage 1 and the selected plan cursor supplies it online.
+The controller samples six bounded local end-effector deltas from
+tanh-transformed Normal distributions
 and the gripper from a Bernoulli distribution. Its pose head predicts bounded
 local xyz/Euler increments, cumulatively integrates the chunk around the last
 observed pose, and exposes the resulting absolute end-effector targets to the
@@ -165,10 +173,9 @@ weight `0.01`; a `0.05` behavior-cloning anchor is retained. The bounded
 critic uses clipped targets and Smooth L1 loss without changing shared actor
 features. A zero-return rollout trains the critic and supervised anchor but
 does not reinforce or entropy-expand its failed sampled actions. The controller
-stores the original policy sample and its behavior-policy log probability for
-PPO; the deterministic Cartesian safety envelope is applied only when forming
-the simulator command. This avoids treating a clipped execution target as if it
-had been sampled from the Normal policy. Likelihood ratios are bounded before
+stores the bounded policy sample and its change-of-variables-corrected behavior
+log probability for PPO; an independent Cartesian envelope protects custom or
+legacy controllers. Likelihood ratios are bounded before
 exponentiation, and later PPO epochs stop when the mean per-action log-ratio
 leaves the configured trust region, so one stale chunk cannot dominate an
 update. The controller executes four actions before replanning. Each action
@@ -176,11 +183,11 @@ update. The controller executes four actions before replanning. Each action
 `get_qpos_from_ee_pos`; the gripper becomes two `0.04` (open) or `0.0`
 (closed) finger commands. The default safety envelope permits at most 2 cm of
 translation and 0.10 radians of rotation per simulator action. IK uses a
-`1e-3` convergence tolerance and at most 200 iterations; the hierarchical
-program constructor exposes all four limits for experiments that need tighter
-or looser execution. A finite target that fails IK is not executed and safely
-truncates the rollout without erasing reward accumulated by earlier valid
-actions.
+`5e-3` convergence tolerance and at most 200 iterations; the hierarchical
+program retries a failed target at `0.5`, `0.25`, and `0.125` scale. A
+hold-position command is not counted as recovery. Exhausted retries truncate
+the rollout without erasing reward accumulated by earlier valid actions and
+provide a controller feasibility penalty.
 
 The canonical 24 GB GPU command runs both stages, samples all ten tasks
 uniformly, configures four planner samples and eight simulator rollouts per
@@ -192,18 +199,30 @@ uv run python -m test_regr.VLABenchAgentInterface.main train-agent --two-stage `
   --control-source test_regr\VLABenchAgentInterface\data\control `
   --task all `
   --output test_regr\VLABenchAgentInterface\checkpoints\agent `
-  --sft-epochs 3 --controller-epochs 20 --rl-epochs 10 `
-  --rl-num-samples 4 --rollouts-per-update 8
+  --sft-epochs 3 --controller-warmup-steps 20000 --rl-epochs 3 `
+  --rl-rounds-per-epoch 10 --rl-num-samples 4 --rollouts-per-update 8 `
+  --eval-rollouts-per-task 3
 ```
 
-Qwen defaults to 4-bit NF4 LoRA and the controller freezes SigLIP features.
+Qwen defaults to a 512-wide graph decoder, 4-bit NF4 LoRA, and one backbone
+pass per example. The controller freezes SigLIP features. Controller BC is
+bounded by update count rather than twenty full passes over 459,675 windows;
+set `--controller-warmup-steps 0` only when deliberately using the slower
+`--controller-epochs` debugging path.
 Simulator rollouts are sequential. Install the applicable CUDA, PEFT,
 quantization, and video-decoding extras before a full run.
+The ten RL rounds visit each primitive task once per epoch. Fixed-seed
+simulator evaluation runs before RL and after every RL epoch; training-rollout
+and evaluation metrics remain separate. Use at least
+`--eval-rollouts-per-task 3` for the six-setting report, or `0` only for a
+short diagnostic run. Setting `--rl-epochs 0` produces the supervised-only
+VLABench setting and still writes `agent_stage1_evaluated.pt`.
 TorchCodec decoders use a per-task LRU capped at eight open videos by default;
 override it with `--video-decoder-cache-size` if the process has an unusually
 low file-descriptor limit.
 
-Joint checkpoints contain planner, controller, value head, both optimizer
+Standalone checkpoint version 2 contains trainable LoRA/graph-decoder state,
+controller, value head, both optimizer
 states, stage/epoch, Python/NumPy/PyTorch RNG states, graph vocabulary, and the
 world-domain checksum. Resume at either stage boundary with:
 
@@ -215,8 +234,9 @@ uv run python -m test_regr.VLABenchAgentInterface.main train-agent --two-stage `
   --resume test_regr\VLABenchAgentInterface\checkpoints\agent\agent_rl_epoch_003.pt
 ```
 
-Resume is rejected before training if either the graph-derived domain checksum
-or vocabulary differs. Stage 1 resumes at joint boundaries; a reinforcement
+Resume is rejected before training if the graph-derived domain checksum,
+vocabulary, or graph-decoder configuration differs. Checkpoints from the old
+prefix-reprompt planner must restart Stage 1. Stage 1 resumes at boundaries; a reinforcement
 checkpoint restores the next RL epoch and both optimizer/RNG states.
 
 For debugging, component commands remain available:
@@ -268,9 +288,10 @@ R = clip(
   0, 1)
 ```
 
-Invalid plans never reach the controller. Failed/non-finite end-effector
-conversion invalidates the trajectory and gives both policies zero simulator
-return.
+Invalid plans never reach the controller. Non-finite actions give both
+policies zero simulator return. An unrecoverable IK target is never executed;
+the rollout terminates at the last valid state, retains earlier shaped reward,
+and records an explicit feasibility cost for controller learning.
 
 The controller receives these chunk rewards through PPO and GAE. Each selected
 planner decision receives the simulator return-to-go from that decision onward

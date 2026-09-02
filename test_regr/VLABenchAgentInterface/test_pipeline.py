@@ -42,6 +42,7 @@ from test_regr.VLABenchAgentInterface.models import (
     resolve_vision_language_loader,
     vision_language_hidden_size,
 )
+from test_regr.VLABenchAgentInterface.main import build_parser
 from test_regr.VLABenchAgentInterface.program import (
     JointEpisode,
     VLABenchHierarchicalReinforcementProgram,
@@ -61,6 +62,7 @@ from test_regr.VLABenchAgentInterface.training import (
     save_joint_checkpoint,
     save_checkpoint,
     train_controller_epoch,
+    train_controller_steps,
     train_planner_reinforcement_epoch,
 )
 from test_regr.VLABenchAgentInterface.world_graph import (
@@ -529,6 +531,16 @@ def test_control_windows_controller_loss_and_training(tmp_path):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     trained = train_controller_epoch(model, [batch], optimizer, device="cpu", mixed_precision=False)
     assert trained["loss"] >= 0
+    stepped = train_controller_steps(
+        model,
+        [batch],
+        optimizer,
+        steps=3,
+        device="cpu",
+        mixed_precision=False,
+    )
+    assert stepped["steps"] == 3
+    assert stepped["loss"] >= 0
     checkpoint = tmp_path / "controller.pt"
     save_checkpoint(checkpoint, model=model, optimizer=optimizer, epoch=0, metrics=trained)
     restored = MultiViewController(TinyImageEncoder(16), hidden_dim=24, action_horizon=3, max_views=3)
@@ -622,8 +634,10 @@ class FakeGenerationModel(torch.nn.Module):
         super().__init__()
         self.preference = torch.nn.Parameter(torch.tensor(0.0))
         self.config = SimpleNamespace(hidden_size=4)
+        self.calls = 0
 
     def forward(self, input_ids, **_kwargs):
+        self.calls += 1
         hidden = torch.zeros(input_ids.shape[0], input_ids.shape[1], 4, device=input_ids.device)
         hidden[..., 0] = self.preference
         return SimpleNamespace(hidden_states=(hidden,))
@@ -642,8 +656,41 @@ def test_qwen_sample_is_rescored_with_differentiable_log_probability():
         max_steps=runtime.max_tokens,
     )
     assert logprob.requires_grad
+    assert planner.model.calls == 1
     (-logprob).backward()
     assert planner.output.weight.grad is not None
+    assert planner.graph_decoder.weight_hh_l0.grad is not None
+
+
+def test_qwen_teacher_forcing_encodes_context_once_and_uses_prefixes():
+    world = build_vlabench_world_graph("test_teacher_forced_qwen_world")
+    runtime = build_constraint_runtime(world, max_entities=2, max_operations=2, name_prefix="test_teacher_forced_qwen")
+    planner = QwenVLPlanner(FakeGenerationModel(), FakeProcessor(), runtime.vocabulary)
+    context = {"instruction": "test", "images": [], "entity_table": ["apple", "bowl"]}
+    first = torch.tensor([[runtime.vocabulary.eos_label, 1, 2]])
+    second = torch.tensor([[runtime.vocabulary.eos_label, 2, 1]])
+    first_logits = planner.sequence_logits(context, first)
+    second_logits = planner.sequence_logits(context, second)
+    assert planner.model.calls == 2
+    assert first_logits.shape == second_logits.shape == (1, 3, runtime.vocabulary.label_count)
+    assert not torch.allclose(first_logits[:, -1], second_logits[:, -1])
+
+
+def test_standalone_agent_uses_bounded_report_defaults():
+    args = build_parser().parse_args([
+        "train-agent",
+        "--two-stage",
+        "--planning-dir", "planning",
+        "--control-source", "control",
+        "--output", "output",
+    ])
+    assert args.planner_decoder_hidden_dim == 512
+    assert args.controller_warmup_steps == 20000
+    assert args.validation_limit == 32
+    assert args.rl_epochs == 3
+    assert args.rl_rounds_per_epoch == 10
+    assert args.eval_rollouts_per_task == 1
+    assert args.ik_tolerance == pytest.approx(5e-3)
 
 
 class TinyCompactPlanner(torch.nn.Module):

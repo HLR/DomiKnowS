@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import random
 import sys
 from pathlib import Path
 
 import torch
+import numpy as np
 from torch.utils.data import ConcatDataset, DataLoader, Subset
 
 try:
@@ -35,6 +37,7 @@ try:
         save_checkpoint,
         save_joint_checkpoint,
         train_controller_epoch,
+        train_controller_steps,
     )
     from .world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
 except ImportError:
@@ -42,7 +45,7 @@ except ImportError:
     from dataset import LeRobotWindowDataset, deterministic_split, download_processed_datasets, load_control_task_instructions, load_hf_control_records, load_planning_examples
     from graph import PlanVocabulary
     from models import FrozenSigLIPEncoder, MultiViewController, QwenVLPlanner, TinyImageEncoder
-    from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch
+    from training import build_constraint_runtime, create_stage1_program, create_stage2_program, evaluate_controller, evaluate_planner, load_checkpoint, load_joint_checkpoint, prepare_planner_program_examples, save_checkpoint, save_joint_checkpoint, train_controller_epoch, train_controller_steps
     from world_graph import PRIMITIVE_TASK_PATTERNS, build_vlabench_world_graph
 
 
@@ -132,7 +135,9 @@ def _control_loaders(args):
             f"indexed control task {task_index}/{len(tasks)}: {task} "
             f"records={len(records)} windows={len(windows)} episodes={len(windows.episodes)}"
         )
-        episode_split = deterministic_split(sorted(windows.episodes), seed=42)
+        episode_split = deterministic_split(
+            sorted(windows.episodes), seed=getattr(args, "seed", 42)
+        )
         for name, episode_ids in episode_split.items():
             selected = set(episode_ids)
             indices = [index for index, (episode, _offset) in enumerate(windows.index) if episode in selected]
@@ -193,6 +198,7 @@ def _load_planner(args, vocabulary):
         adapter_path=args.resume_adapter,
         load_in_4bit=args.load_in_4bit,
         gradient_checkpointing=True,
+        decoder_hidden_size=args.planner_decoder_hidden_dim,
     )
 
 
@@ -204,7 +210,7 @@ def _save_planner_epoch(path: Path, planner, optimizer, epoch: int, metrics) -> 
 
 def command_train_planner(args) -> None:
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
-    splits = deterministic_split(examples, seed=42)
+    splits = deterministic_split(examples, seed=args.seed)
     world = build_vlabench_world_graph("vlabench_train_world")
     runtime = build_constraint_runtime(
         world, max_entities=args.max_entities, max_operations=args.max_operations, name_prefix="vlabench_train",
@@ -234,9 +240,14 @@ def command_train_agent(args) -> None:
     """Canonical graph-first supervised -> joint reinforcement pipeline."""
     if not args.two_stage:
         raise ValueError("train-agent requires --two-stage")
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
     device = _device(args.device)
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
-    splits = deterministic_split(examples, seed=42)
+    splits = deterministic_split(examples, seed=args.seed)
     world = build_vlabench_world_graph("vlabench_agent_world")
     runtime = build_constraint_runtime(
         world,
@@ -285,17 +296,32 @@ def command_train_agent(args) -> None:
             test_every_epoch=False,
         )
         controller_metrics = {}
-        for epoch in range(args.controller_epochs):
-            controller_metrics = train_controller_epoch(
+        if args.controller_warmup_steps > 0:
+            controller_metrics = train_controller_steps(
                 controller,
                 loaders["train"],
                 controller_optimizer,
+                steps=args.controller_warmup_steps,
                 device=device,
                 grad_accumulation=args.grad_accumulation,
             )
+        else:
+            for epoch in range(args.controller_epochs):
+                controller_metrics = train_controller_epoch(
+                    controller,
+                    loaders["train"],
+                    controller_optimizer,
+                    device=device,
+                    grad_accumulation=args.grad_accumulation,
+                )
         validation = {
             "planner": evaluate_planner(planner, splits["validation"], runtime),
-            "controller": evaluate_controller(controller, loaders["validation"], device=device),
+            "controller": evaluate_controller(
+                controller,
+                loaders["validation"],
+                device=device,
+                max_batches=args.validation_limit,
+            ),
         }
         checkpoint = save_joint_checkpoint(
             output / "agent_stage1.pt",
@@ -305,7 +331,7 @@ def command_train_agent(args) -> None:
             controller_optimizer=controller_optimizer,
             runtime=runtime,
             stage="supervised",
-            epoch=max(args.sft_epochs, args.controller_epochs) - 1,
+            epoch=max(args.sft_epochs - 1, 0),
             metrics={"controller_train": controller_metrics, "validation": validation},
         )
         _json({"stage": "supervised", "checkpoint": checkpoint, "validation": validation})
@@ -334,9 +360,66 @@ def command_train_agent(args) -> None:
         ppo_epochs=args.ppo_epochs,
         value_weight=args.value_weight,
         entropy_weight=args.entropy_weight,
+        max_position_step=args.max_position_step,
+        max_rotation_step=args.max_rotation_step,
+        ik_tolerance=args.ik_tolerance,
+        ik_max_steps=args.ik_max_steps,
     )
+    if args.eval_rollouts_per_task > 0 and start_rl_epoch == 0:
+        baseline = stage2.evaluate_rollouts(
+            descriptors,
+            rollouts_per_task=args.eval_rollouts_per_task,
+            seed=args.seed + 100000,
+        )
+        _json({"stage": "supervised-simulator-evaluation", "metrics": baseline})
+        save_joint_checkpoint(
+            output / "agent_stage1_evaluated.pt",
+            planner=planner,
+            controller=controller,
+            planner_optimizer=planner_optimizer,
+            controller_optimizer=controller_optimizer,
+            runtime=runtime,
+            stage="supervised",
+            epoch=max(args.sft_epochs - 1, 0),
+            metrics={"simulator_evaluation": baseline},
+        )
     for epoch in range(start_rl_epoch, args.rl_epochs):
-        metrics = stage2.train_joint_epoch(descriptors, rollouts_per_update=args.rollouts_per_update)
+        round_metrics = []
+        for round_index in range(args.rl_rounds_per_epoch):
+            descriptor = descriptors[
+                (epoch * args.rl_rounds_per_epoch + round_index) % len(descriptors)
+            ]
+            _status(
+                f"reinforcement epoch={epoch + 1}/{args.rl_epochs} "
+                f"round={round_index + 1}/{args.rl_rounds_per_epoch} "
+                f"task={descriptor['task']}"
+            )
+            round_metrics.append(stage2.train_joint_epoch(
+                [descriptor], rollouts_per_update=args.rollouts_per_update
+            ))
+        episode_count = sum(int(item["episodes"]) for item in round_metrics)
+        training_metrics = {
+            "rounds": round_metrics,
+            "episodes": episode_count,
+            "return": sum(float(item["return"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
+            "success_rate": sum(float(item["success_rate"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
+            "valid_rate": sum(float(item["valid_rate"]) * int(item["episodes"]) for item in round_metrics) / max(1, episode_count),
+            "per_task": {
+                task: metrics
+                for item in round_metrics
+                for task, metrics in item.get("per_task", {}).items()
+            },
+        }
+        metrics = training_metrics
+        if args.eval_rollouts_per_task > 0:
+            metrics = {
+                "training": training_metrics,
+                "evaluation": stage2.evaluate_rollouts(
+                    descriptors,
+                    rollouts_per_task=args.eval_rollouts_per_task,
+                    seed=args.seed + 100000,
+                ),
+            }
         checkpoint = save_joint_checkpoint(
             output / f"agent_rl_epoch_{epoch:03d}.pt",
             planner=planner,
@@ -353,7 +436,7 @@ def command_train_agent(args) -> None:
 
 def command_evaluate_planner(args) -> None:
     examples = load_planning_examples(args.planning_dir, limit=args.limit)
-    splits = deterministic_split(examples, seed=42)
+    splits = deterministic_split(examples, seed=args.seed)
     world = build_vlabench_world_graph("vlabench_eval_world")
     vocabulary = PlanVocabulary.load(args.vocab) if args.vocab else PlanVocabulary.from_world(world, args.max_entities)
     runtime = build_constraint_runtime(world, max_entities=vocabulary.max_entities, max_operations=args.max_operations, name_prefix="vlabench_eval")
@@ -437,6 +520,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--task", choices=["all", *PRIMITIVE_TASK_PATTERNS], default="all")
         command.add_argument("--output", required=True)
         command.add_argument("--device")
+        command.add_argument("--seed", type=int, default=42)
         command.add_argument("--limit", type=int)
         command.add_argument("--epochs", type=int, default=20)
         command.add_argument("--batch-size", type=int, default=8)
@@ -463,6 +547,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
         command.add_argument("--max-entities", type=int, default=64)
         command.add_argument("--max-operations", type=int, default=8)
+        command.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
         command.add_argument("--limit", type=int)
         command.add_argument("--device")
 
@@ -489,9 +574,17 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--limit", type=int)
     agent.add_argument("--max-entities", type=int, default=64)
     agent.add_argument("--max-operations", type=int, default=8)
+    agent.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
     agent.add_argument("--sft-epochs", type=int, default=3)
     agent.add_argument("--controller-epochs", type=int, default=20)
-    agent.add_argument("--rl-epochs", type=int, default=1)
+    agent.add_argument(
+        "--controller-warmup-steps",
+        type=int,
+        default=20000,
+        help="bounded controller BC updates; set 0 to use --controller-epochs full passes",
+    )
+    agent.add_argument("--rl-epochs", type=int, default=3)
+    agent.add_argument("--rl-rounds-per-epoch", type=int, default=10)
     agent.add_argument("--learning-rate", type=float, default=2e-4)
     agent.add_argument("--rl-learning-rate", type=float, default=2e-5)
     agent.add_argument("--controller-learning-rate", type=float, default=3e-4)
@@ -499,6 +592,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--workers", type=int, default=0)
     agent.add_argument("--video-decoder-cache-size", type=int, default=8)
     agent.add_argument("--grad-accumulation", type=int, default=4)
+    agent.add_argument("--validation-limit", type=int, default=32)
     agent.add_argument("--action-horizon", type=int, default=16)
     agent.add_argument("--execute-horizon", type=int, default=4)
     agent.add_argument("--max-steps", type=int, default=400)
@@ -517,6 +611,12 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--ppo-epochs", type=int, default=4)
     agent.add_argument("--value-weight", type=float, default=0.5)
     agent.add_argument("--entropy-weight", type=float, default=0.01)
+    agent.add_argument("--max-position-step", type=float, default=0.02)
+    agent.add_argument("--max-rotation-step", type=float, default=0.10)
+    agent.add_argument("--ik-tolerance", type=float, default=5e-3)
+    agent.add_argument("--ik-max-steps", type=int, default=200)
+    agent.add_argument("--eval-rollouts-per-task", type=int, default=1)
+    agent.add_argument("--seed", type=int, default=42)
     agent.set_defaults(handler=command_train_agent)
 
     evaluate = sub.add_parser("evaluate-planner")
@@ -534,6 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--agent-checkpoint")
     rollout.add_argument("--max-steps", type=int, default=400)
     rollout.add_argument("--max-operations", type=int, default=8)
+    rollout.add_argument("--planner-decoder-hidden-dim", type=int, default=512)
     rollout.add_argument("--planner-model", default="Qwen/Qwen2.5-VL-3B-Instruct")
     rollout.add_argument("--resume-adapter")
     rollout.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)

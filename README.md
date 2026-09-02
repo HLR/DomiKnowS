@@ -27,6 +27,24 @@ While several approaches for integrating symbolic and sub-symbolic models have b
 2. Install Gurobi following the instructions [here](https://github.com/HLR/DomiKnowS/blob/develop/GurobiREADME.md).
 3. Refer to the [Getting Started](https://github.com/HLR/DomiKnowS/blob/Doc/Getting%20Started.md) documentation for detailed instructions on how to define graph declarations, model declarations, initialize programs, and compose and execute programs using DomiKnowS.
 
+## Executable Query Inference
+
+Runtime queries are evaluated from a `DataNode` through two related APIs:
+
+- `DataNode.inferExecutableResults(...)` is the generic query-answering
+  interface. It supports registered and temporary ad hoc executable queries
+  using t-norm traversal, circuit inference, or ILP through its `mode`
+  argument.
+- `DataNode.inferILPResults(...)` is the existing lower-level, in-place ILP
+  inference method. It builds and solves the constrained model, writes the
+  selected `<concept>/ILP` assignments, and persists answers for active
+  executable constraints.
+
+Calling `inferExecutableResults(mode="ilp", ...)` prepares the executable query
+and delegates the actual constrained solving to `DataNode.inferILPResults()`.
+See the [DataNode inference-method documentation](domiknows/graph/README.md#datanode-inference-methods)
+for signatures, return values, ad hoc queries, and examples.
+
 ## Publications
 
 - [DomiKnowS: A Library for Integration of Symbolic Domain Knowledge in Deep Learning](https://arxiv.org/abs/2108.12370)
