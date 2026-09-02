@@ -623,7 +623,7 @@ def build_parser():
     agent.add_argument("--simulator-max-steps", type=int, default=400)
     agent.add_argument("--max-position-step", type=float, default=0.02)
     agent.add_argument("--max-rotation-step", type=float, default=0.10)
-    agent.add_argument("--ik-tolerance", type=float, default=1e-3)
+    agent.add_argument("--ik-tolerance", type=float, default=5e-3)
     agent.add_argument("--ik-max-steps", type=int, default=200)
     agent.add_argument("--max-entities", type=int, default=64)
     agent.add_argument("--max-operations", type=int, default=8)

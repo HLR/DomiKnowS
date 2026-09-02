@@ -981,5 +981,5 @@ def test_balanced_checkpoint_keys_and_cli_defaults():
     assert args.stage2_max_ik_truncation_rate == pytest.approx(0.25)
     assert args.max_position_step == pytest.approx(0.02)
     assert args.max_rotation_step == pytest.approx(0.10)
-    assert args.ik_tolerance == pytest.approx(1e-3)
+    assert args.ik_tolerance == pytest.approx(5e-3)
     assert args.ik_max_steps == 200

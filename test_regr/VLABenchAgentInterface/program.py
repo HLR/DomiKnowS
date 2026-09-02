@@ -648,7 +648,10 @@ class VLABenchHierarchicalReinforcementProgram(ReinforcementProgram):
                         current = np.asarray(_observation_state(observation), dtype=np.float64)
                         command = None
                         last_ik_error = None
-                        for recovery_scale in (1.0, 0.5, 0.25, 0.125, 0.0):
+                        # A zero-scale target is merely a hold command. Treating
+                        # it as recovery creates long no-op loops that look
+                        # executable while providing no controller progress.
+                        for recovery_scale in (1.0, 0.5, 0.25, 0.125):
                             recovered = np.asarray(bounded, dtype=np.float64).copy()
                             recovered[:3] = current[:3] + recovery_scale * (recovered[:3] - current[:3])
                             angle_delta = np.arctan2(

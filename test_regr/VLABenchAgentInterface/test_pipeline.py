@@ -1080,7 +1080,7 @@ def test_failed_ik_action_receives_zero_and_is_not_executed():
     assert episode.valid
     assert episode.total_return == 0.0
     assert simulator.count == 0
-    assert episode.controller[0].feasibility_cost == 5.0
+    assert episode.controller[0].feasibility_cost == 4.0
 
 
 def test_ik_recovery_retries_a_smaller_bounded_delta():

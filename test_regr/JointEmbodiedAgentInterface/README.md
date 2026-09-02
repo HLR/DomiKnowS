@@ -124,15 +124,15 @@ PPO epochs stop after the mean per-action log-ratio leaves the trust region.
 This keeps the importance ratio tied to the behavior policy and prevents one
 stale trajectory from producing a catastrophic controller update.
 Online actions are limited to 2 cm translation and 0.10 radians rotation per
-simulator step before IK. IK uses a practical `1e-3` convergence tolerance and
+simulator step before IK. IK uses a practical `5e-3` convergence tolerance and
 up to 200 iterations. These defaults are configurable through
 `--max-position-step`, `--max-rotation-step`, `--ik-tolerance`, and
 `--ik-max-steps`.
 
 Constraint-invalid plans never reach the controller. Non-finite actions receive
 zero and are not sent to the environment. An IK failure is retried at `0.5`,
-`0.25`, and `0.125` of the bounded delta, followed by a hold-position target.
-Only an unrecoverable failure truncates the rollout. Recovery and truncation
+`0.25`, and `0.125` of the bounded delta. A hold-position command is not
+misreported as recovery; exhausted retries truncate the rollout. Recovery and truncation
 counts are reported per task, and a feasibility penalty reduces the likelihood
 of sampled actions that needed recovery without erasing earlier shaping reward.
 
